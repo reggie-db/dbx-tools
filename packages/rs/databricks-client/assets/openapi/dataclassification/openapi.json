@@ -1,0 +1,283 @@
+{
+  "components": {
+    "schemas": {
+      "AutoTaggingConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "auto_tagging_mode": {
+            "type": "string"
+          },
+          "classification_tag": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CatalogConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "auto_tag_configs": {
+            "items": {
+              "$ref": "#/components/schemas/AutoTaggingConfig"
+            },
+            "type": "array"
+          },
+          "excluded_schemas": {
+            "$ref": "#/components/schemas/CatalogConfig_SchemaNames"
+          },
+          "included_schemas": {
+            "$ref": "#/components/schemas/CatalogConfig_SchemaNames"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CatalogConfig_SchemaNames": {
+        "additionalProperties": false,
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Data Classification API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/data-classification/v1/catalogs/{catalog_name}/config": {
+      "delete": {
+        "description": "Delete Data Classification configuration for a catalog.",
+        "operationId": "dataClassification.deleteCatalogConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "catalogs/{catalog_name}/config",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataClassification"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get the Data Classification configuration for a catalog.",
+        "operationId": "dataClassification.getCatalogConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "catalogs/{catalog_name}/config",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataClassification"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create Data Classification configuration for a catalog.\n\nCreates a new config resource, which enables Data Classification\nfor the specified catalog.\n- The config must not already exist for the catalog.",
+        "operationId": "dataClassification.createCatalogConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "catalogs/{catalog_name}",
+            "x-databricks-sdk-name": "parent"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogConfig"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataClassification"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/data-classification/v1/catalogs/{catalog_name}/config.": {
+      "patch": {
+        "description": "Update the Data Classification configuration for a catalog.\n- The config must already exist for the catalog.\n- Updates fields specified in the update_mask.  Use update_mask field to perform partial updates of the configuration.",
+        "operationId": "dataClassification.updateCatalogConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "catalogs/{catalog_name}/config.",
+            "x-databricks-sdk-name": "catalogConfig.name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "auto_tag_configs": {
+                    "items": {
+                      "$ref": "#/components/schemas/AutoTaggingConfig"
+                    },
+                    "type": "array"
+                  },
+                  "excluded_schemas": {
+                    "$ref": "#/components/schemas/CatalogConfig_SchemaNames"
+                  },
+                  "included_schemas": {
+                    "$ref": "#/components/schemas/CatalogConfig_SchemaNames"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataClassification"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "dataClassification"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "dataClassification.createCatalogConfig",
+      "path": "/api/data-classification/v1/catalogs/{catalog_name}/config",
+      "source": "@databricks/sdk-dataclassification/v1/client.js:41"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "dataClassification.deleteCatalogConfig",
+      "path": "/api/data-classification/v1/catalogs/{catalog_name}/config",
+      "source": "@databricks/sdk-dataclassification/v1/client.js:61"
+    },
+    {
+      "method": "GET",
+      "operationId": "dataClassification.getCatalogConfig",
+      "path": "/api/data-classification/v1/catalogs/{catalog_name}/config",
+      "source": "@databricks/sdk-dataclassification/v1/client.js:77"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "dataClassification.updateCatalogConfig",
+      "path": "/api/data-classification/v1/catalogs/{catalog_name}/config.",
+      "source": "@databricks/sdk-dataclassification/v1/client.js:100"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-dataclassification",
+  "x-databricks-sdk-version": "0.49.0"
+}

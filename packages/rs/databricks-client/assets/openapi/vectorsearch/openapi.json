@@ -1,0 +1,2001 @@
+{
+  "components": {
+    "schemas": {
+      "ColumnInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type_text": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateEndpointRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_policy_id": {
+            "type": "string"
+          },
+          "endpoint_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target_qps": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "usage_policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateVectorIndexRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "delta_sync_index_spec": {
+            "$ref": "#/components/schemas/DeltaSyncVectorIndexSpecRequest"
+          },
+          "direct_access_index_spec": {
+            "$ref": "#/components/schemas/DirectAccessVectorIndexSpec"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "index_subtype": {
+            "type": "string"
+          },
+          "index_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "primary_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CustomTag": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteDataVectorIndexResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "result": {
+            "$ref": "#/components/schemas/UpsertDeleteDataResult"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteEndpointResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteVectorIndexResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeltaSyncVectorIndexSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "columns_to_index": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "columns_to_sync": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "embedding_source_columns": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingSourceColumn"
+            },
+            "type": "array"
+          },
+          "embedding_vector_columns": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingVectorColumn"
+            },
+            "type": "array"
+          },
+          "embedding_writeback_table": {
+            "type": "string"
+          },
+          "pipeline_id": {
+            "type": "string"
+          },
+          "pipeline_type": {
+            "type": "string"
+          },
+          "source_table": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeltaSyncVectorIndexSpecRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "columns_to_index": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "columns_to_sync": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "embedding_source_columns": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingSourceColumn"
+            },
+            "type": "array"
+          },
+          "embedding_vector_columns": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingVectorColumn"
+            },
+            "type": "array"
+          },
+          "embedding_writeback_table": {
+            "type": "string"
+          },
+          "pipeline_id": {
+            "type": "string"
+          },
+          "pipeline_type": {
+            "type": "string"
+          },
+          "source_table": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DirectAccessVectorIndexSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "embedding_source_columns": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingSourceColumn"
+            },
+            "type": "array"
+          },
+          "embedding_vector_columns": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingVectorColumn"
+            },
+            "type": "array"
+          },
+          "schema_json": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EmbeddingSourceColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "embedding_model_endpoint_name": {
+            "type": "string"
+          },
+          "model_endpoint_name_for_query": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EmbeddingVectorColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "embedding_dimension": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Endpoint": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_policy_id": {
+            "type": "string"
+          },
+          "creation_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "creator": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "items": {
+              "$ref": "#/components/schemas/CustomTag"
+            },
+            "type": "array"
+          },
+          "effective_budget_policy_id": {
+            "type": "string"
+          },
+          "endpoint_status": {
+            "$ref": "#/components/schemas/EndpointStatus"
+          },
+          "endpoint_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_updated_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "last_updated_user": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "num_indexes": {
+            "type": "number"
+          },
+          "scaling_info": {
+            "$ref": "#/components/schemas/EndpointScalingInfo"
+          }
+        },
+        "type": "object"
+      },
+      "EndpointScalingInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "requested_target_qps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EndpointStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FacetResultData": {
+        "additionalProperties": false,
+        "properties": {
+          "facet_array": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "facet_row_count": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ListEndpointResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/Endpoint"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListValue": {
+        "additionalProperties": false,
+        "properties": {
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/Value"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListVectorIndexResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "vector_indexes": {
+            "items": {
+              "$ref": "#/components/schemas/MiniVectorIndex"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "MapStringValueEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Value"
+          }
+        },
+        "type": "object"
+      },
+      "Metric": {
+        "additionalProperties": false,
+        "properties": {
+          "labels": {
+            "items": {
+              "$ref": "#/components/schemas/MetricLabel"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "percentile": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "MetricLabel": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MetricValue": {
+        "additionalProperties": false,
+        "properties": {
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "value": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "MetricValues": {
+        "additionalProperties": false,
+        "properties": {
+          "metric": {
+            "$ref": "#/components/schemas/Metric"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/MetricValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "MiniVectorIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "creator": {
+            "type": "string"
+          },
+          "delta_sync_index_spec": {
+            "$ref": "#/components/schemas/DeltaSyncVectorIndexSpec"
+          },
+          "direct_access_index_spec": {
+            "$ref": "#/components/schemas/DirectAccessVectorIndexSpec"
+          },
+          "endpoint_id": {
+            "type": "string"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "index_subtype": {
+            "type": "string"
+          },
+          "index_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "primary_key": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VectorIndexStatus"
+          }
+        },
+        "type": "object"
+      },
+      "PatchEndpointBudgetPolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_policy_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PatchEndpointBudgetPolicyResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_policy_id": {
+            "type": "string"
+          },
+          "effective_budget_policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PatchEndpointRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "target_qps": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "QueryVectorIndexNextPageRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "QueryVectorIndexRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "columns_to_rerank": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "facets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "filters_json": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "num_results": {
+            "type": "number"
+          },
+          "query_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "query_text": {
+            "type": "string"
+          },
+          "query_type": {
+            "type": "string"
+          },
+          "query_vector": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "reranker": {
+            "$ref": "#/components/schemas/RerankerConfig"
+          },
+          "score_threshold": {
+            "type": "number"
+          },
+          "sort_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "QueryVectorIndexResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "facet_result": {
+            "$ref": "#/components/schemas/FacetResultData"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/ResultManifest"
+          },
+          "next_page_token": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ResultData"
+          }
+        },
+        "type": "object"
+      },
+      "RerankerConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/RerankerConfig_RerankerParameters"
+          }
+        },
+        "type": "object"
+      },
+      "RerankerConfig_RerankerParameters": {
+        "additionalProperties": false,
+        "properties": {
+          "columns_to_rerank": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ResultData": {
+        "additionalProperties": false,
+        "properties": {
+          "data_array": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "row_count": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ResultManifest": {
+        "additionalProperties": false,
+        "properties": {
+          "column_count": {
+            "type": "number"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnInfo"
+            },
+            "type": "array"
+          },
+          "facet_column_count": {
+            "type": "number"
+          },
+          "facet_columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RetrieveUserVisibleMetricsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "end_time": {
+            "type": "string"
+          },
+          "granularity_in_seconds": {
+            "type": "number"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/Metric"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "page_token": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RetrieveUserVisibleMetricsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "metric_values": {
+            "items": {
+              "$ref": "#/components/schemas/MetricValues"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ScanVectorIndexRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "last_primary_key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "num_results": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ScanVectorIndexResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Struct"
+            },
+            "type": "array"
+          },
+          "last_primary_key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Struct": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/MapStringValueEntry"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SyncVectorIndexRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SyncVectorIndexResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "UpdateEndpointCustomTagsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "custom_tags": {
+            "items": {
+              "$ref": "#/components/schemas/CustomTag"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateEndpointCustomTagsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "custom_tags": {
+            "items": {
+              "$ref": "#/components/schemas/CustomTag"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpsertDataVectorIndexRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "inputs_json": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpsertDataVectorIndexResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "result": {
+            "$ref": "#/components/schemas/UpsertDeleteDataResult"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpsertDeleteDataResult": {
+        "additionalProperties": false,
+        "properties": {
+          "failed_primary_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "success_row_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Value": {
+        "additionalProperties": false,
+        "properties": {
+          "bool_value": {
+            "type": "boolean"
+          },
+          "list_value": {
+            "$ref": "#/components/schemas/ListValue"
+          },
+          "number_value": {
+            "type": "number"
+          },
+          "string_value": {
+            "type": "string"
+          },
+          "struct_value": {
+            "$ref": "#/components/schemas/Struct"
+          }
+        },
+        "type": "object"
+      },
+      "VectorIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "creator": {
+            "type": "string"
+          },
+          "delta_sync_index_spec": {
+            "$ref": "#/components/schemas/DeltaSyncVectorIndexSpec"
+          },
+          "direct_access_index_spec": {
+            "$ref": "#/components/schemas/DirectAccessVectorIndexSpec"
+          },
+          "endpoint_id": {
+            "type": "string"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "index_subtype": {
+            "type": "string"
+          },
+          "index_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "primary_key": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VectorIndexStatus"
+          }
+        },
+        "type": "object"
+      },
+      "VectorIndexStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "index_url": {
+            "type": "string"
+          },
+          "indexed_row_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Vector Search API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/vector-search/endpoints": {
+      "get": {
+        "description": "List all AI Search endpoints in the workspace.",
+        "operationId": "vectorSearch.listEndpoints",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEndpointResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a new endpoint.",
+        "operationId": "vectorSearch.createEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "budget_policy_id": {
+                    "type": "string"
+                  },
+                  "endpoint_type": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "target_qps": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "usage_policy_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Endpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/endpoints/{name}": {
+      "delete": {
+        "description": "Delete an AI Search endpoint.",
+        "operationId": "vectorSearch.deleteEndpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteEndpointResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get details for a single AI Search endpoint.",
+        "operationId": "vectorSearch.getEndpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Endpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update an endpoint",
+        "operationId": "vectorSearch.patchEndpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "target_qps": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Endpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/endpoints/{name}/budget-policy": {
+      "patch": {
+        "description": "Update the budget policy of an endpoint",
+        "operationId": "vectorSearch.patchEndpointBudgetPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "budget_policy_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchEndpointBudgetPolicyResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/endpoints/{name}/metrics": {
+      "post": {
+        "description": "Retrieve user-visible metrics for an endpoint",
+        "operationId": "vectorSearch.retrieveUserVisibleMetrics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "end_time": {
+                    "type": "string"
+                  },
+                  "granularity_in_seconds": {
+                    "type": "number"
+                  },
+                  "metrics": {
+                    "items": {
+                      "$ref": "#/components/schemas/Metric"
+                    },
+                    "type": "array"
+                  },
+                  "page_token": {
+                    "type": "string"
+                  },
+                  "start_time": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrieveUserVisibleMetricsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/endpoints/{name}/tags": {
+      "patch": {
+        "description": "Update the custom tags of an endpoint.",
+        "operationId": "vectorSearch.updateEndpointCustomTags",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "custom_tags": {
+                    "items": {
+                      "$ref": "#/components/schemas/CustomTag"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateEndpointCustomTagsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes": {
+      "get": {
+        "description": "List all indexes in the given endpoint.",
+        "operationId": "vectorSearch.listVectorIndex",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "endpoint_name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "endpointName"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a new index.",
+        "operationId": "vectorSearch.createVectorIndex",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "delta_sync_index_spec": {
+                    "$ref": "#/components/schemas/DeltaSyncVectorIndexSpecRequest"
+                  },
+                  "direct_access_index_spec": {
+                    "$ref": "#/components/schemas/DirectAccessVectorIndexSpec"
+                  },
+                  "endpoint_name": {
+                    "type": "string"
+                  },
+                  "index_subtype": {
+                    "type": "string"
+                  },
+                  "index_type": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "primary_key": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VectorIndex"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes/{name}": {
+      "delete": {
+        "description": "Delete an index.",
+        "operationId": "vectorSearch.deleteVectorIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get an index.",
+        "operationId": "vectorSearch.getVectorIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "query",
+            "name": "ensure_reranker_compatible",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "ensureRerankerCompatible"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VectorIndex"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes/{name}/delete-data": {
+      "delete": {
+        "description": "Handles the deletion of data from a specified vector index.",
+        "operationId": "vectorSearch.deleteDataVectorIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteDataVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes/{name}/query": {
+      "post": {
+        "description": "Query the specified vector index.",
+        "operationId": "vectorSearch.queryVectorIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "columns": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "columns_to_rerank": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "facets": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "filters_json": {
+                    "type": "string"
+                  },
+                  "num_results": {
+                    "type": "number"
+                  },
+                  "query_columns": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "query_text": {
+                    "type": "string"
+                  },
+                  "query_type": {
+                    "type": "string"
+                  },
+                  "query_vector": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  "reranker": {
+                    "$ref": "#/components/schemas/RerankerConfig"
+                  },
+                  "score_threshold": {
+                    "type": "number"
+                  },
+                  "sort_columns": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes/{name}/query-next-page": {
+      "post": {
+        "description": "Use `next_page_token` returned from previous `QueryVectorIndex` or `QueryVectorIndexNextPage` request to fetch next page of results.",
+        "operationId": "vectorSearch.queryVectorIndexNextPage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "endpoint_name": {
+                    "type": "string"
+                  },
+                  "page_token": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes/{name}/scan": {
+      "post": {
+        "description": "Scan the specified vector index and return the first `num_results` entries after the exclusive `primary_key`.",
+        "operationId": "vectorSearch.scanVectorIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "last_primary_key": {
+                    "type": "string"
+                  },
+                  "num_results": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes/{name}/sync": {
+      "post": {
+        "description": "Triggers a synchronization process for a specified vector index.",
+        "operationId": "vectorSearch.syncVectorIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/vector-search/indexes/{name}/upsert-data": {
+      "post": {
+        "description": "Handles the upserting of data into a specified vector index.",
+        "operationId": "vectorSearch.upsertDataVectorIndex",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "inputs_json": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpsertDataVectorIndexResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "vectorSearch"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "vectorSearch"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_JSON_VALUE",
+      "message": "unmarshalFacetResultDataSchema accepts an arbitrary JSON value",
+      "source": "@databricks/sdk-vectorsearch/v1/model.js:192:31"
+    },
+    {
+      "code": "UNCONSTRAINED_JSON_VALUE",
+      "message": "unmarshalResultDataSchema accepts an arbitrary JSON value",
+      "source": "@databricks/sdk-vectorsearch/v1/model.js:301:30"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalRetrieveUserVisibleMetricsRequestSchema uses z.any()",
+      "source": "@databricks/sdk-vectorsearch/v1/model.js:590:13"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalRetrieveUserVisibleMetricsRequestSchema uses z.any()",
+      "source": "@databricks/sdk-vectorsearch/v1/model.js:591:11"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.createEndpoint",
+      "path": "/api/2.0/vector-search/endpoints",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:35"
+    },
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.createVectorIndex",
+      "path": "/api/2.0/vector-search/indexes",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:61"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "vectorSearch.deleteDataVectorIndex",
+      "path": "/api/2.0/vector-search/indexes/{name}/delete-data",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:81"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "vectorSearch.deleteEndpoint",
+      "path": "/api/2.0/vector-search/endpoints/{name}",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:104"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "vectorSearch.deleteVectorIndex",
+      "path": "/api/2.0/vector-search/indexes/{name}",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:123"
+    },
+    {
+      "method": "GET",
+      "operationId": "vectorSearch.getEndpoint",
+      "path": "/api/2.0/vector-search/endpoints/{name}",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:142"
+    },
+    {
+      "method": "GET",
+      "operationId": "vectorSearch.getVectorIndex",
+      "path": "/api/2.0/vector-search/indexes/{name}",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:161"
+    },
+    {
+      "method": "GET",
+      "operationId": "vectorSearch.listEndpoints",
+      "path": "/api/2.0/vector-search/endpoints",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:184"
+    },
+    {
+      "method": "GET",
+      "operationId": "vectorSearch.listVectorIndex",
+      "path": "/api/2.0/vector-search/indexes",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:216"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "vectorSearch.patchEndpoint",
+      "path": "/api/2.0/vector-search/endpoints/{name}",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:249"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "vectorSearch.patchEndpointBudgetPolicy",
+      "path": "/api/2.0/vector-search/endpoints/{name}/budget-policy",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:269"
+    },
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.queryVectorIndex",
+      "path": "/api/2.0/vector-search/indexes/{name}/query",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:289"
+    },
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.queryVectorIndexNextPage",
+      "path": "/api/2.0/vector-search/indexes/{name}/query-next-page",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:309"
+    },
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.retrieveUserVisibleMetrics",
+      "path": "/api/2.0/vector-search/endpoints/{name}/metrics",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:329"
+    },
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.scanVectorIndex",
+      "path": "/api/2.0/vector-search/indexes/{name}/scan",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:349"
+    },
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.syncVectorIndex",
+      "path": "/api/2.0/vector-search/indexes/{name}/sync",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:369"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "vectorSearch.updateEndpointCustomTags",
+      "path": "/api/2.0/vector-search/endpoints/{name}/tags",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:389"
+    },
+    {
+      "method": "POST",
+      "operationId": "vectorSearch.upsertDataVectorIndex",
+      "path": "/api/2.0/vector-search/indexes/{name}/upsert-data",
+      "source": "@databricks/sdk-vectorsearch/v1/client.js:409"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-vectorsearch",
+  "x-databricks-sdk-version": "0.49.0"
+}

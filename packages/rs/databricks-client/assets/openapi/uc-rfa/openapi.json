@@ -1,0 +1,330 @@
+{
+  "components": {
+    "schemas": {
+      "AccessRequestDestinations": {
+        "additionalProperties": false,
+        "properties": {
+          "are_any_destinations_hidden": {
+            "type": "boolean"
+          },
+          "destination_source_securable": {
+            "$ref": "#/components/schemas/Securable"
+          },
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationDestination"
+            },
+            "type": "array"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "securable": {
+            "$ref": "#/components/schemas/Securable"
+          },
+          "securable_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BatchCreateAccessRequestsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/CreateAccessRequest"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "BatchCreateAccessRequestsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "responses": {
+            "items": {
+              "$ref": "#/components/schemas/CreateAccessRequestResponse"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccessRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "behalf_of": {
+            "$ref": "#/components/schemas/Principal"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "securable_permissions": {
+            "items": {
+              "$ref": "#/components/schemas/SecurablePermissions"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccessRequestResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "behalf_of": {
+            "$ref": "#/components/schemas/Principal"
+          },
+          "request_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRequestDestinations"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NotificationDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "destination_id": {
+            "type": "string"
+          },
+          "destination_type": {
+            "type": "string"
+          },
+          "special_destination": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Principal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "principal_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Securable": {
+        "additionalProperties": false,
+        "properties": {
+          "full_name": {
+            "type": "string"
+          },
+          "provider_share": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SecurablePermissions": {
+        "additionalProperties": false,
+        "properties": {
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "securable": {
+            "$ref": "#/components/schemas/Securable"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Rfa API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/3.0/rfa/destinations": {
+      "patch": {
+        "description": "Updates the access request destinations for the given securable.\nThe caller must be a metastore admin, the owner of the securable, or a user that has the **MANAGE** privilege on the securable in order to assign destinations.\nA maximum of 5 emails and 5 external notification destinations (Slack, Microsoft Teams, and Generic Webhook destinations) can be assigned to a securable.\nIf a URL destination is assigned, no other destinations can be set.\n\nThe supported securable types are: \"metastore\", \"catalog\", \"schema\", \"table\",\n\"external_location\", \"connection\", \"credential\", \"function\", \"registered_model\", and \"volume\".",
+        "operationId": "rfa.updateAccessRequestDestinations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestDestinations"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestDestinations"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "rfa"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/3.0/rfa/destinations/{securableType}/{fullName}": {
+      "get": {
+        "description": "Gets an array of access request destinations for the specified securable.\nAny caller can see URL destinations or the destinations on the metastore.\nOtherwise, only those with **BROWSE** permissions on the securable can see destinations.\n\nThe supported securable types are: \"metastore\", \"catalog\", \"schema\", \"table\",\n\"external_location\", \"connection\", \"credential\", \"function\", \"registered_model\", and \"volume\".",
+        "operationId": "rfa.getAccessRequestDestinations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullName"
+          },
+          {
+            "in": "path",
+            "name": "securableType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableType"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestDestinations"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "rfa"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/3.0/rfa/requests": {
+      "post": {
+        "description": "Creates access requests for Unity Catalog permissions for a specified principal on a securable object.\nThis Batch API can take in multiple principals, securable objects,\nand permissions as the input and returns the access request destinations for each.\nPrincipals must be unique across the API call.\n\nThe supported securable types are: \"metastore\", \"catalog\", \"schema\", \"table\",\n\"external_location\", \"connection\", \"credential\", \"function\", \"registered_model\", and \"volume\".",
+        "operationId": "rfa.batchCreateAccessRequests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "requests": {
+                    "items": {
+                      "$ref": "#/components/schemas/CreateAccessRequest"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateAccessRequestsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "rfa"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "rfa"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "rfa.batchCreateAccessRequests",
+      "path": "/api/3.0/rfa/requests",
+      "source": "@databricks/sdk-uc-rfa/v1/client.js:43"
+    },
+    {
+      "method": "GET",
+      "operationId": "rfa.getAccessRequestDestinations",
+      "path": "/api/3.0/rfa/destinations/{securableType}/{fullName}",
+      "source": "@databricks/sdk-uc-rfa/v1/client.js:70"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "rfa.updateAccessRequestDestinations",
+      "path": "/api/3.0/rfa/destinations",
+      "source": "@databricks/sdk-uc-rfa/v1/client.js:97"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-uc-rfa",
+  "x-databricks-sdk-version": "0.49.0"
+}

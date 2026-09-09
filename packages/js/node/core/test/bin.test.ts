@@ -56,6 +56,27 @@ describe("bin.parseVersion", () => {
 });
 
 describe("bin.ensure", () => {
+  it("installs to an explicit destination", async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-destination-"));
+    const root = join(homeDir, ".dbx-tools", "example");
+    const destination = {
+      root,
+      binDir: root,
+      path: join(root, "example_1_2_3"),
+    };
+    try {
+      const installed = await bin.ensure("example", executableUrl(), {
+        destination,
+        minVersion: "1.2.3",
+      });
+
+      assert.deepEqual(installed, destination);
+      await access(installed.path, constants.X_OK);
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it("downloads an executable and reuses the installed path", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-home-"));
     try {

@@ -91,6 +91,7 @@ packages/js/node/appkit-web-search/index.ts
 packages/js/node/auth-gate/index.ts
 packages/js/node/core/index.ts
 packages/js/node/databricks/index.ts
+packages/js/node/databricks-openapi/index.ts
 packages/js/node/databricks-zerobus/index.ts
 packages/js/node/email/index.ts
 packages/js/node/fs/index.ts

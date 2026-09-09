@@ -1,0 +1,3973 @@
+{
+  "components": {
+    "schemas": {
+      "AccountComplexValue": {
+        "additionalProperties": false,
+        "properties": {
+          "$ref": {
+            "type": "string"
+          },
+          "display": {
+            "type": "string"
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AccountGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/AccountResourceMeta"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "AccountName": {
+        "additionalProperties": false,
+        "properties": {
+          "familyName": {
+            "type": "string"
+          },
+          "givenName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AccountPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "op": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "type": "object"
+      },
+      "AccountResourceMeta": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceType": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AccountServicePrincipal": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "AccountUser": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/AccountName"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "userName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ComplexValue": {
+        "additionalProperties": false,
+        "properties": {
+          "$ref": {
+            "type": "string"
+          },
+          "display": {
+            "type": "string"
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccountGroupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/AccountResourceMeta"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccountServicePrincipalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccountUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/AccountName"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "userName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateGroupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceMeta"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateServicePrincipalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/Name"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "userName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetPasswordPermissionLevelsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "permission_levels": {
+            "items": {
+              "$ref": "#/components/schemas/PasswordPermissionsDescription"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Group": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceMeta"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListAccountGroupsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "itemsPerPage": {
+            "type": "number"
+          },
+          "Resources": {
+            "items": {
+              "$ref": "#/components/schemas/AccountGroup"
+            },
+            "type": "array"
+          },
+          "startIndex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "totalResults": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ListAccountServicePrincipalsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "itemsPerPage": {
+            "type": "number"
+          },
+          "Resources": {
+            "items": {
+              "$ref": "#/components/schemas/AccountServicePrincipal"
+            },
+            "type": "array"
+          },
+          "startIndex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "totalResults": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ListAccountUsersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "itemsPerPage": {
+            "type": "number"
+          },
+          "Resources": {
+            "items": {
+              "$ref": "#/components/schemas/AccountUser"
+            },
+            "type": "array"
+          },
+          "startIndex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "totalResults": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ListGroupsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "itemsPerPage": {
+            "type": "number"
+          },
+          "Resources": {
+            "items": {
+              "$ref": "#/components/schemas/Group"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "startIndex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "totalResults": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ListServicePrincipalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "itemsPerPage": {
+            "type": "number"
+          },
+          "Resources": {
+            "items": {
+              "$ref": "#/components/schemas/ServicePrincipal"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "startIndex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "totalResults": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ListUsersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "itemsPerPage": {
+            "type": "number"
+          },
+          "Resources": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "startIndex": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "totalResults": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "Name": {
+        "additionalProperties": false,
+        "properties": {
+          "familyName": {
+            "type": "string"
+          },
+          "givenName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PasswordAccessControlRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "group_name": {
+            "type": "string"
+          },
+          "permission_level": {
+            "type": "string"
+          },
+          "service_principal_name": {
+            "type": "string"
+          },
+          "user_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PasswordAccessControlResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "all_permissions": {
+            "items": {
+              "$ref": "#/components/schemas/PasswordPermission"
+            },
+            "type": "array"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "group_name": {
+            "type": "string"
+          },
+          "service_principal_name": {
+            "type": "string"
+          },
+          "user_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PasswordPermission": {
+        "additionalProperties": false,
+        "properties": {
+          "inherited": {
+            "type": "boolean"
+          },
+          "inherited_from_object": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "permission_level": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PasswordPermissions": {
+        "additionalProperties": false,
+        "properties": {
+          "access_control_list": {
+            "items": {
+              "$ref": "#/components/schemas/PasswordAccessControlResponse"
+            },
+            "type": "array"
+          },
+          "object_id": {
+            "type": "string"
+          },
+          "object_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PasswordPermissionsDescription": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "permission_level": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PasswordPermissionsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "access_control_list": {
+            "items": {
+              "$ref": "#/components/schemas/PasswordAccessControlRequest"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Patch": {
+        "additionalProperties": false,
+        "properties": {
+          "op": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "type": "object"
+      },
+      "PatchAccountGroupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "Operations": {
+            "items": {
+              "$ref": "#/components/schemas/AccountPatch"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PatchAccountServicePrincipalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "Operations": {
+            "items": {
+              "$ref": "#/components/schemas/AccountPatch"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PatchAccountUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "Operations": {
+            "items": {
+              "$ref": "#/components/schemas/AccountPatch"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PatchGroupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "Operations": {
+            "items": {
+              "$ref": "#/components/schemas/Patch"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PatchServicePrincipalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "Operations": {
+            "items": {
+              "$ref": "#/components/schemas/Patch"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PatchUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "Operations": {
+            "items": {
+              "$ref": "#/components/schemas/Patch"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ResourceMeta": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceType": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ServicePrincipal": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateAccountGroupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/AccountResourceMeta"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateAccountServicePrincipalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateAccountUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/AccountName"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AccountComplexValue"
+            },
+            "type": "array"
+          },
+          "userName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateGroupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceMeta"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateServicePrincipalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/Name"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "userName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "entitlements": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "$ref": "#/components/schemas/Name"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ComplexValue"
+            },
+            "type": "array"
+          },
+          "schemas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "userName": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Schema_7868603e": {
+        "type": "object",
+        "properties": {
+          "Operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountPatch"
+            }
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Schema_7ba25b10": {
+        "type": "object",
+        "properties": {
+          "Operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Patch"
+            }
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Scim API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/scim/v2/Groups": {
+      "get": {
+        "description": "Gets all details of the groups associated with the <Databricks> account. As of 08/22/2025,\nthis endpoint will no longer return members. Instead, members should be retrieved by\niterating through `Get group details`. Existing accounts that rely on this attribute\nwill not be impacted and will continue receiving member data as before.",
+        "operationId": "scim.listAccountGroups",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAccountGroupsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a group in the <Databricks> account with a unique name, using the supplied group details.",
+        "operationId": "scim.createAccountGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "members": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "meta": {
+                    "$ref": "#/components/schemas/AccountResourceMeta"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountGroup"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/scim/v2/Groups/{id}": {
+      "delete": {
+        "description": "Deletes a group from the <Databricks> account.",
+        "operationId": "scim.deleteAccountGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets the information for a specific group in the <Databricks> account.",
+        "operationId": "scim.getAccountGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountGroup"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Partially updates the details of a group.",
+        "operationId": "scim.patchAccountGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7868603e"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates the details of a group by replacing the entire group entity.",
+        "operationId": "scim.updateAccountGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "members": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "meta": {
+                    "$ref": "#/components/schemas/AccountResourceMeta"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals": {
+      "get": {
+        "description": "Gets the set of service principals associated with a <Databricks> account.",
+        "operationId": "scim.listAccountServicePrincipals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAccountServicePrincipalsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a new service principal in the <Databricks> account.",
+        "operationId": "scim.createAccountServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "applicationId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountServicePrincipal"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals/{id}": {
+      "delete": {
+        "description": "Delete a single service principal in the <Databricks> account.",
+        "operationId": "scim.deleteAccountServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets the details for a single service principal define in the <Databricks> account.",
+        "operationId": "scim.getAccountServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountServicePrincipal"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Partially updates the details of a single service principal in the <Databricks> account.",
+        "operationId": "scim.patchAccountServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7868603e"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates the details of a single service principal.\n\nThis action replaces the existing service principal with the same name.",
+        "operationId": "scim.updateAccountServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "applicationId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/scim/v2/Users": {
+      "get": {
+        "description": "Gets details for all the users associated with a <Databricks> account.",
+        "operationId": "scim.listAccountUsers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAccountUsersResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a new user in the <Databricks> account. This new user will also be added to the <Databricks> account.",
+        "operationId": "scim.createAccountUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "emails": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "$ref": "#/components/schemas/AccountName"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "userName": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountUser"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/scim/v2/Users/{id}": {
+      "delete": {
+        "description": "Deletes a user. Deleting a user from a <Databricks> account also removes objects associated with the user.",
+        "operationId": "scim.deleteAccountUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets information for a specific user in <Databricks> account.",
+        "operationId": "scim.getAccountUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          },
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountUser"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Partially updates a user resource by applying the supplied operations on specific user attributes.\nThe `userName` and `emails` attributes cannot be updated through this API; any supplied changes to them are ignored (no-op).",
+        "operationId": "scim.patchAccountUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7868603e"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Replaces a user's information with the data supplied in request.\nThe `userName` and `emails` attributes cannot be updated through this API; any supplied changes to them are ignored (no-op).",
+        "operationId": "scim.updateAccountUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "emails": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "$ref": "#/components/schemas/AccountName"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/AccountComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "userName": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/permissions/authorization/passwords": {
+      "get": {
+        "description": "Gets the permissions of all passwords. Passwords can inherit permissions from their root object.",
+        "operationId": "scim.getPermissions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordPermissions"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates the permissions on all passwords. Passwords can inherit permissions from their root object.",
+        "operationId": "scim.updatePermissions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordPermissionsRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordPermissions"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Sets permissions on an object, replacing existing permissions if they exist. Deletes all direct permissions if none are specified. Objects can inherit permissions from their root object.",
+        "operationId": "scim.setPermissions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordPermissionsRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordPermissions"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/permissions/authorization/passwords/permissionLevels": {
+      "get": {
+        "description": "Gets the permission levels that a user can have on an object.",
+        "operationId": "scim.getPermissionLevels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPasswordPermissionLevelsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/preview/scim/v2/Groups": {
+      "get": {
+        "description": "Gets all details of the groups associated with the <Databricks> workspace.",
+        "operationId": "scim.listGroups",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListGroupsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a group in the <Databricks> workspace with a unique name, using the supplied group details.",
+        "operationId": "scim.createGroup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "entitlements": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "members": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "meta": {
+                    "$ref": "#/components/schemas/ResourceMeta"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "schemas": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/preview/scim/v2/Groups/{id}": {
+      "delete": {
+        "description": "Deletes a group from the <Databricks> workspace.",
+        "operationId": "scim.deleteGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets the information for a specific group in the <Databricks> workspace.",
+        "operationId": "scim.getGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Group"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Partially updates the details of a group.",
+        "operationId": "scim.patchGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7ba25b10"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Updates the details of a group by replacing the entire group entity.",
+        "operationId": "scim.updateGroup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "entitlements": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "members": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "meta": {
+                    "$ref": "#/components/schemas/ResourceMeta"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "schemas": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/preview/scim/v2/Me": {
+      "get": {
+        "description": "Get details about the current method caller's identity.",
+        "operationId": "scim.me",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/preview/scim/v2/ServicePrincipals": {
+      "get": {
+        "description": "Gets the set of service principals associated with a <Databricks> workspace.",
+        "operationId": "scim.listServicePrincipals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListServicePrincipalResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a new service principal in the <Databricks> workspace.",
+        "operationId": "scim.createServicePrincipal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "applicationId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "entitlements": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "schemas": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicePrincipal"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/preview/scim/v2/ServicePrincipals/{id}": {
+      "delete": {
+        "description": "Delete a single service principal in the <Databricks> workspace.",
+        "operationId": "scim.deleteServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets the details for a single service principal define in the <Databricks> workspace.",
+        "operationId": "scim.getServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicePrincipal"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Partially updates the details of a single service principal in the <Databricks> workspace.",
+        "operationId": "scim.patchServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7ba25b10"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Updates the details of a single service principal.\n\nThis action replaces the existing service principal with the same name.",
+        "operationId": "scim.updateServicePrincipal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "applicationId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "entitlements": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "schemas": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/preview/scim/v2/Users": {
+      "get": {
+        "description": "Gets details for all the users associated with a <Databricks> workspace.",
+        "operationId": "scim.listUsers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListUsersResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a new user in the <Databricks> workspace. This new user will also be added to the <Databricks> account.",
+        "operationId": "scim.createUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "emails": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "entitlements": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "$ref": "#/components/schemas/Name"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "schemas": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "userName": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/preview/scim/v2/Users/{id}": {
+      "delete": {
+        "description": "Deletes a user. Deleting a user from a <Databricks> workspace also removes objects associated with the user.",
+        "operationId": "scim.deleteUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets information for a specific user in <Databricks> workspace.",
+        "operationId": "scim.getUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          },
+          {
+            "in": "query",
+            "name": "attributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "attributes"
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "count"
+          },
+          {
+            "in": "query",
+            "name": "excludedAttributes",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "excludedAttributes"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "filter"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortBy"
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          },
+          {
+            "in": "query",
+            "name": "startIndex",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "startIndex"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Partially updates a user resource by applying the supplied operations on specific user attributes.\nThe `userName` and `emails` attributes cannot be updated through this API; any supplied changes to them are ignored (no-op).",
+        "operationId": "scim.patchUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7ba25b10"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Replaces a user's information with the data supplied in request.\nThe `userName` and `emails` attributes cannot be updated through this API; any supplied changes to them are ignored (no-op).",
+        "operationId": "scim.updateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "emails": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "entitlements": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "name": {
+                    "$ref": "#/components/schemas/Name"
+                  },
+                  "roles": {
+                    "items": {
+                      "$ref": "#/components/schemas/ComplexValue"
+                    },
+                    "type": "array"
+                  },
+                  "schemas": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "userName": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "scim"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "scim"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_JSON_VALUE",
+      "message": "marshalAccountPatchSchema accepts an arbitrary JSON value",
+      "source": "@databricks/sdk-scim/v1/model.js:398:9"
+    },
+    {
+      "code": "UNCONSTRAINED_JSON_VALUE",
+      "message": "marshalPatchSchema accepts an arbitrary JSON value",
+      "source": "@databricks/sdk-scim/v1/model.js:562:9"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "scim.createAccountGroup",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Groups",
+      "source": "@databricks/sdk-scim/v1/client.js:35"
+    },
+    {
+      "method": "POST",
+      "operationId": "scim.createAccountServicePrincipal",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals",
+      "source": "@databricks/sdk-scim/v1/client.js:162"
+    },
+    {
+      "method": "POST",
+      "operationId": "scim.createAccountUser",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Users",
+      "source": "@databricks/sdk-scim/v1/client.js:288"
+    },
+    {
+      "method": "POST",
+      "operationId": "scim.createGroup",
+      "path": "/api/2.0/preview/scim/v2/Groups",
+      "source": "@databricks/sdk-scim/v1/client.js:450"
+    },
+    {
+      "method": "POST",
+      "operationId": "scim.createServicePrincipal",
+      "path": "/api/2.0/preview/scim/v2/ServicePrincipals",
+      "source": "@databricks/sdk-scim/v1/client.js:578"
+    },
+    {
+      "method": "POST",
+      "operationId": "scim.createUser",
+      "path": "/api/2.0/preview/scim/v2/Users",
+      "source": "@databricks/sdk-scim/v1/client.js:710"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "scim.deleteAccountGroup",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:54"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "scim.deleteAccountServicePrincipal",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:181"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "scim.deleteAccountUser",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:307"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "scim.deleteGroup",
+      "path": "/api/2.0/preview/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:470"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "scim.deleteServicePrincipal",
+      "path": "/api/2.0/preview/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:598"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "scim.deleteUser",
+      "path": "/api/2.0/preview/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:730"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getAccountGroup",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:69"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getAccountServicePrincipal",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:196"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getAccountUser",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:322"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getGroup",
+      "path": "/api/2.0/preview/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:486"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getPermissionLevels",
+      "path": "/api/2.0/permissions/authorization/passwords/permissionLevels",
+      "source": "@databricks/sdk-scim/v1/client.js:746"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getPermissions",
+      "path": "/api/2.0/permissions/authorization/passwords",
+      "source": "@databricks/sdk-scim/v1/client.js:765"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getServicePrincipal",
+      "path": "/api/2.0/preview/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:614"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.getUser",
+      "path": "/api/2.0/preview/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:784"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.listAccountGroups",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Groups",
+      "source": "@databricks/sdk-scim/v1/client.js:92"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.listAccountServicePrincipals",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals",
+      "source": "@databricks/sdk-scim/v1/client.js:214"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.listAccountUsers",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Users",
+      "source": "@databricks/sdk-scim/v1/client.js:350"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.listGroups",
+      "path": "/api/2.0/preview/scim/v2/Groups",
+      "source": "@databricks/sdk-scim/v1/client.js:505"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.listServicePrincipals",
+      "path": "/api/2.0/preview/scim/v2/ServicePrincipals",
+      "source": "@databricks/sdk-scim/v1/client.js:633"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.listUsers",
+      "path": "/api/2.0/preview/scim/v2/Users",
+      "source": "@databricks/sdk-scim/v1/client.js:813"
+    },
+    {
+      "method": "GET",
+      "operationId": "scim.me",
+      "path": "/api/2.0/preview/scim/v2/Me",
+      "source": "@databricks/sdk-scim/v1/client.js:426"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "scim.patchAccountGroup",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:130"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "scim.patchAccountServicePrincipal",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:252"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "scim.patchAccountUser",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:391"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "scim.patchGroup",
+      "path": "/api/2.0/preview/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:544"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "scim.patchServicePrincipal",
+      "path": "/api/2.0/preview/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:672"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "scim.patchUser",
+      "path": "/api/2.0/preview/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:855"
+    },
+    {
+      "method": "PUT",
+      "operationId": "scim.setPermissions",
+      "path": "/api/2.0/permissions/authorization/passwords",
+      "source": "@databricks/sdk-scim/v1/client.js:872"
+    },
+    {
+      "method": "PUT",
+      "operationId": "scim.updateAccountGroup",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:146"
+    },
+    {
+      "method": "PUT",
+      "operationId": "scim.updateAccountServicePrincipal",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:272"
+    },
+    {
+      "method": "PUT",
+      "operationId": "scim.updateAccountUser",
+      "path": "/api/2.0/accounts/{accountId}/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:410"
+    },
+    {
+      "method": "PUT",
+      "operationId": "scim.updateGroup",
+      "path": "/api/2.0/preview/scim/v2/Groups/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:561"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "scim.updatePermissions",
+      "path": "/api/2.0/permissions/authorization/passwords",
+      "source": "@databricks/sdk-scim/v1/client.js:892"
+    },
+    {
+      "method": "PUT",
+      "operationId": "scim.updateServicePrincipal",
+      "path": "/api/2.0/preview/scim/v2/ServicePrincipals/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:693"
+    },
+    {
+      "method": "PUT",
+      "operationId": "scim.updateUser",
+      "path": "/api/2.0/preview/scim/v2/Users/{id}",
+      "source": "@databricks/sdk-scim/v1/client.js:915"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-scim",
+  "x-databricks-sdk-version": "0.49.0"
+}

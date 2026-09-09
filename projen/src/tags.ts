@@ -182,6 +182,7 @@ export const PACKAGE_TAG_MIXINS = {
   openapi: create(projectPredicate.hasTag("openapi"), (p) => {
     p.addDeps("openapi-fetch@catalog:");
     applyCompilerOptions(p, { target: "ES2022", lib: [...DOM_LIB], types: [] });
+    addPackageFiles(p, "openapi.json");
   }),
 } satisfies Record<string, ConstructsMixin>;
 

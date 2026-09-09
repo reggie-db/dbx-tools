@@ -19,8 +19,23 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
 import { Component, DependencyType } from "projen";
+import {
+  DATABRICKS_SDK_VERSION,
+  discoverDatabricksSdkInputs,
+} from "./packages/js/node/databricks-openapi/src/inputs.ts";
 
 const SCOPE = "dbx-tools";
+const DATABRICKS_SDK_API_INPUTS = discoverDatabricksSdkInputs();
+
+/** Copy canonical branding into published package trees after synthesis. */
+class BrandPackageAssets extends Component {
+  /** Refresh crate-local and UI package brand copies after generated manifests are available. */
+  public override postSynthesize(): void {
+    execFileSync("bun", [resolve(this.project.outdir, "branding/generate-package-assets.mjs")], {
+      stdio: "inherit",
+    });
+  }
+}
 
 /** Generate committed model metadata fallbacks after project synthesis. */
 class ModelMetadataSource extends Component {
@@ -69,6 +84,7 @@ const root = new projenProject.DBXToolsNodeProject({
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:*` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
+  syncResynthPaths: ["branding/brand.yaml", "branding/assets"],
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
   // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
   // by source path either way.
@@ -113,8 +129,6 @@ root.gitignore.addPatterns(
   ".isaac/",
   ".polly/",
   ".home/",
-  ".dev.token",
-  ".dev.client.test/",
   "**/.logs/",
 );
 
@@ -161,6 +175,9 @@ root.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
 root.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
 root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
 root.pnpmWorkspace?.addCatalog("echarts-for-react", "^3.0.2");
+for (const input of DATABRICKS_SDK_API_INPUTS) {
+  root.pnpmWorkspace?.addCatalog(input.package, DATABRICKS_SDK_VERSION);
+}
 root.pnpmWorkspace?.addCatalog("shiki", "^3.0.0");
 root.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
 // The Adaptive Cards JavaScript renderer, used by the `ui-teams` package to
@@ -307,6 +324,28 @@ project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p
     "@databricks/appkit@catalog:",
   );
 });
+
+// node-databricks-openapi: pinned Databricks modular SDK syntax to
+// deterministic OpenAPI JSON and generated Rust clients.
+project.applyToProjects(root, { identifierName: "databricks-openapi", tags: "node" }, (p) => {
+  p.addDeps(
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "oxc-parser@^0.90.0",
+    "yaml@^2.9.0",
+  );
+  p.addDevDeps(...DATABRICKS_SDK_API_INPUTS.map((input) => `${input.package}@catalog:`));
+  projectJs.addPackageFiles(p, "openapi-overrides.yaml");
+  p.dbxToolsConfig.databricksOpenapi = {
+    overrides: "openapi-overrides.yaml",
+    rustOutputDirectory: "../../../rs/databricks-client/assets/openapi",
+    rustClientPath: "../../../rs/databricks-client/src/lib.rs",
+    strict: true,
+  };
+});
+
+const openapiTask = root.tasks.tryFind("openapi");
+openapiTask?.prependExec("bun packages/js/node/databricks-openapi/src/cli.ts");
 
 // node-databricks-zerobus: Zerobus streaming-ingest helpers. Uses the Zerobus
 // SDK directly (no AppKit); resolves the region-aware endpoint via
@@ -687,7 +726,7 @@ project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p)
     "./assets/logo-light.svg": "./src/generated/logo-light.svg",
     "./assets/logo-dark.svg": "./src/generated/logo-dark.svg",
   });
-  p.tasks.tryFind("pre-compile")?.exec("node ../../../branding/generate-package-assets.mjs");
+  p.tasks.tryFind("pre-compile")?.exec("bun ../../../branding/generate-package-assets.mjs");
 });
 
 // ui-email: the React surface for the email add-on - an Approve/Deny approval
@@ -895,6 +934,8 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       defaultFeatures: false,
       features: ["client-api-ring", "server-api-ring"],
     },
+    progenitor: "=0.14.0",
+    "progenitor-client": "=0.14.0",
     reqwest: { version: "0.12", defaultFeatures: false, features: ["json", "rustls-tls"] },
     regex: "1",
     rcgen: "0.14",
@@ -946,6 +987,24 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         uniffi: { workspace: true },
         url: { workspace: true },
         uuid: { workspace: true },
+      },
+    },
+    "databricks-client": {
+      description: "Generated Rust clients for Databricks workspace and account APIs",
+      dependencies: {
+        bytes: { workspace: true },
+        chrono: { version: "0.4", features: ["serde"] },
+        futures: { workspace: true },
+        progenitor: { workspace: true },
+        "progenitor-client": { workspace: true },
+        reqwest: {
+          version: "0.13",
+          defaultFeatures: false,
+          features: ["json", "query", "rustls", "stream"],
+        },
+        serde: { workspace: true },
+        serde_json: { workspace: true },
+        uuid: { workspace: true, features: ["serde"] },
       },
     },
     google: {
@@ -1105,6 +1164,11 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   },
   release: true,
 });
+root.annotateGenerated("/packages/rs/databricks/assets/brand.yaml");
+root.annotateGenerated("/packages/rs/databricks/assets/logo-light.svg");
+root.annotateGenerated("/packages/rs/databricks-client/assets/openapi/**");
+root.annotateGenerated("/packages/rs/databricks-client/src/lib.rs");
+new BrandPackageAssets(root);
 new ModelMetadataSource(root);
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",

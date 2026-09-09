@@ -1,0 +1,2448 @@
+{
+  "components": {
+    "schemas": {
+      "CleanRoom": {
+        "additionalProperties": false,
+        "properties": {
+          "access_restricted": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "enable_shared_output": {
+            "type": "boolean"
+          },
+          "local_collaborator_alias": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "output_catalog": {
+            "$ref": "#/components/schemas/CleanRoomOutputCatalog"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "remote_detailed_info": {
+            "$ref": "#/components/schemas/CleanRoomRemoteDetail"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset": {
+        "additionalProperties": false,
+        "properties": {
+          "added_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "asset_type": {
+            "type": "string"
+          },
+          "clean_room_name": {
+            "type": "string"
+          },
+          "foreign_table": {
+            "$ref": "#/components/schemas/CleanRoomAsset_ForeignTable"
+          },
+          "foreign_table_local_details": {
+            "$ref": "#/components/schemas/CleanRoomAsset_ForeignTableLocalDetails"
+          },
+          "jar_analysis": {
+            "$ref": "#/components/schemas/CleanRoomAsset_JarAnalysis"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notebook": {
+            "$ref": "#/components/schemas/CleanRoomAsset_Notebook"
+          },
+          "owner_collaborator_alias": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "table": {
+            "$ref": "#/components/schemas/CleanRoomAsset_Table"
+          },
+          "table_local_details": {
+            "$ref": "#/components/schemas/CleanRoomAsset_TableLocalDetails"
+          },
+          "view": {
+            "$ref": "#/components/schemas/CleanRoomAsset_View"
+          },
+          "view_local_details": {
+            "$ref": "#/components/schemas/CleanRoomAsset_ViewLocalDetails"
+          },
+          "volume_local_details": {
+            "$ref": "#/components/schemas/CleanRoomAsset_VolumeLocalDetails"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_ForeignTable": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_ForeignTableLocalDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "local_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_JarAnalysis": {
+        "additionalProperties": false,
+        "properties": {
+          "central_jar_file_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "environment_version": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "main_class_name": {
+            "type": "string"
+          },
+          "review_state": {
+            "type": "string"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomJarAnalysisReview"
+            },
+            "type": "array"
+          },
+          "runner_collaborator_aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_Notebook": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "environment_version": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "notebook_content": {
+            "type": "string"
+          },
+          "review_state": {
+            "type": "string"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomNotebookReview"
+            },
+            "type": "array"
+          },
+          "runner_collaborator_aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_Table": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_TableLocalDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "local_name": {
+            "type": "string"
+          },
+          "partitions": {
+            "items": {
+              "$ref": "#/components/schemas/PartitionSpecification_Partition"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_View": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_ViewLocalDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "local_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAsset_VolumeLocalDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "local_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomAutoApprovalRule": {
+        "additionalProperties": false,
+        "properties": {
+          "author_collaborator_alias": {
+            "type": "string"
+          },
+          "author_scope": {
+            "type": "string"
+          },
+          "clean_room_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "rule_owner_collaborator_alias": {
+            "type": "string"
+          },
+          "runner_collaborator_alias": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomCollaborator": {
+        "additionalProperties": false,
+        "properties": {
+          "collaborator_alias": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "global_metastore_id": {
+            "type": "string"
+          },
+          "invite_recipient_email": {
+            "type": "string"
+          },
+          "invite_recipient_workspace_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "organization_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomJarAnalysisReview": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "created_at_millis": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "review_state": {
+            "type": "string"
+          },
+          "review_sub_reason": {
+            "type": "string"
+          },
+          "reviewer_collaborator_alias": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomNotebookReview": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "created_at_millis": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "review_state": {
+            "type": "string"
+          },
+          "review_sub_reason": {
+            "type": "string"
+          },
+          "reviewer_collaborator_alias": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomNotebookTaskRun": {
+        "additionalProperties": false,
+        "properties": {
+          "collaborator_job_run_info": {
+            "$ref": "#/components/schemas/CollaboratorJobRunInfo"
+          },
+          "notebook_etag": {
+            "type": "string"
+          },
+          "notebook_job_run_state": {
+            "$ref": "#/components/schemas/CleanRoomTaskRunState"
+          },
+          "notebook_name": {
+            "type": "string"
+          },
+          "notebook_updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "output_schema_expiration_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "output_schema_name": {
+            "type": "string"
+          },
+          "run_duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "shared_output_schema_expiration_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "shared_output_schema_name": {
+            "type": "string"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomOutputCatalog": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomRemoteDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "central_clean_room_id": {
+            "type": "string"
+          },
+          "cloud_vendor": {
+            "type": "string"
+          },
+          "collaborators": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomCollaborator"
+            },
+            "type": "array"
+          },
+          "compliance_security_profile": {
+            "$ref": "#/components/schemas/ComplianceSecurityProfile"
+          },
+          "creator": {
+            "$ref": "#/components/schemas/CleanRoomCollaborator"
+          },
+          "egress_network_policy": {
+            "$ref": "#/components/schemas/EgressNetworkPolicy"
+          },
+          "enable_shared_output": {
+            "type": "boolean"
+          },
+          "package_provider_collaborator_alias": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomTaskRun": {
+        "additionalProperties": false,
+        "properties": {
+          "analysis_details": {
+            "$ref": "#/components/schemas/CleanRoomTaskRun_CleanRoomTaskAnalysisDetails"
+          },
+          "collaborator_job_run_info": {
+            "$ref": "#/components/schemas/CollaboratorJobRunInfo"
+          },
+          "name": {
+            "type": "string"
+          },
+          "output_info": {
+            "$ref": "#/components/schemas/CleanRoomTaskRun_OutputInfo"
+          },
+          "run_duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "shared_output_info": {
+            "$ref": "#/components/schemas/CleanRoomTaskRun_OutputInfo"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "task_run_state": {
+            "$ref": "#/components/schemas/CleanRoomTaskRunState"
+          },
+          "task_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomTaskRun_CleanRoomTaskAnalysisDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "etag": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomTaskRun_OutputInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "output_schema_expiration_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "output_schema_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CleanRoomTaskRunState": {
+        "additionalProperties": false,
+        "properties": {
+          "life_cycle_state": {
+            "type": "string"
+          },
+          "result_state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CollaboratorJobRunInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "collaborator_alias": {
+            "type": "string"
+          },
+          "collaborator_job_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "collaborator_job_run_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "collaborator_task_run_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "collaborator_workspace_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ColumnInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "mask": {
+            "$ref": "#/components/schemas/ColumnMask"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nullable": {
+            "type": "boolean"
+          },
+          "partition_index": {
+            "type": "number"
+          },
+          "position": {
+            "type": "number"
+          },
+          "type_interval_type": {
+            "type": "string"
+          },
+          "type_json": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          },
+          "type_precision": {
+            "type": "number"
+          },
+          "type_scale": {
+            "type": "number"
+          },
+          "type_text": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ColumnMask": {
+        "additionalProperties": false,
+        "properties": {
+          "function_name": {
+            "type": "string"
+          },
+          "using_arguments": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyFunctionArgument"
+            },
+            "type": "array"
+          },
+          "using_column_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ComplianceSecurityProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "compliance_standards": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CreateCleanRoomAssetReviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_type": {
+            "type": "string"
+          },
+          "clean_room_name": {
+            "type": "string"
+          },
+          "jar_analysis_review": {
+            "$ref": "#/components/schemas/JarAnalysisVersionReview"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notebook_review": {
+            "$ref": "#/components/schemas/NotebookVersionReview"
+          }
+        },
+        "type": "object"
+      },
+      "CreateCleanRoomAssetReviewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "jar_analysis_review_state": {
+            "type": "string"
+          },
+          "jar_analysis_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomJarAnalysisReview"
+            },
+            "type": "array"
+          },
+          "notebook_review_state": {
+            "type": "string"
+          },
+          "notebook_reviews": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomNotebookReview"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateCleanRoomAutoApprovalRuleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "auto_approval_rule": {
+            "$ref": "#/components/schemas/CleanRoomAutoApprovalRule"
+          }
+        },
+        "type": "object"
+      },
+      "CreateCleanRoomOutputCatalogResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "output_catalog": {
+            "$ref": "#/components/schemas/CleanRoomOutputCatalog"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteCleanRoomAssetResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "EgressNetworkPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "internet_access": {
+            "$ref": "#/components/schemas/EgressNetworkPolicy_InternetAccessPolicy"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_InternetAccessPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_internet_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/EgressNetworkPolicy_InternetAccessPolicy_InternetDestination"
+            },
+            "type": "array"
+          },
+          "allowed_storage_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/EgressNetworkPolicy_InternetAccessPolicy_StorageDestination"
+            },
+            "type": "array"
+          },
+          "log_only_mode": {
+            "$ref": "#/components/schemas/EgressNetworkPolicy_InternetAccessPolicy_LogOnlyMode"
+          },
+          "restriction_mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_InternetAccessPolicy_InternetDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_InternetAccessPolicy_LogOnlyMode": {
+        "additionalProperties": false,
+        "properties": {
+          "log_only_mode_type": {
+            "type": "string"
+          },
+          "workloads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_InternetAccessPolicy_StorageDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "azure_container": {
+            "type": "string"
+          },
+          "azure_dns_zone": {
+            "type": "string"
+          },
+          "azure_storage_account": {
+            "type": "string"
+          },
+          "azure_storage_service": {
+            "type": "string"
+          },
+          "bucket_name": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "JarAnalysisVersionReview": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "review_state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListCleanRoomAssetRevisionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomAsset"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListCleanRoomAssetsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomAsset"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListCleanRoomAutoApprovalRulesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomAutoApprovalRule"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListCleanRoomNotebookTaskRunsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomNotebookTaskRun"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListCleanRoomsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clean_rooms": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoom"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListCleanRoomTaskRunsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/CleanRoomTaskRun"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NotebookVersionReview": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "etag": {
+            "type": "string"
+          },
+          "review_state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PartitionSpecification_Partition": {
+        "additionalProperties": false,
+        "properties": {
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/PartitionSpecification_Partition_PartitionValue"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PartitionSpecification_Partition_PartitionValue": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string"
+          },
+          "recipient_property_key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PolicyFunctionArgument": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "type": "string"
+          },
+          "constant": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCleanRoomRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clean_room": {
+            "$ref": "#/components/schemas/CleanRoom"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Schema_17b20a24": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Clean Rooms API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/clean-rooms": {
+      "get": {
+        "description": "Get a list of all clean rooms of the metastore. Only clean rooms\nthe caller has access to are returned.",
+        "operationId": "cleanRooms.listCleanRooms",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCleanRoomsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a new clean room with the specified collaborators.\nThis method is asynchronous; the returned name field inside the clean_room field can be used to poll the clean room status,\nusing the [cleanrooms/get](https://docs.databricks.com/api/workspace/cleanrooms/get) method.\nWhen this method returns, the clean room will be in a PROVISIONING state, with only name, owner, comment, created_at and status populated.\nThe clean room will be usable once it enters an ACTIVE state.\n\nThe caller must be a metastore admin or have the **CREATE_CLEAN_ROOM** privilege on the\nmetastore.",
+        "operationId": "cleanRooms.createCleanRoom",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanRoom"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoom"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/assets": {
+      "get": {
+        "description": "List assets.",
+        "operationId": "cleanRooms.listCleanRoomAssets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCleanRoomAssetsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a clean room asset —share an asset like a notebook or table into the clean room.\nFor each UC asset that is added through this method, the clean room owner must also have\nenough privilege on the asset to consume it.\nThe privilege must be maintained indefinitely for the clean room to be able to access the asset.\nTypically, you should use a group as the clean room owner.",
+        "operationId": "cleanRooms.createCleanRoomAsset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "asset.cleanRoomName"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "added_at": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "asset_type": {
+                    "type": "string"
+                  },
+                  "foreign_table": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_ForeignTable"
+                  },
+                  "foreign_table_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_ForeignTableLocalDetails"
+                  },
+                  "jar_analysis": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_JarAnalysis"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "notebook": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_Notebook"
+                  },
+                  "owner_collaborator_alias": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "table": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_Table"
+                  },
+                  "table_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_TableLocalDetails"
+                  },
+                  "view": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_View"
+                  },
+                  "view_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_ViewLocalDetails"
+                  },
+                  "volume_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_VolumeLocalDetails"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoomAsset"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}": {
+      "delete": {
+        "description": "Delete a clean room asset - unshare/remove the asset from the clean room",
+        "operationId": "cleanRooms.deleteCleanRoomAsset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "assetType"
+          },
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCleanRoomAssetResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get the details of a clean room asset by its type and full name.",
+        "operationId": "cleanRooms.getCleanRoomAsset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "assetType"
+          },
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoomAsset"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a clean room asset. For example, updating the content of a notebook;\nchanging the shared partitions of a table; etc.",
+        "operationId": "cleanRooms.updateCleanRoomAsset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "asset.assetType"
+          },
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "asset.name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "added_at": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "clean_room_name": {
+                    "type": "string"
+                  },
+                  "foreign_table": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_ForeignTable"
+                  },
+                  "foreign_table_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_ForeignTableLocalDetails"
+                  },
+                  "jar_analysis": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_JarAnalysis"
+                  },
+                  "notebook": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_Notebook"
+                  },
+                  "owner_collaborator_alias": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "table": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_Table"
+                  },
+                  "table_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_TableLocalDetails"
+                  },
+                  "view": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_View"
+                  },
+                  "view_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_ViewLocalDetails"
+                  },
+                  "volume_local_details": {
+                    "$ref": "#/components/schemas/CleanRoomAsset_VolumeLocalDetails"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoomAsset"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}/reviews": {
+      "post": {
+        "description": "Submit an asset review",
+        "operationId": "cleanRooms.createCleanRoomAssetReview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "assetType"
+          },
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "jar_analysis_review": {
+                    "$ref": "#/components/schemas/JarAnalysisVersionReview"
+                  },
+                  "notebook_review": {
+                    "$ref": "#/components/schemas/NotebookVersionReview"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCleanRoomAssetReviewResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}/revisions": {
+      "get": {
+        "description": "List revisions for an asset",
+        "operationId": "cleanRooms.listCleanRoomAssetRevisions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "assetType"
+          },
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCleanRoomAssetRevisionsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}/revisions/{etag}": {
+      "get": {
+        "description": "Get a specific revision of an asset",
+        "operationId": "cleanRooms.getCleanRoomAssetRevision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "assetType"
+          },
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "etag",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "etag"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoomAsset"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/auto-approval-rules": {
+      "get": {
+        "description": "List all auto-approval rules for the caller",
+        "operationId": "cleanRooms.listCleanRoomAutoApprovalRules",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCleanRoomAutoApprovalRulesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create an auto-approval rule",
+        "operationId": "cleanRooms.createCleanRoomAutoApprovalRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "autoApprovalRule.cleanRoomName"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "auto_approval_rule": {
+                    "$ref": "#/components/schemas/CleanRoomAutoApprovalRule"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoomAutoApprovalRule"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/auto-approval-rules/{ruleId}": {
+      "delete": {
+        "description": "Delete a auto-approval rule by rule ID",
+        "operationId": "cleanRooms.deleteCleanRoomAutoApprovalRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "ruleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "ruleId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get a auto-approval rule by rule ID",
+        "operationId": "cleanRooms.getCleanRoomAutoApprovalRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "ruleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "ruleId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoomAutoApprovalRule"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a auto-approval rule by rule ID",
+        "operationId": "cleanRooms.updateCleanRoomAutoApprovalRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "autoApprovalRule.cleanRoomName"
+          },
+          {
+            "in": "path",
+            "name": "ruleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "autoApprovalRule.ruleId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "author_collaborator_alias": {
+                    "type": "string"
+                  },
+                  "author_scope": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "rule_owner_collaborator_alias": {
+                    "type": "string"
+                  },
+                  "runner_collaborator_alias": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoomAutoApprovalRule"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/output-catalogs": {
+      "post": {
+        "description": "Create the output catalog of the clean room.",
+        "operationId": "cleanRooms.createCleanRoomOutputCatalog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanRoomOutputCatalog"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCleanRoomOutputCatalogResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/runs": {
+      "get": {
+        "description": "List all the historical notebook task runs in a clean room.",
+        "operationId": "cleanRooms.listCleanRoomNotebookTaskRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "query",
+            "name": "notebook_name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "notebookName"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCleanRoomNotebookTaskRunsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{cleanRoomName}/task-runs": {
+      "get": {
+        "description": "List all the historical task runs in a clean room.",
+        "operationId": "cleanRooms.listCleanRoomTaskRunsHandler",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cleanRoomName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "cleanRoomName"
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "task_type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "taskType"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCleanRoomTaskRunsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/clean-rooms/{name}": {
+      "delete": {
+        "description": "Delete a clean room. After deletion, the clean room will be removed from the metastore.\nIf the other collaborators have not deleted the clean room, they will still have the clean room\nin their metastore, but it will be in a DELETED state\nand no operations other than deletion can be performed on it.",
+        "operationId": "cleanRooms.deleteCleanRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get the details of a clean room given its name.",
+        "operationId": "cleanRooms.getCleanRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoom"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a clean room.\nThe caller must be the owner of the clean room, have **MODIFY_CLEAN_ROOM** privilege, or\nbe metastore admin.\n\nWhen the caller is a metastore admin, only the __owner__ field can be updated.",
+        "operationId": "cleanRooms.updateCleanRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "clean_room": {
+                    "$ref": "#/components/schemas/CleanRoom"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanRoom"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "cleanRooms"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "cleanRooms"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "cleanRooms.createCleanRoom",
+      "path": "/api/2.0/clean-rooms",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:44"
+    },
+    {
+      "method": "POST",
+      "operationId": "cleanRooms.createCleanRoomAsset",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:85"
+    },
+    {
+      "method": "POST",
+      "operationId": "cleanRooms.createCleanRoomAssetReview",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}/reviews",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:105"
+    },
+    {
+      "method": "POST",
+      "operationId": "cleanRooms.createCleanRoomAutoApprovalRule",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/auto-approval-rules",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:125"
+    },
+    {
+      "method": "POST",
+      "operationId": "cleanRooms.createCleanRoomOutputCatalog",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/output-catalogs",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:145"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "cleanRooms.deleteCleanRoom",
+      "path": "/api/2.0/clean-rooms/{name}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:170"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "cleanRooms.deleteCleanRoomAsset",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:186"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "cleanRooms.deleteCleanRoomAutoApprovalRule",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/auto-approval-rules/{ruleId}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:205"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.getCleanRoom",
+      "path": "/api/2.0/clean-rooms/{name}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:221"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.getCleanRoomAsset",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:240"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.getCleanRoomAssetRevision",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}/revisions/{etag}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:259"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.getCleanRoomAutoApprovalRule",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/auto-approval-rules/{ruleId}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:278"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.listCleanRoomAssetRevisions",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}/revisions",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:297"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.listCleanRoomAssets",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:330"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.listCleanRoomAutoApprovalRules",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/auto-approval-rules",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:362"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.listCleanRoomNotebookTaskRuns",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/runs",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:395"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.listCleanRooms",
+      "path": "/api/2.0/clean-rooms",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:467"
+    },
+    {
+      "method": "GET",
+      "operationId": "cleanRooms.listCleanRoomTaskRunsHandler",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/task-runs",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:429"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "cleanRooms.updateCleanRoom",
+      "path": "/api/2.0/clean-rooms/{name}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:506"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "cleanRooms.updateCleanRoomAsset",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/assets/{assetType}/{name}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:529"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "cleanRooms.updateCleanRoomAutoApprovalRule",
+      "path": "/api/2.0/clean-rooms/{cleanRoomName}/auto-approval-rules/{ruleId}",
+      "source": "@databricks/sdk-cleanrooms/v1/client.js:549"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-cleanrooms",
+  "x-databricks-sdk-version": "0.49.0"
+}

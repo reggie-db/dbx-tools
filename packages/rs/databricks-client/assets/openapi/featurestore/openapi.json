@@ -1,0 +1,452 @@
+{
+  "components": {
+    "schemas": {
+      "ListOnlineStoresResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "online_stores": {
+            "items": {
+              "$ref": "#/components/schemas/OnlineStore"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OnlineStore": {
+        "additionalProperties": false,
+        "properties": {
+          "capacity": {
+            "type": "string"
+          },
+          "creation_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "creator": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "read_replica_count": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string"
+          },
+          "usage_policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PublishSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "online_store": {
+            "type": "string"
+          },
+          "online_table_name": {
+            "type": "string"
+          },
+          "publish_mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PublishTableRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "publish_spec": {
+            "$ref": "#/components/schemas/PublishSpec"
+          },
+          "source_table_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PublishTableResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "online_table_name": {
+            "type": "string"
+          },
+          "pipeline_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Feature Store API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/feature-store/online-stores": {
+      "get": {
+        "description": "List Online Feature Stores.",
+        "operationId": "featureStore.listOnlineStores",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListOnlineStoresResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "featureStore"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create an Online Feature Store.",
+        "operationId": "featureStore.createOnlineStore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnlineStore"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineStore"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "featureStore"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-store/online-stores/{name}": {
+      "delete": {
+        "description": "Delete an Online Feature Store.",
+        "operationId": "featureStore.deleteOnlineStore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "featureStore"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get an Online Feature Store.",
+        "operationId": "featureStore.getOnlineStore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineStore"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "featureStore"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update an Online Feature Store.",
+        "operationId": "featureStore.updateOnlineStore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "onlineStore.name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "capacity": {
+                    "type": "string"
+                  },
+                  "creation_time": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "creator": {
+                    "type": "string"
+                  },
+                  "read_replica_count": {
+                    "type": "number"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "usage_policy_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnlineStore"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "featureStore"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-store/online-tables/{onlineTableName}": {
+      "delete": {
+        "description": "Delete online table.",
+        "operationId": "featureStore.deleteOnlineTable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "onlineTableName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "onlineTableName"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "featureStore"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-store/tables/{sourceTableName}/publish": {
+      "post": {
+        "description": "Publish features.",
+        "operationId": "featureStore.publishTable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sourceTableName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sourceTableName"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "publish_spec": {
+                    "$ref": "#/components/schemas/PublishSpec"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishTableResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "featureStore"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "featureStore"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalOnlineStoreSchema uses z.any()",
+      "source": "@databricks/sdk-featurestore/v1/model.js:55:16"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "featureStore.createOnlineStore",
+      "path": "/api/2.0/feature-store/online-stores",
+      "source": "@databricks/sdk-featurestore/v1/client.js:35"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "featureStore.deleteOnlineStore",
+      "path": "/api/2.0/feature-store/online-stores/{name}",
+      "source": "@databricks/sdk-featurestore/v1/client.js:55"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "featureStore.deleteOnlineTable",
+      "path": "/api/2.0/feature-store/online-tables/{onlineTableName}",
+      "source": "@databricks/sdk-featurestore/v1/client.js:71"
+    },
+    {
+      "method": "GET",
+      "operationId": "featureStore.getOnlineStore",
+      "path": "/api/2.0/feature-store/online-stores/{name}",
+      "source": "@databricks/sdk-featurestore/v1/client.js:87"
+    },
+    {
+      "method": "GET",
+      "operationId": "featureStore.listOnlineStores",
+      "path": "/api/2.0/feature-store/online-stores",
+      "source": "@databricks/sdk-featurestore/v1/client.js:106"
+    },
+    {
+      "method": "POST",
+      "operationId": "featureStore.publishTable",
+      "path": "/api/2.0/feature-store/tables/{sourceTableName}/publish",
+      "source": "@databricks/sdk-featurestore/v1/client.js:139"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "featureStore.updateOnlineStore",
+      "path": "/api/2.0/feature-store/online-stores/{name}",
+      "source": "@databricks/sdk-featurestore/v1/client.js:159"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-featurestore",
+  "x-databricks-sdk-version": "0.49.0"
+}

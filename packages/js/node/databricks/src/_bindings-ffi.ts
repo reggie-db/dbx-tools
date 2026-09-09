@@ -320,11 +320,6 @@ const DEFINITIONS = {
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
-    "uniffi_dbx_tools_databricks_fn_func_create_persistent_auth_for_request": {
-      args: [FfiType.RustBuffer, FfiType.RustBuffer, FfiType.RustBuffer],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
     "uniffi_dbx_tools_databricks_fn_func_create_persistent_auth_with_storage": {
       args: [FfiType.RustBuffer, FfiType.Handle],
       ret: FfiType.Handle,
@@ -466,11 +461,6 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth_for_request": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -766,7 +756,6 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_fn_init_callback_vtable_storageadapter(vtable: UniffiVTableCallbackInterfaceDbxToolsDatabricksStorageAdapter): void;
     uniffi_dbx_tools_databricks_fn_func_canonical_scopes(scopes: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_databricks_fn_func_create_persistent_auth(options: Uint8Array, storage: Uint8Array): bigint;
-    uniffi_dbx_tools_databricks_fn_func_create_persistent_auth_for_request(options: Uint8Array, requestHeaders: Uint8Array, storage: Uint8Array): bigint;
     uniffi_dbx_tools_databricks_fn_func_create_persistent_auth_with_storage(options: Uint8Array, storage: bigint): bigint;
     uniffi_dbx_tools_databricks_fn_func_create_provider_auth(options: Uint8Array): bigint;
     uniffi_dbx_tools_databricks_fn_func_create_provider_auth_with_storage(options: Uint8Array, storage: bigint): bigint;
@@ -796,7 +785,6 @@ interface NativeModuleInterface {
     ffi_dbx_tools_databricks_uniffi_contract_version(): number;
     uniffi_dbx_tools_databricks_checksum_func_canonical_scopes(): number;
     uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth(): number;
-    uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth_for_request(): number;
     uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth_with_storage(): number;
     uniffi_dbx_tools_databricks_checksum_func_create_provider_auth(): number;
     uniffi_dbx_tools_databricks_checksum_func_create_provider_auth_with_storage(): number;

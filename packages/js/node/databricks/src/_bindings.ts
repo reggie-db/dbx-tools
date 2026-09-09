@@ -76,40 +76,6 @@ export async function createPersistentAuth(options: DatabricksAuthOptions, stora
     }
 
 /**
- * Resolve authentication with the current Databricks App request headers.
- */
-export async function createPersistentAuthForRequest(options: DatabricksAuthOptions, requestHeaders: Map<string, string>, storage: Storage | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<PersistentAuthLike> /*throws*/ {
-    const __stack = uniffiIsDebug ? new Error().stack : undefined;
-    try {
-        return await uniffiRustCallAsync(
-            /*rustCaller:*/ uniffiCaller,
-            /*rustFutureFunc:*/ () => {
-                return nativeModule().uniffi_dbx_tools_databricks_fn_func_create_persistent_auth_for_request(FfiConverterTypeDatabricksAuthOptions.lower(options, nativeModule().rustbuffer_alloc),FfiConverterMapStringString.lower(requestHeaders, nativeModule().rustbuffer_alloc),FfiConverterOptionalTypeStorage.lower(storage, nativeModule().rustbuffer_alloc)
-                );
-            },
-            /*pollFunc:*/ nativeModule().ffi_dbx_tools_databricks_rust_future_poll_u64,
-            /*cancelFunc:*/ nativeModule().ffi_dbx_tools_databricks_rust_future_cancel_u64,
-            /*completeFunc:*/ nativeModule().ffi_dbx_tools_databricks_rust_future_complete_u64,
-            /*freeFunc:*/ nativeModule().ffi_dbx_tools_databricks_rust_future_free_u64,
-            // Async returns always go through the JS-side converter: the
-            // FFI symbol returns the future handle (u64), and the user-level
-            // RustBuffer comes back via the shared `rust_future_complete_*`
-            // export. The bytes the runtime hands back must be deserialized
-            // here using the per-callable return-type converter.
-            /*liftFunc:*/ FfiConverterTypePersistentAuth.lift.bind(FfiConverterTypePersistentAuth),
-            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
-            /*asyncOpts:*/ asyncOpts_,
-            /*errorHandler:*/ FfiConverterTypeAuthError.lift.bind(FfiConverterTypeAuthError)
-        );
-    } catch (__error: any) {
-        if (uniffiIsDebug && __error instanceof Error) {
-            __error.stack = __stack;
-        }
-        throw __error;
-    }
-    }
-
-/**
  * Resolve a Databricks profile using a shared owning-library storage handle.
  */
 export async function createPersistentAuthWithStorage(options: DatabricksAuthOptions, storage: StorageHandleLike, asyncOpts_?: { signal: AbortSignal }): Promise<PersistentAuthLike> /*throws*/ {
@@ -520,6 +486,14 @@ export type DatabricksAuthOptions = {
      */
     auth?: AuthOptions,
     /**
+     * Request headers available to request-scoped authentication.
+     */
+    requestHeaders?: Map<string, string>,
+    /**
+     * Header selected from `request_headers`; defaults to `authorization`.
+     */
+    accessTokenHeader?: string,
+    /**
      * Whether implicit M2M defaults should select one matching U2M profile.
      */
     preferUserToMachine: boolean
@@ -542,6 +516,8 @@ export const DatabricksAuthOptions = (() => {
         target: undefined,
         cacheDir: undefined,
         auth: undefined,
+        requestHeaders: undefined,
+        accessTokenHeader: undefined,
         preferUserToMachine: true
     });
     const create = (() => {
@@ -571,6 +547,8 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
                 target: FfiConverterOptionalString.readFromCursor(c),
                 cacheDir: FfiConverterOptionalString.readFromCursor(c),
                 auth: FfiConverterOptionalTypeAuthOptions.readFromCursor(c),
+                requestHeaders: FfiConverterOptionalMapStringString.readFromCursor(c),
+                accessTokenHeader: FfiConverterOptionalString.readFromCursor(c),
                 preferUserToMachine: FfiConverterBool.readFromCursor(c)
             };
         }
@@ -587,6 +565,8 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
             FfiConverterOptionalString.writeIntoCursor(value.target, c);
             FfiConverterOptionalString.writeIntoCursor(value.cacheDir, c);
             FfiConverterOptionalTypeAuthOptions.writeIntoCursor(value.auth, c);
+            FfiConverterOptionalMapStringString.writeIntoCursor(value.requestHeaders, c);
+            FfiConverterOptionalString.writeIntoCursor(value.accessTokenHeader, c);
             FfiConverterBool.writeIntoCursor(value.preferUserToMachine, c);
         }
         allocationSize(value: TypeName): number {
@@ -602,6 +582,8 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
              FfiConverterOptionalString.allocationSize(value.target) +
              FfiConverterOptionalString.allocationSize(value.cacheDir) +
              FfiConverterOptionalTypeAuthOptions.allocationSize(value.auth) +
+             FfiConverterOptionalMapStringString.allocationSize(value.requestHeaders) +
+             FfiConverterOptionalString.allocationSize(value.accessTokenHeader) +
              FfiConverterBool.allocationSize(value.preferUserToMachine);
 
         }
@@ -2608,6 +2590,12 @@ const FfiConverterOptionalSequenceString = new FfiConverterOptional(FfiConverter
 // FfiConverter for AuthOptions | undefined
 const FfiConverterOptionalTypeAuthOptions = new FfiConverterOptional(FfiConverterTypeAuthOptions);
 
+// FfiConverter for Map<string, string>
+const FfiConverterMapStringString = new FfiConverterMap(FfiConverterString, FfiConverterString);
+
+// FfiConverter for Map<string, string> | undefined
+const FfiConverterOptionalMapStringString = new FfiConverterOptional(FfiConverterMapStringString);
+
 // FfiConverter for number | undefined
 const FfiConverterOptionalUInt16 = new FfiConverterOptional(FfiConverterUInt16);
 
@@ -2625,9 +2613,6 @@ const FfiConverterOptionalTypeFileLayout = new FfiConverterOptional(FfiConverter
 
 // FfiConverter for boolean | undefined
 const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
-
-// FfiConverter for Map<string, string>
-const FfiConverterMapStringString = new FfiConverterMap(FfiConverterString, FfiConverterString);
 
 
 /**
@@ -2653,9 +2638,6 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth() !== 24006) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth");
-    }
-    if (nativeModule().uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth_for_request() !== 30718) {
-        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth_for_request");
     }
     if (nativeModule().uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth_with_storage() !== 38756) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_checksum_func_create_persistent_auth_with_storage");

@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { brand } from "../../packages/js/node/core/index.ts";
+import { brand, project as coreProject } from "../../packages/js/node/core/index.ts";
 import { docsSiteConfig } from "./site-config.mjs";
 
 const root = process.cwd();
 const sourceRoot = path.join(root, ".docs-build", "site");
 const docsContentRoot = path.join(sourceRoot, "src", "content", "docs");
 const publicRoot = path.join(sourceRoot, "public");
-const repoUrl = "https://github.com/reggie-db/dbx-tools";
+const repoUrl = coreProject.repositoryUrl(root);
+if (!repoUrl) throw new Error("Could not resolve the repository URL");
 const brandFile = path.join(root, "branding", "brand.yaml");
 const brandContext = await brand.loadBrandContextFile(brandFile);
 const { base, site } = docsSiteConfig();
@@ -525,7 +526,7 @@ export default defineConfig({
       sidebar: generatedNav.sidebar,
       social: [{ icon: "github", label: "GitHub", href: ${JSON.stringify(brandContext.links.repository ?? repoUrl)} }],
       editLink: {
-        baseUrl: "https://github.com/reggie-db/dbx-tools/edit/main/",
+        baseUrl: ${JSON.stringify(`${repoUrl}/edit/main/`)},
       },
       pagefind: true,
     }),

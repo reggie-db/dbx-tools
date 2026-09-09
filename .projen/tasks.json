@@ -211,6 +211,9 @@
       "name": "openapi",
       "steps": [
         {
+          "exec": "bun packages/js/node/databricks-openapi/src/cli.ts"
+        },
+        {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/openapi.ts"
         }
       ]

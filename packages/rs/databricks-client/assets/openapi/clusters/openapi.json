@@ -1,0 +1,3624 @@
+{
+  "components": {
+    "schemas": {
+      "Adlsgen2Info": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AutoScale": {
+        "additionalProperties": false,
+        "properties": {
+          "max_workers": {
+            "type": "number"
+          },
+          "min_workers": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "AwsAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "ebs_volume_count": {
+            "type": "number"
+          },
+          "ebs_volume_iops": {
+            "type": "number"
+          },
+          "ebs_volume_size": {
+            "type": "number"
+          },
+          "ebs_volume_throughput": {
+            "type": "number"
+          },
+          "ebs_volume_type": {
+            "type": "string"
+          },
+          "first_on_demand": {
+            "type": "number"
+          },
+          "instance_profile_arn": {
+            "type": "string"
+          },
+          "spot_bid_price_percent": {
+            "type": "number"
+          },
+          "zone_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AzureAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "capacity_reservation_group": {
+            "type": "string"
+          },
+          "first_on_demand": {
+            "type": "number"
+          },
+          "log_analytics_info": {
+            "$ref": "#/components/schemas/LogAnalyticsInfo"
+          },
+          "spot_bid_max_price": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "CancelPendingClusterEnforcementRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_missing": {
+            "type": "boolean"
+          },
+          "cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CancelPendingClusterEnforcementResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "ChangeClusterOwnerRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "owner_username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ChangeClusterOwnerResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "CloneCluster": {
+        "additionalProperties": false,
+        "properties": {
+          "source_cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CloudProviderNodeInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "autotermination_minutes": {
+            "type": "number"
+          },
+          "aws_attributes": {
+            "$ref": "#/components/schemas/AwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/AzureAttributes"
+          },
+          "cluster_log_conf": {
+            "$ref": "#/components/schemas/ClusterLogConf"
+          },
+          "cluster_name": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_security_mode": {
+            "type": "string"
+          },
+          "dependency_mode": {
+            "type": "string"
+          },
+          "docker_image": {
+            "$ref": "#/components/schemas/DockerImage"
+          },
+          "driver_instance_pool_id": {
+            "type": "string"
+          },
+          "driver_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "driver_node_type_id": {
+            "type": "string"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "enable_local_disk_encryption": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/GcpAttributes"
+          },
+          "init_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptInfo"
+            },
+            "type": "array"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "is_single_node": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "runtime_engine": {
+            "type": "string"
+          },
+          "single_user_name": {
+            "type": "string"
+          },
+          "spark_conf": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_version": {
+            "type": "string"
+          },
+          "ssh_public_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          },
+          "use_ml_runtime": {
+            "type": "boolean"
+          },
+          "worker_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "workload_type": {
+            "$ref": "#/components/schemas/WorkloadType"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterCompliance": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "is_compliant": {
+            "type": "boolean"
+          },
+          "pending_enforcement": {
+            "$ref": "#/components/schemas/PendingEnforcement"
+          },
+          "violations": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "data_plane_event_details": {
+            "$ref": "#/components/schemas/DataPlaneEventDetails"
+          },
+          "details": {
+            "$ref": "#/components/schemas/EventDetails"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "autotermination_minutes": {
+            "type": "number"
+          },
+          "aws_attributes": {
+            "$ref": "#/components/schemas/AwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/AzureAttributes"
+          },
+          "cluster_cores": {
+            "type": "number"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "cluster_log_conf": {
+            "$ref": "#/components/schemas/ClusterLogConf"
+          },
+          "cluster_log_status": {
+            "$ref": "#/components/schemas/LogSyncStatus"
+          },
+          "cluster_memory_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "cluster_name": {
+            "type": "string"
+          },
+          "creator_user_name": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_security_mode": {
+            "type": "string"
+          },
+          "default_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "dependency_mode": {
+            "type": "string"
+          },
+          "docker_image": {
+            "$ref": "#/components/schemas/DockerImage"
+          },
+          "driver": {
+            "$ref": "#/components/schemas/SparkInfo_SparkNode"
+          },
+          "driver_instance_pool_id": {
+            "type": "string"
+          },
+          "driver_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "driver_node_type_id": {
+            "type": "string"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "enable_local_disk_encryption": {
+            "type": "boolean"
+          },
+          "executors": {
+            "items": {
+              "$ref": "#/components/schemas/SparkInfo_SparkNode"
+            },
+            "type": "array"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/GcpAttributes"
+          },
+          "init_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptInfo"
+            },
+            "type": "array"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "is_single_node": {
+            "type": "boolean"
+          },
+          "jdbc_port": {
+            "type": "number"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_restarted_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "last_state_loss_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "num_workers": {
+            "type": "number"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "runtime_engine": {
+            "type": "string"
+          },
+          "single_user_name": {
+            "type": "string"
+          },
+          "spark_conf": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_context_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "spark_env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_version": {
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ClusterInfo_ComputeSpec"
+          },
+          "ssh_public_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "state_message": {
+            "type": "string"
+          },
+          "terminated_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "termination_reason": {
+            "$ref": "#/components/schemas/TerminationReason"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          },
+          "use_ml_runtime": {
+            "type": "boolean"
+          },
+          "worker_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "workload_type": {
+            "$ref": "#/components/schemas/WorkloadType"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterInfo_ComputeSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "apply_policy_default_values": {
+            "type": "boolean"
+          },
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "autotermination_minutes": {
+            "type": "number"
+          },
+          "aws_attributes": {
+            "$ref": "#/components/schemas/AwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/AzureAttributes"
+          },
+          "cluster_log_conf": {
+            "$ref": "#/components/schemas/ClusterLogConf"
+          },
+          "cluster_name": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_security_mode": {
+            "type": "string"
+          },
+          "dependency_mode": {
+            "type": "string"
+          },
+          "docker_image": {
+            "$ref": "#/components/schemas/DockerImage"
+          },
+          "driver_instance_pool_id": {
+            "type": "string"
+          },
+          "driver_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "driver_node_type_id": {
+            "type": "string"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "enable_local_disk_encryption": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/GcpAttributes"
+          },
+          "init_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptInfo"
+            },
+            "type": "array"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "is_single_node": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "num_workers": {
+            "type": "number"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "runtime_engine": {
+            "type": "string"
+          },
+          "single_user_name": {
+            "type": "string"
+          },
+          "spark_conf": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_version": {
+            "type": "string"
+          },
+          "ssh_public_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          },
+          "use_ml_runtime": {
+            "type": "boolean"
+          },
+          "worker_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "workload_type": {
+            "$ref": "#/components/schemas/WorkloadType"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterLogConf": {
+        "additionalProperties": false,
+        "properties": {
+          "dbfs": {
+            "$ref": "#/components/schemas/DbfsStorageInfo"
+          },
+          "s3": {
+            "$ref": "#/components/schemas/S3StorageInfo"
+          },
+          "volumes": {
+            "$ref": "#/components/schemas/VolumesStorageInfo"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterRevision": {
+        "additionalProperties": false,
+        "properties": {
+          "create_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "edit_reason": {
+            "type": "string"
+          },
+          "edit_user": {
+            "type": "string"
+          },
+          "is_current": {
+            "type": "boolean"
+          },
+          "revision_id": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ClusterInfo_ComputeSpec"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterSize": {
+        "additionalProperties": false,
+        "properties": {
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "num_workers": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "CreateClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "apply_policy_default_values": {
+            "type": "boolean"
+          },
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "autotermination_minutes": {
+            "type": "number"
+          },
+          "aws_attributes": {
+            "$ref": "#/components/schemas/AwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/AzureAttributes"
+          },
+          "clone_from": {
+            "$ref": "#/components/schemas/CloneCluster"
+          },
+          "cluster_log_conf": {
+            "$ref": "#/components/schemas/ClusterLogConf"
+          },
+          "cluster_name": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_security_mode": {
+            "type": "string"
+          },
+          "dependency_mode": {
+            "type": "string"
+          },
+          "docker_image": {
+            "$ref": "#/components/schemas/DockerImage"
+          },
+          "driver_instance_pool_id": {
+            "type": "string"
+          },
+          "driver_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "driver_node_type_id": {
+            "type": "string"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "enable_local_disk_encryption": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/GcpAttributes"
+          },
+          "init_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptInfo"
+            },
+            "type": "array"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "is_single_node": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "num_workers": {
+            "type": "number"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "runtime_engine": {
+            "type": "string"
+          },
+          "single_user_name": {
+            "type": "string"
+          },
+          "spark_conf": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_version": {
+            "type": "string"
+          },
+          "ssh_public_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          },
+          "use_ml_runtime": {
+            "type": "boolean"
+          },
+          "worker_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "workload_type": {
+            "$ref": "#/components/schemas/WorkloadType"
+          }
+        },
+        "type": "object"
+      },
+      "CreateClusterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DataPlaneEventDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "event_type": {
+            "type": "string"
+          },
+          "executor_failures": {
+            "type": "number"
+          },
+          "host_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "DbfsStorageInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DockerBasicAuth": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DockerImage": {
+        "additionalProperties": false,
+        "properties": {
+          "basic_auth": {
+            "$ref": "#/components/schemas/DockerBasicAuth"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EditClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "apply_policy_default_values": {
+            "type": "boolean"
+          },
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "autotermination_minutes": {
+            "type": "number"
+          },
+          "aws_attributes": {
+            "$ref": "#/components/schemas/AwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/AzureAttributes"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "cluster_log_conf": {
+            "$ref": "#/components/schemas/ClusterLogConf"
+          },
+          "cluster_name": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_security_mode": {
+            "type": "string"
+          },
+          "dependency_mode": {
+            "type": "string"
+          },
+          "docker_image": {
+            "$ref": "#/components/schemas/DockerImage"
+          },
+          "driver_instance_pool_id": {
+            "type": "string"
+          },
+          "driver_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "driver_node_type_id": {
+            "type": "string"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "enable_local_disk_encryption": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/GcpAttributes"
+          },
+          "init_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptInfo"
+            },
+            "type": "array"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "is_single_node": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "num_workers": {
+            "type": "number"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "runtime_engine": {
+            "type": "string"
+          },
+          "single_user_name": {
+            "type": "string"
+          },
+          "spark_conf": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_version": {
+            "type": "string"
+          },
+          "ssh_public_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          },
+          "use_ml_runtime": {
+            "type": "boolean"
+          },
+          "worker_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "workload_type": {
+            "$ref": "#/components/schemas/WorkloadType"
+          }
+        },
+        "type": "object"
+      },
+      "EditClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "EnforcePolicyComplianceForClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "enforce_mode": {
+            "type": "string"
+          },
+          "validate_only": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "EnforcePolicyComplianceForClusterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/EnforcePolicyComplianceForClusterResponse_ClusterSettingsChange"
+            },
+            "type": "array"
+          },
+          "enforce_result": {
+            "type": "string"
+          },
+          "has_changes": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "EnforcePolicyComplianceForClusterResponse_ClusterSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "autotermination_minutes": {
+            "type": "number"
+          },
+          "aws_attributes": {
+            "$ref": "#/components/schemas/AwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/AzureAttributes"
+          },
+          "cluster_log_conf": {
+            "$ref": "#/components/schemas/ClusterLogConf"
+          },
+          "cluster_name": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_security_mode": {
+            "type": "string"
+          },
+          "dependency_mode": {
+            "type": "string"
+          },
+          "docker_image": {
+            "$ref": "#/components/schemas/DockerImage"
+          },
+          "driver_instance_pool_id": {
+            "type": "string"
+          },
+          "driver_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "driver_node_type_id": {
+            "type": "string"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "enable_local_disk_encryption": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/GcpAttributes"
+          },
+          "init_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptInfo"
+            },
+            "type": "array"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "is_single_node": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "num_workers": {
+            "type": "number"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "runtime_engine": {
+            "type": "string"
+          },
+          "single_user_name": {
+            "type": "string"
+          },
+          "spark_conf": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_version": {
+            "type": "string"
+          },
+          "ssh_public_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          },
+          "use_ml_runtime": {
+            "type": "boolean"
+          },
+          "worker_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "workload_type": {
+            "$ref": "#/components/schemas/WorkloadType"
+          }
+        },
+        "type": "object"
+      },
+      "EnforcePolicyComplianceForClusterResponse_ClusterSettingsChange": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "new_value": {
+            "type": "string"
+          },
+          "previous_value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EventDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "attributes": {
+            "$ref": "#/components/schemas/ClusterAttributes"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "cluster_size": {
+            "$ref": "#/components/schemas/ClusterSize"
+          },
+          "current_num_vcpus": {
+            "type": "number"
+          },
+          "current_num_workers": {
+            "type": "number"
+          },
+          "did_not_expand_reason": {
+            "type": "string"
+          },
+          "disk_size": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "driver_state_message": {
+            "type": "string"
+          },
+          "enable_termination_for_node_blocklisted": {
+            "type": "boolean"
+          },
+          "free_space": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "init_scripts": {
+            "$ref": "#/components/schemas/InitScriptEventDetails"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "job_run_name": {
+            "type": "string"
+          },
+          "previous_attributes": {
+            "$ref": "#/components/schemas/ClusterAttributes"
+          },
+          "previous_cluster_size": {
+            "$ref": "#/components/schemas/ClusterSize"
+          },
+          "previous_disk_size": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "reason": {
+            "$ref": "#/components/schemas/TerminationReason"
+          },
+          "target_num_vcpus": {
+            "type": "number"
+          },
+          "target_num_workers": {
+            "type": "number"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GcpAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "boot_disk_size": {
+            "type": "number"
+          },
+          "confidential_compute_type": {
+            "type": "string"
+          },
+          "first_on_demand": {
+            "type": "number"
+          },
+          "google_service_account": {
+            "type": "string"
+          },
+          "local_ssd_count": {
+            "type": "number"
+          },
+          "use_preemptible_executors": {
+            "type": "boolean"
+          },
+          "zone_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GcsStorageInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetEventsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterEvent"
+            },
+            "type": "array"
+          },
+          "next_page": {
+            "$ref": "#/components/schemas/ListEventsRequest"
+          },
+          "next_page_token": {
+            "type": "string"
+          },
+          "prev_page_token": {
+            "type": "string"
+          },
+          "total_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "GetPolicyComplianceForClusterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "is_compliant": {
+            "type": "boolean"
+          },
+          "pending_enforcement": {
+            "$ref": "#/components/schemas/PendingEnforcement"
+          },
+          "violations": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "GetSparkVersionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/SparkVersion"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "InitScriptEventDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptEventDetails_InitScriptInfoAndExecutionDetails"
+            },
+            "type": "array"
+          },
+          "global": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptEventDetails_InitScriptInfoAndExecutionDetails"
+            },
+            "type": "array"
+          },
+          "reported_for_node": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "InitScriptEventDetails_InitScriptInfoAndExecutionDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "abfss": {
+            "$ref": "#/components/schemas/Adlsgen2Info"
+          },
+          "dbfs": {
+            "$ref": "#/components/schemas/DbfsStorageInfo"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "execution_duration_seconds": {
+            "type": "number"
+          },
+          "file": {
+            "$ref": "#/components/schemas/LocalFileInfo"
+          },
+          "gcs": {
+            "$ref": "#/components/schemas/GcsStorageInfo"
+          },
+          "s3": {
+            "$ref": "#/components/schemas/S3StorageInfo"
+          },
+          "status": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "volumes": {
+            "$ref": "#/components/schemas/VolumesStorageInfo"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceStorageInfo"
+          }
+        },
+        "type": "object"
+      },
+      "InitScriptInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "abfss": {
+            "$ref": "#/components/schemas/Adlsgen2Info"
+          },
+          "dbfs": {
+            "$ref": "#/components/schemas/DbfsStorageInfo"
+          },
+          "file": {
+            "$ref": "#/components/schemas/LocalFileInfo"
+          },
+          "gcs": {
+            "$ref": "#/components/schemas/GcsStorageInfo"
+          },
+          "s3": {
+            "$ref": "#/components/schemas/S3StorageInfo"
+          },
+          "volumes": {
+            "$ref": "#/components/schemas/VolumesStorageInfo"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceStorageInfo"
+          }
+        },
+        "type": "object"
+      },
+      "ListAvailableZonesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "default_zone": {
+            "type": "string"
+          },
+          "zones": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListClusterComplianceForPolicyResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterCompliance"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          },
+          "prev_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListClusterRevisionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_revisions": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterRevision"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListClustersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterInfo"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          },
+          "prev_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListEventsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "order": {
+            "type": "string"
+          },
+          "page_size": {
+            "type": "number"
+          },
+          "page_token": {
+            "type": "string"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListNodeTypesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "node_types": {
+            "items": {
+              "$ref": "#/components/schemas/NodeType"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "LocalFileInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LogAnalyticsInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "log_analytics_primary_key": {
+            "type": "string"
+          },
+          "log_analytics_workspace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LogSyncStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "last_attempted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "last_exception": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NodeInstanceType": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_type_id": {
+            "type": "string"
+          },
+          "local_disk_size_gb": {
+            "type": "number"
+          },
+          "local_disks": {
+            "type": "number"
+          },
+          "local_nvme_disk_size_gb": {
+            "type": "number"
+          },
+          "local_nvme_disks": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "NodeType": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "display_order": {
+            "type": "number"
+          },
+          "instance_type_id": {
+            "type": "string"
+          },
+          "is_deprecated": {
+            "type": "boolean"
+          },
+          "is_encrypted_in_transit": {
+            "type": "boolean"
+          },
+          "is_graviton": {
+            "type": "boolean"
+          },
+          "is_hidden": {
+            "type": "boolean"
+          },
+          "is_io_cache_enabled": {
+            "type": "boolean"
+          },
+          "memory_mb": {
+            "type": "number"
+          },
+          "node_info": {
+            "$ref": "#/components/schemas/CloudProviderNodeInfo"
+          },
+          "node_instance_type": {
+            "$ref": "#/components/schemas/NodeInstanceType"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "num_cores": {
+            "type": "number"
+          },
+          "num_gpus": {
+            "type": "number"
+          },
+          "photon_driver_capable": {
+            "type": "boolean"
+          },
+          "photon_worker_capable": {
+            "type": "boolean"
+          },
+          "support_cluster_tags": {
+            "type": "boolean"
+          },
+          "support_ebs_volumes": {
+            "type": "boolean"
+          },
+          "support_port_forwarding": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "NodeTypeFlexibility": {
+        "additionalProperties": false,
+        "properties": {
+          "alternate_node_type_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PendingEnforcement": {
+        "additionalProperties": false,
+        "properties": {
+          "enforcement_status": {
+            "type": "string"
+          },
+          "initiate_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "initiator_user": {
+            "type": "string"
+          },
+          "target_changes": {
+            "items": {
+              "$ref": "#/components/schemas/EnforcePolicyComplianceForClusterResponse_ClusterSettingsChange"
+            },
+            "type": "array"
+          },
+          "target_spec": {
+            "$ref": "#/components/schemas/EnforcePolicyComplianceForClusterResponse_ClusterSettings"
+          }
+        },
+        "type": "object"
+      },
+      "PermanentDeleteClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PermanentDeleteClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "PinClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PinClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "ResizeClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "num_workers": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ResizeClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "RestartClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "restart_user": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RestartClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "RollbackClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "S3StorageInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "canned_acl": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "enable_encryption": {
+            "type": "boolean"
+          },
+          "encryption_type": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "kms_key": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SparkInfo_SparkNode": {
+        "additionalProperties": false,
+        "properties": {
+          "host_private_ip": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "node_aws_attributes": {
+            "$ref": "#/components/schemas/SparkInfo_SparkNode_SparkNodeAwsAttributes"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "private_ip": {
+            "type": "string"
+          },
+          "public_dns": {
+            "type": "string"
+          },
+          "start_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SparkInfo_SparkNode_SparkNodeAwsAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "is_spot": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SparkVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StartClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StartClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "TerminationReason": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UnpinClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UnpinClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "UpdateClusterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster": {
+            "$ref": "#/components/schemas/UpdateClusterRequest_UpdateClusterResource"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "update_mask": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateClusterRequest_UpdateClusterResource": {
+        "additionalProperties": false,
+        "properties": {
+          "autoscale": {
+            "$ref": "#/components/schemas/AutoScale"
+          },
+          "autotermination_minutes": {
+            "type": "number"
+          },
+          "aws_attributes": {
+            "$ref": "#/components/schemas/AwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/AzureAttributes"
+          },
+          "cluster_log_conf": {
+            "$ref": "#/components/schemas/ClusterLogConf"
+          },
+          "cluster_name": {
+            "type": "string"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "data_security_mode": {
+            "type": "string"
+          },
+          "dependency_mode": {
+            "type": "string"
+          },
+          "docker_image": {
+            "$ref": "#/components/schemas/DockerImage"
+          },
+          "driver_instance_pool_id": {
+            "type": "string"
+          },
+          "driver_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "driver_node_type_id": {
+            "type": "string"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "enable_local_disk_encryption": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/GcpAttributes"
+          },
+          "init_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/InitScriptInfo"
+            },
+            "type": "array"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "is_single_node": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "num_workers": {
+            "type": "number"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "runtime_engine": {
+            "type": "string"
+          },
+          "single_user_name": {
+            "type": "string"
+          },
+          "spark_conf": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "spark_version": {
+            "type": "string"
+          },
+          "ssh_public_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          },
+          "use_ml_runtime": {
+            "type": "boolean"
+          },
+          "worker_node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "workload_type": {
+            "$ref": "#/components/schemas/WorkloadType"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateClusterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "VolumesStorageInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "WorkloadType": {
+        "additionalProperties": false,
+        "properties": {
+          "clients": {
+            "$ref": "#/components/schemas/WorkloadType_ClientsTypes"
+          }
+        },
+        "type": "object"
+      },
+      "WorkloadType_ClientsTypes": {
+        "additionalProperties": false,
+        "properties": {
+          "jobs": {
+            "type": "boolean"
+          },
+          "notebooks": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "WorkspaceStorageInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Schema_745ddacd": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "Schema_17b20a24": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Clusters API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/policies/clusters:cancelPendingClusterEnforcement": {
+      "post": {
+        "description": "Cancels a pending enforcement on a cluster. After canceling the pending enforcement,\nthe cluster will no longer update on the next termination or restart.\nPending enforcements cannot be canceled when a cluster is in `TERMINATING` state.\nOnly workspace admins can cancel pending enforcements.",
+        "operationId": "clusters.cancelPendingClusterEnforcement",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "allow_missing": {
+                    "type": "boolean"
+                  },
+                  "cluster_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelPendingClusterEnforcementResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/enforce-compliance": {
+      "post": {
+        "description": "Updates a cluster to be compliant with the current version of its policy.\n\nIf a cluster is updated while in a `TERMINATED` state, it will remain `TERMINATED`.\nThe next time the cluster is started, the new attributes will take effect.\n\nFor clusters in other states, the behavior depends on the `enforce_mode` used.\n\nClusters created by the Databricks Jobs, SDP, or Models services cannot be enforced by this API.\nInstead, use the \"Enforce job policy compliance\" API to enforce policy compliance on jobs.",
+        "operationId": "clusters.enforcePolicyComplianceForCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cluster_id": {
+                    "type": "string"
+                  },
+                  "enforce_mode": {
+                    "type": "string"
+                  },
+                  "validate_only": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnforcePolicyComplianceForClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/get-compliance": {
+      "get": {
+        "description": "Returns the policy compliance status of a cluster. Clusters could be out\nof compliance if their policy was updated after the cluster was last edited.",
+        "operationId": "clusters.getPolicyComplianceForCluster",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cluster_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "clusterId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPolicyComplianceForClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/list-compliance": {
+      "get": {
+        "description": "Returns the policy compliance status of all clusters that use a\ngiven policy. Clusters could be out of compliance if their policy was\nupdated after the cluster was last edited.",
+        "operationId": "clusters.listClusterComplianceForPolicy",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "policy_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListClusterComplianceForPolicyResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/{cluster_id}./revisions": {
+      "get": {
+        "description": "Lists a cluster's revisions, ordered from most to least recent.",
+        "operationId": "clusters.listClusterRevisions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "clusters/{cluster_id}.",
+            "x-databricks-sdk-name": "parent"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListClusterRevisionsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/{cluster_id}/revisions/{revision_id}.": {
+      "get": {
+        "description": "Get details of a cluster revision.",
+        "operationId": "clusters.getClusterRevision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "clusters/{cluster_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "clusters/{cluster_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterRevision"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/{cluster_id}/revisions/{revision_id}./rollback": {
+      "post": {
+        "description": "Rolls back a cluster to a previous revision.\nA cluster can be rolled back if it is in a `RUNNING` or `TERMINATED` state.\n\nIf a cluster is rolled back while in a `RUNNING` state, it will be restarted so that the new attributes can take effect.\n\nIf a cluster is rolled back while in a `TERMINATED` state, it will remain `TERMINATED`.\nThe next time it is started using the `clusters/start` API, the new attributes will take effect.\nAny attempt to roll back a cluster in any other state will be rejected with an `INVALID_PARAMETER_VALUE` error code.",
+        "operationId": "clusters.rollbackCluster",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "clusters/{cluster_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "clusters/{cluster_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterRevision"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/change-owner": {
+      "post": {
+        "description": "Change the owner of the cluster. You must be an admin and the cluster must be terminated to perform this operation. The service principal application ID can be supplied as an argument to `owner_username`.",
+        "operationId": "clusters.changeClusterOwner",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cluster_id": {
+                    "type": "string"
+                  },
+                  "owner_username": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeClusterOwnerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/create": {
+      "post": {
+        "description": "Creates a new Spark cluster. This method will acquire new instances from the cloud provider\nif necessary. This method is asynchronous; the returned ``cluster_id`` can be used to poll the\ncluster status. When this method returns, the cluster will be in\na ``PENDING`` state. The cluster will be usable once it enters a ``RUNNING`` state.\nNote: <Databricks> may not be able to acquire some of the requested nodes, due to cloud provider\nlimitations (account limits, spot price, etc.) or transient network issues.\n\nIf <Databricks> acquires at least 85% of the requested on-demand nodes, cluster creation will succeed.\nOtherwise the cluster will terminate with an informative error message.\n\nRather than authoring the cluster's JSON definition from scratch, Databricks recommends filling out the\n[create compute UI](/compute/configure.html) and then copying the generated JSON definition from the UI.",
+        "operationId": "clusters.createCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "apply_policy_default_values": {
+                    "type": "boolean"
+                  },
+                  "autoscale": {
+                    "$ref": "#/components/schemas/AutoScale"
+                  },
+                  "autotermination_minutes": {
+                    "type": "number"
+                  },
+                  "aws_attributes": {
+                    "$ref": "#/components/schemas/AwsAttributes"
+                  },
+                  "azure_attributes": {
+                    "$ref": "#/components/schemas/AzureAttributes"
+                  },
+                  "clone_from": {
+                    "$ref": "#/components/schemas/CloneCluster"
+                  },
+                  "cluster_log_conf": {
+                    "$ref": "#/components/schemas/ClusterLogConf"
+                  },
+                  "cluster_name": {
+                    "type": "string"
+                  },
+                  "custom_tags": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "data_security_mode": {
+                    "type": "string"
+                  },
+                  "dependency_mode": {
+                    "type": "string"
+                  },
+                  "docker_image": {
+                    "$ref": "#/components/schemas/DockerImage"
+                  },
+                  "driver_instance_pool_id": {
+                    "type": "string"
+                  },
+                  "driver_node_type_flexibility": {
+                    "$ref": "#/components/schemas/NodeTypeFlexibility"
+                  },
+                  "driver_node_type_id": {
+                    "type": "string"
+                  },
+                  "enable_elastic_disk": {
+                    "type": "boolean"
+                  },
+                  "enable_local_disk_encryption": {
+                    "type": "boolean"
+                  },
+                  "gcp_attributes": {
+                    "$ref": "#/components/schemas/GcpAttributes"
+                  },
+                  "init_scripts": {
+                    "items": {
+                      "$ref": "#/components/schemas/InitScriptInfo"
+                    },
+                    "type": "array"
+                  },
+                  "instance_pool_id": {
+                    "type": "string"
+                  },
+                  "is_single_node": {
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "node_type_id": {
+                    "type": "string"
+                  },
+                  "num_workers": {
+                    "type": "number"
+                  },
+                  "policy_id": {
+                    "type": "string"
+                  },
+                  "remote_disk_throughput": {
+                    "type": "number"
+                  },
+                  "runtime_engine": {
+                    "type": "string"
+                  },
+                  "single_user_name": {
+                    "type": "string"
+                  },
+                  "spark_conf": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "spark_env_vars": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "spark_version": {
+                    "type": "string"
+                  },
+                  "ssh_public_keys": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "total_initial_remote_disk_size": {
+                    "type": "number"
+                  },
+                  "use_ml_runtime": {
+                    "type": "boolean"
+                  },
+                  "worker_node_type_flexibility": {
+                    "$ref": "#/components/schemas/NodeTypeFlexibility"
+                  },
+                  "workload_type": {
+                    "$ref": "#/components/schemas/WorkloadType"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/delete": {
+      "post": {
+        "description": "Terminates the Spark cluster with the specified ID. The cluster is removed asynchronously.\nOnce the termination has completed, the cluster will be in a `TERMINATED` state.\nIf the cluster is already in a `TERMINATING` or `TERMINATED` state, nothing will happen.",
+        "operationId": "clusters.deleteCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpinClusterRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/edit": {
+      "post": {
+        "description": "Updates the configuration of a cluster to match the provided attributes and size.\nA cluster can be updated if it is in a `RUNNING` or `TERMINATED` state.\n\nIf a cluster is updated while in a `RUNNING` state, it will be restarted so that the new attributes can take effect.\n\nIf a cluster is updated while in a `TERMINATED` state, it will remain `TERMINATED`.\nThe next time it is started using the `clusters/start` API, the new attributes will take effect.\nAny attempt to update a cluster in any other state will be rejected with an `INVALID_STATE` error code.\n\nClusters created by the Databricks Jobs service cannot be edited.",
+        "operationId": "clusters.editCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "apply_policy_default_values": {
+                    "type": "boolean"
+                  },
+                  "autoscale": {
+                    "$ref": "#/components/schemas/AutoScale"
+                  },
+                  "autotermination_minutes": {
+                    "type": "number"
+                  },
+                  "aws_attributes": {
+                    "$ref": "#/components/schemas/AwsAttributes"
+                  },
+                  "azure_attributes": {
+                    "$ref": "#/components/schemas/AzureAttributes"
+                  },
+                  "cluster_id": {
+                    "type": "string"
+                  },
+                  "cluster_log_conf": {
+                    "$ref": "#/components/schemas/ClusterLogConf"
+                  },
+                  "cluster_name": {
+                    "type": "string"
+                  },
+                  "custom_tags": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "data_security_mode": {
+                    "type": "string"
+                  },
+                  "dependency_mode": {
+                    "type": "string"
+                  },
+                  "docker_image": {
+                    "$ref": "#/components/schemas/DockerImage"
+                  },
+                  "driver_instance_pool_id": {
+                    "type": "string"
+                  },
+                  "driver_node_type_flexibility": {
+                    "$ref": "#/components/schemas/NodeTypeFlexibility"
+                  },
+                  "driver_node_type_id": {
+                    "type": "string"
+                  },
+                  "enable_elastic_disk": {
+                    "type": "boolean"
+                  },
+                  "enable_local_disk_encryption": {
+                    "type": "boolean"
+                  },
+                  "gcp_attributes": {
+                    "$ref": "#/components/schemas/GcpAttributes"
+                  },
+                  "init_scripts": {
+                    "items": {
+                      "$ref": "#/components/schemas/InitScriptInfo"
+                    },
+                    "type": "array"
+                  },
+                  "instance_pool_id": {
+                    "type": "string"
+                  },
+                  "is_single_node": {
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "node_type_id": {
+                    "type": "string"
+                  },
+                  "num_workers": {
+                    "type": "number"
+                  },
+                  "policy_id": {
+                    "type": "string"
+                  },
+                  "remote_disk_throughput": {
+                    "type": "number"
+                  },
+                  "runtime_engine": {
+                    "type": "string"
+                  },
+                  "single_user_name": {
+                    "type": "string"
+                  },
+                  "spark_conf": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "spark_env_vars": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "spark_version": {
+                    "type": "string"
+                  },
+                  "ssh_public_keys": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "total_initial_remote_disk_size": {
+                    "type": "number"
+                  },
+                  "use_ml_runtime": {
+                    "type": "boolean"
+                  },
+                  "worker_node_type_flexibility": {
+                    "$ref": "#/components/schemas/NodeTypeFlexibility"
+                  },
+                  "workload_type": {
+                    "$ref": "#/components/schemas/WorkloadType"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/events": {
+      "post": {
+        "description": "Retrieves a list of events about the activity of a cluster.\nThis API is paginated. If there are more events to read, the response includes all the\nparameters necessary to request the next page of events.",
+        "operationId": "clusters.listEvents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cluster_id": {
+                    "type": "string"
+                  },
+                  "end_time": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "event_types": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "limit": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "offset": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "order": {
+                    "type": "string"
+                  },
+                  "page_size": {
+                    "type": "number"
+                  },
+                  "page_token": {
+                    "type": "string"
+                  },
+                  "start_time": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetEventsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/get": {
+      "get": {
+        "description": "Retrieves the information for a cluster given its identifier.\nClusters can be described while they are running, or up to 60 days after they are terminated.",
+        "operationId": "clusters.getCluster",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cluster_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "clusterId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/list": {
+      "get": {
+        "description": "Return information about all pinned and active clusters, and all clusters terminated within the last 30 days. Clusters terminated prior to this period are not included.",
+        "operationId": "clusters.listClusters",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListClustersResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/list-node-types": {
+      "get": {
+        "description": "Returns a list of supported Spark node types. These node types can be used to launch a cluster.",
+        "operationId": "clusters.listNodeTypes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNodeTypesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/list-zones": {
+      "get": {
+        "description": "Returns a list of availability zones where clusters can be created in (For example, us-west-2a).\nThese zones can be used to launch a cluster.",
+        "operationId": "clusters.listAvailableZones",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAvailableZonesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/permanent-delete": {
+      "post": {
+        "description": "Permanently deletes a Spark cluster. This cluster is terminated and resources are asynchronously removed.\n\nIn addition, users will no longer see permanently deleted clusters in the cluster list, and API users can no longer\nperform any action on permanently deleted clusters.",
+        "operationId": "clusters.permanentDeleteCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpinClusterRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermanentDeleteClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/pin": {
+      "post": {
+        "description": "Pinning a cluster ensures that the cluster will always be returned by the ListClusters API.\nPinning a cluster that is already pinned will have no effect.\nThis API can only be called by workspace admins.",
+        "operationId": "clusters.pinCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpinClusterRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/resize": {
+      "post": {
+        "description": "Resizes a cluster to have a desired number of workers. This will fail unless the cluster is in a `RUNNING` state.",
+        "operationId": "clusters.resizeCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "autoscale": {
+                    "$ref": "#/components/schemas/AutoScale"
+                  },
+                  "cluster_id": {
+                    "type": "string"
+                  },
+                  "num_workers": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResizeClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/restart": {
+      "post": {
+        "description": "Restarts a Spark cluster with the supplied ID. If the cluster is not currently in a `RUNNING` state, nothing will happen.",
+        "operationId": "clusters.restartCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cluster_id": {
+                    "type": "string"
+                  },
+                  "restart_user": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestartClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/spark-versions": {
+      "get": {
+        "description": "Returns the list of available Spark versions. These versions can be used to launch a cluster.",
+        "operationId": "clusters.listSparkVersions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSparkVersionsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/start": {
+      "post": {
+        "description": "Starts a terminated Spark cluster with the supplied ID. This works similar to `createCluster` except:\n- The previous cluster id and attributes are preserved.\n- The cluster starts with the last specified cluster size.\n- If the previous cluster was an autoscaling cluster, the current cluster starts with\nthe minimum number of nodes.\n- If the cluster is not currently in a ``TERMINATED`` state, nothing will happen.\n- Clusters launched to run a job cannot be started.",
+        "operationId": "clusters.startCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpinClusterRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/unpin": {
+      "post": {
+        "description": "Unpinning a cluster will allow the cluster to eventually be removed from the ListClusters API.\nUnpinning a cluster that is not pinned will have no effect.\nThis API can only be called by workspace admins.",
+        "operationId": "clusters.unpinCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpinClusterRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnpinClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/clusters/update": {
+      "post": {
+        "description": "Updates the configuration of a cluster to match the partial set of attributes and size.\nDenote which fields to update using the `update_mask` field in the request body.\nA cluster can be updated if it is in a `RUNNING` or `TERMINATED` state.\nIf a cluster is updated while in a `RUNNING` state, it will be restarted so that the new attributes can take effect.\nIf a cluster is updated while in a `TERMINATED` state, it will remain `TERMINATED`.\nThe updated attributes will take effect the next time the cluster is started using the `clusters/start` API.\nAttempts to update a cluster in any other state will be rejected with an `INVALID_STATE` error code.\nClusters created by the Databricks Jobs service cannot be updated.",
+        "operationId": "clusters.updateCluster",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cluster": {
+                    "$ref": "#/components/schemas/UpdateClusterRequest_UpdateClusterResource"
+                  },
+                  "cluster_id": {
+                    "type": "string"
+                  },
+                  "update_mask": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateClusterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusters"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "clusters"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalUpdateClusterRequestSchema uses z.any()",
+      "source": "@databricks/sdk-clusters/v2/model.js:1768:14"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "clusters.cancelPendingClusterEnforcement",
+      "path": "/api/2.0/policies/clusters:cancelPendingClusterEnforcement",
+      "source": "@databricks/sdk-clusters/v2/client.js:638"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.changeClusterOwner",
+      "path": "/api/2.1/clusters/change-owner",
+      "source": "@databricks/sdk-clusters/v2/client.js:149"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.createCluster",
+      "path": "/api/2.1/clusters/create",
+      "source": "@databricks/sdk-clusters/v2/client.js:182"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.deleteCluster",
+      "path": "/api/2.1/clusters/delete",
+      "source": "@databricks/sdk-clusters/v2/client.js:225"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.editCluster",
+      "path": "/api/2.1/clusters/edit",
+      "source": "@databricks/sdk-clusters/v2/client.js:266"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.enforcePolicyComplianceForCluster",
+      "path": "/api/2.0/policies/clusters/enforce-compliance",
+      "source": "@databricks/sdk-clusters/v2/client.js:668"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.getCluster",
+      "path": "/api/2.1/clusters/get",
+      "source": "@databricks/sdk-clusters/v2/client.js:306"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.getClusterRevision",
+      "path": "/api/2.1/clusters/{cluster_id}/revisions/{revision_id}.",
+      "source": "@databricks/sdk-clusters/v2/client.js:68"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.getPolicyComplianceForCluster",
+      "path": "/api/2.0/policies/clusters/get-compliance",
+      "source": "@databricks/sdk-clusters/v2/client.js:691"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.listAvailableZones",
+      "path": "/api/2.1/clusters/list-zones",
+      "source": "@databricks/sdk-clusters/v2/client.js:332"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.listClusterComplianceForPolicy",
+      "path": "/api/2.0/policies/clusters/list-compliance",
+      "source": "@databricks/sdk-clusters/v2/client.js:718"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.listClusterRevisions",
+      "path": "/api/2.1/clusters/{cluster_id}./revisions",
+      "source": "@databricks/sdk-clusters/v2/client.js:87"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.listClusters",
+      "path": "/api/2.1/clusters/list",
+      "source": "@databricks/sdk-clusters/v2/client.js:351"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.listEvents",
+      "path": "/api/2.1/clusters/events",
+      "source": "@databricks/sdk-clusters/v2/client.js:39"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.listNodeTypes",
+      "path": "/api/2.1/clusters/list-node-types",
+      "source": "@databricks/sdk-clusters/v2/client.js:384"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusters.listSparkVersions",
+      "path": "/api/2.1/clusters/spark-versions",
+      "source": "@databricks/sdk-clusters/v2/client.js:403"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.permanentDeleteCluster",
+      "path": "/api/2.1/clusters/permanent-delete",
+      "source": "@databricks/sdk-clusters/v2/client.js:427"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.pinCluster",
+      "path": "/api/2.1/clusters/pin",
+      "source": "@databricks/sdk-clusters/v2/client.js:451"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.resizeCluster",
+      "path": "/api/2.1/clusters/resize",
+      "source": "@databricks/sdk-clusters/v2/client.js:471"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.restartCluster",
+      "path": "/api/2.1/clusters/restart",
+      "source": "@databricks/sdk-clusters/v2/client.js:497"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.rollbackCluster",
+      "path": "/api/2.1/clusters/{cluster_id}/revisions/{revision_id}./rollback",
+      "source": "@databricks/sdk-clusters/v2/client.js:129"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.startCluster",
+      "path": "/api/2.1/clusters/start",
+      "source": "@databricks/sdk-clusters/v2/client.js:531"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.unpinCluster",
+      "path": "/api/2.1/clusters/unpin",
+      "source": "@databricks/sdk-clusters/v2/client.js:569"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusters.updateCluster",
+      "path": "/api/2.1/clusters/update",
+      "source": "@databricks/sdk-clusters/v2/client.js:598"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-clusters",
+  "x-databricks-sdk-version": "0.49.0"
+}

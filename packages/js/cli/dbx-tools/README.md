@@ -35,10 +35,11 @@ SMTP, or X.509 code. Run
 program rather than answering it at the root.
 
 Rust commands are generated from the workspace's release metadata. The first
-invocation downloads the exact GitHub release asset matching this CLI version
-and operating system, then installs it atomically in the user's home directory.
-Later invocations reuse the validated executable. Root help never downloads a
-binary, and all command arguments are forwarded directly to the Rust CLI.
+invocation downloads the exact GitHub release asset matching `PACKAGE_VERSION`
+and the operating system, then installs it as
+`~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`. Later invocations reuse
+that versioned executable. Root help never downloads a binary, and all command
+arguments are forwarded directly to the Rust CLI.
 
 ## Bootstrap A Workspace
 

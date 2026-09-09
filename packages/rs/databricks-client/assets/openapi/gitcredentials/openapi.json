@@ -1,0 +1,448 @@
+{
+  "components": {
+    "schemas": {
+      "CreateCredentialsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "git_email": {
+            "type": "string"
+          },
+          "git_provider": {
+            "type": "string"
+          },
+          "git_username": {
+            "type": "string"
+          },
+          "is_default_for_provider": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "personal_access_token": {
+            "type": "string"
+          },
+          "principal_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CreateCredentialsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "credential_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "git_email": {
+            "type": "string"
+          },
+          "git_provider": {
+            "type": "string"
+          },
+          "git_username": {
+            "type": "string"
+          },
+          "is_default_for_provider": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Credential": {
+        "additionalProperties": false,
+        "properties": {
+          "credential_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "git_email": {
+            "type": "string"
+          },
+          "git_provider": {
+            "type": "string"
+          },
+          "git_username": {
+            "type": "string"
+          },
+          "is_default_for_provider": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteCredentialsResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "GetCredentialsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "credential_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "git_email": {
+            "type": "string"
+          },
+          "git_provider": {
+            "type": "string"
+          },
+          "git_username": {
+            "type": "string"
+          },
+          "is_default_for_provider": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListCredentialsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/Credential"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCredentialsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "git_email": {
+            "type": "string"
+          },
+          "git_provider": {
+            "type": "string"
+          },
+          "git_username": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "is_default_for_provider": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "personal_access_token": {
+            "type": "string"
+          },
+          "principal_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCredentialsResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Git Credentials API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/git-credentials": {
+      "get": {
+        "description": "Lists the calling user's Git credentials.",
+        "operationId": "gitCredentials.listCredentials",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "principalId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCredentialsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "gitCredentials"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a Git credential entry for the user.\nUse the PATCH endpoint to update existing credentials, or the DELETE endpoint to\ndelete existing credentials.",
+        "operationId": "gitCredentials.createCredentials",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCredentialsRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCredentialsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "gitCredentials"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/git-credentials/{id}": {
+      "delete": {
+        "description": "Deletes the specified Git credential.",
+        "operationId": "gitCredentials.deleteCredentials",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          },
+          {
+            "in": "query",
+            "name": "principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "principalId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCredentialsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "gitCredentials"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets the Git credential with the specified credential ID.",
+        "operationId": "gitCredentials.getCredentials",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          },
+          {
+            "in": "query",
+            "name": "principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "principalId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetCredentialsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "gitCredentials"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates the specified Git credential.",
+        "operationId": "gitCredentials.updateCredentials",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCredentialsRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCredentialsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "gitCredentials"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "gitCredentials"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "gitCredentials.createCredentials",
+      "path": "/api/2.0/git-credentials",
+      "source": "@databricks/sdk-gitcredentials/v1/client.js:39"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "gitCredentials.deleteCredentials",
+      "path": "/api/2.0/git-credentials/{id}",
+      "source": "@databricks/sdk-gitcredentials/v1/client.js:59"
+    },
+    {
+      "method": "GET",
+      "operationId": "gitCredentials.getCredentials",
+      "path": "/api/2.0/git-credentials/{id}",
+      "source": "@databricks/sdk-gitcredentials/v1/client.js:82"
+    },
+    {
+      "method": "GET",
+      "operationId": "gitCredentials.listCredentials",
+      "path": "/api/2.0/git-credentials",
+      "source": "@databricks/sdk-gitcredentials/v1/client.js:105"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "gitCredentials.updateCredentials",
+      "path": "/api/2.0/git-credentials/{id}",
+      "source": "@databricks/sdk-gitcredentials/v1/client.js:128"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-gitcredentials",
+  "x-databricks-sdk-version": "0.49.0"
+}

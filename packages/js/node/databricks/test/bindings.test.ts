@@ -3,7 +3,7 @@ import { it } from "node:test";
 import {
   AuthOptions,
   ProviderOptions,
-  createPersistentAuthForRequest,
+  createPersistentAuth,
   createProviderAuthWithStorage,
   createStorageHandle,
   type StorageAdapter,
@@ -88,15 +88,26 @@ it("composes the same generated lifecycle record in both providers", () => {
 });
 
 it("forwards a request-scoped App OBO token without caching", async () => {
-  const auth = await createPersistentAuthForRequest(
+  const auth = await createPersistentAuth(
     DatabricksAuthOptions.create({
       host: "https://workspace.example",
       authType: "app_obo",
+      requestHeaders: new Map([["Authorization", "Bearer request-token"]]),
     }),
-    new Map([["X-Forwarded-Access-Token", "request-token"]]),
     Storage.Memory,
   );
 
   assert.equal((await auth.token()).accessToken, "request-token");
   assert.equal((await auth.forceRefreshToken()).accessToken, "request-token");
+
+  const forwarded = await createPersistentAuth(
+    DatabricksAuthOptions.create({
+      host: "https://workspace.example",
+      authType: "app_obo",
+      requestHeaders: new Map([["X-Forwarded-Access-Token", "forwarded-token"]]),
+      accessTokenHeader: "x-forwarded-access-token",
+    }),
+    Storage.Memory,
+  );
+  assert.equal((await forwarded.token()).accessToken, "forwarded-token");
 });

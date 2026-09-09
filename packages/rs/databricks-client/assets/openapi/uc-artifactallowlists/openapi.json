@@ -1,0 +1,219 @@
+{
+  "components": {
+    "schemas": {
+      "ArtifactAllowlistInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_matchers": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactMatcher"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ArtifactMatcher": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "type": "string"
+          },
+          "match_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SetArtifactAllowlistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_matchers": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactMatcher"
+            },
+            "type": "array"
+          },
+          "artifact_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Artifact Allowlists API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/unity-catalog/artifact-allowlists/{artifactType}": {
+      "get": {
+        "description": "Get the artifact allowlist of a certain artifact type.\nThe caller must be a metastore admin or have the **MANAGE ALLOWLIST** privilege\non the metastore.",
+        "operationId": "artifactAllowlists.getArtifactAllowlist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifactType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "artifactType"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactAllowlistInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "artifactAllowlists"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Set the artifact allowlist of a certain artifact type.\nThe whole artifact allowlist is replaced with the new allowlist.\nThe caller must be a metastore admin or have the **MANAGE ALLOWLIST** privilege\non the metastore.",
+        "operationId": "artifactAllowlists.setArtifactAllowlist",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifactType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "artifactType"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "artifact_matchers": {
+                    "items": {
+                      "$ref": "#/components/schemas/ArtifactMatcher"
+                    },
+                    "type": "array"
+                  },
+                  "created_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactAllowlistInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "artifactAllowlists"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "artifactAllowlists"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "GET",
+      "operationId": "artifactAllowlists.getArtifactAllowlist",
+      "path": "/api/2.1/unity-catalog/artifact-allowlists/{artifactType}",
+      "source": "@databricks/sdk-uc-artifactallowlists/v1/client.js:39"
+    },
+    {
+      "method": "PUT",
+      "operationId": "artifactAllowlists.setArtifactAllowlist",
+      "path": "/api/2.1/unity-catalog/artifact-allowlists/{artifactType}",
+      "source": "@databricks/sdk-uc-artifactallowlists/v1/client.js:63"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-uc-artifactallowlists",
+  "x-databricks-sdk-version": "0.49.0"
+}

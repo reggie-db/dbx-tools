@@ -1,0 +1,572 @@
+{
+  "components": {
+    "schemas": {
+      "EffectivePrivilege": {
+        "additionalProperties": false,
+        "properties": {
+          "inherited_from_name": {
+            "type": "string"
+          },
+          "inherited_from_type": {
+            "type": "string"
+          },
+          "privilege": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EffectivePrivilegeAssignment": {
+        "additionalProperties": false,
+        "properties": {
+          "principal": {
+            "type": "string"
+          },
+          "privileges": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePrivilege"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetEffectivePermissionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "privilege_assignments": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePrivilegeAssignment"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetPermissionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "privilege_assignments": {
+            "items": {
+              "$ref": "#/components/schemas/PrivilegeAssignment"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListEffectivePrivilegeAssignmentsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "effective_privilege_assignments": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePrivilegeAssignment"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListPrivilegeAssignmentsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "privilege_assignments": {
+            "items": {
+              "$ref": "#/components/schemas/PrivilegeAssignment"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PermissionsChange": {
+        "additionalProperties": false,
+        "properties": {
+          "add": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "remove": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PrivilegeAssignment": {
+        "additionalProperties": false,
+        "properties": {
+          "principal": {
+            "type": "string"
+          },
+          "privileges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePermissionsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionsChange"
+            },
+            "type": "array"
+          },
+          "omit_permissions_in_response": {
+            "type": "boolean"
+          },
+          "securable_full_name": {
+            "type": "string"
+          },
+          "securable_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePermissionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "privilege_assignments": {
+            "items": {
+              "$ref": "#/components/schemas/PrivilegeAssignment"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Grants API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/unity-catalog/effective-permissions/{securableType}/{securableFullName}": {
+      "get": {
+        "description": "Gets the effective permissions for a securable. Includes inherited permissions from any parent securables.\n\nNOTE: we recommend using max_results=0 to use the paginated version of this API. Unpaginated calls will be deprecated soon.\n\nPAGINATION BEHAVIOR: When using pagination (max_results >= 0), a page may contain zero results while still providing a next_page_token.\nClients must continue reading pages until next_page_token is absent, which is the only indication that the end of results has been reached.",
+        "operationId": "grants.getEffectivePermissions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "securableFullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableFullName"
+          },
+          {
+            "in": "path",
+            "name": "securableType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableType"
+          },
+          {
+            "in": "query",
+            "name": "max_results",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "maxResults"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "principal",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "principal"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetEffectivePermissionsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "grants"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/effective-privilege-assignments/{securableType}/{fullName}": {
+      "get": {
+        "description": "Lists the effective privilege assignments for a securable. Includes inherited privileges.\nPaginated version of Get Effective Permissions API.",
+        "operationId": "grants.listEffectivePrivilegeAssignments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullName"
+          },
+          {
+            "in": "path",
+            "name": "securableType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableType"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "principal",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "principal"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEffectivePrivilegeAssignmentsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "grants"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/permissions/{securableType}/{securableFullName}": {
+      "get": {
+        "description": "Gets the permissions for a securable. Does not include inherited permissions.\n\nNOTE: we recommend using max_results=0 to use the paginated version of this API. Unpaginated calls will be deprecated soon.\n\nPAGINATION BEHAVIOR: When using pagination (max_results >= 0), a page may contain zero results while still providing a next_page_token.\nClients must continue reading pages until next_page_token is absent, which is the only indication that the end of results has been reached.",
+        "operationId": "grants.getPermissions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "securableFullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableFullName"
+          },
+          {
+            "in": "path",
+            "name": "securableType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableType"
+          },
+          {
+            "in": "query",
+            "name": "max_results",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "maxResults"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "principal",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "principal"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPermissionsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "grants"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates the permissions for a securable.",
+        "operationId": "grants.updatePermissions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "securableFullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableFullName"
+          },
+          {
+            "in": "path",
+            "name": "securableType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableType"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "changes": {
+                    "items": {
+                      "$ref": "#/components/schemas/PermissionsChange"
+                    },
+                    "type": "array"
+                  },
+                  "omit_permissions_in_response": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePermissionsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "grants"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/privilege-assignments/{securableType}/{fullName}": {
+      "get": {
+        "description": "Lists the privilege assignments for a securable. Does not include inherited privileges.\nPaginated version of Get Permissions API.",
+        "operationId": "grants.listPrivilegeAssignments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullName"
+          },
+          {
+            "in": "path",
+            "name": "securableType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "securableType"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "principal",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "principal"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPrivilegeAssignmentsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "grants"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "grants"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "GET",
+      "operationId": "grants.getEffectivePermissions",
+      "path": "/api/2.1/unity-catalog/effective-permissions/{securableType}/{securableFullName}",
+      "source": "@databricks/sdk-uc-grants/v1/client.js:42"
+    },
+    {
+      "method": "GET",
+      "operationId": "grants.getPermissions",
+      "path": "/api/2.1/unity-catalog/permissions/{securableType}/{securableFullName}",
+      "source": "@databricks/sdk-uc-grants/v1/client.js:74"
+    },
+    {
+      "method": "GET",
+      "operationId": "grants.listEffectivePrivilegeAssignments",
+      "path": "/api/2.1/unity-catalog/effective-privilege-assignments/{securableType}/{fullName}",
+      "source": "@databricks/sdk-uc-grants/v1/client.js:102"
+    },
+    {
+      "method": "GET",
+      "operationId": "grants.listPrivilegeAssignments",
+      "path": "/api/2.1/unity-catalog/privilege-assignments/{securableType}/{fullName}",
+      "source": "@databricks/sdk-uc-grants/v1/client.js:139"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "grants.updatePermissions",
+      "path": "/api/2.1/unity-catalog/permissions/{securableType}/{securableFullName}",
+      "source": "@databricks/sdk-uc-grants/v1/client.js:173"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-uc-grants",
+  "x-databricks-sdk-version": "0.49.0"
+}

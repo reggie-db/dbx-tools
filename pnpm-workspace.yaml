@@ -14,6 +14,7 @@ packages:
   - packages/js/node/auth-gate
   - packages/js/node/core
   - packages/js/node/databricks
+  - packages/js/node/databricks-openapi
   - packages/js/node/databricks-zerobus
   - packages/js/node/email
   - packages/js/node/fs
@@ -93,6 +94,88 @@ catalog:
   ai: ^5.0.0
   echarts: ^6.0.0
   echarts-for-react: ^3.0.2
+  "@databricks/sdk-accessmanagement": 0.49.0
+  "@databricks/sdk-alerts": 0.49.0
+  "@databricks/sdk-apps": 0.49.0
+  "@databricks/sdk-authentication": 0.49.0
+  "@databricks/sdk-budgetpolicy": 0.49.0
+  "@databricks/sdk-budgets": 0.49.0
+  "@databricks/sdk-cleanrooms": 0.49.0
+  "@databricks/sdk-clusterlibraries": 0.49.0
+  "@databricks/sdk-clusterpolicies": 0.49.0
+  "@databricks/sdk-clusters": 0.49.0
+  "@databricks/sdk-commandexecution": 0.49.0
+  "@databricks/sdk-customllms": 0.49.0
+  "@databricks/sdk-database": 0.49.0
+  "@databricks/sdk-dataclassification": 0.49.0
+  "@databricks/sdk-dataquality": 0.49.0
+  "@databricks/sdk-disasterrecovery": 0.49.0
+  "@databricks/sdk-environments": 0.49.0
+  "@databricks/sdk-experiments": 0.49.0
+  "@databricks/sdk-features": 0.49.0
+  "@databricks/sdk-featurestore": 0.49.0
+  "@databricks/sdk-files": 0.49.0
+  "@databricks/sdk-forecasting": 0.49.0
+  "@databricks/sdk-genie": 0.49.0
+  "@databricks/sdk-gitcredentials": 0.49.0
+  "@databricks/sdk-globalinitscripts": 0.49.0
+  "@databricks/sdk-instancepools": 0.49.0
+  "@databricks/sdk-instanceprofiles": 0.49.0
+  "@databricks/sdk-jobs": 0.49.0
+  "@databricks/sdk-keyconfigurations": 0.49.0
+  "@databricks/sdk-knowledgeassistants": 0.49.0
+  "@databricks/sdk-lakeview": 0.49.0
+  "@databricks/sdk-logdelivery": 0.49.0
+  "@databricks/sdk-marketplaces": 0.49.0
+  "@databricks/sdk-modelregistry": 0.49.0
+  "@databricks/sdk-modelserving": 0.49.0
+  "@databricks/sdk-modelservingquery": 0.49.0
+  "@databricks/sdk-networking": 0.49.0
+  "@databricks/sdk-notificationdestinations": 0.49.0
+  "@databricks/sdk-oauth": 0.49.0
+  "@databricks/sdk-pipelines": 0.49.0
+  "@databricks/sdk-policyfamilies": 0.49.0
+  "@databricks/sdk-postgres": 0.49.0
+  "@databricks/sdk-queries": 0.49.0
+  "@databricks/sdk-queryhistory": 0.49.0
+  "@databricks/sdk-repos": 0.49.0
+  "@databricks/sdk-scim": 0.49.0
+  "@databricks/sdk-secrets": 0.49.0
+  "@databricks/sdk-settings": 0.49.0
+  "@databricks/sdk-sharing": 0.49.0
+  "@databricks/sdk-statementexecution": 0.49.0
+  "@databricks/sdk-storageconfigurations": 0.49.0
+  "@databricks/sdk-supervisoragents": 0.49.0
+  "@databricks/sdk-tagassignments": 0.49.0
+  "@databricks/sdk-tagpolicies": 0.49.0
+  "@databricks/sdk-tokenmanagement": 0.49.0
+  "@databricks/sdk-tokens": 0.49.0
+  "@databricks/sdk-uc-abacpolicies": 0.49.0
+  "@databricks/sdk-uc-artifactallowlists": 0.49.0
+  "@databricks/sdk-uc-catalogs": 0.49.0
+  "@databricks/sdk-uc-connections": 0.49.0
+  "@databricks/sdk-uc-credentials": 0.49.0
+  "@databricks/sdk-uc-entitytagassignments": 0.49.0
+  "@databricks/sdk-uc-externallineage": 0.49.0
+  "@databricks/sdk-uc-externallocations": 0.49.0
+  "@databricks/sdk-uc-externalmetadata": 0.49.0
+  "@databricks/sdk-uc-functions": 0.49.0
+  "@databricks/sdk-uc-grants": 0.49.0
+  "@databricks/sdk-uc-metastores": 0.49.0
+  "@databricks/sdk-uc-onlinetables": 0.49.0
+  "@databricks/sdk-uc-registeredmodels": 0.49.0
+  "@databricks/sdk-uc-resourcequotas": 0.49.0
+  "@databricks/sdk-uc-rfa": 0.49.0
+  "@databricks/sdk-uc-schemas": 0.49.0
+  "@databricks/sdk-uc-secrets": 0.49.0
+  "@databricks/sdk-uc-systemschemas": 0.49.0
+  "@databricks/sdk-uc-tables": 0.49.0
+  "@databricks/sdk-uc-volumes": 0.49.0
+  "@databricks/sdk-uc-workspacebindings": 0.49.0
+  "@databricks/sdk-usagedashboards": 0.49.0
+  "@databricks/sdk-vectorsearch": 0.49.0
+  "@databricks/sdk-warehouses": 0.49.0
+  "@databricks/sdk-workspaces": 0.49.0
   shiki: ^3.0.0
   sql-formatter: ^15.6.9
   adaptivecards: ^3.0.5

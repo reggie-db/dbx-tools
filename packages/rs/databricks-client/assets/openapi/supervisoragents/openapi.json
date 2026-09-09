@@ -1,0 +1,1064 @@
+{
+  "components": {
+    "schemas": {
+      "App": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Example": {
+        "additionalProperties": false,
+        "properties": {
+          "example_id": {
+            "type": "string"
+          },
+          "guidelines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GenieSpace": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "KnowledgeAssistant": {
+        "additionalProperties": false,
+        "properties": {
+          "knowledge_assistant_id": {
+            "type": "string"
+          },
+          "serving_endpoint_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListExamplesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/Example"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListSupervisorAgentsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "supervisor_agents": {
+            "items": {
+              "$ref": "#/components/schemas/SupervisorAgent"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListToolsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SupervisorAgent": {
+        "additionalProperties": false,
+        "properties": {
+          "create_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "creator": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "experiment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "supervisor_agent_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Tool": {
+        "additionalProperties": false,
+        "properties": {
+          "app": {
+            "$ref": "#/components/schemas/App"
+          },
+          "description": {
+            "type": "string"
+          },
+          "genie_space": {
+            "$ref": "#/components/schemas/GenieSpace"
+          },
+          "id": {
+            "type": "string"
+          },
+          "knowledge_assistant": {
+            "$ref": "#/components/schemas/KnowledgeAssistant"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tool_id": {
+            "type": "string"
+          },
+          "tool_type": {
+            "type": "string"
+          },
+          "uc_connection": {
+            "$ref": "#/components/schemas/UcConnection"
+          },
+          "uc_function": {
+            "$ref": "#/components/schemas/UcFunction"
+          },
+          "volume": {
+            "$ref": "#/components/schemas/Volume"
+          }
+        },
+        "type": "object"
+      },
+      "UcConnection": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UcFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Volume": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Supervisor Agents API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/supervisor-agents": {
+      "get": {
+        "description": "Lists Supervisor Agents.",
+        "operationId": "supervisorAgents.listSupervisorAgents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSupervisorAgentsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a new Supervisor Agent.",
+        "operationId": "supervisorAgents.createSupervisorAgent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupervisorAgent"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupervisorAgent"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/supervisor-agents/{supervisor_agent_id}": {
+      "delete": {
+        "description": "Deletes a Supervisor Agent.",
+        "operationId": "supervisorAgents.deleteSupervisorAgent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets a Supervisor Agent.",
+        "operationId": "supervisorAgents.getSupervisorAgent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupervisorAgent"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates a Supervisor Agent. The fields that are required depend on the paths specified in `update_mask`.\nOnly fields included in the mask will be updated.",
+        "operationId": "supervisorAgents.updateSupervisorAgent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}",
+            "x-databricks-sdk-name": "supervisorAgent.name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "create_time": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "creator": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "display_name": {
+                    "type": "string"
+                  },
+                  "endpoint_name": {
+                    "type": "string"
+                  },
+                  "experiment_id": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "instructions": {
+                    "type": "string"
+                  },
+                  "supervisor_agent_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupervisorAgent"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/supervisor-agents/{supervisor_agent_id}/examples": {
+      "get": {
+        "description": "Lists examples under a Supervisor Agent.",
+        "operationId": "supervisorAgents.listExamples",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}",
+            "x-databricks-sdk-name": "parent"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListExamplesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates an example for a Supervisor Agent.",
+        "operationId": "supervisorAgents.createExample",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}",
+            "x-databricks-sdk-name": "parent"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Example"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Example"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/supervisor-agents/{supervisor_agent_id}/examples/{example_id}": {
+      "delete": {
+        "description": "Deletes an example from a Supervisor Agent.",
+        "operationId": "supervisorAgents.deleteExample",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "example_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets an example from a Supervisor Agent.",
+        "operationId": "supervisorAgents.getExample",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "example_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Example"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates an example in a Supervisor Agent.",
+        "operationId": "supervisorAgents.updateExample",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "example_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Example"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Example"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/supervisor-agents/{supervisor_agent_id}/tools": {
+      "get": {
+        "description": "Lists Tools under a Supervisor Agent.",
+        "operationId": "supervisorAgents.listTools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}",
+            "x-databricks-sdk-name": "parent"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListToolsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a Tool under a Supervisor Agent. Specify one of \"genie_space\", \"knowledge_assistant\", \"uc_function\", \"uc_connection\", \"app\", \"volume\", \"dashboard\", \"table\", \"vector_search_index\", \"catalog\", \"schema\", \"supervisor_agent\", \"databricks_web_search\", \"skill\" in the request body. The legacy values \"lakeview_dashboard\", \"uc_table\", and \"web_search\" are also accepted and remain equivalent to \"dashboard\", \"table\", and \"databricks_web_search\" respectively. The \"databricks_web_search\" tool_type maps to the `web_search` spec field.",
+        "operationId": "supervisorAgents.createTool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}",
+            "x-databricks-sdk-name": "parent"
+          },
+          {
+            "in": "query",
+            "name": "tool_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "toolId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Tool"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tool"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/supervisor-agents/{supervisor_agent_id}/tools/{tool_id}": {
+      "delete": {
+        "description": "Deletes a Tool.",
+        "operationId": "supervisorAgents.deleteTool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "tool_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets a Tool.",
+        "operationId": "supervisorAgents.getTool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "tool_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tool"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates a Tool. Only the `description` field can be updated.\nTo change immutable fields such as tool type, spec, or tool ID, delete the tool and recreate it.",
+        "operationId": "supervisorAgents.updateTool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supervisor_agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+            "x-databricks-sdk-name": "tool.name"
+          },
+          {
+            "in": "path",
+            "name": "tool_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+            "x-databricks-sdk-name": "tool.name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "app": {
+                    "$ref": "#/components/schemas/App"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "genie_space": {
+                    "$ref": "#/components/schemas/GenieSpace"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "knowledge_assistant": {
+                    "$ref": "#/components/schemas/KnowledgeAssistant"
+                  },
+                  "tool_id": {
+                    "type": "string"
+                  },
+                  "tool_type": {
+                    "type": "string"
+                  },
+                  "uc_connection": {
+                    "$ref": "#/components/schemas/UcConnection"
+                  },
+                  "uc_function": {
+                    "$ref": "#/components/schemas/UcFunction"
+                  },
+                  "volume": {
+                    "$ref": "#/components/schemas/Volume"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tool"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "supervisorAgents"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "supervisorAgents"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSupervisorAgentSchema uses z.any()",
+      "source": "@databricks/sdk-supervisoragents/v1/model.js:139:14"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "supervisorAgents.createExample",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/examples",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:35"
+    },
+    {
+      "method": "POST",
+      "operationId": "supervisorAgents.createSupervisorAgent",
+      "path": "/api/2.1/supervisor-agents",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:55"
+    },
+    {
+      "method": "POST",
+      "operationId": "supervisorAgents.createTool",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/tools",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:75"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "supervisorAgents.deleteExample",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:99"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "supervisorAgents.deleteSupervisorAgent",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:115"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "supervisorAgents.deleteTool",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:131"
+    },
+    {
+      "method": "GET",
+      "operationId": "supervisorAgents.getExample",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:147"
+    },
+    {
+      "method": "GET",
+      "operationId": "supervisorAgents.getSupervisorAgent",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:166"
+    },
+    {
+      "method": "GET",
+      "operationId": "supervisorAgents.getTool",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:185"
+    },
+    {
+      "method": "GET",
+      "operationId": "supervisorAgents.listExamples",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/examples",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:204"
+    },
+    {
+      "method": "GET",
+      "operationId": "supervisorAgents.listSupervisorAgents",
+      "path": "/api/2.1/supervisor-agents",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:237"
+    },
+    {
+      "method": "GET",
+      "operationId": "supervisorAgents.listTools",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/tools",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:270"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "supervisorAgents.updateExample",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/examples/{example_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:303"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "supervisorAgents.updateSupervisorAgent",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:330"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "supervisorAgents.updateTool",
+      "path": "/api/2.1/supervisor-agents/{supervisor_agent_id}/tools/{tool_id}",
+      "source": "@databricks/sdk-supervisoragents/v1/client.js:357"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-supervisoragents",
+  "x-databricks-sdk-version": "0.49.0"
+}

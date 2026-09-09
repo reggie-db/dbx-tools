@@ -1,0 +1,4065 @@
+{
+  "components": {
+    "schemas": {
+      "AddExchangeForListingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange_id": {
+            "type": "string"
+          },
+          "listing_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AddExchangeForListingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange_for_listing": {
+            "$ref": "#/components/schemas/ExchangeListing"
+          }
+        },
+        "type": "object"
+      },
+      "BatchGetListingsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listings": {
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "BatchGetProvidersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ConsumerTerms": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ContactInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateExchangeFilterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/ExchangeFilter"
+          }
+        },
+        "type": "object"
+      },
+      "CreateExchangeFilterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "filter_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateExchangeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange": {
+            "$ref": "#/components/schemas/Exchange"
+          }
+        },
+        "type": "object"
+      },
+      "CreateExchangeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateFileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "file_parent": {
+            "$ref": "#/components/schemas/FileParent"
+          },
+          "marketplace_file_type": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateFileResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "file_info": {
+            "$ref": "#/components/schemas/FileInfo"
+          },
+          "upload_url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateInstallationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_consumer_terms": {
+            "$ref": "#/components/schemas/ConsumerTerms"
+          },
+          "catalog_name": {
+            "type": "string"
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "recipient_type": {
+            "type": "string"
+          },
+          "repo_detail": {
+            "$ref": "#/components/schemas/RepoInstallation"
+          },
+          "share_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateInstallationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "installation": {
+            "$ref": "#/components/schemas/InstallationDetail"
+          }
+        },
+        "type": "object"
+      },
+      "CreateListingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "listing": {
+            "$ref": "#/components/schemas/Listing"
+          }
+        },
+        "type": "object"
+      },
+      "CreateListingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listing_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePersonalizationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_consumer_terms": {
+            "$ref": "#/components/schemas/ConsumerTerms"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "intended_use": {
+            "type": "string"
+          },
+          "is_from_lighthouse": {
+            "type": "boolean"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "recipient_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePersonalizationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateProviderAnalyticsDashboardRequest": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "CreateProviderAnalyticsDashboardResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateProviderRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ProviderInfo"
+          }
+        },
+        "type": "object"
+      },
+      "CreateProviderResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DataRefreshInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "interval": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteExchangeFilterResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteExchangeResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteFileResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteInstallationResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteListingResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteProviderResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "Exchange": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/ExchangeFilter"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "linked_listings": {
+            "items": {
+              "$ref": "#/components/schemas/ExchangeListing"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExchangeFilter": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "exchange_id": {
+            "type": "string"
+          },
+          "filter_type": {
+            "type": "string"
+          },
+          "filter_value": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExchangeListing": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "exchange_id": {
+            "type": "string"
+          },
+          "exchange_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "listing_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FileInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "download_link": {
+            "type": "string"
+          },
+          "file_parent": {
+            "$ref": "#/components/schemas/FileParent"
+          },
+          "id": {
+            "type": "string"
+          },
+          "marketplace_file_type": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "status_message": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "FileParent": {
+        "additionalProperties": false,
+        "properties": {
+          "file_parent_type": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetAllPersonalizationRequestsForConsumerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "personalization_requests": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalizationRequest"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetExchangeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange": {
+            "$ref": "#/components/schemas/Exchange"
+          }
+        },
+        "type": "object"
+      },
+      "GetFileResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "file_info": {
+            "$ref": "#/components/schemas/FileInfo"
+          }
+        },
+        "type": "object"
+      },
+      "GetLatestVersionProviderAnalyticsDashboardResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "GetListingContentMetadataResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "shared_data_objects": {
+            "items": {
+              "$ref": "#/components/schemas/SharedDataObject"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetListingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listing": {
+            "$ref": "#/components/schemas/Listing"
+          }
+        },
+        "type": "object"
+      },
+      "GetListingsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listings": {
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetPersonalizationRequestsForConsumerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "personalization_requests": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalizationRequest"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetPersonalizationRequestsForProviderResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "personalization_requests": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalizationRequest"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GetProviderResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ProviderInfo"
+          }
+        },
+        "type": "object"
+      },
+      "GetPublishedListingForConsumerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listing": {
+            "$ref": "#/components/schemas/Listing"
+          }
+        },
+        "type": "object"
+      },
+      "GetPublishedListingsForConsumerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listings": {
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetPublishedProviderForConsumerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ProviderInfo"
+          }
+        },
+        "type": "object"
+      },
+      "InstallationDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_name": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "installed_on": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "listing_name": {
+            "type": "string"
+          },
+          "recipient_type": {
+            "type": "string"
+          },
+          "repo_name": {
+            "type": "string"
+          },
+          "repo_path": {
+            "type": "string"
+          },
+          "share_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "token_detail": {
+            "$ref": "#/components/schemas/TokenDetail"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListAllInstallationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "installations": {
+            "items": {
+              "$ref": "#/components/schemas/InstallationDetail"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListExchangeFiltersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/ExchangeFilter"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListExchangesForListingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange_listing": {
+            "items": {
+              "$ref": "#/components/schemas/ExchangeListing"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListExchangesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "exchanges": {
+            "items": {
+              "$ref": "#/components/schemas/Exchange"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListFilesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "file_infos": {
+            "items": {
+              "$ref": "#/components/schemas/FileInfo"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListFulfillmentsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "fulfillments": {
+            "items": {
+              "$ref": "#/components/schemas/ListingFulfillment"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Listing": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ListingDetail"
+          },
+          "id": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ListingSummary"
+          }
+        },
+        "type": "object"
+      },
+      "ListingDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "assets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "collection_date_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "collection_date_start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "collection_granularity": {
+            "$ref": "#/components/schemas/DataRefreshInfo"
+          },
+          "cost": {
+            "type": "string"
+          },
+          "data_source": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "documentation_link": {
+            "type": "string"
+          },
+          "embedded_notebook_file_infos": {
+            "items": {
+              "$ref": "#/components/schemas/FileInfo"
+            },
+            "type": "array"
+          },
+          "file_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "geographical_coverage": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "pricing_model": {
+            "type": "string"
+          },
+          "privacy_policy_link": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "support_link": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/ListingTag"
+            },
+            "type": "array"
+          },
+          "terms_of_service": {
+            "type": "string"
+          },
+          "update_frequency": {
+            "$ref": "#/components/schemas/DataRefreshInfo"
+          }
+        },
+        "type": "object"
+      },
+      "ListingFulfillment": {
+        "additionalProperties": false,
+        "properties": {
+          "fulfillment_type": {
+            "type": "string"
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "recipient_type": {
+            "type": "string"
+          },
+          "repo_info": {
+            "$ref": "#/components/schemas/RepoInfo"
+          },
+          "share_info": {
+            "$ref": "#/components/schemas/ShareInfo"
+          }
+        },
+        "type": "object"
+      },
+      "ListingSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "visibility": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListingSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "exchange_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "git_repo": {
+            "$ref": "#/components/schemas/RepoInfo"
+          },
+          "listingType": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "provider_region": {
+            "$ref": "#/components/schemas/RegionInfo"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "published_by": {
+            "type": "string"
+          },
+          "setting": {
+            "$ref": "#/components/schemas/ListingSetting"
+          },
+          "share": {
+            "$ref": "#/components/schemas/ShareInfo"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "updated_by_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListingTag": {
+        "additionalProperties": false,
+        "properties": {
+          "tag_name": {
+            "type": "string"
+          },
+          "tag_values": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListInstallationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "installations": {
+            "items": {
+              "$ref": "#/components/schemas/InstallationDetail"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListListingsForExchangeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange_listings": {
+            "items": {
+              "$ref": "#/components/schemas/ExchangeListing"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListProviderAnalyticsDashboardResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dashboard_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListProvidersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListPublishedProvidersForConsumerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PersonalizationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "consumer_region": {
+            "$ref": "#/components/schemas/RegionInfo"
+          },
+          "contact_info": {
+            "$ref": "#/components/schemas/ContactInfo"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "intended_use": {
+            "type": "string"
+          },
+          "is_from_lighthouse": {
+            "type": "boolean"
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "listing_name": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "recipient_type": {
+            "type": "string"
+          },
+          "share": {
+            "$ref": "#/components/schemas/ShareInfo"
+          },
+          "status": {
+            "type": "string"
+          },
+          "status_message": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ProviderInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "business_contact_email": {
+            "type": "string"
+          },
+          "company_website_link": {
+            "type": "string"
+          },
+          "dark_mode_icon_file_id": {
+            "type": "string"
+          },
+          "dark_mode_icon_file_path": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon_file_id": {
+            "type": "string"
+          },
+          "icon_file_path": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_featured": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "privacy_policy_link": {
+            "type": "string"
+          },
+          "published_by": {
+            "type": "string"
+          },
+          "support_contact_email": {
+            "type": "string"
+          },
+          "term_of_service_link": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RegionInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RemoveExchangeForListingResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "RepoInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "git_repo_url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RepoInstallation": {
+        "additionalProperties": false,
+        "properties": {
+          "repo_name": {
+            "type": "string"
+          },
+          "repo_path": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SearchPublishedListingsForConsumerResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listings": {
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SharedDataObject": {
+        "additionalProperties": false,
+        "properties": {
+          "data_object_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ShareInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TokenDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "bearerToken": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "expirationTime": {
+            "type": "string"
+          },
+          "shareCredentialsVersion": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "TokenInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "activation_url": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "expiration_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateExchangeFilterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/ExchangeFilter"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateExchangeFilterResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/ExchangeFilter"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateExchangeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange": {
+            "$ref": "#/components/schemas/Exchange"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateExchangeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "exchange": {
+            "$ref": "#/components/schemas/Exchange"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateInstallationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "installation": {
+            "$ref": "#/components/schemas/InstallationDetail"
+          },
+          "installation_id": {
+            "type": "string"
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "rotate_token": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateInstallationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "installation": {
+            "$ref": "#/components/schemas/InstallationDetail"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateListingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "listing": {
+            "$ref": "#/components/schemas/Listing"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateListingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "listing": {
+            "$ref": "#/components/schemas/Listing"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePersonalizationRequestStatusRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "listing_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "share": {
+            "$ref": "#/components/schemas/ShareInfo"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePersonalizationRequestStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/PersonalizationRequest"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateProviderAnalyticsDashboardRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateProviderAnalyticsDashboardResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dashboard_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "UpdateProviderRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ProviderInfo"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateProviderResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ProviderInfo"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Marketplaces API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/marketplace-exchange/exchanges": {
+      "get": {
+        "description": "List exchanges visible to provider",
+        "operationId": "marketplaces.listExchanges",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListExchangesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create an exchange",
+        "operationId": "marketplaces.createExchange",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExchangeResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateExchangeResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-exchange/exchanges-for-listing": {
+      "get": {
+        "description": "List exchanges associated with a listing",
+        "operationId": "marketplaces.listExchangesForListing",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "listing_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListExchangesForListingResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Associate an exchange with a listing",
+        "operationId": "marketplaces.addExchangeForListing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "exchange_id": {
+                    "type": "string"
+                  },
+                  "listing_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddExchangeForListingResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-exchange/exchanges-for-listing/{id}": {
+      "delete": {
+        "description": "Disassociate an exchange with a listing",
+        "operationId": "marketplaces.removeExchangeForListing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveExchangeForListingResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-exchange/exchanges/{id}": {
+      "delete": {
+        "description": "This removes a listing from marketplace.",
+        "operationId": "marketplaces.deleteExchange",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteExchangeResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get an exchange.",
+        "operationId": "marketplaces.getExchange",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetExchangeResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Update an exchange",
+        "operationId": "marketplaces.updateExchange",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExchangeResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateExchangeResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-exchange/filters": {
+      "get": {
+        "description": "List exchange filter",
+        "operationId": "marketplaces.listExchangeFilters",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "exchange_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "exchangeId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListExchangeFiltersResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Add an exchange filter.",
+        "operationId": "marketplaces.createExchangeFilter",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExchangeFilterResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateExchangeFilterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-exchange/filters/{id}": {
+      "delete": {
+        "description": "Delete an exchange filter",
+        "operationId": "marketplaces.deleteExchangeFilter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteExchangeFilterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Update an exchange filter.",
+        "operationId": "marketplaces.updateExchangeFilter",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExchangeFilterResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateExchangeFilterResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-exchange/listings-for-exchange": {
+      "get": {
+        "description": "List listings associated with an exchange",
+        "operationId": "marketplaces.listListingsForExchange",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "exchange_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "exchangeId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListListingsForExchangeResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/analytics_dashboard": {
+      "get": {
+        "description": "Get provider analytics dashboard.",
+        "operationId": "marketplaces.listProviderAnalyticsDashboard",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProviderAnalyticsDashboardResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create provider analytics dashboard. Returns Marketplace specific `id`. Not to be confused with the Lakeview dashboard id.",
+        "operationId": "marketplaces.createProviderAnalyticsDashboard",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateProviderAnalyticsDashboardResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/analytics_dashboard/{id}": {
+      "put": {
+        "description": "Update provider analytics dashboard.",
+        "operationId": "marketplaces.updateProviderAnalyticsDashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateProviderAnalyticsDashboardResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/analytics_dashboard/latest": {
+      "get": {
+        "description": "Get latest version of provider analytics dashboard.",
+        "operationId": "marketplaces.getLatestVersionProviderAnalyticsDashboard",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetLatestVersionProviderAnalyticsDashboardResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/files": {
+      "get": {
+        "description": "List files attached to a parent entity.",
+        "operationId": "marketplaces.listFiles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFilesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a file. Currently, only provider icons and attached notebooks are supported.",
+        "operationId": "marketplaces.createFile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "display_name": {
+                    "type": "string"
+                  },
+                  "file_parent": {
+                    "$ref": "#/components/schemas/FileParent"
+                  },
+                  "marketplace_file_type": {
+                    "type": "string"
+                  },
+                  "mime_type": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateFileResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/files/{fileId}": {
+      "delete": {
+        "description": "Delete a file",
+        "operationId": "marketplaces.deleteFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fileId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteFileResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get a file",
+        "operationId": "marketplaces.getFile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fileId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFileResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/listing": {
+      "post": {
+        "description": "Create a new listing",
+        "operationId": "marketplaces.createListing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateListingResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateListingResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/listings": {
+      "get": {
+        "description": "List listings owned by this provider",
+        "operationId": "marketplaces.listListings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetListingsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/listings/{id}": {
+      "delete": {
+        "description": "Delete a listing",
+        "operationId": "marketplaces.deleteListing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteListingResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get a listing",
+        "operationId": "marketplaces.getListing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetListingResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Update a listing",
+        "operationId": "marketplaces.updateListing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateListingResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateListingResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/listings/{listingId}/personalization-requests/{requestId}/request-status": {
+      "put": {
+        "description": "Update personalization request. This method only permits updating the status of the request.",
+        "operationId": "marketplaces.updatePersonalizationRequestStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          },
+          {
+            "in": "path",
+            "name": "requestId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "requestId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "share": {
+                    "$ref": "#/components/schemas/ShareInfo"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePersonalizationRequestStatusResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/personalization-requests": {
+      "get": {
+        "description": "List personalization requests to this provider.\nThis will return all personalization requests, regardless of which listing they are for.",
+        "operationId": "marketplaces.getPersonalizationRequestsForProvider",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPersonalizationRequestsForProviderResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/provider": {
+      "post": {
+        "description": "Create a provider",
+        "operationId": "marketplaces.createProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProviderResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateProviderResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/providers": {
+      "get": {
+        "description": "List provider profiles for account.",
+        "operationId": "marketplaces.listProviders",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProvidersResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/marketplace-provider/providers/{id}": {
+      "delete": {
+        "description": "Delete provider",
+        "operationId": "marketplaces.deleteProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteProviderResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get provider profile",
+        "operationId": "marketplaces.getProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetProviderResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Update provider profile",
+        "operationId": "marketplaces.updateProvider",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProviderResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateProviderResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/installations": {
+      "get": {
+        "description": "List all installations across all listings.",
+        "operationId": "marketplaces.listInstallations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAllInstallationsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings": {
+      "get": {
+        "description": "List all published listings in the Databricks Marketplace that the consumer has access to.",
+        "operationId": "marketplaces.listPublishedListingsForConsumer",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "is_free",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "isFree"
+          },
+          {
+            "in": "query",
+            "name": "is_private_exchange",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "isPrivateExchange"
+          },
+          {
+            "in": "query",
+            "name": "is_staff_pick",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "isStaffPick"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPublishedListingsForConsumerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings:batchGet": {
+      "get": {
+        "description": "Batch get a published listing in the Databricks Marketplace that the consumer has access to.",
+        "operationId": "marketplaces.batchGetListings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchGetListingsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings/{id}": {
+      "get": {
+        "description": "Get a published listing in the Databricks Marketplace that the consumer has access to.",
+        "operationId": "marketplaces.getPublishedListingForConsumer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPublishedListingForConsumerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings/{listingId}/content": {
+      "get": {
+        "description": "Get a high level preview of the metadata of listing installable content.",
+        "operationId": "marketplaces.getListingContent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetListingContentMetadataResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings/{listingId}/fulfillments": {
+      "get": {
+        "description": "Get all listings fulfillments associated with a listing. A _fulfillment_ is a potential installation.\nStandard installations contain metadata about the attached share or git repo. Only one of these fields will be present.\nPersonalized installations contain metadata about the attached share or git repo, as well as the Delta Sharing recipient type.",
+        "operationId": "marketplaces.listListingFulfillments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFulfillmentsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings/{listingId}/installations": {
+      "get": {
+        "description": "List all installations for a particular listing.",
+        "operationId": "marketplaces.getInstallationDetails",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInstallationsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Install payload associated with a Databricks Marketplace listing.",
+        "operationId": "marketplaces.installListing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "accepted_consumer_terms": {
+                    "$ref": "#/components/schemas/ConsumerTerms"
+                  },
+                  "catalog_name": {
+                    "type": "string"
+                  },
+                  "recipient_type": {
+                    "type": "string"
+                  },
+                  "repo_detail": {
+                    "$ref": "#/components/schemas/RepoInstallation"
+                  },
+                  "share_name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateInstallationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings/{listingId}/installations/{installationId}": {
+      "delete": {
+        "description": "Uninstall an installation associated with a Databricks Marketplace listing.",
+        "operationId": "marketplaces.uninstallListing",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "installationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "installationId"
+          },
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteInstallationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "This is a update API that will update the part of the fields defined in the installation table as well\nas interact with external services according to the fields not included in the installation table\n1. the token will be rotate if the rotateToken flag is true\n2. the token will be forcibly rotate if the rotateToken flag is true and the tokenInfo field is empty",
+        "operationId": "marketplaces.updateInstallationDetail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "installationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "installationId"
+          },
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "installation": {
+                    "$ref": "#/components/schemas/InstallationDetail"
+                  },
+                  "rotate_token": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateInstallationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/listings/{listingId}/personalization-requests": {
+      "get": {
+        "description": "Get the personalization request for a listing. Each consumer can make at *most* one personalization request for a listing.",
+        "operationId": "marketplaces.getPersonalizationRequestsForConsumer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPersonalizationRequestsForConsumerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a personalization request for a listing.",
+        "operationId": "marketplaces.createPersonalizationRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listingId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listingId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "accepted_consumer_terms": {
+                    "$ref": "#/components/schemas/ConsumerTerms"
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "company": {
+                    "type": "string"
+                  },
+                  "first_name": {
+                    "type": "string"
+                  },
+                  "intended_use": {
+                    "type": "string"
+                  },
+                  "is_from_lighthouse": {
+                    "type": "boolean"
+                  },
+                  "last_name": {
+                    "type": "string"
+                  },
+                  "recipient_type": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePersonalizationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/personalization-requests": {
+      "get": {
+        "description": "List personalization requests for a consumer across all listings.",
+        "operationId": "marketplaces.listPersonalizationRequestsForConsumer",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllPersonalizationRequestsForConsumerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/providers": {
+      "get": {
+        "description": "List all providers in the Databricks Marketplace with at least one visible listing.",
+        "operationId": "marketplaces.listPublishedProvidersForConsumer",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "is_featured",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "isFeatured"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPublishedProvidersForConsumerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/providers:batchGet": {
+      "get": {
+        "description": "Batch get a provider in the Databricks Marketplace with at least one visible listing.",
+        "operationId": "marketplaces.batchGetProviders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchGetProvidersResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/providers/{id}": {
+      "get": {
+        "description": "Get a provider in the Databricks Marketplace with at least one visible listing.",
+        "operationId": "marketplaces.getPublishedProviderForConsumer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPublishedProviderForConsumerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/marketplace-consumer/search-listings": {
+      "get": {
+        "description": "Search published listings in the Databricks Marketplace that the consumer has access to.\nThis query supports a variety of different search parameters and performs fuzzy matching.",
+        "operationId": "marketplaces.searchPublishedListingsForConsumer",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "is_free",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "isFree"
+          },
+          {
+            "in": "query",
+            "name": "is_private_exchange",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "isPrivateExchange"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPublishedListingsForConsumerResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "marketplaces"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "marketplaces"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "marketplaces.addExchangeForListing",
+      "path": "/api/2.0/marketplace-exchange/exchanges-for-listing",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:507"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.batchGetListings",
+      "path": "/api/2.1/marketplace-consumer/listings:batchGet",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:35"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.batchGetProviders",
+      "path": "/api/2.1/marketplace-consumer/providers:batchGet",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:58"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.createExchange",
+      "path": "/api/2.0/marketplace-exchange/exchanges",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:527"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.createExchangeFilter",
+      "path": "/api/2.0/marketplace-exchange/filters",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:547"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.createFile",
+      "path": "/api/2.0/marketplace-provider/files",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:567"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.createListing",
+      "path": "/api/2.0/marketplace-provider/listing",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:587"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.createPersonalizationRequest",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/personalization-requests",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:81"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.createProvider",
+      "path": "/api/2.0/marketplace-provider/provider",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:607"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.createProviderAnalyticsDashboard",
+      "path": "/api/2.0/marketplace-provider/analytics_dashboard",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:627"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "marketplaces.deleteExchange",
+      "path": "/api/2.0/marketplace-exchange/exchanges/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:647"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "marketplaces.deleteExchangeFilter",
+      "path": "/api/2.0/marketplace-exchange/filters/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:666"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "marketplaces.deleteFile",
+      "path": "/api/2.0/marketplace-provider/files/{fileId}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:685"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "marketplaces.deleteListing",
+      "path": "/api/2.0/marketplace-provider/listings/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:704"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "marketplaces.deleteProvider",
+      "path": "/api/2.0/marketplace-provider/providers/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:723"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getExchange",
+      "path": "/api/2.0/marketplace-exchange/exchanges/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:742"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getFile",
+      "path": "/api/2.0/marketplace-provider/files/{fileId}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:761"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getInstallationDetails",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/installations",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:101"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getLatestVersionProviderAnalyticsDashboard",
+      "path": "/api/2.0/marketplace-provider/analytics_dashboard/latest",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:780"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getListing",
+      "path": "/api/2.0/marketplace-provider/listings/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:799"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getListingContent",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/content",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:134"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getPersonalizationRequestsForConsumer",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/personalization-requests",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:167"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getPersonalizationRequestsForProvider",
+      "path": "/api/2.0/marketplace-provider/personalization-requests",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:821"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getProvider",
+      "path": "/api/2.0/marketplace-provider/providers/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:854"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getPublishedListingForConsumer",
+      "path": "/api/2.1/marketplace-consumer/listings/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:186"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.getPublishedProviderForConsumer",
+      "path": "/api/2.1/marketplace-consumer/providers/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:205"
+    },
+    {
+      "method": "POST",
+      "operationId": "marketplaces.installListing",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/installations",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:224"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listExchangeFilters",
+      "path": "/api/2.0/marketplace-exchange/filters",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:873"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listExchanges",
+      "path": "/api/2.0/marketplace-exchange/exchanges",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:907"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listExchangesForListing",
+      "path": "/api/2.0/marketplace-exchange/exchanges-for-listing",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:940"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listFiles",
+      "path": "/api/2.0/marketplace-provider/files",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:974"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listInstallations",
+      "path": "/api/2.1/marketplace-consumer/installations",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:244"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listListingFulfillments",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/fulfillments",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:281"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listListings",
+      "path": "/api/2.0/marketplace-provider/listings",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1008"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listListingsForExchange",
+      "path": "/api/2.0/marketplace-exchange/listings-for-exchange",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1041"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listPersonalizationRequestsForConsumer",
+      "path": "/api/2.1/marketplace-consumer/personalization-requests",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:314"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listProviderAnalyticsDashboard",
+      "path": "/api/2.0/marketplace-provider/analytics_dashboard",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1075"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listProviders",
+      "path": "/api/2.0/marketplace-provider/providers",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1094"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listPublishedListingsForConsumer",
+      "path": "/api/2.1/marketplace-consumer/listings",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:347"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.listPublishedProvidersForConsumer",
+      "path": "/api/2.1/marketplace-consumer/providers",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:387"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "marketplaces.removeExchangeForListing",
+      "path": "/api/2.0/marketplace-exchange/exchanges-for-listing/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1127"
+    },
+    {
+      "method": "GET",
+      "operationId": "marketplaces.searchPublishedListingsForConsumer",
+      "path": "/api/2.1/marketplace-consumer/search-listings",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:424"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "marketplaces.uninstallListing",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/installations/{installationId}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:463"
+    },
+    {
+      "method": "PUT",
+      "operationId": "marketplaces.updateExchange",
+      "path": "/api/2.0/marketplace-exchange/exchanges/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1146"
+    },
+    {
+      "method": "PUT",
+      "operationId": "marketplaces.updateExchangeFilter",
+      "path": "/api/2.0/marketplace-exchange/filters/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1166"
+    },
+    {
+      "method": "PUT",
+      "operationId": "marketplaces.updateInstallationDetail",
+      "path": "/api/2.1/marketplace-consumer/listings/{listingId}/installations/{installationId}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:487"
+    },
+    {
+      "method": "PUT",
+      "operationId": "marketplaces.updateListing",
+      "path": "/api/2.0/marketplace-provider/listings/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1186"
+    },
+    {
+      "method": "PUT",
+      "operationId": "marketplaces.updatePersonalizationRequestStatus",
+      "path": "/api/2.0/marketplace-provider/listings/{listingId}/personalization-requests/{requestId}/request-status",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1206"
+    },
+    {
+      "method": "PUT",
+      "operationId": "marketplaces.updateProvider",
+      "path": "/api/2.0/marketplace-provider/providers/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1226"
+    },
+    {
+      "method": "PUT",
+      "operationId": "marketplaces.updateProviderAnalyticsDashboard",
+      "path": "/api/2.0/marketplace-provider/analytics_dashboard/{id}",
+      "source": "@databricks/sdk-marketplaces/v1/client.js:1246"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-marketplaces",
+  "x-databricks-sdk-version": "0.49.0"
+}

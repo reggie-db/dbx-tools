@@ -1,0 +1,32 @@
+version: 1
+operations:
+  files.downloadFile:
+    reason: The SDK exposes downloaded file bytes as an unparsed response body.
+    source: "@databricks/sdk-files@0.49.0 dist/v2/client.js"
+    status: 200
+    responseMediaType: application/octet-stream
+    rawResponse: binary
+  genie.downloadMessageAttachmentVisualization:
+    reason: The SDK exposes the rendered PNG visualization as an unparsed response body.
+    source: "@databricks/sdk-genie@0.49.0 dist/v1/client.js"
+    status: 200
+    responseMediaType: image/png
+    rawResponse: binary
+  modelServing.getExportEndpointMetrics:
+    reason: The SDK exposes the metrics response as an unparsed response body.
+    source: "@databricks/sdk-modelserving@0.49.0 dist/v1/client.js"
+    status: 200
+    responseMediaType: text/plain
+    rawResponse: string
+  modelServing.getInferenceEndpointSchema:
+    reason: The SDK exposes the endpoint OpenAPI document as an unparsed response body.
+    source: "@databricks/sdk-modelserving@0.49.0 dist/v1/client.js"
+    status: 200
+    responseMediaType: application/json
+    rawResponse: object
+  modelServing.httpRequest:
+    reason: The external function endpoint can return an arbitrary response body.
+    source: "@databricks/sdk-modelserving@0.49.0 dist/v1/client.js"
+    status: 200
+    responseMediaType: application/octet-stream
+    rawResponse: binary

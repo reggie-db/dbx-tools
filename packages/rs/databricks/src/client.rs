@@ -1,6 +1,6 @@
 //! Authenticated Databricks REST client with one rejected-token retry.
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use reqwest::{
     header::{HeaderMap, ACCEPT, AUTHORIZATION, CONTENT_TYPE},
@@ -8,10 +8,7 @@ use reqwest::{
 };
 use serde_json::Value;
 
-use crate::{
-    create_persistent_auth, create_persistent_auth_for_request, DatabricksAuthOptions,
-    PersistentAuth, Storage,
-};
+use crate::{create_persistent_auth, DatabricksAuthOptions, PersistentAuth};
 
 /// Authenticated Databricks REST client with shared token lifecycle.
 #[derive(Clone)]
@@ -37,18 +34,6 @@ impl DatabricksClient {
         options: DatabricksAuthOptions,
     ) -> Result<Self, DatabricksClientError> {
         let auth = create_persistent_auth(options, None)
-            .await
-            .map_err(|error| DatabricksClientError::Authentication(error.to_string()))?;
-        Self::from_auth(auth)
-    }
-
-    /// Resolve request-scoped App authentication from forwarded headers.
-    pub async fn for_request(
-        options: DatabricksAuthOptions,
-        request_headers: HashMap<String, String>,
-        storage: Option<Storage>,
-    ) -> Result<Self, DatabricksClientError> {
-        let auth = create_persistent_auth_for_request(options, request_headers, storage)
             .await
             .map_err(|error| DatabricksClientError::Authentication(error.to_string()))?;
         Self::from_auth(auth)

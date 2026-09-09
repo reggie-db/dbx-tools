@@ -1,0 +1,501 @@
+{
+  "components": {
+    "schemas": {
+      "CreateLogDeliveryConfigurationParams": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "config_id": {
+            "type": "string"
+          },
+          "config_name": {
+            "type": "string"
+          },
+          "creation_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "credentials_id": {
+            "type": "string"
+          },
+          "delivery_path_prefix": {
+            "type": "string"
+          },
+          "delivery_start_time": {
+            "type": "string"
+          },
+          "log_delivery_status": {
+            "$ref": "#/components/schemas/LogDeliveryStatus"
+          },
+          "log_type": {
+            "type": "string"
+          },
+          "output_format": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "storage_configuration_id": {
+            "type": "string"
+          },
+          "update_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workspace_ids_filter": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateLogDeliveryConfigurationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "log_delivery_configuration": {
+            "$ref": "#/components/schemas/CreateLogDeliveryConfigurationParams"
+          }
+        },
+        "type": "object"
+      },
+      "CreateLogDeliveryConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "log_delivery_configuration": {
+            "$ref": "#/components/schemas/LogDeliveryConfiguration"
+          }
+        },
+        "type": "object"
+      },
+      "GetLogDeliveryConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "log_delivery_configuration": {
+            "$ref": "#/components/schemas/LogDeliveryConfiguration"
+          }
+        },
+        "type": "object"
+      },
+      "ListLogDeliveryConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "log_delivery_configurations": {
+            "items": {
+              "$ref": "#/components/schemas/LogDeliveryConfiguration"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LogDeliveryConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "config_id": {
+            "type": "string"
+          },
+          "config_name": {
+            "type": "string"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "credentials_id": {
+            "type": "string"
+          },
+          "delivery_path_prefix": {
+            "type": "string"
+          },
+          "delivery_start_time": {
+            "type": "string"
+          },
+          "log_delivery_status": {
+            "$ref": "#/components/schemas/LogDeliveryStatus"
+          },
+          "log_type": {
+            "type": "string"
+          },
+          "output_format": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "storage_configuration_id": {
+            "type": "string"
+          },
+          "update_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "workspace_ids_filter": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "LogDeliveryStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "last_attempt_time": {
+            "type": "string"
+          },
+          "last_successful_attempt_time": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateLogDeliveryConfigurationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "config_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateLogDeliveryConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Log Delivery API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/log-delivery": {
+      "get": {
+        "description": "Gets all <Databricks> log delivery configurations associated with an account specified by ID.",
+        "operationId": "logDelivery.listLogDeliveryConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "credentials_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "credentialsId"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "status"
+          },
+          {
+            "in": "query",
+            "name": "storage_configuration_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "storageConfigurationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListLogDeliveryConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "logDelivery"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a new <Databricks> log delivery configuration to enable delivery of the specified type of logs to your storage location.\nThis requires that you already created a [credential object](:method:Credentials/Create) (which encapsulates a cross-account service IAM role)\nand a [storage configuration object](:method:Storage/Create) (which encapsulates an S3 bucket).\n\nFor full details, including the required IAM role policies and bucket policies,\nsee [Deliver and access billable usage logs](https://docs.databricks.com/administration-guide/account-settings/billable-usage-delivery.html)\nor [Configure audit logging](https://docs.databricks.com/administration-guide/account-settings/audit-logs.html).\n\n**Note**: There is a limit on the number of log delivery configurations available per account (each limit applies separately to each log type including billable usage and audit logs).\nYou can create a maximum of two enabled account-level delivery configurations (configurations without a workspace filter) per type.\nAdditionally, you can create two enabled workspace-level delivery configurations per workspace for each log type, which means that the same workspace ID can occur in the workspace filter for no more than two delivery configurations per log type.\n\nYou cannot delete a log delivery configuration, but you can disable it (see [Enable or disable log delivery configuration](:method:LogDelivery/PatchStatus)).",
+        "operationId": "logDelivery.createLogDeliveryConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "logDeliveryConfiguration.accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "log_delivery_configuration": {
+                    "$ref": "#/components/schemas/CreateLogDeliveryConfigurationParams"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateLogDeliveryConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "logDelivery"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/log-delivery/{configId}": {
+      "get": {
+        "description": "Gets a <Databricks> log delivery configuration object for an account, both specified by ID.",
+        "operationId": "logDelivery.getLogDeliveryConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "configId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetLogDeliveryConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "logDelivery"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Enables or disables a log delivery configuration.\nDeletion of delivery configurations is not supported, so disable log delivery configurations that are no longer needed.\nNote that you can't re-enable a delivery configuration if this would violate the delivery configuration limits described under [Create log delivery](:method:LogDelivery/Create).",
+        "operationId": "logDelivery.updateLogDeliveryConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "configId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateLogDeliveryConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "logDelivery"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "logDelivery"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "logDelivery.createLogDeliveryConfiguration",
+      "path": "/api/2.0/accounts/{accountId}/log-delivery",
+      "source": "@databricks/sdk-logdelivery/v1/client.js:49"
+    },
+    {
+      "method": "GET",
+      "operationId": "logDelivery.getLogDeliveryConfiguration",
+      "path": "/api/2.0/accounts/{accountId}/log-delivery/{configId}",
+      "source": "@databricks/sdk-logdelivery/v1/client.js:68"
+    },
+    {
+      "method": "GET",
+      "operationId": "logDelivery.listLogDeliveryConfiguration",
+      "path": "/api/2.0/accounts/{accountId}/log-delivery",
+      "source": "@databricks/sdk-logdelivery/v1/client.js:86"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "logDelivery.updateLogDeliveryConfiguration",
+      "path": "/api/2.0/accounts/{accountId}/log-delivery/{configId}",
+      "source": "@databricks/sdk-logdelivery/v1/client.js:124"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-logdelivery",
+  "x-databricks-sdk-version": "0.49.0"
+}

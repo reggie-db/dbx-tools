@@ -1,0 +1,1851 @@
+{
+  "components": {
+    "schemas": {
+      "AccountsCreateMetastoreAssignmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "metastore_assignment": {
+            "$ref": "#/components/schemas/MetastoreAssignment"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsCreateMetastoreAssignmentResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "AccountsCreateMetastoreRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "metastore_info": {
+            "$ref": "#/components/schemas/CreateAccountsMetastore"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsCreateMetastoreResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "metastore_info": {
+            "$ref": "#/components/schemas/MetastoreInfo"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsDeleteMetastoreAssignmentResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "AccountsDeleteMetastoreResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "AccountsGetMetastoreAssignmentResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "metastore_assignment": {
+            "$ref": "#/components/schemas/MetastoreAssignment"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsGetMetastoreResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "metastore_info": {
+            "$ref": "#/components/schemas/MetastoreInfo"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsListMetastoresResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "metastores": {
+            "items": {
+              "$ref": "#/components/schemas/MetastoreInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsListWorkspaceIdsForMetastoreResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "workspace_ids": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsUpdateMetastoreAssignmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "metastore_assignment": {
+            "$ref": "#/components/schemas/MetastoreAssignment"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsUpdateMetastoreAssignmentResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "AccountsUpdateMetastoreRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "metastore_info": {
+            "$ref": "#/components/schemas/UpdateAccountsMetastore"
+          }
+        },
+        "type": "object"
+      },
+      "AccountsUpdateMetastoreResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "metastore_info": {
+            "$ref": "#/components/schemas/MetastoreInfo"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccountsMetastore": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "default_data_access_config_id": {
+            "type": "string"
+          },
+          "delta_sharing_organization_name": {
+            "type": "string"
+          },
+          "delta_sharing_recipient_token_lifetime_in_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "delta_sharing_scope": {
+            "type": "string"
+          },
+          "external_access_enabled": {
+            "type": "boolean"
+          },
+          "global_metastore_id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "privilege_model_version": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "storage_root_credential_id": {
+            "type": "string"
+          },
+          "storage_root_credential_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateMetastoreAssignmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "default_catalog_name": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CreateMetastoreAssignmentResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "CreateMetastoreRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "default_data_access_config_id": {
+            "type": "string"
+          },
+          "delta_sharing_organization_name": {
+            "type": "string"
+          },
+          "delta_sharing_recipient_token_lifetime_in_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "delta_sharing_scope": {
+            "type": "string"
+          },
+          "external_access_enabled": {
+            "type": "boolean"
+          },
+          "global_metastore_id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "privilege_model_version": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "storage_root_credential_id": {
+            "type": "string"
+          },
+          "storage_root_credential_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteMetastoreAssignmentResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteMetastoreResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "GetMetastoreSummaryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "default_data_access_config_id": {
+            "type": "string"
+          },
+          "delta_sharing_organization_name": {
+            "type": "string"
+          },
+          "delta_sharing_recipient_token_lifetime_in_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "delta_sharing_scope": {
+            "type": "string"
+          },
+          "external_access_enabled": {
+            "type": "boolean"
+          },
+          "global_metastore_id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "privilege_model_version": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "storage_root_credential_id": {
+            "type": "string"
+          },
+          "storage_root_credential_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListMetastoresResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "metastores": {
+            "items": {
+              "$ref": "#/components/schemas/MetastoreInfo"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MetastoreAssignment": {
+        "additionalProperties": false,
+        "properties": {
+          "default_catalog_name": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "MetastoreInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "default_data_access_config_id": {
+            "type": "string"
+          },
+          "delta_sharing_organization_name": {
+            "type": "string"
+          },
+          "delta_sharing_recipient_token_lifetime_in_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "delta_sharing_scope": {
+            "type": "string"
+          },
+          "external_access_enabled": {
+            "type": "boolean"
+          },
+          "global_metastore_id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "privilege_model_version": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "storage_root_credential_id": {
+            "type": "string"
+          },
+          "storage_root_credential_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateAccountsMetastore": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "default_data_access_config_id": {
+            "type": "string"
+          },
+          "delta_sharing_organization_name": {
+            "type": "string"
+          },
+          "delta_sharing_recipient_token_lifetime_in_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "delta_sharing_scope": {
+            "type": "string"
+          },
+          "external_access_enabled": {
+            "type": "boolean"
+          },
+          "global_metastore_id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "privilege_model_version": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "storage_root_credential_id": {
+            "type": "string"
+          },
+          "storage_root_credential_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateMetastoreAssignmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "default_catalog_name": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateMetastoreAssignmentResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "UpdateMetastoreRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cloud": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "default_data_access_config_id": {
+            "type": "string"
+          },
+          "delta_sharing_organization_name": {
+            "type": "string"
+          },
+          "delta_sharing_recipient_token_lifetime_in_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "delta_sharing_scope": {
+            "type": "string"
+          },
+          "external_access_enabled": {
+            "type": "boolean"
+          },
+          "global_metastore_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "new_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "privilege_model_version": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "storage_root_credential_id": {
+            "type": "string"
+          },
+          "storage_root_credential_name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Schema_7cf127fe": {
+        "type": "object",
+        "properties": {
+          "default_catalog_name": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Metastores API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/metastores": {
+      "get": {
+        "description": "Gets all Unity Catalog metastores associated with an account specified by ID.",
+        "operationId": "metastores.listAccountsMetastores",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsListMetastoresResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a Unity Catalog metastore.",
+        "operationId": "metastores.createAccountsMetastore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "metastore_info": {
+                    "$ref": "#/components/schemas/CreateAccountsMetastore"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsCreateMetastoreResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/metastores/{metastoreId}": {
+      "delete": {
+        "description": "Deletes a Unity Catalog metastore for an account, both specified by ID.",
+        "operationId": "metastores.deleteAccountsMetastore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "metastoreId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "force"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsDeleteMetastoreResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a Unity Catalog metastore from an account, both specified by ID.",
+        "operationId": "metastores.getAccountsMetastore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "metastoreId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsGetMetastoreResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates an existing Unity Catalog metastore.",
+        "operationId": "metastores.updateAccountsMetastore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "metastoreId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "metastore_info": {
+                    "$ref": "#/components/schemas/UpdateAccountsMetastore"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsUpdateMetastoreResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/metastores/{metastoreId}/workspaces": {
+      "get": {
+        "description": "Gets a list of all <Databricks> workspace IDs that have been assigned to given metastore.",
+        "operationId": "metastores.listMetastoreAssignments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "metastoreId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsListWorkspaceIdsForMetastoreResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/metastore": {
+      "get": {
+        "description": "Gets the metastore assignment, if any, for the workspace specified by ID.\nIf the workspace is assigned a metastore, the mapping will be returned.\nIf no metastore is assigned to the workspace, the assignment will not be\nfound and a 404 returned.",
+        "operationId": "metastores.getMetastoreAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsGetMetastoreAssignmentResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/metastores/{metastoreId}": {
+      "delete": {
+        "description": "Deletes a metastore assignment to a workspace, leaving the workspace with no metastore.",
+        "operationId": "metastores.deleteAccountsMetastoreAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "metastoreId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          },
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsDeleteMetastoreAssignmentResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates an assignment to a metastore for a workspace",
+        "operationId": "metastores.createAccountsMetastoreAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "metastoreId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          },
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountsGetMetastoreAssignmentResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsCreateMetastoreAssignmentResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates an assignment to a metastore for a workspace. Currently, only the default catalog may be updated.",
+        "operationId": "metastores.updateAccountsMetastoreAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "metastoreId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          },
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountsGetMetastoreAssignmentResponse"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsUpdateMetastoreAssignmentResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.1/unity-catalog/current-metastore-assignment": {
+      "get": {
+        "description": "Gets the metastore assignment for the workspace being accessed.",
+        "operationId": "metastores.getCurrentMetastoreAssignment",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetastoreAssignment"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/metastore_summary": {
+      "get": {
+        "description": "Gets information about a metastore.\nThis summary includes the storage credential, the cloud vendor, the cloud region, and the global metastore ID.",
+        "operationId": "metastores.getMetastoreSummary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMetastoreSummaryResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/metastores": {
+      "get": {
+        "description": "Gets an array of the available metastores (as __MetastoreInfo__ objects). The caller must be an admin to retrieve this info.\nThere is no guarantee of a specific ordering of the elements in the array.\n\nNOTE: we recommend using max_results=0 to use the paginated version of this API. Unpaginated calls will be deprecated soon.\n\nPAGINATION BEHAVIOR: When using pagination (max_results >= 0), a page may contain zero results while still providing a next_page_token.\nClients must continue reading pages until next_page_token is absent, which is the only indication that the end of results has been reached.",
+        "operationId": "metastores.listMetastores",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "max_results",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "maxResults"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMetastoresResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a new metastore based on a provided name and optional storage root path.\nBy default (if the __owner__ field is not set), the owner of the new metastore is the user calling\nthe __createMetastore__ API.  If the __owner__ field is set to the empty string (**\"\"**), the ownership is\nassigned to the System User instead.",
+        "operationId": "metastores.createMetastore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cloud": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "default_data_access_config_id": {
+                    "type": "string"
+                  },
+                  "delta_sharing_organization_name": {
+                    "type": "string"
+                  },
+                  "delta_sharing_recipient_token_lifetime_in_seconds": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "delta_sharing_scope": {
+                    "type": "string"
+                  },
+                  "external_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "global_metastore_id": {
+                    "type": "string"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "privilege_model_version": {
+                    "type": "string"
+                  },
+                  "region": {
+                    "type": "string"
+                  },
+                  "storage_root": {
+                    "type": "string"
+                  },
+                  "storage_root_credential_id": {
+                    "type": "string"
+                  },
+                  "storage_root_credential_name": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetastoreInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/metastores/{id}": {
+      "delete": {
+        "description": "Deletes a metastore. The caller must be a metastore admin.",
+        "operationId": "metastores.deleteMetastore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "force"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteMetastoreResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets a metastore that matches the supplied ID. The caller must be a metastore admin to retrieve this info.",
+        "operationId": "metastores.getMetastore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetastoreInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates information for a specific metastore. The caller must be a metastore admin.\nIf the __owner__ field is set to the empty string (**\"\"**), the ownership is updated\nto the System User.",
+        "operationId": "metastores.updateMetastore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cloud": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "default_data_access_config_id": {
+                    "type": "string"
+                  },
+                  "delta_sharing_organization_name": {
+                    "type": "string"
+                  },
+                  "delta_sharing_recipient_token_lifetime_in_seconds": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "delta_sharing_scope": {
+                    "type": "string"
+                  },
+                  "external_access_enabled": {
+                    "type": "boolean"
+                  },
+                  "global_metastore_id": {
+                    "type": "string"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "new_name": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "privilege_model_version": {
+                    "type": "string"
+                  },
+                  "region": {
+                    "type": "string"
+                  },
+                  "storage_root": {
+                    "type": "string"
+                  },
+                  "storage_root_credential_id": {
+                    "type": "string"
+                  },
+                  "storage_root_credential_name": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetastoreInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/workspaces/{workspaceId}/metastore": {
+      "delete": {
+        "description": "Deletes a metastore assignment. The caller must be an account administrator.",
+        "operationId": "metastores.deleteMetastoreAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          },
+          {
+            "in": "query",
+            "name": "metastore_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "metastoreId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteMetastoreAssignmentResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates a metastore assignment. This operation can be used to update __metastore_id__ or __default_catalog_name__\nfor a specified Workspace, if the Workspace is already assigned a metastore.\nThe caller must be an account admin to update __metastore_id__; otherwise, the caller can be a Workspace admin.",
+        "operationId": "metastores.updateMetastoreAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7cf127fe"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateMetastoreAssignmentResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Creates a new metastore assignment.\nIf an assignment for the same __workspace_id__ exists, it will be overwritten by the new __metastore_id__ and\n__default_catalog_name__. The caller must be an account admin.",
+        "operationId": "metastores.createMetastoreAssignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_7cf127fe"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateMetastoreAssignmentResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "metastores"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "metastores"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "metastores.createAccountsMetastore",
+      "path": "/api/2.0/accounts/{accountId}/metastores",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:35"
+    },
+    {
+      "method": "POST",
+      "operationId": "metastores.createAccountsMetastoreAssignment",
+      "path": "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/metastores/{metastoreId}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:54"
+    },
+    {
+      "method": "POST",
+      "operationId": "metastores.createMetastore",
+      "path": "/api/2.1/unity-catalog/metastores",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:233"
+    },
+    {
+      "method": "PUT",
+      "operationId": "metastores.createMetastoreAssignment",
+      "path": "/api/2.1/unity-catalog/workspaces/{workspaceId}/metastore",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:257"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "metastores.deleteAccountsMetastore",
+      "path": "/api/2.0/accounts/{accountId}/metastores/{metastoreId}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:73"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "metastores.deleteAccountsMetastoreAssignment",
+      "path": "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/metastores/{metastoreId}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:95"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "metastores.deleteMetastore",
+      "path": "/api/2.1/unity-catalog/metastores/{id}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:277"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "metastores.deleteMetastoreAssignment",
+      "path": "/api/2.1/unity-catalog/workspaces/{workspaceId}/metastore",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:300"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.getAccountsMetastore",
+      "path": "/api/2.0/accounts/{accountId}/metastores/{metastoreId}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:113"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.getCurrentMetastoreAssignment",
+      "path": "/api/2.1/unity-catalog/current-metastore-assignment",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:323"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.getMetastore",
+      "path": "/api/2.1/unity-catalog/metastores/{id}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:342"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.getMetastoreAssignment",
+      "path": "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/metastore",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:136"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.getMetastoreSummary",
+      "path": "/api/2.1/unity-catalog/metastore_summary",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:364"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.listAccountsMetastores",
+      "path": "/api/2.0/accounts/{accountId}/metastores",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:154"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.listMetastoreAssignments",
+      "path": "/api/2.0/accounts/{accountId}/metastores/{metastoreId}/workspaces",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:172"
+    },
+    {
+      "method": "GET",
+      "operationId": "metastores.listMetastores",
+      "path": "/api/2.1/unity-catalog/metastores",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:391"
+    },
+    {
+      "method": "PUT",
+      "operationId": "metastores.updateAccountsMetastore",
+      "path": "/api/2.0/accounts/{accountId}/metastores/{metastoreId}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:190"
+    },
+    {
+      "method": "PUT",
+      "operationId": "metastores.updateAccountsMetastoreAssignment",
+      "path": "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/metastores/{metastoreId}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:209"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "metastores.updateMetastore",
+      "path": "/api/2.1/unity-catalog/metastores/{id}",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:428"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "metastores.updateMetastoreAssignment",
+      "path": "/api/2.1/unity-catalog/workspaces/{workspaceId}/metastore",
+      "source": "@databricks/sdk-uc-metastores/v1/client.js:452"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-uc-metastores",
+  "x-databricks-sdk-version": "0.49.0"
+}

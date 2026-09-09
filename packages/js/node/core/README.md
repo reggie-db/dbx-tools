@@ -41,7 +41,8 @@ const executable = await bin.ensure("tool", releaseUrl, {
 ```
 
 `bin.ensure()` installs to `$HOME/.<name>/bin/<name>` and returns its `root`,
-`binDir`, and executable `path`. An existing executable returns immediately, so
+`binDir`, and executable `path`. Pass `destination` to supply those exact paths
+for a different layout. An existing executable returns immediately, so
 a URL resolver is only called when installation is necessary. Concurrent
 callers use a file lock with a check-lock-check-load sequence, preventing
 duplicate downloads across processes and worker threads. Direct downloads

@@ -1,0 +1,387 @@
+{
+  "components": {
+    "schemas": {
+      "ExternalMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "create_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "system_type": {
+            "type": "string"
+          },
+          "update_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListExternalMetadataResponseV2": {
+        "additionalProperties": false,
+        "properties": {
+          "external_metadata": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalMetadata"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "External Metadata API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/lineage-tracking/external-metadata": {
+      "get": {
+        "description": "Gets an array of external metadata objects in the metastore.\nIf the caller is the metastore admin, all external metadata objects will be retrieved.\nOtherwise, only external metadata objects that the caller has **BROWSE** on will be retrieved.\nThere is no guarantee of a specific ordering of the elements in the array.",
+        "operationId": "externalMetadata.listExternalMetadataV2",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListExternalMetadataResponseV2"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "externalMetadata"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a new external metadata object in the parent metastore if the caller is a metastore admin or has the **CREATE_EXTERNAL_METADATA** privilege.\nGrants **BROWSE** to all account users upon creation by default.",
+        "operationId": "externalMetadata.createExternalMetadataV2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalMetadata"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalMetadata"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "externalMetadata"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/lineage-tracking/external-metadata/{name}": {
+      "delete": {
+        "description": "Deletes the external metadata object that matches the supplied name.\nThe caller must be a metastore admin, the owner of the external metadata object, or a user that has the **MANAGE** privilege.",
+        "operationId": "externalMetadata.deleteExternalMetadataV2",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "externalMetadata"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets the specified external metadata object in a metastore.\nThe caller must be a metastore admin, the owner of the external metadata object, or a user that has the **BROWSE** privilege.",
+        "operationId": "externalMetadata.getExternalMetadataV2",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalMetadata"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "externalMetadata"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates the external metadata object that matches the supplied name. The caller can only update either the owner or other metadata fields in one request.\nThe caller must be a metastore admin, the owner of the external metadata object, or a user that has the **MODIFY** privilege.\nIf the caller is updating the owner, they must also have the **MANAGE** privilege.",
+        "operationId": "externalMetadata.updateExternalMetadataV2",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "externalMetadata.name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "columns": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "create_time": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "entity_type": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "properties": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "system_type": {
+                    "type": "string"
+                  },
+                  "update_time": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalMetadata"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "externalMetadata"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "externalMetadata"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalExternalMetadataSchema uses z.any()",
+      "source": "@databricks/sdk-uc-externalmetadata/v1/model.js:80:14"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalExternalMetadataSchema uses z.any()",
+      "source": "@databricks/sdk-uc-externalmetadata/v1/model.js:82:14"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "externalMetadata.createExternalMetadataV2",
+      "path": "/api/2.0/lineage-tracking/external-metadata",
+      "source": "@databricks/sdk-uc-externalmetadata/v1/client.js:38"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "externalMetadata.deleteExternalMetadataV2",
+      "path": "/api/2.0/lineage-tracking/external-metadata/{name}",
+      "source": "@databricks/sdk-uc-externalmetadata/v1/client.js:61"
+    },
+    {
+      "method": "GET",
+      "operationId": "externalMetadata.getExternalMetadataV2",
+      "path": "/api/2.0/lineage-tracking/external-metadata/{name}",
+      "source": "@databricks/sdk-uc-externalmetadata/v1/client.js:80"
+    },
+    {
+      "method": "GET",
+      "operationId": "externalMetadata.listExternalMetadataV2",
+      "path": "/api/2.0/lineage-tracking/external-metadata",
+      "source": "@databricks/sdk-uc-externalmetadata/v1/client.js:104"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "externalMetadata.updateExternalMetadataV2",
+      "path": "/api/2.0/lineage-tracking/external-metadata/{name}",
+      "source": "@databricks/sdk-uc-externalmetadata/v1/client.js:141"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-uc-externalmetadata",
+  "x-databricks-sdk-version": "0.49.0"
+}

@@ -1,0 +1,845 @@
+{
+  "components": {
+    "schemas": {
+      "CreateInstancePoolRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "aws_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAzureAttributes"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "disk_spec": {
+            "$ref": "#/components/schemas/DiskSpec"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/InstancePoolGcpAttributes"
+          },
+          "idle_instance_autotermination_minutes": {
+            "type": "number"
+          },
+          "instance_pool_name": {
+            "type": "string"
+          },
+          "max_capacity": {
+            "type": "number"
+          },
+          "min_idle_instances": {
+            "type": "number"
+          },
+          "node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "preloaded_docker_images": {
+            "items": {
+              "$ref": "#/components/schemas/DockerImage"
+            },
+            "type": "array"
+          },
+          "preloaded_spark_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "CreateInstancePoolResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_pool_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteInstancePoolRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_pool_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteInstancePoolResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DiskSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "disk_count": {
+            "type": "number"
+          },
+          "disk_iops": {
+            "type": "number"
+          },
+          "disk_size": {
+            "type": "number"
+          },
+          "disk_throughput": {
+            "type": "number"
+          },
+          "disk_type": {
+            "$ref": "#/components/schemas/DiskType"
+          }
+        },
+        "type": "object"
+      },
+      "DiskType": {
+        "additionalProperties": false,
+        "properties": {
+          "azure_disk_volume_type": {
+            "type": "string"
+          },
+          "ebs_volume_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DockerBasicAuth": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DockerImage": {
+        "additionalProperties": false,
+        "properties": {
+          "basic_auth": {
+            "$ref": "#/components/schemas/DockerBasicAuth"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EditInstancePoolRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "aws_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAzureAttributes"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "disk_spec": {
+            "$ref": "#/components/schemas/DiskSpec"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/InstancePoolGcpAttributes"
+          },
+          "idle_instance_autotermination_minutes": {
+            "type": "number"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "instance_pool_name": {
+            "type": "string"
+          },
+          "max_capacity": {
+            "type": "number"
+          },
+          "min_idle_instances": {
+            "type": "number"
+          },
+          "node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "preloaded_docker_images": {
+            "items": {
+              "$ref": "#/components/schemas/DockerImage"
+            },
+            "type": "array"
+          },
+          "preloaded_spark_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "EditInstancePoolResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "GetInstancePoolResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "aws_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAzureAttributes"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "default_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "disk_spec": {
+            "$ref": "#/components/schemas/DiskSpec"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/InstancePoolGcpAttributes"
+          },
+          "idle_instance_autotermination_minutes": {
+            "type": "number"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "instance_pool_name": {
+            "type": "string"
+          },
+          "max_capacity": {
+            "type": "number"
+          },
+          "min_idle_instances": {
+            "type": "number"
+          },
+          "node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "preloaded_docker_images": {
+            "items": {
+              "$ref": "#/components/schemas/DockerImage"
+            },
+            "type": "array"
+          },
+          "preloaded_spark_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/InstancePoolStats"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InstancePoolStatus"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "InstancePoolAndStats": {
+        "additionalProperties": false,
+        "properties": {
+          "aws_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAwsAttributes"
+          },
+          "azure_attributes": {
+            "$ref": "#/components/schemas/InstancePoolAzureAttributes"
+          },
+          "custom_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "default_tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "disk_spec": {
+            "$ref": "#/components/schemas/DiskSpec"
+          },
+          "enable_elastic_disk": {
+            "type": "boolean"
+          },
+          "gcp_attributes": {
+            "$ref": "#/components/schemas/InstancePoolGcpAttributes"
+          },
+          "idle_instance_autotermination_minutes": {
+            "type": "number"
+          },
+          "instance_pool_id": {
+            "type": "string"
+          },
+          "instance_pool_name": {
+            "type": "string"
+          },
+          "max_capacity": {
+            "type": "number"
+          },
+          "min_idle_instances": {
+            "type": "number"
+          },
+          "node_type_flexibility": {
+            "$ref": "#/components/schemas/NodeTypeFlexibility"
+          },
+          "node_type_id": {
+            "type": "string"
+          },
+          "preloaded_docker_images": {
+            "items": {
+              "$ref": "#/components/schemas/DockerImage"
+            },
+            "type": "array"
+          },
+          "preloaded_spark_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remote_disk_throughput": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/InstancePoolStats"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InstancePoolStatus"
+          },
+          "total_initial_remote_disk_size": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "InstancePoolAwsAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "instance_profile_arn": {
+            "type": "string"
+          },
+          "spot_bid_price_percent": {
+            "type": "number"
+          },
+          "zone_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "InstancePoolAzureAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "capacity_reservation_group": {
+            "type": "string"
+          },
+          "spot_bid_max_price": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "InstancePoolGcpAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "gcp_availability": {
+            "type": "string"
+          },
+          "local_ssd_count": {
+            "type": "number"
+          },
+          "zone_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "InstancePoolStats": {
+        "additionalProperties": false,
+        "properties": {
+          "idle_count": {
+            "type": "number"
+          },
+          "pending_idle_count": {
+            "type": "number"
+          },
+          "pending_used_count": {
+            "type": "number"
+          },
+          "used_count": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "InstancePoolStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "pending_instance_errors": {
+            "items": {
+              "$ref": "#/components/schemas/PendingInstanceError"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListInstancePoolsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_pools": {
+            "items": {
+              "$ref": "#/components/schemas/InstancePoolAndStats"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NodeTypeFlexibility": {
+        "additionalProperties": false,
+        "properties": {
+          "alternate_node_type_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PendingInstanceError": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Schema_745ddacd": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Instance Pools API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/instance-pools/create": {
+      "post": {
+        "description": "Creates a new instance pool using idle and ready-to-use cloud instances.",
+        "operationId": "instancePools.createInstancePool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "aws_attributes": {
+                    "$ref": "#/components/schemas/InstancePoolAwsAttributes"
+                  },
+                  "azure_attributes": {
+                    "$ref": "#/components/schemas/InstancePoolAzureAttributes"
+                  },
+                  "custom_tags": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "disk_spec": {
+                    "$ref": "#/components/schemas/DiskSpec"
+                  },
+                  "enable_elastic_disk": {
+                    "type": "boolean"
+                  },
+                  "gcp_attributes": {
+                    "$ref": "#/components/schemas/InstancePoolGcpAttributes"
+                  },
+                  "idle_instance_autotermination_minutes": {
+                    "type": "number"
+                  },
+                  "instance_pool_name": {
+                    "type": "string"
+                  },
+                  "max_capacity": {
+                    "type": "number"
+                  },
+                  "min_idle_instances": {
+                    "type": "number"
+                  },
+                  "node_type_flexibility": {
+                    "$ref": "#/components/schemas/NodeTypeFlexibility"
+                  },
+                  "node_type_id": {
+                    "type": "string"
+                  },
+                  "preloaded_docker_images": {
+                    "items": {
+                      "$ref": "#/components/schemas/DockerImage"
+                    },
+                    "type": "array"
+                  },
+                  "preloaded_spark_versions": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "remote_disk_throughput": {
+                    "type": "number"
+                  },
+                  "total_initial_remote_disk_size": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateInstancePoolResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instancePools"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/instance-pools/delete": {
+      "post": {
+        "description": "Deletes the instance pool permanently. The idle instances in the pool are terminated asynchronously.",
+        "operationId": "instancePools.deleteInstancePool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "instance_pool_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteInstancePoolResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instancePools"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/instance-pools/edit": {
+      "post": {
+        "description": "Modifies the configuration of an existing instance pool.",
+        "operationId": "instancePools.editInstancePool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "aws_attributes": {
+                    "$ref": "#/components/schemas/InstancePoolAwsAttributes"
+                  },
+                  "azure_attributes": {
+                    "$ref": "#/components/schemas/InstancePoolAzureAttributes"
+                  },
+                  "custom_tags": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "disk_spec": {
+                    "$ref": "#/components/schemas/DiskSpec"
+                  },
+                  "enable_elastic_disk": {
+                    "type": "boolean"
+                  },
+                  "gcp_attributes": {
+                    "$ref": "#/components/schemas/InstancePoolGcpAttributes"
+                  },
+                  "idle_instance_autotermination_minutes": {
+                    "type": "number"
+                  },
+                  "instance_pool_id": {
+                    "type": "string"
+                  },
+                  "instance_pool_name": {
+                    "type": "string"
+                  },
+                  "max_capacity": {
+                    "type": "number"
+                  },
+                  "min_idle_instances": {
+                    "type": "number"
+                  },
+                  "node_type_flexibility": {
+                    "$ref": "#/components/schemas/NodeTypeFlexibility"
+                  },
+                  "node_type_id": {
+                    "type": "string"
+                  },
+                  "preloaded_docker_images": {
+                    "items": {
+                      "$ref": "#/components/schemas/DockerImage"
+                    },
+                    "type": "array"
+                  },
+                  "preloaded_spark_versions": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "remote_disk_throughput": {
+                    "type": "number"
+                  },
+                  "total_initial_remote_disk_size": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditInstancePoolResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instancePools"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/instance-pools/get": {
+      "get": {
+        "description": "Retrieve the information for an instance pool based on its identifier.",
+        "operationId": "instancePools.getInstancePool",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "instance_pool_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "instancePoolId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetInstancePoolResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instancePools"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/instance-pools/list": {
+      "get": {
+        "description": "Gets a list of instance pools with their statistics.",
+        "operationId": "instancePools.listInstancePools",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInstancePoolsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instancePools"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "instancePools"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "instancePools.createInstancePool",
+      "path": "/api/2.0/instance-pools/create",
+      "source": "@databricks/sdk-instancepools/v2/client.js:35"
+    },
+    {
+      "method": "POST",
+      "operationId": "instancePools.deleteInstancePool",
+      "path": "/api/2.0/instance-pools/delete",
+      "source": "@databricks/sdk-instancepools/v2/client.js:55"
+    },
+    {
+      "method": "POST",
+      "operationId": "instancePools.editInstancePool",
+      "path": "/api/2.0/instance-pools/edit",
+      "source": "@databricks/sdk-instancepools/v2/client.js:75"
+    },
+    {
+      "method": "GET",
+      "operationId": "instancePools.getInstancePool",
+      "path": "/api/2.0/instance-pools/get",
+      "source": "@databricks/sdk-instancepools/v2/client.js:95"
+    },
+    {
+      "method": "GET",
+      "operationId": "instancePools.listInstancePools",
+      "path": "/api/2.0/instance-pools/list",
+      "source": "@databricks/sdk-instancepools/v2/client.js:118"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-instancepools",
+  "x-databricks-sdk-version": "0.49.0"
+}

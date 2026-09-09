@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
+import { PACKAGE_VERSION } from "../index.ts";
 import { buildProgram } from "../src/cli.ts";
 import {
   ensureRustReleaseBinary,
@@ -51,12 +52,14 @@ describe("Rust release binaries", () => {
 
   it("reuses an exact-version installation without resolving a download", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-rust-bin-"));
-    const path = join(homeDir, ".fixture-bin", "bin", "fixture-bin");
+    const version = PACKAGE_VERSION.replace(/[^0-9A-Za-z]+/g, "_");
+    const binDir = join(homeDir, ".dbx-tools", "bin");
+    const path = join(binDir, `fixture-bin_${version}`);
     try {
-      await mkdir(join(homeDir, ".fixture-bin", "bin"), { recursive: true });
+      await mkdir(binDir, { recursive: true });
       await writeFile(
         path,
-        '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "fixture-bin 1.2.3"; exit 0; fi\nexit 7\n',
+        `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "fixture-bin ${PACKAGE_VERSION}"; exit 0; fi\nexit 7\n`,
       );
       await chmod(path, 0o755);
 
@@ -64,7 +67,6 @@ describe("Rust release binaries", () => {
         homeDir,
         platform: "linux",
         arch: "x64",
-        version: "1.2.3",
       });
       assert.equal(installed.path, path);
       assert.equal(
@@ -72,7 +74,6 @@ describe("Rust release binaries", () => {
           homeDir,
           platform: "linux",
           arch: "x64",
-          version: "1.2.3",
         }),
         7,
       );

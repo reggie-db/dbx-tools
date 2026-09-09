@@ -35,6 +35,10 @@
 /packages/py/google/pyproject.toml linguist-generated
 /packages/py/graphiti/pyproject.toml linguist-generated
 /packages/py/postgres/pyproject.toml linguist-generated
+/packages/rs/databricks-client/assets/openapi/** linguist-generated
+/packages/rs/databricks-client/src/lib.rs linguist-generated
+/packages/rs/databricks/assets/brand.yaml linguist-generated
+/packages/rs/databricks/assets/logo-light.svg linguist-generated
 /packages/test/**/index.ts linguist-generated
 /packages/test/openapi/** linguist-generated
 /pnpm-workspace.yaml linguist-generated

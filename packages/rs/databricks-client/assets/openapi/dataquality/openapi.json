@@ -1,0 +1,1024 @@
+{
+  "components": {
+    "schemas": {
+      "AnomalyDetectionConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "excluded_table_full_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CancelRefreshRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "object_type": {
+            "type": "string"
+          },
+          "refresh_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CancelRefreshResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "refresh": {
+            "$ref": "#/components/schemas/Refresh"
+          }
+        },
+        "type": "object"
+      },
+      "CronSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "pause_status": {
+            "type": "string"
+          },
+          "quartz_cron_expression": {
+            "type": "string"
+          },
+          "timezone_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DataProfilingConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "assets_dir": {
+            "type": "string"
+          },
+          "baseline_table_name": {
+            "type": "string"
+          },
+          "custom_metrics": {
+            "items": {
+              "$ref": "#/components/schemas/DataProfilingCustomMetric"
+            },
+            "type": "array"
+          },
+          "dashboard_id": {
+            "type": "string"
+          },
+          "drift_metrics_table_name": {
+            "type": "string"
+          },
+          "effective_warehouse_id": {
+            "type": "string"
+          },
+          "inference_log": {
+            "$ref": "#/components/schemas/InferenceLogConfig"
+          },
+          "latest_monitor_failure_message": {
+            "type": "string"
+          },
+          "monitor_version": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "monitored_table_name": {
+            "type": "string"
+          },
+          "notification_settings": {
+            "$ref": "#/components/schemas/NotificationSettings"
+          },
+          "output_schema_id": {
+            "type": "string"
+          },
+          "profile_metrics_table_name": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/CronSchedule"
+          },
+          "skip_builtin_dashboard": {
+            "type": "boolean"
+          },
+          "slicing_exprs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/SnapshotConfig"
+          },
+          "status": {
+            "type": "string"
+          },
+          "time_series": {
+            "$ref": "#/components/schemas/TimeSeriesConfig"
+          },
+          "warehouse_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DataProfilingCustomMetric": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "type": "string"
+          },
+          "input_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "output_data_type": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "InferenceLogConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "granularities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label_column": {
+            "type": "string"
+          },
+          "model_id_column": {
+            "type": "string"
+          },
+          "prediction_column": {
+            "type": "string"
+          },
+          "problem_type": {
+            "type": "string"
+          },
+          "timestamp_column": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListMonitorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "monitors": {
+            "items": {
+              "$ref": "#/components/schemas/Monitor"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListRefreshResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "refreshes": {
+            "items": {
+              "$ref": "#/components/schemas/Refresh"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Monitor": {
+        "additionalProperties": false,
+        "properties": {
+          "anomaly_detection_config": {
+            "$ref": "#/components/schemas/AnomalyDetectionConfig"
+          },
+          "data_profiling_config": {
+            "$ref": "#/components/schemas/DataProfilingConfig"
+          },
+          "object_id": {
+            "type": "string"
+          },
+          "object_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NotificationDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "email_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NotificationSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "on_failure": {
+            "$ref": "#/components/schemas/NotificationDestination"
+          }
+        },
+        "type": "object"
+      },
+      "Refresh": {
+        "additionalProperties": false,
+        "properties": {
+          "end_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "object_id": {
+            "type": "string"
+          },
+          "object_type": {
+            "type": "string"
+          },
+          "refresh_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "start_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SnapshotConfig": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "TimeSeriesConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "granularities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timestamp_column": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Schema_17b20a24": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Data Quality API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/data-quality/v1/monitors": {
+      "get": {
+        "description": "(Unimplemented) List data quality monitors.",
+        "operationId": "dataQuality.listMonitor",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMonitorResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a data quality monitor on a Unity Catalog object. The caller must provide either `anomaly_detection_config` for a schema monitor or `data_profiling_config` for a table monitor.\n\nFor the `table` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **SELECT** on the table\n2. **USE_CATALOG** on the table's parent catalog, **MANAGE** and **USE_SCHEMA** on the table's parent schema, and **SELECT** on the table.\n3. **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **MANAGE** and **SELECT** on the table.\n\nWorkspace assets, such as the dashboard, will be created in the workspace where this call was made.\n\nFor the `schema` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the schema's parent catalog.\n2. **USE_CATALOG** on the schema's parent catalog, and **MANAGE** and **USE_SCHEMA** on the schema.",
+        "operationId": "dataQuality.createMonitor",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Monitor"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Monitor"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/data-quality/v1/monitors/{objectType}/{objectId}": {
+      "delete": {
+        "description": "Delete a data quality monitor on Unity Catalog object.\n\nFor the `table` `object_type`, the caller must have either of the following sets of permissions:\n**MANAGE** and **USE_CATALOG** on the table's parent catalog.\n**USE_CATALOG** on the table's parent catalog, and **MANAGE** and **USE_SCHEMA** on the table's parent schema.\n**USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **MANAGE** on the table.\n\nNote that the metric tables and dashboard will not be deleted as part of this call; those\nassets must be manually cleaned up (if desired).\n\nFor the `schema` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the schema's parent catalog.\n2. **USE_CATALOG** on the schema's parent catalog, and **MANAGE** and **USE_SCHEMA** on the schema.",
+        "operationId": "dataQuality.deleteMonitor",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Read a data quality monitor on a Unity Catalog object.\n\nFor the `table` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the table's parent catalog.\n2. **USE_CATALOG** on the table's parent catalog, and **MANAGE** and **USE_SCHEMA** on the table's parent schema.\n3. **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **SELECT** on the table.\n\nFor the `schema` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the schema's parent catalog.\n2. **USE_CATALOG** on the schema's parent catalog, and **USE_SCHEMA** on the schema.\n\nThe returned information includes configuration values on the entity and parent entity as well as information on\nassets created by the monitor. Some information (e.g. dashboard) may be filtered out\nif the caller is in a different workspace than where the monitor was created.",
+        "operationId": "dataQuality.getMonitor",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Monitor"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a data quality monitor on Unity Catalog object.\n\nFor the `table` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the table's parent catalog.\n2. **USE_CATALOG** on the table's parent catalog, and **MANAGE** and **USE_SCHEMA** on the table's parent schema.\n3. **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **MANAGE** on the table.\n\nFor the `schema` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the schema's parent catalog.\n2. **USE_CATALOG** on the schema's parent catalog, and **MANAGE** and **USE_SCHEMA** on the schema.",
+        "operationId": "dataQuality.updateMonitor",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Monitor"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Monitor"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes": {
+      "get": {
+        "description": "List data quality monitor refreshes. The call must be made in the same workspace as where the monitor was created.\n\nFor the `table` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the table's parent catalog.\n2. **USE_CATALOG** on the table's parent catalog, and **MANAGE** and **USE_SCHEMA** on the table's parent schema.\n3. **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **SELECT** on the table.\n\nFor the `schema` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the schema's parent catalog.\n2. **USE_CATALOG** on the schema's parent catalog, and **USE_SCHEMA** on the schema.",
+        "operationId": "dataQuality.listRefresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRefreshResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a refresh. Currently only supported for the `table` `object_type`.\nThe call must be made in the same workspace as where the monitor was created.\n\nThe caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the table's parent catalog.\n2. **USE_CATALOG** on the table's parent catalog, and **MANAGE** and **USE_SCHEMA** on the table's parent schema.\n3. **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **MANAGE** on the table.",
+        "operationId": "dataQuality.createRefresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "refresh.objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "refresh.objectType"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "end_time_ms": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "refresh_id": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "start_time_ms": {
+                    "$ref": "#/components/schemas/Schema_17b20a24"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "trigger": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refresh"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes/{refreshId}": {
+      "delete": {
+        "description": "(Unimplemented) Delete a refresh",
+        "operationId": "dataQuality.deleteRefresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          },
+          {
+            "in": "path",
+            "name": "refreshId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "refreshId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get data quality monitor refresh. The call must be made in the same workspace as where the monitor was created.\n\nFor the `table` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the table's parent catalog.\n2. **USE_CATALOG** on the table's parent catalog, and **MANAGE** and **USE_SCHEMA** on the table's parent schema.\n3. **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **SELECT** on the table.\n\nFor the `schema` `object_type`, the caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the schema's parent catalog.\n2. **USE_CATALOG** on the schema's parent catalog, and **USE_SCHEMA** on the schema.",
+        "operationId": "dataQuality.getRefresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          },
+          {
+            "in": "path",
+            "name": "refreshId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "refreshId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refresh"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "(Unimplemented) Update a refresh",
+        "operationId": "dataQuality.updateRefresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          },
+          {
+            "in": "path",
+            "name": "refreshId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "refreshId"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Refresh"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refresh"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes/{refreshId}/cancel": {
+      "post": {
+        "description": "Cancels a data quality monitor refresh. Currently only supported for the `table` `object_type`.\nThe call must be made in the same workspace as where the monitor was created.\n\nThe caller must have either of the following sets of permissions:\n1. **MANAGE** and **USE_CATALOG** on the table's parent catalog.\n2. **USE_CATALOG** on the table's parent catalog, and **MANAGE** and **USE_SCHEMA** on the table's parent schema.\n3. **USE_CATALOG** on the table's parent catalog, **USE_SCHEMA** on the table's parent schema, and **MANAGE** on the table.",
+        "operationId": "dataQuality.cancelRefresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "objectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectId"
+          },
+          {
+            "in": "path",
+            "name": "objectType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "objectType"
+          },
+          {
+            "in": "path",
+            "name": "refreshId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "refreshId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelRefreshResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "dataQuality"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "dataQuality"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "dataQuality.cancelRefresh",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes/{refreshId}/cancel",
+      "source": "@databricks/sdk-dataquality/v1/client.js:43"
+    },
+    {
+      "method": "POST",
+      "operationId": "dataQuality.createMonitor",
+      "path": "/api/data-quality/v1/monitors",
+      "source": "@databricks/sdk-dataquality/v1/client.js:76"
+    },
+    {
+      "method": "POST",
+      "operationId": "dataQuality.createRefresh",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes",
+      "source": "@databricks/sdk-dataquality/v1/client.js:104"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "dataQuality.deleteMonitor",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}",
+      "source": "@databricks/sdk-dataquality/v1/client.js:138"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "dataQuality.deleteRefresh",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes/{refreshId}",
+      "source": "@databricks/sdk-dataquality/v1/client.js:154"
+    },
+    {
+      "method": "GET",
+      "operationId": "dataQuality.getMonitor",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}",
+      "source": "@databricks/sdk-dataquality/v1/client.js:185"
+    },
+    {
+      "method": "GET",
+      "operationId": "dataQuality.getRefresh",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes/{refreshId}",
+      "source": "@databricks/sdk-dataquality/v1/client.js:215"
+    },
+    {
+      "method": "GET",
+      "operationId": "dataQuality.listMonitor",
+      "path": "/api/data-quality/v1/monitors",
+      "source": "@databricks/sdk-dataquality/v1/client.js:234"
+    },
+    {
+      "method": "GET",
+      "operationId": "dataQuality.listRefresh",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes",
+      "source": "@databricks/sdk-dataquality/v1/client.js:278"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "dataQuality.updateMonitor",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}",
+      "source": "@databricks/sdk-dataquality/v1/client.js:322"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "dataQuality.updateRefresh",
+      "path": "/api/data-quality/v1/monitors/{objectType}/{objectId}/refreshes/{refreshId}",
+      "source": "@databricks/sdk-dataquality/v1/client.js:346"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-dataquality",
+  "x-databricks-sdk-version": "0.49.0"
+}

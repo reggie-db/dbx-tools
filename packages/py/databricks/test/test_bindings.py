@@ -4,7 +4,7 @@ from dbx_tools.databricks import (
     ProviderOptions,
     Storage,
     StorageAdapter,
-    create_persistent_auth_for_request,
+    create_persistent_auth,
     create_persistent_auth_with_storage,
     create_provider_auth_with_storage,
     create_storage_handle,
@@ -85,12 +85,12 @@ def test_shared_lifecycle_record_composes_in_both_providers():
 
 
 async def test_request_scoped_app_obo_token_is_not_cached():
-    auth = await create_persistent_auth_for_request(
+    auth = await create_persistent_auth(
         DatabricksAuthOptions(
             host="https://workspace.example",
             auth_type="app_obo",
+            request_headers={"Authorization": "Bearer request-token"},
         ),
-        {"X-Forwarded-Access-Token": "request-token"},
         Storage.MEMORY,
     )
 

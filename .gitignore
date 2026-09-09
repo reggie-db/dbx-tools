@@ -92,8 +92,6 @@ jspm_packages/
 .isaac/
 .polly/
 .home/
-.dev.token
-.dev.client.test/
 **/.logs/
 !/packages/js/cli/dbx-tools/src/_rust-release-binaries.ts
 target/

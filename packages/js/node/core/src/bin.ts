@@ -73,6 +73,8 @@ export interface BinOptions {
   autoUnpackage?: boolean;
   selector?: BinSelector;
   homeDir?: string;
+  /** Exact installation paths. Omission keeps `$HOME/.<name>/bin/<name>`. */
+  destination?: BinContext;
   /** Minimum accepted numeric version, with one to three components. */
   minVersion?: string;
   /** Argument passed to the binary for version detection. Defaults to `--version`. */
@@ -84,10 +86,11 @@ export interface BinOptions {
 /** A URL resolved only when the executable is not already installed. */
 export type BinUrl = string | (() => string | Promise<string>);
 
-function context(name: string, homeDir: string): BinContext {
+function context(name: string, homeDir: string, destination?: BinContext): BinContext {
   if (!name || basename(name) !== name || name === "." || name === "..") {
     throw new TypeError(`invalid binary name: ${name}`);
   }
+  if (destination) return destination;
   const root = join(homeDir, `.${name}`);
   const binDir = join(root, "bin");
   return { root, binDir, path: join(binDir, name) };
@@ -307,7 +310,7 @@ export async function ensure(
   if (options.minVersion && !numericVersion(options.minVersion, true)) {
     throw new TypeError(`invalid minimum binary version: ${options.minVersion}`);
   }
-  const destination = context(name, options.homeDir ?? homedir());
+  const destination = context(name, options.homeDir ?? homedir(), options.destination);
   if (await isValidBin(destination.path, options)) {
     logger.debug("using installed binary", { name, path: destination.path });
     return destination;

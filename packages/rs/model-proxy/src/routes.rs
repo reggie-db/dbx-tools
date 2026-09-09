@@ -1,10 +1,13 @@
 //! HTTP routes for model listing, generation, and embeddings.
 
-use std::{num::NonZeroU64, time::Instant};
+use std::{
+    num::{NonZeroU64, NonZeroUsize},
+    time::Instant,
+};
 
 use axum::{
     body::Bytes,
-    extract::{Query, State},
+    extract::{DefaultBodyLimit, Query, State},
     http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -64,7 +67,7 @@ struct ModelsQuery {
     search: Option<String>,
 }
 
-pub(crate) fn routes(state: AppState) -> Router {
+pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router {
     Router::new()
         .route("/healthz", get(health))
         .route("/v1/models", get(list_models))
@@ -93,6 +96,7 @@ pub(crate) fn routes(state: AppState) -> Router {
                 },
             ),
         )
+        .layer(DefaultBodyLimit::max(max_request_bytes.get()))
         .with_state(state)
 }
 

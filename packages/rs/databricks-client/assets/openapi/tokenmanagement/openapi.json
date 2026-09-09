@@ -1,0 +1,487 @@
+{
+  "components": {
+    "schemas": {
+      "AdminTokenInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "autoscope_state": {
+            "type": "string"
+          },
+          "backfill_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by_username": {
+            "type": "string"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "expiry_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "inferred_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "last_used_day": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CreateOnBehalfOfTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "type": "string"
+          },
+          "autoscope_enabled": {
+            "type": "boolean"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "lifetime_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateOnBehalfOfTokenResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "token_info": {
+            "$ref": "#/components/schemas/AdminTokenInfo"
+          },
+          "token_value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetTokenResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "token_info": {
+            "$ref": "#/components/schemas/AdminTokenInfo"
+          }
+        },
+        "type": "object"
+      },
+      "ListTokensResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "token_infos": {
+            "items": {
+              "$ref": "#/components/schemas/AdminTokenInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RevokeTokenResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "UpdateTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/AdminTokenInfo"
+          },
+          "update_mask": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Token Management API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/token-management/on-behalf-of/tokens": {
+      "post": {
+        "description": "Creates a token on behalf of a service principal.",
+        "operationId": "tokenManagement.createOnBehalfOfToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "application_id": {
+                    "type": "string"
+                  },
+                  "autoscope_enabled": {
+                    "type": "boolean"
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "lifetime_seconds": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "scopes": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOnBehalfOfTokenResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "tokenManagement"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/token-management/tokens": {
+      "get": {
+        "description": "Lists all tokens associated with the specified workspace or user.",
+        "operationId": "tokenManagement.listTokens",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "created_by_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "createdById"
+          },
+          {
+            "in": "query",
+            "name": "created_by_username",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "createdByUsername"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListTokensResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "tokenManagement"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/token-management/tokens/{tokenId}": {
+      "delete": {
+        "description": "Deletes a token, specified by its ID.",
+        "operationId": "tokenManagement.deleteToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tokenId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "tokenId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeTokenResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "tokenManagement"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets information about a token, specified by its ID.",
+        "operationId": "tokenManagement.getToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tokenId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "tokenId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTokenResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "tokenManagement"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates a token, specified by its ID.",
+        "operationId": "tokenManagement.updateToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tokenId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "token.tokenId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "token": {
+                    "$ref": "#/components/schemas/AdminTokenInfo"
+                  },
+                  "update_mask": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTokenInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "tokenManagement"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "tokenManagement"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalUpdateTokenRequestSchema uses z.any()",
+      "source": "@databricks/sdk-tokenmanagement/v1/model.js:127:14"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "tokenManagement.createOnBehalfOfToken",
+      "path": "/api/2.0/token-management/on-behalf-of/tokens",
+      "source": "@databricks/sdk-tokenmanagement/v1/client.js:35"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "tokenManagement.deleteToken",
+      "path": "/api/2.0/token-management/tokens/{tokenId}",
+      "source": "@databricks/sdk-tokenmanagement/v1/client.js:55"
+    },
+    {
+      "method": "GET",
+      "operationId": "tokenManagement.getToken",
+      "path": "/api/2.0/token-management/tokens/{tokenId}",
+      "source": "@databricks/sdk-tokenmanagement/v1/client.js:74"
+    },
+    {
+      "method": "GET",
+      "operationId": "tokenManagement.listTokens",
+      "path": "/api/2.0/token-management/tokens",
+      "source": "@databricks/sdk-tokenmanagement/v1/client.js:93"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "tokenManagement.updateToken",
+      "path": "/api/2.0/token-management/tokens/{tokenId}",
+      "source": "@databricks/sdk-tokenmanagement/v1/client.js:117"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-tokenmanagement",
+  "x-databricks-sdk-version": "0.49.0"
+}

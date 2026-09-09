@@ -1,0 +1,1222 @@
+{
+  "components": {
+    "schemas": {
+      "CreateServicePrincipalSecretRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "lifetime": {
+            "type": "string"
+          },
+          "service_principal": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateServicePrincipalSecretResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "create_time": {
+            "type": "string"
+          },
+          "expire_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "secret_hash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "update_time": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteServicePrincipalSecretResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "FederationPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "create_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "oidc_policy": {
+            "$ref": "#/components/schemas/OidcFederationPolicy"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "service_principal_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "uid": {
+            "type": "string"
+          },
+          "update_time": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListFederationPoliciesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/FederationPolicy"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListServicePrincipalSecretsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "secrets": {
+            "items": {
+              "$ref": "#/components/schemas/ServicePrincipalSecret"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OidcFederationPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "audiences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "jwks_json": {
+            "type": "string"
+          },
+          "jwks_uri": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subject_claim": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ServicePrincipalSecret": {
+        "additionalProperties": false,
+        "properties": {
+          "create_time": {
+            "type": "string"
+          },
+          "expire_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "secret_hash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "update_time": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Authentication API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/federationPolicies": {
+      "get": {
+        "description": "List account federation policies.",
+        "operationId": "authentication.listAccountFederationPolicies",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "service_principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFederationPoliciesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create account federation policy.",
+        "operationId": "authentication.createAccountFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "policy_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          },
+          {
+            "in": "query",
+            "name": "service_principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FederationPolicy"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FederationPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/federationPolicies/{policyId}": {
+      "delete": {
+        "description": "Delete account federation policy.",
+        "operationId": "authentication.deleteAccountFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          },
+          {
+            "in": "query",
+            "name": "service_principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Get account federation policy.",
+        "operationId": "authentication.getAccountFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          },
+          {
+            "in": "query",
+            "name": "service_principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FederationPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Update account federation policy.",
+        "operationId": "authentication.updateAccountFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          },
+          {
+            "in": "query",
+            "name": "service_principal_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FederationPolicy"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FederationPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipal}/credentials/secrets": {
+      "get": {
+        "description": "List all secrets associated with the given service principal. This operation only returns information about the secrets themselves and does not include the secret values.",
+        "operationId": "authentication.listServicePrincipalSecrets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipal"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListServicePrincipalSecretsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create a secret for the given service principal.",
+        "operationId": "authentication.createServicePrincipalSecret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipal"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "lifetime": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateServicePrincipalSecretResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipal}/credentials/secrets/{secretId}": {
+      "delete": {
+        "description": "Delete a secret from the given service principal.",
+        "operationId": "authentication.deleteServicePrincipalSecret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "secretId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "secretId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipal"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteServicePrincipalSecretResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipalId}/federationPolicies": {
+      "get": {
+        "description": "List account federation policies.",
+        "operationId": "authentication.listServicePrincipalFederationPolicies",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFederationPoliciesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create account federation policy.",
+        "operationId": "authentication.createServicePrincipalFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          },
+          {
+            "in": "query",
+            "name": "policy_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FederationPolicy"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FederationPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipalId}/federationPolicies/{policyId}": {
+      "delete": {
+        "description": "Delete account federation policy.",
+        "operationId": "authentication.deleteServicePrincipalFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Get account federation policy.",
+        "operationId": "authentication.getServicePrincipalFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FederationPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Update account federation policy.",
+        "operationId": "authentication.updateServicePrincipalFederationPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipalId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipalId"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FederationPolicy"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FederationPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/servicePrincipals/{servicePrincipal}/credentials/secrets": {
+      "get": {
+        "description": "List all secrets associated with the given service principal. This operation only returns information about the secrets themselves and does not include the secret values.",
+        "operationId": "authentication.listServicePrincipalSecretsProxy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "servicePrincipal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipal"
+          },
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListServicePrincipalSecretsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create a secret for the given service principal.",
+        "operationId": "authentication.createServicePrincipalSecretProxy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "servicePrincipal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipal"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "account_id": {
+                    "type": "string"
+                  },
+                  "lifetime": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateServicePrincipalSecretResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/servicePrincipals/{servicePrincipal}/credentials/secrets/{secretId}": {
+      "delete": {
+        "description": "Delete a secret from the given service principal.",
+        "operationId": "authentication.deleteServicePrincipalSecretProxy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "secretId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "secretId"
+          },
+          {
+            "in": "path",
+            "name": "servicePrincipal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "servicePrincipal"
+          },
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteServicePrincipalSecretResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "authentication"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "authentication"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalFederationPolicySchema uses z.any()",
+      "source": "@databricks/sdk-authentication/v1/model.js:112:14"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalFederationPolicySchema uses z.any()",
+      "source": "@databricks/sdk-authentication/v1/model.js:113:14"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalCreateServicePrincipalSecretRequestSchema uses z.any()",
+      "source": "@databricks/sdk-authentication/v1/model.js:99:12"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "authentication.createAccountFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/federationPolicies",
+      "source": "@databricks/sdk-authentication/v1/client.js:35"
+    },
+    {
+      "method": "POST",
+      "operationId": "authentication.createServicePrincipalFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipalId}/federationPolicies",
+      "source": "@databricks/sdk-authentication/v1/client.js:59"
+    },
+    {
+      "method": "POST",
+      "operationId": "authentication.createServicePrincipalSecret",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipal}/credentials/secrets",
+      "source": "@databricks/sdk-authentication/v1/client.js:268"
+    },
+    {
+      "method": "POST",
+      "operationId": "authentication.createServicePrincipalSecretProxy",
+      "path": "/api/2.0/accounts/servicePrincipals/{servicePrincipal}/credentials/secrets",
+      "source": "@databricks/sdk-authentication/v1/client.js:287"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "authentication.deleteAccountFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/federationPolicies/{policyId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:82"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "authentication.deleteServicePrincipalFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipalId}/federationPolicies/{policyId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:101"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "authentication.deleteServicePrincipalSecret",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipal}/credentials/secrets/{secretId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:307"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "authentication.deleteServicePrincipalSecretProxy",
+      "path": "/api/2.0/accounts/servicePrincipals/{servicePrincipal}/credentials/secrets/{secretId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:325"
+    },
+    {
+      "method": "GET",
+      "operationId": "authentication.getAccountFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/federationPolicies/{policyId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:116"
+    },
+    {
+      "method": "GET",
+      "operationId": "authentication.getServicePrincipalFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipalId}/federationPolicies/{policyId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:138"
+    },
+    {
+      "method": "GET",
+      "operationId": "authentication.listAccountFederationPolicies",
+      "path": "/api/2.0/accounts/{accountId}/federationPolicies",
+      "source": "@databricks/sdk-authentication/v1/client.js:156"
+    },
+    {
+      "method": "GET",
+      "operationId": "authentication.listServicePrincipalFederationPolicies",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipalId}/federationPolicies",
+      "source": "@databricks/sdk-authentication/v1/client.js:189"
+    },
+    {
+      "method": "GET",
+      "operationId": "authentication.listServicePrincipalSecrets",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipal}/credentials/secrets",
+      "source": "@databricks/sdk-authentication/v1/client.js:348"
+    },
+    {
+      "method": "GET",
+      "operationId": "authentication.listServicePrincipalSecretsProxy",
+      "path": "/api/2.0/accounts/servicePrincipals/{servicePrincipal}/credentials/secrets",
+      "source": "@databricks/sdk-authentication/v1/client.js:380"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "authentication.updateAccountFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/federationPolicies/{policyId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:221"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "authentication.updateServicePrincipalFederationPolicy",
+      "path": "/api/2.0/accounts/{accountId}/servicePrincipals/{servicePrincipalId}/federationPolicies/{policyId}",
+      "source": "@databricks/sdk-authentication/v1/client.js:245"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-authentication",
+  "x-databricks-sdk-version": "0.49.0"
+}

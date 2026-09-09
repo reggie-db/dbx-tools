@@ -18,6 +18,8 @@ set -euo pipefail
 #   DEV_INSTALL=1     Run the local scripts/install.mjs.
 #   DRY_RUN=1         Print PATH exports without changing files.
 #   DBX_TOOLS_REF     Git ref for remote install.mjs. Defaults to main.
+#   GITHUB_REPOSITORY GitHub owner/repository used for remote install.mjs.
+#                     Defaults to the current origin remote.
 #   INSTALL_MJS_URL   Full URL override for remote install.mjs.
 
 DEV_INSTALL="${DEV_INSTALL:-0}"
@@ -75,6 +77,31 @@ command_path() {
 working_command() {
   local command="$1"
   [[ -n "$command" ]] && "$command" --version >/dev/null 2>&1
+}
+
+github_repository() {
+  local remote="$1"
+  remote="${remote#git+}"
+  remote="${remote#https://github.com/}"
+  remote="${remote#http://github.com/}"
+  remote="${remote#ssh://git@github.com/}"
+  remote="${remote#git@github.com:}"
+  remote="${remote%.git}"
+  if [[ "$remote" == */* && "$remote" != *"://"* && "$remote" != *@* ]]; then
+    printf '%s\n' "$remote"
+  fi
+}
+
+resolve_repository() {
+  if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+    printf '%s\n' "$GITHUB_REPOSITORY"
+    return
+  fi
+  local git_command
+  git_command="$(command_path git)"
+  if [[ -n "$git_command" ]]; then
+    github_repository "$("$git_command" config --get remote.origin.url 2>/dev/null || true)"
+  fi
 }
 
 detect_tools() {
@@ -199,7 +226,14 @@ run_installer() {
   fi
 
   local ref="${DBX_TOOLS_REF:-main}"
-  local url="${INSTALL_MJS_URL:-https://raw.githubusercontent.com/reggie-db/dbx-tools/$ref/scripts/install.mjs}"
+  local url="${INSTALL_MJS_URL:-}"
+  if [[ -z "$url" ]]; then
+    local repository
+    repository="$(resolve_repository)"
+    [[ -n "$repository" ]] ||
+      fail "could not resolve a GitHub repository; set GITHUB_REPOSITORY or INSTALL_MJS_URL"
+    url="https://raw.githubusercontent.com/$repository/$ref/scripts/install.mjs"
+  fi
   command -v curl >/dev/null 2>&1 || fail "curl is required to download install.mjs"
   log "running installer from $url"
   curl -fsSL "$url" | "$BUN_COMMAND" run -

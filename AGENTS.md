@@ -9,9 +9,14 @@ other coding agents. Keep tool-specific files such as `CLAUDE.md` and Cursor
 rules as thin pointers back here so instructions do not drift.
 
 Before authoring or changing an AppKit-facing plugin, package, or its docs, check
-the installed AppKit surface directly (`npx @databricks/appkit docs`, plus the
+the installed AppKit surface directly (`bunx @databricks/appkit docs`, plus the
 `.d.ts` files under `node_modules/@databricks/appkit`) so `dbx-tools` packages
 stay shaped like first-party AppKit ones.
+
+Use Bun for routine local JavaScript package management and command execution.
+Invoke repository tools with `bun` or `bunx`. npm or pnpm remain allowed only in
+explicitly documented bootstrap, Databricks deployment, and publication
+workflows, not for routine repository work.
 
 Never use emojis in source code, generated output, logs, documentation, commit
 messages, or user-facing text. When wrapping a third-party process that emits
@@ -113,9 +118,12 @@ Primary package areas:
   `databricks auth token --profile` when the CLI is available; otherwise it
   uses the native browser flow. Inside an App, automatic storage resolves to
   memory and does not invoke the CLI. App auth has two explicit types:
-  `app_obo` reads `x-forwarded-access-token` case-insensitively from
-  `createPersistentAuthForRequest` / `create_persistent_auth_for_request`
-  headers and returns it directly without caching or refreshing; `app_sp` uses
+  `app_obo` reads request headers from `DatabricksAuthOptions` through the
+  normal `createPersistentAuth` / `create_persistent_auth` factory. The access
+  token header defaults to case-insensitive `authorization` with the `Bearer`
+  scheme; callers set `accessTokenHeader` / `access_token_header` for another
+  trusted front-door header. The token is returned directly without caching or
+  refreshing; `app_sp` uses
   `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` and
   shares the complete M2M implementation. Automatic App resolution prefers an
   available OBO request token, then App SP. An explicit profile or auth type
@@ -126,6 +134,21 @@ Primary package areas:
   parse errors. Rust and UniFFI own the cross-language contract; commit
   generated bindings and import them from `@dbx-tools/databricks` or
   `dbx_tools.databricks`.
+- `packages/rs/databricks-client` owns generated Rust clients for every pinned
+  modular Databricks API SDK package. The Node-only
+  `packages/js/node/databricks-openapi` generator emits validated OpenAPI 3.0.3
+  JSON under the Rust crate's `assets/openapi` directory and regenerates its
+  `src/lib.rs` as one `progenitor` module per API. It discovers inputs from its
+  installed `@databricks/sdk-*` development dependencies, pins one shared SDK
+  version, and maintains only the support-package exclusion list. Its generated
+  package settings live under `dbxToolsConfig.databricksOpenapi`. Never
+  generate or restore
+  packages under `packages/js/openapi` for this surface. Keep the client in its
+  own Rust crate so its large generated type surface, `progenitor`, and reqwest
+  client dependency do not reach the lower-level authentication crate. The
+  crate-root `Client` exposes service fields such as `client.dataquality` and
+  initializes all of them from clones of one `reqwest::Client` handle so they
+  share its connection pool and default headers.
 - `packages/rs/google`, `packages/js/node/google`, and `packages/py/google`
   contain Google integrations. The current surface is Google Application
   Default Credentials through the native `google-cloud-auth` crate, sharing
@@ -161,7 +184,12 @@ Primary package areas:
   for credentials and on `model` for cached discovery and ranking. Releases
   publish the crate to Cargo and attach the compiled binary for each selected
   platform to the GitHub release. It logs payload-free request summaries with
-  model, protocol, status, streaming mode, and latency.
+  model, protocol, status, streaming mode, and latency. Request JSON is buffered
+  for model resolution and protocol adaptation with a 4 MB default limit;
+  `MAX_REQUEST_BYTES` / `--max-request-bytes` can override it. The local token
+  queue is disabled unless `TOKENS_PER_MINUTE` / `--tokens-per-minute` is set
+  because Databricks limits vary by model and separate input from output
+  tokens, while Codex limits vary by account tier.
   `dbx model-proxy` downloads and runs the release asset matching the installed
   `@dbx-tools/cli` version and host platform.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
@@ -536,8 +564,8 @@ Primary package areas:
   process-isolated behavior stays in the owning Node or Python package's native
   test suite.
 
-> Local dir is `dbx-tools/`; the GitHub repo is `reggie-db/dbx-tools`
-> (default branch **`main`**).
+> Repository identity is derived from the configured Git remote. The default
+> branch is **`main`**.
 
 ## README and docs rules
 
@@ -970,11 +998,14 @@ second package, put it in shared-core rather than duplicating it.
   `ProjectContext`, including unsuccessful/empty results.
   Blank, null, omitted, and an explicit path equal to `process.cwd()` may hit or
   populate that command map; another directory executes without populating it.
-- `token` also owns the front-door header NAMES - `ACCESS_TOKEN_HEADER`,
-  `USER_ID_HEADER`, `USER_EMAIL_HEADER`. Never spell `"x-forwarded-access-token"`
-  in a package: several places branch on it (`@dbx-tools/appkit`'s `identity`
-  decides whether OBO is possible by its presence, `@dbx-tools/tunnel` must
-  strip inbound copies), and a stale second spelling is a silent auth bug.
+- `token` also owns the TypeScript front-door header NAMES -
+  `ACCESS_TOKEN_HEADER`, `USER_ID_HEADER`, `USER_EMAIL_HEADER`. TypeScript
+  packages must import those constants rather than repeating a header string:
+  several places branch on it (`@dbx-tools/appkit`'s `identity` decides whether
+  OBO is possible by its presence, `@dbx-tools/tunnel` must strip inbound
+  copies), and a stale second spelling is a silent auth bug. Rust and Python
+  request auth accept the trusted header name through
+  `access_token_header` / `accessTokenHeader`.
 - Every token or credential refresh THIS repo owns must use
   check-lock-check-load: read a still-fresh cached value before locking, acquire
   a process-local lock, re-check because another caller may have refreshed, then
@@ -1400,7 +1431,8 @@ existing Bun first; when Bun is absent it uses a working Node package manager,
 installing Node LTS through NVM only when neither Bun nor a usable Node
 environment exists, then prefers `pnpm add -g bun` and falls back to
 `npm install -g bun`. Let NVM's official installer own shell-profile setup; do
-not reproduce or prune its installation and do not depend on mise.
+not reproduce or prune its installation and do not depend on mise. Once Bun is
+available, use it for repository work.
 
 `scripts/install.ts` is the standalone Bun surface for mise and mise-backed
 commands. Its `ensureCommand(command, minVersion, options)` checks PATH and
@@ -1672,10 +1704,11 @@ names the real invocation.
 Release-enabled Rust commands are generated separately from the sibling
 Commander packages. `dbx model-proxy` and `dbx lakebase-proxy` look up the
 current platform in the synthesized Rust registry, use `bin.ensure` to install
-the exact CLI-version asset, then forward argv, stdio, signals, and exit status
-to the native process. Root help registers names without downloading assets.
-Add another native command through the Rust package's `cli` option, not another
-JavaScript package or handwritten CLI entry.
+the asset matching the generated CLI `PACKAGE_VERSION` at
+`~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`, then forward argv, stdio,
+signals, and exit status to the native process. Root help registers names
+without downloading assets. Add another native command through the Rust
+package's `cli` option, not another JavaScript package or handwritten CLI entry.
 
 `dev` exists for the one thing projen cannot do for itself: a folder with no
 `.projenrc.ts` or toolchain installed yet, where there are no tasks to run.

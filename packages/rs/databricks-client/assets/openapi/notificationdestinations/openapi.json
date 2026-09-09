@@ -1,0 +1,464 @@
+{
+  "components": {
+    "schemas": {
+      "Config": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "$ref": "#/components/schemas/EmailConfig"
+          },
+          "generic_webhook": {
+            "$ref": "#/components/schemas/GenericWebhookConfig"
+          },
+          "microsoft_teams": {
+            "$ref": "#/components/schemas/MicrosoftTeamsConfig"
+          },
+          "pagerduty": {
+            "$ref": "#/components/schemas/PagerdutyConfig"
+          },
+          "slack": {
+            "$ref": "#/components/schemas/SlackConfig"
+          }
+        },
+        "type": "object"
+      },
+      "CreateNotificationDestinationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config"
+          },
+          "display_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EmailConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Empty": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "GenericWebhookConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "password_set": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          },
+          "url_set": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string"
+          },
+          "username_set": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ListNotificationDestinationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ListNotificationDestinationsResult"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListNotificationDestinationsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config"
+          },
+          "destination_type": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MicrosoftTeamsConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "app_id": {
+            "type": "string"
+          },
+          "app_id_set": {
+            "type": "boolean"
+          },
+          "auth_secret": {
+            "type": "string"
+          },
+          "auth_secret_set": {
+            "type": "boolean"
+          },
+          "channel_url": {
+            "type": "string"
+          },
+          "channel_url_set": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "tenant_id_set": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          },
+          "url_set": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "NotificationDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config"
+          },
+          "destination_type": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PagerdutyConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "integration_key": {
+            "type": "string"
+          },
+          "integration_key_set": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SlackConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "channel_id": {
+            "type": "string"
+          },
+          "channel_id_set": {
+            "type": "boolean"
+          },
+          "oauth_token": {
+            "type": "string"
+          },
+          "oauth_token_set": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          },
+          "url_set": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateNotificationDestinationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/Config"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Notification Destinations API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/notification-destinations": {
+      "get": {
+        "description": "Lists notification destinations.",
+        "operationId": "notificationDestinations.listNotificationDestinations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNotificationDestinationsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "notificationDestinations"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a notification destination. Requires workspace admin permissions.",
+        "operationId": "notificationDestinations.createNotificationDestination",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNotificationDestinationRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDestination"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "notificationDestinations"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/notification-destinations/{id}": {
+      "delete": {
+        "description": "Deletes a notification destination. Requires workspace admin permissions.",
+        "operationId": "notificationDestinations.deleteNotificationDestination",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "notificationDestinations"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets a notification destination.",
+        "operationId": "notificationDestinations.getNotificationDestination",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDestination"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "notificationDestinations"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates a notification destination. Requires workspace admin permissions. At least one field is required in the request body.",
+        "operationId": "notificationDestinations.updateNotificationDestination",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNotificationDestinationRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDestination"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "notificationDestinations"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "notificationDestinations"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "notificationDestinations.createNotificationDestination",
+      "path": "/api/2.0/notification-destinations",
+      "source": "@databricks/sdk-notificationdestinations/v1/client.js:35"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "notificationDestinations.deleteNotificationDestination",
+      "path": "/api/2.0/notification-destinations/{id}",
+      "source": "@databricks/sdk-notificationdestinations/v1/client.js:55"
+    },
+    {
+      "method": "GET",
+      "operationId": "notificationDestinations.getNotificationDestination",
+      "path": "/api/2.0/notification-destinations/{id}",
+      "source": "@databricks/sdk-notificationdestinations/v1/client.js:74"
+    },
+    {
+      "method": "GET",
+      "operationId": "notificationDestinations.listNotificationDestinations",
+      "path": "/api/2.0/notification-destinations",
+      "source": "@databricks/sdk-notificationdestinations/v1/client.js:93"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "notificationDestinations.updateNotificationDestination",
+      "path": "/api/2.0/notification-destinations/{id}",
+      "source": "@databricks/sdk-notificationdestinations/v1/client.js:126"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-notificationdestinations",
+  "x-databricks-sdk-version": "0.49.0"
+}

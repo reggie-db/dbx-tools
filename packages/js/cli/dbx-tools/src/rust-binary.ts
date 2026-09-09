@@ -4,15 +4,11 @@
  * @module
  */
 import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
-import { constants as osConstants } from "node:os";
+import { constants as osConstants, homedir } from "node:os";
+import { join } from "node:path";
 
 import { bin } from "@dbx-tools/core";
 import { RUST_RELEASE_BINARY_COMMANDS } from "./_rust-release-binaries.ts";
-
-interface CliPackageMetadata {
-  version: string;
-}
 
 /** One release archive available to the current Node runtime. */
 export interface RustReleaseBinaryAsset {
@@ -38,10 +34,6 @@ export interface RustReleaseBinaryOptions {
   readonly version?: string;
 }
 
-const packageMetadata = createRequire(import.meta.url)(
-  "@dbx-tools/cli/package.json",
-) as CliPackageMetadata;
-
 /** Return every Rust command registered by the synthesized workspace. */
 export function rustReleaseBinaryCommands(): readonly RustReleaseBinaryCommand[] {
   return RUST_RELEASE_BINARY_COMMANDS;
@@ -61,6 +53,20 @@ function repositoryName(repository: string): string {
     throw new Error(`Rust release repository must be a GitHub owner/repository: ${repository}`);
   }
   return name;
+}
+
+async function packageVersion(): Promise<string> {
+  return (await import("../index.ts")).PACKAGE_VERSION;
+}
+
+function versionedBinaryName(
+  binaryName: string,
+  version: string,
+  platform: NodeJS.Platform,
+): string {
+  const suffix = version.replace(/[^0-9A-Za-z]+/g, "_");
+  const extension = platform === "win32" ? ".exe" : "";
+  return `${binaryName}_${suffix}${extension}`;
 }
 
 /** Select the archive for an OS and CPU pair. */
@@ -94,15 +100,18 @@ export async function ensureRustReleaseBinary(
 ): Promise<bin.BinContext> {
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
-  const version = options.version ?? packageMetadata.version;
+  const version = options.version ?? (await packageVersion());
   const asset = rustReleaseBinaryAsset(command, platform, arch);
-  const installedName =
-    platform === "win32" && !command.binaryName.endsWith(".exe")
-      ? `${command.binaryName}.exe`
-      : command.binaryName;
-  return bin.ensure(installedName, () => rustReleaseBinaryUrl(command, asset, version), {
+  const root = join(options.homeDir ?? homedir(), ".dbx-tools");
+  const binDir = join(root, "bin");
+  const destination: bin.BinContext = {
+    root,
+    binDir,
+    path: join(binDir, versionedBinaryName(command.binaryName, version, platform)),
+  };
+  return bin.ensure(command.binaryName, () => rustReleaseBinaryUrl(command, asset, version), {
     autoUnpackage: true,
-    homeDir: options.homeDir,
+    destination,
     minVersion: version,
     versionParser: (output) => {
       const installed = bin.parseVersion(output);

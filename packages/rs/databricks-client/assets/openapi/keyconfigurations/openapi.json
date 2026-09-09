@@ -1,0 +1,443 @@
+{
+  "components": {
+    "schemas": {
+      "AwsKeyInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "key_alias": {
+            "type": "string"
+          },
+          "key_arn": {
+            "type": "string"
+          },
+          "key_region": {
+            "type": "string"
+          },
+          "reuse_key_for_cluster_volumes": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "AzureKeyInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "disk_encryption_set_id": {
+            "type": "string"
+          },
+          "key_access_configuration": {
+            "$ref": "#/components/schemas/KeyAccessConfiguration"
+          },
+          "key_name": {
+            "type": "string"
+          },
+          "key_vault_uri": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAwsKeyInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "key_alias": {
+            "type": "string"
+          },
+          "key_arn": {
+            "type": "string"
+          },
+          "key_region": {
+            "type": "string"
+          },
+          "reuse_key_for_cluster_volumes": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAzureKeyInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "disk_encryption_set_id": {
+            "type": "string"
+          },
+          "key_access_configuration": {
+            "$ref": "#/components/schemas/KeyAccessConfiguration"
+          },
+          "key_name": {
+            "type": "string"
+          },
+          "key_vault_uri": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateCustomerManagedKeyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "aws_key_info": {
+            "$ref": "#/components/schemas/CreateAwsKeyInfo"
+          },
+          "azure_key_info": {
+            "$ref": "#/components/schemas/CreateAzureKeyInfo"
+          },
+          "gcp_key_info": {
+            "$ref": "#/components/schemas/CreateGcpKeyInfo"
+          },
+          "use_cases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateGcpKeyInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "gcp_service_account": {
+            "$ref": "#/components/schemas/GcpServiceAccount"
+          },
+          "kms_key_id": {
+            "type": "string"
+          },
+          "manual": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CustomerManagedKey": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "aws_key_info": {
+            "$ref": "#/components/schemas/AwsKeyInfo"
+          },
+          "azure_key_info": {
+            "$ref": "#/components/schemas/AzureKeyInfo"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "customer_managed_key_id": {
+            "type": "string"
+          },
+          "gcp_key_info": {
+            "$ref": "#/components/schemas/GcpKeyInfo"
+          },
+          "use_cases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "GcpKeyInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "gcp_service_account": {
+            "$ref": "#/components/schemas/GcpServiceAccount"
+          },
+          "kms_key_id": {
+            "type": "string"
+          },
+          "manual": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "GcpServiceAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "service_account_email": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "KeyAccessConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "credential_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Key Configurations API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/customer-managed-keys": {
+      "get": {
+        "description": "Lists <Databricks> customer-managed key configurations for an account.",
+        "operationId": "keyConfigurations.listCustomerManagedKeyPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CustomerManagedKey"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "keyConfigurations"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a customer-managed key configuration object for an account, specified by ID.\nThis operation uploads a reference to a customer-managed key to <Databricks>.\nIf the key is assigned as a workspace's customer-managed key for managed services,\n<Databricks> uses the key to encrypt the workspaces notebooks and secrets in the control plane,\nin addition to Databricks SQL queries and query history. If it is specified as a\nworkspace's customer-managed key for workspace storage, the key encrypts the\nworkspace's root S3 bucket (which contains the workspace's root DBFS and system data)\nand, optionally, cluster EBS volume data.\n\n**Important**: Customer-managed keys are supported only for some deployment types,\nsubscription types, and AWS regions that currently support creation of <Databricks> workspaces.\n\nThis operation is available only if your account is on the E2 version of the\nplatform or on a select custom plan that allows multiple workspaces per account.\n\n**GCP only**: To create a customer-managed key on GCP, you must include the\n`X-Databricks-GCP-SA-Access-Token` HTTP header in your request. This header must contain\na Google Cloud OAuth access token with the `cloud-platform` scope. The Google identity\nassociated with the token must also have the `setIamPermissions` and `getIamPermissions`\nIAM permissions on the key resource. For details on obtaining this token, see\n[Authenticate with Google ID tokens](https://docs.databricks.com/gcp/en/dev-tools/auth/authentication-google-id.html).",
+        "operationId": "keyConfigurations.createCustomerManagedKeyPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "aws_key_info": {
+                    "$ref": "#/components/schemas/CreateAwsKeyInfo"
+                  },
+                  "azure_key_info": {
+                    "$ref": "#/components/schemas/CreateAzureKeyInfo"
+                  },
+                  "gcp_key_info": {
+                    "$ref": "#/components/schemas/CreateGcpKeyInfo"
+                  },
+                  "use_cases": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerManagedKey"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "keyConfigurations"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/customer-managed-keys/{customerManagedKeyId}": {
+      "delete": {
+        "description": "Deletes a customer-managed key configuration object for an account. You cannot delete a configuration that is associated with a running workspace.",
+        "operationId": "keyConfigurations.deleteCustomerManagedKeyPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "customerManagedKeyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "customerManagedKeyId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerManagedKey"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "keyConfigurations"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a customer-managed key configuration object for an account, specified by ID.\nThis operation uploads a reference to a customer-managed key to <Databricks>.\nIf assigned as a workspace's customer-managed key for managed services, <Databricks> uses the\nkey to encrypt the workspaces notebooks and secrets in the control plane, in addition to\nDatabricks SQL queries and query history. If it is specified as a workspace's\ncustomer-managed key for storage, the key encrypts the workspace's root S3 bucket\n(which contains the workspace's root DBFS and system data) and, optionally, cluster EBS volume data.\n\n**Important**: Customer-managed keys are supported only for some deployment types,\nsubscription types, and AWS regions.\n\nThis operation is available only if your account is on the E2 version of the platform.\",",
+        "operationId": "keyConfigurations.getCustomerManagedKeyPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "customerManagedKeyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "customerManagedKeyId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerManagedKey"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "keyConfigurations"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "keyConfigurations"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "keyConfigurations.createCustomerManagedKeyPublic",
+      "path": "/api/2.0/accounts/{accountId}/customer-managed-keys",
+      "source": "@databricks/sdk-keyconfigurations/v1/client.js:58"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "keyConfigurations.deleteCustomerManagedKeyPublic",
+      "path": "/api/2.0/accounts/{accountId}/customer-managed-keys/{customerManagedKeyId}",
+      "source": "@databricks/sdk-keyconfigurations/v1/client.js:77"
+    },
+    {
+      "method": "GET",
+      "operationId": "keyConfigurations.getCustomerManagedKeyPublic",
+      "path": "/api/2.0/accounts/{accountId}/customer-managed-keys/{customerManagedKeyId}",
+      "source": "@databricks/sdk-keyconfigurations/v1/client.js:108"
+    },
+    {
+      "method": "GET",
+      "operationId": "keyConfigurations.listCustomerManagedKeyPublic",
+      "path": "/api/2.0/accounts/{accountId}/customer-managed-keys",
+      "source": "@databricks/sdk-keyconfigurations/v1/client.js:126"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-keyconfigurations",
+  "x-databricks-sdk-version": "0.49.0"
+}

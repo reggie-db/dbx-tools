@@ -1,0 +1,23 @@
+[package]
+name = "dbx-tools-databricks-client"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Generated Rust clients for Databricks workspace and account APIs"
+license = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "dbx_tools_databricks_client"
+path = "src/lib.rs"
+
+[dependencies]
+bytes = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
+futures = { workspace = true }
+progenitor = { workspace = true }
+progenitor-client = { workspace = true }
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls", "stream"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }

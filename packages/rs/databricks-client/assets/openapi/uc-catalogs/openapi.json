@@ -1,0 +1,839 @@
+{
+  "components": {
+    "schemas": {
+      "AzureEncryptionSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "azure_cmk_access_connector_id": {
+            "type": "string"
+          },
+          "azure_cmk_managed_identity_id": {
+            "type": "string"
+          },
+          "azure_tenant_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CatalogInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "browse_only": {
+            "type": "boolean"
+          },
+          "catalog_type": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "connection_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "custom_max_retention_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "effective_predictive_optimization_flag": {
+            "$ref": "#/components/schemas/EffectivePredictiveOptimizationFlag"
+          },
+          "enable_predictive_optimization": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "isolation_mode": {
+            "type": "string"
+          },
+          "managed_encryption_settings": {
+            "$ref": "#/components/schemas/EncryptionSettings"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "provider_name": {
+            "type": "string"
+          },
+          "provisioning_info": {
+            "$ref": "#/components/schemas/ProvisioningInfo"
+          },
+          "securable_type": {
+            "type": "string"
+          },
+          "share_name": {
+            "type": "string"
+          },
+          "storage_location": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateCatalogRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "browse_only": {
+            "type": "boolean"
+          },
+          "catalog_type": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "connection_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "custom_max_retention_hours": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "effective_predictive_optimization_flag": {
+            "$ref": "#/components/schemas/EffectivePredictiveOptimizationFlag"
+          },
+          "enable_predictive_optimization": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "isolation_mode": {
+            "type": "string"
+          },
+          "managed_encryption_settings": {
+            "$ref": "#/components/schemas/EncryptionSettings"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "provider_name": {
+            "type": "string"
+          },
+          "provisioning_info": {
+            "$ref": "#/components/schemas/ProvisioningInfo"
+          },
+          "securable_type": {
+            "type": "string"
+          },
+          "share_name": {
+            "type": "string"
+          },
+          "storage_location": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteCatalogResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "EffectivePredictiveOptimizationFlag": {
+        "additionalProperties": false,
+        "properties": {
+          "inherited_from_name": {
+            "type": "string"
+          },
+          "inherited_from_type": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EncryptionSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "azure_encryption_settings": {
+            "$ref": "#/components/schemas/AzureEncryptionSettings"
+          },
+          "azure_key_vault_key_id": {
+            "type": "string"
+          },
+          "customer_managed_key_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListCatalogsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "catalogs": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogInfo"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ProvisioningInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCatalogRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "browse_only": {
+            "type": "boolean"
+          },
+          "catalog_type": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "connection_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "custom_max_retention_hours": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "effective_predictive_optimization_flag": {
+            "$ref": "#/components/schemas/EffectivePredictiveOptimizationFlag"
+          },
+          "enable_predictive_optimization": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "isolation_mode": {
+            "type": "string"
+          },
+          "managed_encryption_settings": {
+            "$ref": "#/components/schemas/EncryptionSettings"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "name_arg": {
+            "type": "string"
+          },
+          "new_name": {
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "provider_name": {
+            "type": "string"
+          },
+          "provisioning_info": {
+            "$ref": "#/components/schemas/ProvisioningInfo"
+          },
+          "securable_type": {
+            "type": "string"
+          },
+          "share_name": {
+            "type": "string"
+          },
+          "storage_location": {
+            "type": "string"
+          },
+          "storage_root": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Schema_745ddacd": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Catalogs API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/unity-catalog/catalogs": {
+      "get": {
+        "description": "Gets an array of catalogs in the metastore.\nIf the caller is the metastore admin, all catalogs will be retrieved.\nOtherwise, only catalogs owned by the caller (or for which the caller has the **USE_CATALOG** privilege) will be retrieved.\nThere is no guarantee of a specific ordering of the elements in the array.\n\nNOTE: we recommend using max_results=0 to use the paginated version of this API. Unpaginated calls will be deprecated soon.\n\nPAGINATION BEHAVIOR: When using pagination (max_results >= 0), a page may contain zero results while still providing a next_page_token.\nClients must continue reading pages until next_page_token is absent, which is the only indication that the end of results has been reached.",
+        "operationId": "catalogs.listCatalogs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_browse",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeBrowse"
+          },
+          {
+            "in": "query",
+            "name": "include_unbound",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeUnbound"
+          },
+          {
+            "in": "query",
+            "name": "max_results",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "maxResults"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCatalogsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "catalogs"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a new catalog instance in the parent metastore if the caller is a metastore admin or has the **CREATE_CATALOG** privilege.",
+        "operationId": "catalogs.createCatalog",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "browse_only": {
+                    "type": "boolean"
+                  },
+                  "catalog_type": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "connection_name": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "custom_max_retention_hours": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "effective_predictive_optimization_flag": {
+                    "$ref": "#/components/schemas/EffectivePredictiveOptimizationFlag"
+                  },
+                  "enable_predictive_optimization": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "isolation_mode": {
+                    "type": "string"
+                  },
+                  "managed_encryption_settings": {
+                    "$ref": "#/components/schemas/EncryptionSettings"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "provider_name": {
+                    "type": "string"
+                  },
+                  "provisioning_info": {
+                    "$ref": "#/components/schemas/ProvisioningInfo"
+                  },
+                  "securable_type": {
+                    "type": "string"
+                  },
+                  "share_name": {
+                    "type": "string"
+                  },
+                  "storage_location": {
+                    "type": "string"
+                  },
+                  "storage_root": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "catalogs"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/catalogs/{nameArg}": {
+      "delete": {
+        "description": "Deletes the catalog that matches the supplied name. The caller must be a metastore admin or the owner of the catalog.",
+        "operationId": "catalogs.deleteCatalog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nameArg",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "nameArg"
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "force"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCatalogResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "catalogs"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets the specified catalog in a metastore.\nThe caller must be a metastore admin, the owner of the catalog, or a user that has the **USE_CATALOG** privilege set for their account.",
+        "operationId": "catalogs.getCatalog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nameArg",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "nameArg"
+          },
+          {
+            "in": "query",
+            "name": "include_browse",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeBrowse"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "catalogs"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates the catalog that matches the supplied name.\nThe caller must be either the owner of the catalog, or a metastore admin (when changing the owner field of the catalog).",
+        "operationId": "catalogs.updateCatalog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nameArg",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "nameArg"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "browse_only": {
+                    "type": "boolean"
+                  },
+                  "catalog_type": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "connection_name": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "custom_max_retention_hours": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "effective_predictive_optimization_flag": {
+                    "$ref": "#/components/schemas/EffectivePredictiveOptimizationFlag"
+                  },
+                  "enable_predictive_optimization": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "isolation_mode": {
+                    "type": "string"
+                  },
+                  "managed_encryption_settings": {
+                    "$ref": "#/components/schemas/EncryptionSettings"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "new_name": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "properties": {
+                    "$ref": "#/components/schemas/Schema_745ddacd"
+                  },
+                  "provider_name": {
+                    "type": "string"
+                  },
+                  "provisioning_info": {
+                    "$ref": "#/components/schemas/ProvisioningInfo"
+                  },
+                  "securable_type": {
+                    "type": "string"
+                  },
+                  "share_name": {
+                    "type": "string"
+                  },
+                  "storage_location": {
+                    "type": "string"
+                  },
+                  "storage_root": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "catalogs"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "catalogs"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "catalogs.createCatalog",
+      "path": "/api/2.1/unity-catalog/catalogs",
+      "source": "@databricks/sdk-uc-catalogs/v1/client.js:35"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "catalogs.deleteCatalog",
+      "path": "/api/2.1/unity-catalog/catalogs/{nameArg}",
+      "source": "@databricks/sdk-uc-catalogs/v1/client.js:55"
+    },
+    {
+      "method": "GET",
+      "operationId": "catalogs.getCatalog",
+      "path": "/api/2.1/unity-catalog/catalogs/{nameArg}",
+      "source": "@databricks/sdk-uc-catalogs/v1/client.js:81"
+    },
+    {
+      "method": "GET",
+      "operationId": "catalogs.listCatalogs",
+      "path": "/api/2.1/unity-catalog/catalogs",
+      "source": "@databricks/sdk-uc-catalogs/v1/client.js:114"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "catalogs.updateCatalog",
+      "path": "/api/2.1/unity-catalog/catalogs/{nameArg}",
+      "source": "@databricks/sdk-uc-catalogs/v1/client.js:152"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-uc-catalogs",
+  "x-databricks-sdk-version": "0.49.0"
+}

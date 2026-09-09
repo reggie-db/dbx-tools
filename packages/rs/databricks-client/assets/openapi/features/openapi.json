@@ -1,0 +1,2453 @@
+{
+  "components": {
+    "schemas": {
+      "AggregationFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "approx_count_distinct": {
+            "$ref": "#/components/schemas/ApproxCountDistinctFunction"
+          },
+          "approx_percentile": {
+            "$ref": "#/components/schemas/ApproxPercentileFunction"
+          },
+          "avg": {
+            "$ref": "#/components/schemas/AvgFunction"
+          },
+          "count_function": {
+            "$ref": "#/components/schemas/CountFunction"
+          },
+          "first": {
+            "$ref": "#/components/schemas/FirstFunction"
+          },
+          "first_distinct": {
+            "$ref": "#/components/schemas/FirstDistinctFunction"
+          },
+          "first_n": {
+            "$ref": "#/components/schemas/FirstNFunction"
+          },
+          "last": {
+            "$ref": "#/components/schemas/LastFunction"
+          },
+          "last_distinct": {
+            "$ref": "#/components/schemas/LastDistinctFunction"
+          },
+          "last_n": {
+            "$ref": "#/components/schemas/LastNFunction"
+          },
+          "max": {
+            "$ref": "#/components/schemas/MaxFunction"
+          },
+          "min": {
+            "$ref": "#/components/schemas/MinFunction"
+          },
+          "stddev_pop": {
+            "$ref": "#/components/schemas/StddevPopFunction"
+          },
+          "stddev_samp": {
+            "$ref": "#/components/schemas/StddevSampFunction"
+          },
+          "sum": {
+            "$ref": "#/components/schemas/SumFunction"
+          },
+          "time_window": {
+            "$ref": "#/components/schemas/TimeWindow"
+          },
+          "var_pop": {
+            "$ref": "#/components/schemas/VarPopFunction"
+          },
+          "var_samp": {
+            "$ref": "#/components/schemas/VarSampFunction"
+          }
+        },
+        "type": "object"
+      },
+      "ApproxCountDistinctFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "relative_sd": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ApproxPercentileFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "accuracy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "input": {
+            "type": "string"
+          },
+          "percentile": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "AuthConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "mtls_config": {
+            "$ref": "#/components/schemas/MtlsConfig"
+          },
+          "uc_service_credential_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AvgFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BackfillSource": {
+        "additionalProperties": false,
+        "properties": {
+          "delta_table_name": {
+            "type": "string"
+          },
+          "delta_table_source": {
+            "$ref": "#/components/schemas/DeltaTableSource"
+          }
+        },
+        "type": "object"
+      },
+      "BatchCreateMaterializedFeaturesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/CreateMaterializedFeatureRequest"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "BatchCreateMaterializedFeaturesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "materialized_features": {
+            "items": {
+              "$ref": "#/components/schemas/MaterializedFeature"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ColumnSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CountFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateMaterializedFeatureRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "materialized_feature": {
+            "$ref": "#/components/schemas/MaterializedFeature"
+          }
+        },
+        "type": "object"
+      },
+      "CronSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "cron_expression": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CustomUdf": {
+        "additionalProperties": false,
+        "properties": {
+          "function_path": {
+            "type": "string"
+          },
+          "input_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/InputBinding"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "DataSource": {
+        "additionalProperties": false,
+        "properties": {
+          "delta_table_source": {
+            "$ref": "#/components/schemas/DeltaTableSource"
+          },
+          "kafka_source": {
+            "$ref": "#/components/schemas/KafkaSource"
+          },
+          "lateness": {
+            "$ref": "#/components/schemas/SourceLateness"
+          },
+          "request_source": {
+            "$ref": "#/components/schemas/RequestSource"
+          },
+          "stream_source": {
+            "$ref": "#/components/schemas/StreamSource"
+          }
+        },
+        "type": "object"
+      },
+      "DeltaTableSource": {
+        "additionalProperties": false,
+        "properties": {
+          "dataframe_schema": {
+            "type": "string"
+          },
+          "filter_condition": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "transformation_sql": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DirectMtlsConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "bootstrap_servers": {
+            "type": "string"
+          },
+          "mtls_config": {
+            "$ref": "#/components/schemas/MtlsConfig"
+          }
+        },
+        "type": "object"
+      },
+      "DirectSchemas": {
+        "additionalProperties": false,
+        "properties": {
+          "key_schema": {
+            "$ref": "#/components/schemas/SchemaConfig"
+          },
+          "payload_schema": {
+            "$ref": "#/components/schemas/SchemaConfig"
+          }
+        },
+        "type": "object"
+      },
+      "EntityColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Feature": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/EntityColumn"
+            },
+            "type": "array"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "function": {
+            "$ref": "#/components/schemas/Function"
+          },
+          "lineage_context": {
+            "$ref": "#/components/schemas/LineageContext"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema_name": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "timeseries_column": {
+            "$ref": "#/components/schemas/TimeseriesColumn"
+          }
+        },
+        "type": "object"
+      },
+      "FieldDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "data_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FirstDistinctFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "FirstFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FirstNFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "FlatSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldDefinition"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Function": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregation_function": {
+            "$ref": "#/components/schemas/AggregationFunction"
+          },
+          "column_selection": {
+            "$ref": "#/components/schemas/ColumnSelection"
+          },
+          "custom_udf": {
+            "$ref": "#/components/schemas/CustomUdf"
+          }
+        },
+        "type": "object"
+      },
+      "IngestionConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "backfill_job_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "backfill_source": {
+            "$ref": "#/components/schemas/BackfillSource"
+          },
+          "deduplication_columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ingestion_destination": {
+            "$ref": "#/components/schemas/IngestionDestination"
+          },
+          "ingestion_job_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "ingestion_pipeline_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IngestionDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "delta_table_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "InputBinding": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "type": "string"
+          },
+          "parameter": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "JobContext": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "job_run_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "KafkaConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "auth_config": {
+            "$ref": "#/components/schemas/AuthConfig"
+          },
+          "backfill_source": {
+            "$ref": "#/components/schemas/BackfillSource"
+          },
+          "bootstrap_servers": {
+            "type": "string"
+          },
+          "extra_options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "ingestion_config": {
+            "$ref": "#/components/schemas/IngestionConfig"
+          },
+          "key_schema": {
+            "$ref": "#/components/schemas/SchemaConfig"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subscription_mode": {
+            "$ref": "#/components/schemas/SubscriptionMode"
+          },
+          "value_schema": {
+            "$ref": "#/components/schemas/SchemaConfig"
+          }
+        },
+        "type": "object"
+      },
+      "KafkaSource": {
+        "additionalProperties": false,
+        "properties": {
+          "filter_condition": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "KafkaStreamConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "extra_options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "subscription_mode": {
+            "$ref": "#/components/schemas/KafkaSubscriptionMode"
+          }
+        },
+        "type": "object"
+      },
+      "KafkaSubscriptionMode": {
+        "additionalProperties": false,
+        "properties": {
+          "assign": {
+            "type": "string"
+          },
+          "subscribe": {
+            "type": "string"
+          },
+          "subscribe_pattern": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "KinesisStreamConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "extra_options": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "stream_arns": {
+            "$ref": "#/components/schemas/StreamArnList"
+          },
+          "stream_names": {
+            "$ref": "#/components/schemas/StreamNameList"
+          }
+        },
+        "type": "object"
+      },
+      "LastDistinctFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "LastFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LastNFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "LineageContext": {
+        "additionalProperties": false,
+        "properties": {
+          "job_context": {
+            "$ref": "#/components/schemas/JobContext"
+          },
+          "notebook_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListFeaturesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/Feature"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListKafkaConfigsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "kafka_configs": {
+            "items": {
+              "$ref": "#/components/schemas/KafkaConfig"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListMaterializedFeaturesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "materialized_features": {
+            "items": {
+              "$ref": "#/components/schemas/MaterializedFeature"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListStreamsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "streams": {
+            "items": {
+              "$ref": "#/components/schemas/Stream"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "MaterializedFeature": {
+        "additionalProperties": false,
+        "properties": {
+          "cron_schedule_trigger": {
+            "$ref": "#/components/schemas/CronSchedule"
+          },
+          "feature_name": {
+            "type": "string"
+          },
+          "is_online": {
+            "type": "boolean"
+          },
+          "last_materialization_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "materialized_feature_id": {
+            "type": "string"
+          },
+          "offline_store_config": {
+            "$ref": "#/components/schemas/OfflineStoreConfig"
+          },
+          "online_store_config": {
+            "$ref": "#/components/schemas/OnlineStoreConfig"
+          },
+          "pipeline_schedule_state": {
+            "type": "string"
+          },
+          "streaming_mode": {
+            "$ref": "#/components/schemas/StreamingMode"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "table_trigger": {
+            "$ref": "#/components/schemas/TableTrigger"
+          }
+        },
+        "type": "object"
+      },
+      "MaxFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MinFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MtlsConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "disable_hostname_verification": {
+            "type": "boolean"
+          },
+          "key_password_ref": {
+            "$ref": "#/components/schemas/SecretScopeReference"
+          },
+          "keystore_location": {
+            "type": "string"
+          },
+          "keystore_password_ref": {
+            "$ref": "#/components/schemas/SecretScopeReference"
+          },
+          "truststore_location": {
+            "type": "string"
+          },
+          "truststore_password_ref": {
+            "$ref": "#/components/schemas/SecretScopeReference"
+          }
+        },
+        "type": "object"
+      },
+      "OfflineStoreConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_name": {
+            "type": "string"
+          },
+          "schema_name": {
+            "type": "string"
+          },
+          "table_name_prefix": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OnlineStoreConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_name": {
+            "type": "string"
+          },
+          "online_store_name": {
+            "type": "string"
+          },
+          "schema_name": {
+            "type": "string"
+          },
+          "table_name_prefix": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ProtoSchemaSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "message_name": {
+            "type": "string"
+          },
+          "schema_text": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RequestSource": {
+        "additionalProperties": false,
+        "properties": {
+          "flat_schema": {
+            "$ref": "#/components/schemas/FlatSchema"
+          }
+        },
+        "type": "object"
+      },
+      "RollingWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "delay": {
+            "format": "duration",
+            "type": "string"
+          },
+          "window_duration": {
+            "format": "duration",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SawtoothWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "delay": {
+            "format": "duration",
+            "type": "string"
+          },
+          "window_duration": {
+            "format": "duration",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SchemaConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "avro_schema": {
+            "type": "string"
+          },
+          "json_schema": {
+            "type": "string"
+          },
+          "proto_schema": {
+            "$ref": "#/components/schemas/ProtoSchemaSpec"
+          }
+        },
+        "type": "object"
+      },
+      "SchemaLocator": {
+        "additionalProperties": false,
+        "properties": {
+          "confluent_schema": {
+            "$ref": "#/components/schemas/SchemaLocator_ConfluentSchema"
+          },
+          "format": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SchemaLocator_ConfluentSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "subject": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SchemaRegistryConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "api_secret_ref": {
+            "$ref": "#/components/schemas/SecretScopeReference"
+          },
+          "key_schema_locator": {
+            "$ref": "#/components/schemas/SchemaLocator"
+          },
+          "payload_schema_locator": {
+            "$ref": "#/components/schemas/SchemaLocator"
+          },
+          "uc_connection": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SecretScopeReference": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SlidingWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "delay": {
+            "format": "duration",
+            "type": "string"
+          },
+          "offset": {
+            "format": "duration",
+            "type": "string"
+          },
+          "slide_duration": {
+            "format": "duration",
+            "type": "string"
+          },
+          "window_duration": {
+            "format": "duration",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SourceLateness": {
+        "additionalProperties": false,
+        "properties": {
+          "settling_delay": {
+            "format": "duration",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StddevPopFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StddevSampFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Stream": {
+        "additionalProperties": false,
+        "properties": {
+          "browse_only": {
+            "type": "boolean"
+          },
+          "connection_config": {
+            "$ref": "#/components/schemas/StreamConnectionConfig"
+          },
+          "create_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "ingestion_config": {
+            "$ref": "#/components/schemas/IngestionConfig"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema_config": {
+            "$ref": "#/components/schemas/StreamSchemaConfig"
+          },
+          "source_config": {
+            "$ref": "#/components/schemas/StreamSourceConfig"
+          },
+          "update_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StreamArnList": {
+        "additionalProperties": false,
+        "properties": {
+          "arns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "StreamConnectionConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "direct_mtls_config": {
+            "$ref": "#/components/schemas/DirectMtlsConfig"
+          },
+          "uc_connection_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StreamingMode": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness_target": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StreamNameList": {
+        "additionalProperties": false,
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "StreamSchemaConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "direct_schemas": {
+            "$ref": "#/components/schemas/DirectSchemas"
+          },
+          "schema_registry_config": {
+            "$ref": "#/components/schemas/SchemaRegistryConfig"
+          }
+        },
+        "type": "object"
+      },
+      "StreamSource": {
+        "additionalProperties": false,
+        "properties": {
+          "dataframe_schema": {
+            "type": "string"
+          },
+          "filter_condition": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "transformation_sql": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StreamSourceConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "kafka_stream_config": {
+            "$ref": "#/components/schemas/KafkaStreamConfig"
+          },
+          "kinesis_stream_config": {
+            "$ref": "#/components/schemas/KinesisStreamConfig"
+          }
+        },
+        "type": "object"
+      },
+      "SubscriptionMode": {
+        "additionalProperties": false,
+        "properties": {
+          "assign": {
+            "type": "string"
+          },
+          "subscribe": {
+            "type": "string"
+          },
+          "subscribe_pattern": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SumFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TableTrigger": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "TimeseriesColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TimeWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "rolling": {
+            "$ref": "#/components/schemas/RollingWindow"
+          },
+          "sawtooth": {
+            "$ref": "#/components/schemas/SawtoothWindow"
+          },
+          "sliding": {
+            "$ref": "#/components/schemas/SlidingWindow"
+          },
+          "start_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "tumbling": {
+            "$ref": "#/components/schemas/TumblingWindow"
+          }
+        },
+        "type": "object"
+      },
+      "TumblingWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "delay": {
+            "format": "duration",
+            "type": "string"
+          },
+          "offset": {
+            "format": "duration",
+            "type": "string"
+          },
+          "window_duration": {
+            "format": "duration",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VarPopFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VarSampFunction": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Features API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/feature-engineering/features": {
+      "get": {
+        "description": "List Features.",
+        "operationId": "features.listFeatures",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "catalog_name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "catalogName"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "schema_name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "schemaName"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListFeaturesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a Feature.",
+        "operationId": "features.createFeature",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Feature"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feature"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/features/{fullName}": {
+      "delete": {
+        "description": "Delete a Feature.",
+        "operationId": "features.deleteFeature",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullName"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get a Feature.",
+        "operationId": "features.getFeature",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullName"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feature"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a Feature.",
+        "operationId": "features.updateFeature",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "feature.fullName"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "catalog_name": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "entities": {
+                    "items": {
+                      "$ref": "#/components/schemas/EntityColumn"
+                    },
+                    "type": "array"
+                  },
+                  "function": {
+                    "$ref": "#/components/schemas/Function"
+                  },
+                  "lineage_context": {
+                    "$ref": "#/components/schemas/LineageContext"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "schema_name": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "$ref": "#/components/schemas/DataSource"
+                  },
+                  "timeseries_column": {
+                    "$ref": "#/components/schemas/TimeseriesColumn"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feature"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/features/kafka-configs": {
+      "get": {
+        "description": "List Kafka configs.\nDuring PrPr, Kafka configs can be read and used when creating features under the entire metastore.\nOnly the creator of the Kafka config can delete it.",
+        "operationId": "features.listKafkaConfigs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListKafkaConfigsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a Kafka config.\nDuring PrPr, Kafka configs can be read and used when creating features under the entire metastore.\nOnly the creator of the Kafka config can delete it.",
+        "operationId": "features.createKafkaConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KafkaConfig"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KafkaConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/features/kafka-configs/{name}": {
+      "delete": {
+        "description": "Delete a Kafka config.\nDuring PrPr, Kafka configs can be read and used when creating features under the entire metastore.\nOnly the creator of the Kafka config can delete it.",
+        "operationId": "features.deleteKafkaConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get a Kafka config.\nDuring PrPr, Kafka configs can be read and used when creating features under the entire metastore.\nOnly the creator of the Kafka config can delete it.",
+        "operationId": "features.getKafkaConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KafkaConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a Kafka config.\nDuring PrPr, Kafka configs can be read and used when creating features under the entire metastore.\nOnly the creator of the Kafka config can delete it.",
+        "operationId": "features.updateKafkaConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "kafkaConfig.name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "auth_config": {
+                    "$ref": "#/components/schemas/AuthConfig"
+                  },
+                  "backfill_source": {
+                    "$ref": "#/components/schemas/BackfillSource"
+                  },
+                  "bootstrap_servers": {
+                    "type": "string"
+                  },
+                  "extra_options": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "ingestion_config": {
+                    "$ref": "#/components/schemas/IngestionConfig"
+                  },
+                  "key_schema": {
+                    "$ref": "#/components/schemas/SchemaConfig"
+                  },
+                  "subscription_mode": {
+                    "$ref": "#/components/schemas/SubscriptionMode"
+                  },
+                  "value_schema": {
+                    "$ref": "#/components/schemas/SchemaConfig"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KafkaConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/materialized-features": {
+      "get": {
+        "description": "List materialized features.",
+        "operationId": "features.listMaterializedFeatures",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "feature_name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "featureName"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMaterializedFeaturesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a materialized feature.",
+        "operationId": "features.createMaterializedFeature",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterializedFeature"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializedFeature"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/materialized-features:batchCreate": {
+      "post": {
+        "description": "Batch create materialized features.",
+        "operationId": "features.batchCreateMaterializedFeatures",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "requests": {
+                    "items": {
+                      "$ref": "#/components/schemas/CreateMaterializedFeatureRequest"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateMaterializedFeaturesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/materialized-features/{materializedFeatureId}": {
+      "delete": {
+        "description": "Delete a materialized feature.",
+        "operationId": "features.deleteMaterializedFeature",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "materializedFeatureId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "materializedFeatureId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get a materialized feature.",
+        "operationId": "features.getMaterializedFeature",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "materializedFeatureId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "materializedFeatureId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializedFeature"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a materialized feature (pause/resume).",
+        "operationId": "features.updateMaterializedFeature",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "materializedFeatureId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "materializedFeature.materializedFeatureId"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cron_schedule_trigger": {
+                    "$ref": "#/components/schemas/CronSchedule"
+                  },
+                  "feature_name": {
+                    "type": "string"
+                  },
+                  "is_online": {
+                    "type": "boolean"
+                  },
+                  "last_materialization_time": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "offline_store_config": {
+                    "$ref": "#/components/schemas/OfflineStoreConfig"
+                  },
+                  "online_store_config": {
+                    "$ref": "#/components/schemas/OnlineStoreConfig"
+                  },
+                  "pipeline_schedule_state": {
+                    "type": "string"
+                  },
+                  "streaming_mode": {
+                    "$ref": "#/components/schemas/StreamingMode"
+                  },
+                  "table_name": {
+                    "type": "string"
+                  },
+                  "table_trigger": {
+                    "$ref": "#/components/schemas/TableTrigger"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterializedFeature"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/streams": {
+      "get": {
+        "description": "List Streams under a given catalog.schema parent.",
+        "operationId": "features.listStreams",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "parent",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "parent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListStreamsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Create a Stream, a governed UC entity representing an external streaming data source.",
+        "operationId": "features.createStream",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Stream"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/feature-engineering/streams/{name}": {
+      "delete": {
+        "description": "Delete a Stream by its full three-part name (catalog.schema.stream).",
+        "operationId": "features.deleteStream",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Get a Stream by its full three-part name (catalog.schema.stream).",
+        "operationId": "features.getStream",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Update a Stream. Only fields listed in `update_mask` are mutated.",
+        "operationId": "features.updateStream",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "stream.name"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "browse_only": {
+                    "type": "boolean"
+                  },
+                  "connection_config": {
+                    "$ref": "#/components/schemas/StreamConnectionConfig"
+                  },
+                  "create_time": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "ingestion_config": {
+                    "$ref": "#/components/schemas/IngestionConfig"
+                  },
+                  "schema_config": {
+                    "$ref": "#/components/schemas/StreamSchemaConfig"
+                  },
+                  "source_config": {
+                    "$ref": "#/components/schemas/StreamSourceConfig"
+                  },
+                  "update_time": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "features"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "features"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalMaterializedFeatureSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1139:27"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalRollingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1217:18"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalRollingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1218:9"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSawtoothWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1224:18"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSawtoothWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1225:9"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSlidingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1278:18"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSlidingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1279:17"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSlidingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1280:9"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSlidingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1281:10"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalSourceLatenessSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1288:63"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalStreamSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1298:14"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalStreamSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1300:14"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalTimeWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1405:13"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalTumblingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1415:18"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalTumblingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1416:9"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalTumblingWindowSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:1417:10"
+    },
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalFeatureSchema uses z.any()",
+      "source": "@databricks/sdk-features/v1/model.js:948:13"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "features.batchCreateMaterializedFeatures",
+      "path": "/api/2.0/feature-engineering/materialized-features:batchCreate",
+      "source": "@databricks/sdk-features/v1/client.js:35"
+    },
+    {
+      "method": "POST",
+      "operationId": "features.createFeature",
+      "path": "/api/2.0/feature-engineering/features",
+      "source": "@databricks/sdk-features/v1/client.js:55"
+    },
+    {
+      "method": "POST",
+      "operationId": "features.createKafkaConfig",
+      "path": "/api/2.0/feature-engineering/features/kafka-configs",
+      "source": "@databricks/sdk-features/v1/client.js:79"
+    },
+    {
+      "method": "POST",
+      "operationId": "features.createMaterializedFeature",
+      "path": "/api/2.0/feature-engineering/materialized-features",
+      "source": "@databricks/sdk-features/v1/client.js:99"
+    },
+    {
+      "method": "POST",
+      "operationId": "features.createStream",
+      "path": "/api/2.0/feature-engineering/streams",
+      "source": "@databricks/sdk-features/v1/client.js:119"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "features.deleteFeature",
+      "path": "/api/2.0/feature-engineering/features/{fullName}",
+      "source": "@databricks/sdk-features/v1/client.js:139"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "features.deleteKafkaConfig",
+      "path": "/api/2.0/feature-engineering/features/kafka-configs/{name}",
+      "source": "@databricks/sdk-features/v1/client.js:159"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "features.deleteMaterializedFeature",
+      "path": "/api/2.0/feature-engineering/materialized-features/{materializedFeatureId}",
+      "source": "@databricks/sdk-features/v1/client.js:175"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "features.deleteStream",
+      "path": "/api/2.0/feature-engineering/streams/{name}",
+      "source": "@databricks/sdk-features/v1/client.js:191"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.getFeature",
+      "path": "/api/2.0/feature-engineering/features/{fullName}",
+      "source": "@databricks/sdk-features/v1/client.js:207"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.getKafkaConfig",
+      "path": "/api/2.0/feature-engineering/features/kafka-configs/{name}",
+      "source": "@databricks/sdk-features/v1/client.js:230"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.getMaterializedFeature",
+      "path": "/api/2.0/feature-engineering/materialized-features/{materializedFeatureId}",
+      "source": "@databricks/sdk-features/v1/client.js:249"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.getStream",
+      "path": "/api/2.0/feature-engineering/streams/{name}",
+      "source": "@databricks/sdk-features/v1/client.js:268"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.listFeatures",
+      "path": "/api/2.0/feature-engineering/features",
+      "source": "@databricks/sdk-features/v1/client.js:287"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.listKafkaConfigs",
+      "path": "/api/2.0/feature-engineering/features/kafka-configs",
+      "source": "@databricks/sdk-features/v1/client.js:326"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.listMaterializedFeatures",
+      "path": "/api/2.0/feature-engineering/materialized-features",
+      "source": "@databricks/sdk-features/v1/client.js:359"
+    },
+    {
+      "method": "GET",
+      "operationId": "features.listStreams",
+      "path": "/api/2.0/feature-engineering/streams",
+      "source": "@databricks/sdk-features/v1/client.js:393"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "features.updateFeature",
+      "path": "/api/2.0/feature-engineering/features/{fullName}",
+      "source": "@databricks/sdk-features/v1/client.js:427"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "features.updateKafkaConfig",
+      "path": "/api/2.0/feature-engineering/features/kafka-configs/{name}",
+      "source": "@databricks/sdk-features/v1/client.js:455"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "features.updateMaterializedFeature",
+      "path": "/api/2.0/feature-engineering/materialized-features/{materializedFeatureId}",
+      "source": "@databricks/sdk-features/v1/client.js:479"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "features.updateStream",
+      "path": "/api/2.0/feature-engineering/streams/{name}",
+      "source": "@databricks/sdk-features/v1/client.js:503"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-features",
+  "x-databricks-sdk-version": "0.49.0"
+}

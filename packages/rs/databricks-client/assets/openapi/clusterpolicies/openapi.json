@@ -1,0 +1,806 @@
+{
+  "components": {
+    "schemas": {
+      "ClusterPolicyRevision": {
+        "additionalProperties": false,
+        "properties": {
+          "create_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "edit_user": {
+            "type": "string"
+          },
+          "is_current": {
+            "type": "boolean"
+          },
+          "revision_id": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/PolicyOwnAttributes"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "libraries": {
+            "items": {
+              "$ref": "#/components/schemas/Library"
+            },
+            "type": "array"
+          },
+          "max_clusters_per_user": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "policy_family_definition_overrides": {
+            "type": "string"
+          },
+          "policy_family_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePolicyResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeletePolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeletePolicyResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "EditPolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "libraries": {
+            "items": {
+              "$ref": "#/components/schemas/Library"
+            },
+            "type": "array"
+          },
+          "max_clusters_per_user": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "policy_family_definition_overrides": {
+            "type": "string"
+          },
+          "policy_family_id": {
+            "type": "string"
+          },
+          "policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EditPolicyResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "Library": {
+        "additionalProperties": false,
+        "properties": {
+          "cran": {
+            "$ref": "#/components/schemas/RCranLibrary"
+          },
+          "egg": {
+            "type": "string"
+          },
+          "jar": {
+            "type": "string"
+          },
+          "maven": {
+            "$ref": "#/components/schemas/MavenLibrary"
+          },
+          "pypi": {
+            "$ref": "#/components/schemas/PythonPyPiLibrary"
+          },
+          "requirements": {
+            "type": "string"
+          },
+          "whl": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListClusterPolicyRevisionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "cluster_policy_revisions": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterPolicyRevision"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListPoliciesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/Policy"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "MavenLibrary": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "type": "string"
+          },
+          "exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "repo": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Policy": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "creator_user_name": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "libraries": {
+            "items": {
+              "$ref": "#/components/schemas/Library"
+            },
+            "type": "array"
+          },
+          "max_clusters_per_user": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "policy_family_definition_overrides": {
+            "type": "string"
+          },
+          "policy_family_id": {
+            "type": "string"
+          },
+          "policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PolicyOwnAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "libraries": {
+            "items": {
+              "$ref": "#/components/schemas/Library"
+            },
+            "type": "array"
+          },
+          "max_clusters_per_user": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "policy_family_definition_overrides": {
+            "type": "string"
+          },
+          "policy_family_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PythonPyPiLibrary": {
+        "additionalProperties": false,
+        "properties": {
+          "package": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RCranLibrary": {
+        "additionalProperties": false,
+        "properties": {
+          "package": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RollbackClusterPolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Cluster Policies API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/cluster-policies/{policy_id}./revisions": {
+      "get": {
+        "description": "Lists a cluster policy's revisions, ordered from most to least recent.",
+        "operationId": "clusterPolicies.listClusterPolicyRevisions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "cluster-policies/{policy_id}.",
+            "x-databricks-sdk-name": "parent"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListClusterPolicyRevisionsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/cluster-policies/{policy_id}/revisions/{revision_id}.": {
+      "get": {
+        "description": "Get details of a cluster policy revision.",
+        "operationId": "clusterPolicies.getClusterPolicyRevision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "cluster-policies/{policy_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "cluster-policies/{policy_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterPolicyRevision"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/cluster-policies/{policy_id}/revisions/{revision_id}./rollback": {
+      "post": {
+        "description": "Rolls back a cluster policy to a previous revision.",
+        "operationId": "clusterPolicies.rollbackClusterPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "cluster-policies/{policy_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "cluster-policies/{policy_id}/revisions/{revision_id}.",
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterPolicyRevision"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/create": {
+      "post": {
+        "description": "Creates a new policy with prescribed settings.",
+        "operationId": "clusterPolicies.createPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "definition": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "libraries": {
+                    "items": {
+                      "$ref": "#/components/schemas/Library"
+                    },
+                    "type": "array"
+                  },
+                  "max_clusters_per_user": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "policy_family_definition_overrides": {
+                    "type": "string"
+                  },
+                  "policy_family_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePolicyResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/delete": {
+      "post": {
+        "description": "Delete a policy for a cluster. Clusters governed by this policy can still run, but cannot be edited.",
+        "operationId": "clusterPolicies.deletePolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "policy_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletePolicyResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/edit": {
+      "post": {
+        "description": "Update an existing policy for cluster. This operation may make some clusters governed by the previous policy invalid.",
+        "operationId": "clusterPolicies.editPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "definition": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "libraries": {
+                    "items": {
+                      "$ref": "#/components/schemas/Library"
+                    },
+                    "type": "array"
+                  },
+                  "max_clusters_per_user": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "policy_family_definition_overrides": {
+                    "type": "string"
+                  },
+                  "policy_family_id": {
+                    "type": "string"
+                  },
+                  "policy_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditPolicyResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/get": {
+      "get": {
+        "description": "Get a cluster policy entity. Creation and editing is available to admins only.",
+        "operationId": "clusterPolicies.getPolicy",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "policy_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policies/clusters/list": {
+      "get": {
+        "description": "Returns a list of policies accessible by the requesting user.",
+        "operationId": "clusterPolicies.listPolicies",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sort_column",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortColumn"
+          },
+          {
+            "in": "query",
+            "name": "sort_order",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "sortOrder"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPoliciesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "clusterPolicies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "clusterPolicies"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "clusterPolicies.createPolicy",
+      "path": "/api/2.0/policies/clusters/create",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:107"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusterPolicies.deletePolicy",
+      "path": "/api/2.0/policies/clusters/delete",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:127"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusterPolicies.editPolicy",
+      "path": "/api/2.0/policies/clusters/edit",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:147"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusterPolicies.getClusterPolicyRevision",
+      "path": "/api/2.0/cluster-policies/{policy_id}/revisions/{revision_id}.",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:35"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusterPolicies.getPolicy",
+      "path": "/api/2.0/policies/clusters/get",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:167"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusterPolicies.listClusterPolicyRevisions",
+      "path": "/api/2.0/cluster-policies/{policy_id}./revisions",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:54"
+    },
+    {
+      "method": "GET",
+      "operationId": "clusterPolicies.listPolicies",
+      "path": "/api/2.0/policies/clusters/list",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:190"
+    },
+    {
+      "method": "POST",
+      "operationId": "clusterPolicies.rollbackClusterPolicy",
+      "path": "/api/2.0/cluster-policies/{policy_id}/revisions/{revision_id}./rollback",
+      "source": "@databricks/sdk-clusterpolicies/v2/client.js:87"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-clusterpolicies",
+  "x-databricks-sdk-version": "0.49.0"
+}

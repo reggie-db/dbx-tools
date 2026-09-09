@@ -1,0 +1,202 @@
+{
+  "components": {
+    "schemas": {
+      "CreateBillingUsageDashboardRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "dashboard_type": {
+            "type": "string"
+          },
+          "major_version": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CreateBillingUsageDashboardResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dashboard_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetBillingUsageDashboardResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "dashboard_id": {
+            "type": "string"
+          },
+          "dashboard_url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Usage Dashboards API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/dashboard": {
+      "get": {
+        "description": "Get a usage dashboard specified by workspaceId, accountId, and dashboard type.",
+        "operationId": "usageDashboards.getBillingUsageDashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "dashboard_type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "dashboardType"
+          },
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBillingUsageDashboardResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "usageDashboards"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create a usage dashboard specified by workspaceId, accountId, and dashboard type.",
+        "operationId": "usageDashboards.createBillingUsageDashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "dashboard_type": {
+                    "type": "string"
+                  },
+                  "major_version": {
+                    "type": "string"
+                  },
+                  "workspace_id": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBillingUsageDashboardResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "usageDashboards"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "usageDashboards"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "usageDashboards.createBillingUsageDashboard",
+      "path": "/api/2.0/accounts/{accountId}/dashboard",
+      "source": "@databricks/sdk-usagedashboards/v1/client.js:35"
+    },
+    {
+      "method": "GET",
+      "operationId": "usageDashboards.getBillingUsageDashboard",
+      "path": "/api/2.0/accounts/{accountId}/dashboard",
+      "source": "@databricks/sdk-usagedashboards/v1/client.js:54"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-usagedashboards",
+  "x-databricks-sdk-version": "0.49.0"
+}

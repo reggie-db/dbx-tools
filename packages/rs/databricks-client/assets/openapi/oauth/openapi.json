@@ -1,0 +1,1021 @@
+{
+  "components": {
+    "schemas": {
+      "CreateCustomOAuthAppIntegrationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "confidential": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "redirect_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token_access_policy": {
+            "$ref": "#/components/schemas/TokenAccessPolicy"
+          },
+          "user_authorized_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePublishedOAuthAppIntegrationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "app_id": {
+            "type": "string"
+          },
+          "token_access_policy": {
+            "$ref": "#/components/schemas/TokenAccessPolicy"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePublishedOAuthAppIntegrationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "integration_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CustomOAuthAppIntegration": {
+        "additionalProperties": false,
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "confidential": {
+            "type": "boolean"
+          },
+          "create_time": {
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "creator_username": {
+            "type": "string"
+          },
+          "integration_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "redirect_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token_access_policy": {
+            "$ref": "#/components/schemas/TokenAccessPolicy"
+          },
+          "user_authorized_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CustomOAuthAppIntegrationSecret": {
+        "additionalProperties": false,
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "integration_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteCustomOAuthAppIntegrationResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeletePublishedOAuthAppIntegrationResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "ListCustomOAuthAppIntegrationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/CustomOAuthAppIntegration"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListPublishedOAuthAppIntegrationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/PublishedOAuthAppIntegration"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListPublishedOAuthAppsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/PublishedOAuthApp"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PublishedOAuthApp": {
+        "additionalProperties": false,
+        "properties": {
+          "app_id": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "is_confidential_client": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "redirect_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PublishedOAuthAppIntegration": {
+        "additionalProperties": false,
+        "properties": {
+          "app_id": {
+            "type": "string"
+          },
+          "create_time": {
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "integration_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "token_access_policy": {
+            "$ref": "#/components/schemas/TokenAccessPolicy"
+          }
+        },
+        "type": "object"
+      },
+      "TokenAccessPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "absolute_session_lifetime_in_minutes": {
+            "type": "number"
+          },
+          "access_token_ttl_in_minutes": {
+            "type": "number"
+          },
+          "enable_single_use_refresh_tokens": {
+            "type": "boolean"
+          },
+          "refresh_token_ttl_in_minutes": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCustomOAuthAppIntegrationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "integration_id": {
+            "type": "string"
+          },
+          "redirect_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token_access_policy": {
+            "$ref": "#/components/schemas/TokenAccessPolicy"
+          },
+          "user_authorized_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCustomOAuthAppIntegrationResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "UpdatePublishedOAuthAppIntegrationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "integration_id": {
+            "type": "string"
+          },
+          "token_access_policy": {
+            "$ref": "#/components/schemas/TokenAccessPolicy"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePublishedOAuthAppIntegrationResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "O Auth API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/oauth2/custom-app-integrations": {
+      "get": {
+        "description": "Get the list of custom OAuth app integrations for the specified <Account>",
+        "operationId": "oAuth.listCustomOAuthAppIntegrations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "include_creator_username",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeCreatorUsername"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCustomOAuthAppIntegrationsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create Custom OAuth App Integration.\n\nYou can retrieve the custom OAuth app integration via [CustomAppIntegration/get](https://docs.databricks.com/api/account/customappintegration/get).",
+        "operationId": "oAuth.createCustomOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidential": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "redirect_urls": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "scopes": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "token_access_policy": {
+                    "$ref": "#/components/schemas/TokenAccessPolicy"
+                  },
+                  "user_authorized_scopes": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomOAuthAppIntegrationSecret"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/oauth2/custom-app-integrations/{integrationId}": {
+      "delete": {
+        "description": "Delete an existing Custom OAuth App Integration.\nYou can retrieve the custom OAuth app integration via [CustomAppIntegration/get](https://docs.databricks.com/api/account/customappintegration/get).",
+        "operationId": "oAuth.deleteCustomOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "integrationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "integrationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCustomOAuthAppIntegrationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets the Custom OAuth App Integration for the given integration id.",
+        "operationId": "oAuth.getCustomOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "integrationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "integrationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomOAuthAppIntegration"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Updates an existing custom OAuth App Integration.\nYou can retrieve the custom OAuth app integration via [CustomAppIntegration/get](https://docs.databricks.com/api/account/customappintegration/get).",
+        "operationId": "oAuth.updateCustomOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "integrationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "integrationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "redirect_urls": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "scopes": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "token_access_policy": {
+                    "$ref": "#/components/schemas/TokenAccessPolicy"
+                  },
+                  "user_authorized_scopes": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCustomOAuthAppIntegrationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/oauth2/published-app-integrations": {
+      "get": {
+        "description": "Get the list of published OAuth app integrations for the specified <Account>",
+        "operationId": "oAuth.listPublishedOAuthAppIntegrations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPublishedOAuthAppIntegrationsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create Published OAuth App Integration.\n\nYou can retrieve the published OAuth app integration via [PublishedAppIntegration/get](https://docs.databricks.com/api/account/publishedappintegration/get).",
+        "operationId": "oAuth.createPublishedOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "app_id": {
+                    "type": "string"
+                  },
+                  "token_access_policy": {
+                    "$ref": "#/components/schemas/TokenAccessPolicy"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePublishedOAuthAppIntegrationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/oauth2/published-app-integrations/{integrationId}": {
+      "delete": {
+        "description": "Delete an existing Published OAuth App Integration.\nYou can retrieve the published OAuth app integration via [PublishedAppIntegration/get](https://docs.databricks.com/api/account/publishedappintegration/get).",
+        "operationId": "oAuth.deletePublishedOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "integrationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "integrationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletePublishedOAuthAppIntegrationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets the Published OAuth App Integration for the given integration id.",
+        "operationId": "oAuth.getPublishedOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "integrationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "integrationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedOAuthAppIntegration"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Updates an existing published OAuth App Integration.\nYou can retrieve the published OAuth app integration via [PublishedAppIntegration/get](https://docs.databricks.com/api/account/publishedappintegration/get).",
+        "operationId": "oAuth.updatePublishedOAuthAppIntegration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "integrationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "integrationId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "token_access_policy": {
+                    "$ref": "#/components/schemas/TokenAccessPolicy"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePublishedOAuthAppIntegrationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/oauth2/published-apps": {
+      "get": {
+        "description": "Get all the available published OAuth apps in <Databricks>.",
+        "operationId": "oAuth.listPublishedOAuthApps",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPublishedOAuthAppsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "oAuth"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "oAuth"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "oAuth.createCustomOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/custom-app-integrations",
+      "source": "@databricks/sdk-oauth/v1/client.js:39"
+    },
+    {
+      "method": "POST",
+      "operationId": "oAuth.createPublishedOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/published-app-integrations",
+      "source": "@databricks/sdk-oauth/v1/client.js:62"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "oAuth.deleteCustomOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/custom-app-integrations/{integrationId}",
+      "source": "@databricks/sdk-oauth/v1/client.js:84"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "oAuth.deletePublishedOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/published-app-integrations/{integrationId}",
+      "source": "@databricks/sdk-oauth/v1/client.js:105"
+    },
+    {
+      "method": "GET",
+      "operationId": "oAuth.getCustomOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/custom-app-integrations/{integrationId}",
+      "source": "@databricks/sdk-oauth/v1/client.js:123"
+    },
+    {
+      "method": "GET",
+      "operationId": "oAuth.getPublishedOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/published-app-integrations/{integrationId}",
+      "source": "@databricks/sdk-oauth/v1/client.js:141"
+    },
+    {
+      "method": "GET",
+      "operationId": "oAuth.listCustomOAuthAppIntegrations",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/custom-app-integrations",
+      "source": "@databricks/sdk-oauth/v1/client.js:159"
+    },
+    {
+      "method": "GET",
+      "operationId": "oAuth.listPublishedOAuthAppIntegrations",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/published-app-integrations",
+      "source": "@databricks/sdk-oauth/v1/client.js:192"
+    },
+    {
+      "method": "GET",
+      "operationId": "oAuth.listPublishedOAuthApps",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/published-apps",
+      "source": "@databricks/sdk-oauth/v1/client.js:224"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "oAuth.updateCustomOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/custom-app-integrations/{integrationId}",
+      "source": "@databricks/sdk-oauth/v1/client.js:259"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "oAuth.updatePublishedOAuthAppIntegration",
+      "path": "/api/2.0/accounts/{accountId}/oauth2/published-app-integrations/{integrationId}",
+      "source": "@databricks/sdk-oauth/v1/client.js:281"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-oauth",
+  "x-databricks-sdk-version": "0.49.0"
+}

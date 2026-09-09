@@ -2,7 +2,6 @@ use std::{collections::HashMap, env};
 
 use crate::{Error, Result};
 
-use super::super::OBO_TOKEN_HEADER;
 use super::{config_file::RawProfile, AuthKind, AUTH_TYPE_APP_OBO, AUTH_TYPE_APP_SP};
 
 pub(super) const AUTH_TYPE_DATABRICKS_CLI: &str = "databricks-cli";
@@ -56,7 +55,7 @@ pub(super) fn resolve_auth_kind(
         Some(AUTH_TYPE_APP_OBO) | Some("app-obo") => {
             if access_token.is_none() {
                 return Err(Error::Config(
-                    "app_obo requires x-forwarded-access-token".into(),
+                    "app_obo requires the configured access token header".into(),
                 ));
             }
             Ok(AuthKind::AppOnBehalfOf)
@@ -83,12 +82,20 @@ pub(super) fn resolve_auth_kind(
 
 pub(in crate::auth) fn request_obo_token(
     headers: Option<&HashMap<String, String>>,
+    access_token_header: &str,
 ) -> Option<String> {
-    headers?
+    let value = headers?
         .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case(OBO_TOKEN_HEADER))
-        .map(|(_, value)| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
+        .find(|(name, _)| name.eq_ignore_ascii_case(access_token_header))
+        .map(|(_, value)| value.trim())
+        .filter(|value| !value.is_empty())?;
+    if access_token_header.eq_ignore_ascii_case("authorization") {
+        let (scheme, token) = value.split_once(char::is_whitespace)?;
+        return scheme
+            .eq_ignore_ascii_case("bearer")
+            .then(|| token.trim().to_owned());
+    }
+    Some(value.to_owned())
 }
 
 pub(in crate::auth) fn app_service_principal_available() -> bool {
@@ -127,6 +134,7 @@ pub(in crate::auth) fn resolve_app_auth_type(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::DEFAULT_ACCESS_TOKEN_HEADER;
 
     #[test]
     fn only_databricks_cli_is_u2m_compatible() {
@@ -192,20 +200,36 @@ mod tests {
     }
 
     #[test]
-    fn request_token_header_is_case_insensitive_and_blank_safe() {
+    fn request_token_header_uses_bearer_authorization_by_default() {
         assert_eq!(
-            request_obo_token(Some(&HashMap::from([(
-                "X-Forwarded-Access-Token".to_owned(),
-                " request-token ".to_owned(),
-            )]))),
+            request_obo_token(
+                Some(&HashMap::from([(
+                    "Authorization".to_owned(),
+                    " Bearer request-token ".to_owned(),
+                )])),
+                DEFAULT_ACCESS_TOKEN_HEADER
+            ),
             Some("request-token".to_owned())
         );
         assert_eq!(
-            request_obo_token(Some(&HashMap::from([(
-                OBO_TOKEN_HEADER.to_owned(),
-                " ".to_owned(),
-            )]))),
+            request_obo_token(
+                Some(&HashMap::from([(
+                    "authorization".to_owned(),
+                    "Basic credentials".to_owned(),
+                )])),
+                DEFAULT_ACCESS_TOKEN_HEADER
+            ),
             None
+        );
+        assert_eq!(
+            request_obo_token(
+                Some(&HashMap::from([(
+                    "X-Forwarded-Access-Token".to_owned(),
+                    " request-token ".to_owned(),
+                )])),
+                "x-forwarded-access-token",
+            ),
+            Some("request-token".to_owned())
         );
     }
 }

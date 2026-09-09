@@ -1,0 +1,174 @@
+{
+  "components": {
+    "schemas": {
+      "ListPolicyFamiliesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "policy_families": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyFamily"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PolicyFamily": {
+        "additionalProperties": false,
+        "properties": {
+          "definition": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "policy_family_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Policy Families API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/policy-families": {
+      "get": {
+        "description": "Returns the list of policy definition types available to use at their latest version. This API is paginated.",
+        "operationId": "policyFamilies.listPolicyFamilies",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "max_results",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "maxResults"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPolicyFamiliesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "policyFamilies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/policy-families/{policyFamilyId}": {
+      "get": {
+        "description": "Retrieve the information for an policy family based on its identifier and version",
+        "operationId": "policyFamilies.getPolicyFamily",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "policyFamilyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyFamilyId"
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyFamily"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "policyFamilies"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "policyFamilies"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "GET",
+      "operationId": "policyFamilies.getPolicyFamily",
+      "path": "/api/2.0/policy-families/{policyFamilyId}",
+      "source": "@databricks/sdk-policyfamilies/v2/client.js:35"
+    },
+    {
+      "method": "GET",
+      "operationId": "policyFamilies.listPolicyFamilies",
+      "path": "/api/2.0/policy-families",
+      "source": "@databricks/sdk-policyfamilies/v2/client.js:58"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-policyfamilies",
+  "x-databricks-sdk-version": "0.49.0"
+}

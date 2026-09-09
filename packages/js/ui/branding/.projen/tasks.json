@@ -86,7 +86,7 @@
       "description": "Prepare the project for compilation",
       "steps": [
         {
-          "exec": "node ../../../branding/generate-package-assets.mjs"
+          "exec": "bun ../../../branding/generate-package-assets.mjs"
         }
       ]
     },

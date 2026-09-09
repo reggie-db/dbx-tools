@@ -1,0 +1,867 @@
+{
+  "components": {
+    "schemas": {
+      "AibiDashboardEmbeddingAccessPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "access_policy_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AibiDashboardEmbeddingApprovedDomains": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "AllowedAppsUserApiScopesMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "BooleanMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterAutoRestartMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "can_toggle": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "enablement_details": {
+            "$ref": "#/components/schemas/ClusterAutoRestartMessage_EnablementDetails"
+          },
+          "maintenance_window": {
+            "$ref": "#/components/schemas/ClusterAutoRestartMessage_MaintenanceWindow"
+          },
+          "restart_even_if_no_updates_available": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterAutoRestartMessage_EnablementDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "forced_for_compliance_mode": {
+            "type": "boolean"
+          },
+          "unavailable_for_disabled_entitlement": {
+            "type": "boolean"
+          },
+          "unavailable_for_non_enterprise_tier": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterAutoRestartMessage_MaintenanceWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "week_day_based_schedule": {
+            "$ref": "#/components/schemas/ClusterAutoRestartMessage_MaintenanceWindow_WeekDayBasedSchedule"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterAutoRestartMessage_MaintenanceWindow_WeekDayBasedSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "day_of_week": {
+            "type": "string"
+          },
+          "frequency": {
+            "type": "string"
+          },
+          "window_start_time": {
+            "$ref": "#/components/schemas/ClusterAutoRestartMessage_MaintenanceWindow_WindowStartTime"
+          }
+        },
+        "type": "object"
+      },
+      "ClusterAutoRestartMessage_MaintenanceWindow_WindowStartTime": {
+        "additionalProperties": false,
+        "properties": {
+          "hours": {
+            "type": "number"
+          },
+          "minutes": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "CollaborationPlatformConnectivityMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "connectivity": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IntegerMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "ListAccountSettingsMetadataResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "settings_metadata": {
+            "items": {
+              "$ref": "#/components/schemas/SettingsMetadata"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListAccountUserPreferencesMetadataResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "settings_metadata": {
+            "items": {
+              "$ref": "#/components/schemas/SettingsMetadata"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListWorkspaceSettingsMetadataResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "settings_metadata": {
+            "items": {
+              "$ref": "#/components/schemas/SettingsMetadata"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "OperationalEmailCustomRecipientMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PersonalComputeMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RestrictWorkspaceAdminsMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "disable_gov_tag_creation": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Setting": {
+        "additionalProperties": false,
+        "properties": {
+          "aibi_dashboard_embedding_access_policy": {
+            "$ref": "#/components/schemas/AibiDashboardEmbeddingAccessPolicy"
+          },
+          "aibi_dashboard_embedding_approved_domains": {
+            "$ref": "#/components/schemas/AibiDashboardEmbeddingApprovedDomains"
+          },
+          "allowed_apps_user_api_scopes": {
+            "$ref": "#/components/schemas/AllowedAppsUserApiScopesMessage"
+          },
+          "automatic_cluster_update_workspace": {
+            "$ref": "#/components/schemas/ClusterAutoRestartMessage"
+          },
+          "boolean_val": {
+            "$ref": "#/components/schemas/BooleanMessage"
+          },
+          "collaboration_platform_connectivity": {
+            "$ref": "#/components/schemas/CollaborationPlatformConnectivityMessage"
+          },
+          "effective_aibi_dashboard_embedding_access_policy": {
+            "$ref": "#/components/schemas/AibiDashboardEmbeddingAccessPolicy"
+          },
+          "effective_aibi_dashboard_embedding_approved_domains": {
+            "$ref": "#/components/schemas/AibiDashboardEmbeddingApprovedDomains"
+          },
+          "effective_allowed_apps_user_api_scopes": {
+            "$ref": "#/components/schemas/AllowedAppsUserApiScopesMessage"
+          },
+          "effective_automatic_cluster_update_workspace": {
+            "$ref": "#/components/schemas/ClusterAutoRestartMessage"
+          },
+          "effective_boolean_val": {
+            "$ref": "#/components/schemas/BooleanMessage"
+          },
+          "effective_collaboration_platform_connectivity": {
+            "$ref": "#/components/schemas/CollaborationPlatformConnectivityMessage"
+          },
+          "effective_integer_val": {
+            "$ref": "#/components/schemas/IntegerMessage"
+          },
+          "effective_operational_email_custom_recipient": {
+            "$ref": "#/components/schemas/OperationalEmailCustomRecipientMessage"
+          },
+          "effective_personal_compute": {
+            "$ref": "#/components/schemas/PersonalComputeMessage"
+          },
+          "effective_restrict_workspace_admins": {
+            "$ref": "#/components/schemas/RestrictWorkspaceAdminsMessage"
+          },
+          "effective_string_val": {
+            "$ref": "#/components/schemas/StringMessage"
+          },
+          "integer_val": {
+            "$ref": "#/components/schemas/IntegerMessage"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operational_email_custom_recipient": {
+            "$ref": "#/components/schemas/OperationalEmailCustomRecipientMessage"
+          },
+          "personal_compute": {
+            "$ref": "#/components/schemas/PersonalComputeMessage"
+          },
+          "restrict_workspace_admins": {
+            "$ref": "#/components/schemas/RestrictWorkspaceAdminsMessage"
+          },
+          "string_val": {
+            "$ref": "#/components/schemas/StringMessage"
+          }
+        },
+        "type": "object"
+      },
+      "SettingsMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "docs_link": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "preview_phase": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StringMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UserPreference": {
+        "additionalProperties": false,
+        "properties": {
+          "boolean_val": {
+            "$ref": "#/components/schemas/BooleanMessage"
+          },
+          "effective_boolean_val": {
+            "$ref": "#/components/schemas/BooleanMessage"
+          },
+          "effective_string_val": {
+            "$ref": "#/components/schemas/StringMessage"
+          },
+          "name": {
+            "type": "string"
+          },
+          "string_val": {
+            "$ref": "#/components/schemas/StringMessage"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Settings API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/accounts/{accountId}/settings-metadata": {
+      "get": {
+        "description": "List valid setting keys and metadata. These settings are available to be referenced via\nGET :method:settingsv2/getpublicaccountsetting and\nPATCH :method:settingsv2/patchpublicaccountsetting APIs",
+        "operationId": "settings.listAccountSettingsMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAccountSettingsMetadataResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.1/accounts/{accountId}/settings/{name}": {
+      "get": {
+        "description": "Get a setting value at account level. See :method:settingsv2/listaccountsettingsmetadata for list of setting available via public APIs at account level.",
+        "operationId": "settings.getPublicAccountSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setting"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Patch a setting value at account level. See :method:settingsv2/listaccountsettingsmetadata for list of setting available via public APIs at account level.\nTo determine the correct field to include in a patch request, refer to the type field of the setting returned in the :method:settingsv2/listaccountsettingsmetadata response.\n\nNote: Page refresh is required for changes to take effect in UI.",
+        "operationId": "settings.patchPublicAccountSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Setting"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setting"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.1/accounts/{accountId}/users/{userId}/settings-metadata": {
+      "get": {
+        "description": "List valid user preferences and their metadata for a specific user.\nUser preferences are personal settings that allow individual customization without affecting other users.\nThese settings are available to be referenced via\nGET :method:settingsv2/getpublicaccountuserpreference and\nPATCH :method:settingsv2/patchpublicaccountuserpreference APIs",
+        "operationId": "settings.listAccountUserPreferencesMetadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "userId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAccountUserPreferencesMetadataResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.1/accounts/{accountId}/users/{userId}/settings/{name}": {
+      "get": {
+        "description": "Get a user preference for a specific user.\nUser preferences are personal settings that allow individual customization without affecting other users.\nSee :method:settingsv2/listaccountuserpreferencesmetadata for list of user preferences available via public APIs.",
+        "operationId": "settings.getPublicAccountUserPreference",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "userId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreference"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Update a user preference for a specific user.\nUser preferences are personal settings that allow individual customization without affecting other users.\nSee :method:settingsv2/listaccountuserpreferencesmetadata for list of user preferences available via public APIs.\n\nNote: Page refresh is required for changes to take effect in UI.",
+        "operationId": "settings.patchPublicAccountUserPreference",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "userId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreference"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreference"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.1/settings-metadata": {
+      "get": {
+        "description": "List valid setting keys and metadata. These settings are available to be referenced via\nGET :method:settingsv2/getpublicworkspacesetting and\nPATCH :method:settingsv2/patchpublicworkspacesetting APIs",
+        "operationId": "settings.listWorkspaceSettingsMetadata",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListWorkspaceSettingsMetadataResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/settings/{name}": {
+      "get": {
+        "description": "Get a setting value at workspace level. See :method:settingsv2/listworkspacesettingsmetadata for list of setting available via public APIs.",
+        "operationId": "settings.getPublicWorkspaceSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setting"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Patch a setting value at workspace level. See :method:settingsv2/listworkspacesettingsmetadata for list of setting available via public APIs at workspace level.\nTo determine the correct field to include in a patch request, refer to the type field of the setting returned in the :method:settingsv2/listworkspacesettingsmetadata response.\n\nNote: Page refresh is required for changes to take effect in UI.",
+        "operationId": "settings.patchPublicWorkspaceSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Setting"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setting"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "settings"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "settings"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "GET",
+      "operationId": "settings.getPublicAccountSetting",
+      "path": "/api/2.1/accounts/{accountId}/settings/{name}",
+      "source": "@databricks/sdk-settings/v2/client.js:35"
+    },
+    {
+      "method": "GET",
+      "operationId": "settings.getPublicAccountUserPreference",
+      "path": "/api/2.1/accounts/{accountId}/users/{userId}/settings/{name}",
+      "source": "@databricks/sdk-settings/v2/client.js:57"
+    },
+    {
+      "method": "GET",
+      "operationId": "settings.getPublicWorkspaceSetting",
+      "path": "/api/2.1/settings/{name}",
+      "source": "@databricks/sdk-settings/v2/client.js:75"
+    },
+    {
+      "method": "GET",
+      "operationId": "settings.listAccountSettingsMetadata",
+      "path": "/api/2.1/accounts/{accountId}/settings-metadata",
+      "source": "@databricks/sdk-settings/v2/client.js:98"
+    },
+    {
+      "method": "GET",
+      "operationId": "settings.listAccountUserPreferencesMetadata",
+      "path": "/api/2.1/accounts/{accountId}/users/{userId}/settings-metadata",
+      "source": "@databricks/sdk-settings/v2/client.js:136"
+    },
+    {
+      "method": "GET",
+      "operationId": "settings.listWorkspaceSettingsMetadata",
+      "path": "/api/2.1/settings-metadata",
+      "source": "@databricks/sdk-settings/v2/client.js:172"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "settings.patchPublicAccountSetting",
+      "path": "/api/2.1/accounts/{accountId}/settings/{name}",
+      "source": "@databricks/sdk-settings/v2/client.js:210"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "settings.patchPublicAccountUserPreference",
+      "path": "/api/2.1/accounts/{accountId}/users/{userId}/settings/{name}",
+      "source": "@databricks/sdk-settings/v2/client.js:235"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "settings.patchPublicWorkspaceSetting",
+      "path": "/api/2.1/settings/{name}",
+      "source": "@databricks/sdk-settings/v2/client.js:259"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-settings",
+  "x-databricks-sdk-version": "0.49.0"
+}

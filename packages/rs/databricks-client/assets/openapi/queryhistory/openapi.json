@@ -1,0 +1,789 @@
+{
+  "components": {
+    "schemas": {
+      "ChannelInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "dbsql_version": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExternalQuerySource": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "type": "string"
+          },
+          "dashboard_id": {
+            "type": "string"
+          },
+          "genie_space_id": {
+            "type": "string"
+          },
+          "job_info": {
+            "$ref": "#/components/schemas/ExternalQuerySource_JobInfo"
+          },
+          "legacy_dashboard_id": {
+            "type": "string"
+          },
+          "notebook_id": {
+            "type": "string"
+          },
+          "sql_query_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExternalQuerySource_JobInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "job_run_id": {
+            "type": "string"
+          },
+          "job_task_run_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListQueriesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "has_next_page": {
+            "type": "boolean"
+          },
+          "next_page_token": {
+            "type": "string"
+          },
+          "res": {
+            "items": {
+              "$ref": "#/components/schemas/QueryInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "QueryInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_query_id": {
+            "type": "string"
+          },
+          "channel_used": {
+            "$ref": "#/components/schemas/ChannelInfo"
+          },
+          "client_application": {
+            "type": "string"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "endpoint_id": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "executed_as_user_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "executed_as_user_name": {
+            "type": "string"
+          },
+          "execution_end_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "is_final": {
+            "type": "boolean"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/QueryMetrics"
+          },
+          "plans_state": {
+            "type": "string"
+          },
+          "query_end_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "query_id": {
+            "type": "string"
+          },
+          "query_source": {
+            "$ref": "#/components/schemas/ExternalQuerySource"
+          },
+          "query_start_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "query_tags": {
+            "items": {
+              "$ref": "#/components/schemas/QueryTag"
+            },
+            "type": "array"
+          },
+          "query_text": {
+            "type": "string"
+          },
+          "rows_produced": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "spark_ui_url": {
+            "type": "string"
+          },
+          "statement_type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "user_name": {
+            "type": "string"
+          },
+          "warehouse_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "QueryMetrics": {
+        "additionalProperties": false,
+        "properties": {
+          "compilation_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "execution_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "network_sent_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "overloading_queue_start_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "photon_total_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "projected_remaining_task_total_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "projected_remaining_wallclock_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "provisioning_queue_start_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "pruned_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "pruned_files_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "query_compilation_start_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "read_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "read_cache_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "read_files_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "read_files_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "read_partitions_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "read_remote_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "remaining_task_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "result_fetch_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "result_from_cache": {
+            "type": "boolean"
+          },
+          "rows_produced_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "rows_read_count": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "runnable_tasks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "spill_to_disk_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "task_time_over_time_range": {
+            "$ref": "#/components/schemas/TaskTimeOverRange"
+          },
+          "task_total_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "total_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "work_to_be_done": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "write_remote_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "QueryTag": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TaskTimeOverRange": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/TaskTimeOverRangeEntry"
+            },
+            "type": "array"
+          },
+          "interval": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "TaskTimeOverRangeEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "task_completed_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Query History API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/sql/history/queries": {
+      "get": {
+        "description": "List the history of queries through SQL warehouses, and serverless compute.\n\nYou can filter by user ID, warehouse ID, status, and time range.\nMost recently started queries are returned first (up to max_results in request).\nThe pagination token returned in response can be used to list subsequent query statuses.",
+        "operationId": "queryHistory.listQueries",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_metrics",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeMetrics"
+          },
+          {
+            "in": "query",
+            "name": "max_results",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "maxResults"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListQueriesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "queryHistory"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "queryHistory"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "GET",
+      "operationId": "queryHistory.listQueries",
+      "path": "/api/2.0/sql/history/queries",
+      "source": "@databricks/sdk-queryhistory/v1/client.js:41"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-queryhistory",
+  "x-databricks-sdk-version": "0.49.0"
+}

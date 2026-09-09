@@ -1,0 +1,304 @@
+{
+  "components": {
+    "schemas": {
+      "AddInstanceProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "iam_role_arn": {
+            "type": "string"
+          },
+          "instance_profile_arn": {
+            "type": "string"
+          },
+          "is_meta_instance_profile": {
+            "type": "boolean"
+          },
+          "skip_validation": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "AddInstanceProfileResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "EditInstanceProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "iam_role_arn": {
+            "type": "string"
+          },
+          "instance_profile_arn": {
+            "type": "string"
+          },
+          "is_meta_instance_profile": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "EditInstanceProfileResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "InstanceProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "iam_role_arn": {
+            "type": "string"
+          },
+          "instance_profile_arn": {
+            "type": "string"
+          },
+          "is_meta_instance_profile": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ListInstanceProfilesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_profiles": {
+            "items": {
+              "$ref": "#/components/schemas/InstanceProfile"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RemoveInstanceProfileRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "instance_profile_arn": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RemoveInstanceProfileResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Instance Profiles API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/instance-profiles/add": {
+      "post": {
+        "description": "Registers an instance profile in <Databricks>. In the UI, you can then give users the permission\nto use this instance profile when launching clusters.\n\nThis API is only available to admin users.",
+        "operationId": "instanceProfiles.addInstanceProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "iam_role_arn": {
+                    "type": "string"
+                  },
+                  "instance_profile_arn": {
+                    "type": "string"
+                  },
+                  "is_meta_instance_profile": {
+                    "type": "boolean"
+                  },
+                  "skip_validation": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddInstanceProfileResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instanceProfiles"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/instance-profiles/edit": {
+      "post": {
+        "description": "The only supported field to change is the optional IAM role ARN associated with\nthe instance profile. It is required to specify the IAM role ARN if both of\nthe following are true:\n\n* Your role name and instance profile name do not match. The name is the part\nafter the last slash in each ARN.\n* You want to use the instance profile with [Databricks SQL Serverless](/sql/admin/serverless.html).\n\nTo understand where these fields are in the AWS console, see\n[Enable serverless SQL warehouses](/sql/admin/serverless.html).\n\nThis API is only available to admin users.",
+        "operationId": "instanceProfiles.editInstanceProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "iam_role_arn": {
+                    "type": "string"
+                  },
+                  "instance_profile_arn": {
+                    "type": "string"
+                  },
+                  "is_meta_instance_profile": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditInstanceProfileResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instanceProfiles"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/instance-profiles/list": {
+      "get": {
+        "description": "List the instance profiles that the calling user can use to launch a cluster.\n\nThis API is available to all users.",
+        "operationId": "instanceProfiles.listInstanceProfiles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInstanceProfilesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instanceProfiles"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/instance-profiles/remove": {
+      "post": {
+        "description": "Remove the instance profile with the provided ARN.\nExisting clusters with this instance profile will continue to function.\n\nThis API is only accessible to admin users.",
+        "operationId": "instanceProfiles.removeInstanceProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "instance_profile_arn": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveInstanceProfileResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "instanceProfiles"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "instanceProfiles"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "instanceProfiles.addInstanceProfile",
+      "path": "/api/2.0/instance-profiles/add",
+      "source": "@databricks/sdk-instanceprofiles/v2/client.js:40"
+    },
+    {
+      "method": "POST",
+      "operationId": "instanceProfiles.editInstanceProfile",
+      "path": "/api/2.0/instance-profiles/edit",
+      "source": "@databricks/sdk-instanceprofiles/v2/client.js:73"
+    },
+    {
+      "method": "GET",
+      "operationId": "instanceProfiles.listInstanceProfiles",
+      "path": "/api/2.0/instance-profiles/list",
+      "source": "@databricks/sdk-instanceprofiles/v2/client.js:97"
+    },
+    {
+      "method": "POST",
+      "operationId": "instanceProfiles.removeInstanceProfile",
+      "path": "/api/2.0/instance-profiles/remove",
+      "source": "@databricks/sdk-instanceprofiles/v2/client.js:121"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-instanceprofiles",
+  "x-databricks-sdk-version": "0.49.0"
+}

@@ -1,0 +1,410 @@
+{
+  "components": {
+    "schemas": {
+      "BudgetPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "binding_workspace_ids": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "custom_tags": {
+            "items": {
+              "$ref": "#/components/schemas/CustomPolicyTag"
+            },
+            "type": "array"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "policy_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateBudgetPolicyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/BudgetPolicy"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CustomPolicyTag": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListBudgetPoliciesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetPolicy"
+            },
+            "type": "array"
+          },
+          "previous_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Budget Policy API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/accounts/{accountId}/budget-policies": {
+      "get": {
+        "description": "Lists all policies. Policies are returned in the alphabetically ascending order of their names.",
+        "operationId": "budgetPolicy.listBudgetPolicies",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBudgetPoliciesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgetPolicy"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a new policy.",
+        "operationId": "budgetPolicy.createBudgetPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "policy": {
+                    "$ref": "#/components/schemas/BudgetPolicy"
+                  },
+                  "request_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgetPolicy"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.1/accounts/{accountId}/budget-policies/{policyId}": {
+      "delete": {
+        "description": "Deletes a policy",
+        "operationId": "budgetPolicy.deleteBudgetPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgetPolicy"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Retrieves a policy by it's ID.",
+        "operationId": "budgetPolicy.getBudgetPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policyId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgetPolicy"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Updates a policy",
+        "operationId": "budgetPolicy.updateBudgetPolicy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "policyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "policy.policyId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "binding_workspace_ids": {
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": "array"
+                  },
+                  "custom_tags": {
+                    "items": {
+                      "$ref": "#/components/schemas/CustomPolicyTag"
+                    },
+                    "type": "array"
+                  },
+                  "policy_name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgetPolicy"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "budgetPolicy"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "budgetPolicy.createBudgetPolicy",
+      "path": "/api/2.1/accounts/{accountId}/budget-policies",
+      "source": "@databricks/sdk-budgetpolicy/v1/client.js:35"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "budgetPolicy.deleteBudgetPolicy",
+      "path": "/api/2.1/accounts/{accountId}/budget-policies/{policyId}",
+      "source": "@databricks/sdk-budgetpolicy/v1/client.js:54"
+    },
+    {
+      "method": "GET",
+      "operationId": "budgetPolicy.getBudgetPolicy",
+      "path": "/api/2.1/accounts/{accountId}/budget-policies/{policyId}",
+      "source": "@databricks/sdk-budgetpolicy/v1/client.js:69"
+    },
+    {
+      "method": "GET",
+      "operationId": "budgetPolicy.listBudgetPolicies",
+      "path": "/api/2.1/accounts/{accountId}/budget-policies",
+      "source": "@databricks/sdk-budgetpolicy/v1/client.js:87"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "budgetPolicy.updateBudgetPolicy",
+      "path": "/api/2.1/accounts/{accountId}/budget-policies/{policyId}",
+      "source": "@databricks/sdk-budgetpolicy/v1/client.js:121"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-budgetpolicy",
+  "x-databricks-sdk-version": "0.49.0"
+}

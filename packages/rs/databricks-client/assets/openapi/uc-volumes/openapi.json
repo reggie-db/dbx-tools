@@ -1,0 +1,647 @@
+{
+  "components": {
+    "schemas": {
+      "CreateVolumeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "access_point": {
+            "type": "string"
+          },
+          "browse_only": {
+            "type": "boolean"
+          },
+          "catalog_name": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "encryption_details": {
+            "$ref": "#/components/schemas/EncryptionDetails"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "schema_name": {
+            "type": "string"
+          },
+          "storage_location": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "volume_id": {
+            "type": "string"
+          },
+          "volume_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteVolumeResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "EncryptionDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "sse_encryption_details": {
+            "$ref": "#/components/schemas/SseEncryptionDetails"
+          }
+        },
+        "type": "object"
+      },
+      "ListVolumesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "next_page_token": {
+            "type": "string"
+          },
+          "volumes": {
+            "items": {
+              "$ref": "#/components/schemas/VolumeInfo"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SseEncryptionDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "aws_kms_key_arn": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateVolumeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "access_point": {
+            "type": "string"
+          },
+          "browse_only": {
+            "type": "boolean"
+          },
+          "catalog_name": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "encryption_details": {
+            "$ref": "#/components/schemas/EncryptionDetails"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "full_name_arg": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "new_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "schema_name": {
+            "type": "string"
+          },
+          "storage_location": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "volume_id": {
+            "type": "string"
+          },
+          "volume_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VolumeInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "access_point": {
+            "type": "string"
+          },
+          "browse_only": {
+            "type": "boolean"
+          },
+          "catalog_name": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "encryption_details": {
+            "$ref": "#/components/schemas/EncryptionDetails"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "metastore_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "schema_name": {
+            "type": "string"
+          },
+          "storage_location": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "volume_id": {
+            "type": "string"
+          },
+          "volume_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Volumes API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/unity-catalog/volumes": {
+      "get": {
+        "description": "Gets an array of volumes for the current metastore\nunder the parent catalog and schema.\n\nThe returned volumes are filtered based on the privileges of the calling user.\nFor example, the metastore admin is able to list all the volumes.\nA regular user needs to be the owner or have the **READ VOLUME** privilege\non the volume to receive the volumes in the response.\nFor the latter case, the caller must also be the owner or have the **USE_CATALOG**\nprivilege on the parent catalog and the **USE_SCHEMA** privilege on the parent schema.\n\nThere is no guarantee of a specific ordering of the elements in the array.\n\nPAGINATION BEHAVIOR: The API is by default paginated, a page may contain zero results while still providing a next_page_token.\nClients must continue reading pages until next_page_token is absent, which is the only indication that the end of results has been reached.",
+        "operationId": "volumes.listVolumes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "catalog_name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "catalogName"
+          },
+          {
+            "in": "query",
+            "name": "include_browse",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeBrowse"
+          },
+          {
+            "in": "query",
+            "name": "max_results",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "maxResults"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          },
+          {
+            "in": "query",
+            "name": "schema_name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "schemaName"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListVolumesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "volumes"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates a new volume.\n\nThe user could create either an external volume or a managed volume. An external volume\nwill be created in the specified external location, while a managed volume\nwill be located in the default location which is specified by the parent schema,\nor the parent catalog, or the Metastore.\n\nFor the volume creation to succeed, the user must satisfy following conditions:\n- The caller must be a metastore admin, or be the owner of the parent catalog and schema,\nor have the **USE_CATALOG** privilege on the parent catalog\nand the **USE_SCHEMA** privilege on the parent schema.\n- The caller must have **CREATE VOLUME** privilege on the parent schema.\n\nFor an external volume, following conditions also need to satisfy\n- The caller must have **CREATE EXTERNAL VOLUME** privilege on the external location.\n- There are no other tables, nor volumes existing in the specified storage location.\n- The specified storage location is not under the location of other tables, nor volumes,\nor catalogs or schemas.",
+        "operationId": "volumes.createVolume",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "access_point": {
+                    "type": "string"
+                  },
+                  "browse_only": {
+                    "type": "boolean"
+                  },
+                  "catalog_name": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "encryption_details": {
+                    "$ref": "#/components/schemas/EncryptionDetails"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "schema_name": {
+                    "type": "string"
+                  },
+                  "storage_location": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  },
+                  "volume_id": {
+                    "type": "string"
+                  },
+                  "volume_type": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "volumes"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.1/unity-catalog/volumes/{fullNameArg}": {
+      "delete": {
+        "description": "Deletes a volume from the specified parent catalog and schema.\n\nThe caller must be a metastore admin or an owner of the volume.\nFor the latter case, the caller must also be the owner or have the **USE_CATALOG**\nprivilege on the parent catalog and the **USE_SCHEMA** privilege on the parent schema.",
+        "operationId": "volumes.deleteVolume",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullNameArg",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullNameArg"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteVolumeResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "volumes"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets a volume from the metastore for a specific catalog and schema.\n\nThe caller must be a metastore admin or an owner of (or have the **READ VOLUME**\nprivilege on) the volume.\nFor the latter case, the caller must also be the owner or have the **USE_CATALOG**\nprivilege on the parent catalog and the **USE_SCHEMA** privilege on the parent schema.",
+        "operationId": "volumes.getVolume",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullNameArg",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullNameArg"
+          },
+          {
+            "in": "query",
+            "name": "include_browse",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeBrowse"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "volumes"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates the specified volume under the specified parent catalog and schema.\n\nThe caller must be a metastore admin or an owner of the volume.\nFor the latter case, the caller must also be the owner or have the **USE_CATALOG**\nprivilege on the parent catalog and the **USE_SCHEMA** privilege on the parent schema.\n\nCurrently only the name, the owner or the comment of the volume could be updated.",
+        "operationId": "volumes.updateVolume",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fullNameArg",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "fullNameArg"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "access_point": {
+                    "type": "string"
+                  },
+                  "browse_only": {
+                    "type": "boolean"
+                  },
+                  "catalog_name": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "created_by": {
+                    "type": "string"
+                  },
+                  "encryption_details": {
+                    "$ref": "#/components/schemas/EncryptionDetails"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "metastore_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "new_name": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "schema_name": {
+                    "type": "string"
+                  },
+                  "storage_location": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "updated_by": {
+                    "type": "string"
+                  },
+                  "volume_id": {
+                    "type": "string"
+                  },
+                  "volume_type": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeInfo"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "volumes"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "volumes"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "volumes.createVolume",
+      "path": "/api/2.1/unity-catalog/volumes",
+      "source": "@databricks/sdk-uc-volumes/v1/client.js:54"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "volumes.deleteVolume",
+      "path": "/api/2.1/unity-catalog/volumes/{fullNameArg}",
+      "source": "@databricks/sdk-uc-volumes/v1/client.js:80"
+    },
+    {
+      "method": "GET",
+      "operationId": "volumes.getVolume",
+      "path": "/api/2.1/unity-catalog/volumes/{fullNameArg}",
+      "source": "@databricks/sdk-uc-volumes/v1/client.js:106"
+    },
+    {
+      "method": "GET",
+      "operationId": "volumes.listVolumes",
+      "path": "/api/2.1/unity-catalog/volumes",
+      "source": "@databricks/sdk-uc-volumes/v1/client.js:144"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "volumes.updateVolume",
+      "path": "/api/2.1/unity-catalog/volumes/{fullNameArg}",
+      "source": "@databricks/sdk-uc-volumes/v1/client.js:188"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-uc-volumes",
+  "x-databricks-sdk-version": "0.49.0"
+}

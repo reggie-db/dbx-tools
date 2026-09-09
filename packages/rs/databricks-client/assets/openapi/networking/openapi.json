@@ -1,0 +1,4260 @@
+{
+  "components": {
+    "schemas": {
+      "AccountIpAccessList": {
+        "additionalProperties": false,
+        "properties": {
+          "address_count": {
+            "type": "number"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "AccountNetworkPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "egress": {
+            "$ref": "#/components/schemas/EgressNetworkPolicy"
+          },
+          "ingress": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy"
+          },
+          "ingress_dry_run": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy"
+          },
+          "network_policy_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AwsVpcEndpointInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "aws_account_id": {
+            "type": "string"
+          },
+          "aws_endpoint_service_id": {
+            "type": "string"
+          },
+          "aws_vpc_endpoint_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AzurePrivateEndpointInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "private_endpoint_name": {
+            "type": "string"
+          },
+          "private_endpoint_resource_guid": {
+            "type": "string"
+          },
+          "private_endpoint_resource_id": {
+            "type": "string"
+          },
+          "private_link_service_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccountIpAccessListRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateAccountIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/AccountIpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "CreateIpAccessListRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/IpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "CreateNetworkConnectivityConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "creation_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "egress_config": {
+            "$ref": "#/components/schemas/CustomerFacingNetworkConnectivityConfigEgressConfig"
+          },
+          "name": {
+            "type": "string"
+          },
+          "network_connectivity_config_id": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "updated_time": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CreateNetworkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "gcp_network_info": {
+            "$ref": "#/components/schemas/GcpNetworkInfo"
+          },
+          "network_name": {
+            "type": "string"
+          },
+          "security_group_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subnet_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "vpc_endpoints": {
+            "$ref": "#/components/schemas/NetworkVpcEndpoints"
+          },
+          "vpc_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePrivateAccessSettingsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "allowed_vpc_endpoint_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "private_access_level": {
+            "type": "string"
+          },
+          "private_access_settings_name": {
+            "type": "string"
+          },
+          "public_access_enabled": {
+            "type": "boolean"
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreatePrivateEndpointRule": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "connection_state": {
+            "type": "string"
+          },
+          "creation_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "deactivated": {
+            "type": "boolean"
+          },
+          "deactivated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domain_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "endpoint_service": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "gcp_endpoint": {
+            "$ref": "#/components/schemas/GcpEndpoint"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "network_connectivity_config_id": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "updated_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "vpc_endpoint_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreateVpcEndpointRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "aws_vpc_endpoint_id": {
+            "type": "string"
+          },
+          "gcp_vpc_endpoint_info": {
+            "$ref": "#/components/schemas/GcpVpcEndpointInfo"
+          },
+          "region": {
+            "type": "string"
+          },
+          "vpc_endpoint_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CustomerFacingNetworkConnectivityConfigEgressConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "default_rules": {
+            "$ref": "#/components/schemas/NetworkConnectivityConfigEgressConfig_DefaultRule"
+          },
+          "target_rules": {
+            "$ref": "#/components/schemas/CustomerFacingNetworkConnectivityConfigEgressConfig_CustomerFacingTargetRule"
+          }
+        },
+        "type": "object"
+      },
+      "CustomerFacingNetworkConnectivityConfigEgressConfig_CustomerFacingTargetRule": {
+        "additionalProperties": false,
+        "properties": {
+          "aws_private_endpoint_rules": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkConnectivityConfigAwsPrivateEndpointRule"
+            },
+            "type": "array"
+          },
+          "azure_private_endpoint_rules": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkConnectivityConfigAzurePrivateEndpointRule"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteAccountIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "DeleteIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "EgressNetworkPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "network_access": {
+            "$ref": "#/components/schemas/EgressNetworkPolicy_NetworkAccessPolicy"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_NetworkAccessPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_databricks_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/EgressNetworkPolicy_NetworkAccessPolicy_DatabricksDestination"
+            },
+            "type": "array"
+          },
+          "allowed_internet_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/EgressNetworkPolicy_NetworkAccessPolicy_InternetDestination"
+            },
+            "type": "array"
+          },
+          "allowed_storage_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/EgressNetworkPolicy_NetworkAccessPolicy_StorageDestination"
+            },
+            "type": "array"
+          },
+          "blocked_internet_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/EgressNetworkPolicy_NetworkAccessPolicy_InternetDestination"
+            },
+            "type": "array"
+          },
+          "policy_enforcement": {
+            "$ref": "#/components/schemas/EgressNetworkPolicy_NetworkAccessPolicy_PolicyEnforcement"
+          },
+          "restriction_mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_NetworkAccessPolicy_DatabricksDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "workspace_ids": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_NetworkAccessPolicy_InternetDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "destination": {
+            "type": "string"
+          },
+          "internet_destination_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_NetworkAccessPolicy_PolicyEnforcement": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run_mode_product_filter": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enforcement_mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EgressNetworkPolicy_NetworkAccessPolicy_StorageDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "azure_storage_account": {
+            "type": "string"
+          },
+          "azure_storage_service": {
+            "type": "string"
+          },
+          "bucket_name": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "storage_destination_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Endpoint": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "aws_vpc_endpoint_info": {
+            "$ref": "#/components/schemas/AwsVpcEndpointInfo"
+          },
+          "azure_private_endpoint_info": {
+            "$ref": "#/components/schemas/AzurePrivateEndpointInfo"
+          },
+          "create_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "endpoint_id": {
+            "type": "string"
+          },
+          "gcp_psc_endpoint_info": {
+            "$ref": "#/components/schemas/GcpPscEndpointInfo"
+          },
+          "name": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "use_case": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GcpEndpoint": {
+        "additionalProperties": false,
+        "properties": {
+          "all_vpc_sc_services": {
+            "type": "boolean"
+          },
+          "google_api_endpoints": {
+            "$ref": "#/components/schemas/GoogleApiEndpoints"
+          },
+          "psc_endpoint_uri": {
+            "type": "string"
+          },
+          "service_attachment": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GcpNetworkInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "network_project_id": {
+            "type": "string"
+          },
+          "pod_ip_range_name": {
+            "type": "string"
+          },
+          "service_ip_range_name": {
+            "type": "string"
+          },
+          "subnet_id": {
+            "type": "string"
+          },
+          "subnet_region": {
+            "type": "string"
+          },
+          "vpc_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GcpPscEndpointInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint_region": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "psc_connection_id": {
+            "type": "string"
+          },
+          "psc_endpoint": {
+            "type": "string"
+          },
+          "service_attachment_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GcpVpcEndpointInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint_region": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "psc_connection_id": {
+            "type": "string"
+          },
+          "psc_endpoint_name": {
+            "type": "string"
+          },
+          "service_attachment_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GetAccountIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/AccountIpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "GetIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/IpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "GoogleApiEndpoints": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "cross_workspace_access": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_CrossWorkspaceAccess"
+          },
+          "private_access": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_PrivateAccess"
+          },
+          "public_access": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_PublicAccess"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_AccountApiDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "scope_qualifier": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_AccountDatabricksOneDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "all_destinations": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_AccountUiDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "all_destinations": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_AppsRuntimeDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "all_destinations": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_Authentication": {
+        "additionalProperties": false,
+        "properties": {
+          "identities": {
+            "items": {
+              "$ref": "#/components/schemas/IngressNetworkPolicy_AuthenticationIdentity"
+            },
+            "type": "array"
+          },
+          "identity_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_AuthenticationIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "principal_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "principal_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_CrossWorkspaceAccess": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_rules": {
+            "items": {
+              "$ref": "#/components/schemas/IngressNetworkPolicy_CrossWorkspaceIngressRule"
+            },
+            "type": "array"
+          },
+          "deny_rules": {
+            "items": {
+              "$ref": "#/components/schemas/IngressNetworkPolicy_CrossWorkspaceIngressRule"
+            },
+            "type": "array"
+          },
+          "restriction_mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_CrossWorkspaceIngressRule": {
+        "additionalProperties": false,
+        "properties": {
+          "authentication": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_Authentication"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_RequestDestination"
+          },
+          "label": {
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_CrossWorkspaceRequestOrigin"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_CrossWorkspaceRequestOrigin": {
+        "additionalProperties": false,
+        "properties": {
+          "all_source_workspaces": {
+            "type": "boolean"
+          },
+          "selected_workspaces": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_WorkspaceIdList"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_Endpoints": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_IpRanges": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_ranges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_LakebaseRuntimeDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "all_destinations": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_PrivateAccess": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_rules": {
+            "items": {
+              "$ref": "#/components/schemas/IngressNetworkPolicy_PrivateIngressRule"
+            },
+            "type": "array"
+          },
+          "deny_rules": {
+            "items": {
+              "$ref": "#/components/schemas/IngressNetworkPolicy_PrivateIngressRule"
+            },
+            "type": "array"
+          },
+          "restriction_mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_PrivateIngressRule": {
+        "additionalProperties": false,
+        "properties": {
+          "authentication": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_Authentication"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_RequestDestination"
+          },
+          "label": {
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_PrivateRequestOrigin"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_PrivateRequestOrigin": {
+        "additionalProperties": false,
+        "properties": {
+          "all_private_access": {
+            "type": "boolean"
+          },
+          "all_registered_endpoints": {
+            "type": "boolean"
+          },
+          "azure_workspace_private_link": {
+            "type": "boolean"
+          },
+          "endpoints": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_Endpoints"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_PublicAccess": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_rules": {
+            "items": {
+              "$ref": "#/components/schemas/IngressNetworkPolicy_PublicIngressRule"
+            },
+            "type": "array"
+          },
+          "deny_rules": {
+            "items": {
+              "$ref": "#/components/schemas/IngressNetworkPolicy_PublicIngressRule"
+            },
+            "type": "array"
+          },
+          "restriction_mode": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_PublicIngressRule": {
+        "additionalProperties": false,
+        "properties": {
+          "authentication": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_Authentication"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_RequestDestination"
+          },
+          "label": {
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_PublicRequestOrigin"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_PublicRequestOrigin": {
+        "additionalProperties": false,
+        "properties": {
+          "all_ip_ranges": {
+            "type": "boolean"
+          },
+          "excluded_ip_ranges": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_IpRanges"
+          },
+          "included_ip_ranges": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_IpRanges"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_RequestDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "account_api": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_AccountApiDestination"
+          },
+          "account_databricks_one": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_AccountDatabricksOneDestination"
+          },
+          "account_ui": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_AccountUiDestination"
+          },
+          "all_destinations": {
+            "type": "boolean"
+          },
+          "apps_runtime": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_AppsRuntimeDestination"
+          },
+          "lakebase_runtime": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_LakebaseRuntimeDestination"
+          },
+          "workspace_api": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_WorkspaceApiDestination"
+          },
+          "workspace_ui": {
+            "$ref": "#/components/schemas/IngressNetworkPolicy_WorkspaceUiDestination"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_WorkspaceApiDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "scope_qualifier": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_WorkspaceIdList": {
+        "additionalProperties": false,
+        "properties": {
+          "workspace_ids": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IngressNetworkPolicy_WorkspaceUiDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "all_destinations": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "IpAccessList": {
+        "additionalProperties": false,
+        "properties": {
+          "address_count": {
+            "type": "number"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListAccountIpAccessListsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_lists": {
+            "items": {
+              "$ref": "#/components/schemas/AccountIpAccessList"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListEndpointsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Endpoint"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListIpAccessListsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_lists": {
+            "items": {
+              "$ref": "#/components/schemas/IpAccessList"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ListNccPrivateEndpointRulesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NccPrivateEndpointRule"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListNetworkConnectivityConfigsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkConnectivityConfig"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListNetworkPoliciesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AccountNetworkPolicy"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NccPrivateEndpointRule": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "connection_state": {
+            "type": "string"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "deactivated": {
+            "type": "boolean"
+          },
+          "deactivated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "domain_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "endpoint_service": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "gcp_endpoint": {
+            "$ref": "#/components/schemas/GcpEndpoint"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "network_connectivity_config_id": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "updated_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "vpc_endpoint_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Network": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "error_messages": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkHealth"
+            },
+            "type": "array"
+          },
+          "gcp_network_info": {
+            "$ref": "#/components/schemas/GcpNetworkInfo"
+          },
+          "network_id": {
+            "type": "string"
+          },
+          "network_name": {
+            "type": "string"
+          },
+          "security_group_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subnet_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "vpc_endpoints": {
+            "$ref": "#/components/schemas/NetworkVpcEndpoints"
+          },
+          "vpc_id": {
+            "type": "string"
+          },
+          "vpc_status": {
+            "type": "string"
+          },
+          "warning_messages": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkWarning"
+            },
+            "type": "array"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "NetworkConnectivityConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "egress_config": {
+            "$ref": "#/components/schemas/CustomerFacingNetworkConnectivityConfigEgressConfig"
+          },
+          "name": {
+            "type": "string"
+          },
+          "network_connectivity_config_id": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "updated_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "NetworkConnectivityConfigAwsPrivateEndpointRule": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "connection_state": {
+            "type": "string"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "deactivated": {
+            "type": "boolean"
+          },
+          "deactivated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "domain_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint_service": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "network_connectivity_config_id": {
+            "type": "string"
+          },
+          "resource_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "updated_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "vpc_endpoint_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NetworkConnectivityConfigAzurePrivateEndpointRule": {
+        "additionalProperties": false,
+        "properties": {
+          "connection_state": {
+            "type": "string"
+          },
+          "creation_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "deactivated": {
+            "type": "boolean"
+          },
+          "deactivated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "domain_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "network_connectivity_config_id": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "updated_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "NetworkConnectivityConfigEgressConfig_DefaultRule": {
+        "additionalProperties": false,
+        "properties": {
+          "aws_stable_ip_rule": {
+            "$ref": "#/components/schemas/NetworkConnectivityConfigEgressConfig_DefaultRule_AwsStableIpRule"
+          },
+          "azure_service_endpoint_rule": {
+            "$ref": "#/components/schemas/NetworkConnectivityConfigEgressConfig_DefaultRule_AzureServiceEndpointRule"
+          }
+        },
+        "type": "object"
+      },
+      "NetworkConnectivityConfigEgressConfig_DefaultRule_AwsStableIpRule": {
+        "additionalProperties": false,
+        "properties": {
+          "cidr_blocks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NetworkConnectivityConfigEgressConfig_DefaultRule_AzureServiceEndpointRule": {
+        "additionalProperties": false,
+        "properties": {
+          "subnets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "target_region": {
+            "type": "string"
+          },
+          "target_services": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NetworkHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "error_message": {
+            "type": "string"
+          },
+          "error_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "NetworkVpcEndpoints": {
+        "additionalProperties": false,
+        "properties": {
+          "dataplane_relay": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rest_api": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NetworkWarning": {
+        "additionalProperties": false,
+        "properties": {
+          "warning_message": {
+            "type": "string"
+          },
+          "warning_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PrivateAccessSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "allowed_vpc_endpoint_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "private_access_level": {
+            "type": "string"
+          },
+          "private_access_settings_id": {
+            "type": "string"
+          },
+          "private_access_settings_name": {
+            "type": "string"
+          },
+          "public_access_enabled": {
+            "type": "boolean"
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReplaceAccountIpAccessListRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReplaceAccountIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/AccountIpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "ReplaceIpAccessListRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReplaceIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/IpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateAccountIpAccessListRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateAccountIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/AccountIpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateIpAccessListRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "ip_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateIpAccessListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ip_access_list": {
+            "$ref": "#/components/schemas/IpAccessList"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePrivateEndpointRule": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "connection_state": {
+            "type": "string"
+          },
+          "creation_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "deactivated": {
+            "type": "boolean"
+          },
+          "deactivated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domain_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint_name": {
+            "type": "string"
+          },
+          "endpoint_service": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "gcp_endpoint": {
+            "$ref": "#/components/schemas/GcpEndpoint"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "network_connectivity_config_id": {
+            "type": "string"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "updated_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "vpc_endpoint_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VpcEndpoint": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "aws_account_id": {
+            "type": "string"
+          },
+          "aws_endpoint_service_id": {
+            "type": "string"
+          },
+          "aws_vpc_endpoint_id": {
+            "type": "string"
+          },
+          "gcp_vpc_endpoint_info": {
+            "$ref": "#/components/schemas/GcpVpcEndpointInfo"
+          },
+          "region": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "use_case": {
+            "type": "string"
+          },
+          "vpc_endpoint_id": {
+            "type": "string"
+          },
+          "vpc_endpoint_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "WorkspaceNetworkOption": {
+        "additionalProperties": false,
+        "properties": {
+          "network_policy_id": {
+            "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "Schema_2854c5c4": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "ip_addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Schema_85391f0e": {
+        "type": "object",
+        "properties": {
+          "allowed_vpc_endpoint_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "private_access_level": {
+            "type": "string"
+          },
+          "private_access_settings_name": {
+            "type": "string"
+          },
+          "public_access_enabled": {
+            "type": "boolean"
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Networking API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.0/accounts/{accountId}/ip-access-lists": {
+      "get": {
+        "description": "Gets all IP access lists for the specified account.",
+        "operationId": "networking.listAccountIpAccessLists",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAccountIpAccessListsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates an IP access list for the account.\n\nA list can be an allow list or a block list. See the top of this file for a description of\nhow the server treats allow lists and block lists at runtime.\n\nWhen creating or updating an IP access list:\n\n* For all allow lists and block lists combined, the API supports a maximum of 1000\nIP/CIDR values, where one CIDR counts as a single value. Attempts to exceed that number\nreturn error 400 with `error_code` value `QUOTA_EXCEEDED`.\n* If the new list would block the calling user's current IP, error 400 is returned with\n`error_code` value `INVALID_STATE`.\n\nIt can take a few minutes for the changes to take effect.",
+        "operationId": "networking.createAccountIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIpAccessListRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAccountIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/ip-access-lists/{listId}": {
+      "delete": {
+        "description": "Deletes an IP access list, specified by its list ID.",
+        "operationId": "networking.deleteAccountIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteAccountIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets an IP access list, specified by its list ID.",
+        "operationId": "networking.getAccountIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAccountIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Updates an existing IP access list, specified by its ID.\n\nA list can include allow lists and block lists. See the top of this file for a description\nof how the server treats allow lists and block lists at run time.\n\nWhen updating an IP access list:\n\n* For all allow lists and block lists combined, the API supports a maximum of 1000\nIP/CIDR values, where one CIDR counts as a single value. Attempts to exceed that number\nreturn error 400 with `error_code` value `QUOTA_EXCEEDED`.\n* If the updated list would block the calling user's current IP, error 400 is returned\nwith `error_code` value `INVALID_STATE`.\n\nIt can take a few minutes for the changes to take effect.",
+        "operationId": "networking.updateAccountIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_2854c5c4"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAccountIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Replaces an IP access list, specified by its ID.\n\nA list can include allow lists and block lists. See the top of this file for a description\nof how the server treats allow lists and block lists at run time. When replacing an IP\naccess list:\n* For all allow lists and block lists combined, the API supports a maximum of 1000 IP/CIDR values,\nwhere one CIDR counts as a single value. Attempts to exceed that number return error 400 with `error_code`\nvalue `QUOTA_EXCEEDED`.\n* If the resulting list would block the calling user's current IP, error 400 is returned with `error_code`\nvalue `INVALID_STATE`.\nIt can take a few minutes for the changes to take effect.",
+        "operationId": "networking.replaceAccountIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_2854c5c4"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplaceAccountIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/network-connectivity-configs": {
+      "get": {
+        "description": "Gets an array of network connectivity configurations.",
+        "operationId": "networking.listNetworkConnectivityConfigsPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNetworkConnectivityConfigsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a network connectivity configuration (NCC), which provides stable Azure service\nsubnets when accessing your Azure Storage accounts. You can also use a network connectivity configuration to create\n<Databricks> managed private endpoints so that <Databricks> serverless compute resources privately access your\nresources.\n\n**IMPORTANT**: After you create the network connectivity configuration, you must assign one or more workspaces to the new network connectivity configuration.\nYou can share one network connectivity configuration with multiple workspaces from the same Azure region within\nthe same <Databricks> account.\nSee [configure serverless secure connectivity](https://learn.microsoft.com/azure/databricks/security/network/serverless-network-security).",
+        "operationId": "networking.createNetworkConnectivityConfigPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNetworkConnectivityConfiguration"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkConnectivityConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}": {
+      "delete": {
+        "description": "Deletes a network connectivity configuration.",
+        "operationId": "networking.deleteNetworkConnectivityConfigPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkConnectivityConfigId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkConnectivityConfigId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a network connectivity configuration.",
+        "operationId": "networking.getNetworkConnectivityConfigPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkConnectivityConfigId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkConnectivityConfigId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkConnectivityConfig"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}/private-endpoint-rules": {
+      "get": {
+        "description": "Gets an array of private endpoint rules.",
+        "operationId": "networking.listNccPrivateEndpointRules",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkConnectivityConfigId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkConnectivityConfigId"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNccPrivateEndpointRulesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create a private endpoint rule for the specified network connectivity config object.\nOnce the object is created, <Databricks> asynchronously provisions a new Azure private endpoint to your\nspecified Azure resource.\n\n**IMPORTANT**: You must use Azure portal or other Azure tools to approve the private endpoint to complete the\nconnection. To get the information of the private endpoint created, make a `GET` request on the new private\nendpoint rule. See [serverless private link](https://learn.microsoft.com/azure/databricks/security/network/serverless-network-security/serverless-private-link).",
+        "operationId": "networking.createNccPrivateEndpointRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkConnectivityConfigId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkConnectivityConfigId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePrivateEndpointRule"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NccPrivateEndpointRule"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}/private-endpoint-rules/{privateEndpointRuleId}": {
+      "delete": {
+        "description": "Initiates deleting a private endpoint rule. If the connection state is PENDING or EXPIRED,\nthe private endpoint is immediately deleted. Otherwise, the private endpoint is deactivated\nand will be deleted after one day of deactivation. When a private endpoint is deactivated,\nthe `deactivated` field is set to `true` and the private endpoint is not\navailable to your serverless compute resources.",
+        "operationId": "networking.deleteNccPrivateEndpointRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkConnectivityConfigId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkConnectivityConfigId"
+          },
+          {
+            "in": "path",
+            "name": "privateEndpointRuleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "privateEndpointRuleId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NccPrivateEndpointRule"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets the private endpoint rule.",
+        "operationId": "networking.getNccPrivateEndpointRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkConnectivityConfigId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkConnectivityConfigId"
+          },
+          {
+            "in": "path",
+            "name": "privateEndpointRuleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "privateEndpointRuleId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NccPrivateEndpointRule"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "patch": {
+        "description": "Updates a private endpoint rule. Currently only a private endpoint rule to customer-managed resources is allowed to be updated.",
+        "operationId": "networking.updateNccPrivateEndpointRule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkConnectivityConfigId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkConnectivityConfigId"
+          },
+          {
+            "in": "path",
+            "name": "privateEndpointRuleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "privateEndpointRuleId"
+          },
+          {
+            "in": "query",
+            "name": "update_mask",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "updateMask"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePrivateEndpointRule"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NccPrivateEndpointRule"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/network-policies": {
+      "get": {
+        "description": "Gets an array of network policies.",
+        "operationId": "networking.listNetworkPoliciesRpc",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNetworkPoliciesResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a new network policy to manage which network destinations can be accessed from the <Databricks>\nenvironment.",
+        "operationId": "networking.createNetworkPolicyRpc",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountNetworkPolicy"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountNetworkPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/network-policies/{networkPolicyId}": {
+      "delete": {
+        "description": "Deletes a network policy. Cannot be called on 'default-policy'.",
+        "operationId": "networking.deleteNetworkPolicyRpc",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkPolicyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkPolicyId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a network policy.",
+        "operationId": "networking.getNetworkPolicyRpc",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkPolicyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkPolicyId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountNetworkPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates a network policy. This allows you to modify the configuration of a network policy.",
+        "operationId": "networking.updateNetworkPolicyRpc",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkPolicyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkPolicyId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountNetworkPolicy"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountNetworkPolicy"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/networks": {
+      "get": {
+        "description": "Lists <Databricks> network configurations for an account.",
+        "operationId": "networking.listNetworkPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Network"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a <Databricks> network configuration that represents an VPC and its resources. The VPC will be used for new <Databricks> clusters. This requires a pre-existing VPC and subnets.",
+        "operationId": "networking.createNetworkPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "gcp_network_info": {
+                    "$ref": "#/components/schemas/GcpNetworkInfo"
+                  },
+                  "network_name": {
+                    "type": "string"
+                  },
+                  "security_group_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "subnet_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "vpc_endpoints": {
+                    "$ref": "#/components/schemas/NetworkVpcEndpoints"
+                  },
+                  "vpc_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Network"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/networks/{networkId}": {
+      "delete": {
+        "description": "Deletes a <Databricks> network configuration, which represents a cloud VPC and its resources. You cannot delete a network that is associated with a workspace.\n\nThis operation is available only if your account is on the E2 version of the platform.",
+        "operationId": "networking.deleteNetworkPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Network"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a <Databricks> network configuration, which represents a cloud VPC and its resources.",
+        "operationId": "networking.getNetworkPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "networkId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "networkId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Network"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/private-access-settings": {
+      "get": {
+        "description": "Lists <Databricks> private access settings for an account.",
+        "operationId": "networking.listPrivateAccessSettingsPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrivateAccessSettings"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a private access settings configuration, which represents\nnetwork access restrictions for workspace resources. Private access\nsettings configure whether workspaces can be accessed from the public\ninternet or only from private endpoints.",
+        "operationId": "networking.createPrivateAccessSettingsPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_85391f0e"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivateAccessSettings"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/private-access-settings/{privateAccessSettingsId}": {
+      "delete": {
+        "description": "Deletes a <Databricks> private access settings configuration, both specified by ID.",
+        "operationId": "networking.deletePrivateAccessSettingsPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "privateAccessSettingsId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "privateAccessSettingsId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivateAccessSettings"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a <Databricks> private access settings configuration, both specified by ID.",
+        "operationId": "networking.getPrivateAccessSettingsPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "privateAccessSettingsId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "privateAccessSettingsId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivateAccessSettings"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates an existing private access settings object, which specifies how your workspace is accessed over AWS PrivateLink. To use AWS PrivateLink, a workspace must have a private access settings object referenced by ID in the workspace's private_access_settings_id property.\nThis operation completely overwrites your existing private access settings object attached to your workspaces. All workspaces attached to the private access settings are affected by any change. If public_access_enabled, private_access_level, or allowed_vpc_endpoint_ids are updated, effects of these changes might take several minutes to propagate to the workspace API.\nYou can share one private access settings object with multiple workspaces in a single account. However, private access settings are specific to AWS regions, so only workspaces in the same AWS region can use a given private access settings object.\nBefore configuring PrivateLink, read the <Databricks> article about PrivateLink.",
+        "operationId": "networking.updatePrivateAccessSettingsPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "customerFacingPrivateAccessSettings.accountId"
+          },
+          {
+            "in": "path",
+            "name": "privateAccessSettingsId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "customerFacingPrivateAccessSettings.privateAccessSettingsId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_85391f0e"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivateAccessSettings"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/vpc-endpoints": {
+      "get": {
+        "description": "Lists Databricks VPC endpoint configurations for an account.",
+        "operationId": "networking.listVpcEndpointPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VpcEndpoint"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a VPC endpoint configuration, which represents a\n[VPC endpoint](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints.html)\nobject in AWS used to communicate privately with <Databricks> over\n[AWS PrivateLink](https://aws.amazon.com/privatelink).\n\nAfter you create the VPC endpoint configuration, the <Databricks>\n[endpoint service](https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-share-your-services.html)\nautomatically accepts the VPC endpoint.\n\nBefore configuring PrivateLink, read the\n[<Databricks> article about PrivateLink](https://docs.databricks.com/administration-guide/cloud-configurations/aws/privatelink.html).",
+        "operationId": "networking.createVpcEndpointPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "aws_vpc_endpoint_id": {
+                    "type": "string"
+                  },
+                  "gcp_vpc_endpoint_info": {
+                    "$ref": "#/components/schemas/GcpVpcEndpointInfo"
+                  },
+                  "region": {
+                    "type": "string"
+                  },
+                  "vpc_endpoint_name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VpcEndpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/vpc-endpoints/{vpcEndpointId}": {
+      "delete": {
+        "description": "Deletes a Databricks VPC endpoint configuration. You cannot delete a VPC endpoint configuration that is associated with any workspace.",
+        "operationId": "networking.deleteVpcEndpointPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "vpcEndpointId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "vpcEndpointId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VpcEndpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a VPC endpoint configuration, which represents\na [VPC endpoint](https://docs.aws.amazon.com/vpc/latest/privatelink/concepts.html)\nobject in AWS used to communicate privately with <Databricks> over\n[AWS PrivateLink](https://aws.amazon.com/privatelink).",
+        "operationId": "networking.getVpcEndpointPublic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "vpcEndpointId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "vpcEndpointId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VpcEndpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/network": {
+      "get": {
+        "description": "Gets the network option for a workspace. Every workspace has exactly one network policy binding,\nwith 'default-policy' used if no explicit assignment exists.",
+        "operationId": "networking.getWorkspaceNetworkOptionRpc",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceNetworkOption"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates the network option for a workspace. This operation associates the workspace with the specified network policy.\nTo revert to the default policy, specify 'default-policy' as the network_policy_id.",
+        "operationId": "networking.updateWorkspaceNetworkOptionRpc",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "workspaceId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceNetworkOption"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceNetworkOption"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.0/ip-access-lists": {
+      "get": {
+        "description": "Gets all IP access lists for the specified workspace.",
+        "operationId": "networking.listIpAccessLists",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListIpAccessListsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "post": {
+        "description": "Creates an IP access list for this workspace.\n\nA list can be an allow list or a block list.\nSee the top of this file for a description of how the server treats allow lists and block lists at runtime.\n\nWhen creating or updating an IP access list:\n\n* For all allow lists and block lists combined, the API supports a maximum of 1000 IP/CIDR values,\nwhere one CIDR counts as a single value. Attempts to exceed that number return error 400 with `error_code` value `QUOTA_EXCEEDED`.\n* If the new list would block the calling user's current IP, error 400 is returned with `error_code` value `INVALID_STATE`.\n\nIt can take a few minutes for the changes to take effect. **Note**: Your new IP access list has no effect until you enable the feature. See [workspaceconf/setStatus](https://docs.databricks.com/api/workspace/workspaceconf/setstatus)",
+        "operationId": "networking.createIpAccessList",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIpAccessListRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/2.0/ip-access-lists/{listId}": {
+      "delete": {
+        "description": "Deletes an IP access list, specified by its list ID.",
+        "operationId": "networking.deleteIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets an IP access list, specified by its list ID.",
+        "operationId": "networking.getIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "patch": {
+        "description": "Updates an existing IP access list, specified by its ID.\n\nA list can include allow lists and block lists.\nSee the top of this file for a description of how the server treats allow lists and block lists at run time.\n\nWhen updating an IP access list:\n\n* For all allow lists and block lists combined, the API supports a maximum of 1000 IP/CIDR values,\nwhere one CIDR counts as a single value. Attempts to exceed that number return error 400 with `error_code` value `QUOTA_EXCEEDED`.\n* If the updated list would block the calling user's current IP, error 400 is returned with `error_code` value `INVALID_STATE`.\n\nIt can take a few minutes for the changes to take effect. Note that your resulting IP access list has no effect until you enable\nthe feature. See [workspaceconf/setStatus](https://docs.databricks.com/api/workspace/workspaceconf/setstatus).",
+        "operationId": "networking.updateIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_2854c5c4"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "put": {
+        "description": "Replaces an IP access list, specified by its ID.\n\nA list can include allow lists and block lists. See the top\nof this file for a description of how the server treats allow lists and block lists at run time. When\nreplacing an IP access list:\n* For all allow lists and block lists combined, the API supports a maximum of 1000 IP/CIDR values,\nwhere one CIDR counts as a single value. Attempts to exceed that number return error 400 with `error_code`\nvalue `QUOTA_EXCEEDED`.\n* If the resulting list would block the calling user's current IP, error 400 is returned with `error_code`\nvalue `INVALID_STATE`.\nIt can take a few minutes for the changes to take effect. Note that your resulting IP access list has no\neffect until you enable the feature. See [workspaceconf/setStatus](https://docs.databricks.com/api/workspace/workspaceconf/setstatus).",
+        "operationId": "networking.replaceIpAccessList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "listId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "listId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schema_2854c5c4"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplaceIpAccessListResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/networking/v1/{name}": {
+      "delete": {
+        "description": "Deletes a network endpoint. This will remove the endpoint configuration from <Databricks>.\nDepending on the endpoint type and use case, you may also need to delete corresponding network resources\nin your cloud provider account.",
+        "operationId": "networking.deleteEndpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      },
+      "get": {
+        "description": "Gets details of a specific network endpoint.",
+        "operationId": "networking.getEndpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Endpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "workspace"
+      }
+    },
+    "/api/networking/v1/accounts/{account_id}/endpoints": {
+      "get": {
+        "description": "Lists all network connectivity endpoints for the account.",
+        "operationId": "networking.listEndpoints",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "accounts/{account_id}",
+            "x-databricks-sdk-name": "parent"
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageSize"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEndpointsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Creates a new network connectivity endpoint that enables private connectivity\nbetween your network resources and <Databricks> services.\n\nAfter creation, the endpoint is initially in the PENDING state. The <Databricks>\nendpoint service automatically reviews and approves the endpoint within a few\nminutes. Use the GET method to retrieve the latest endpoint state.\n\nAn endpoint can be used only after it reaches the APPROVED state.",
+        "operationId": "networking.createEndpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-resource-pattern": "accounts/{account_id}",
+            "x-databricks-sdk-name": "parent"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Endpoint"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Endpoint"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "networking"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "networking"
+    }
+  ],
+  "x-databricks-diagnostics": [
+    {
+      "code": "UNCONSTRAINED_ZOD_SCHEMA",
+      "message": "marshalEndpointSchema uses z.any()",
+      "source": "@databricks/sdk-networking/v1/model.js:1172:14"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "networking.createAccountIpAccessList",
+      "path": "/api/2.0/accounts/{accountId}/ip-access-lists",
+      "source": "@databricks/sdk-networking/v1/client.js:51"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createEndpoint",
+      "path": "/api/networking/v1/accounts/{account_id}/endpoints",
+      "source": "@databricks/sdk-networking/v1/client.js:198"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createIpAccessList",
+      "path": "/api/2.0/ip-access-lists",
+      "source": "@databricks/sdk-networking/v1/client.js:303"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createNccPrivateEndpointRule",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}/private-endpoint-rules",
+      "source": "@databricks/sdk-networking/v1/client.js:548"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createNetworkConnectivityConfigPublic",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs",
+      "source": "@databricks/sdk-networking/v1/client.js:457"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createNetworkPolicyRpc",
+      "path": "/api/2.0/accounts/{accountId}/network-policies",
+      "source": "@databricks/sdk-networking/v1/client.js:666"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createNetworkPublic",
+      "path": "/api/2.0/accounts/{accountId}/networks",
+      "source": "@databricks/sdk-networking/v1/client.js:768"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createPrivateAccessSettingsPublic",
+      "path": "/api/2.0/accounts/{accountId}/private-access-settings",
+      "source": "@databricks/sdk-networking/v1/client.js:792"
+    },
+    {
+      "method": "POST",
+      "operationId": "networking.createVpcEndpointPublic",
+      "path": "/api/2.0/accounts/{accountId}/vpc-endpoints",
+      "source": "@databricks/sdk-networking/v1/client.js:823"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteAccountIpAccessList",
+      "path": "/api/2.0/accounts/{accountId}/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:70"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteEndpoint",
+      "path": "/api/networking/v1/{name}",
+      "source": "@databricks/sdk-networking/v1/client.js:222"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteIpAccessList",
+      "path": "/api/2.0/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:323"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteNccPrivateEndpointRule",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}/private-endpoint-rules/{privateEndpointRuleId}",
+      "source": "@databricks/sdk-networking/v1/client.js:573"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteNetworkConnectivityConfigPublic",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}",
+      "source": "@databricks/sdk-networking/v1/client.js:476"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteNetworkPolicyRpc",
+      "path": "/api/2.0/accounts/{accountId}/network-policies/{networkPolicyId}",
+      "source": "@databricks/sdk-networking/v1/client.js:685"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteNetworkPublic",
+      "path": "/api/2.0/accounts/{accountId}/networks/{networkId}",
+      "source": "@databricks/sdk-networking/v1/client.js:846"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deletePrivateAccessSettingsPublic",
+      "path": "/api/2.0/accounts/{accountId}/private-access-settings/{privateAccessSettingsId}",
+      "source": "@databricks/sdk-networking/v1/client.js:864"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "networking.deleteVpcEndpointPublic",
+      "path": "/api/2.0/accounts/{accountId}/vpc-endpoints/{vpcEndpointId}",
+      "source": "@databricks/sdk-networking/v1/client.js:882"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getAccountIpAccessList",
+      "path": "/api/2.0/accounts/{accountId}/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:88"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getEndpoint",
+      "path": "/api/networking/v1/{name}",
+      "source": "@databricks/sdk-networking/v1/client.js:238"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getIpAccessList",
+      "path": "/api/2.0/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:342"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getNccPrivateEndpointRule",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}/private-endpoint-rules/{privateEndpointRuleId}",
+      "source": "@databricks/sdk-networking/v1/client.js:591"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getNetworkConnectivityConfigPublic",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}",
+      "source": "@databricks/sdk-networking/v1/client.js:491"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getNetworkPolicyRpc",
+      "path": "/api/2.0/accounts/{accountId}/network-policies/{networkPolicyId}",
+      "source": "@databricks/sdk-networking/v1/client.js:700"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getNetworkPublic",
+      "path": "/api/2.0/accounts/{accountId}/networks/{networkId}",
+      "source": "@databricks/sdk-networking/v1/client.js:900"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getPrivateAccessSettingsPublic",
+      "path": "/api/2.0/accounts/{accountId}/private-access-settings/{privateAccessSettingsId}",
+      "source": "@databricks/sdk-networking/v1/client.js:918"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getVpcEndpointPublic",
+      "path": "/api/2.0/accounts/{accountId}/vpc-endpoints/{vpcEndpointId}",
+      "source": "@databricks/sdk-networking/v1/client.js:941"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.getWorkspaceNetworkOptionRpc",
+      "path": "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/network",
+      "source": "@databricks/sdk-networking/v1/client.js:1040"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listAccountIpAccessLists",
+      "path": "/api/2.0/accounts/{accountId}/ip-access-lists",
+      "source": "@databricks/sdk-networking/v1/client.js:106"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listEndpoints",
+      "path": "/api/networking/v1/accounts/{account_id}/endpoints",
+      "source": "@databricks/sdk-networking/v1/client.js:257"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listIpAccessLists",
+      "path": "/api/2.0/ip-access-lists",
+      "source": "@databricks/sdk-networking/v1/client.js:361"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listNccPrivateEndpointRules",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}/private-endpoint-rules",
+      "source": "@databricks/sdk-networking/v1/client.js:609"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listNetworkConnectivityConfigsPublic",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs",
+      "source": "@databricks/sdk-networking/v1/client.js:509"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listNetworkPoliciesRpc",
+      "path": "/api/2.0/accounts/{accountId}/network-policies",
+      "source": "@databricks/sdk-networking/v1/client.js:718"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listNetworkPublic",
+      "path": "/api/2.0/accounts/{accountId}/networks",
+      "source": "@databricks/sdk-networking/v1/client.js:959"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listPrivateAccessSettingsPublic",
+      "path": "/api/2.0/accounts/{accountId}/private-access-settings",
+      "source": "@databricks/sdk-networking/v1/client.js:977"
+    },
+    {
+      "method": "GET",
+      "operationId": "networking.listVpcEndpointPublic",
+      "path": "/api/2.0/accounts/{accountId}/vpc-endpoints",
+      "source": "@databricks/sdk-networking/v1/client.js:995"
+    },
+    {
+      "method": "PUT",
+      "operationId": "networking.replaceAccountIpAccessList",
+      "path": "/api/2.0/accounts/{accountId}/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:136"
+    },
+    {
+      "method": "PUT",
+      "operationId": "networking.replaceIpAccessList",
+      "path": "/api/2.0/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:393"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "networking.updateAccountIpAccessList",
+      "path": "/api/2.0/accounts/{accountId}/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:170"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "networking.updateIpAccessList",
+      "path": "/api/2.0/ip-access-lists/{listId}",
+      "source": "@databricks/sdk-networking/v1/client.js:427"
+    },
+    {
+      "method": "PATCH",
+      "operationId": "networking.updateNccPrivateEndpointRule",
+      "path": "/api/2.0/accounts/{accountId}/network-connectivity-configs/{networkConnectivityConfigId}/private-endpoint-rules/{privateEndpointRuleId}",
+      "source": "@databricks/sdk-networking/v1/client.js:640"
+    },
+    {
+      "method": "PUT",
+      "operationId": "networking.updateNetworkPolicyRpc",
+      "path": "/api/2.0/accounts/{accountId}/network-policies/{networkPolicyId}",
+      "source": "@databricks/sdk-networking/v1/client.js:749"
+    },
+    {
+      "method": "PUT",
+      "operationId": "networking.updatePrivateAccessSettingsPublic",
+      "path": "/api/2.0/accounts/{accountId}/private-access-settings/{privateAccessSettingsId}",
+      "source": "@databricks/sdk-networking/v1/client.js:1018"
+    },
+    {
+      "method": "PUT",
+      "operationId": "networking.updateWorkspaceNetworkOptionRpc",
+      "path": "/api/2.0/accounts/{accountId}/workspaces/{workspaceId}/network",
+      "source": "@databricks/sdk-networking/v1/client.js:1061"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-networking",
+  "x-databricks-sdk-version": "0.49.0"
+}

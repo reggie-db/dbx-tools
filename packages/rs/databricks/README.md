@@ -33,12 +33,14 @@ the native browser flow otherwise. Inside an App, automatic storage uses memory
 and does not invoke the CLI. M2M always uses the native client-credentials
 flow.
 
-Inside an App, `create_persistent_auth_for_request` prefers `app_obo` when its
-request headers contain `x-forwarded-access-token`, then falls back to `app_sp` from
-`DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`.
-OBO tokens are returned directly without caching because the App front door
-refreshes them per request. Set `auth_type` or `profile` explicitly to override
-automatic App resolution.
+Inside an App, `create_persistent_auth` reads request headers from
+`DatabricksAuthOptions`. It prefers `app_obo` when the configured access-token
+header is present, then falls back to `app_sp` from `DATABRICKS_HOST`,
+`DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`. The header defaults to
+`authorization` and accepts the `Bearer` scheme. Set `access_token_header` for
+another trusted front-door header. OBO tokens are returned directly without
+caching because the front door refreshes them per request. Set `auth_type` or
+`profile` explicitly to override automatic App resolution.
 
 ## Modules
 

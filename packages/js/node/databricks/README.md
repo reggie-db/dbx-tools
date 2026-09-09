@@ -29,11 +29,8 @@ Key features:
 ## Authenticate
 
 ```ts
-import {
-  createPersistentAuth,
-  createPersistentAuthForRequest,
-  DatabricksAuthOptions,
-} from "@dbx-tools/databricks";
+import { createPersistentAuth, DatabricksAuthOptions } from "@dbx-tools/databricks";
+import { ACCESS_TOKEN_HEADER } from "@dbx-tools/shared-core";
 
 const auth = await createPersistentAuth(DatabricksAuthOptions.create({}));
 const token = await auth.token();
@@ -44,14 +41,21 @@ ambient service principal:
 
 ```ts
 const requestHeaders = new Map<string, string>();
-const forwardedToken = req.header("x-forwarded-access-token");
-if (forwardedToken) requestHeaders.set("x-forwarded-access-token", forwardedToken);
-const auth = await createPersistentAuthForRequest(DatabricksAuthOptions.create({}), requestHeaders);
+const forwardedToken = req.header(ACCESS_TOKEN_HEADER);
+if (forwardedToken) requestHeaders.set(ACCESS_TOKEN_HEADER, forwardedToken);
+const auth = await createPersistentAuth(
+  DatabricksAuthOptions.create({
+    requestHeaders,
+    accessTokenHeader: ACCESS_TOKEN_HEADER,
+  }),
+);
 ```
 
-OBO tokens are forwarded directly without caching. `app_sp` shares the complete
-M2M client-credentials implementation. Set `authType` or `profile` explicitly
-to override automatic App resolution.
+The access-token header defaults to `authorization` and accepts the standard
+`Bearer` scheme. Set `accessTokenHeader` for another trusted front-door header.
+OBO tokens are forwarded directly without caching. `app_sp` shares the
+complete M2M client-credentials implementation. Set `authType` or `profile`
+explicitly to override automatic App resolution.
 
 ## Relationship To Native AppKit
 

@@ -44,6 +44,13 @@ cargo run --manifest-path packages/rs/model-proxy/Cargo.toml -- \
 The server listens on `127.0.0.1:4000` by default. `--port` reads
 `DATABRICKS_APP_PORT` when present.
 
+Request bodies default to 4 MB through `--max-request-bytes` /
+`MAX_REQUEST_BYTES`. This follows the documented 4 MB payload limit for
+[Databricks Foundation Model APIs](https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/limits).
+Codex documents image processing limits but no smaller aggregate HTTP request
+limit, so the Databricks limit is the effective default. Increase the option
+only when the selected upstream endpoint accepts a larger payload.
+
 `LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`, case-insensitively,
 and defaults to `info`. Request summaries include protocol, selected model,
 streaming mode, status, and latency without logging request bodies or tokens.
@@ -109,18 +116,23 @@ protocols pass the upstream byte stream through directly, including Chat
 Completions to Chat Completions and Responses to Responses for Codex clients.
 Cross-protocol streams pass through aigateway's stateful Chat Completions or
 Responses parser. Anthropic output uses aigateway's native SSE encoder, while
-OpenAI Chat Completions output uses the prototype's canonical event encoder.
+OpenAI Chat Completions output uses the proxy's canonical event encoder.
 
 Responses input currently targets only Responses, so Responses-to-Chat
-translation is outside this prototype's supported route matrix.
+translation is outside the supported route matrix.
 
 Databricks errors are returned with their original status, body, and content
 type. The proxy also forwards `Retry-After`, request and correlation IDs,
 rate-limit headers, quota names, and Databricks limit details. It does not retry
 rate-limited requests; clients such as Codex retain control of retry timing.
 
-Set `DBX_MODEL_PROXY_TOKENS_PER_MINUTE` or pass `--tokens-per-minute` to enable
-an optional request queue. The configured budget applies independently to each
-resolved model in each Databricks workspace. Requests reserve an estimated
-input token count plus any explicit `max_output_tokens`,
-`max_completion_tokens`, or `max_tokens` value before they are sent upstream.
+The local token queue is disabled by default. Databricks publishes different
+input and output token limits for each pay-per-token model, while provisioned
+endpoints use allocated capacity. Codex limits vary by account tier. There is
+no single documented value that is correct for every routed model.
+
+Set `TOKENS_PER_MINUTE` or pass `--tokens-per-minute` to enable an explicit
+combined budget. The configured budget applies independently to each resolved
+model in each Databricks workspace. Requests reserve an estimated input token
+count plus any explicit `max_output_tokens`, `max_completion_tokens`, or
+`max_tokens` value before they are sent upstream.

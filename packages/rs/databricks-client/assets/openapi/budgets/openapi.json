@@ -1,0 +1,664 @@
+{
+  "components": {
+    "schemas": {
+      "ActionConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "action_configuration_id": {
+            "type": "string"
+          },
+          "action_type": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AlertConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "action_configurations": {
+            "items": {
+              "$ref": "#/components/schemas/ActionConfiguration"
+            },
+            "type": "array"
+          },
+          "alert_configuration_id": {
+            "type": "string"
+          },
+          "principal_overrides": {
+            "items": {
+              "$ref": "#/components/schemas/PrincipalOverride"
+            },
+            "type": "array"
+          },
+          "quantity_threshold": {
+            "type": "string"
+          },
+          "quantity_type": {
+            "type": "string"
+          },
+          "scope_type": {
+            "type": "string"
+          },
+          "time_period": {
+            "type": "string"
+          },
+          "trigger_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BudgetConfiguration": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "alert_configurations": {
+            "items": {
+              "$ref": "#/components/schemas/AlertConfiguration"
+            },
+            "type": "array"
+          },
+          "budget_configuration_id": {
+            "type": "string"
+          },
+          "create_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/BudgetConfigurationFilter"
+          },
+          "resource_type": {
+            "type": "string"
+          },
+          "update_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "BudgetConfigurationFilter": {
+        "additionalProperties": false,
+        "properties": {
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetConfigurationFilter_TagClause"
+            },
+            "type": "array"
+          },
+          "workspace_id": {
+            "$ref": "#/components/schemas/BudgetConfigurationFilter_WorkspaceIdClause"
+          }
+        },
+        "type": "object"
+      },
+      "BudgetConfigurationFilter_Clause": {
+        "additionalProperties": false,
+        "properties": {
+          "operator": {
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "BudgetConfigurationFilter_TagClause": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/BudgetConfigurationFilter_Clause"
+          }
+        },
+        "type": "object"
+      },
+      "BudgetConfigurationFilter_WorkspaceIdClause": {
+        "additionalProperties": false,
+        "properties": {
+          "operator": {
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateBudgetConfigurationBudget": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "alert_configurations": {
+            "items": {
+              "$ref": "#/components/schemas/AlertConfiguration"
+            },
+            "type": "array"
+          },
+          "budget_configuration_id": {
+            "type": "string"
+          },
+          "create_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/BudgetConfigurationFilter"
+          },
+          "resource_type": {
+            "type": "string"
+          },
+          "update_time": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CreateBudgetConfigurationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/CreateBudgetConfigurationBudget"
+          }
+        },
+        "type": "object"
+      },
+      "CreateBudgetConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/BudgetConfiguration"
+          }
+        },
+        "type": "object"
+      },
+      "DeleteBudgetConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "GetBudgetConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/BudgetConfiguration"
+          }
+        },
+        "type": "object"
+      },
+      "ListBudgetConfigurationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "budgets": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetConfiguration"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PrincipalOverride": {
+        "additionalProperties": false,
+        "properties": {
+          "override_threshold": {
+            "type": "string"
+          },
+          "principal_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "UpdateBudgetConfigurationBudget": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "alert_configurations": {
+            "items": {
+              "$ref": "#/components/schemas/AlertConfiguration"
+            },
+            "type": "array"
+          },
+          "budget_configuration_id": {
+            "type": "string"
+          },
+          "create_time": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/BudgetConfigurationFilter"
+          },
+          "resource_type": {
+            "type": "string"
+          },
+          "update_time": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateBudgetConfigurationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/UpdateBudgetConfigurationBudget"
+          },
+          "budget_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateBudgetConfigurationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/BudgetConfiguration"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Budgets API",
+    "version": "0.49.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/2.1/accounts/{accountId}/budgets": {
+      "get": {
+        "description": "Gets all budgets associated with this account.",
+        "operationId": "budgets.listBudgetConfigurations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "query",
+            "name": "include_spend_status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeSpendStatus"
+          },
+          {
+            "in": "query",
+            "name": "include_workspace_budgets",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeWorkspaceBudgets"
+          },
+          {
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "pageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBudgetConfigurationsResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgets"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "post": {
+        "description": "Create a new budget configuration for an account. For full details, see https://docs.databricks.com/en/admin/account-settings/budgets.html.",
+        "operationId": "budgets.createBudgetConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "budget.accountId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "budget": {
+                    "$ref": "#/components/schemas/CreateBudgetConfigurationBudget"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBudgetConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgets"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    },
+    "/api/2.1/accounts/{accountId}/budgets/{budgetId}": {
+      "delete": {
+        "description": "Deletes a budget configuration for an account. Both account and budget configuration are specified by ID. This cannot be undone.",
+        "operationId": "budgets.deleteBudgetConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "budgetId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "budgetId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteBudgetConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgets"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "get": {
+        "description": "Gets a budget configuration for an account. Both account and budget configuration are specified by ID.",
+        "operationId": "budgets.getBudgetConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "accountId"
+          },
+          {
+            "in": "path",
+            "name": "budgetId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "budgetId"
+          },
+          {
+            "in": "query",
+            "name": "include_spend_status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "includeSpendStatus"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBudgetConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgets"
+        ],
+        "x-databricks-api-scope": "account"
+      },
+      "put": {
+        "description": "Updates a budget configuration for an account. Both account and budget configuration are specified by ID.",
+        "operationId": "budgets.updateBudgetConfiguration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "budget.accountId"
+          },
+          {
+            "in": "path",
+            "name": "budgetId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-databricks-sdk-name": "budgetId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "budget": {
+                    "$ref": "#/components/schemas/UpdateBudgetConfigurationBudget"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateBudgetConfigurationResponse"
+                }
+              }
+            },
+            "description": "Operation completed successfully."
+          }
+        },
+        "tags": [
+          "budgets"
+        ],
+        "x-databricks-api-scope": "account"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Databricks API host",
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "example.cloud.databricks.com",
+          "description": "Workspace, account, or data-plane host"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "budgets"
+    }
+  ],
+  "x-databricks-operation-inventory": [
+    {
+      "method": "POST",
+      "operationId": "budgets.createBudgetConfiguration",
+      "path": "/api/2.1/accounts/{accountId}/budgets",
+      "source": "@databricks/sdk-budgets/v1/client.js:35"
+    },
+    {
+      "method": "DELETE",
+      "operationId": "budgets.deleteBudgetConfiguration",
+      "path": "/api/2.1/accounts/{accountId}/budgets/{budgetId}",
+      "source": "@databricks/sdk-budgets/v1/client.js:54"
+    },
+    {
+      "method": "GET",
+      "operationId": "budgets.getBudgetConfiguration",
+      "path": "/api/2.1/accounts/{accountId}/budgets/{budgetId}",
+      "source": "@databricks/sdk-budgets/v1/client.js:72"
+    },
+    {
+      "method": "GET",
+      "operationId": "budgets.listBudgetConfigurations",
+      "path": "/api/2.1/accounts/{accountId}/budgets",
+      "source": "@databricks/sdk-budgets/v1/client.js:94"
+    },
+    {
+      "method": "PUT",
+      "operationId": "budgets.updateBudgetConfiguration",
+      "path": "/api/2.1/accounts/{accountId}/budgets/{budgetId}",
+      "source": "@databricks/sdk-budgets/v1/client.js:127"
+    }
+  ],
+  "x-databricks-sdk-package": "@databricks/sdk-budgets",
+  "x-databricks-sdk-version": "0.49.0"
+}

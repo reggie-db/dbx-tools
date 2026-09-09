@@ -27,7 +27,6 @@ __all__ = [
     "StorageHandleProtocol",
     "canonical_scopes",
     "create_persistent_auth",
-    "create_persistent_auth_for_request",
     "create_persistent_auth_with_storage",
     "create_provider_auth",
     "create_provider_auth_with_storage",

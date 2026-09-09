@@ -22,8 +22,8 @@ pub use profile::{
 };
 pub use storage::{open_databricks_store, StoreOptions};
 
-/// Header carrying the current Databricks App on-behalf-of access token.
-pub const OBO_TOKEN_HEADER: &str = "x-forwarded-access-token";
+/// Default request header carrying an access token.
+pub const DEFAULT_ACCESS_TOKEN_HEADER: &str = "authorization";
 
 /// Configuration shared by the generated Node and Python auth bindings.
 #[derive(Clone, uniffi::Record)]
@@ -64,6 +64,12 @@ pub struct DatabricksAuthOptions {
     /// Shared lifecycle configuration; omission uses `AuthOptions::default()`.
     #[uniffi(default = None)]
     pub auth: Option<AuthOptions>,
+    /// Request headers available to request-scoped authentication.
+    #[uniffi(default = None)]
+    pub request_headers: Option<HashMap<String, String>>,
+    /// Header selected from `request_headers`; defaults to `authorization`.
+    #[uniffi(default = None)]
+    pub access_token_header: Option<String>,
     /// Whether implicit M2M defaults should select one matching U2M profile.
     #[uniffi(default = true)]
     pub prefer_user_to_machine: bool,
@@ -84,6 +90,8 @@ impl Default for DatabricksAuthOptions {
             target: None,
             cache_dir: None,
             auth: None,
+            request_headers: None,
+            access_token_header: None,
             prefer_user_to_machine: true,
         }
     }
@@ -117,26 +125,8 @@ pub async fn create_persistent_auth(
     options: DatabricksAuthOptions,
     storage: Option<Storage>,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    create_persistent_auth_from_headers(options, storage, None).await
-}
-
-#[uniffi::export(async_runtime = "tokio", default(storage = None))]
-/// Resolve authentication with the current Databricks App request headers.
-pub async fn create_persistent_auth_for_request(
-    options: DatabricksAuthOptions,
-    request_headers: HashMap<String, String>,
-    storage: Option<Storage>,
-) -> BindingResult<Arc<PersistentAuth>> {
-    create_persistent_auth_from_headers(options, storage, Some(&request_headers)).await
-}
-
-async fn create_persistent_auth_from_headers(
-    options: DatabricksAuthOptions,
-    storage: Option<Storage>,
-    request_headers: Option<&HashMap<String, String>>,
-) -> BindingResult<Arc<PersistentAuth>> {
     let in_app = is_databricks_app();
-    let profile = resolve_profile(&options, in_app, request_headers)?;
+    let profile = resolve_profile(&options, in_app)?;
     let use_databricks_cli = should_use_databricks_cli(
         profile.auth_kind,
         storage,
@@ -154,7 +144,7 @@ pub async fn create_persistent_auth_with_storage(
     options: DatabricksAuthOptions,
     storage: Arc<StorageHandle>,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    let profile = resolve_profile(&options, is_databricks_app(), None)?;
+    let profile = resolve_profile(&options, is_databricks_app())?;
     create_persistent_auth_with_store(options, profile, storage.store.clone(), false).await
 }
 
@@ -169,7 +159,7 @@ async fn create_persistent_auth_with_store(
             access_token: profile
                 .access_token()
                 .ok_or_else(|| DatabricksAuthError::Failure {
-                    message: "app_obo requires x-forwarded-access-token".into(),
+                    message: "app_obo requires the configured access token header".into(),
                 })?
                 .to_owned(),
             token_type: "Bearer".into(),
@@ -214,11 +204,7 @@ fn storage_backend(storage: Option<Storage>, in_app: bool) -> Storage {
     }
 }
 
-fn resolve_profile(
-    options: &DatabricksAuthOptions,
-    in_app: bool,
-    request_headers: Option<&HashMap<String, String>>,
-) -> BindingResult<Profile> {
+fn resolve_profile(options: &DatabricksAuthOptions, in_app: bool) -> BindingResult<Profile> {
     let explicit_profile = options.profile.is_some()
         || std::env::var("DATABRICKS_CONFIG_PROFILE")
             .ok()
@@ -233,7 +219,13 @@ fn resolve_profile(
         })
         .map(|auth_type| auth_type.trim().to_ascii_lowercase())
         .filter(|auth_type| !auth_type.is_empty());
-    let request_token = request_obo_token(request_headers);
+    let access_token_header = options
+        .access_token_header
+        .as_deref()
+        .map(str::trim)
+        .filter(|header| !header.is_empty())
+        .unwrap_or(DEFAULT_ACCESS_TOKEN_HEADER);
+    let request_token = request_obo_token(options.request_headers.as_ref(), access_token_header);
     let auth_type = resolve_app_auth_type(
         in_app,
         explicit_profile,

@@ -549,6 +549,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |-
           cargo publish --package "dbx-tools-databricks" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-databricks-client" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-google" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-model" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-model-proxy" --registry crates-io --no-verify
@@ -587,6 +588,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.LOCAL_CARGO_TOKEN }}
         run: |-
           cargo publish --package "dbx-tools-databricks" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-databricks-client" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-google" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-model" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-model-proxy" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
