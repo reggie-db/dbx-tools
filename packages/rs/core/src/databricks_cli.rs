@@ -1,6 +1,7 @@
 use std::{
     process::{Command, Stdio},
     sync::OnceLock,
+    time::Duration,
 };
 
 static DATABRICKS_CLI_AVAILABLE: OnceLock<bool> = OnceLock::new();
@@ -31,8 +32,8 @@ pub fn databricks_cli_available() -> bool {
 }
 
 /// Run interactive Databricks CLI login for one profile.
-pub fn databricks_cli_login(profile: &str) -> Result<(), DatabricksCliError> {
-    let status = login_command(databricks_executable(), profile).status()?;
+pub fn databricks_cli_login(profile: &str, timeout: Duration) -> Result<(), DatabricksCliError> {
+    let status = login_command(databricks_executable(), profile, timeout).status()?;
     if status.success() {
         Ok(())
     } else {
@@ -63,9 +64,16 @@ fn databricks_executable() -> std::ffi::OsString {
     std::env::var_os("DATABRICKS_CLI_PATH").unwrap_or_else(|| "databricks".into())
 }
 
-fn login_command(executable: std::ffi::OsString, profile: &str) -> Command {
+fn login_command(executable: std::ffi::OsString, profile: &str, timeout: Duration) -> Command {
     let mut command = Command::new(executable);
-    command.args(["auth", "login", "--profile", profile]);
+    command.args([
+        "auth",
+        "login",
+        "--profile",
+        profile,
+        "--timeout",
+        &format!("{}s", timeout.as_secs()),
+    ]);
     command
 }
 
@@ -100,11 +108,11 @@ mod tests {
     }
 
     #[test]
-    fn login_command_uses_profile() {
-        let command = login_command("databricks".into(), "PROFILE");
+    fn login_command_uses_profile_and_timeout() {
+        let command = login_command("databricks".into(), "PROFILE", Duration::from_secs(900));
         assert_eq!(
             command.get_args().collect::<Vec<_>>(),
-            ["auth", "login", "--profile", "PROFILE"]
+            ["auth", "login", "--profile", "PROFILE", "--timeout", "900s"]
         );
     }
 }

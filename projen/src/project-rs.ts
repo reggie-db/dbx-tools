@@ -163,6 +163,14 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
     os: RustReleaseOs.WINDOWS,
     cpu: RustReleaseCpu.X64,
   },
+  {
+    runner: "windows-11-vs2026-arm",
+    cargo: "aarch64-pc-windows-msvc",
+    node: "win32-arm64-msvc",
+    python: "win_arm64",
+    os: RustReleaseOs.WINDOWS,
+    cpu: RustReleaseCpu.ARM64,
+  },
 ] as const;
 
 const RUST_CACHE_ENV = {
@@ -990,6 +998,12 @@ export class DBXToolsRustWorkspace {
       env: {
         ...RUST_CACHE_ENV,
         SCCACHE_GHA_VERSION: `release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`,
+        ...(hasPythonBindings
+          ? {
+              UV_PYTHON_DOWNLOADS:
+                "${{ matrix.os == 'win32' && 'never' || 'automatic' }}",
+            }
+          : {}),
       },
       strategy: {
         failFast: false,
@@ -997,7 +1011,20 @@ export class DBXToolsRustWorkspace {
       },
       steps: [
         ...releaseSourceSteps(),
-        ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
+        ...(hasPythonBindings
+          ? [
+              {
+                name: "Setup Windows Python",
+                if: "${{ matrix.os == 'win32' }}",
+                uses: "actions/setup-python@v6",
+                with: {
+                  "python-version": "3.12",
+                  architecture: "${{ matrix.cpu }}",
+                },
+              },
+              { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+            ]
+          : []),
         {
           name: "Setup Rust",
           ...(usePreinstalledWindowsRust ? { if: "${{ matrix.os != 'win32' }}" } : {}),

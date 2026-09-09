@@ -31,7 +31,7 @@ pub struct AuthOptions {
     #[uniffi(default = 30)]
     pub lock_timeout_seconds: u64,
     /// Maximum time allowed for a new interactive login.
-    #[uniffi(default = 3600)]
+    #[uniffi(default = 900)]
     pub login_timeout_seconds: u64,
     /// Logo URL or data URI displayed by the browser callback page.
     #[uniffi(default = None)]
@@ -43,7 +43,7 @@ impl Default for AuthOptions {
         Self {
             refresh_buffer_seconds: 300,
             lock_timeout_seconds: 30,
-            login_timeout_seconds: 3600,
+            login_timeout_seconds: 900,
             callback_image_src: None,
         }
     }

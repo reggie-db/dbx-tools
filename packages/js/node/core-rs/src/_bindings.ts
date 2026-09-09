@@ -392,7 +392,7 @@ export const AuthOptions = (() => {
     const defaults = () => ({
         refreshBufferSeconds: BigInt("300"),
         lockTimeoutSeconds: BigInt("30"),
-        loginTimeoutSeconds: BigInt("3600"),
+        loginTimeoutSeconds: BigInt("900"),
         callbackImageSrc: undefined
     });
     const create = (() => {

@@ -79,7 +79,7 @@ def test_shared_lifecycle_record_composes_in_both_providers():
     assert provider.auth is auth
     assert databricks.auth is auth
     assert auth.lock_timeout_seconds == 30
-    assert auth.login_timeout_seconds == 3600
+    assert auth.login_timeout_seconds == 900
     assert AuthOptions().refresh_buffer_seconds == 300
     assert DatabricksAuthOptions().auth is None
 

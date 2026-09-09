@@ -51,12 +51,12 @@ describe("auth CLI", () => {
   it("routes login and token operations through PersistentAuth", async () => {
     const cases = [
       { args: ["login"], expected: "token:true" },
-      { args: ["token"], expected: "token:false" },
-      { args: ["token", "--login-if-missing"], expected: "token:undefined" },
-      { args: ["token", "--force-refresh"], expected: "force-refresh:false" },
+      { args: ["token"], expected: "token:undefined" },
+      { args: ["token", "--no-login"], expected: "token:false" },
+      { args: ["token", "--force-refresh"], expected: "force-refresh:undefined" },
       {
-        args: ["token", "--force-refresh", "--login-if-missing"],
-        expected: "force-refresh:undefined",
+        args: ["token", "--force-refresh", "--no-login"],
+        expected: "force-refresh:false",
       },
     ];
 
@@ -80,7 +80,7 @@ describe("auth CLI", () => {
     }
   });
 
-  it("routes logout and status through PersistentAuth", async () => {
+  it("routes logout, profile, and status through PersistentAuth", async () => {
     const logoutCalls: string[] = [];
     await buildProgram("dbx auth", {
       createPersistentAuth: async () => fakeAuth(logoutCalls),
@@ -101,6 +101,26 @@ describe("auth CLI", () => {
         storage: "file",
       },
     ]);
+
+    const profileCalls: string[] = [];
+    const profileOutput: string[] = [];
+    await buildProgram("dbx auth", {
+      createPersistentAuth: async () => fakeAuth(profileCalls),
+      writeText: (value) => profileOutput.push(value),
+    }).parseAsync(["profile"], { from: "user" });
+    assert.deepEqual(profileCalls, ["status"]);
+    assert.deepEqual(profileOutput, ["TEST"]);
+  });
+
+  it("describes automatic login and its opt-out", () => {
+    const program = buildProgram("dbx auth");
+    const token = program.commands.find((command) => command.name() === "token");
+    const profile = program.commands.find((command) => command.name() === "profile");
+
+    assert.match(token?.description() ?? "", /logging in when needed/);
+    assert.match(token?.helpInformation() ?? "", /--no-login/);
+    assert.doesNotMatch(token?.helpInformation() ?? "", /--login-if-missing/);
+    assert.match(profile?.description() ?? "", /configured or automatically detected profile/);
   });
 
   it("translates common options to the generated binding record", async () => {

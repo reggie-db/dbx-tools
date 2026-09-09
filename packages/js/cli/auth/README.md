@@ -15,7 +15,8 @@ Key features:
 - U2M preference by default, with standard M2M resolution available through
   `--no-prefer-user-to-machine`;
 - Databricks CLI refresh when available, with native file fallback;
-- access-token lookup, optional login, and forced refresh;
+- access-token lookup with automatic login, a non-interactive opt-out, and
+  forced refresh;
 - profile and host resolution compatible with Databricks configuration;
 - JSON output that excludes refresh credentials;
 - one `dbx` installation, with native auth code loaded only for `dbx auth`.
@@ -25,16 +26,19 @@ Key features:
 ```sh
 dbx auth login --profile DEFAULT
 dbx auth token --profile DEFAULT
-dbx auth token --profile DEFAULT --login-if-missing
+dbx auth token --profile DEFAULT --no-login
 dbx auth token --profile DEFAULT --force-refresh
+dbx auth profile
 dbx auth status --profile DEFAULT
 dbx auth logout --profile DEFAULT
 ```
 
-`login` and `token` write access-token JSON to stdout. `status` writes the
-resolved profile, host, and storage name. `logout` produces no output when it
-succeeds. `token` mints an M2M token when no cached token exists; U2M requires
-`login` or `--login-if-missing` when its credential is missing or invalid.
+`login` and `token` write access-token JSON to stdout. `token` automatically
+runs login when a U2M credential is missing or cannot refresh; `--no-login`
+makes it fail instead. The same policy applies with `--force-refresh`.
+`profile` writes only the configured or detected profile name. `status` writes
+the resolved profile, host, and storage name. `logout` produces no output when
+it succeeds.
 
 ## Common options
 
@@ -52,7 +56,8 @@ succeeds. `token` mints an M2M token when no cached token exists; U2M requires
 - `--cache-dir <path>` selects the file-storage directory.
 - `--callback-image-src <src>` sets the callback logo URL or data URI.
 - `--lock-timeout-seconds`, `--login-timeout-seconds`, and
-  `--refresh-buffer-seconds` control auth timing.
+  `--refresh-buffer-seconds` control auth timing. Browser login defaults to 15
+  minutes.
 
 The Databricks options also read their standard `DATABRICKS_*` environment
 variables. U2M storage and timeout options read the matching

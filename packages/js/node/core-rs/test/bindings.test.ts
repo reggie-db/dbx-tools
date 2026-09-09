@@ -82,7 +82,7 @@ it("composes the same generated lifecycle record in both providers", () => {
   assert.equal(provider.auth, auth);
   assert.equal(databricks.auth, auth);
   assert.equal(auth.lockTimeoutSeconds, 30n);
-  assert.equal(auth.loginTimeoutSeconds, 3600n);
+  assert.equal(auth.loginTimeoutSeconds, 900n);
   assert.equal(AuthOptions.create({}).refreshBufferSeconds, 300n);
   assert.equal(DatabricksAuthOptions.create({}).auth, undefined);
 });

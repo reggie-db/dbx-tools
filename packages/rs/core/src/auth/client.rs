@@ -37,10 +37,10 @@ impl DatabricksCliFlow {
         .map_err(|error| Error::OAuth(format!("databricks auth token task failed: {error}")))?
     }
 
-    async fn login(&self) -> Result<Token> {
+    async fn login(&self, timeout: Duration) -> Result<Token> {
         let profile = self.profile.clone();
         tokio::task::spawn_blocking(move || {
-            crate::databricks_cli_login(&profile)
+            crate::databricks_cli_login(&profile, timeout)
                 .map_err(|error| Error::OAuth(error.to_string()))?;
             let output = crate::databricks_cli_token(&profile, false)
                 .map_err(|error| Error::OAuth(error.to_string()))?;
@@ -117,7 +117,7 @@ impl crate::TokenProvider for AuthFlow {
     async fn login(&self, timeout: Duration) -> Result<Token> {
         match self {
             Self::UserToMachine(flow) => flow.login(timeout).await,
-            Self::UserToMachineCli(flow) => flow.login().await,
+            Self::UserToMachineCli(flow) => flow.login(timeout).await,
             Self::MachineToMachine(flow) => flow.token().await,
             Self::PersonalAccessToken(token) => Ok(token.clone()),
         }

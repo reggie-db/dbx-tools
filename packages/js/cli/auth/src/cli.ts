@@ -35,7 +35,7 @@ interface AuthCliOptions {
 
 interface TokenCommandOptions {
   forceRefresh?: boolean;
-  loginIfMissing?: boolean;
+  login?: boolean;
 }
 
 interface AuthContext {
@@ -47,12 +47,18 @@ interface AuthContext {
 interface AuthCliDependencies {
   createPersistentAuth: typeof databricks.createPersistentAuth;
   writeJson(value: unknown): void;
+  writeText(value: string): void;
 }
+
+const DEFAULT_AUTH_OPTIONS = databricks.AuthOptions.create({});
 
 const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
   createPersistentAuth: databricks.createPersistentAuth,
   writeJson: (value) => {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+  },
+  writeText: (value) => {
+    process.stdout.write(`${value}\n`);
   },
 };
 
@@ -219,17 +225,17 @@ function addCommonOptions(program: Command): Command {
     )
     .addOption(
       new Option("--lock-timeout-seconds <seconds>", "Credential lock timeout")
-        .default("30")
+        .default(DEFAULT_AUTH_OPTIONS.lockTimeoutSeconds.toString())
         .env("DBX_TOOLS_U2M_LOCK_TIMEOUT_SECONDS"),
     )
     .addOption(
       new Option("--login-timeout-seconds <seconds>", "Browser login timeout")
-        .default("3600")
+        .default(DEFAULT_AUTH_OPTIONS.loginTimeoutSeconds.toString())
         .env("DBX_TOOLS_U2M_LOGIN_TIMEOUT_SECONDS"),
     )
     .addOption(
       new Option("--refresh-buffer-seconds <seconds>", "Token refresh buffer")
-        .default("300")
+        .default(DEFAULT_AUTH_OPTIONS.refreshBufferSeconds.toString())
         .env("DBX_TOOLS_U2M_REFRESH_BUFFER_SECONDS"),
     )
     .option(
@@ -254,7 +260,7 @@ export function buildProgram(
 
   program
     .command("login")
-    .description("Authenticate and return an access token")
+    .description("Force browser login and return an access token")
     .action(async () => {
       await withAuth(options(), dependencies, async ({ auth }) => {
         dependencies.writeJson(tokenJson(await auth.token(true)));
@@ -263,17 +269,25 @@ export function buildProgram(
 
   program
     .command("token")
-    .description("Return a valid access token")
+    .description("Return a valid access token, logging in when needed")
     .option("--force-refresh", "Refresh the token before returning it")
-    .option("--login-if-missing", "Run browser OAuth when a credential is missing or invalid")
+    .option("--no-login", "Fail instead of logging in for a missing or invalid credential")
     .action(async (tokenOptions: TokenCommandOptions) => {
       await withAuth(options(), dependencies, async ({ auth }) => {
+        const login = tokenOptions.login === false ? false : undefined;
         const token = tokenOptions.forceRefresh
-          ? await auth.forceRefreshToken(tokenOptions.loginIfMissing ? undefined : false)
-          : tokenOptions.loginIfMissing
-            ? await auth.token()
-            : await auth.token(false);
+          ? await auth.forceRefreshToken(login)
+          : await auth.token(login);
         dependencies.writeJson(tokenJson(token));
+      });
+    });
+
+  program
+    .command("profile")
+    .description("Print the configured or automatically detected profile")
+    .action(async () => {
+      await withAuth(options(), dependencies, async ({ auth }) => {
+        dependencies.writeText(auth.status().profile);
       });
     });
 

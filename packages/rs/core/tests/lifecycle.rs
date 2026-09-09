@@ -32,7 +32,7 @@ impl AuthSession for Session {
 fn lifecycle_options_have_shared_defaults_and_signed_refresh_windows() {
     let options = AuthOptions::default();
     assert_eq!(options.lock_timeout(), Duration::from_secs(30));
-    assert_eq!(options.login_timeout(), Duration::from_secs(3600));
+    assert_eq!(options.login_timeout(), Duration::from_secs(900));
     assert_eq!(options.refresh_buffer(), time::Duration::seconds(300));
     let options = AuthOptions {
         refresh_buffer_seconds: -5,
