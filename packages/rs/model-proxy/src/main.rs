@@ -35,11 +35,13 @@ use clap::{Parser, ValueEnum};
 use dbx_tools_databricks::{
     create_persistent_auth, init_logging, DatabricksAuthOptions, PersistentAuth,
 };
-use dbx_tools_model::{codex_model_name, models_payload, ModelClient};
+use dbx_tools_model::{
+    codex_model_name, models_payload_with_capabilities, ModelCapabilitiesResolver, ModelClient,
+};
 use eventsource_stream::Eventsource;
 use futures_util::{StreamExt, TryStreamExt};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use tracing::info;
 
 const CHAT_PATH: &str = "serving-endpoints/chat/completions";
@@ -65,6 +67,7 @@ enum TargetWire {
 
 #[derive(Clone)]
 struct AppState {
+    capabilities: ModelCapabilitiesResolver,
     client: reqwest::Client,
     host: String,
     models: ModelClient,
@@ -157,6 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind((host, port)).await?;
     let models = ModelClient::new(&databricks_host)?;
     let state = AppState {
+        capabilities: ModelCapabilitiesResolver::new()?,
         client: reqwest::Client::new(),
         host: databricks_host,
         models,
@@ -211,7 +215,24 @@ async fn list_models(
     let codex = originator.is_some_and(is_codex_originator);
     let token = state.tokens.token().await?;
     let endpoints = state.models.models(&token, false).await?;
-    let payload = models_payload(&endpoints, query.search.as_deref(), query.extended, codex);
+    let capabilities = if codex {
+        match state.capabilities.capabilities().await {
+            Ok(capabilities) => Some(capabilities),
+            Err(error) => {
+                tracing::warn!(%error, "Codex capability discovery unavailable");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let payload = models_payload_with_capabilities(
+        &endpoints,
+        query.search.as_deref(),
+        query.extended,
+        codex,
+        capabilities.as_ref(),
+    );
     let count = payload
         .get(if codex { "models" } else { "data" })
         .and_then(Value::as_array)
@@ -253,6 +274,17 @@ async fn proxy(
         .models
         .resolve_endpoint(&token, &requested_model)
         .await?;
+    let native_responses = if let Some(endpoint) = endpoint.as_ref() {
+        match state.capabilities.capabilities().await {
+            Ok(capabilities) => capabilities.supports_responses(endpoint),
+            Err(error) => {
+                tracing::warn!(%error, "model capability discovery unavailable");
+                false
+            }
+        }
+    } else {
+        false
+    };
     let model = endpoint
         .as_ref()
         .map(|endpoint| endpoint.name.clone())
@@ -266,9 +298,15 @@ async fn proxy(
         model.clone()
     };
     input["model"] = Value::String(upstream_model);
-    let target = select_request_target(state.target, client_wire, &model, originator);
+    let target = select_request_target(
+        state.target,
+        client_wire,
+        originator,
+        &input,
+        native_responses,
+    );
     let request_body = adapt_request(client_wire, target, input)?;
-    let url = upstream_url(&state.host, target, &model, codex);
+    let url = upstream_url(&state.host, target, codex, native_responses);
     let mut upstream = send(&state.client, &url, &token, originator, &request_body).await?;
 
     if upstream.status() == reqwest::StatusCode::UNAUTHORIZED {
@@ -560,9 +598,9 @@ async fn send(
         .map_err(|error| ProxyError::Upstream(error.to_string()))
 }
 
-fn select_target(configured: TargetWire, client: ClientWire, model: &str) -> TargetWire {
+fn select_target(configured: TargetWire, client: ClientWire, native_responses: bool) -> TargetWire {
     match configured {
-        TargetWire::Auto if client == ClientWire::Responses || responses_only(model) => {
+        TargetWire::Auto if client == ClientWire::Responses || native_responses => {
             TargetWire::Responses
         }
         TargetWire::Auto => TargetWire::Chat,
@@ -573,21 +611,24 @@ fn select_target(configured: TargetWire, client: ClientWire, model: &str) -> Tar
 fn select_request_target(
     configured: TargetWire,
     client: ClientWire,
-    model: &str,
     originator: Option<&str>,
+    input: &Value,
+    native_responses: bool,
 ) -> TargetWire {
     let configured = if originator.is_some_and(is_codex_originator) {
+        TargetWire::Responses
+    } else if configured == TargetWire::Auto && request_requires_responses(client, input) {
         TargetWire::Responses
     } else {
         configured
     };
-    select_target(configured, client, model)
+    select_target(configured, client, native_responses)
 }
 
 fn adapt_request(
     client: ClientWire,
     target: TargetWire,
-    input: Value,
+    mut input: Value,
 ) -> Result<Vec<u8>, ProxyError> {
     if client == ClientWire::Responses {
         return match target {
@@ -597,6 +638,15 @@ fn adapt_request(
             )),
         };
     }
+
+    if target == TargetWire::Chat && request_requires_responses(client, &input) {
+        return Err(ProxyError::Unsupported(
+            "request uses Responses-only tools or fields but the proxy target is Chat".to_owned(),
+        ));
+    }
+
+    let original_input = input.clone();
+    let original_tools = take_cross_protocol_tools(client, &mut input);
 
     let canonical = match client {
         ClientWire::Chat => serde_json::from_value::<ChatRequest>(input)?,
@@ -612,9 +662,159 @@ fn adapt_request(
             let request =
                 build_responses_create_request(&canonical, &ResponsesRequestConfig::default())
                     .map_err(|error| ProxyError::Translation(error.to_string()))?;
+            let mut request = serde_json::to_value(request)?;
+            preserve_responses_fields(&original_input, &mut request);
+            if let Some(tools) = original_tools {
+                request["tools"] = Value::Array(translate_responses_tools(client, tools)?);
+            }
             serde_json::to_vec(&request).map_err(Into::into)
         }
         TargetWire::Auto => unreachable!(),
+    }
+}
+
+fn request_requires_responses(client: ClientWire, input: &Value) -> bool {
+    if client == ClientWire::Responses {
+        return true;
+    }
+    let has_hosted_tool = input
+        .get("tools")
+        .and_then(Value::as_array)
+        .is_some_and(|tools| {
+            tools.iter().any(|tool| {
+                tool.get("type")
+                    .and_then(Value::as_str)
+                    .is_some_and(|kind| kind != "function")
+            })
+        });
+    has_hosted_tool
+        || [
+            "background",
+            "conversation",
+            "context_management",
+            "previous_response_id",
+            "prompt_cache_key",
+            "prompt_cache_retention",
+            "safety_identifier",
+            "stream_options",
+            "truncation",
+        ]
+        .iter()
+        .any(|field| input.get(*field).is_some())
+}
+
+fn take_cross_protocol_tools(client: ClientWire, input: &mut Value) -> Option<Vec<Value>> {
+    let tools = input.get("tools")?.as_array()?.clone();
+    let canonical = tools
+        .iter()
+        .filter(|tool| match client {
+            ClientWire::Chat => tool.get("type").and_then(Value::as_str) == Some("function"),
+            ClientWire::Anthropic => tool.get("input_schema").is_some(),
+            ClientWire::Responses => false,
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if canonical.is_empty() {
+        input
+            .as_object_mut()
+            .expect("request is an object")
+            .remove("tools");
+    } else {
+        input["tools"] = Value::Array(canonical);
+    }
+    Some(tools)
+}
+
+fn translate_responses_tools(
+    client: ClientWire,
+    tools: Vec<Value>,
+) -> Result<Vec<Value>, ProxyError> {
+    tools
+        .into_iter()
+        .map(|tool| match client {
+            ClientWire::Chat => translate_chat_tool(tool),
+            ClientWire::Anthropic => translate_anthropic_tool(tool),
+            ClientWire::Responses => Ok(tool),
+        })
+        .collect()
+}
+
+fn translate_chat_tool(tool: Value) -> Result<Value, ProxyError> {
+    let mut tool = tool
+        .as_object()
+        .cloned()
+        .ok_or_else(|| ProxyError::Unsupported("Chat tools must be JSON objects".to_owned()))?;
+    let kind = tool
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or("function");
+    if kind != "function" {
+        normalize_web_search_tool(&mut tool);
+        return Ok(Value::Object(tool));
+    }
+    let function = tool
+        .remove("function")
+        .and_then(|value| value.as_object().cloned())
+        .ok_or_else(|| {
+            ProxyError::Unsupported("function tools must include a function object".to_owned())
+        })?;
+    tool.insert("type".to_owned(), Value::String("function".to_owned()));
+    tool.extend(function);
+    Ok(Value::Object(tool))
+}
+
+fn translate_anthropic_tool(tool: Value) -> Result<Value, ProxyError> {
+    let mut tool = tool.as_object().cloned().ok_or_else(|| {
+        ProxyError::Unsupported("Anthropic tools must be JSON objects".to_owned())
+    })?;
+    if let Some(parameters) = tool.remove("input_schema") {
+        tool.insert("type".to_owned(), Value::String("function".to_owned()));
+        tool.insert("parameters".to_owned(), parameters);
+        tool.remove("cache_control");
+    } else {
+        normalize_web_search_tool(&mut tool);
+    }
+    Ok(Value::Object(tool))
+}
+
+fn normalize_web_search_tool(tool: &mut Map<String, Value>) {
+    let legacy = tool
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|kind| kind.starts_with("web_search"));
+    if legacy {
+        tool.insert("type".to_owned(), Value::String("web_search".to_owned()));
+        tool.remove("name");
+    }
+}
+
+fn preserve_responses_fields(input: &Value, output: &mut Value) {
+    let output = output
+        .as_object_mut()
+        .expect("Responses request is an object");
+    for field in [
+        "background",
+        "conversation",
+        "context_management",
+        "metadata",
+        "previous_response_id",
+        "prompt_cache_key",
+        "prompt_cache_retention",
+        "safety_identifier",
+        "service_tier",
+        "stream_options",
+        "truncation",
+    ] {
+        if let Some(value) = input.get(field) {
+            output.insert(field.to_owned(), value.clone());
+        }
+    }
+    if !output.contains_key("max_output_tokens") {
+        if let Some(value) = input.get("max_completion_tokens") {
+            output.insert("max_output_tokens".to_owned(), value.clone());
+        } else if let Some(value) = input.get("max_output_tokens") {
+            output.insert("max_output_tokens".to_owned(), value.clone());
+        }
     }
 }
 
@@ -649,11 +849,11 @@ fn adapt_response(
     }
 }
 
-fn upstream_url(host: &str, target: TargetWire, model: &str, codex: bool) -> String {
+fn upstream_url(host: &str, target: TargetWire, codex: bool, native_responses: bool) -> String {
     let path = match (target, codex) {
         (TargetWire::Responses, true) => CODEX_RESPONSES_PATH,
         (TargetWire::Chat, _) => CHAT_PATH,
-        (TargetWire::Responses, false) if openai_family(model) => RESPONSES_PATH,
+        (TargetWire::Responses, false) if native_responses => RESPONSES_PATH,
         (TargetWire::Responses, false) => OPEN_RESPONSES_PATH,
         (TargetWire::Auto, _) => unreachable!(),
     };
@@ -670,33 +870,6 @@ fn request_originator(headers: &HeaderMap) -> Option<&str> {
 
 fn is_codex_originator(value: &str) -> bool {
     value.trim().to_ascii_lowercase().starts_with("codex")
-}
-
-fn openai_family(model: &str) -> bool {
-    let model = model.to_ascii_lowercase();
-    model.contains("gpt")
-        || model.contains("codex")
-        || model.contains("openai")
-        || (1..=9).any(|version| model.contains(&format!("o{version}")))
-}
-
-fn responses_only(model: &str) -> bool {
-    let model = model.to_ascii_lowercase();
-    if model.contains("codex") {
-        return true;
-    }
-    let Some(gpt) = model.find("gpt") else {
-        return false;
-    };
-    let numbers: Vec<u32> = model[gpt + 3..]
-        .trim_start_matches(['-', '_', '.', '/'])
-        .split(|character: char| !character.is_ascii_digit())
-        .filter(|part| !part.is_empty())
-        .take(2)
-        .filter_map(|part| part.parse().ok())
-        .collect();
-    matches!(numbers.as_slice(), [major, ..] if *major > 5)
-        || matches!(numbers.as_slice(), [5, minor, ..] if *minor >= 4)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -786,6 +959,95 @@ mod tests {
     }
 
     #[test]
+    fn openai_chat_preserves_images_hosted_tools_and_responses_fields() {
+        let output = adapt_request(
+            ClientWire::Chat,
+            TargetWire::Responses,
+            json!({
+                "model": "databricks-gpt-5-6-sol",
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Describe this image, then search for context"},
+                        {"type": "image_url", "image_url": {"url": "data:image/png;base64,aW1n"}}
+                    ]
+                }],
+                "tools": [
+                    {"type": "function", "function": {
+                        "name": "lookup",
+                        "description": "Look up a value",
+                        "parameters": {"type": "object"}
+                    }},
+                    {"type": "web_search", "search_context_size": "high"},
+                    {"type": "image_generation", "quality": "high"},
+                    {"type": "mcp", "server_label": "docs", "server_url": "https://example.com/mcp"},
+                    {"type": "shell"},
+                    {"type": "apply_patch"},
+                    {"type": "custom", "name": "grammar", "format": {"type": "grammar"}}
+                ],
+                "background": true,
+                "metadata": {"source": "test"},
+                "prompt_cache_key": "cache-key",
+                "service_tier": "default",
+                "truncation": "auto",
+                "max_completion_tokens": 256
+            }),
+        )
+        .unwrap();
+        let value: Value = serde_json::from_slice(&output).unwrap();
+
+        assert_eq!(value["input"][0]["content"][1]["type"], "input_image");
+        assert_eq!(
+            value["input"][0]["content"][1]["image_url"],
+            "data:image/png;base64,aW1n"
+        );
+        assert_eq!(value["tools"][0]["type"], "function");
+        assert_eq!(value["tools"][0]["name"], "lookup");
+        assert_eq!(value["tools"][1]["type"], "web_search");
+        assert_eq!(value["tools"][2]["type"], "image_generation");
+        assert_eq!(value["tools"][3]["type"], "mcp");
+        assert_eq!(value["tools"][4]["type"], "shell");
+        assert_eq!(value["tools"][5]["type"], "apply_patch");
+        assert_eq!(value["tools"][6]["type"], "custom");
+        assert_eq!(value["background"], true);
+        assert_eq!(value["metadata"]["source"], "test");
+        assert_eq!(value["prompt_cache_key"], "cache-key");
+        assert_eq!(value["service_tier"], "default");
+        assert_eq!(value["truncation"], "auto");
+        assert_eq!(value["max_output_tokens"], 256);
+    }
+
+    #[test]
+    fn native_responses_preserve_codex_gateway_capabilities() {
+        let input = json!({
+            "model": "system.ai.gpt-5-6-sol",
+            "input": [{
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": "Use every available capability"},
+                    {"type": "input_image", "image_url": "data:image/png;base64,aW1n", "detail": "high"}
+                ]
+            }],
+            "tools": [
+                {"type": "web_search"},
+                {"type": "function", "name": "lookup", "parameters": {"type": "object"}},
+                {"type": "custom", "name": "apply_patch"},
+                {"type": "apply_patch"},
+                {"type": "shell"},
+                {"type": "image_generation"},
+                {"type": "mcp", "server_label": "docs", "server_url": "https://example.com/mcp"}
+            ],
+            "include": ["web_search_call.action.sources", "reasoning.encrypted_content"],
+            "stream": true
+        });
+
+        let output =
+            adapt_request(ClientWire::Responses, TargetWire::Responses, input.clone()).unwrap();
+
+        assert_eq!(serde_json::from_slice::<Value>(&output).unwrap(), input);
+    }
+
+    #[test]
     fn anthropic_messages_adapt_to_responses() {
         let output = adapt_request(
             ClientWire::Anthropic,
@@ -871,18 +1133,28 @@ mod tests {
     }
 
     #[test]
-    fn auto_selects_responses_for_responses_only_models() {
+    fn auto_selects_responses_from_discovered_capabilities() {
         assert_eq!(
-            select_target(TargetWire::Auto, ClientWire::Chat, "codex-mini"),
+            select_target(TargetWire::Auto, ClientWire::Chat, true),
             TargetWire::Responses
         );
         assert_eq!(
-            select_target(TargetWire::Auto, ClientWire::Chat, "databricks-gpt-5-4"),
-            TargetWire::Responses
-        );
-        assert_eq!(
-            select_target(TargetWire::Auto, ClientWire::Chat, "claude-sonnet-4-6"),
+            select_target(TargetWire::Auto, ClientWire::Chat, false),
             TargetWire::Chat
+        );
+        assert_eq!(
+            select_target(TargetWire::Auto, ClientWire::Responses, false),
+            TargetWire::Responses
+        );
+        assert_eq!(
+            select_request_target(
+                TargetWire::Auto,
+                ClientWire::Chat,
+                None,
+                &json!({"tools": [{"type": "web_search"}]}),
+                false,
+            ),
+            TargetWire::Responses
         );
     }
 
@@ -893,8 +1165,9 @@ mod tests {
             select_request_target(
                 TargetWire::Auto,
                 ClientWire::Chat,
-                "custom-model",
                 Some("codex_cli_rs"),
+                &json!({}),
+                false,
             ),
             TargetWire::Responses
         );
@@ -902,10 +1175,28 @@ mod tests {
             upstream_url(
                 "https://workspace.example.com",
                 TargetWire::Responses,
-                "custom-model",
                 true,
+                false
             ),
             "https://workspace.example.com/ai-gateway/codex/v1/responses"
+        );
+        assert_eq!(
+            upstream_url(
+                "https://workspace.example.com",
+                TargetWire::Responses,
+                false,
+                true,
+            ),
+            "https://workspace.example.com/serving-endpoints/responses"
+        );
+        assert_eq!(
+            upstream_url(
+                "https://workspace.example.com",
+                TargetWire::Responses,
+                false,
+                false,
+            ),
+            "https://workspace.example.com/serving-endpoints/open-responses"
         );
     }
 }

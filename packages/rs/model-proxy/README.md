@@ -67,7 +67,27 @@ output defaults to `false`.
 `--target responses` forces Chat Completions or Anthropic Messages input
 through the Responses request translator. `--target chat` sends canonical
 Chat Completions. `--target auto` selects Responses for Responses clients,
-Codex models, and GPT 5.4 or newer.
+models listed by the current Databricks Responses documentation, Codex clients,
+and requests containing Responses-only hosted tools or conversation fields.
+
+Native Responses requests are forwarded without a capability allow-list, so
+Databricks-supported `function`, `custom`, `apply_patch`, `shell`,
+`image_generation`, `mcp`, and `web_search` tools, image inputs, conversation
+state, background mode, and future request fields remain intact. Chat and
+Anthropic image blocks are translated to Responses `input_image` content.
+Chat-hosted tools are preserved in Responses form instead of being rejected as
+malformed function tools. A forced `--target chat` returns a clear client error
+for Responses-only features rather than silently dropping them.
+
+Codex model records obtain image-input, web-search, and patch capability sets
+from the corresponding Databricks documentation pages. The parsed model lists
+are cached for one day and matched against endpoint, model-service, and provider
+identities from the live workspace catalogue. The same parser generates a
+committed snapshot during repository synthesis, and the binary embeds that
+snapshot as its offline fallback. A failed page refresh retains the matching
+capabilities from the embedded snapshot without blocking model listing. This
+avoids embedding a handwritten model/version matrix while still using the
+unified local execution tool shape expected by current Codex clients.
 
 Streaming requests use SSE without buffering the upstream response. Matching
 protocols pass the upstream byte stream through directly, including Chat

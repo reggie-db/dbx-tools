@@ -22,9 +22,9 @@ import { Component, DependencyType } from "projen";
 
 const SCOPE = "dbx-tools";
 
-/** Generate the committed model-retirement fallback after project synthesis. */
-class RetiredModelsSource extends Component {
-  /** Invoke the existing LiteLLM command after generated manifests are available. */
+/** Generate committed model metadata fallbacks after project synthesis. */
+class ModelMetadataSource extends Component {
+  /** Refresh generated model metadata after generated manifests are available. */
   public override postSynthesize(): void {
     const generatedSource = resolve(
       this.project.outdir,
@@ -45,6 +45,25 @@ class RetiredModelsSource extends Component {
         generatedSource,
         "--static-output",
         staticSource,
+      ],
+      {
+        stdio: "inherit",
+      },
+    );
+    execFileSync(
+      "cargo",
+      [
+        "run",
+        "--quiet",
+        "-p",
+        "dbx-tools-model",
+        "--example",
+        "generate-model-capabilities",
+        "--",
+        resolve(
+          this.project.outdir,
+          "packages/rs/model/assets/model-capabilities.json",
+        ),
       ],
       {
         stdio: "inherit",
@@ -1134,7 +1153,7 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   },
   release: true,
 });
-new RetiredModelsSource(root);
+new ModelMetadataSource(root);
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",
   description: "Emit local Python hello-world messages onto the demo bus",

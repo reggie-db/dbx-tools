@@ -3,6 +3,7 @@
 use serde_json::{json, Map, Value};
 
 use crate::{
+    capabilities::ModelCapabilities,
     lookup_models,
     models::{parse_model_name, ModelFamily, ModelQuery, RankedModel, ServingEndpointSummary},
 };
@@ -15,12 +16,22 @@ pub fn models_payload(
     extended: bool,
     codex: bool,
 ) -> Value {
+    models_payload_with_capabilities(endpoints, search, extended, codex, None)
+}
+
+pub fn models_payload_with_capabilities(
+    endpoints: &[ServingEndpointSummary],
+    search: Option<&str>,
+    extended: bool,
+    codex: bool,
+    capabilities: Option<&ModelCapabilities>,
+) -> Value {
     let listed = listed_models(endpoints, search);
     if codex {
         json!({
             "models": listed
                 .iter()
-                .filter_map(|model| codex_model(model, extended))
+                .filter_map(|model| codex_model(model, extended, capabilities))
                 .enumerate()
                 .map(|(index, mut model)| {
                     model.insert("priority".to_owned(), json!(index + 1));
@@ -81,9 +92,16 @@ fn openai_model(model: &ListedModel, extended: bool) -> Map<String, Value> {
     entry
 }
 
-fn codex_model(model: &ListedModel, extended: bool) -> Option<Map<String, Value>> {
+fn codex_model(
+    model: &ListedModel,
+    extended: bool,
+    capabilities: Option<&ModelCapabilities>,
+) -> Option<Map<String, Value>> {
     let endpoint = &model.endpoint;
     let codex_model = codex_model_name(endpoint)?;
+    let image_input = capabilities.is_some_and(|value| value.supports_image_input(endpoint));
+    let apply_patch = capabilities.is_some_and(|value| value.supports_apply_patch(endpoint));
+    let web_search = capabilities.is_some_and(|value| value.supports_web_search(endpoint));
     let mut entry = Map::from_iter([
         ("slug".to_owned(), json!(codex_model)),
         (
@@ -102,21 +120,44 @@ fn codex_model(model: &ListedModel, extended: bool) -> Option<Map<String, Value>
             json!(CODEX_BASE_INSTRUCTIONS),
         ),
         ("supported_reasoning_levels".to_owned(), json!([])),
-        ("shell_type".to_owned(), json!("shell_command")),
+        ("shell_type".to_owned(), json!("unified_exec")),
         ("visibility".to_owned(), json!("list")),
         ("supported_in_api".to_owned(), json!(true)),
         ("availability_nux".to_owned(), Value::Null),
         ("upgrade".to_owned(), Value::Null),
         ("support_verbosity".to_owned(), json!(false)),
         ("default_verbosity".to_owned(), Value::Null),
-        ("apply_patch_tool_type".to_owned(), Value::Null),
+        (
+            "apply_patch_tool_type".to_owned(),
+            if apply_patch {
+                json!("freeform")
+            } else {
+                Value::Null
+            },
+        ),
         (
             "truncation_policy".to_owned(),
             json!({"mode": "tokens", "limit": 128_000}),
         ),
         ("context_window".to_owned(), Value::Null),
         ("experimental_supported_tools".to_owned(), json!([])),
-        ("input_modalities".to_owned(), json!(["text"])),
+        (
+            "input_modalities".to_owned(),
+            if image_input {
+                json!(["text", "image"])
+            } else {
+                json!(["text"])
+            },
+        ),
+        (
+            "web_search_tool_type".to_owned(),
+            if web_search {
+                json!("text")
+            } else {
+                Value::Null
+            },
+        ),
+        ("supports_image_detail_original".to_owned(), json!(false)),
     ]);
     if extended {
         extend_model(&mut entry, model);

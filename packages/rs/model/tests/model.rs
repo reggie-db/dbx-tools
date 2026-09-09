@@ -3,8 +3,9 @@ use std::{collections::BTreeMap, time::Duration};
 use dbx_tools_databricks::FileCache;
 use dbx_tools_model::{
     endpoints_from_response, lookup_models, model_search_query, model_service_names,
-    models_payload, parse_model_name, parse_retired_models, rank_model_id, status_from_names,
-    version_tuple, ModelClass, ModelClient, ModelFamily, ModelQuery, ModelStatus,
+    models_payload, models_payload_with_capabilities, parse_model_capabilities, parse_model_name,
+    parse_retired_models, rank_model_id, status_from_names, version_tuple,
+    ModelCapabilitiesResolver, ModelClass, ModelClient, ModelFamily, ModelQuery, ModelStatus,
     ModelStatusResolver, ParsedModelName, ServingEndpointSummary,
 };
 use serde_json::json;
@@ -155,7 +156,55 @@ fn codex_originators_receive_the_codex_model_envelope() {
     assert!(payload.get("data").is_none());
     assert_eq!(payload["models"][0]["slug"], "system.ai.gpt-5-6-sol");
     assert_eq!(payload["models"][0]["priority"], 1);
+    assert_eq!(payload["models"][0]["shell_type"], "unified_exec");
+    assert!(payload["models"][0]["apply_patch_tool_type"].is_null());
+    assert!(payload["models"][0]["web_search_tool_type"].is_null());
+    assert_eq!(payload["models"][0]["input_modalities"], json!(["text"]));
     assert_eq!(payload["models"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn codex_capabilities_follow_discovered_databricks_documentation() {
+    let capabilities = parse_model_capabilities(
+        r#"
+        <html><body>
+          <h3 id="databricks-hosted-foundation-models">Models</h3>
+          <ul>
+            <li><code>databricks-gpt-5-6-sol</code></li>
+            <li><code>databricks-gpt-7-future</code></li>
+          </ul>
+          <h2 id="supported-input-types">Supported input types</h2>
+          <p>OpenAI GPT models on Databricks accept text and image inputs.</p>
+          <h2 id="limitations">Limitations</h2>
+          <code>apply_patch</code>
+        </body></html>
+        "#,
+        r#"
+        <html><body>
+          <h3 id="openai-models">OpenAI models</h3>
+          <ul><li><code>databricks-gpt-7-future</code></li></ul>
+        </body></html>
+        "#,
+    )
+    .unwrap();
+    let endpoints = [
+        endpoint("databricks-gpt-5-6-sol", ModelClass::ChatBalanced),
+        endpoint("databricks-gpt-7-future", ModelClass::ChatBalanced),
+        endpoint("databricks-qwen35-122b-a10b", ModelClass::ChatBalanced),
+    ];
+
+    let payload =
+        models_payload_with_capabilities(&endpoints, None, false, true, Some(&capabilities));
+    let models = payload["models"].as_array().unwrap();
+
+    assert_eq!(models[0]["input_modalities"], json!(["text", "image"]));
+    assert_eq!(models[0]["apply_patch_tool_type"], "freeform");
+    assert!(models[0]["web_search_tool_type"].is_null());
+    assert_eq!(models[1]["input_modalities"], json!(["text", "image"]));
+    assert_eq!(models[1]["apply_patch_tool_type"], "freeform");
+    assert_eq!(models[1]["web_search_tool_type"], "text");
+    assert_eq!(models[2]["input_modalities"], json!(["text"]));
+    assert!(models[2]["apply_patch_tool_type"].is_null());
 }
 
 #[test]
@@ -340,6 +389,35 @@ async fn retirement_refresh_failure_is_cached_with_the_generated_fallback() {
 
     assert!(first.contains("DBRX"));
     assert_eq!(first, second);
+}
+
+#[tokio::test]
+async fn capability_refresh_failure_uses_the_embedded_snapshot() {
+    let server = MockServer::start().await;
+    for path_value in ["/responses", "/web-search"] {
+        Mock::given(method("GET"))
+            .and(path(path_value))
+            .respond_with(ResponseTemplate::new(500))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let resolver = ModelCapabilitiesResolver::with_cache_urls(
+        FileCache::new(
+            directory.path().join("capabilities.json"),
+            Duration::from_secs(60),
+        ),
+        format!("{}/responses", server.uri()),
+        format!("{}/web-search", server.uri()),
+    );
+    let capabilities = resolver.capabilities().await.unwrap();
+    let endpoint = endpoint("databricks-gpt-5-4", ModelClass::ChatBalanced);
+
+    assert!(capabilities.supports_responses(&endpoint));
+    assert!(capabilities.supports_image_input(&endpoint));
+    assert!(capabilities.supports_apply_patch(&endpoint));
+    assert!(capabilities.supports_web_search(&endpoint));
 }
 
 fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {
