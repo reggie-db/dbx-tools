@@ -178,7 +178,7 @@ pub async fn create_provider_auth_with_storage(
 
 #[uniffi::export(async_runtime = "tokio")]
 impl ProviderAuth {
-    /// True forces login, false forbids interactive login, and omission permits missing-token login.
+    /// True forces login, false forbids it, and omission permits automatic login.
     #[uniffi::method(default(login = None))]
     pub async fn token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
         self.inner
@@ -187,21 +187,24 @@ impl ProviderAuth {
             .map(Into::into)
             .map_err(failure)
     }
-    /// Renew the credential even if it has not entered its refresh window.
-    pub async fn force_refresh_token(&self) -> BindingResult<AccessToken> {
+    /// Renew the credential, permitting login by default when renewal fails.
+    #[uniffi::method(default(login = None))]
+    pub async fn force_refresh_token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
         self.inner
-            .force_refresh()
+            .force_refresh(login.unwrap_or(true))
             .await
             .map(Into::into)
             .map_err(failure)
     }
     /// Reuse a concurrent replacement or renew the rejected access token.
+    #[uniffi::method(default(login = None))]
     pub async fn refresh_rejected_token(
         &self,
         stale_access_token: String,
+        login: Option<bool>,
     ) -> BindingResult<AccessToken> {
         self.inner
-            .refresh_rejected_token(&stale_access_token)
+            .refresh_rejected_token(&stale_access_token, login.unwrap_or(true))
             .await
             .map(Into::into)
             .map_err(failure)

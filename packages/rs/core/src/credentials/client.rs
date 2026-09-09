@@ -104,14 +104,16 @@ pub trait AuthSession: Send + Sync {
         self.auth_client().token_or_login().await
     }
 
-    /// Renew the stored credential even when it has not reached its refresh window.
-    async fn force_refresh(&self) -> Result<Token> {
-        self.auth_client().force_refresh().await
+    /// Renew the stored credential and optionally permit login after renewal fails.
+    async fn force_refresh(&self, login: bool) -> Result<Token> {
+        self.auth_client().force_refresh(login).await
     }
 
     /// Reuse another caller's replacement or renew the rejected credential.
-    async fn refresh_rejected_token(&self, stale: &str) -> Result<Token> {
-        self.auth_client().refresh_rejected_token(stale).await
+    async fn refresh_rejected_token(&self, stale: &str, login: bool) -> Result<Token> {
+        self.auth_client()
+            .refresh_rejected_token(stale, login)
+            .await
     }
 
     /// Remove the persisted credential under its refresh lock.
@@ -211,17 +213,25 @@ impl AuthClient {
         self.load_token(true).await
     }
 
-    /// Renew even before the refresh window, without forcing an interactive login.
-    pub async fn force_refresh(&self) -> Result<Token> {
-        self.refresh_rejected(None).await
+    /// Renew before the refresh window and optionally permit login after renewal fails.
+    pub async fn force_refresh(&self, login: bool) -> Result<Token> {
+        self.refresh_rejected(None, login).await
     }
 
     /// Refresh a rejected token unless another process already replaced it.
-    pub async fn refresh_rejected_token(&self, stale_access_token: &str) -> Result<Token> {
-        self.refresh_rejected(Some(stale_access_token)).await
+    pub async fn refresh_rejected_token(
+        &self,
+        stale_access_token: &str,
+        login: bool,
+    ) -> Result<Token> {
+        self.refresh_rejected(Some(stale_access_token), login).await
     }
 
-    async fn refresh_rejected(&self, stale_access_token: Option<&str>) -> Result<Token> {
+    async fn refresh_rejected(
+        &self,
+        stale_access_token: Option<&str>,
+        login: bool,
+    ) -> Result<Token> {
         let cache_key = self.key.clone();
         let lock = self
             .store
@@ -236,7 +246,7 @@ impl AuthClient {
                     return Ok(public_token(current.clone()));
                 }
             }
-            self.renew(token, false).await
+            self.renew(token, login).await
         }
         .await;
         release(lock, result).await
@@ -262,9 +272,21 @@ impl AuthClient {
             return Err(Error::LoginRequired(self.key.clone()));
         }
         self.store.prepare_write().await?;
+        let timeout = self.options.login_timeout();
         let renewed = match token {
-            Some(token) => self.flow.refresh(&token).await?,
-            None => self.flow.authenticate(self.options.login_timeout()).await?,
+            Some(token) => match self.flow.refresh(&token).await {
+                Ok(token) => token,
+                Err(_) if login => self.flow.login(timeout).await?,
+                Err(error) => return Err(error),
+            },
+            None if login && !self.flow.can_authenticate_silently() => {
+                self.flow.login(timeout).await?
+            }
+            None => match self.flow.authenticate(timeout).await {
+                Ok(token) => token,
+                Err(_) if login => self.flow.login(timeout).await?,
+                Err(error) => return Err(error),
+            },
         };
         self.store.save(&self.key, &renewed).await?;
         Ok(public_token(renewed))

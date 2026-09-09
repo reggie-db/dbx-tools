@@ -34,7 +34,7 @@ dbx auth logout --profile DEFAULT
 `login` and `token` write access-token JSON to stdout. `status` writes the
 resolved profile, host, and storage name. `logout` produces no output when it
 succeeds. `token` mints an M2M token when no cached token exists; U2M requires
-`login` or `--login-if-missing`.
+`login` or `--login-if-missing` when its credential is missing or invalid.
 
 ## Common options
 

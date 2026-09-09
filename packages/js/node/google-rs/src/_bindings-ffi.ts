@@ -281,7 +281,7 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_google_fn_method_googleauth_force_refresh_token": {
-      args: [FfiType.Handle],
+      args: [FfiType.Handle, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -291,7 +291,7 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_google_fn_method_googleauth_refresh_rejected_token": {
-      args: [FfiType.Handle, FfiType.RustBuffer],
+      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -301,7 +301,7 @@ const DEFINITIONS = {
       hasRustCallStatus: true,
     },
     "uniffi_dbx_tools_google_fn_method_googleauth_token": {
-      args: [FfiType.Handle],
+      args: [FfiType.Handle, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -413,11 +413,11 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_google_fn_clone_googleauth(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): bigint;
     uniffi_dbx_tools_google_fn_free_googleauth(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     uniffi_dbx_tools_google_fn_func_create_google_auth(options: Uint8Array): bigint;
-    uniffi_dbx_tools_google_fn_method_googleauth_force_refresh_token(uniffiSelf: bigint): bigint;
+    uniffi_dbx_tools_google_fn_method_googleauth_force_refresh_token(uniffiSelf: bigint, login: Uint8Array): bigint;
     uniffi_dbx_tools_google_fn_method_googleauth_logout(uniffiSelf: bigint): bigint;
-    uniffi_dbx_tools_google_fn_method_googleauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array): bigint;
+    uniffi_dbx_tools_google_fn_method_googleauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array, login: Uint8Array): bigint;
     uniffi_dbx_tools_google_fn_method_googleauth_status(uniffiSelf: bigint, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
-    uniffi_dbx_tools_google_fn_method_googleauth_token(uniffiSelf: bigint): bigint;
+    uniffi_dbx_tools_google_fn_method_googleauth_token(uniffiSelf: bigint, login: Uint8Array): bigint;
     ffi_dbx_tools_google_uniffi_contract_version(): number;
     uniffi_dbx_tools_google_checksum_func_create_google_auth(): number;
     uniffi_dbx_tools_google_checksum_method_googleauth_force_refresh_token(): number;

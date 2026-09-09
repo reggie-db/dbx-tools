@@ -113,7 +113,11 @@ Primary package areas:
   containing both client ID and secret remain M2M even when `auth_type` is
   absent. Outside Databricks Apps, automatic U2M uses
   `databricks auth token --profile` when the CLI is available; otherwise it
-  uses the native browser flow. Inside an App, automatic storage resolves to
+  uses the native browser flow. Token, force-refresh, and rejected-token refresh
+  calls permit login by default when a credential is missing or renewal fails;
+  passing `login = false` keeps the call strictly non-interactive. This policy
+  lives in the shared lifecycle and applies to CLI-backed U2M, native OAuth,
+  generic providers, and Google ADC. Inside an App, automatic storage resolves to
   memory and does not invoke the CLI. App auth has two explicit types:
   `app_obo` reads request headers from `DatabricksAuthOptions` through the
   normal `createPersistentAuth` / `create_persistent_auth` factory. The access

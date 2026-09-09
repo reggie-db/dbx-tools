@@ -11,7 +11,7 @@ import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDrop
 } from "./_bindings-ffi.ts";
 import { type AccessToken, type AuthOptions, AuthError,
 } from "@dbx-tools/core-rs";
-import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, AbstractFfiConverterByteArray, Cursor, FfiConverterObject, FfiConverterOptional, FfiConverterUInt64, RustBuffer, UniffiAbstractObject, UniffiInternalError, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiRustCallAsync, uniffiTypeNameSymbol,
+import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, AbstractFfiConverterByteArray, Cursor, FfiConverterBool, FfiConverterObject, FfiConverterOptional, FfiConverterUInt64, RustBuffer, UniffiAbstractObject, UniffiInternalError, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiRustCallAsync, uniffiTypeNameSymbol,
 } from "@ubjs/core";
 import { uniffiModule as uniffiDbxToolsCoreModule } from "@dbx-tools/core-rs";
 const { FfiConverterTypeAccessToken, FfiConverterTypeAuthError, FfiConverterTypeAuthOptions } = uniffiDbxToolsCoreModule.converters;
@@ -195,7 +195,7 @@ export interface GoogleAuthLike {
 /**
  * Refresh ADC even when the current token is outside its refresh window.
  */
-    forceRefreshToken(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+    forceRefreshToken(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 /**
  * Clear the in-process access-token cache without modifying ADC.
  */
@@ -203,7 +203,7 @@ export interface GoogleAuthLike {
 /**
  * Reuse a concurrent replacement or refresh the rejected access token.
  */
-    refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+    refreshRejectedToken(staleAccessToken: string, login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 /**
  * Return the selected ADC path and short-lived token storage mode.
  */
@@ -211,7 +211,7 @@ export interface GoogleAuthLike {
 /**
  * Return a cached token or refresh it from ADC.
  */
-    token(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+    token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
 /**
  * @deprecated Use `GoogleAuthLike` instead.
@@ -240,14 +240,14 @@ private constructor(pointer: UniffiHandle) {
 /**
  * Refresh ADC even when the current token is outside its refresh window.
  */
-    async forceRefreshToken(asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async forceRefreshToken(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_google_fn_method_googleauth_force_refresh_token(
-                    uniffiTypeGoogleAuthObjectFactory.clonePointer(this)
+                    uniffiTypeGoogleAuthObjectFactory.clonePointer(this),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_google_rust_future_poll_rust_buffer,
@@ -314,14 +314,14 @@ private constructor(pointer: UniffiHandle) {
 /**
  * Reuse a concurrent replacement or refresh the rejected access token.
  */
-    async refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async refreshRejectedToken(staleAccessToken: string, login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_google_fn_method_googleauth_refresh_rejected_token(
-                    uniffiTypeGoogleAuthObjectFactory.clonePointer(this),FfiConverterString.lower(staleAccessToken, nativeModule().rustbuffer_alloc)
+                    uniffiTypeGoogleAuthObjectFactory.clonePointer(this),FfiConverterString.lower(staleAccessToken, nativeModule().rustbuffer_alloc),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_google_rust_future_poll_rust_buffer,
@@ -377,14 +377,14 @@ private constructor(pointer: UniffiHandle) {
 /**
  * Return a cached token or refresh it from ADC.
  */
-    async token(asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async token(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_google_fn_method_googleauth_token(
-                    uniffiTypeGoogleAuthObjectFactory.clonePointer(this)
+                    uniffiTypeGoogleAuthObjectFactory.clonePointer(this),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_google_rust_future_poll_rust_buffer,
@@ -504,6 +504,9 @@ const FfiConverterOptionalTypeAuthOptions = new FfiConverterOptional(FfiConverte
 // FfiConverter for string | undefined
 const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
 
+// FfiConverter for boolean | undefined
+const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
+
 
 /**
  * This should be called before anything else.
@@ -526,19 +529,19 @@ function uniffiEnsureInitialized() {
     if (nativeModule().uniffi_dbx_tools_google_checksum_func_create_google_auth() !== 8482) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_func_create_google_auth");
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_force_refresh_token() !== 40538) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_force_refresh_token() !== 40331) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_force_refresh_token");
     }
     if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_logout() !== 28220) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_logout");
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_refresh_rejected_token() !== 56472) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_refresh_rejected_token() !== 47983) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_refresh_rejected_token");
     }
     if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_status() !== 21388) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_status");
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_token() !== 20454) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_token() !== 53387) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_token");
     }
 

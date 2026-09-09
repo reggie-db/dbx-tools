@@ -1,6 +1,6 @@
 use dbx_tools_core::{
     credential_key, AuthClient, AuthOptions, AuthSession, CredentialStore, Error, FileLayout,
-    FileStore, Result, Token, TokenProvider,
+    FileStore, MemoryStore, Result, Token, TokenProvider,
 };
 use std::{
     sync::{
@@ -13,6 +13,11 @@ use time::OffsetDateTime;
 
 struct Provider {
     calls: AtomicUsize,
+}
+
+struct ExpiredProvider {
+    logins: AtomicUsize,
+    refreshes: AtomicUsize,
 }
 
 struct Session(AuthClient);
@@ -54,7 +59,7 @@ async fn session_defaults_preserve_login_policy_refresh_and_logout() {
         Err(Error::LoginRequired(_))
     ));
     assert!(matches!(
-        session.force_refresh().await,
+        session.force_refresh(false).await,
         Err(Error::LoginRequired(_))
     ));
     assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
@@ -80,20 +85,73 @@ async fn session_defaults_preserve_login_policy_refresh_and_logout() {
     );
     assert_eq!(
         session
-            .refresh_rejected_token("access-0")
+            .refresh_rejected_token("access-0", true)
             .await
             .unwrap()
             .access_token,
         "access-1"
     );
     assert_eq!(
-        session.force_refresh().await.unwrap().access_token,
+        session.force_refresh(true).await.unwrap().access_token,
         "access-2"
     );
     assert!(session.token().await.unwrap().refresh_token.is_none());
     assert_eq!(session.store_name(), "file");
     session.logout().await.unwrap();
     assert!(store.load("key").await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn expired_credentials_login_unless_explicitly_disabled() {
+    let provider = Arc::new(ExpiredProvider {
+        logins: AtomicUsize::new(0),
+        refreshes: AtomicUsize::new(0),
+    });
+    let store = Arc::new(MemoryStore::new());
+    store
+        .save(
+            "key",
+            &Token {
+                access_token: "expired".into(),
+                token_type: "Bearer".into(),
+                refresh_token: Some("invalid".into()),
+                expires_at: Some(OffsetDateTime::now_utc() - time::Duration::hours(1)),
+                scopes: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    let client = AuthClient::new(
+        "key".into(),
+        provider.clone(),
+        store,
+        AuthOptions::default(),
+    );
+
+    assert!(matches!(client.token().await, Err(Error::OAuth(_))));
+    assert_eq!(provider.logins.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        client.token_or_login().await.unwrap().access_token,
+        "login-0"
+    );
+    assert!(matches!(
+        client.force_refresh(false).await,
+        Err(Error::OAuth(_))
+    ));
+    assert_eq!(provider.logins.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        client.force_refresh(true).await.unwrap().access_token,
+        "login-1"
+    );
+    assert_eq!(
+        client
+            .refresh_rejected_token("login-1", true)
+            .await
+            .unwrap()
+            .access_token,
+        "login-2"
+    );
+    assert_eq!(provider.refreshes.load(Ordering::SeqCst), 5);
 }
 
 #[async_trait::async_trait]
@@ -111,6 +169,33 @@ impl TokenProvider for Provider {
     }
     async fn refresh(&self, _token: &Token) -> Result<Token> {
         self.authenticate(Duration::ZERO).await
+    }
+}
+
+#[async_trait::async_trait]
+impl TokenProvider for ExpiredProvider {
+    async fn authenticate(&self, _timeout: Duration) -> Result<Token> {
+        Err(Error::OAuth("silent acquisition failed".into()))
+    }
+
+    async fn login(&self, _timeout: Duration) -> Result<Token> {
+        let sequence = self.logins.fetch_add(1, Ordering::SeqCst);
+        Ok(Token {
+            access_token: format!("login-{sequence}"),
+            token_type: "Bearer".into(),
+            refresh_token: Some("refresh".into()),
+            expires_at: Some(OffsetDateTime::now_utc() + time::Duration::hours(1)),
+            scopes: vec![],
+        })
+    }
+
+    async fn refresh(&self, _token: &Token) -> Result<Token> {
+        self.refreshes.fetch_add(1, Ordering::SeqCst);
+        Err(Error::OAuth("refresh rejected".into()))
+    }
+
+    fn can_authenticate_silently(&self) -> bool {
+        true
     }
 }
 
@@ -163,8 +248,8 @@ async fn concurrent_logins_and_rejected_refreshes_mint_once() {
     assert_eq!(one.unwrap().access_token, two.unwrap().access_token);
     assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
     let (one, two) = tokio::join!(
-        first.refresh_rejected_token("access-0"),
-        second.refresh_rejected_token("access-0")
+        first.refresh_rejected_token("access-0", true),
+        second.refresh_rejected_token("access-0", true)
     );
     assert_eq!(one.unwrap().access_token, two.unwrap().access_token);
     assert_eq!(provider.calls.load(Ordering::SeqCst), 2);
@@ -217,7 +302,7 @@ async fn rejected_refresh_does_not_reuse_a_different_expired_token() {
     );
     assert_eq!(
         client
-            .refresh_rejected_token("older-token")
+            .refresh_rejected_token("older-token", true)
             .await
             .unwrap()
             .access_token,

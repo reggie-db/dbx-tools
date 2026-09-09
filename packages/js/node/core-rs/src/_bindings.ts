@@ -1164,15 +1164,15 @@ export interface PersistentAuthLike {
 /**
  * Return a current authorization header when the request URL matches the profile origin.
  */
-    authorizationHeaderForUrl(requestUrl: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<string | undefined>;
+    authorizationHeaderForUrl(requestUrl: string, login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<string | undefined>;
 /**
  * Start an explicit login and persist the resulting credential.
  */
     challenge(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
 /**
- * Renew the stored credential even before its refresh window.
+ * Renew the stored credential, permitting login by default when renewal fails.
  */
-    forceRefreshToken(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+    forceRefreshToken(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 /**
  * Delete the credential while holding the store's refresh lock.
  */
@@ -1180,13 +1180,13 @@ export interface PersistentAuthLike {
 /**
  * Reuse another caller's replacement or renew the rejected token.
  */
-    refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+    refreshRejectedToken(staleAccessToken: string, login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 /**
  * Return the resolved identity and active built-in storage backend.
  */
     status(): DatabricksAuthStatus;
 /**
- * True forces login, false forbids interactive login, and omission permits missing-token login.
+ * True forces login, false forbids it, and omission permits automatic login.
  */
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
@@ -1217,14 +1217,14 @@ private constructor(pointer: UniffiHandle) {
 /**
  * Return a current authorization header when the request URL matches the profile origin.
  */
-    async authorizationHeaderForUrl(requestUrl: string, asyncOpts_?: { signal: AbortSignal }): Promise<string | undefined> /*throws*/ {
+    async authorizationHeaderForUrl(requestUrl: string, login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<string | undefined> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_core_fn_method_persistentauth_authorization_header_for_url(
-                    uniffiTypePersistentAuthObjectFactory.clonePointer(this),FfiConverterString.lower(requestUrl, nativeModule().rustbuffer_alloc)
+                    uniffiTypePersistentAuthObjectFactory.clonePointer(this),FfiConverterString.lower(requestUrl, nativeModule().rustbuffer_alloc),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_core_rust_future_poll_rust_buffer,
@@ -1289,16 +1289,16 @@ private constructor(pointer: UniffiHandle) {
     }
 
 /**
- * Renew the stored credential even before its refresh window.
+ * Renew the stored credential, permitting login by default when renewal fails.
  */
-    async forceRefreshToken(asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async forceRefreshToken(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_core_fn_method_persistentauth_force_refresh_token(
-                    uniffiTypePersistentAuthObjectFactory.clonePointer(this)
+                    uniffiTypePersistentAuthObjectFactory.clonePointer(this),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_core_rust_future_poll_rust_buffer,
@@ -1365,14 +1365,14 @@ private constructor(pointer: UniffiHandle) {
 /**
  * Reuse another caller's replacement or renew the rejected token.
  */
-    async refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async refreshRejectedToken(staleAccessToken: string, login: boolean | undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_core_fn_method_persistentauth_refresh_rejected_token(
-                    uniffiTypePersistentAuthObjectFactory.clonePointer(this),FfiConverterString.lower(staleAccessToken, nativeModule().rustbuffer_alloc)
+                    uniffiTypePersistentAuthObjectFactory.clonePointer(this),FfiConverterString.lower(staleAccessToken, nativeModule().rustbuffer_alloc),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_core_rust_future_poll_rust_buffer,
@@ -1426,7 +1426,7 @@ private constructor(pointer: UniffiHandle) {
     }
 
 /**
- * True forces login, false forbids interactive login, and omission permits missing-token login.
+ * True forces login, false forbids it, and omission permits automatic login.
  */
     async token(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
@@ -1555,9 +1555,9 @@ const FfiConverterTypePersistentAuth = new FfiConverterObject(uniffiTypePersiste
 export interface ProviderAuthLike {
 
 /**
- * Renew the credential even if it has not entered its refresh window.
+ * Renew the credential, permitting login by default when renewal fails.
  */
-    forceRefreshToken(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+    forceRefreshToken(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 /**
  * Delete the stored credential while holding its refresh lock.
  */
@@ -1565,9 +1565,9 @@ export interface ProviderAuthLike {
 /**
  * Reuse a concurrent replacement or renew the rejected access token.
  */
-    refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+    refreshRejectedToken(staleAccessToken: string, login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 /**
- * True forces login, false forbids interactive login, and omission permits missing-token login.
+ * True forces login, false forbids it, and omission permits automatic login.
  */
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
@@ -1596,16 +1596,16 @@ private constructor(pointer: UniffiHandle) {
 
 
 /**
- * Renew the credential even if it has not entered its refresh window.
+ * Renew the credential, permitting login by default when renewal fails.
  */
-    async forceRefreshToken(asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async forceRefreshToken(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_core_fn_method_providerauth_force_refresh_token(
-                    uniffiTypeProviderAuthObjectFactory.clonePointer(this)
+                    uniffiTypeProviderAuthObjectFactory.clonePointer(this),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_core_rust_future_poll_rust_buffer,
@@ -1672,14 +1672,14 @@ private constructor(pointer: UniffiHandle) {
 /**
  * Reuse a concurrent replacement or renew the rejected access token.
  */
-    async refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async refreshRejectedToken(staleAccessToken: string, login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
                 return nativeModule().uniffi_dbx_tools_core_fn_method_providerauth_refresh_rejected_token(
-                    uniffiTypeProviderAuthObjectFactory.clonePointer(this),FfiConverterString.lower(staleAccessToken, nativeModule().rustbuffer_alloc)
+                    uniffiTypeProviderAuthObjectFactory.clonePointer(this),FfiConverterString.lower(staleAccessToken, nativeModule().rustbuffer_alloc),FfiConverterOptionalBoolean.lower(login, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_core_rust_future_poll_rust_buffer,
@@ -1714,7 +1714,7 @@ private constructor(pointer: UniffiHandle) {
     }
 
 /**
- * True forces login, false forbids interactive login, and omission permits missing-token login.
+ * True forces login, false forbids it, and omission permits automatic login.
  */
     async token(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
@@ -2714,37 +2714,37 @@ function uniffiEnsureInitialized() {
     if (nativeModule().uniffi_dbx_tools_core_checksum_func_parse_resource_path() !== 62884) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_parse_resource_path");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_authorization_header_for_url() !== 39071) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_authorization_header_for_url() !== 24) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_authorization_header_for_url");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_challenge() !== 32194) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_challenge");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_force_refresh_token() !== 34839) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_force_refresh_token() !== 7780) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_force_refresh_token");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_logout() !== 22550) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_logout");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_refresh_rejected_token() !== 25961) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_refresh_rejected_token() !== 3854) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_refresh_rejected_token");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_status() !== 3099) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_status");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_token() !== 38242) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_token() !== 37099) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_token");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_providerauth_force_refresh_token() !== 12705) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_providerauth_force_refresh_token() !== 34555) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_providerauth_force_refresh_token");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_method_providerauth_logout() !== 64726) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_providerauth_logout");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_providerauth_refresh_rejected_token() !== 47589) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_providerauth_refresh_rejected_token() !== 43419) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_providerauth_refresh_rejected_token");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_providerauth_token() !== 37517) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_providerauth_token() !== 42139) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_providerauth_token");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_method_storageadapter_load() !== 54668) {

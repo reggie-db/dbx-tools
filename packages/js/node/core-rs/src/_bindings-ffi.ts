@@ -366,7 +366,7 @@ const DEFINITIONS = {
       hasRustCallStatus: true,
     },
     "uniffi_dbx_tools_core_fn_method_persistentauth_authorization_header_for_url": {
-      args: [FfiType.Handle, FfiType.RustBuffer],
+      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -376,7 +376,7 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_core_fn_method_persistentauth_force_refresh_token": {
-      args: [FfiType.Handle],
+      args: [FfiType.Handle, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -386,7 +386,7 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_core_fn_method_persistentauth_refresh_rejected_token": {
-      args: [FfiType.Handle, FfiType.RustBuffer],
+      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -401,7 +401,7 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_core_fn_method_providerauth_force_refresh_token": {
-      args: [FfiType.Handle],
+      args: [FfiType.Handle, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -411,7 +411,7 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_core_fn_method_providerauth_refresh_rejected_token": {
-      args: [FfiType.Handle, FfiType.RustBuffer],
+      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
@@ -775,16 +775,16 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_core_fn_func_is_databricks_app(uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_core_fn_func_parse_address(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_func_parse_resource_path(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
-    uniffi_dbx_tools_core_fn_method_persistentauth_authorization_header_for_url(uniffiSelf: bigint, requestUrl: Uint8Array): bigint;
+    uniffi_dbx_tools_core_fn_method_persistentauth_authorization_header_for_url(uniffiSelf: bigint, requestUrl: Uint8Array, login: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_persistentauth_challenge(uniffiSelf: bigint): bigint;
-    uniffi_dbx_tools_core_fn_method_persistentauth_force_refresh_token(uniffiSelf: bigint): bigint;
+    uniffi_dbx_tools_core_fn_method_persistentauth_force_refresh_token(uniffiSelf: bigint, login: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_persistentauth_logout(uniffiSelf: bigint): bigint;
-    uniffi_dbx_tools_core_fn_method_persistentauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array): bigint;
+    uniffi_dbx_tools_core_fn_method_persistentauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array, login: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_persistentauth_status(uniffiSelf: bigint, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_method_persistentauth_token(uniffiSelf: bigint, login: Uint8Array): bigint;
-    uniffi_dbx_tools_core_fn_method_providerauth_force_refresh_token(uniffiSelf: bigint): bigint;
+    uniffi_dbx_tools_core_fn_method_providerauth_force_refresh_token(uniffiSelf: bigint, login: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_providerauth_logout(uniffiSelf: bigint): bigint;
-    uniffi_dbx_tools_core_fn_method_providerauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array): bigint;
+    uniffi_dbx_tools_core_fn_method_providerauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array, login: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_providerauth_token(uniffiSelf: bigint, login: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_storageadapter_load(uniffiSelf: bigint, profile: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_storageadapter_prepare_write(uniffiSelf: bigint): bigint;

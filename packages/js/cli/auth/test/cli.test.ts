@@ -25,8 +25,8 @@ function fakeAuth(calls: string[]): PersistentAuthLike {
     async refreshRejectedToken() {
       return TOKEN;
     },
-    async forceRefreshToken() {
-      calls.push("force-refresh");
+    async forceRefreshToken(login) {
+      calls.push(`force-refresh:${String(login)}`);
       return TOKEN;
     },
     async logout() {
@@ -53,7 +53,11 @@ describe("auth CLI", () => {
       { args: ["login"], expected: "token:true" },
       { args: ["token"], expected: "token:false" },
       { args: ["token", "--login-if-missing"], expected: "token:undefined" },
-      { args: ["token", "--force-refresh"], expected: "force-refresh" },
+      { args: ["token", "--force-refresh"], expected: "force-refresh:false" },
+      {
+        args: ["token", "--force-refresh", "--login-if-missing"],
+        expected: "force-refresh:undefined",
+      },
     ];
 
     for (const testCase of cases) {

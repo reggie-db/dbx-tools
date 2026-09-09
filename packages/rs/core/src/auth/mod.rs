@@ -278,7 +278,7 @@ impl PersistentAuth {
         }
     }
 
-    /// True forces login, false forbids interactive login, and omission permits missing-token login.
+    /// True forces login, false forbids it, and omission permits automatic login.
     #[uniffi::method(default(login = None))]
     pub async fn token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
         match &self.inner {
@@ -292,9 +292,11 @@ impl PersistentAuth {
     }
 
     /// Return a current authorization header when the request URL matches the profile origin.
+    #[uniffi::method(default(login = None))]
     pub async fn authorization_header_for_url(
         &self,
         request_url: String,
+        login: Option<bool>,
     ) -> BindingResult<Option<String>> {
         let profile_url =
             Url::parse(&self.status().host).map_err(|error| DatabricksAuthError::Failure {
@@ -307,15 +309,16 @@ impl PersistentAuth {
         if profile_url.origin() != request_url.origin() {
             return Ok(None);
         }
-        let token = self.token(Some(false)).await?;
+        let token = self.token(login).await?;
         Ok(Some(format!("{} {}", token.token_type, token.access_token)))
     }
 
-    /// Renew the stored credential even before its refresh window.
-    pub async fn force_refresh_token(&self) -> BindingResult<AccessToken> {
+    /// Renew the stored credential, permitting login by default when renewal fails.
+    #[uniffi::method(default(login = None))]
+    pub async fn force_refresh_token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
         match &self.inner {
             PersistentAuthInner::Managed(inner) => inner
-                .force_refresh()
+                .force_refresh(login.unwrap_or(true))
                 .await
                 .map(Into::into)
                 .map_err(binding_error),
@@ -324,13 +327,15 @@ impl PersistentAuth {
     }
 
     /// Reuse another caller's replacement or renew the rejected token.
+    #[uniffi::method(default(login = None))]
     pub async fn refresh_rejected_token(
         &self,
         stale_access_token: String,
+        login: Option<bool>,
     ) -> BindingResult<AccessToken> {
         match &self.inner {
             PersistentAuthInner::Managed(inner) => inner
-                .refresh_rejected_token(&stale_access_token)
+                .refresh_rejected_token(&stale_access_token, login.unwrap_or(true))
                 .await
                 .map(Into::into)
                 .map_err(binding_error),
@@ -500,7 +505,7 @@ mod tests {
             "request-token"
         );
         assert_eq!(
-            auth.refresh_rejected_token("request-token".into())
+            auth.refresh_rejected_token("request-token".into(), None)
                 .await
                 .unwrap()
                 .access_token,
@@ -508,7 +513,8 @@ mod tests {
         );
         assert_eq!(
             auth.authorization_header_for_url(
-                "https://workspace.example/api/2.0/clusters/list".into()
+                "https://workspace.example/api/2.0/clusters/list".into(),
+                None,
             )
             .await
             .unwrap()
@@ -516,9 +522,12 @@ mod tests {
             Some("Bearer request-token")
         );
         assert_eq!(
-            auth.authorization_header_for_url("https://other.example/api/2.0/clusters/list".into())
-                .await
-                .unwrap(),
+            auth.authorization_header_for_url(
+                "https://other.example/api/2.0/clusters/list".into(),
+                None,
+            )
+            .await
+            .unwrap(),
             None
         );
     }

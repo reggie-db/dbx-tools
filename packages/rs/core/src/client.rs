@@ -45,7 +45,7 @@ impl Middleware for AuthorizationMiddleware {
             return Ok(response);
         };
         self.auth
-            .refresh_rejected_token(stale_access_token)
+            .refresh_rejected_token(stale_access_token, None)
             .await
             .map_err(reqwest_middleware::Error::middleware)?;
         self.authorize(&mut retry_request).await?;
@@ -59,7 +59,7 @@ impl AuthorizationMiddleware {
         request.headers_mut().remove(AUTHORIZATION);
         let Some(header) = self
             .auth
-            .authorization_header_for_url(request.url().to_string())
+            .authorization_header_for_url(request.url().to_string(), None)
             .await
             .map_err(reqwest_middleware::Error::middleware)?
         else {

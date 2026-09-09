@@ -89,7 +89,7 @@ mod tests {
             assert_eq!(second.scopes, ["files:read", "jobs"]);
             assert_eq!(
                 client
-                    .refresh_rejected_token("older-rejected-token")
+                    .refresh_rejected_token("older-rejected-token", true)
                     .await
                     .unwrap()
                     .access_token,
@@ -153,7 +153,7 @@ mod tests {
         )
         .unwrap();
 
-        let token = client.force_refresh().await.unwrap();
+        let token = client.force_refresh(true).await.unwrap();
 
         assert_eq!(token.access_token, "access");
         assert_eq!(token.scopes, ["all-apis"]);

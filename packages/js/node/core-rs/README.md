@@ -10,6 +10,9 @@ const auth = await createPersistentAuth(DatabricksAuthOptions.create({}));
 const token = await auth.token();
 ```
 
+Token and refresh methods permit login after a missing or invalid credential by
+default. Pass `false` as their `login` argument to prohibit interactive login.
+
 This package contains only generated UniFFI bindings and the matching native
 library dependency. Databricks workspace, filesystem, cloud, and network
 utilities remain in [`@dbx-tools/databricks`](../databricks).

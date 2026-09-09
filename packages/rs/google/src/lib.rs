@@ -139,27 +139,31 @@ pub async fn create_google_auth(options: GoogleAuthOptions) -> BindingResult<Arc
 #[uniffi::export(async_runtime = "tokio")]
 impl GoogleAuth {
     /// Return a cached token or refresh it from ADC.
-    pub async fn token(&self) -> BindingResult<AccessToken> {
-        AuthSession::token(self)
+    #[uniffi::method(default(login = None))]
+    pub async fn token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
+        AuthSession::token_with_login(self, login)
             .await
             .map(Into::into)
             .map_err(failure)
     }
 
     /// Refresh ADC even when the current token is outside its refresh window.
-    pub async fn force_refresh_token(&self) -> BindingResult<AccessToken> {
-        AuthSession::force_refresh(self)
+    #[uniffi::method(default(login = None))]
+    pub async fn force_refresh_token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
+        AuthSession::force_refresh(self, login.unwrap_or(true))
             .await
             .map(Into::into)
             .map_err(failure)
     }
 
     /// Reuse a concurrent replacement or refresh the rejected access token.
+    #[uniffi::method(default(login = None))]
     pub async fn refresh_rejected_token(
         &self,
         stale_access_token: String,
+        login: Option<bool>,
     ) -> BindingResult<AccessToken> {
-        AuthSession::refresh_rejected_token(self, &stale_access_token)
+        AuthSession::refresh_rejected_token(self, &stale_access_token, login.unwrap_or(true))
             .await
             .map(Into::into)
             .map_err(failure)

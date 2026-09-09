@@ -44,7 +44,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.188",
+  "version": "0.6.189",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -57,11 +57,11 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@dbx-tools/google-rs-linux-x64-gnu": "0.6.188",
-    "@dbx-tools/google-rs-linux-arm64-gnu": "0.6.188",
-    "@dbx-tools/google-rs-darwin-x64": "0.6.188",
-    "@dbx-tools/google-rs-darwin-arm64": "0.6.188",
-    "@dbx-tools/google-rs-win32-x64-msvc": "0.6.188"
+    "@dbx-tools/google-rs-linux-x64-gnu": "0.6.189",
+    "@dbx-tools/google-rs-linux-arm64-gnu": "0.6.189",
+    "@dbx-tools/google-rs-darwin-x64": "0.6.189",
+    "@dbx-tools/google-rs-darwin-arm64": "0.6.189",
+    "@dbx-tools/google-rs-win32-x64-msvc": "0.6.189"
   },
   "dbxToolsConfig": {
     "uniffi": true,

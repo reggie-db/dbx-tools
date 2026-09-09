@@ -13,6 +13,9 @@ auth = await create_persistent_auth(DatabricksAuthOptions())
 token = await auth.token()
 ```
 
+Token and refresh methods permit login after a missing or invalid credential by
+default. Pass `False` as their `login` argument to prohibit interactive login.
+
 Inside a Databricks App, pass current request headers through
 `DatabricksAuthOptions`. It prefers `app_obo` from the configured access-token
 header, then falls back to `app_sp` using the ambient App service principal.

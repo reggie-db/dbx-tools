@@ -265,11 +265,11 @@ export function buildProgram(
     .command("token")
     .description("Return a valid access token")
     .option("--force-refresh", "Refresh the token before returning it")
-    .option("--login-if-missing", "Run browser OAuth when no credential is stored")
+    .option("--login-if-missing", "Run browser OAuth when a credential is missing or invalid")
     .action(async (tokenOptions: TokenCommandOptions) => {
       await withAuth(options(), dependencies, async ({ auth }) => {
         const token = tokenOptions.forceRefresh
-          ? await auth.forceRefreshToken()
+          ? await auth.forceRefreshToken(tokenOptions.loginIfMissing ? undefined : false)
           : tokenOptions.loginIfMissing
             ? await auth.token()
             : await auth.token(false);
