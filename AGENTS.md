@@ -490,11 +490,11 @@ Primary package areas:
   registry and cleaned dependency artifacts from the target directory, while
   workspace crate outputs rebuild for their release version. Do not layer the
   GHA sccache backend on top: its per-object entries exhaust the repository
-  cache quota. GitHub isolates caches by tag, so the manual `rust-cache.yml`
-  workflow primes caches in the default-branch scope; release jobs restore
-  those archives with `save-if: false` instead of creating unusable tag-scoped
-  copies. Run the cache workflow after dependency, Rust toolchain, target, or
-  Rust build-config changes. Set `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
+  cache quota. GitHub isolates caches by tag, so `rust-cache.yml` primes caches
+  in the default-branch scope on Rust, Cargo, or workflow changes and also
+  supports manual dispatch; release jobs restore those archives with
+  `save-if: false` instead of creating unusable tag-scoped copies. Set
+  `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
   Packaging must
   execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace

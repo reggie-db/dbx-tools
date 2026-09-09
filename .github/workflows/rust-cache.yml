@@ -2,6 +2,15 @@
 
 name: rust-cache
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .cargo/**
+      - .github/workflows/rust-cache.yml
+      - Cargo.lock
+      - Cargo.toml
+      - packages/rs/**
   workflow_dispatch: {}
 concurrency:
   group: rust-cache

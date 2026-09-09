@@ -627,6 +627,16 @@ describe("DBXToolsRustWorkspace", () => {
     });
     const cacheWorkflow = readWorkflow(outdir, "rust-cache");
     assert.deepEqual(cacheWorkflow.on.workflow_dispatch, {});
+    assert.deepEqual(cacheWorkflow.on.push, {
+      branches: ["main"],
+      paths: [
+        ".cargo/**",
+        ".github/workflows/rust-cache.yml",
+        "Cargo.lock",
+        "Cargo.toml",
+        "packages/rs/**",
+      ],
+    });
     const cachePrime = cacheWorkflow.jobs.prime!;
     assert.equal(stepNames(cachePrime).includes("Setup uv"), false);
     assert.match(

@@ -875,7 +875,19 @@ export class DBXToolsRustWorkspace {
       limitConcurrency: true,
       concurrencyOptions: { group: "rust-cache", cancelInProgress: true },
     });
-    workflow.on({ workflowDispatch: {} });
+    workflow.on({
+      push: {
+        branches: ["main"],
+        paths: [
+          ".cargo/**",
+          ".github/workflows/rust-cache.yml",
+          "Cargo.lock",
+          "Cargo.toml",
+          "packages/rs/**",
+        ],
+      },
+      workflowDispatch: {},
+    });
     workflow.addJob("prime", {
       name: "${{ matrix.node }}",
       runsOn: ["${{ matrix.runner }}"],
