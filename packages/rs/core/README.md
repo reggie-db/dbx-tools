@@ -29,8 +29,10 @@ Outside Databricks Apps, automatic U2M uses
 the native browser flow otherwise. Missing or invalid credentials invoke login
 after acquisition or refresh fails unless the caller passes `login = false`.
 The same default applies to force-refresh and rejected-token refresh. Inside an
-App, automatic storage uses memory and does not invoke the CLI. M2M always uses
-the native client-credentials flow.
+CLI-backed U2M profile, login runs through `databricks auth login --profile`;
+native OAuth uses its browser flow. Inside an App, automatic storage uses
+memory and does not invoke the CLI. M2M always uses the native
+client-credentials flow.
 
 Inside an App, `create_persistent_auth` reads request headers from
 `DatabricksAuthOptions`. It prefers `app_obo` when the configured access-token

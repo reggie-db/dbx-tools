@@ -18,8 +18,8 @@ aigw-openai = "=0.6.0"
 async-stream = "0.3"
 axum = "0.8"
 clap = { workspace = true }
-dbx-tools-core = { version = "0.6.189", path = "../core" }
-dbx-tools-model = { version = "0.6.189", path = "../model" }
+dbx-tools-core = { version = "0.6.190", path = "../core" }
+dbx-tools-model = { version = "0.6.190", path = "../model" }
 eventsource-stream = "0.2"
 futures-util = "0.3"
 reqwest = { workspace = true, features = ["stream"] }

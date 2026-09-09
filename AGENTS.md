@@ -117,8 +117,10 @@ Primary package areas:
   calls permit login by default when a credential is missing or renewal fails;
   passing `login = false` keeps the call strictly non-interactive. This policy
   lives in the shared lifecycle and applies to CLI-backed U2M, native OAuth,
-  generic providers, and Google ADC. Inside an App, automatic storage resolves to
-  memory and does not invoke the CLI. App auth has two explicit types:
+  generic providers, and Google ADC. CLI-backed U2M invokes
+  `databricks auth login --profile` before reading the replacement token;
+  native OAuth runs its browser flow. Inside an App, automatic storage resolves
+  to memory and does not invoke the CLI. App auth has two explicit types:
   `app_obo` reads request headers from `DatabricksAuthOptions` through the
   normal `createPersistentAuth` / `create_persistent_auth` factory. The access
   token header defaults to case-insensitive `authorization` with the `Bearer`

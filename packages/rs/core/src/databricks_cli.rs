@@ -30,6 +30,18 @@ pub fn databricks_cli_available() -> bool {
     })
 }
 
+/// Run interactive Databricks CLI login for one profile.
+pub fn databricks_cli_login(profile: &str) -> Result<(), DatabricksCliError> {
+    let status = login_command(databricks_executable(), profile).status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(DatabricksCliError::Command(format!(
+            "databricks auth login exited {status}"
+        )))
+    }
+}
+
 /// Request one profile token from the Databricks CLI as its JSON response bytes.
 pub fn databricks_cli_token(
     profile: &str,
@@ -49,6 +61,12 @@ pub fn databricks_cli_token(
 
 fn databricks_executable() -> std::ffi::OsString {
     std::env::var_os("DATABRICKS_CLI_PATH").unwrap_or_else(|| "databricks".into())
+}
+
+fn login_command(executable: std::ffi::OsString, profile: &str) -> Command {
+    let mut command = Command::new(executable);
+    command.args(["auth", "login", "--profile", profile]);
+    command
 }
 
 fn token_command(executable: std::ffi::OsString, profile: &str, force_refresh: bool) -> Command {
@@ -78,6 +96,15 @@ mod tests {
                 "json",
                 "--force-refresh",
             ]
+        );
+    }
+
+    #[test]
+    fn login_command_uses_profile() {
+        let command = login_command("databricks".into(), "PROFILE");
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            ["auth", "login", "--profile", "PROFILE"]
         );
     }
 }

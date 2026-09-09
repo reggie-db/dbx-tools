@@ -17,7 +17,9 @@ mod runtime;
 pub use auth::*;
 pub use client::{DatabricksClient, DatabricksClientError};
 pub use credentials::*;
-pub use databricks_cli::{databricks_cli_available, databricks_cli_token, DatabricksCliError};
+pub use databricks_cli::{
+    databricks_cli_available, databricks_cli_login, databricks_cli_token, DatabricksCliError,
+};
 pub use file_cache::{platform_cache_root, FileCache, FileCacheError};
 pub use file_lock::{FileLock, FileLockError};
 pub use lakebase_address::{

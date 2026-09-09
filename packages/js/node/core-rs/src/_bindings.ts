@@ -1365,7 +1365,7 @@ private constructor(pointer: UniffiHandle) {
 /**
  * Reuse another caller's replacement or renew the rejected token.
  */
-    async refreshRejectedToken(staleAccessToken: string, login: boolean | undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    async refreshRejectedToken(staleAccessToken: string, login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
@@ -2726,7 +2726,7 @@ function uniffiEnsureInitialized() {
     if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_logout() !== 22550) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_logout");
     }
-    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_refresh_rejected_token() !== 3854) {
+    if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_refresh_rejected_token() !== 28608) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_method_persistentauth_refresh_rejected_token");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_method_persistentauth_status() !== 3099) {

@@ -18,13 +18,12 @@ enum AuthFlow {
 }
 
 struct DatabricksCliFlow {
-    native: OAuthFlow,
     profile: String,
 }
 
 impl DatabricksCliFlow {
-    fn new(native: OAuthFlow, profile: String) -> Self {
-        Self { native, profile }
+    fn new(profile: String) -> Self {
+        Self { profile }
     }
 
     async fn token(&self, force_refresh: bool) -> Result<Token> {
@@ -36,6 +35,19 @@ impl DatabricksCliFlow {
         })
         .await
         .map_err(|error| Error::OAuth(format!("databricks auth token task failed: {error}")))?
+    }
+
+    async fn login(&self) -> Result<Token> {
+        let profile = self.profile.clone();
+        tokio::task::spawn_blocking(move || {
+            crate::databricks_cli_login(&profile)
+                .map_err(|error| Error::OAuth(error.to_string()))?;
+            let output = crate::databricks_cli_token(&profile, false)
+                .map_err(|error| Error::OAuth(error.to_string()))?;
+            serde_json::from_slice(&output).map_err(Into::into)
+        })
+        .await
+        .map_err(|error| Error::OAuth(format!("databricks auth login task failed: {error}")))?
     }
 }
 
@@ -49,11 +61,11 @@ impl DatabricksAuthClient {
     ) -> Result<Self> {
         let flow = match profile.auth_kind {
             AuthKind::UserToMachine => {
-                let native = OAuthFlow::new(profile.clone())?
-                    .with_template(OAuthTemplate::new(options.callback_image_src.clone()));
                 if use_databricks_cli {
-                    AuthFlow::UserToMachineCli(DatabricksCliFlow::new(native, profile.name.clone()))
+                    AuthFlow::UserToMachineCli(DatabricksCliFlow::new(profile.name.clone()))
                 } else {
+                    let native = OAuthFlow::new(profile.clone())?
+                        .with_template(OAuthTemplate::new(options.callback_image_src.clone()));
                     AuthFlow::UserToMachine(native)
                 }
             }
@@ -105,7 +117,7 @@ impl crate::TokenProvider for AuthFlow {
     async fn login(&self, timeout: Duration) -> Result<Token> {
         match self {
             Self::UserToMachine(flow) => flow.login(timeout).await,
-            Self::UserToMachineCli(flow) => flow.native.login(timeout).await,
+            Self::UserToMachineCli(flow) => flow.login().await,
             Self::MachineToMachine(flow) => flow.token().await,
             Self::PersonalAccessToken(token) => Ok(token.clone()),
         }
