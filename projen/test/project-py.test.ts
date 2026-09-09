@@ -77,7 +77,7 @@ describe("DBXToolsPythonWorkspace", () => {
     const workspace = readFileSync(join(outdir, "pyproject.toml"), "utf8");
     assert.match(workspace, /members = \[\s*"python\/packages\/\*"\s*\]/);
     assert.doesNotMatch(workspace, /exclude =/);
-    assert.match(workspace, /\[tool\.uv\.sources\.fixture-native\]\s+workspace = true/);
+    assert.match(workspace, /\[tool\.uv\.sources\.fixture-native-rs\]\s+workspace = true/);
     assert.match(workspace, /dependencies = \[\s*"fixture-app"\s*\]/);
     assert.match(workspace, /requires-python = ">=3\.12"/);
     assert.match(workspace, /index-strategy = "unsafe-best-match"/);
@@ -85,7 +85,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(workspace, /\[tool\.pyrefly\]\s+ignore-errors-in-generated-code = true/);
     assert.match(
       workspace,
-      /project-excludes = \[[^\]]*"python\/packages\/native\/src\/fixture\/native\/bindings\.py"/,
+      /project-excludes = \[[^\]]*"python\/packages\/native-rs\/src\/fixture\/native_rs\/bindings\.py"/,
     );
     assert.doesNotMatch(workspace, /^  \[/m);
     assert.doesNotMatch(workspace, /= \[ /);
@@ -101,7 +101,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.doesNotMatch(app, /\[dependency-groups\]/);
     assert.doesNotMatch(app, /^  \[/m);
     assert.doesNotMatch(app, /= \[ /);
-    const native = readFileSync(join(outdir, "python/packages/native/pyproject.toml"), "utf8");
+    const native = readFileSync(join(outdir, "python/packages/native-rs/pyproject.toml"), "utf8");
     assert.match(native, /\[tool\.dbx_tools\.config\]\s+uniffi = true/);
     const standard = readFileSync(join(outdir, "python/packages/standard/pyproject.toml"), "utf8");
     assert.match(standard, /\[tool\.dbx_tools\.config\]\s+uniffi = false/);
@@ -129,11 +129,13 @@ describe("DBXToolsPythonWorkspace", () => {
       workflowStep(buildPython, "Stamp workspace versions").run?.includes("stamp-python.ts"),
     );
     assert.equal(
-      workflowStep(buildPython, "Download fixture-native native wheels").with?.pattern,
-      "fixture-native--*--python-wheel",
+      workflowStep(buildPython, "Download fixture-native-rs native wheels").with?.pattern,
+      "fixture-native-rs--*--python-wheel",
     );
     assert.equal(
-      workflowStep(buildPython, "Download recovered fixture-native native wheels").with?.["run-id"],
+      workflowStep(buildPython, "Download recovered fixture-native-rs native wheels").with?.[
+        "run-id"
+      ],
       "${{ inputs.source_run_id }}",
     );
     assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
@@ -152,13 +154,12 @@ describe("DBXToolsPythonWorkspace", () => {
       url: "https://pypi.org/project/fixture-app/",
     });
     assert.equal(
-      release.jobs["publish-pypi-native"]?.if,
+      release.jobs["publish-pypi-native-rs"]?.if,
       "${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}",
     );
     assert.equal(
-      workflowStep(release.jobs["publish-pypi-native"]!, "Publish fixture-native to PyPI").with?.[
-        "skip-existing"
-      ],
+      workflowStep(release.jobs["publish-pypi-native-rs"]!, "Publish fixture-native-rs to PyPI")
+        .with?.["skip-existing"],
       true,
     );
     assert.equal("repository_dispatch" in release.on, false);
@@ -203,7 +204,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /Remove duplicates so exactly one matching publisher remains/);
     assert.match(
       instructions,
-      /## fixture-native\n- Owner: example\n- Repository name: fixture\n- Workflow name: release\.yml\n- Environment name: pypi-fixture-native/,
+      /## fixture-native-rs\n- Owner: example\n- Repository name: fixture\n- Workflow name: release\.yml\n- Environment name: pypi-fixture-native-rs/,
     );
     assert.doesNotMatch(instructions, /PyPI project:|GitHub repository:|Workflow path:/);
     assert.match(instructions, /Artifacts: platform-specific wheels/);

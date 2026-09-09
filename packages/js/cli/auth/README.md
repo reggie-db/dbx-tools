@@ -3,7 +3,7 @@
 Databricks OAuth commands mounted under `dbx auth`.
 
 The package uses the generated
-[`@dbx-tools/databricks`](../../node/databricks) bindings for profile
+[`@dbx-tools/core-rs`](../../node/core-rs) bindings for profile
 resolution, U2M browser authorization, M2M client credentials, token refresh,
 PAT access, locking, and credential storage.
 
@@ -84,7 +84,7 @@ await cli.buildProgram().parseAsync(["status"], { from: "user" });
 ```
 
 Applications that need programmatic OAuth should import
-[`@dbx-tools/databricks`](../../node/databricks) directly.
+[`@dbx-tools/core-rs`](../../node/core-rs) directly.
 
 ## Modules
 

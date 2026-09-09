@@ -5,4 +5,4 @@ cdylib_name = "dbx_tools_google"
 strictTypeChecking = true
 
 [bindings.python.external_packages]
-dbx_tools_databricks = "dbx_tools.databricks.bindings"
+dbx_tools_core = "dbx_tools.core_rs.bindings"

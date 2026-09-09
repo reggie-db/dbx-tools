@@ -2,12 +2,12 @@
  * `dbx auth` Commander program for Databricks OAuth.
  *
  * The command delegates profile resolution, browser OAuth, token refresh,
- * locking, and credential storage to `@dbx-tools/databricks`.
+ * locking, and credential storage to `@dbx-tools/core-rs`.
  *
  * @module
  */
 
-import * as databricks from "@dbx-tools/databricks";
+import * as databricks from "@dbx-tools/core-rs";
 import { string as sharedString } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 

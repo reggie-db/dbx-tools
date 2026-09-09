@@ -2,7 +2,7 @@
 
 Private loopback PostgreSQL proxy for Databricks Lakebase.
 
-The proxy uses the shared `dbx-tools-databricks` Lakebase address parser and
+The proxy uses the shared `dbx-tools-core` Lakebase address parser and
 discovery client. It accepts the same inputs as the Node parser: PostgreSQL
 URLs, canonical resource paths, bare endpoint hostnames, and bare project ids.
 The proxy discovers missing project, branch, endpoint, database, and principal
@@ -86,7 +86,7 @@ canonical resource path and adds `sslmode=disable`.
 
 Auth sessions and discovery metadata use bounded `mini-moka` caches. Database
 credentials are minted for every upstream connection. One Databricks API `401`
-is retried by the shared `dbx-tools-databricks` client.
+is retried by the shared `dbx-tools-core` client.
 
 ## Protocol behavior
 

@@ -70,7 +70,9 @@ function ownerBinding(
 function generate(binding: RustBindingMapping): void {
   const targets = [
     ...(binding.node ? ["--node", binding.node] : []),
-    ...(binding.python ? ["--python", binding.python] : []),
+    ...(binding.python
+      ? ["--python", binding.python, "--python-module", binding.pythonModule ?? ""]
+      : []),
   ];
   const result = spawnSync(
     process.execPath,

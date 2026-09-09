@@ -1,11 +1,11 @@
 from typing import Literal, TypeAlias
 
-from dbx_tools.databricks import (
+from dbx_tools.core_rs.bindings import (
     ParsedAddress,
     parse_address,
     parse_resource_path,
 )
-from dbx_tools.databricks import (
+from dbx_tools.core_rs.bindings import (
     SslMode as NativeSslMode,
 )
 

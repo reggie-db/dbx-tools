@@ -16,11 +16,10 @@ aigw-anthropic = "=0.6.0"
 aigw-core = "=0.6.0"
 aigw-openai = "=0.6.0"
 async-stream = "0.3"
-async-trait = { workspace = true }
 axum = "0.8"
 clap = { workspace = true }
-dbx-tools-databricks = { version = "0.6.186", path = "../databricks", default-features = false }
-dbx-tools-model = { version = "0.6.186", path = "../model" }
+dbx-tools-core = { version = "0.6.187", path = "../core" }
+dbx-tools-model = { version = "0.6.187", path = "../model" }
 eventsource-stream = "0.2"
 futures-util = "0.3"
 reqwest = { workspace = true, features = ["stream"] }

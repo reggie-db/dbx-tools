@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use dbx_tools_databricks::DatabricksClientError;
+use dbx_tools_core::DatabricksClientError;
 use dbx_tools_model::ModelError;
 use serde_json::json;
 

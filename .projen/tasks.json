@@ -211,9 +211,6 @@
       "name": "openapi",
       "steps": [
         {
-          "exec": "bun packages/js/node/databricks-openapi/src/cli.ts"
-        },
-        {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/openapi.ts"
         }
       ]
@@ -296,15 +293,6 @@
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/rust.ts"
-        }
-      ]
-    },
-    "rs:bindings:demo": {
-      "name": "rs:bindings:demo",
-      "description": "Generate and run UniFFI Node and Python example CLIs",
-      "steps": [
-        {
-          "exec": "bun run rs:bindings && bun packages/js/node/databricks/test/cli.ts && uv run --project packages/py/databricks packages/py/databricks/test/cli.py && bun packages/js/node/google/test/cli.ts && uv run --project packages/py/google packages/py/google/test/cli.py"
         }
       ]
     },

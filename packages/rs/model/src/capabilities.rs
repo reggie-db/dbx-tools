@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeSet, path::Path, time::Duration};
 
-use dbx_tools_databricks::{platform_cache_root, FileCache, FileCacheError};
+use dbx_tools_core::{platform_cache_root, FileCache, FileCacheError};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 

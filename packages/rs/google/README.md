@@ -11,7 +11,7 @@ Credential discovery follows ADC:
 
 The package never invokes gcloud or rewrites ADC. Configure local user
 credentials with `gcloud auth application-default login`. ADC is the only
-persistent credential store; short-lived tokens use `dbx-tools-databricks`'
+persistent credential store; short-lived tokens use `dbx-tools-core`'
 shared auth lifecycle and remain in process memory.
 
 ```rust
@@ -19,4 +19,5 @@ let auth = create_google_auth(GoogleAuthOptions::default()).await?;
 let token = auth.token().await?;
 ```
 
-UniFFI bindings are published as `@dbx-tools/google` and `dbx-tools-google`.
+UniFFI bindings are published as `@dbx-tools/google-rs` and
+`dbx-tools-google-rs`.

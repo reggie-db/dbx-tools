@@ -157,6 +157,8 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
     includeNode ? binding.nodePackage! : "",
     "--python-package",
     includePython ? binding.pythonPackage! : "",
+    "--python-module",
+    includePython ? binding.pythonModule! : "",
     "--cargo-target",
     rustHost(),
     "--node-triple",

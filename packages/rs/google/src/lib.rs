@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use dbx_tools_databricks::{
+use dbx_tools_core::{
     credential_key, AccessToken, AuthClient, AuthError, AuthOptions, AuthSession, BindingResult,
     MemoryStore, Result, Token, TokenProvider,
 };
@@ -68,10 +68,11 @@ impl TokenProvider for GoogleFlow {
 
 impl GoogleFlow {
     async fn token(&self) -> Result<Token> {
-        let token =
-            self.credential.get_token().await.map_err(|error| {
-                dbx_tools_databricks::Error::OAuth(format!("Google ADC: {error}"))
-            })?;
+        let token = self
+            .credential
+            .get_token()
+            .await
+            .map_err(|error| dbx_tools_core::Error::OAuth(format!("Google ADC: {error}")))?;
         let now = time::OffsetDateTime::now_utc();
         let expires_at = token
             .expires_at

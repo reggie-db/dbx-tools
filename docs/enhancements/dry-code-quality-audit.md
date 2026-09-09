@@ -9,8 +9,9 @@ public surface cannot be reviewed and maintained from its owning module.
 
 ## Sources Of Truth
 
-- `dbx-tools-databricks` owns Databricks authentication, rejected-token retry,
-  Lakebase address parsing, and the UniFFI contract.
+- `dbx-tools-core` owns Databricks authentication, middleware-backed requests,
+  rejected-token retry, Lakebase parsing, and shared runtime primitives.
+- `dbx-tools-lakebase-proxy` owns Lakebase discovery and database credentials.
 - `dbx-tools-model` owns server-side model discovery, model-name parsing,
   capability policy, retirement status, ranking, and Databricks model identity.
 - `@dbx-tools/shared-model` owns browser-safe schemas and request/response

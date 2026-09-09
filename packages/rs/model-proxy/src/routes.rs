@@ -13,7 +13,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use dbx_tools_databricks::DatabricksClient;
+use dbx_tools_core::{DatabricksClient, DatabricksClientError};
 use dbx_tools_model::{
     codex_model_name, is_responses_only, models_payload_with_capabilities,
     ModelCapabilitiesResolver, ModelClass, ModelClient,
@@ -164,15 +164,13 @@ async fn embeddings(
     let throttle_wait = state.throttle.acquire(&endpoint.name, &input).await;
     let (path, request_body) = prepare_embedding_request(input, &endpoint.name)?;
     let originator = request_originator(&headers);
-    let upstream = state
-        .databricks
-        .request_raw(
-            Method::POST,
-            &path,
-            upstream_headers(originator),
-            Some(request_body),
-        )
-        .await?;
+    let upstream = send_upstream(
+        &state.databricks,
+        &path,
+        upstream_headers(originator),
+        request_body,
+    )
+    .await?;
     let upstream = buffered_response(upstream).await?;
     info!(
         route = "/v1/embeddings",
@@ -242,15 +240,13 @@ async fn proxy(
         native_responses,
     );
     let request_body = adapt_request(client_wire, target, input)?;
-    let upstream = state
-        .databricks
-        .request_raw(
-            Method::POST,
-            upstream_path(target, codex, native_responses),
-            upstream_headers(originator),
-            Some(request_body),
-        )
-        .await?;
+    let upstream = send_upstream(
+        &state.databricks,
+        upstream_path(target, codex, native_responses),
+        upstream_headers(originator),
+        request_body,
+    )
+    .await?;
     let status = upstream_status(&upstream)?;
     if status.is_success() && streaming {
         let response_headers = forwarded_response_headers(upstream.headers());
@@ -296,6 +292,21 @@ async fn proxy(
         "model request completed"
     );
     Ok(upstream.into_json_response(output))
+}
+
+async fn send_upstream(
+    client: &DatabricksClient,
+    path: &str,
+    headers: HeaderMap,
+    body: Vec<u8>,
+) -> Result<reqwest::Response, DatabricksClientError> {
+    client
+        .request_builder(path, Method::POST)?
+        .headers(headers)
+        .body(body)
+        .send()
+        .await
+        .map_err(Into::into)
 }
 
 fn requested_model(input: &Value) -> Result<&str, ProxyError> {

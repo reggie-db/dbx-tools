@@ -6,7 +6,7 @@ Databricks.
 ## Key features
 
 - Lists live Databricks serving endpoints through the authenticated
-  `dbx-tools-databricks` client.
+  `dbx-tools-core` client.
 - Caches the workspace catalogue on disk for five minutes.
 - Parses provider, family, version, and model components.
 - Classifies chat and embedding endpoints from live task and profile metadata.
@@ -21,7 +21,7 @@ Databricks.
 ## Resolve a serving endpoint
 
 ```rust
-use dbx_tools_databricks::DatabricksClient;
+use dbx_tools_core::DatabricksClient;
 use dbx_tools_model::ModelClient;
 
 let databricks = DatabricksClient::new(Some("PROFILE".to_owned())).await?;

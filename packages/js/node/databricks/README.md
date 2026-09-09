@@ -1,20 +1,14 @@
 # @dbx-tools/databricks
 
-Databricks authentication, runtime, workspace, filesystem, cloud, and network
-utilities.
+Databricks workspace, filesystem, cloud, and network utilities.
 
 Import this package when backend code needs workspace URL/id discovery, cloud
-provider/region lookup, App runtime detection, DNS resolution, or public-IP
-discovery without requiring an AppKit plugin runtime.
+provider/region lookup, DNS resolution, or public-IP discovery.
 
 Key features:
 
 - Workspace URL and numeric workspace id resolution from AppKit context,
   Databricks SDK config, env, and config files.
-- U2M browser OAuth, M2M client credentials, PAT, `app_obo`, and `app_sp`
-  authentication.
-- Rust-backed App detection, CLI token access, file locks, and file-backed
-  caches.
 - `DatabricksFileSystem` (`FileSystem` over workspace files, UC volumes, and DBFS)
   with intelligent roots: `/Workspace/...`, `/Volumes/...` (also `/Volume/...` and
   `catalog.schema.volume`), `~` → `/Workspace/Users/<userName>`, and `/dbfs/...`.
@@ -26,43 +20,12 @@ Key features:
 - DNS A/AAAA lookup helpers for Databricks and adjacent service hosts.
 - Memoized outbound public-IP discovery for setup and diagnostics.
 
-## Authenticate
-
-```ts
-import { createPersistentAuth, DatabricksAuthOptions } from "@dbx-tools/databricks";
-import { ACCESS_TOKEN_HEADER } from "@dbx-tools/shared-core";
-
-const auth = await createPersistentAuth(DatabricksAuthOptions.create({}));
-const token = await auth.token();
-```
-
-Inside a Databricks App, request-scoped auth prefers OBO, then falls back to the
-ambient service principal:
-
-```ts
-const requestHeaders = new Map<string, string>();
-const forwardedToken = req.header(ACCESS_TOKEN_HEADER);
-if (forwardedToken) requestHeaders.set(ACCESS_TOKEN_HEADER, forwardedToken);
-const auth = await createPersistentAuth(
-  DatabricksAuthOptions.create({
-    requestHeaders,
-    accessTokenHeader: ACCESS_TOKEN_HEADER,
-  }),
-);
-```
-
-The access-token header defaults to `authorization` and accepts the standard
-`Bearer` scheme. Set `accessTokenHeader` for another trusted front-door header.
-OBO tokens are forwarded directly without caching. `app_sp` shares the
-complete M2M client-credentials implementation. Set `authType` or `profile`
-explicitly to override automatic App resolution.
-
 ## Relationship To Native AppKit
 
 Use native AppKit for its standard workspace client and plugin integrations.
 Use this package when code needs Databricks filesystem root normalization,
 cloud region discovery, network helpers, or workspace identity fallbacks
-outside an AppKit request, or when direct Rust-backed authentication is needed.
+outside an AppKit request.
 
 ## Databricks filesystem
 

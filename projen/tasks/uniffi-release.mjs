@@ -27,6 +27,7 @@ const parsed = parseArgs({
     "node-package": { type: "string" },
     "native-package": { type: "string" },
     "python-package": { type: "string" },
+    "python-module": { type: "string" },
     "cargo-target": { type: "string" },
     "node-triple": { type: "string" },
     "python-tag": { type: "string" },
@@ -231,11 +232,28 @@ const writable = (path) => {
   if (existsSync(path)) chmodSync(path, statSync(path).mode | 0o200);
 };
 
+const cargoMetadata = spawnSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+  cwd: root,
+  encoding: "utf8",
+});
+if (cargoMetadata.error) {
+  throw new Error(`cargo metadata failed: ${cargoMetadata.error.message}`, {
+    cause: cargoMetadata.error,
+  });
+}
+if (cargoMetadata.status !== 0) {
+  throw new Error(`cargo metadata exited with ${cargoMetadata.status}`);
+}
+const cargoTargetRoot = JSON.parse(cargoMetadata.stdout).target_directory;
+if (typeof cargoTargetRoot !== "string" || !cargoTargetRoot) {
+  throw new Error("cargo metadata returned no target_directory");
+}
+
 const libraryPath = (crate, cargoTarget, os) => {
   const name = crate.replaceAll("-", "_");
   const extension = os === "darwin" ? "dylib" : os === "win32" ? "dll" : "so";
   const prefix = os === "win32" ? "" : "lib";
-  return resolve(root, "target", cargoTarget, "release", `${prefix}${name}.${extension}`);
+  return resolve(cargoTargetRoot, cargoTarget, "release", `${prefix}${name}.${extension}`);
 };
 
 const packageNode = ({
@@ -387,6 +405,7 @@ const packagePython = ({
   version,
   cargoTarget,
   os,
+  pythonModule,
 }) => {
   const pythonRoot = resolve(output, "python-root");
   cpSync(resolve(root, pythonDirectory), pythonRoot, { recursive: true });
@@ -407,8 +426,9 @@ const packagePython = ({
   }
   writeFileSync(pyproject, metadata);
 
-  const packageName = crate.replace(/^dbx-tools-/, "").replaceAll("-", "_");
-  const packageDirectory = resolve(pythonRoot, "src", "dbx_tools", packageName);
+  const packageName = pythonModule.split(".").at(-1);
+  if (!packageName) throw new Error(`Invalid Python module ${pythonModule}`);
+  const packageDirectory = resolve(pythonRoot, "src", ...pythonModule.split("."));
   const generatedDirectory = mkdtempSync(join(tmpdir(), `${packageName}-python-`));
   const generator = resolve(
     root,
@@ -506,6 +526,7 @@ const build = () => {
       version,
       cargoTarget,
       os,
+      pythonModule: required("python-module"),
     });
   }
 };

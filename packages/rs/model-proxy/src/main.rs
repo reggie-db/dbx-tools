@@ -13,7 +13,7 @@ use std::{
 };
 
 use clap::Parser;
-use dbx_tools_databricks::{init_logging, DatabricksClient};
+use dbx_tools_core::{init_logging, DatabricksClient};
 use dbx_tools_model::{ModelCapabilitiesResolver, ModelClient};
 use protocol::TargetWire;
 use routes::AppState;

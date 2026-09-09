@@ -21,7 +21,6 @@ import {
   addExplicitInterfaceReexports,
   addTypeScriptExtensionsToBindingImports,
   makeDefaultedInterfaceParametersOptional,
-  mergePythonBindingExports,
 } from "../src/uniffi.ts";
 
 const { values } = parseArgs({
@@ -30,6 +29,7 @@ const { values } = parseArgs({
     crate: { type: "string" },
     node: { type: "string" },
     python: { type: "string" },
+    "python-module": { type: "string" },
     "cargo-target": { type: "string" },
     "node-package-base": { type: "string" },
     ubrn: { type: "string" },
@@ -54,10 +54,6 @@ const dependencies =
 const extension =
   process.platform === "darwin" ? "dylib" : process.platform === "win32" ? "dll" : "so";
 const prefix = process.platform === "win32" ? "" : "lib";
-const targetDirectory = values["cargo-target"]
-  ? join(root, "target", values["cargo-target"], "release")
-  : join(root, "target", "release");
-const library = join(targetDirectory, `${prefix}${libraryName}.${extension}`);
 const normalizedOutput = (value: string): string =>
   value
     .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, "")
@@ -74,6 +70,28 @@ const run = (command: string, args: string[]) => {
   }
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
 };
+
+const cargoMetadata = spawnSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+  cwd: root,
+  encoding: "utf8",
+});
+if (cargoMetadata.error) {
+  throw new Error(`cargo metadata failed: ${cargoMetadata.error.message}`, {
+    cause: cargoMetadata.error,
+  });
+}
+if (cargoMetadata.status !== 0) {
+  throw new Error(`cargo metadata exited with ${cargoMetadata.status}`);
+}
+const cargoTargetRoot = (JSON.parse(cargoMetadata.stdout) as { target_directory?: unknown })
+  .target_directory;
+if (typeof cargoTargetRoot !== "string" || !cargoTargetRoot) {
+  throw new Error("cargo metadata returned no target_directory");
+}
+const targetDirectory = values["cargo-target"]
+  ? join(cargoTargetRoot, values["cargo-target"], "release")
+  : join(cargoTargetRoot, "release");
+const library = join(targetDirectory, `${prefix}${libraryName}.${extension}`);
 
 const replaceGenerated = (source: string, destination: string): void => {
   const deadline = Date.now() + 5_000;
@@ -243,12 +261,10 @@ if (values.node) {
 }
 
 if (values.python) {
-  const pythonPackage = resolve(
-    root,
-    values.python,
-    "src/dbx_tools",
-    crate.replace(/^dbx-tools-/, "").replaceAll("-", "_"),
-  );
+  if (!values["python-module"]) {
+    throw new Error("Expected --python-module with --python");
+  }
+  const pythonPackage = resolve(root, values.python, "src", ...values["python-module"].split("."));
   const pythonOutput = mkdtempSync(join(tmpdir(), `${libraryName}-python-`));
   run(
     join(targetDirectory, `${crate}-uniffi-bindgen${process.platform === "win32" ? ".exe" : ""}`),
@@ -269,14 +285,7 @@ if (values.python) {
   stampGeneratedPython(pythonBindings);
   const pythonInit = join(pythonPackage, "__init__.py");
   makeWritable(pythonInit);
-  writeFileSync(
-    pythonInit,
-    mergePythonBindingExports(
-      existsSync(pythonInit) ? readFileSync(pythonInit, "utf8") : "",
-      readFileSync(pythonBindings, "utf8"),
-      { crate, file: pythonInit },
-    ),
-  );
+  writeFileSync(pythonInit, "");
   makeReadonly(pythonInit);
   const pythonLibrary = join(pythonPackage, basename(library));
   makeWritable(pythonLibrary);

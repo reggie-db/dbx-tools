@@ -15,11 +15,12 @@ pub(super) async fn generate_database_credential(
     let response = sessions
         .get(profile.as_deref())
         .await?
-        .post(
+        .request(
             CREDENTIALS_PATH,
-            json!({
+            Some(json!({
                 "endpoint": endpoint,
-            }),
+            })),
+            None,
         )
         .await?;
     response

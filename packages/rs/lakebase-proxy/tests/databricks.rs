@@ -3,7 +3,7 @@ use std::sync::{
     Arc,
 };
 
-use dbx_tools_databricks::{parse_lakebase_address, DatabricksAuthOptions};
+use dbx_tools_core::{parse_lakebase_address, DatabricksAuthOptions};
 use dbx_tools_lakebase_proxy::databricks::LakebaseClient;
 use wiremock::{
     matchers::{method, path, query_param},

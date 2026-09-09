@@ -4,7 +4,7 @@ mod credential;
 mod discovery;
 mod session;
 
-use dbx_tools_databricks::{DatabricksAuthOptions, DatabricksClientError, ParsedAddress};
+use dbx_tools_core::{DatabricksAuthOptions, DatabricksClientError, ParsedAddress};
 
 pub use discovery::ResolvedLakebase;
 

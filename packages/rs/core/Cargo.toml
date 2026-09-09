@@ -1,0 +1,42 @@
+[package]
+name = "dbx-tools-core"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Databricks authentication, flexible API requests, Lakebase parsing, caching, and filesystem primitives"
+license = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "dbx_tools_core"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "dbx-tools-core-uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+async-trait = { workspace = true }
+base64 = { workspace = true }
+configparser = { workspace = true }
+directories = { workspace = true }
+fs4 = { workspace = true }
+http = { workspace = true }
+oauth2 = { workspace = true }
+open = { workspace = true }
+percent-encoding = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uniffi = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }

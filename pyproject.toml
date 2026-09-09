@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.6.186"
+version = "0.6.187"
 requires-python = ">=3.11,<4"
 dependencies = ["dbx-tools-graphiti"]
 
@@ -28,10 +28,10 @@ index-strategy = "unsafe-best-match"
 [tool.uv.workspace]
 members = ["packages/py/*"]
 
-[tool.uv.sources.dbx-tools-databricks]
+[tool.uv.sources.dbx-tools-core-rs]
 workspace = true
 
-[tool.uv.sources.dbx-tools-google]
+[tool.uv.sources.dbx-tools-google-rs]
 workspace = true
 
 [tool.uv.sources.dbx-tools-core]
@@ -45,4 +45,4 @@ workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
-project-excludes = ["packages/py/databricks/src/dbx_tools/databricks/bindings.py", "packages/py/databricks/src/dbx_tools/databricks/__init__.py", "packages/py/google/src/dbx_tools/google/bindings.py", "packages/py/google/src/dbx_tools/google/__init__.py"]
+project-excludes = ["packages/py/core-rs/src/dbx_tools/core_rs/bindings.py", "packages/py/core-rs/src/dbx_tools/core_rs/__init__.py", "packages/py/google-rs/src/dbx_tools/google_rs/bindings.py", "packages/py/google-rs/src/dbx_tools/google_rs/__init__.py"]

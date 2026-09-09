@@ -6,7 +6,7 @@ import {
   type DatabricksAuthOptions,
   type PersistentAuthLike,
   Storage,
-} from "@dbx-tools/databricks";
+} from "@dbx-tools/core-rs";
 
 import { buildProgram } from "../src/cli.ts";
 

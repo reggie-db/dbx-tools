@@ -94,19 +94,20 @@ configurable `root` (default `packages/rs`), generates its Cargo manifest, and
 derives the crate name and repository from the parent project. A crate containing
 `uniffi::setup_scaffolding!()`
 automatically wires matching public Node and Python binding packages using the
-same capability name. Repository-specific dependencies and features remain
+`<name>-rs` folder suffix. Node packages are named `@<scope>/<name>-rs`;
+Python distributions are named `<scope>-<name>-rs` and import generated values
+from `<scope>.<name>_rs.bindings`. Binding packages are always dedicated and
+never merge generated code into handwritten Node or Python packages.
+Repository-specific dependencies and features remain
 declarative options in `.projenrc.ts`; generated bindings are built separately
 from projen synthesis. Target-independent Node binding TypeScript is committed
 and remains generated/read-only, while native libraries stay ignored. Node
 facades compile to `lib/` and publish JavaScript entry points that plain Node
 can load from `node_modules`. A complete `bindings.ts` / `_bindings.ts` /
 `_bindings-ffi.ts` triplet is exported directly from the generated package
-barrel. Python keeps `bindings.py` as the generated implementation and exports
-its public names from a fully generated `__init__.py` with no editable marker
-blocks. Node generation fails when direct binding names conflict with another
-package-root export; Python generation refuses to overwrite a non-generated
-package root. Do not create a `nodeExports` binding subpath or a handwritten
-type facade.
+barrel. Python keeps `bindings.py` as the generated implementation and leaves
+`__init__.py` empty. Node generation fails when direct binding names conflict.
+Do not create a `nodeExports` binding subpath or a handwritten type facade.
 
 Rust dependencies between binding-enabled workspace crates become Node
 `workspace:*` and Python `internalDependencies` automatically. Python generation

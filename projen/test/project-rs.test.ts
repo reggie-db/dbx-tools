@@ -13,7 +13,6 @@ import {
   DBXToolsNodeProject,
   DBXToolsPythonWorkspace,
   DBXToolsRustWorkspace,
-  DBXToolsTypeScriptProject,
   RustReleaseCpu,
   RustReleaseOs,
 } from "../src/project.ts";
@@ -93,16 +92,16 @@ describe("DBXToolsRustWorkspace", () => {
       });
       project.synth();
       assert.deepEqual(
-        rust.pythonPackages.find((pkg) => pkg.directory === "provider")?.internalDependencies,
-        ["auth"],
+        rust.pythonPackages.find((pkg) => pkg.directory === "provider-rs")?.internalDependencies,
+        ["auth-rs"],
       );
       const manifest = JSON.parse(
-        readFileSync(join(directory, "packages/js/node/provider/package.json"), "utf8"),
+        readFileSync(join(directory, "packages/js/node/provider-rs/package.json"), "utf8"),
       );
-      assert.equal(manifest.dependencies["@fixture/auth"], "workspace:*");
+      assert.equal(manifest.dependencies["@fixture/auth-rs"], "workspace:*");
       assert.match(
         readFileSync(join(directory, "packages/rs/provider/uniffi.toml"), "utf8"),
-        /fixture_auth = "fixture.auth.bindings"/,
+        /fixture_auth = "fixture.auth_rs.bindings"/,
       );
       assert.deepEqual(
         rust.bindingMappings.find((binding) => binding.crate === "fixture-provider")?.dependencies,
@@ -444,7 +443,7 @@ describe("DBXToolsRustWorkspace", () => {
         "publish-node",
         "publish-node-facades",
         "build-python",
-        "publish-pypi-addon",
+        "publish-pypi-addon-rs",
       ]) {
         assert.ok(release.jobs[job], `missing ${job}`);
       }
@@ -474,11 +473,7 @@ describe("DBXToolsRustWorkspace", () => {
         { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
       ],
       packages: {
-        "databricks-auth": {
-          dependencies: { uniffi: "0.31" },
-          nodeDependencies: ["pg@^8"],
-          nodeDevDependencies: ["@types/pg@^8"],
-        },
+        "databricks-auth": { dependencies: { uniffi: "0.31" } },
         tool: {
           release: true,
         },
@@ -488,15 +483,15 @@ describe("DBXToolsRustWorkspace", () => {
 
     assert.equal(rust.packages[0]?.crateName, "fixture-databricks-auth");
     assert.equal(rust.pythonPackages.length, 1);
-    assert.equal(rust.pythonPackages[0]?.name, "fixture-databricks-auth");
-    assert.equal(rust.pythonPackages[0]?.module, "fixture.databricks_auth");
+    assert.equal(rust.pythonPackages[0]?.name, "fixture-databricks-auth-rs");
+    assert.equal(rust.pythonPackages[0]?.module, "fixture.databricks_auth_rs");
     assert.equal(rust.pythonPackages[0]?.uniffi, true);
     assert.deepEqual(rust.pythonPackages[0]?.generatedSources, [
-      "src/fixture/databricks_auth/bindings.py",
-      "src/fixture/databricks_auth/__init__.py",
+      "src/fixture/databricks_auth_rs/bindings.py",
+      "src/fixture/databricks_auth_rs/__init__.py",
     ]);
     assert.deepEqual(rust.pythonPackages[0]?.trustedPublisher, {
-      environment: "pypi-fixture-databricks-auth",
+      environment: "pypi-fixture-databricks-auth-rs",
       artifacts:
         "platform-specific wheels for darwin-arm64, linux-x64; all architectures publish to this one PyPI project",
     });
@@ -507,11 +502,11 @@ describe("DBXToolsRustWorkspace", () => {
         {
           crate: "fixture-databricks-auth",
           rust: "packages/rs/databricks-auth",
-          node: "packages/js/node/databricks-auth",
-          nodePackage: "@fixture/databricks-auth",
-          python: "packages/py/databricks-auth",
-          pythonPackage: "fixture-databricks-auth",
-          pythonModule: "fixture.databricks_auth",
+          node: "packages/js/node/databricks-auth-rs",
+          nodePackage: "@fixture/databricks-auth-rs",
+          python: "packages/py/databricks-auth-rs",
+          pythonPackage: "fixture-databricks-auth-rs",
+          pythonModule: "fixture.databricks_auth_rs",
         },
       ],
       binaries: [],
@@ -523,7 +518,7 @@ describe("DBXToolsRustWorkspace", () => {
     );
     assert.match(readFileSync(join(outdir, "Cargo.toml"), "utf8"), /rust-version = "1\.82"/);
     const node = JSON.parse(
-      readFileSync(join(outdir, "packages/js/node/databricks-auth/package.json"), "utf8"),
+      readFileSync(join(outdir, "packages/js/node/databricks-auth-rs/package.json"), "utf8"),
     ) as {
       name: string;
       private?: boolean;
@@ -536,29 +531,27 @@ describe("DBXToolsRustWorkspace", () => {
         exports: Record<string, { types: string; default: string }>;
       };
     };
-    assert.equal(node.name, "@fixture/databricks-auth");
+    assert.equal(node.name, "@fixture/databricks-auth-rs");
     assert.equal(node.private, undefined);
     assert.equal(node.dbxToolsConfig.uniffi, true);
-    assert.equal("pg" in node.dependencies, true);
-    assert.equal("@types/pg" in node.devDependencies, true);
-    assert.equal("@fixture/databricks-auth-darwin-arm64" in node.optionalDependencies, true);
-    assert.equal("@fixture/databricks-auth-linux-x64-gnu" in node.optionalDependencies, true);
-    assert.equal("@fixture/databricks-auth-darwin-x64" in node.optionalDependencies, false);
+    assert.equal("@fixture/databricks-auth-rs-darwin-arm64" in node.optionalDependencies, true);
+    assert.equal("@fixture/databricks-auth-rs-linux-x64-gnu" in node.optionalDependencies, true);
+    assert.equal("@fixture/databricks-auth-rs-darwin-x64" in node.optionalDependencies, false);
     assert.deepEqual(node.exports, { ".": "./index.ts", "./package.json": "./package.json" });
     assert.deepEqual(Object.keys(node.publishConfig.exports), [".", "./package.json"]);
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
     const prettierignore = readFileSync(join(outdir, ".prettierignore"), "utf8");
     assert.match(gitignore, /^target\/$/m);
-    assert.doesNotMatch(gitignore, /^packages\/js\/node\/databricks-auth\/src\/bindings\.ts$/m);
+    assert.doesNotMatch(gitignore, /^packages\/js\/node\/databricks-auth-rs\/src\/bindings\.ts$/m);
     assert.match(
       gitignore,
-      /^packages\/js\/node\/databricks-auth\/src\/\*fixture_databricks_auth\.\*$/m,
+      /^packages\/js\/node\/databricks-auth-rs\/src\/\*fixture_databricks_auth\.\*$/m,
     );
-    assert.match(prettierignore, /^packages\/js\/node\/databricks-auth\/src\/bindings\.ts$/m);
-    assert.match(prettierignore, /^packages\/js\/node\/databricks-auth\/src\/_bindings\*\.ts$/m);
+    assert.match(prettierignore, /^packages\/js\/node\/databricks-auth-rs\/src\/bindings\.ts$/m);
+    assert.match(prettierignore, /^packages\/js\/node\/databricks-auth-rs\/src\/_bindings\*\.ts$/m);
     assert.match(
       gitignore,
-      /^packages\/py\/databricks-auth\/src\/fixture\/databricks_auth\/bindings\.py$/m,
+      /^packages\/py\/databricks-auth-rs\/src\/fixture\/databricks_auth_rs\/bindings\.py$/m,
     );
     const release = readWorkflow(outdir);
     const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
@@ -598,7 +591,7 @@ describe("DBXToolsRustWorkspace", () => {
         .map((candidate) => candidate.with?.name),
       [
         "fixture-databricks-auth-${{ matrix.node }}-npm",
-        "fixture-databricks-auth--${{ matrix.python }}--python-wheel",
+        "fixture-databricks-auth-rs--${{ matrix.python }}--python-wheel",
         "fixture-tool-${{ matrix.node }}-binary",
       ],
     );
@@ -673,12 +666,13 @@ describe("DBXToolsRustWorkspace", () => {
       "utf8",
     );
     assert.match(nodeGenerator, /values\.ubrn \? resolve\(values\.ubrn\)/);
+    assert.match(nodeGenerator, /target_directory/);
     assert.match(nodeGenerator, /if \(!values\["skip-barrels"\]\)/);
     assert.equal(rust.pythonPackages.length, 1);
-    assert.equal(existsSync(join(outdir, "packages/js/node/databricks-auth/exports.ts")), false);
+    assert.equal(existsSync(join(outdir, "packages/js/node/databricks-auth-rs/exports.ts")), false);
   });
 
-  it("reuses an existing Node project for generated bindings", () => {
+  it("keeps generated bindings in a dedicated Node package", () => {
     const directory = mkdtempSync(join(tmpdir(), "project-rs-existing-node-"));
     try {
       mkdirSync(join(directory, "packages/rs/databricks/src"), { recursive: true });
@@ -699,37 +693,30 @@ describe("DBXToolsRustWorkspace", () => {
         defaultTagMixins: false,
         github: false,
       });
-      const existing = project.subprojects.find(
-        (candidate) => candidate.outdir === join(directory, "packages/js/node/databricks"),
-      );
-      assert.ok(existing instanceof DBXToolsTypeScriptProject);
-      existing.package.addField("description", "Direct and generated Databricks utilities");
-      existing.addDeps("direct-dependency@^1");
-
       const rust = new DBXToolsRustWorkspace(project, {
         scope: "fixture",
         release: false,
-        packages: { databricks: { nodeDependencies: ["binding-dependency@^1"] } },
       });
-      assert.equal(rust.nodePackages[0], existing);
       project.synth();
 
-      const manifest = JSON.parse(readFileSync(join(existing.outdir, "package.json"), "utf8")) as {
+      const manifest = JSON.parse(
+        readFileSync(join(directory, "packages/js/node/databricks-rs/package.json"), "utf8"),
+      ) as {
         private?: boolean;
         description: string;
-        dependencies: Record<string, string>;
         dbxToolsConfig: { uniffi: boolean };
       };
       assert.equal(manifest.private, undefined);
-      assert.equal(manifest.description, "Direct and generated Databricks utilities");
+      assert.equal(manifest.description, "Node bindings for fixture-databricks");
       assert.equal(manifest.dbxToolsConfig.uniffi, true);
-      assert.equal(manifest.dependencies["direct-dependency"], "^1");
-      assert.equal(manifest.dependencies["binding-dependency"], "^1");
       assert.equal(
-        readFileSync(join(existing.outdir, "src/direct.ts"), "utf8"),
+        readFileSync(join(directory, "packages/js/node/databricks/src/direct.ts"), "utf8"),
         "export const direct = true;\n",
       );
-      assert.equal(existsSync(join(existing.outdir, "exports.ts")), false);
+      assert.equal(
+        existsSync(join(directory, "packages/js/node/databricks-rs/src/direct.ts")),
+        false,
+      );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

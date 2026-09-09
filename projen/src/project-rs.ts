@@ -64,8 +64,6 @@ export interface RustPackageOptions {
   /** Publish this release binary through the generated `dbx` command registry. */
   readonly cli?: boolean | RustCliOptions;
   readonly bindings?: readonly ("node" | "python")[];
-  readonly nodeDependencies?: readonly string[];
-  readonly nodeDevDependencies?: readonly string[];
   readonly uniffiConfig?: Readonly<Record<string, unknown>>;
 }
 
@@ -517,7 +515,7 @@ function rustPackageDependencies(
   );
 }
 
-/** Generated Rust workspace plus convention-derived UniFFI facade packages. */
+/** Generated Rust workspace plus convention-derived UniFFI binding packages. */
 export class DBXToolsRustWorkspace {
   readonly packages: readonly DBXToolsRustProject[];
   readonly nodePackages: readonly DBXToolsTypeScriptProject[];
@@ -626,7 +624,7 @@ export class DBXToolsRustWorkspace {
     this.bindingMappings = orderRustBindings(
       bindings.map((pkg) => {
         const targets = pkg.packageOptions.bindings ?? ["node", "python"];
-        const packageName = pkg.packageOptions.directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+        const packageDirectory = `${string.toSlug(pkg.packageOptions.directory)}-rs`;
         const dependencies = [
           ...new Set([...bindingDependencies(pkg, "node"), ...bindingDependencies(pkg, "python")]),
         ].map((dependency) => dependency.crateName);
@@ -636,15 +634,15 @@ export class DBXToolsRustWorkspace {
           rust: `${root}/${pkg.packageOptions.directory}`,
           ...(targets.includes("node")
             ? {
-                node: `${nodeRoot}/${pkg.packageOptions.directory}`,
-                nodePackage: `@${scope}/${packageName}`,
+                node: `${nodeRoot}/${packageDirectory}`,
+                nodePackage: `@${scope}/${packageDirectory}`,
               }
             : {}),
           ...(targets.includes("python")
             ? {
-                python: `${options.pythonRoot ?? "packages/py"}/${pkg.packageOptions.directory}`,
-                pythonPackage: pkg.crateName,
-                pythonModule: pythonModuleName(pythonModulePrefix, pkg.packageOptions.directory),
+                python: `${options.pythonRoot ?? "packages/py"}/${packageDirectory}`,
+                pythonPackage: `${scope}-${packageDirectory}`,
+                pythonModule: pythonModuleName(pythonModulePrefix, packageDirectory),
               }
             : {}),
         };
@@ -662,7 +660,10 @@ export class DBXToolsRustWorkspace {
           "bindings.python.external_packages": Object.fromEntries(
             dependencies.map((dependency) => [
               dependency.crateName.replaceAll("-", "_"),
-              `${pythonModuleName(pythonModulePrefix, dependency.packageOptions.directory)}.bindings`,
+              `${pythonModuleName(
+                pythonModulePrefix,
+                `${string.toSlug(dependency.packageOptions.directory)}-rs`,
+              )}.bindings`,
             ]),
           ),
         })
@@ -705,22 +706,24 @@ export class DBXToolsRustWorkspace {
     this.pythonPackages = bindings
       .filter((pkg) => (pkg.packageOptions.bindings ?? ["node", "python"]).includes("python"))
       .map((pkg) => {
-        const module = pythonModuleName(pythonModulePrefix, pkg.packageOptions.directory);
+        const directory = `${string.toSlug(pkg.packageOptions.directory)}-rs`;
+        const module = pythonModuleName(pythonModulePrefix, directory);
+        const name = `${scope}-${directory}`;
         return {
-          directory: pkg.packageOptions.directory,
-          name: pkg.crateName,
+          directory,
+          name,
           module,
           description: `Python bindings for ${pkg.crateName}`,
           uniffi: true,
           internalDependencies: bindingDependencies(pkg, "python").map(
-            (dependency) => dependency.packageOptions.directory,
+            (dependency) => `${string.toSlug(dependency.packageOptions.directory)}-rs`,
           ),
           generatedSources: [
             `src/${module.replaceAll(".", "/")}/bindings.py`,
             `src/${module.replaceAll(".", "/")}/__init__.py`,
           ],
           trustedPublisher: {
-            environment: `pypi-${pkg.crateName}`,
+            environment: `pypi-${name}`,
             artifacts: `platform-specific wheels for ${nativeTargets
               .map((target) => `${target.os}-${target.cpu}`)
               .join(", ")}; all architectures publish to this one PyPI project`,
@@ -735,7 +738,7 @@ export class DBXToolsRustWorkspace {
     for (const binding of bindings.filter((pkg) =>
       (pkg.packageOptions.bindings ?? ["node", "python"]).includes("node"),
     )) {
-      const directory = binding.packageOptions.directory;
+      const directory = `${string.toSlug(binding.packageOptions.directory)}-rs`;
       const memberPath = `${nodeRoot}/${directory}`;
       const found = existing.get(memberPath);
       const existingNode = found instanceof DBXToolsTypeScriptProject ? found : undefined;
@@ -752,9 +755,7 @@ export class DBXToolsRustWorkspace {
         `@${scope}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
       );
       node.dbxToolsConfig.uniffi = true;
-      if (!existingNode) {
-        node.package.addField("description", `Node bindings for ${binding.crateName}`);
-      }
+      node.package.addField("description", `Node bindings for ${binding.crateName}`);
       if (options.release ?? true) {
         node.package.addField(
           "optionalDependencies",
@@ -769,16 +770,11 @@ export class DBXToolsRustWorkspace {
       node.addDeps("@ubjs/core@0.31.0-5", "@ubjs/node@0.31.0-5");
       node.addDeps(
         ...bindingDependencies(binding, "node").map(
-          (dependency) => `@${scope}/${dependency.packageOptions.directory}@workspace:*`,
+          (dependency) =>
+            `@${scope}/${string.toSlug(dependency.packageOptions.directory)}-rs@workspace:*`,
         ),
       );
-      if (binding.packageOptions.nodeDependencies?.length) {
-        node.addDeps(...binding.packageOptions.nodeDependencies);
-      }
       node.addDevDeps(`uniffi-bindgen-react-native@${UBRN_VERSION}`);
-      if (binding.packageOptions.nodeDevDependencies?.length) {
-        node.addDevDeps(...binding.packageOptions.nodeDevDependencies);
-      }
       nodePackages.push(node);
     }
     this.nodePackages = nodePackages;
@@ -823,18 +819,7 @@ export class DBXToolsRustWorkspace {
     if (this.bindingMappings.some((binding) => binding.node)) {
       project.tasks.tryFind("pre-compile")?.spawn(bindingsTask);
     }
-    project.addTask("rs:bindings:demo", {
-      description: "Generate and run UniFFI Node and Python example CLIs",
-      exec: [
-        "bun run rs:bindings",
-        ...this.bindingMappings.flatMap((binding) => [
-          ...(binding.node ? [`bun ${binding.node}/test/cli.ts`] : []),
-          ...(binding.python
-            ? [`uv run --project ${binding.python} ${binding.python}/test/cli.py`]
-            : []),
-        ]),
-      ].join(" && "),
-    });
+    project.removeTask("rs:bindings:demo");
     if (releaseEnabled) {
       this.addReleaseWorkflow(project, options, nativeTargets);
     }
@@ -908,6 +893,7 @@ export class DBXToolsRustWorkspace {
         `--python "${binding.python}"`,
         `--node-package "${binding.nodePackage}"`,
         `--python-package "${binding.pythonPackage}"`,
+        `--python-module "${binding.pythonModule}"`,
         '--cargo-target "${{ matrix.cargo }}"',
         '--node-triple "${{ matrix.node }}"',
         '--python-tag "${{ matrix.python }}"',
@@ -974,7 +960,7 @@ export class DBXToolsRustWorkspace {
                 name: `Upload ${binding.crate} Python wheel`,
                 uses: "actions/upload-artifact@v7",
                 with: {
-                  name: `${binding.crate}--\${{ matrix.python }}--python-wheel`,
+                  name: `${binding.pythonPackage}--\${{ matrix.python }}--python-wheel`,
                   path: `dist/release/${binding.crate}/\${{ matrix.node }}/python/*.whl`,
                   "retention-days": 7,
                 },

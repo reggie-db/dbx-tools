@@ -1,72 +1,33 @@
-# UniFFI Consolidation Plan
+# UniFFI Package Boundaries
 
-## Current Native Ownership
+Status: implemented.
 
-`dbx-tools-databricks` and `dbx-tools-google` generate Node and Python bindings
-from their Rust APIs. Authentication, credential storage, token refresh,
-Databricks App detection, and Google ADC therefore have one implementation.
+## Package Rule
 
-The model and proxy crates are native Rust packages without a foreign-language
-facade. Browser and framework integrations remain in their owning runtimes.
+Every UniFFI crate generates dedicated Node and Python packages. A Rust crate
+folder `<name>` maps to:
 
-## Immediate Consolidation
+- Node folder `packages/js/node/<name>-rs` and package
+  `@dbx-tools/<name>-rs`;
+- Python folder `packages/py/<name>-rs`, distribution
+  `dbx-tools-<name>-rs`, and module `dbx_tools.<name>_rs`.
 
-### Lakebase address parsing
+Generated bindings are never merged into handwritten packages. Python package
+initializers remain empty, so generated values are imported from
+`dbx_tools.<name>_rs.bindings`.
 
-Export `ParsedAddress`, `SslMode`, `parse_address`, and
-`parse_resource_path` from `dbx-tools-databricks`.
+## Native Ownership
 
-Python `dbx_tools.postgres.address` re-exports those generated values and keeps
-only its string configuration type aliases. Node AppKit retains its native-free
-parser because adding a native binding to the AppKit bootstrap package would
-increase installation and deployment coupling.
+- `dbx-tools-core` owns authentication, credential storage, token refresh,
+  Databricks App detection, flexible middleware-backed API requests, Lakebase
+  address parsing, file locking, caching, and logging. Its bindings are
+  `@dbx-tools/core-rs` and `dbx-tools-core-rs`.
+- `dbx-tools-lakebase-proxy` owns Lakebase resource discovery and database
+  credentials through the core client. It has no UniFFI surface.
+- `dbx-tools-google` shares core's token lifecycle. Its bindings are
+  `@dbx-tools/google-rs` and `dbx-tools-google-rs`.
 
-Parity remains enforceable because the TypeScript test harness loads the
-Rust-backed Python parser.
-
-## Evaluated Candidates
-
-### Rust model bindings for Node
-
-A Node-only binding for `dbx-tools-model` could replace server-side parsing,
-classification, and ranking in `@dbx-tools/model`. It should be considered only
-when all of these conditions are met:
-
-- The binding reuses the existing `packages/js/node/model` package instead of
-  creating another public model package.
-- Browser schemas remain in `@dbx-tools/shared-model`.
-- AppKit request context and `CacheManager` stay in Node.
-- Rust internal discovery records and browser wire records have distinct,
-  explicit boundaries.
-- The native dependency materially removes more Node code than its packaging
-  and deployment cost adds.
-
-This is not part of the immediate migration because the Node package still
-needs AppKit-specific discovery and browser-safe wire contracts.
-
-### Lakebase discovery
-
-The Rust Lakebase proxy and Node AppKit resolver apply similar project, branch,
-endpoint, and database selection rules. A future extraction can move the pure
-selection policy into `dbx-tools-databricks` and test both clients against one
-fixture set.
-
-A full UniFFI resolver should wait until it can preserve:
-
-- AppKit request-scoped authentication.
-- Caller-provided WorkspaceClient behavior.
-- Python credential-provider callbacks.
-- Node and Python framework-specific connection configuration.
-
-### Raw Databricks requests
-
-`DatabricksClient` owns authenticated JSON and raw HTTP requests for Rust
-consumers. Exporting a generic JSON request API through UniFFI is only useful
-when a Node or Python package can remove an existing custom REST client. The
-Databricks SDK and AppKit WorkspaceClient remain the preferred high-level
-clients.
-
-## Non-Candidates
+## Native-only Surfaces
 
 Do not move these surfaces into UniFFI:
 
@@ -79,10 +40,3 @@ Do not move these surfaces into UniFFI:
 - Graphiti and Honcho process supervision.
 - Rust proxy executables, because they already expose process and network
   protocols directly.
-
-## Decision Gate
-
-Add a new binding only when it removes a complete handwritten implementation,
-keeps generated types as the only foreign-language contract, and does not force
-a native dependency into browser or bootstrap packages. Otherwise preserve the
-runtime-specific implementation and enforce parity with shared fixtures.

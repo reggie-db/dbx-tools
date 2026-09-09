@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
-use dbx_tools_databricks::{
+use dbx_tools_core::{
     platform_cache_root, DatabricksClient, DatabricksClientError, FileCache, FileCacheError,
 };
 use serde_json::Value;
@@ -140,7 +140,10 @@ impl ModelClient {
     }
 
     async fn fetch_models(&self) -> Result<Vec<ServingEndpointSummary>, ModelError> {
-        let value = self.client.get("/api/2.0/serving-endpoints").await?;
+        let value = self
+            .client
+            .request("/api/2.0/serving-endpoints", None, None)
+            .await?;
         let retired = self.status.retired_model_names().await?;
         endpoints_from_response_with_retired(&value, &retired)
     }

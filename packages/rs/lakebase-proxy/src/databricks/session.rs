@@ -2,7 +2,7 @@
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use dbx_tools_databricks::{
+use dbx_tools_core::{
     config_profile_exists, is_databricks_app, DatabricksAuthOptions,
     DatabricksClient as WorkspaceClient, DatabricksClientError,
 };
@@ -83,7 +83,7 @@ impl DatabricksSessionCache {
 
 #[cfg(test)]
 mod tests {
-    use dbx_tools_databricks::DatabricksAuthOptions;
+    use dbx_tools_core::DatabricksAuthOptions;
 
     use super::DatabricksSessionCache;
 

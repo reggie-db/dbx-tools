@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use dbx_tools_databricks::DatabricksAuthOptions;
+use dbx_tools_core::DatabricksAuthOptions;
 use dbx_tools_lakebase_proxy::{databricks::LakebaseClient, proxy::PostgresProxy};
 use futures::{stream, Sink, SinkExt, TryStreamExt};
 use pgwire::{

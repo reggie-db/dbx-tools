@@ -16,7 +16,7 @@ const targetRoot = path.resolve(
   "src",
   "generated",
 );
-const rustAssetRoot = path.resolve(brandingRoot, "..", "packages/rs/databricks/assets");
+const rustAssetRoot = path.resolve(brandingRoot, "..", "packages/rs/core/assets");
 const assets = ["icon-light.svg", "icon-dark.svg", "logo-light.svg", "logo-dark.svg"];
 
 function writeReadonly(target, contents, encoding = "utf8") {

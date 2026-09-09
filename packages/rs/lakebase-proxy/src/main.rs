@@ -5,7 +5,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use dbx_tools_databricks::{connection_url, init_logging, DatabricksAuthOptions};
+use dbx_tools_core::{connection_url, init_logging, DatabricksAuthOptions};
 use dbx_tools_lakebase_proxy::{
     databricks::LakebaseClient,
     proxy::{report_connection_stats, ConnectionStats, PostgresProxy},

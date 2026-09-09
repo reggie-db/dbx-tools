@@ -91,23 +91,20 @@ Primary package areas:
   to be a separate `shared-sdk-model` package with exactly one consumer.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
-- `packages/rs/databricks`, `packages/js/node/databricks`, and
-  `packages/py/databricks` own the complete Databricks Rust surface. The Rust
-  crate contains Databricks App detection, cached CLI availability, CLI token
-  process access, profile resolution, U2M, M2M, PAT authentication,
-  provider-neutral token lifecycle, credential storage, file locking, and file
-  caching. Databricks-specific authentication lives under `src/auth`; generic
-  OAuth flow, templates, and provider factories live under `src/oauth`;
-  credential records, token lifecycle, and storage stay under `src/credentials`
-  because they are not OAuth-specific. `FileCache` and `FileLock` remain root
-  modules. `lakebase_address` mirrors the Node AppKit parser for PostgreSQL
-  URLs, canonical resource paths, hostnames, and project ids;
-  `lakebase-proxy` consumes it rather than maintaining another parser.
-  `DatabricksClient` owns authenticated JSON requests and one rejected-token
-  retry so consumers do not repeat auth header and 401 logic. `log` initializes
-  tracing from `LOG_LEVEL` using the shared four-level parser (`debug`, `info`,
-  `warn`, `error`, case-insensitive, unknown values default to `info`). Do not
-  restore separate Rust `core`, `client`, `auth`, or `databricks-auth` crates.
+- `packages/rs/core` owns Databricks authentication and shared Rust runtime
+  primitives. It contains Databricks App detection, cached CLI availability,
+  CLI token process access, profile resolution, U2M, M2M, PAT authentication,
+  provider-neutral token lifecycle, credential storage, file locking, file
+  caching, and tracing initialization. Databricks-specific authentication lives
+  under `src/auth`; generic OAuth flow, templates, and provider factories live
+  under `src/oauth`; credential records, token lifecycle, and storage stay under
+  `src/credentials`. `FileCache` and `FileLock` remain root modules.
+  `packages/js/node/databricks` is a separate handwritten package for workspace,
+  filesystem, cloud, and network utilities. Generated core bindings live only
+  in `packages/js/node/core-rs` and `packages/py/core-rs`.
+  `log` initializes tracing from `LOG_LEVEL` using the shared four-level parser
+  (`debug`, `info`, `warn`, `error`, case-insensitive, unknown values default to
+  `info`).
   Providers supply endpoints and acquisition policy; `AuthOptions` owns shared
   lifecycle durations and callback configuration. `StorageAdapter` remains
   caller-implementable. Built-in storage is file or memory only. Do not add
@@ -128,31 +125,32 @@ Primary package areas:
   shares the complete M2M implementation. Automatic App resolution prefers an
   available OBO request token, then App SP. An explicit profile or auth type
   suppresses automatic tiering, and a profile forced inside an App reads its
-  profile credentials instead of ambient App credentials. File-backed refresh
-  locks preserve unrelated entries in `~/.databricks/token-cache.json`.
+  profile credentials instead of ambient App credentials.
+  `PersistentAuth::authorization_header_for_url` returns a current header only
+  when the request URL and resolved profile host have the same origin;
+  `DatabricksClient` uses it through `reqwest-middleware`.
+  File-backed refresh locks preserve unrelated entries in
+  `~/.databricks/token-cache.json`.
   Profile files are parsed once per absolute path, including missing files and
-  parse errors. Rust and UniFFI own the cross-language contract; commit
-  generated bindings and import them from `@dbx-tools/databricks` or
-  `dbx_tools.databricks`.
-- `packages/rs/databricks-client` owns generated Rust clients for every pinned
-  modular Databricks API SDK package. The Node-only
-  `packages/js/node/databricks-openapi` generator emits validated OpenAPI 3.0.3
-  JSON under the Rust crate's `assets/openapi` directory and regenerates its
-  `src/lib.rs` as one `progenitor` module per API. It discovers inputs from its
-  installed `@databricks/sdk-*` development dependencies, pins one shared SDK
-  version, and maintains only the support-package exclusion list. Its generated
-  package settings live under `dbxToolsConfig.databricksOpenapi`. Never
-  generate or restore
-  packages under `packages/js/openapi` for this surface. Keep the client in its
-  own Rust crate so its large generated type surface, `progenitor`, and reqwest
-  client dependency do not reach the lower-level authentication crate. The
-  crate-root `Client` exposes service fields such as `client.dataquality` and
-  initializes all of them from clones of one `reqwest::Client` handle so they
-  share its connection pool and default headers.
-- `packages/rs/google`, `packages/js/node/google`, and `packages/py/google`
+  parse errors.
+  `DatabricksClient` is a thin `reqwest-middleware` client. It defaults its base
+  URL from resolved authentication, accepts an explicit host override, strips
+  caller-supplied authorization, adds a current header only for the credential
+  origin, and retries once after refreshing a rejected token. Its JSON request
+  API takes a path, optional body, and optional method; a body defaults the
+  method to `POST`, otherwise it defaults to `GET`. `request_builder` exposes
+  the middleware-enabled reqwest builder for streaming and custom headers.
+  Keep this client in `rs/core`; do not restore a generated API client crate or
+  Databricks OpenAPI generator.
+  `lakebase_address` in core parses PostgreSQL URLs, canonical resource paths,
+  hosts, and project ids. `lakebase-proxy` owns resource discovery and database
+  credentials and uses the core client for API requests. Do not create a
+  separate Lakebase parser or client crate.
+- `packages/rs/google`, `packages/js/node/google-rs`, and
+  `packages/py/google-rs`
   contain Google integrations. The current surface is Google Application
   Default Credentials through the native `google-cloud-auth` crate, sharing
-  the auth lifecycle exported by `databricks`. ADC checks
+  the auth lifecycle exported by `core`. ADC checks
   `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known
   `application_default_credentials.json`, then the metadata service. ADC is the
   only persistent credential store; short-lived tokens stay in process memory.
@@ -424,9 +422,14 @@ Primary package areas:
   only assets produced by the selected target matrix. `@dbx-tools/cli`
   consumes that registry through its `rust-binary` module and delegates atomic
   installation to the existing `@dbx-tools/core` `bin.ensure`. Do not put the
-  product registry or release URL policy in core. Generated Node facades
-  carry `dbxToolsConfig.uniffi = true`;
-  generated Python facades carry `[tool.dbx_tools.config] uniffi = true`.
+  product registry or release URL policy in core. Every UniFFI crate gets
+  dedicated binding packages and never merges generated bindings into a
+  handwritten package. A Rust directory `<name>` generates Node folder
+  `packages/js/node/<name>-rs` with package `@<scope>/<name>-rs`, plus Python
+  folder `packages/py/<name>-rs` with distribution `<scope>-<name>-rs` and
+  module `<scope>.<name>_rs`. Generated Node packages carry
+  `dbxToolsConfig.uniffi = true`; generated Python packages carry
+  `[tool.dbx_tools.config] uniffi = true`.
   These are public packages prepared by Rust and published by the Node and Python
   jobs in `release.yml`. Do not mark them private. Rust release rows need uv only when a
   Python binding exists; they do not install Bun or UBRN because Node facades
@@ -436,11 +439,9 @@ Primary package areas:
   Cargo metadata unreadable while the package still advertises its older MSRV.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
-  without a `bindings` namespace. Python keeps `bindings.py` internally and
-  generates a complete package-root `__init__.py` with no editable marker
-  blocks. Node generation fails on binding-name conflicts, and Python generation
-  refuses to overwrite a non-generated package root. Consumers import from the
-  package root.
+  without a `bindings` namespace. Python keeps an empty `__init__.py`; consumers
+  import generated values from `<scope>.<name>_rs.bindings`. Node generation
+  fails on binding-name conflicts.
   Stable Windows release rows use the toolchain already installed on the hosted
   runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
   Their workspace build selects `rust-lld`; an explicitly pinned
@@ -1645,8 +1646,9 @@ is read-only and is not treated as a publish target.
 
 A Databricks notebook or job is a different network with its own package index.
 Documentation and notebooks install the published distributions by name
-(`dbx-tools-core`, `dbx-tools-databricks`, `dbx-tools-google`,
-`dbx-tools-postgres`, and `dbx-tools-graphiti`). Each Python package README also documents the Git
+(`dbx-tools-core`, `dbx-tools-core-rs`, `dbx-tools-google-rs`,
+`dbx-tools-postgres`, and `dbx-tools-graphiti`). Each
+Python package README also documents the Git
 `#subdirectory=` form as an alternative for testing unreleased `main` branch
 changes.
 

@@ -19,13 +19,8 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
 import { Component, DependencyType } from "projen";
-import {
-  DATABRICKS_SDK_VERSION,
-  discoverDatabricksSdkInputs,
-} from "./packages/js/node/databricks-openapi/src/inputs.ts";
 
 const SCOPE = "dbx-tools";
-const DATABRICKS_SDK_API_INPUTS = discoverDatabricksSdkInputs();
 
 /** Copy canonical branding into published package trees after synthesis. */
 class BrandPackageAssets extends Component {
@@ -175,9 +170,6 @@ root.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
 root.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
 root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
 root.pnpmWorkspace?.addCatalog("echarts-for-react", "^3.0.2");
-for (const input of DATABRICKS_SDK_API_INPUTS) {
-  root.pnpmWorkspace?.addCatalog(input.package, DATABRICKS_SDK_VERSION);
-}
 root.pnpmWorkspace?.addCatalog("shiki", "^3.0.0");
 root.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
 // The Adaptive Cards JavaScript renderer, used by the `ui-teams` package to
@@ -279,7 +271,7 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 // tag, and the native OAuth implementation stays in the generated Databricks binding.
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
   p.package.addField("description", "Commander CLI for Databricks OAuth");
-  p.addDeps("@dbx-tools/databricks@workspace:*");
+  p.addDeps("@dbx-tools/core-rs@workspace:*");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -306,8 +298,7 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
   );
 });
 
-// node-databricks: generic Databricks/cloud infra with NO AppKit requirement -
-// workspace URL/id resolution + cloud provider/region detection (fetches
+// node-databricks: workspace URL/id resolution + cloud provider/region detection (fetches
 // AWS/GCP/Azure IP-range feeds, DNS via node:dns, disk cache). Consumes
 // node-appkit for the optional execution-context client + node-core for fs
 // stat. AppKit's facade owns client construction; workspace/DBFS calls cross
@@ -315,7 +306,7 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
 project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p) => {
   p.package.addField(
     "description",
-    "Databricks workspace, filesystem, cloud, runtime, and CLI utilities",
+    "Databricks workspace, filesystem, cloud, and network utilities",
   );
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
@@ -324,28 +315,6 @@ project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p
     "@databricks/appkit@catalog:",
   );
 });
-
-// node-databricks-openapi: pinned Databricks modular SDK syntax to
-// deterministic OpenAPI JSON and generated Rust clients.
-project.applyToProjects(root, { identifierName: "databricks-openapi", tags: "node" }, (p) => {
-  p.addDeps(
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/shared-core@workspace:*",
-    "oxc-parser@^0.90.0",
-    "yaml@^2.9.0",
-  );
-  p.addDevDeps(...DATABRICKS_SDK_API_INPUTS.map((input) => `${input.package}@catalog:`));
-  projectJs.addPackageFiles(p, "openapi-overrides.yaml");
-  p.dbxToolsConfig.databricksOpenapi = {
-    overrides: "openapi-overrides.yaml",
-    rustOutputDirectory: "../../../rs/databricks-client/assets/openapi",
-    rustClientPath: "../../../rs/databricks-client/src/lib.rs",
-    strict: true,
-  };
-});
-
-const openapiTask = root.tasks.tryFind("openapi");
-openapiTask?.prependExec("bun packages/js/node/databricks-openapi/src/cli.ts");
 
 // node-databricks-zerobus: Zerobus streaming-ingest helpers. Uses the Zerobus
 // SDK directly (no AppKit); resolves the region-aware endpoint via
@@ -925,6 +894,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     fs4: "0.13",
     futures: "0.3",
     "google-cloud-auth": "=0.18.0",
+    http: "1",
     "mini-moka": "0.10",
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
@@ -934,9 +904,8 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       defaultFeatures: false,
       features: ["client-api-ring", "server-api-ring"],
     },
-    progenitor: "=0.14.0",
-    "progenitor-client": "=0.14.0",
     reqwest: { version: "0.12", defaultFeatures: false, features: ["json", "rustls-tls"] },
+    "reqwest-middleware": { version: "=0.4.2", features: ["json"] },
     regex: "1",
     rcgen: "0.14",
     rustls: "0.23",
@@ -963,18 +932,21 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     wiremock: "0.6",
   },
   packages: {
-    databricks: {
-      description: "Databricks runtime, authentication, caching, and filesystem primitives",
+    core: {
+      description:
+        "Databricks authentication, flexible API requests, Lakebase parsing, caching, and filesystem primitives",
       dependencies: {
         "async-trait": { workspace: true },
         base64: { workspace: true },
         configparser: { workspace: true },
         directories: { workspace: true },
         fs4: { workspace: true },
+        http: { workspace: true },
         oauth2: { workspace: true },
         open: { workspace: true },
         "percent-encoding": { workspace: true },
         reqwest: { workspace: true },
+        "reqwest-middleware": { workspace: true },
         serde: { workspace: true },
         serde_json: { workspace: true },
         sha2: { workspace: true },
@@ -989,32 +961,11 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         uuid: { workspace: true },
       },
     },
-    "databricks-client": {
-      description: "Generated Rust clients for Databricks workspace and account APIs",
-      dependencies: {
-        bytes: { workspace: true },
-        chrono: { version: "0.4", features: ["serde"] },
-        futures: { workspace: true },
-        progenitor: { workspace: true },
-        "progenitor-client": { workspace: true },
-        reqwest: {
-          version: "0.13",
-          defaultFeatures: false,
-          features: ["json", "query", "rustls", "stream"],
-        },
-        serde: { workspace: true },
-        serde_json: { workspace: true },
-        uuid: { workspace: true, features: ["serde"] },
-      },
-    },
     google: {
       description: "Google integrations including Application Default Credentials",
       dependencies: {
         "async-trait": { workspace: true },
-        [`${root.scope}-databricks`]: {
-          path: "../databricks",
-          defaultFeatures: false,
-        },
+        [`${root.scope}-core`]: { path: "../core" },
         "google-cloud-auth": { workspace: true },
         time: { workspace: true },
         tokio: { workspace: true },
@@ -1024,7 +975,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     model: {
       description: "Databricks model discovery, caching, classification, and fuzzy resolution",
       dependencies: {
-        [`${root.scope}-databricks`]: { path: "../databricks" },
+        [`${root.scope}-core`]: { path: "../core" },
         "difflib-fast": { workspace: true },
         regex: { workspace: true },
         reqwest: { workspace: true },
@@ -1051,13 +1002,9 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         "aigw-core": "=0.6.0",
         "aigw-openai": "=0.6.0",
         "async-stream": "0.3",
-        "async-trait": { workspace: true },
         axum: "0.8",
         clap: { workspace: true },
-        [`${root.scope}-databricks`]: {
-          path: "../databricks",
-          defaultFeatures: false,
-        },
+        [`${root.scope}-core`]: { path: "../core" },
         [`${root.scope}-model`]: { path: "../model" },
         "eventsource-stream": "0.2",
         "futures-util": "0.3",
@@ -1080,15 +1027,11 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         "async-trait": { workspace: true },
         bytes: { workspace: true },
         clap: { workspace: true },
-        [`${root.scope}-databricks`]: {
-          path: "../databricks",
-          defaultFeatures: false,
-        },
+        [`${root.scope}-core`]: { path: "../core" },
         futures: { workspace: true },
         "mini-moka": { workspace: true },
         pgwire: { workspace: true },
         rustls: { workspace: true },
-        serde: { workspace: true },
         "serde_json": { workspace: true },
         thiserror: { workspace: true },
         tokio: { workspace: true, features: ["signal"] },
@@ -1123,7 +1066,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     directory: "postgres",
     description:
       "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus",
-    internalDependencies: ["core", "databricks"],
+    internalDependencies: ["core", "core-rs"],
     dependencies: [
       "asyncpg>=0.30",
       "databricks-sdk>=0.63.0",
@@ -1164,10 +1107,8 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   },
   release: true,
 });
-root.annotateGenerated("/packages/rs/databricks/assets/brand.yaml");
-root.annotateGenerated("/packages/rs/databricks/assets/logo-light.svg");
-root.annotateGenerated("/packages/rs/databricks-client/assets/openapi/**");
-root.annotateGenerated("/packages/rs/databricks-client/src/lib.rs");
+root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
+root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
 new BrandPackageAssets(root);
 new ModelMetadataSource(root);
 root.addTask("demo:emitter", {

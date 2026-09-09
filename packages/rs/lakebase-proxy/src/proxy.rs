@@ -7,7 +7,7 @@ mod tunnel;
 
 use std::{io, sync::Arc, time::Duration};
 
-use dbx_tools_databricks::{parse_lakebase_address, DatabricksClientError};
+use dbx_tools_core::{parse_lakebase_address, DatabricksClientError};
 use pgwire::error::{PgWireClientError, PgWireError};
 use rustls::{ClientConfig, RootCertStore};
 use tokio::net::TcpStream;

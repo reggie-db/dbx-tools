@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use dbx_tools_databricks::{DatabricksClient as WorkspaceClient, ParsedAddress};
+use dbx_tools_core::{DatabricksClient as WorkspaceClient, ParsedAddress};
 use mini_moka::sync::Cache;
 use serde_json::Value;
 
@@ -96,7 +96,7 @@ async fn resolve_lakebase_resources(
         .as_deref()
         .ok_or_else(|| DatabricksError::Discovery("could not resolve a Lakebase project".into()))?;
     let project_path = format!("{API_BASE}/projects/{project_id}");
-    let project = session.get(&project_path).await?;
+    let project = session.request(&project_path, None, None).await?;
     let branch = select_branch(
         &project,
         &list_branches(&session, &project_path).await?,
@@ -138,7 +138,7 @@ async fn resolve_lakebase_resources(
             .or(target.database.as_deref()),
     )?;
     let user = session
-        .get("/api/2.0/preview/scim/v2/Me")
+        .request("/api/2.0/preview/scim/v2/Me", None, None)
         .await?
         .get("userName")
         .and_then(Value::as_str)
@@ -199,7 +199,7 @@ async fn list_postgres_resources(
             None => path.to_owned(),
         };
         let response = client
-            .get(&page_path)
+            .request(&page_path, None, None)
             .await
             .map_err(DatabricksError::Client)?;
         resources.extend(

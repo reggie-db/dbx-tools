@@ -15,11 +15,6 @@
       "type": "build"
     },
     {
-      "name": "uniffi-bindgen-react-native",
-      "version": "0.31.0-5",
-      "type": "build"
-    },
-    {
       "name": "@databricks/appkit",
       "version": "catalog:",
       "type": "runtime"
@@ -42,16 +37,6 @@
     {
       "name": "@dbx-tools/shared-fs",
       "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "@ubjs/core",
-      "version": "0.31.0-5",
-      "type": "runtime"
-    },
-    {
-      "name": "@ubjs/node",
-      "version": "0.31.0-5",
       "type": "runtime"
     }
   ],

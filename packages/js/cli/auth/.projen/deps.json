@@ -15,7 +15,7 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/databricks",
+      "name": "@dbx-tools/core-rs",
       "version": "workspace:*",
       "type": "runtime"
     },

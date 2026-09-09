@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, time::Duration};
 
-use dbx_tools_databricks::{DatabricksAuthOptions, DatabricksClient, FileCache};
+use dbx_tools_core::{DatabricksAuthOptions, DatabricksClient, FileCache};
 use dbx_tools_model::{
     endpoints_from_response, is_responses_only, lookup_models, model_search_query,
     model_service_names, models_payload, models_payload_with_capabilities,

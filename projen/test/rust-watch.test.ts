@@ -28,8 +28,9 @@ function fixture(): { root: string; config: RustWorkspaceMapping } {
         {
           crate: "fixture-databricks-auth",
           rust: `${root}/databricks-auth`,
-          node: "packages/js/node/databricks-auth",
-          python: "packages/py/databricks-auth",
+          node: "packages/js/node/databricks-auth-rs",
+          python: "packages/py/databricks-auth-rs",
+          pythonModule: "fixture.databricks_auth_rs",
         },
       ],
       binaries: [],
