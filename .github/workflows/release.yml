@@ -360,7 +360,7 @@ jobs:
         run: |-
           SECONDS=0
           trap 'status=$?; echo "phase=rust_workspace duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
-          cargo build --release --workspace --target "${{ matrix.cargo }}" ${{ matrix.cargoExcludes }}
+          cargo build --release --workspace --locked --target "${{ matrix.cargo }}" ${{ matrix.cargoExcludes }}
         shell: bash
       - name: Package UniFFI outputs
         id: package_uniffi_outputs

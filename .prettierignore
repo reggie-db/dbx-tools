@@ -46,6 +46,7 @@ packages/py/google-rs/pyproject.toml
 packages/py/core/pyproject.toml
 packages/py/postgres/pyproject.toml
 packages/py/graphiti/pyproject.toml
+.cargo/config.toml
 .eslintrc.json
 .gitattributes
 .github/pull_request_template.md

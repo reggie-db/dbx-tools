@@ -451,7 +451,9 @@ Primary package areas:
   fails on binding-name conflicts.
   Stable Windows release rows use the toolchain already installed on the hosted
   runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
-  Their workspace build selects `rust-lld`; an explicitly pinned
+  Their workspace build selects `rust-lld`. Both MSVC targets use
+  `target-feature=+crt-static`, so Node archives and Python wheels do not depend
+  on a separately installed `VCRUNTIME140.dll`. An explicitly pinned
   `releaseRustVersion` still uses the setup action on Windows.
   One generated `.github/workflows/release.yml` owns Rust, npm, PyPI, GitHub
   binary, and documentation publication. An annotated `v*` tag starts it
@@ -2029,6 +2031,13 @@ install`); the Node release stamps the workspace once, then native Bun publish
   and `uv sync`; do not commit them. The release publish task also deletes
   `bun.lock` and reinstalls to re-resolve `workspace:*` after a version stamp
   (see the release gotcha below). CI installs are plain `bun install` / `uv sync`.
+- **Root `Cargo.lock` is tracked.** `DBXToolsRustWorkspace` adds
+  `!/Cargo.lock` after the broad lockfile ignore. Cargo records canonical
+  crates.io package identities and checksums, not this machine's configured
+  sparse mirror URL. Bump refreshes workspace package versions in the lock
+  before committing, and release builds use `--locked` whenever the file
+  exists. This keeps dependency resolution and Rust cache inputs stable across
+  releases.
 - **Do not set projen's `workflowPackageCache: true`.** `bun.lock` is not tracked,
   so a lockfile-keyed cache has no stable input. Generated workflows instead use
   the helpers in `bun-workflow.ts`: one `BUN_VERSION` environment value drives

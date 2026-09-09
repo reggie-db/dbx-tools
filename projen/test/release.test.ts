@@ -194,6 +194,10 @@ describe("release task contracts", () => {
       bump.indexOf('[publishScript, version, "--stamp-only"]') <
         bump.indexOf('git(["push", "--no-verify", "origin", ...tags])'),
     );
+    assert.ok(
+      bump.indexOf("refreshing Cargo.lock workspace versions") <
+        bump.indexOf('git(["add", "-A"])'),
+    );
   });
 });
 

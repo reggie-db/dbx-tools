@@ -494,7 +494,15 @@ const build = () => {
   rmSync(output, { recursive: true, force: true });
   mkdirSync(output, { recursive: true });
   if (!parsed.values["skip-build"]) {
-    run("cargo", ["build", "--release", "--package", crate, "--target", cargoTarget]);
+    run("cargo", [
+      "build",
+      "--release",
+      ...(existsSync(resolve(root, "Cargo.lock")) ? ["--locked"] : []),
+      "--package",
+      crate,
+      "--target",
+      cargoTarget,
+    ]);
   }
   if (!existsSync(library)) throw new Error(`Missing native library ${library}`);
 

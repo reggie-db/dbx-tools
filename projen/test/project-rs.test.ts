@@ -324,6 +324,7 @@ describe("DBXToolsRustWorkspace", () => {
           "uniffi::setup_scaffolding!();\n",
         );
       }
+      writeFileSync(join(multiOutdir, "Cargo.lock"), "version = 4\n");
       const project = new DBXToolsNodeProject({
         name: "@fixture/multi-root",
         scope: "fixture",
@@ -341,9 +342,13 @@ describe("DBXToolsRustWorkspace", () => {
       const buildJob = readWorkflow(multiOutdir).jobs["rust-build"]!;
       assert.equal(
         workflowStep(buildJob, "Build Rust outputs").run?.match(
-          /cargo build --release --workspace --target/g,
+          /cargo build --release --workspace(?: --locked)? --target/g,
         )?.length,
         1,
+      );
+      assert.match(
+        workflowStep(buildJob, "Build Rust outputs").run ?? "",
+        /cargo build --release --workspace --locked --target/,
       );
       const packageBindings = workflowStep(buildJob, "Package UniFFI outputs").run!;
       assert.ok(packageBindings.includes('--crate "fixture-alpha"'));
@@ -527,6 +532,10 @@ describe("DBXToolsRustWorkspace", () => {
       /crate-type = \["lib", "cdylib"\]/,
     );
     assert.match(readFileSync(join(outdir, "Cargo.toml"), "utf8"), /rust-version = "1\.82"/);
+    const cargoConfig = readFileSync(join(outdir, ".cargo/config.toml"), "utf8");
+    assert.match(cargoConfig, /\[target\.x86_64-pc-windows-msvc\]/);
+    assert.match(cargoConfig, /\[target\.aarch64-pc-windows-msvc\]/);
+    assert.equal(cargoConfig.match(/target-feature=\+crt-static/g)?.length, 2);
     const node = JSON.parse(
       readFileSync(join(outdir, "packages/js/node/databricks-auth-rs/package.json"), "utf8"),
     ) as {
@@ -552,6 +561,7 @@ describe("DBXToolsRustWorkspace", () => {
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
     const prettierignore = readFileSync(join(outdir, ".prettierignore"), "utf8");
     assert.match(gitignore, /^target\/$/m);
+    assert.match(gitignore, /^!\/Cargo\.lock$/m);
     assert.doesNotMatch(gitignore, /^packages\/js\/node\/databricks-auth-rs\/src\/bindings\.ts$/m);
     assert.match(
       gitignore,

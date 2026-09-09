@@ -94,6 +94,7 @@ jspm_packages/
 .home/
 **/.logs/
 !/packages/js/cli/dbx-tools/src/_rust-release-binaries.ts
+!/Cargo.lock
 target/
 packages/js/node/core-rs/src/*dbx_tools_core.*
 packages/py/core-rs/src/dbx_tools/core_rs/bindings.py
@@ -102,6 +103,7 @@ packages/js/node/google-rs/src/*dbx_tools_google.*
 packages/py/google-rs/src/dbx_tools/google_rs/bindings.py
 packages/py/google-rs/src/dbx_tools/google_rs/*dbx_tools_google.*
 !/Cargo.toml
+!/.cargo/config.toml
 !/.projen/uniffi-release.mjs
 !/pyproject.toml
 !/packages/py/core-rs/pyproject.toml

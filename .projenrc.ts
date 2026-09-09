@@ -101,13 +101,15 @@ installerTest.exec("bun test scripts/install.test.ts");
 root.testTask.spawn(installerTest);
 
 // ---------------------------------------------------------------------------
-// Lockfiles stay UNTRACKED (projen's `*.lock` default ignore)
+// JavaScript and Python lockfiles stay UNTRACKED
 // ---------------------------------------------------------------------------
 // Deliberately NOT committed: a lockfile resolved on a dev machine can bake its
 // active npm or Python registry into `bun.lock` / `uv.lock`, then fail in CI or
 // on another developer's machine. Local installs still generate both files, but
 // the repo ignores them and CI resolves fresh. Verify before ever committing one:
 //   grep -c 'localhost:4873' bun.lock
+// Rust workspaces override the broad lockfile ignore for root Cargo.lock because
+// Cargo records canonical crates.io identities rather than the configured mirror.
 
 // ---------------------------------------------------------------------------
 // Generated dot-directories

@@ -130,6 +130,7 @@ if (!values["skip-build"]) {
   run("cargo", [
     "build",
     "--release",
+    ...(existsSync(join(root, "Cargo.lock")) ? ["--locked"] : []),
     "--package",
     crate,
     ...(values["cargo-target"] ? ["--target", values["cargo-target"]] : []),

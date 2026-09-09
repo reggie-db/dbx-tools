@@ -693,6 +693,7 @@ export class DBXToolsRustWorkspace {
       dbxToolsProject.dbxToolsConfig.rust = this.workspaceMapping;
     }
     project.gitignore.addPatterns(
+      "!/Cargo.lock",
       "target/",
       ...this.bindingMappings.flatMap((binding) => [
         ...(binding.node ? [`${binding.node}/src/*${binding.crate.replaceAll("-", "_")}.*`] : []),
@@ -816,6 +817,18 @@ export class DBXToolsRustWorkspace {
     new TextFile(project, "Cargo.toml", {
       lines: renderToml(generatedWorkspaceManifest).trimEnd().split("\n"),
     });
+    new TextFile(project, ".cargo/config.toml", {
+      lines: renderToml({
+        "target.x86_64-pc-windows-msvc": {
+          rustflags: ["-C", "target-feature=+crt-static"],
+        },
+        "target.aarch64-pc-windows-msvc": {
+          rustflags: ["-C", "target-feature=+crt-static"],
+        },
+      })
+        .trimEnd()
+        .split("\n"),
+    });
     project.addTask("rs:format", { exec: "cargo fmt --all" });
     project.addTask("rs:lint", { exec: "cargo clippy --workspace --all-targets --all-features" });
     project.addTask("rs:test", { exec: "cargo test --workspace" });
@@ -879,6 +892,7 @@ export class DBXToolsRustWorkspace {
       return { ...target, ...(hasReleaseExclusions ? { cargoExcludes } : {}) };
     });
     const hasPythonBindings = bindings.some((binding) => binding.python);
+    const usesCargoLock = existsSync(join(project.outdir, "Cargo.lock"));
     const usePreinstalledWindowsRust = releaseRustVersion === "stable";
     const hasTargetOutputs =
       bindings.length > 0 || releaseBinaries.length > 0 || publicCrates.length > 0;
@@ -1056,7 +1070,7 @@ export class DBXToolsRustWorkspace {
           },
           run: timedBash(
             "rust_workspace",
-            `cargo build --release --workspace --target "\${{ matrix.cargo }}"${
+            `cargo build --release --workspace${usesCargoLock ? " --locked" : ""} --target "\${{ matrix.cargo }}"${
               hasReleaseExclusions ? " ${{ matrix.cargoExcludes }}" : ""
             }`,
           ),

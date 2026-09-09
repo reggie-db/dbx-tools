@@ -315,6 +315,16 @@ program
           stdin: "ignore",
           check: true,
         });
+        if (existsSync(join(root, "Cargo.toml"))) {
+          logger.info("refreshing Cargo.lock workspace versions");
+          exec.spawnSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+            cwd: process.cwd(),
+            stdout: "ignore",
+            stderr: "inherit",
+            stdin: "ignore",
+            check: true,
+          });
+        }
       }
 
       if (opts.commit) {
