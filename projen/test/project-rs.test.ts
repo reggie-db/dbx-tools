@@ -135,6 +135,7 @@ describe("DBXToolsRustWorkspace", () => {
       new DBXToolsRustWorkspace(project, {});
       project.synth();
       assert.equal("rust-build" in readWorkflow(emptyOutdir).jobs, false);
+      assert.equal(existsSync(join(emptyOutdir, ".github/workflows/rust-cache.yml")), false);
       assert.equal(existsSync(join(emptyOutdir, ".github/workflows/release-dispatch.yml")), false);
     } finally {
       rmSync(emptyOutdir, { recursive: true, force: true });
@@ -353,7 +354,11 @@ describe("DBXToolsRustWorkspace", () => {
       const packageBindings = workflowStep(buildJob, "Package UniFFI outputs").run!;
       assert.ok(packageBindings.includes('--crate "fixture-alpha"'));
       assert.ok(packageBindings.includes('--crate "fixture-beta"'));
-      assert.equal(stepNames(buildJob).filter((name) => name === "Setup sccache").length, 1);
+      assert.equal(
+        stepNames(buildJob).filter((name) => name === "Cache Cargo registry and targets").length,
+        1,
+      );
+      assert.equal(stepNames(buildJob).includes("Setup sccache"), false);
       assert.equal(
         stepNames(buildJob).filter((name) => name === "Install Linux native dependencies").length,
         1,
@@ -590,9 +595,6 @@ describe("DBXToolsRustWorkspace", () => {
     assert.deepEqual(rustBuild.env, {
       CARGO_INCREMENTAL: "0",
       CARGO_TERM_COLOR: "always",
-      RUSTC_WRAPPER: "sccache",
-      SCCACHE_GHA_ENABLED: "true",
-      SCCACHE_GHA_VERSION: "release-${{ matrix.cargo }}-rust-stable",
     });
     assert.equal(workflowStep(rustBuild, "Setup Rust").uses, "dtolnay/rust-toolchain@stable");
     assert.equal(workflowStep(rustBuild, "Setup Rust").if, "${{ matrix.os != 'win32' }}");
@@ -615,12 +617,26 @@ describe("DBXToolsRustWorkspace", () => {
         "fixture-tool-${{ matrix.node }}-binary",
       ],
     );
-    assert.deepEqual(workflowStep(rustBuild, "Cache Cargo registry").with, {
-      "cache-targets": false,
+    assert.deepEqual(workflowStep(rustBuild, "Cache Cargo registry and targets").with, {
+      "cache-targets": true,
+      "cache-workspace-crates": false,
       "add-job-id-key": false,
-      "add-rust-environment-hash-key": false,
+      "add-rust-environment-hash-key": true,
       "shared-key": "release-${{ matrix.cargo }}-rust-stable",
+      "save-if": false,
     });
+    const cacheWorkflow = readWorkflow(outdir, "rust-cache");
+    assert.deepEqual(cacheWorkflow.on.workflow_dispatch, {});
+    const cachePrime = cacheWorkflow.jobs.prime!;
+    assert.equal(stepNames(cachePrime).includes("Setup uv"), false);
+    assert.match(
+      workflowStep(cachePrime, "Prime Cargo target cache").run ?? "",
+      /cargo build --release --workspace --target/,
+    );
+    assert.equal(
+      workflowStep(cachePrime, "Cache Cargo registry and targets").with?.["save-if"],
+      true,
+    );
 
     const cargoPublisher = release.jobs["publish-cargo"]!;
     assert.deepEqual(stepNames(cargoPublisher), [
@@ -715,7 +731,7 @@ describe("DBXToolsRustWorkspace", () => {
         defaultTagMixins: false,
         github: false,
       });
-      const rust = new DBXToolsRustWorkspace(project, {
+      new DBXToolsRustWorkspace(project, {
         scope: "fixture",
         release: false,
       });

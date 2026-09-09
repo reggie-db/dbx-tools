@@ -287,9 +287,6 @@ jobs:
     env:
       CARGO_INCREMENTAL: "0"
       CARGO_TERM_COLOR: always
-      RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
-      SCCACHE_GHA_VERSION: release-${{ matrix.cargo }}-rust-stable
     if: ${{ github.event_name == 'push' || inputs.stage == 'all' }}
     steps:
       - name: Checkout release commit
@@ -327,24 +324,21 @@ jobs:
           rustup target list --installed | grep -Fx "${{ matrix.cargo }}"
           test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.cargo }}/bin/rust-lld.exe"
         shell: bash
-      - name: Setup sccache
-        id: sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
-      - name: Cache Cargo registry
+      - name: Cache Cargo registry and targets
         id: cargo_cache
         uses: Swatinem/rust-cache@v2.9.2
         with:
-          cache-targets: false
+          cache-targets: true
+          cache-workspace-crates: false
           add-job-id-key: false
-          add-rust-environment-hash-key: false
+          add-rust-environment-hash-key: true
           shared-key: release-${{ matrix.cargo }}-rust-stable
+          save-if: false
       - name: Log cache configuration
         id: log_cache_configuration
         run: |-
           echo "cargo_cache_namespace=release-${{ matrix.cargo }}-rust-stable"
           echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"
-          echo "sccache_scope=${{ github.ref }}"
-          echo "sccache_namespace=${SCCACHE_GHA_VERSION}"
         shell: bash
       - name: Install Linux native dependencies
         id: install_linux_native_dependencies
@@ -473,11 +467,6 @@ jobs:
           name: dbx-tools-model-proxy-${{ matrix.node }}-binary
           path: dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/*
           retention-days: 7
-      - name: Log sccache statistics
-        id: log_sccache_statistics
-        if: ${{ always() }}
-        run: '"${SCCACHE_PATH}" --show-stats'
-        shell: bash
     strategy:
       fail-fast: false
       matrix:

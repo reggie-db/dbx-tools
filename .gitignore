@@ -104,6 +104,7 @@ packages/py/google-rs/src/dbx_tools/google_rs/bindings.py
 packages/py/google-rs/src/dbx_tools/google_rs/*dbx_tools_google.*
 !/Cargo.toml
 !/.cargo/config.toml
+!/.github/workflows/rust-cache.yml
 !/.projen/uniffi-release.mjs
 !/pyproject.toml
 !/packages/py/core-rs/pyproject.toml

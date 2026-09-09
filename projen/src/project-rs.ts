@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Project, TextFile, javascript } from "projen";
+import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { DBXToolsTypeScriptProject, projectRepositoryUrl } from "./project-js.ts";
@@ -176,28 +177,27 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
 const RUST_CACHE_ENV = {
   CARGO_INCREMENTAL: "0",
   CARGO_TERM_COLOR: "always",
-  RUSTC_WRAPPER: "sccache",
-  SCCACHE_GHA_ENABLED: "true",
 } as const;
 const UBRN_VERSION = "0.31.0-5";
 const RELEASE_PLATFORMS_ENV = "DBX_TOOLS_RELEASE_PLATFORMS";
 
-function rustCacheSteps(sharedKey: string, idPrefix = ""): readonly Record<string, unknown>[] {
+function rustCacheSteps(
+  sharedKey: string,
+  idPrefix = "",
+  saveIf = true,
+): readonly Record<string, unknown>[] {
   return [
     {
-      name: "Setup sccache",
-      id: `${idPrefix}sccache`,
-      uses: "mozilla-actions/sccache-action@v0.0.11",
-    },
-    {
-      name: "Cache Cargo registry",
+      name: "Cache Cargo registry and targets",
       id: `${idPrefix}cargo_cache`,
       uses: "Swatinem/rust-cache@v2.9.2",
       with: {
-        "cache-targets": false,
+        "cache-targets": true,
+        "cache-workspace-crates": false,
         "add-job-id-key": false,
-        "add-rust-environment-hash-key": false,
+        "add-rust-environment-hash-key": true,
         "shared-key": sharedKey,
+        "save-if": saveIf,
       },
     },
   ];
@@ -842,8 +842,98 @@ export class DBXToolsRustWorkspace {
     }
     project.removeTask("rs:bindings:demo");
     if (releaseEnabled) {
+      this.addCacheWorkflow(project, options, nativeTargets);
       this.addReleaseWorkflow(project, options, nativeTargets);
     }
+  }
+
+  private addCacheWorkflow(
+    project: javascript.NodeProject,
+    options: DBXToolsRustWorkspaceOptions,
+    targets: readonly UniFFIReleaseTarget[],
+  ): void {
+    if (!project.github || !isDBXToolsJavaScriptProject()(project) || targets.length === 0) return;
+    const releaseRustVersion = options.releaseRustVersion ?? "stable";
+    const usePreinstalledWindowsRust = releaseRustVersion === "stable";
+    const usesCargoLock = existsSync(join(project.outdir, "Cargo.lock"));
+    const hasReleaseExclusions = this.packages.some(
+      (pkg) => pkg.packageOptions.releaseExcludeOs?.length,
+    );
+    const matrix = targets.map((target) => ({
+      ...target,
+      ...(hasReleaseExclusions
+        ? {
+            cargoExcludes: this.packages
+              .filter((pkg) => pkg.packageOptions.releaseExcludeOs?.includes(target.os))
+              .map((pkg) => `--exclude ${pkg.crateName}`)
+              .join(" "),
+          }
+        : {}),
+    }));
+    const workflow = new GithubWorkflow(project.github, "rust-cache", {
+      fileName: "rust-cache.yml",
+      limitConcurrency: true,
+      concurrencyOptions: { group: "rust-cache", cancelInProgress: true },
+    });
+    workflow.on({ workflowDispatch: {} });
+    workflow.addJob("prime", {
+      name: "${{ matrix.node }}",
+      runsOn: ["${{ matrix.runner }}"],
+      permissions: { contents: JobPermission.READ },
+      env: RUST_CACHE_ENV,
+      strategy: {
+        failFast: false,
+        matrix: { include: matrix },
+      },
+      steps: [
+        { name: "Checkout", uses: "actions/checkout@v6" },
+        {
+          name: "Setup Rust",
+          ...(usePreinstalledWindowsRust ? { if: "${{ matrix.os != 'win32' }}" } : {}),
+          uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
+          with: { targets: "${{ matrix.cargo }}" },
+        },
+        ...(usePreinstalledWindowsRust
+          ? [
+              {
+                name: "Verify preinstalled Windows Rust",
+                if: "${{ matrix.os == 'win32' }}",
+                shell: "bash",
+                run: [
+                  "rustc --version --verbose",
+                  "cargo --version",
+                  'rustup target list --installed | grep -Fx "${{ matrix.cargo }}"',
+                  'test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.cargo }}/bin/rust-lld.exe"',
+                ].join("\n"),
+              },
+            ]
+          : []),
+        ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`),
+        {
+          name: "Install Linux native dependencies",
+          if: "${{ matrix.os == 'linux' }}",
+          run: [
+            "sudo rm -f /etc/apt/sources.list.d/google-chrome.list",
+            "sudo apt-get update",
+            "sudo apt-get install --yes libdbus-1-dev pkg-config",
+          ].join("\n"),
+        },
+        {
+          name: "Prime Cargo target cache",
+          shell: "bash",
+          env: {
+            CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER:
+              "${{ matrix.os == 'win32' && 'rust-lld' || '' }}",
+          },
+          run: timedBash(
+            "rust_cache",
+            `cargo build --release --workspace${usesCargoLock ? " --locked" : ""} --target "\${{ matrix.cargo }}"${
+              hasReleaseExclusions ? " ${{ matrix.cargoExcludes }}" : ""
+            }`,
+          ),
+        },
+      ],
+    });
   }
 
   private addReleaseWorkflow(
@@ -1011,7 +1101,6 @@ export class DBXToolsRustWorkspace {
       permissions: { contents: JobPermission.READ },
       env: {
         ...RUST_CACHE_ENV,
-        SCCACHE_GHA_VERSION: `release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`,
       },
       strategy: {
         failFast: false,
@@ -1041,15 +1130,13 @@ export class DBXToolsRustWorkspace {
               },
             ]
           : []),
-        ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`),
+        ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`, "", false),
         {
           name: "Log cache configuration",
           shell: "bash",
           run: [
             `echo "cargo_cache_namespace=release-\${{ matrix.cargo }}-rust-${releaseRustVersion}"`,
             'echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"',
-            'echo "sccache_scope=${{ github.ref }}"',
-            'echo "sccache_namespace=${SCCACHE_GHA_VERSION}"',
           ].join("\n"),
         },
         {
@@ -1095,12 +1182,6 @@ export class DBXToolsRustWorkspace {
             ]
           : []),
         ...artifactSteps,
-        {
-          name: "Log sccache statistics",
-          if: "${{ always() }}",
-          shell: "bash",
-          run: '"${SCCACHE_PATH}" --show-stats',
-        },
       ],
     };
     const workflow = releaseWorkflow(project);

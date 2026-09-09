@@ -486,8 +486,15 @@ Primary package areas:
   binding dependency order. Python combines every platform wheel with standard
   wheel and source builds, and publishes each distribution through its own PyPI
   trusted-publisher environment. Cargo registry caches use one stable
-  target/toolchain key; `SCCACHE_GHA_VERSION` provides the matching compiler-cache
-  namespace. Set `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
+  target/toolchain key through `Swatinem/rust-cache`; each archive includes the
+  registry and cleaned dependency artifacts from the target directory, while
+  workspace crate outputs rebuild for their release version. Do not layer the
+  GHA sccache backend on top: its per-object entries exhaust the repository
+  cache quota. GitHub isolates caches by tag, so the manual `rust-cache.yml`
+  workflow primes caches in the default-branch scope; release jobs restore
+  those archives with `save-if: false` instead of creating unusable tag-scoped
+  copies. Run the cache workflow after dependency, Rust toolchain, target, or
+  Rust build-config changes. Set `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
   Packaging must
   execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace
