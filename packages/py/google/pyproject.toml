@@ -5,7 +5,7 @@ name = "dbx-tools-google"
 version = "0.6.186"
 description = "Python bindings for dbx-tools-google"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<4"
 dependencies = ["dbx-tools-databricks @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/databricks"]
 
 [project.urls]

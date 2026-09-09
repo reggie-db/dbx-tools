@@ -360,6 +360,16 @@ const DEFINITIONS = {
       ret: FfiType.Int8,
       hasRustCallStatus: true,
     },
+    "uniffi_dbx_tools_databricks_fn_func_parse_address": {
+      args: [FfiType.RustBuffer],
+      ret: FfiType.RustBuffer,
+      hasRustCallStatus: true,
+    },
+    "uniffi_dbx_tools_databricks_fn_func_parse_resource_path": {
+      args: [FfiType.RustBuffer],
+      ret: FfiType.RustBuffer,
+      hasRustCallStatus: true,
+    },
     "uniffi_dbx_tools_databricks_fn_method_persistentauth_challenge": {
       args: [FfiType.Handle],
       ret: FfiType.Handle,
@@ -496,6 +506,16 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_databricks_checksum_func_is_databricks_app": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_databricks_checksum_func_parse_address": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_databricks_checksum_func_parse_resource_path": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -754,6 +774,8 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_fn_func_credential_key(provider: Uint8Array, profile: Uint8Array, scopes: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_databricks_fn_func_databricks_cli_available(uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_databricks_fn_func_is_databricks_app(uniffi_out_err: UniffiRustCallStatus): number;
+    uniffi_dbx_tools_databricks_fn_func_parse_address(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
+    uniffi_dbx_tools_databricks_fn_func_parse_resource_path(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_databricks_fn_method_persistentauth_challenge(uniffiSelf: bigint): bigint;
     uniffi_dbx_tools_databricks_fn_method_persistentauth_force_refresh_token(uniffiSelf: bigint): bigint;
     uniffi_dbx_tools_databricks_fn_method_persistentauth_logout(uniffiSelf: bigint): bigint;
@@ -782,6 +804,8 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_checksum_func_credential_key(): number;
     uniffi_dbx_tools_databricks_checksum_func_databricks_cli_available(): number;
     uniffi_dbx_tools_databricks_checksum_func_is_databricks_app(): number;
+    uniffi_dbx_tools_databricks_checksum_func_parse_address(): number;
+    uniffi_dbx_tools_databricks_checksum_func_parse_resource_path(): number;
     uniffi_dbx_tools_databricks_checksum_method_persistentauth_challenge(): number;
     uniffi_dbx_tools_databricks_checksum_method_persistentauth_force_refresh_token(): number;
     uniffi_dbx_tools_databricks_checksum_method_persistentauth_logout(): number;

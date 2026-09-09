@@ -2,41 +2,48 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
-use dbx_tools_databricks::{platform_cache_root, FileCache, FileCacheError};
-use reqwest::header::AUTHORIZATION;
+use dbx_tools_databricks::{
+    platform_cache_root, DatabricksClient, DatabricksClientError, FileCache, FileCacheError,
+};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::{
     classify::{classify_endpoints, supports_tools_by_family},
     model_status::{status_from_names, ModelStatusError, ModelStatusResolver},
-    models::{model_search_query, model_service_names, ModelProfile, ServingEndpointSummary},
-    resolve::{rank_model_id, DEFAULT_FUZZY_THRESHOLD},
+    models::{
+        model_search_query, model_service_names, ModelClass, ModelProfile, ModelQuery,
+        ServingEndpointSummary,
+    },
+    reasoning::reasoning_efforts_for_names,
+    resolve::{lookup_models, rank_model_id, DEFAULT_FUZZY_THRESHOLD},
 };
 
+/// Default lifetime for cached Model Serving endpoint metadata.
 pub const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
 const MODEL_CACHE_VERSION: u8 = 3;
 
+/// Client for discovering, caching, and resolving Databricks Model Serving endpoints.
 #[derive(Clone)]
 pub struct ModelClient {
-    client: reqwest::Client,
-    host: String,
+    client: DatabricksClient,
     cache: FileCache,
     status: ModelStatusResolver,
 }
 
 impl ModelClient {
-    pub fn new(host: impl Into<String>) -> Result<Self, ModelError> {
-        Self::with_cache_ttl(host, DEFAULT_MODEL_CACHE_TTL)
+    /// Create a model client with the default file-backed cache.
+    pub fn new(client: DatabricksClient) -> Result<Self, ModelError> {
+        Self::with_cache_ttl(client, DEFAULT_MODEL_CACHE_TTL)
     }
 
+    /// Create a model client with an explicit endpoint-cache lifetime.
     pub fn with_cache_ttl(
-        host: impl Into<String>,
+        client: DatabricksClient,
         cache_ttl: Duration,
     ) -> Result<Self, ModelError> {
         assert!(!cache_ttl.is_zero(), "model cache TTL must be positive");
-        let host = host.into().trim_end_matches('/').to_owned();
-        let key = format!("{:x}", Sha256::digest(host.as_bytes()));
+        let key = format!("{:x}", Sha256::digest(client.host().as_bytes()));
         let cache = FileCache::new(
             platform_cache_root()?
                 .join("dbx-tools")
@@ -45,110 +52,134 @@ impl ModelClient {
             cache_ttl,
         );
         Ok(Self {
-            client: reqwest::Client::new(),
-            host,
+            client,
             cache,
             status: ModelStatusResolver::new()?,
         })
     }
 
-    pub fn with_cache(host: impl Into<String>, cache: FileCache) -> Result<Self, ModelError> {
+    /// Create a model client with an explicit endpoint cache.
+    pub fn with_cache(client: DatabricksClient, cache: FileCache) -> Result<Self, ModelError> {
         Ok(Self::with_cache_and_status(
-            host,
+            client,
             cache,
             ModelStatusResolver::new()?,
         ))
     }
 
+    /// Create a model client with explicit endpoint and retirement-status caches.
     pub fn with_cache_and_status(
-        host: impl Into<String>,
+        client: DatabricksClient,
         cache: FileCache,
         status: ModelStatusResolver,
     ) -> Self {
         Self {
-            client: reqwest::Client::new(),
-            host: host.into().trim_end_matches('/').to_owned(),
+            client,
             cache,
             status,
         }
     }
 
-    pub async fn models(
+    /// List cached serving endpoint summaries, optionally forcing a live refresh.
+    pub async fn list_serving_endpoints(
         &self,
-        authorization: &str,
         force: bool,
     ) -> Result<Vec<ServingEndpointSummary>, ModelError> {
         if force {
-            self.cache
-                .refresh(|| self.fetch_models(authorization))
-                .await
+            self.cache.refresh(|| self.fetch_models()).await
         } else {
-            self.cache
-                .get_or_try_init(|| self.fetch_models(authorization))
-                .await
+            self.cache.get_or_try_init(|| self.fetch_models()).await
         }
     }
 
-    pub async fn resolve(
-        &self,
-        authorization: &str,
-        requested: &str,
-    ) -> Result<String, ModelError> {
+    /// Resolve a loose model name to a serving endpoint name.
+    pub async fn resolve_model(&self, requested: &str) -> Result<String, ModelError> {
         Ok(self
-            .resolve_endpoint(authorization, requested)
+            .resolve_serving_endpoint(requested)
             .await?
             .map(|endpoint| endpoint.name)
             .unwrap_or_else(|| requested.to_owned()))
     }
 
-    pub async fn resolve_endpoint(
+    /// Resolve a loose model name to its serving endpoint summary.
+    pub async fn resolve_serving_endpoint(
         &self,
-        authorization: &str,
         requested: &str,
     ) -> Result<Option<ServingEndpointSummary>, ModelError> {
-        let models = self.models(authorization, false).await?;
-        let resolved = resolve_from_models(&models, requested);
-        if resolved != requested || models.iter().any(|model| model.name == requested) {
-            return Ok(models.into_iter().find(|model| model.name == resolved));
+        let endpoints = self.list_serving_endpoints(false).await?;
+        let resolved = resolve_from_endpoints(&endpoints, requested);
+        if resolved != requested || endpoints.iter().any(|endpoint| endpoint.name == requested) {
+            return Ok(endpoints
+                .into_iter()
+                .find(|endpoint| endpoint.name == resolved));
         }
-        let refreshed = self.models(authorization, true).await?;
-        let resolved = resolve_from_models(&refreshed, requested);
-        Ok(refreshed.into_iter().find(|model| model.name == resolved))
+        let endpoints = self.list_serving_endpoints(true).await?;
+        let resolved = resolve_from_endpoints(&endpoints, requested);
+        Ok(endpoints
+            .into_iter()
+            .find(|endpoint| endpoint.name == resolved))
     }
 
-    async fn fetch_models(
+    /// Resolve a loose model name within one model class.
+    pub async fn resolve_serving_endpoint_for_class(
         &self,
-        authorization: &str,
-    ) -> Result<Vec<ServingEndpointSummary>, ModelError> {
-        let response = self
-            .client
-            .get(format!("{}/api/2.0/serving-endpoints", self.host))
-            .header(AUTHORIZATION, authorization)
-            .send()
-            .await?;
-        let status = response.status();
-        let body = response.bytes().await?;
-        if !status.is_success() {
-            return Err(ModelError::Databricks {
-                status: status.as_u16(),
-                body: String::from_utf8_lossy(&body).into_owned(),
-            });
+        requested: &str,
+        model_class: ModelClass,
+    ) -> Result<Option<ServingEndpointSummary>, ModelError> {
+        let endpoints = self.list_serving_endpoints(false).await?;
+        if let Some(endpoint) = resolve_from_endpoints_for_class(&endpoints, requested, model_class)
+        {
+            return Ok(Some(endpoint));
         }
-        let value: Value = serde_json::from_slice(&body)?;
+        let endpoints = self.list_serving_endpoints(true).await?;
+        Ok(resolve_from_endpoints_for_class(
+            &endpoints,
+            requested,
+            model_class,
+        ))
+    }
+
+    async fn fetch_models(&self) -> Result<Vec<ServingEndpointSummary>, ModelError> {
+        let value = self.client.get("/api/2.0/serving-endpoints").await?;
         let retired = self.status.retired_model_names().await?;
         endpoints_from_response_with_retired(&value, &retired)
     }
 }
 
-fn resolve_from_models(models: &[ServingEndpointSummary], requested: &str) -> String {
-    let search = if models.iter().any(|model| model.name == requested) {
+fn resolve_from_endpoints(endpoints: &[ServingEndpointSummary], requested: &str) -> String {
+    let search = if endpoints.iter().any(|endpoint| endpoint.name == requested) {
         requested.to_owned()
     } else {
         model_search_query(requested).unwrap_or_else(|| requested.to_owned())
     };
-    rank_model_id(models, &search, DEFAULT_FUZZY_THRESHOLD).model_id
+    rank_model_id(endpoints, &search, DEFAULT_FUZZY_THRESHOLD).model_id
 }
 
+fn resolve_from_endpoints_for_class(
+    endpoints: &[ServingEndpointSummary],
+    requested: &str,
+    model_class: ModelClass,
+) -> Option<ServingEndpointSummary> {
+    let search = if endpoints.iter().any(|endpoint| endpoint.name == requested) {
+        requested.to_owned()
+    } else {
+        model_search_query(requested).unwrap_or_else(|| requested.to_owned())
+    };
+    lookup_models(
+        endpoints,
+        &ModelQuery {
+            search: Some(search),
+            model_class: Some(model_class),
+            limit: Some(1),
+            ..Default::default()
+        },
+    )
+    .into_iter()
+    .next()
+    .map(|ranked| ranked.endpoint)
+}
+
+/// Parse a Databricks serving-endpoints response into endpoint summaries.
 pub fn endpoints_from_response(value: &Value) -> Result<Vec<ServingEndpointSummary>, ModelError> {
     endpoints_from_response_with_retired(value, &Default::default())
 }
@@ -194,6 +225,7 @@ fn endpoint_summary(
             .flat_map(|identity| model_service_names(identity))
             .collect(),
         model_service_name: model_service_name(endpoint),
+        reasoning_efforts: reasoning_efforts_for_names(identities.iter().map(String::as_str)),
         status: status_from_names(identities.iter().map(String::as_str), retired),
         name,
     })
@@ -359,18 +391,19 @@ fn string_at(value: &Value, path: &[&str]) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// Errors produced while discovering or resolving Model Serving endpoints.
 #[derive(Debug, thiserror::Error)]
 pub enum ModelError {
+    /// The endpoint cache failed.
     #[error(transparent)]
     Cache(#[from] FileCacheError),
+    /// Model retirement status could not be resolved.
     #[error(transparent)]
     Status(#[from] ModelStatusError),
-    #[error("Databricks model discovery returned HTTP {status}: {body}")]
-    Databricks { status: u16, body: String },
+    /// A Databricks API request failed.
+    #[error(transparent)]
+    Databricks(#[from] DatabricksClientError),
+    /// A Databricks API response did not contain the expected endpoint data.
     #[error("invalid Databricks model response: {0}")]
     InvalidResponse(&'static str),
-    #[error("model discovery request failed: {0}")]
-    Http(#[from] reqwest::Error),
-    #[error("model discovery response was invalid JSON: {0}")]
-    Json(#[from] serde_json::Error),
 }

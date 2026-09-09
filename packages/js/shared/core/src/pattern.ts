@@ -5,8 +5,7 @@
  * A configurable allow-list is the same shape everywhere in this repo: a list of
  * patterns from a config field or an env var, where an operator reasonably
  * expects to write a plain value, a `*` wildcard, or - when neither is enough -
- * a real regex. Each consumer used to grow its own `globToRegExp` +
- * `/pattern/flags` parser; this is that parser, once.
+ * a real regex. This module is the single parser for those three forms.
  *
  * Three shapes are recognized per entry, tried in order:
  *

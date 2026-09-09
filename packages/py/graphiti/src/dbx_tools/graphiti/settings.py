@@ -4,12 +4,14 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from dbx_tools.core import config
+
 """Model and proxy settings for the native Graphiti launcher."""
 
-DEFAULT_LITELLM_HOST = "127.0.0.1"
-DEFAULT_LITELLM_PORT = 4000
-DEFAULT_MODEL = "dbx/databricks-gpt-5-nano"
-DEFAULT_EMBEDDER_MODEL = "dbx/databricks-gte-large-en"
+DEFAULT_MODEL_PROXY_HOST = "127.0.0.1"
+DEFAULT_MODEL_PROXY_PORT = 4000
+DEFAULT_MODEL = "databricks-gpt-5-nano"
+DEFAULT_EMBEDDER_MODEL = "databricks-gte-large-en"
 DEFAULT_EMBEDDER_DIMENSIONS = 1024
 DEFAULT_STRUCTURED_OUTPUT_MODE = "json_object"
 _PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
@@ -17,12 +19,13 @@ _PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
 
 @dataclass(frozen=True)
 class ModelSettings:
-    """Resolved Graphiti model settings and LiteLLM ownership policy."""
+    """Resolved Graphiti model settings and model proxy ownership policy."""
 
     profile: str | None
-    manage_litellm: bool
-    litellm_host: str
-    litellm_port: int
+    manage_model_proxy: bool
+    model_proxy_host: str
+    model_proxy_port: int
+    model_proxy_command: str | None
     openai_api_url: str
     openai_api_key: str
     model: str
@@ -38,26 +41,39 @@ class ModelSettings:
         model: str | None = None,
         embedder_model: str | None = None,
         embedder_dimensions: int | None = None,
-        litellm_host: str | None = None,
-        litellm_port: int | None = None,
-        litellm_url: str | None = None,
-        manage_litellm: bool | None = None,
+        model_proxy_host: str | None = None,
+        model_proxy_port: int | None = None,
+        model_proxy_url: str | None = None,
+        model_proxy_command: str | None = None,
+        manage_model_proxy: bool | None = None,
         environ: Mapping[str, str] | None = None,
     ) -> ModelSettings:
         """Resolve CLI values over environment values and defaults."""
         env = os.environ if environ is None else environ
+        options: config.ConfigOptions = {
+            "scope": (),
+            "sources": "config",
+            "data": env,
+        }
         resolved_host = (
-            _text(litellm_host) or _text(env.get("LITELLM_HOST")) or DEFAULT_LITELLM_HOST
+            config.string(model_proxy_host, "MODEL_PROXY_HOST", options) or DEFAULT_MODEL_PROXY_HOST
         )
-        resolved_port = _positive_int(
-            litellm_port if litellm_port is not None else env.get("LITELLM_PORT"),
-            DEFAULT_LITELLM_PORT,
-            "LITELLM_PORT",
+        resolved_port = config.positive_int(
+            model_proxy_port,
+            "MODEL_PROXY_PORT",
+            DEFAULT_MODEL_PROXY_PORT,
+            options,
         )
-        configured_proxy_url = _text(litellm_url) or _text(env.get("LITELLM_URL"))
-        configured_openai_url = _text(env.get("OPENAI_API_URL"))
-        configured_manage = (
-            manage_litellm if manage_litellm is not None else _boolean(env.get("MANAGE_LITELLM"))
+        configured_proxy_url = config.string(
+            model_proxy_url,
+            "MODEL_PROXY_URL",
+            options,
+        )
+        configured_openai_url = config.string(None, "OPENAI_API_URL", options)
+        configured_manage = config.boolean(
+            manage_model_proxy,
+            "MANAGE_MODEL_PROXY",
+            options,
         )
         resolved_manage = (
             configured_manage
@@ -71,47 +87,50 @@ class ModelSettings:
             else configured_proxy_url or configured_openai_url or local_url
         )
         proxy_mode = resolved_manage or configured_proxy_url is not None
-        api_key = _text(env.get("OPENAI_API_KEY"))
+        api_key = config.string(None, "OPENAI_API_KEY", options)
         if api_key is None:
             if proxy_mode:
                 api_key = "not-required"
             else:
                 raise ValueError(
-                    "OPENAI_API_KEY is required when managed LiteLLM is disabled "
+                    "OPENAI_API_KEY is required when the managed model proxy is disabled "
                     "and OPENAI_API_URL points at an external provider"
                 )
-        dimensions = _positive_int(
-            embedder_dimensions
-            if embedder_dimensions is not None
-            else env.get("EMBEDDER_DIMENSIONS")
-            or env.get("EMBEDDER__DIMENSIONS")
-            or env.get("EMBEDDING_DIM"),
+        dimensions = config.positive_int(
+            embedder_dimensions,
+            ("EMBEDDER_DIMENSIONS", "EMBEDDER__DIMENSIONS", "EMBEDDING_DIM"),
             DEFAULT_EMBEDDER_DIMENSIONS,
-            "EMBEDDER_DIMENSIONS",
+            options,
         )
-        resolved_profile = _text(profile) or _text(env.get(_PROFILE_ENV))
+        resolved_profile = config.string(profile, _PROFILE_ENV, options)
         return cls(
             profile=resolved_profile,
-            manage_litellm=resolved_manage,
-            litellm_host=resolved_host,
-            litellm_port=resolved_port,
+            manage_model_proxy=resolved_manage,
+            model_proxy_host=resolved_host,
+            model_proxy_port=resolved_port,
+            model_proxy_command=config.string(
+                model_proxy_command,
+                "MODEL_PROXY_COMMAND",
+                options,
+            ),
             openai_api_url=openai_url.rstrip("/"),
             openai_api_key=api_key,
-            model=_text(model) or _text(env.get("MODEL_NAME")) or DEFAULT_MODEL,
+            model=config.string(model, "MODEL_NAME", options) or DEFAULT_MODEL,
             embedder_model=(
-                _text(embedder_model) or _text(env.get("EMBEDDER_MODEL")) or DEFAULT_EMBEDDER_MODEL
+                config.string(embedder_model, "EMBEDDER_MODEL", options) or DEFAULT_EMBEDDER_MODEL
             ),
             embedder_dimensions=dimensions,
             structured_output_mode=(
-                _text(env.get("LLM_STRUCTURED_OUTPUT_MODE")) or DEFAULT_STRUCTURED_OUTPUT_MODE
+                config.string(None, "LLM_STRUCTURED_OUTPUT_MODE", options)
+                or DEFAULT_STRUCTURED_OUTPUT_MODE
             ),
         )
 
     @property
     def health_url(self) -> str:
-        """LiteLLM readiness endpoint for the configured OpenAI-compatible URL."""
+        """Health endpoint for the configured OpenAI-compatible model proxy."""
         base = self.openai_api_url.removesuffix("/v1")
-        return f"{base}/health/readiness"
+        return f"{base}/healthz"
 
     def graphiti_environment(self) -> dict[str, str]:
         """Non-secret settings injected into the upstream Graphiti process."""
@@ -141,43 +160,10 @@ class ModelSettings:
         """Settings safe to include in status and environment output."""
         return {
             "profile": self.profile,
-            "manage_litellm": self.manage_litellm,
-            "litellm_url": self.openai_api_url,
+            "manage_model_proxy": self.manage_model_proxy,
+            "model_proxy_url": self.openai_api_url,
             "model": self.model,
             "embedder_model": self.embedder_model,
             "embedder_dimensions": self.embedder_dimensions,
             "structured_output_mode": self.structured_output_mode,
         }
-
-
-def _text(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    stripped = value.strip()
-    return stripped or None
-
-
-def _boolean(value: object) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    normalized = _text(value)
-    if normalized is None:
-        return None
-    lowered = normalized.lower()
-    if lowered in {"1", "true", "yes", "on"}:
-        return True
-    if lowered in {"0", "false", "no", "off"}:
-        return False
-    raise ValueError(f"MANAGE_LITELLM must be a boolean, got {value!r}")
-
-
-def _positive_int(value: object, default: int, name: str) -> int:
-    if value is None:
-        return default
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as error:
-        raise ValueError(f"{name} must be a positive integer") from error
-    if parsed <= 0:
-        raise ValueError(f"{name} must be a positive integer")
-    return parsed

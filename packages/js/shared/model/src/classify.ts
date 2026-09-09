@@ -34,6 +34,35 @@ const CHAT_TASK = "llm/v1/chat";
 /** Task hint Databricks stamps on embedding endpoints. */
 const EMBEDDING_TASK = "llm/v1/embeddings";
 
+type ModelFamily = "claude" | "gemini" | "gemma" | "glm" | "gpt" | "llama" | "qwen";
+
+interface ParsedFamily {
+  family: ModelFamily;
+  parts: ReadonlySet<string>;
+}
+
+function parsedFamily(name: string): ParsedFamily | undefined {
+  const tokens = name.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const familyToken = tokens.find((token) => {
+    return (
+      token === "claude" ||
+      token === "gemini" ||
+      token === "gemma" ||
+      token === "glm" ||
+      token === "gpt" ||
+      token === "llama" ||
+      token === "qwen" ||
+      /^qwen\d/.test(token)
+    );
+  });
+  if (!familyToken) return undefined;
+  const family = (familyToken.startsWith("qwen") ? "qwen" : familyToken) as ModelFamily;
+  return {
+    family,
+    parts: new Set(tokens),
+  };
+}
+
 /** What an endpoint can be asked to do, as derived by {@link endpointCapabilities}. */
 export interface EndpointCapabilities {
   /** OpenAI chat/completions + Responses: the surface a chat agent needs. */
@@ -55,15 +84,10 @@ export interface EndpointCapabilities {
  * passthrough entirely.
  */
 export function supportsToolsByFamily(name: string): boolean {
-  const n = name.toLowerCase();
-  if (n.includes("gemini") || n.includes("gpt-oss")) return false;
-  return (
-    n.includes("claude") ||
-    n.includes("gpt") ||
-    n.includes("qwen") ||
-    n.includes("glm") ||
-    n.includes("llama")
-  );
+  const parsed = parsedFamily(name);
+  if (!parsed || parsed.family === "gemini") return false;
+  if (parsed.family === "gpt" && parsed.parts.has("oss")) return false;
+  return ["claude", "gpt", "qwen", "glm", "llama"].includes(parsed.family);
 }
 
 /**
@@ -153,42 +177,46 @@ function versionScore(name: string): number {
  */
 export function classifyByFamily(name: string): FamilyClass | null {
   const n = name.toLowerCase();
+  const parsed = parsedFamily(n);
+  if (!parsed) return null;
+  const { family, parts } = parsed;
+  const has = (part: string): boolean => parts.has(part);
   const at = (cls: ModelClass): FamilyClass => ({ class: cls, rank: versionScore(n) });
 
   // Anthropic Claude
-  if (n.includes("opus")) return at(ModelClass.ChatThinking);
-  if (n.includes("sonnet")) return at(ModelClass.ChatBalanced);
-  if (n.includes("haiku")) return at(ModelClass.ChatFast);
+  if (family === "claude" && has("opus")) return at(ModelClass.ChatThinking);
+  if (family === "claude" && has("sonnet")) return at(ModelClass.ChatBalanced);
+  if (family === "claude" && has("haiku")) return at(ModelClass.ChatFast);
 
   // OpenAI open-weights (check before the generic gpt branch)
-  if (n.includes("gpt-oss")) {
-    return at(n.includes("120b") ? ModelClass.ChatBalanced : ModelClass.ChatFast);
+  if (family === "gpt" && has("oss")) {
+    return at(has("120b") ? ModelClass.ChatBalanced : ModelClass.ChatFast);
   }
   // OpenAI GPT family
-  if (n.includes("gpt")) {
-    if (n.includes("pro")) return at(ModelClass.ChatThinking);
-    if (n.includes("mini") || n.includes("nano")) return at(ModelClass.ChatFast);
+  if (family === "gpt") {
+    if (has("pro")) return at(ModelClass.ChatThinking);
+    if (has("mini") || has("nano")) return at(ModelClass.ChatFast);
     return at(ModelClass.ChatBalanced);
   }
 
   // Google Gemini / Gemma
-  if (n.includes("gemini")) {
-    if (n.includes("flash-lite")) return at(ModelClass.ChatFast);
-    if (n.includes("pro")) return at(ModelClass.ChatThinking);
+  if (family === "gemini") {
+    if (has("flash") && has("lite")) return at(ModelClass.ChatFast);
+    if (has("pro")) return at(ModelClass.ChatThinking);
     return at(ModelClass.ChatBalanced);
   }
-  if (n.includes("gemma")) return at(ModelClass.ChatFast);
+  if (family === "gemma") return at(ModelClass.ChatFast);
 
   // Meta Llama
-  if (n.includes("llama")) {
-    if (n.includes("maverick") || n.includes("405b")) return at(ModelClass.ChatThinking);
-    if (n.includes("70b")) return at(ModelClass.ChatBalanced);
-    if (n.includes("8b") || n.includes("1b")) return at(ModelClass.ChatFast);
+  if (family === "llama") {
+    if (has("maverick") || has("405b")) return at(ModelClass.ChatThinking);
+    if (has("70b")) return at(ModelClass.ChatBalanced);
+    if (has("8b") || has("1b")) return at(ModelClass.ChatFast);
     return at(ModelClass.ChatBalanced);
   }
 
   // Alibaba Qwen
-  if (n.includes("qwen")) return at(ModelClass.ChatBalanced);
+  if (family === "qwen") return at(ModelClass.ChatBalanced);
 
   return null;
 }

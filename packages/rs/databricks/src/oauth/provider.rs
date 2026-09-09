@@ -9,8 +9,10 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 #[derive(Clone, Copy, Debug, Default, uniffi::Enum)]
 /// OAuth grant used to acquire and renew credentials.
 pub enum OAuthGrant {
+    /// Browser authorization-code grant with PKCE and refresh-token renewal.
     #[default]
     AuthorizationCode,
+    /// Noninteractive client-credentials grant renewed by repeating the exchange.
     ClientCredentials,
 }
 

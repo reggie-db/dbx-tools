@@ -158,6 +158,12 @@ release-enabled binary's `releaseExcludeOs` package option to omit it from
 incompatible rows through Cargo `--exclude`. Release binary packaging and
 artifact upload are skipped in those rows. UniFFI crates cannot use this option
 because every configured target must produce their artifacts.
+Set a release binary's `cli` package option and the workspace
+`cliRegistryPath` to generate a typed `dbx` command registry from the same
+selected targets. The generated entries carry only the archives that the
+release matrix publishes, so an excluded operating system fails locally before
+any download is attempted. The runtime command uses `@dbx-tools/core`
+`bin.ensure`; the core installer itself contains no product registry.
 Rust rows prepare native npm
 archives and Python wheels; they do not install Bun or UBRN and do not build
 Node facades. A binary-only row therefore installs no language package tool.

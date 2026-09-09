@@ -6,9 +6,12 @@ use crate::models::{
     parse_model_name, version_tuple, ModelClass, ModelFamily, ServingEndpointSummary,
 };
 
+/// Model Serving task identifier for chat endpoints.
 pub const CHAT_TASK: &str = "llm/v1/chat";
+/// Model Serving task identifier for embedding endpoints.
 pub const EMBEDDING_TASK: &str = "llm/v1/embeddings";
 
+/// Infer whether a model family supports a complete tool-calling round trip.
 pub fn supports_tools_by_family(name: &str) -> bool {
     let Some(parsed) = parse_model_name(name) else {
         return false;
@@ -28,6 +31,7 @@ pub fn supports_tools_by_family(name: &str) -> bool {
     )
 }
 
+/// Classify a model name by family and return its sortable version rank.
 pub fn classify_by_family(name: &str) -> Option<(ModelClass, u64)> {
     let parsed = parse_model_name(name)?;
     let version = version_tuple(name);
@@ -56,6 +60,7 @@ pub fn classify_by_family(name: &str) -> Option<(ModelClass, u64)> {
     Some((model_class, rank))
 }
 
+/// Classify and order Model Serving endpoints by task, profile, and model family.
 pub fn classify_endpoints(
     endpoints: &[ServingEndpointSummary],
 ) -> Vec<(ModelClass, ServingEndpointSummary)> {

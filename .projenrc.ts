@@ -26,30 +26,6 @@ const SCOPE = "dbx-tools";
 class ModelMetadataSource extends Component {
   /** Refresh generated model metadata after generated manifests are available. */
   public override postSynthesize(): void {
-    const generatedSource = resolve(
-      this.project.outdir,
-      "packages/py/model/src/dbx_tools/model/_retired_models.py",
-    );
-    const staticSource = resolve(
-      this.project.outdir,
-      "packages/rs/model/assets/retired-models.json",
-    );
-    execFileSync(
-      "uv",
-      [
-        "run",
-        "--package",
-        "dbx-tools-litellm",
-        "dbx-litellm",
-        "retired-models",
-        generatedSource,
-        "--static-output",
-        staticSource,
-      ],
-      {
-        stdio: "inherit",
-      },
-    );
     execFileSync(
       "cargo",
       [
@@ -58,8 +34,9 @@ class ModelMetadataSource extends Component {
         "-p",
         "dbx-tools-model",
         "--example",
-        "generate-model-capabilities",
+        "generate-model-metadata",
         "--",
+        resolve(this.project.outdir, "packages/rs/model/assets/retired-models.json"),
         resolve(
           this.project.outdir,
           "packages/rs/model/assets/model-capabilities.json",
@@ -78,9 +55,8 @@ class ModelMetadataSource extends Component {
 const root = new projenProject.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
-  // `packages/js` is the JavaScript product tree; `packages/example` holds the runnable demo app
-  // (server + React app), merged in from the former standalone `demo/` workspace
-  // so it dogfoods the `@dbx-tools/*` packages as `workspace:*` source siblings.
+  // `packages/js` is the JavaScript product tree; `packages/example` holds the
+  // runnable demo app as `workspace:*` source siblings of the packages it uses.
   packageRoots: ["packages/js", "packages/test", "packages/example"],
   packageTagPaths: { polyglot: ["node"] },
   github: true,
@@ -222,7 +198,7 @@ project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
   });
 });
 
-for (const identifierName of ["shared-core", "appkit", "postgres", "shared-model", "model"]) {
+for (const identifierName of ["shared-core", "appkit", "postgres"]) {
   project.applyToProjects(root, { identifierName }, (p) => {
     p.deps.addDependency(
       "@dbx-tools/test-polyglot@workspace:*",
@@ -384,12 +360,14 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
 });
 
 // node-appkit-graphiti: AppKit lifecycle + Caddy routing for the Python Graphiti
-// sidecar. The Python package owns Graphiti, Neo4j, LiteLLM, and Postgres replay;
-// this package owns the AppKit plugin, child supervision, and single public port.
+// sidecar. The Python package owns Graphiti, Neo4j, the Rust model proxy, and
+// Postgres replay; this package owns binary resolution, child supervision, and
+// the single public port.
 project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
   p.addDeps(
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/cli@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
@@ -896,6 +874,7 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // ---------------------------------------------------------------------------
 const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   rustVersion: "1.89",
+  cliRegistryPath: "packages/js/cli/dbx-tools/src/_rust-release-binaries.ts",
   workspaceDependencies: {
     "async-trait": "0.1",
     base64: "0.22",
@@ -994,18 +973,19 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         serde: { workspace: true },
         "serde_json": { workspace: true },
         sha2: { workspace: true },
+        tempfile: { workspace: true },
         thiserror: { workspace: true },
         tokio: { workspace: true },
         tracing: { workspace: true },
       },
       devDependencies: {
-        tempfile: { workspace: true },
         wiremock: { workspace: true },
       },
     },
     "model-proxy": {
       description: "Multi-protocol Databricks model proxy",
       release: true,
+      cli: true,
       binaryName: "dbx-model-proxy",
       dependencies: {
         "aigw-anthropic": "=0.6.0",
@@ -1034,6 +1014,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       description: "Loopback PostgreSQL proxy for Databricks Lakebase",
       private: true,
       release: true,
+      cli: true,
       releaseExcludeOs: [project.RustReleaseOs.WINDOWS],
       binaryName: "dbx-lakebase-proxy",
       dependencies: {
@@ -1083,7 +1064,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     directory: "postgres",
     description:
       "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus",
-    internalDependencies: ["core"],
+    internalDependencies: ["core", "databricks"],
     dependencies: [
       "asyncpg>=0.30",
       "databricks-sdk>=0.63.0",
@@ -1093,39 +1074,10 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     ],
   },
   {
-    directory: "model",
-    description: "Databricks Model Serving invocation, classification, and endpoint resolution",
-    internalDependencies: ["core"],
-    dependencies: [
-      "beautifulsoup4>=4.13,<5",
-      "cachetools>=5.5,<7",
-      "databricks-sdk>=0.63.0",
-      "html5lib>=1.1,<2",
-      "pydantic>=2.9",
-    ],
-    generatedSources: ["src/dbx_tools/model/_retired_models.py"],
-  },
-  {
-    directory: "litellm",
-    description:
-      "LiteLLM Databricks provider with live endpoint discovery and fuzzy model resolution",
-    internalDependencies: ["databricks", "model"],
-    dependencies: [
-      "cachetools>=5.5,<7",
-      "cyclopts>=4.11,<6",
-      "databricks-sdk>=0.63.0",
-      "fastapi>=0.136.3,<1",
-      "litellm[proxy]==1.99.0",
-    ],
-    scripts: {
-      "dbx-litellm": "dbx_tools.litellm.cli:main",
-    },
-  },
-  {
     directory: "graphiti",
     description:
-      "Native Graphiti MCP and Neo4j launcher with Databricks models through LiteLLM",
-    internalDependencies: ["core", "litellm", "postgres"],
+      "Native Graphiti MCP and Neo4j launcher with Databricks models through dbx-model-proxy",
+    internalDependencies: ["core", "postgres"],
     dependencies: [
       "cyclopts>=4.11,<6",
       "graphiti-core==0.29.3",
@@ -1140,8 +1092,8 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
 new projenProject.DBXToolsPythonWorkspace(root, {
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
-  // LiteLLM 1.99 imports Python 3.11 typing APIs and does not support 3.14.
-  requiresPython: ">=3.11,<3.14",
+  // Graphiti supports Python 3.11 through the current Python 3 release line.
+  requiresPython: ">=3.11,<4",
   ruffTarget: "py311",
   // This workspace uses two trusted corporate indexes. The first can lag the
   // local devpi index, so uv must consider the pinned version from both.

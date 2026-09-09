@@ -9,7 +9,7 @@
 import nativeModule from "./_bindings-ffi.ts";
 import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct, type UniffiForeignFutureResultRustBuffer, type UniffiForeignFutureCompleterustBuffer, type UniffiForeignFutureResultVoid, type UniffiForeignFutureCompletevoid, type UniffiVTableCallbackInterfaceDbxToolsDatabricksStorageAdapter,
 } from "./_bindings-ffi.ts";
-import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterInt64, FfiConverterMap, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiEnum, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiRustCallAsync, uniffiTraitInterfaceCall, uniffiTraitInterfaceCallAsyncWithError, uniffiTypeNameSymbol, variantOrdinalSymbol,
+import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, type UniffiReferenceHolder, type UniffiRustCallStatus, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterInt64, FfiConverterMap, FfiConverterObject, FfiConverterObjectWithCallbacks, FfiConverterOptional, FfiConverterUInt16, FfiConverterUInt64, FfiConverterUInt8, RustBuffer, UniffiAbstractObject, UniffiEnum, UniffiError, UniffiInternalError, UniffiResult, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiRustCallAsync, uniffiTraitInterfaceCall, uniffiTraitInterfaceCallAsyncWithError, uniffiTypeNameSymbol, variantOrdinalSymbol,
 } from "@ubjs/core";
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
@@ -272,6 +272,44 @@ export function isDatabricksApp(): boolean {
     ));
     }
 
+/**
+ * Parse a PostgreSQL URL, Lakebase resource path, hostname, or project id.
+ */
+export function parseAddress(input: string | undefined): ParsedAddress {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_databricks_fn_func_parse_address(
+        FfiConverterOptionalString.lower(input, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeParsedAddress.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Parse a canonical Lakebase `projects/...` resource path.
+ */
+export function parseResourcePath(input: string | undefined): ParsedAddress {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_databricks_fn_func_parse_resource_path(
+        FfiConverterOptionalString.lower(input, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterTypeParsedAddress.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
 const stringConverter = (() => {
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
@@ -297,9 +335,21 @@ const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
  * Public credential result; deliberately excludes the refresh token.
  */
 export type AccessToken = {
+    /**
+     * Access token secret presented to protected resources.
+     */
     accessToken: string,
+    /**
+     * OAuth token type returned by the provider.
+     */
     tokenType: string,
+    /**
+     * Formatted absolute expiry, when known.
+     */
     expiry?: string,
+    /**
+     * Scopes granted to the credential.
+     */
     scopes: Array<string>
 }
 
@@ -559,9 +609,21 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
     return new FFIConverter();
 })();
 
+/**
+ * Built-in credential storage backend.
+ */
 export enum Storage {
+    /**
+     * Select file storage.
+     */
     Auto,
+    /**
+     * Keep credentials in process memory.
+     */
     Memory,
+    /**
+     * Persist credentials in the configured directory.
+     */
     File
 }
 
@@ -594,8 +656,17 @@ const FfiConverterTypeStorage = (() => {
  * Resolved Databricks identity and active storage backend.
  */
 export type DatabricksAuthStatus = {
+    /**
+     * Resolved Databricks CLI profile name.
+     */
     profile: string,
+    /**
+     * Resolved workspace or accounts host.
+     */
     host: string,
+    /**
+     * Credential storage backend used by the authentication session.
+     */
     storage: Storage
 }
 
@@ -641,10 +712,167 @@ const FfiConverterTypeDatabricksAuthStatus = (() => {
 })();
 
 /**
+ * PostgreSQL TLS modes recognized in Lakebase connection URLs.
+ */
+export enum SslMode {
+    /**
+     * Require a TLS connection.
+     */
+    Require,
+    /**
+     * Disable TLS for a local proxy connection.
+     */
+    Disable,
+    /**
+     * Prefer TLS when the server supports it.
+     */
+    Prefer
+}
+
+const FfiConverterTypeSslMode = (() => {
+    type TypeName = SslMode;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            switch (c.readI32()) {
+                case 1: return SslMode.Require;
+                case 2: return SslMode.Disable;
+                case 3: return SslMode.Prefer;
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            switch (value) {
+                case SslMode.Require: return c.writeI32(1);
+                case SslMode.Disable: return c.writeI32(2);
+                case SslMode.Prefer: return c.writeI32(3);
+            }
+        }
+        allocationSize(value: TypeName): number {
+            return 4;
+        }
+    }
+    return new FFIConverter();
+})();
+
+/**
+ * Connection and resource fields recovered from a Lakebase address.
+ */
+export type ParsedAddress = {
+    /**
+     * Lakebase Postgres project identifier.
+     */
+    project?: string,
+    /**
+     * Branch identifier within the project.
+     */
+    branch?: string,
+    /**
+     * Canonical endpoint resource path.
+     */
+    endpoint?: string,
+    /**
+     * Endpoint leaf identifier.
+     */
+    endpointId?: string,
+    /**
+     * PostgreSQL database name.
+     */
+    database?: string,
+    /**
+     * Database resource leaf identifier.
+     */
+    databaseResourceId?: string,
+    /**
+     * PostgreSQL user or Databricks profile from a URL.
+     */
+    user?: string,
+    /**
+     * Endpoint or local proxy host.
+     */
+    host?: string,
+    /**
+     * PostgreSQL port.
+     */
+    port?: number,
+    /**
+     * PostgreSQL TLS mode.
+     */
+    sslMode?: SslMode
+}
+
+/**
+ * Generated factory for {@link ParsedAddress} record objects.
+ */
+export const ParsedAddress = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ParsedAddress, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ParsedAddress>,
+    });
+})();
+
+const FfiConverterTypeParsedAddress = (() => {
+    type TypeName = ParsedAddress;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                project: FfiConverterOptionalString.readFromCursor(c),
+                branch: FfiConverterOptionalString.readFromCursor(c),
+                endpoint: FfiConverterOptionalString.readFromCursor(c),
+                endpointId: FfiConverterOptionalString.readFromCursor(c),
+                database: FfiConverterOptionalString.readFromCursor(c),
+                databaseResourceId: FfiConverterOptionalString.readFromCursor(c),
+                user: FfiConverterOptionalString.readFromCursor(c),
+                host: FfiConverterOptionalString.readFromCursor(c),
+                port: FfiConverterOptionalUInt16.readFromCursor(c),
+                sslMode: FfiConverterOptionalTypeSslMode.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterOptionalString.writeIntoCursor(value.project, c);
+            FfiConverterOptionalString.writeIntoCursor(value.branch, c);
+            FfiConverterOptionalString.writeIntoCursor(value.endpoint, c);
+            FfiConverterOptionalString.writeIntoCursor(value.endpointId, c);
+            FfiConverterOptionalString.writeIntoCursor(value.database, c);
+            FfiConverterOptionalString.writeIntoCursor(value.databaseResourceId, c);
+            FfiConverterOptionalString.writeIntoCursor(value.user, c);
+            FfiConverterOptionalString.writeIntoCursor(value.host, c);
+            FfiConverterOptionalUInt16.writeIntoCursor(value.port, c);
+            FfiConverterOptionalTypeSslMode.writeIntoCursor(value.sslMode, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterOptionalString.allocationSize(value.project) +
+             FfiConverterOptionalString.allocationSize(value.branch) +
+             FfiConverterOptionalString.allocationSize(value.endpoint) +
+             FfiConverterOptionalString.allocationSize(value.endpointId) +
+             FfiConverterOptionalString.allocationSize(value.database) +
+             FfiConverterOptionalString.allocationSize(value.databaseResourceId) +
+             FfiConverterOptionalString.allocationSize(value.user) +
+             FfiConverterOptionalString.allocationSize(value.host) +
+             FfiConverterOptionalUInt16.allocationSize(value.port) +
+             FfiConverterOptionalTypeSslMode.allocationSize(value.sslMode);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
  * OAuth grant used to acquire and renew credentials.
  */
 export enum OAuthGrant {
+    /**
+     * Browser authorization-code grant with PKCE and refresh-token renewal.
+     */
     AuthorizationCode,
+    /**
+     * Noninteractive client-credentials grant renewed by repeating the exchange.
+     */
     ClientCredentials
 }
 
@@ -671,8 +899,17 @@ const FfiConverterTypeOAuthGrant = (() => {
     return new FFIConverter();
 })();
 
+/**
+ * File organization used by the persistent credential store.
+ */
 export enum FileLayout {
+    /**
+     * Store all credentials in one token cache.
+     */
     Single,
+    /**
+     * Store each credential in an independent hashed directory.
+     */
     PerCredential
 }
 
@@ -835,6 +1072,9 @@ const FfiConverterTypeProviderOptions = (() => {
 export enum AuthError_Tags {
     Failure = "Failure"
 }
+/**
+ * Authentication failure exposed through language bindings.
+ */
 export const AuthError = (() => {
 
     type Failure__interface = {
@@ -842,6 +1082,9 @@ export const AuthError = (() => {
         inner:
 Readonly<{message: string}>
     };
+    /**
+     * Native authentication, storage, configuration, or callback failure.
+     */
     class Failure_ extends UniffiError implements Failure__interface {
         /**
          * @private
@@ -886,6 +1129,9 @@ Readonly<{message: string}> {
     });
 
 })();
+/**
+ * Authentication failure exposed through language bindings.
+ */
 export type AuthError = InstanceType<
     typeof AuthError['Failure']
 >;
@@ -2362,6 +2608,12 @@ const FfiConverterOptionalSequenceString = new FfiConverterOptional(FfiConverter
 // FfiConverter for AuthOptions | undefined
 const FfiConverterOptionalTypeAuthOptions = new FfiConverterOptional(FfiConverterTypeAuthOptions);
 
+// FfiConverter for number | undefined
+const FfiConverterOptionalUInt16 = new FfiConverterOptional(FfiConverterUInt16);
+
+// FfiConverter for SslMode | undefined
+const FfiConverterOptionalTypeSslMode = new FfiConverterOptional(FfiConverterTypeSslMode);
+
 // FfiConverter for OAuthGrant | undefined
 const FfiConverterOptionalTypeOAuthGrant = new FfiConverterOptional(FfiConverterTypeOAuthGrant);
 
@@ -2425,6 +2677,12 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().uniffi_dbx_tools_databricks_checksum_func_is_databricks_app() !== 65309) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_checksum_func_is_databricks_app");
+    }
+    if (nativeModule().uniffi_dbx_tools_databricks_checksum_func_parse_address() !== 59416) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_checksum_func_parse_address");
+    }
+    if (nativeModule().uniffi_dbx_tools_databricks_checksum_func_parse_resource_path() !== 21883) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_checksum_func_parse_resource_path");
     }
     if (nativeModule().uniffi_dbx_tools_databricks_checksum_method_persistentauth_challenge() !== 16856) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_checksum_method_persistentauth_challenge");
@@ -2491,9 +2749,11 @@ export default Object.freeze({
     FfiConverterTypeDatabricksAuthStatus,
     FfiConverterTypeFileLayout,
     FfiConverterTypeOAuthGrant,
+    FfiConverterTypeParsedAddress,
     FfiConverterTypePersistentAuth,
     FfiConverterTypeProviderAuth,
     FfiConverterTypeProviderOptions,
+    FfiConverterTypeSslMode,
     FfiConverterTypeStorage,
     FfiConverterTypeStorageAdapter,
     FfiConverterTypeStorageHandle,

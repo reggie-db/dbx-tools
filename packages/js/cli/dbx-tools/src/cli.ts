@@ -21,6 +21,11 @@ import {
 } from "./bootstrap.ts";
 import { ensureWorkspaceReady, runBun, runProjen } from "./bun.ts";
 import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root.ts";
+import {
+  runRustReleaseBinary,
+  rustReleaseBinaryCommands,
+  type RustReleaseBinaryCommand,
+} from "./rust-binary.ts";
 
 /** Commands the bin exposes, and the names help is rendered under. */
 const PROGRAM_NAMES = ["dbx", "dbx-tools"] as const;
@@ -81,11 +86,26 @@ function addForwardedCommand(
     });
 }
 
+function addRustReleaseCommand(program: Command, command: RustReleaseBinaryCommand): void {
+  program
+    .command(command.command)
+    .description(command.description)
+    .argument("[args...]", `arguments forwarded to ${command.binaryName}`)
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .helpOption(false)
+    .action(async (args: string[]) => {
+      process.exitCode = await runRustReleaseBinary(command, args);
+    });
+}
+
 /** Build the `dbx` commander program (no side effects until parsed). */
 export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   const program = new Command()
     .name(name)
-    .description("Databricks developer tools: workspace lifecycle, AppKit env, auth, and tunnel")
+    .description(
+      "Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and native proxies",
+    )
     .showHelpAfterError()
     .helpOption("-h, --help", `Show ${name} help`);
 
@@ -120,6 +140,10 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     "Run a public portr tunnel with an email-OTP gate",
     async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
   );
+
+  for (const command of rustReleaseBinaryCommands()) {
+    addRustReleaseCommand(program, command);
+  }
 
   return program;
 }

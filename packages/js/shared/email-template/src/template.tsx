@@ -330,8 +330,8 @@ export const EmailCard = ({
           padding: "22px 30px",
           // The corners are set on the band itself rather than clipped by the
           // container: React Email renders the container as a <table>, which
-          // `overflow: hidden` does not reliably clip, so the square band used to
-          // poke past the rounded edge.
+          // `overflow: hidden` does not reliably clip, so the band needs its own
+          // rounded corners to stay inside the container edge.
           ...(framed ? { borderRadius: "15px 15px 0 0" } : {}),
         }}
       >

@@ -2,6 +2,7 @@ mod bindings;
 mod client;
 mod error;
 mod storage;
+/// OAuth token records and conversion helpers.
 pub mod token;
 
 pub use bindings::*;

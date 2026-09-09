@@ -35,7 +35,7 @@ display.toModelDisplayName("x", "Claude 4.6 (Preview)"); // provided name wins
 
 `ServingEndpointSummary.displayName` is the optional friendly label for the
 picker; `name` stays the invoke id. A Databricks-provided name (a
-`display_name`/`displayName`/`name` endpoint tag, or an external-model name —
+`display_name`/`displayName`/`name` endpoint tag, or an external-model name
 extracted in [`@dbx-tools/model`](../../node/model)'s `serving.ts`) wins;
 otherwise the pure helper strips leading vendor prefixes and title-cases via
 `@dbx-tools/shared-core`'s tokenizer. It flows through `GET /models`
@@ -68,7 +68,8 @@ const ranked: RankedModel = model.RankedModelSchema.parse(response);
 
 `model.ServingEndpointSummarySchema` describes the stable endpoint fields exposed
 to clients: endpoint name, task, state, optional profile scores, classified
-class, `supportsTools`, and embedding dimension. `requiresTools: true` filters
+class, `supportsTools`, provider service names, reasoning efforts, lifecycle
+status, and embedding dimension. `requiresTools: true` filters
 search/ranking to endpoints that can complete both a function call and the
 subsequent `function_call_output` replay.
 
@@ -176,8 +177,8 @@ one-by-one (`openaiResponses.responsesToChat`) already can't leak them. Pass
 
 ## Modules
 
-- `model` - `ModelClass`, zod schemas, and inferred types for profiles,
-  endpoint summaries, lookup requests, and ranked results.
+- `model` - `ModelClass`, `ReasoningEffort`, zod schemas, and inferred types
+  for profiles, endpoint summaries, lookup requests, and ranked results.
 - `classify` - family parsing, version tuple parsing, endpoint classification,
   and capability flags.
 - `display` - human-readable endpoint labels.

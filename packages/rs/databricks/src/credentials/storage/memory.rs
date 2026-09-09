@@ -10,12 +10,14 @@ use tokio::sync::{Mutex, OwnedMutexGuard, RwLock};
 use super::{CredentialStore, StorageLock};
 use crate::{Error, Result, Token};
 
+/// Process-local credential store with per-key refresh locks.
 pub struct MemoryStore {
     tokens: RwLock<HashMap<String, Token>>,
     locks: StdMutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl MemoryStore {
+    /// Create an empty in-memory credential store.
     pub fn new() -> Self {
         Self {
             tokens: RwLock::new(HashMap::new()),

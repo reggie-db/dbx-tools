@@ -66,6 +66,10 @@
         "types": "./lib/src/root.d.ts",
         "default": "./lib/src/root.js"
       },
+      "./rust-binary": {
+        "types": "./lib/src/rust-binary.d.ts",
+        "default": "./lib/src/rust-binary.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -78,6 +82,7 @@
     "./bun": "./src/bun.ts",
     "./cli": "./src/cli.ts",
     "./root": "./src/root.ts",
+    "./rust-binary": "./src/rust-binary.ts",
     "./package.json": "./package.json"
   },
   "files": [

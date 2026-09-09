@@ -13,7 +13,14 @@ from sqlalchemy import create_engine as sqlalchemy_create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import create_async_engine as sqlalchemy_create_async_engine
 
-from .address import SSL_MODES, ParsedAddress, SslMode, parse_address, parse_resource_path
+from .address import (
+    SSL_MODES,
+    NativeSslMode,
+    ParsedAddress,
+    SslMode,
+    parse_address,
+    parse_resource_path,
+)
 
 """Lakebase connection resolution and connect-time credential injection."""
 
@@ -474,7 +481,7 @@ def _parse_port(value: object) -> int:
 def _parse_ssl_mode(value: object) -> SslMode:
     if value is None or value == "":
         return _DEFAULT_SSL_MODE
-    mode = str(value).strip().lower()
+    mode = value.name.lower() if isinstance(value, NativeSslMode) else str(value).strip().lower()
     if mode not in SSL_MODES:
         raise ValueError(f"PGSSLMODE must be one of {', '.join(SSL_MODES)}, got {value!r}")
     return mode  # type: ignore[return-value]

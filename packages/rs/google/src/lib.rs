@@ -1,3 +1,8 @@
+//! Google Application Default Credentials backed by the shared native token lifecycle.
+
+#![deny(missing_docs)]
+#![deny(rustdoc::broken_intra_doc_links)]
+
 use std::{
     path::PathBuf,
     sync::Arc,

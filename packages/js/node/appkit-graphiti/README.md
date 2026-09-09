@@ -5,6 +5,8 @@ AppKit process plugin for the Python `dbx-tools-graphiti` MCP runtime.
 ## Key features
 
 - starts Graphiti as a supervised AppKit sidecar;
+- installs the version-matched `dbx-model-proxy` release through the generated
+  `@dbx-tools/cli` Rust command registry;
 - enables the Python Postgres write journal when the app supplies Lakebase or
   PostgreSQL connection environment;
 - starts an internal loopback Caddy proxy in front of upstream Graphiti, then
@@ -13,12 +15,12 @@ AppKit process plugin for the Python `dbx-tools-graphiti` MCP runtime.
   resource id, overriding every caller-supplied group;
 - exposes only operations that can be constrained to that group and removes
   UUID arguments that could reference another user's graph objects;
-- selects separate free loopback ports for Graphiti, LiteLLM, and Caddy unless
+- selects separate free loopback ports for Graphiti, the model proxy, and Caddy unless
   they are explicitly configured;
 - exposes the user-scoped tools through `plugins.graphiti?.toolkit()` for
   `@dbx-tools/appkit-mastra` agents;
 - runs Graphiti and Caddy under `concurrently`, while the Python launcher runs
-  Graphiti and LiteLLM under Honcho;
+  Graphiti and `dbx-model-proxy` under Honcho;
 - propagates termination signals through both supervisors, which escalate
   unresponsive process groups to `SIGKILL`;
 - exposes the MCP path through plugin exports.
@@ -26,7 +28,7 @@ AppKit process plugin for the Python `dbx-tools-graphiti` MCP runtime.
 ## Why use this over native AppKit
 
 AppKit has no Graphiti or embedded MCP sidecar. This package owns AppKit routes
-and process lifecycle while `dbx-tools-graphiti` owns Graphiti, Neo4j, LiteLLM,
+and process lifecycle while `dbx-tools-graphiti` owns Graphiti, Neo4j, the model proxy,
 and Postgres recovery.
 
 ## Register
@@ -45,7 +47,7 @@ await appkit.createApp({
 ```
 
 AppKit continues to listen on `DATABRICKS_APP_PORT`. The plugin adds a
-user-scoped MCP server at `/api/graphiti/mcp`; Graphiti, LiteLLM, and Caddy
+user-scoped MCP server at `/api/graphiti/mcp`; Graphiti, the model proxy, and Caddy
 remain loopback-only. The plugin's manifest declares the Lakebase resource
 requirements used by generated deployments, so Graphiti does not require a
 separate `lakebase()` plugin. Local callers must still supply a Lakebase or
@@ -76,7 +78,7 @@ Plugin config overrides environment values:
 
 - `graphitiPort` / `GRAPHITI_PORT`: Graphiti's internal port; a free loopback
   port is selected automatically when omitted;
-- `litellmPort` / `LITELLM_PORT`: the managed LiteLLM port; a separate free
+- `modelProxyPort` / `MODEL_PROXY_PORT`: the managed model-proxy port; a separate free
   loopback port is selected automatically so another local proxy cannot be
   mistaken for Graphiti's model backend;
 - `proxyPort` / `PROXY_PORT`: Caddy's internal port; a third free loopback port

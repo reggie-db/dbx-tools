@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { IAppRouter } from "@databricks/appkit";
-import { GraphitiPlugin, ensureGraphitiPython } from "../src/plugin.ts";
+import { GraphitiPlugin, ensureGraphitiModelProxy, ensureGraphitiPython } from "../src/plugin.ts";
 
 describe("GraphitiPlugin routes", () => {
   it("does not block AppKit setup while sidecars warm", async () => {
@@ -40,6 +40,21 @@ describe("GraphitiPlugin routes", () => {
 
     assert.match(calls[2]?.[1] ?? "", /urllib\.request/);
     assert.match(calls[3]?.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
+  });
+
+  it("installs the registered model proxy binary by absolute path", async () => {
+    let selectedCommand = "";
+    const path = await ensureGraphitiModelProxy(async (command) => {
+      selectedCommand = command.command;
+      return {
+        root: "/cache/dbx-model-proxy",
+        binDir: "/cache/dbx-model-proxy/bin",
+        path: "/cache/dbx-model-proxy/bin/dbx-model-proxy",
+      };
+    });
+
+    assert.equal(selectedCommand, "model-proxy");
+    assert.equal(path, "/cache/dbx-model-proxy/bin/dbx-model-proxy");
   });
 
   it("registers the MCP transport on the AppKit server", () => {
@@ -122,13 +137,21 @@ describe("GraphitiPlugin routes", () => {
 
   it("rejects a sidecar port that collides with the AppKit listener", async () => {
     const previous = process.env.DATABRICKS_APP_PORT;
+    const kill = process.kill;
+    const signals: NodeJS.Signals[] = [];
     process.env.DATABRICKS_APP_PORT = "48123";
+    process.kill = ((_pid: number, signal: NodeJS.Signals) => {
+      signals.push(signal);
+      return true;
+    }) as typeof process.kill;
     try {
       const plugin = new GraphitiPlugin({ graphitiPort: 48123 });
       plugin.setup();
       const startup = (plugin as unknown as { startup: Promise<void> }).startup;
       await assert.doesNotReject(startup);
+      assert.deepEqual(signals, ["SIGTERM"]);
     } finally {
+      process.kill = kill;
       if (previous === undefined) delete process.env.DATABRICKS_APP_PORT;
       else process.env.DATABRICKS_APP_PORT = previous;
     }

@@ -37,22 +37,34 @@ pub trait CredentialStore: Send + Sync {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, uniffi::Enum)]
+/// Built-in credential storage backend.
 pub enum Storage {
+    /// Select file storage.
     #[default]
     Auto,
+    /// Keep credentials in process memory.
     Memory,
+    /// Persist credentials in the configured directory.
     File,
 }
 
+/// Compatibility name for the built-in storage selection.
 pub type StoreBackend = Storage;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, uniffi::Enum)]
+/// File organization used by the persistent credential store.
 pub enum FileLayout {
+    /// Store all credentials in one token cache.
     #[default]
     Single,
+    /// Store each credential in an independent hashed directory.
     PerCredential,
 }
 
+/// Open a built-in credential store.
+///
+/// Automatic storage resolves to file storage. File initialization fails when
+/// the directory cannot be created or, on Unix, assigned owner-only permissions.
 pub async fn open_store(
     backend: Storage,
     directory: PathBuf,

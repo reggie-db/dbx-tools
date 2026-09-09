@@ -3,7 +3,7 @@
 [project]
 name = "dbx-tools-python-workspace"
 version = "0.6.186"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<4"
 dependencies = ["dbx-tools-graphiti"]
 
 [dependency-groups]
@@ -40,15 +40,9 @@ workspace = true
 [tool.uv.sources.dbx-tools-postgres]
 workspace = true
 
-[tool.uv.sources.dbx-tools-model]
-workspace = true
-
-[tool.uv.sources.dbx-tools-litellm]
-workspace = true
-
 [tool.uv.sources.dbx-tools-graphiti]
 workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
-project-excludes = ["packages/py/databricks/src/dbx_tools/databricks/bindings.py", "packages/py/databricks/src/dbx_tools/databricks/__init__.py", "packages/py/google/src/dbx_tools/google/bindings.py", "packages/py/google/src/dbx_tools/google/__init__.py", "packages/py/model/src/dbx_tools/model/_retired_models.py"]
+project-excludes = ["packages/py/databricks/src/dbx_tools/databricks/bindings.py", "packages/py/databricks/src/dbx_tools/databricks/__init__.py", "packages/py/google/src/dbx_tools/google/bindings.py", "packages/py/google/src/dbx_tools/google/__init__.py"]

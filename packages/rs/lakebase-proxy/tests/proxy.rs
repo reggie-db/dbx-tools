@@ -39,9 +39,9 @@ use wiremock::{
 
 #[tokio::test]
 async fn standard_postgres_client_uses_tls_upstream_and_preserves_startup_parameters() {
-    let (upstream_port, tls, metadata) = start_upstream().await;
+    let (upstream_port, tls, metadata) = start_postgres_upstream().await;
     let api = MockServer::start().await;
-    mount_lakebase_api(&api, upstream_port).await;
+    mount_lakebase_postgres_api(&api, upstream_port).await;
     let directory = tempfile::tempdir().unwrap();
     let config_file = directory.path().join("databrickscfg");
     std::fs::write(
@@ -147,7 +147,7 @@ async fn standard_postgres_client_uses_tls_upstream_and_preserves_startup_parame
     );
 }
 
-async fn start_upstream() -> (
+async fn start_postgres_upstream() -> (
     u16,
     Arc<ClientConfig>,
     Arc<Mutex<std::collections::HashMap<String, String>>>,
@@ -174,8 +174,8 @@ async fn start_upstream() -> (
     let port = listener.local_addr().unwrap().port();
     let metadata = Arc::new(Mutex::new(std::collections::HashMap::new()));
     let manager = Arc::new(ConnectionManager::new());
-    let handlers = Arc::new(TestHandlers {
-        query: Arc::new(TestQuery {
+    let handlers = Arc::new(PostgresTestHandlers {
+        query: Arc::new(PostgresQueryHandler {
             metadata: Arc::clone(&metadata),
             parser: Arc::new(NoopQueryParser::new()),
         }),
@@ -195,7 +195,7 @@ async fn start_upstream() -> (
     (port, Arc::new(client), metadata)
 }
 
-async fn mount_lakebase_api(api: &MockServer, upstream_port: u16) {
+async fn mount_lakebase_postgres_api(api: &MockServer, upstream_port: u16) {
     let project = "/api/2.0/postgres/projects/project";
     Mock::given(method("GET"))
         .and(path(project))
@@ -251,13 +251,13 @@ async fn mount_lakebase_api(api: &MockServer, upstream_port: u16) {
         .await;
 }
 
-struct TestHandlers {
-    query: Arc<TestQuery>,
+struct PostgresTestHandlers {
+    query: Arc<PostgresQueryHandler>,
     cancel: Arc<DefaultCancelHandler>,
     manager: Arc<ConnectionManager>,
 }
 
-impl PgWireServerHandlers for TestHandlers {
+impl PgWireServerHandlers for PostgresTestHandlers {
     fn simple_query_handler(&self) -> Arc<impl SimpleQueryHandler> {
         Arc::clone(&self.query)
     }
@@ -268,8 +268,11 @@ impl PgWireServerHandlers for TestHandlers {
 
     fn startup_handler(&self) -> Arc<impl StartupHandler> {
         Arc::new(
-            CleartextPasswordAuthStartupHandler::new(TestPassword, TestParameters)
-                .with_connection_manager(Arc::clone(&self.manager)),
+            CleartextPasswordAuthStartupHandler::new(
+                LakebaseCredentialAuthSource,
+                PostgresServerParameterProvider,
+            )
+            .with_connection_manager(Arc::clone(&self.manager)),
         )
     }
 
@@ -279,18 +282,18 @@ impl PgWireServerHandlers for TestHandlers {
 }
 
 #[derive(Debug)]
-struct TestPassword;
+struct LakebaseCredentialAuthSource;
 
 #[async_trait]
-impl AuthSource for TestPassword {
+impl AuthSource for LakebaseCredentialAuthSource {
     async fn get_password(&self, _: &LoginInfo) -> PgWireResult<Password> {
         Ok(Password::new(None, b"database-token".to_vec()))
     }
 }
 
-struct TestParameters;
+struct PostgresServerParameterProvider;
 
-impl ServerParameterProvider for TestParameters {
+impl ServerParameterProvider for PostgresServerParameterProvider {
     fn server_parameters<C>(&self, client: &C) -> Option<std::collections::HashMap<String, String>>
     where
         C: ClientInfo,
@@ -299,13 +302,13 @@ impl ServerParameterProvider for TestParameters {
     }
 }
 
-struct TestQuery {
+struct PostgresQueryHandler {
     metadata: Arc<Mutex<std::collections::HashMap<String, String>>>,
     parser: Arc<NoopQueryParser>,
 }
 
-impl TestQuery {
-    fn response(format: FieldFormat) -> PgWireResult<Response> {
+impl PostgresQueryHandler {
+    fn query_response(format: FieldFormat) -> PgWireResult<Response> {
         let schema = Arc::new(vec![FieldInfo::new(
             "?column?".into(),
             None,
@@ -321,7 +324,7 @@ impl TestQuery {
         )))
     }
 
-    fn copy_response() -> PgWireResult<Response> {
+    fn copy_out_response() -> PgWireResult<Response> {
         let schema = Arc::new(vec![FieldInfo::new(
             "value".into(),
             None,
@@ -340,7 +343,7 @@ impl TestQuery {
 }
 
 #[async_trait]
-impl SimpleQueryHandler for TestQuery {
+impl SimpleQueryHandler for PostgresQueryHandler {
     async fn do_query<C>(&self, client: &mut C, query: &str) -> PgWireResult<Vec<Response>>
     where
         C: ClientInfo + Sink<PgWireBackendMessage> + Unpin + Send + Sync,
@@ -362,7 +365,7 @@ impl SimpleQueryHandler for TestQuery {
             }
         }
         if query.to_ascii_uppercase().starts_with("COPY ") {
-            return Ok(vec![Self::copy_response()?]);
+            return Ok(vec![Self::copy_out_response()?]);
         }
         if query
             .trim()
@@ -383,12 +386,12 @@ impl SimpleQueryHandler for TestQuery {
         {
             return Ok(vec![Response::Execution(Tag::new("LISTEN"))]);
         }
-        Ok(vec![Self::response(FieldFormat::Text)?])
+        Ok(vec![Self::query_response(FieldFormat::Text)?])
     }
 }
 
 #[async_trait]
-impl ExtendedQueryHandler for TestQuery {
+impl ExtendedQueryHandler for PostgresQueryHandler {
     type Statement = String;
     type QueryParser = NoopQueryParser;
 
@@ -412,9 +415,9 @@ impl ExtendedQueryHandler for TestQuery {
             .to_ascii_uppercase()
             .starts_with("COPY ")
         {
-            return Self::copy_response();
+            return Self::copy_out_response();
         }
-        Self::response(portal.result_column_format.format_for(0))
+        Self::query_response(portal.result_column_format.format_for(0))
     }
 
     async fn do_describe_statement<C>(

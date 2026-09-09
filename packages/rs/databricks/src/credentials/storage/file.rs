@@ -31,6 +31,7 @@ impl Default for TokenCache {
     }
 }
 
+/// File-backed credential store with cross-process refresh locking.
 pub struct FileStore {
     root: PathBuf,
     token_cache: PathBuf,
@@ -38,10 +39,18 @@ pub struct FileStore {
 }
 
 impl FileStore {
+    /// Create a store using one shared token cache.
+    ///
+    /// Returns an error when the root directory cannot be created or, on Unix,
+    /// assigned owner-only permissions.
     pub fn new(root: PathBuf) -> Result<Self> {
         Self::with_layout(root, FileLayout::Single)
     }
 
+    /// Create a store using the requested file layout.
+    ///
+    /// Returns an error when the root directory cannot be created or, on Unix,
+    /// assigned owner-only permissions.
     pub fn with_layout(root: PathBuf, layout: FileLayout) -> Result<Self> {
         std::fs::create_dir_all(&root)?;
         set_private_directory(&root)?;

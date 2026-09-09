@@ -45,8 +45,6 @@ packages/py/databricks/pyproject.toml
 packages/py/google/pyproject.toml
 packages/py/core/pyproject.toml
 packages/py/postgres/pyproject.toml
-packages/py/model/pyproject.toml
-packages/py/litellm/pyproject.toml
 packages/py/graphiti/pyproject.toml
 .eslintrc.json
 .gitattributes
@@ -69,6 +67,7 @@ packages/py/graphiti/pyproject.toml
 .vscode/tasks.json
 bunfig.toml
 Cargo.toml
+packages/js/cli/dbx-tools/src/_rust-release-binaries.ts
 pyproject.toml
 tsconfig.base.json
 tsconfig.json

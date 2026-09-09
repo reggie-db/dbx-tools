@@ -108,7 +108,7 @@ async fn discovers_paginated_resources_and_refreshes_one_unauthorized_credential
         ..Default::default()
     });
     let resolved = client
-        .discover(Some("PROFILE"), &parse_lakebase_address("project").unwrap())
+        .resolve_lakebase(Some("PROFILE"), &parse_lakebase_address("project").unwrap())
         .await
         .unwrap();
 
@@ -117,14 +117,14 @@ async fn discovers_paginated_resources_and_refreshes_one_unauthorized_credential
     assert_eq!(resolved.user, "user@example.com");
     assert_eq!(
         client
-            .credential(Some("PROFILE"), &resolved.endpoint)
+            .generate_database_credential(Some("PROFILE"), &resolved.endpoint)
             .await
             .unwrap(),
         "database-token"
     );
     assert_eq!(
         client
-            .credential(Some("PROFILE"), &resolved.endpoint)
+            .generate_database_credential(Some("PROFILE"), &resolved.endpoint)
             .await
             .unwrap(),
         "database-token"

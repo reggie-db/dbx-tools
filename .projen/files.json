@@ -21,6 +21,7 @@
     ".vscode/tasks.json",
     "bunfig.toml",
     "Cargo.toml",
+    "packages/js/cli/dbx-tools/src/_rust-release-binaries.ts",
     "pyproject.toml",
     "tsconfig.base.json",
     "tsconfig.json",

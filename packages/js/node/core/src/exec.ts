@@ -1,8 +1,8 @@
 /**
  * Portable subprocess helper built on `child_process.spawn` and line streaming.
  *
- * Ported from `dbx-tools-js/packages/cli/src/exec.ts`. Each stdio fd defaults to
- * `"inherit"`. {@link spawn} streams output line-by-line into {@link ExecResult.stdoutLines}
+ * Each stdio fd defaults to `"inherit"`. {@link spawn} streams output
+ * line-by-line into {@link ExecResult.stdoutLines}
  * / {@link ExecResult.stderrLines}; its `stdout` / `stderr` getters join those lines.
  * {@link spawnSync} keeps the captured string; its `stdout` / `stderr` getters read
  * that string directly (line arrays split lazily on read).

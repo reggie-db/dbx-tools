@@ -14,6 +14,7 @@ use crate::{
 pub use client::DatabricksAuthClient;
 pub use m2m::MachineToMachineFlow;
 pub use oauth::OAuthFlow;
+use profile::{app_service_principal_available, request_obo_token, resolve_app_auth_type};
 pub use profile::{
     config_profile_exists, resolve_config_file, AuthKind, Profile, ProfileOptions, TargetKind,
     AUTH_TYPE_APP_OBO, AUTH_TYPE_APP_SP, DEFAULT_ACCOUNTS_HOST, DEFAULT_CLIENT_ID,
@@ -21,6 +22,7 @@ pub use profile::{
 };
 pub use storage::{open_databricks_store, StoreOptions};
 
+/// Header carrying the current Databricks App on-behalf-of access token.
 pub const OBO_TOKEN_HEADER: &str = "x-forwarded-access-token";
 
 /// Configuration shared by the generated Node and Python auth bindings.
@@ -90,8 +92,11 @@ impl Default for DatabricksAuthOptions {
 #[derive(Clone, uniffi::Record)]
 /// Resolved Databricks identity and active storage backend.
 pub struct DatabricksAuthStatus {
+    /// Resolved Databricks CLI profile name.
     pub profile: String,
+    /// Resolved workspace or accounts host.
     pub host: String,
+    /// Credential storage backend used by the authentication session.
     pub storage: Storage,
 }
 
@@ -263,47 +268,6 @@ fn resolve_profile(
         ignore_ambient_auth_type: in_app,
     })
     .map_err(binding_error)
-}
-
-fn request_obo_token(headers: Option<&HashMap<String, String>>) -> Option<String> {
-    headers?
-        .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case(OBO_TOKEN_HEADER))
-        .map(|(_, value)| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-}
-
-fn app_service_principal_available() -> bool {
-    [
-        "DATABRICKS_HOST",
-        "DATABRICKS_CLIENT_ID",
-        "DATABRICKS_CLIENT_SECRET",
-    ]
-    .into_iter()
-    .all(|name| {
-        std::env::var(name)
-            .ok()
-            .is_some_and(|value| !value.trim().is_empty())
-    })
-}
-
-fn resolve_app_auth_type(
-    in_app: bool,
-    explicit_profile: bool,
-    explicit_auth_type: Option<&str>,
-    has_obo_token: bool,
-    has_service_principal: bool,
-) -> Option<&'static str> {
-    if !in_app || explicit_profile || explicit_auth_type.is_some() {
-        return None;
-    }
-    if has_obo_token {
-        Some(AUTH_TYPE_APP_OBO)
-    } else if has_service_principal {
-        Some(AUTH_TYPE_APP_SP)
-    } else {
-        None
-    }
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -487,42 +451,6 @@ mod tests {
         assert_eq!(
             storage_backend(Some(Storage::Memory), true),
             Storage::Memory
-        );
-    }
-
-    #[test]
-    fn app_auth_prefers_obo_then_service_principal() {
-        assert_eq!(
-            resolve_app_auth_type(true, false, None, true, true),
-            Some(AUTH_TYPE_APP_OBO)
-        );
-        assert_eq!(
-            resolve_app_auth_type(true, false, None, false, true),
-            Some(AUTH_TYPE_APP_SP)
-        );
-        assert_eq!(resolve_app_auth_type(true, true, None, true, true), None);
-        assert_eq!(
-            resolve_app_auth_type(true, false, Some("pat"), true, true),
-            None
-        );
-        assert_eq!(resolve_app_auth_type(false, false, None, true, true), None);
-    }
-
-    #[test]
-    fn request_token_header_is_case_insensitive_and_blank_safe() {
-        assert_eq!(
-            request_obo_token(Some(&HashMap::from([(
-                "X-Forwarded-Access-Token".to_owned(),
-                " request-token ".to_owned(),
-            )]))),
-            Some("request-token".to_owned())
-        );
-        assert_eq!(
-            request_obo_token(Some(&HashMap::from([(
-                OBO_TOKEN_HEADER.to_owned(),
-                " ".to_owned(),
-            )]))),
-            None
         );
     }
 

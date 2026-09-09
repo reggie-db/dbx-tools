@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -15,11 +16,12 @@ from pathlib import Path
 
 from dbx_tools.core import bin
 from honcho.manager import Manager
+from honcho.process import Popen as HonchoPopen
 
 from .constants import UPSTREAM_MCP_PATH_ENV, persistence_configured
 from .settings import ModelSettings
 
-"""Installation and native process lifecycle for Graphiti, LiteLLM, and Neo4j."""
+"""Installation and native process lifecycle for Graphiti, its model proxy, and Neo4j."""
 
 GRAPHITI_VERSION = "0.29.3"
 NEO4J_VERSION = "5.26.12"
@@ -160,14 +162,16 @@ class Runtime:
         state = self.read_state(required=False)
         pid = state.get("graphiti_pid")
         model_settings = state.get("model_settings")
-        manages_litellm = (
-            model_settings.get("manage_litellm") if isinstance(model_settings, dict) else None
+        manages_model_proxy = (
+            model_settings.get("manage_model_proxy") if isinstance(model_settings, dict) else None
         )
-        litellm_url = (
-            model_settings.get("litellm_url") if isinstance(model_settings, dict) else None
+        model_proxy_url = (
+            model_settings.get("model_proxy_url") if isinstance(model_settings, dict) else None
         )
-        litellm_running = isinstance(litellm_url, str) and _url_ready(
-            f"{litellm_url.removesuffix('/v1')}/health/readiness"
+        model_proxy_running = (
+            manages_model_proxy is True
+            and isinstance(model_proxy_url, str)
+            and _url_ready(f"{model_proxy_url.removesuffix('/v1')}/healthz")
         )
         neo4j_running = False
         if (self.paths.neo4j / "bin" / "neo4j").exists():
@@ -179,11 +183,11 @@ class Runtime:
             "graphiti_pid": pid,
             "neo4j": "running" if neo4j_running else "stopped",
             "mcp_url": f"http://{_graphiti_host()}:{_graphiti_port()}/mcp/",
-            "litellm": (
+            "model_proxy": (
                 "running"
-                if manages_litellm is True and litellm_running
+                if model_proxy_running
                 else "external"
-                if manages_litellm is False
+                if manages_model_proxy is False
                 else "stopped"
             ),
             "models": model_settings,
@@ -257,7 +261,7 @@ class Runtime:
         settings: ModelSettings,
         extra_args: list[str],
     ) -> int:
-        """Run Graphiti and managed LiteLLM under Honcho."""
+        """Run Graphiti and its managed model proxy under Honcho."""
         state = self.read_state()
         manager = Manager()
         state.update(
@@ -269,20 +273,22 @@ class Runtime:
         )
         self._write_state(state)
         try:
-            if settings.manage_litellm:
+            if settings.manage_model_proxy:
                 if _url_ready(settings.health_url):
                     raise RuntimeError(
-                        f"Managed LiteLLM port {settings.litellm_port} is already in use; "
-                        "set LITELLM_URL to use an external proxy"
+                        f"Managed model proxy port {settings.model_proxy_port} is already in use; "
+                        "set MODEL_PROXY_URL to use an external proxy"
                     )
-                manager.add_process(
-                    "litellm",
-                    shlex.join(self._litellm_command(settings)),
-                    env=self._litellm_environment(settings),
+                _add_process(
+                    manager,
+                    "model-proxy",
+                    self._model_proxy_command(settings),
+                    env=self._model_proxy_environment(settings),
                 )
-            manager.add_process(
+            _add_process(
+                manager,
                 "graphiti",
-                shlex.join(self.graphiti_command(settings, extra_args)),
+                self.graphiti_command(settings, extra_args),
                 cwd=self.paths.graphiti / "mcp_server",
                 env=self.environment(str(state["neo4j_password"]), settings),
             )
@@ -298,12 +304,14 @@ class Runtime:
         environment.update(settings.graphiti_environment())
         environment.update(
             {
-                "MANAGE_LITELLM": "true" if settings.manage_litellm else "false",
-                "LITELLM_HOST": settings.litellm_host,
-                "LITELLM_PORT": str(settings.litellm_port),
-                "LITELLM_URL": settings.openai_api_url,
+                "MANAGE_MODEL_PROXY": "true" if settings.manage_model_proxy else "false",
+                "MODEL_PROXY_HOST": settings.model_proxy_host,
+                "MODEL_PROXY_PORT": str(settings.model_proxy_port),
+                "MODEL_PROXY_URL": settings.openai_api_url,
             }
         )
+        if settings.model_proxy_command:
+            environment["MODEL_PROXY_COMMAND"] = settings.model_proxy_command
         return environment
 
     def _wait_for_supervisor(self, pid: int) -> None:
@@ -377,18 +385,24 @@ class Runtime:
         if result.returncode:
             self._neo4j_command("start")
 
-    def _litellm_command(self, settings: ModelSettings) -> list[str]:
+    def _model_proxy_command(self, settings: ModelSettings) -> list[str]:
+        configured = settings.model_proxy_command
+        if configured:
+            command = shlex.split(configured)
+            if not command:
+                raise ValueError("MODEL_PROXY_COMMAND must contain an executable")
+        else:
+            installed = shutil.which("dbx-model-proxy")
+            command = [installed] if installed else [shutil.which("dbx") or "dbx", "model-proxy"]
         return [
-            sys.executable,
-            "-m",
-            "dbx_tools.litellm",
+            *command,
             "--host",
-            settings.litellm_host,
+            settings.model_proxy_host,
             "--port",
-            str(settings.litellm_port),
+            str(settings.model_proxy_port),
         ]
 
-    def _litellm_environment(self, settings: ModelSettings) -> dict[str, str]:
+    def _model_proxy_environment(self, settings: ModelSettings) -> dict[str, str]:
         environment = os.environ.copy()
         environment.update(settings.databricks_environment())
         return environment
@@ -431,6 +445,26 @@ class Runtime:
         self.paths.root.mkdir(parents=True, exist_ok=True)
         self.paths.state.write_text(json.dumps(state, indent=2) + "\n")
         self.paths.state.chmod(0o600)
+
+
+class _ArgvPopen(HonchoPopen):
+    """Run Honcho-managed argv directly without an intermediate command shell."""
+
+    def __init__(self, command: list[str], **kwargs: object) -> None:
+        super().__init__(command, shell=False, **kwargs)
+
+
+def _add_process(
+    manager: Manager,
+    name: str,
+    command: list[str],
+    *,
+    env: dict[str, str],
+    cwd: Path | None = None,
+) -> None:
+    """Register an argv-based child while retaining Honcho lifecycle supervision."""
+    process = manager.add_process(name, command, env=env, cwd=cwd)
+    process._child_ctor = _ArgvPopen
 
 
 def _link_tool(source: Path, destination: Path) -> None:

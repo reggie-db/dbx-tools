@@ -13,6 +13,7 @@ use crate::{
     },
 };
 
+/// Default maximum distance accepted by fuzzy model matching.
 pub const DEFAULT_FUZZY_THRESHOLD: f64 = 0.4;
 
 static SEARCH_TOKEN_PATTERN: LazyLock<Regex> =
@@ -20,6 +21,7 @@ static SEARCH_TOKEN_PATTERN: LazyLock<Regex> =
 static NAME_SEGMENT_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-z0-9]+").expect("valid name segment pattern"));
 
+/// Search Model Serving endpoints by exact name or fuzzy token distance.
 pub fn search_serving_endpoints(
     input: &str,
     endpoints: &[ServingEndpointSummary],
@@ -56,6 +58,7 @@ pub fn search_serving_endpoints(
     matches
 }
 
+/// Filter, classify, rank, and limit endpoints for a model query.
 pub fn lookup_models(endpoints: &[ServingEndpointSummary], query: &ModelQuery) -> Vec<RankedModel> {
     let summaries = endpoints
         .iter()
@@ -116,6 +119,7 @@ pub fn lookup_models(endpoints: &[ServingEndpointSummary], query: &ModelQuery) -
     candidates
 }
 
+/// Resolve a search string to the highest-ranked endpoint name.
 pub fn rank_model_id(
     endpoints: &[ServingEndpointSummary],
     search: &str,

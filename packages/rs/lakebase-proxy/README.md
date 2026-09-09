@@ -11,6 +11,17 @@ certificate-verified TLS, then forwards PostgreSQL protocol bytes opaquely.
 
 ## Run
 
+Use the release binary through the shared `dbx` CLI:
+
+```sh
+dbx lakebase-proxy --port 5432
+```
+
+The first invocation downloads the matching GitHub release asset. Windows is
+rejected before download because the Lakebase proxy has no Windows release.
+
+For repository development:
+
 ```sh
 cargo run -p dbx-tools-lakebase-proxy -- --port 5432
 ```

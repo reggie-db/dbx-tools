@@ -6,12 +6,17 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{Error, Result};
 
+/// Standard OAuth token response without provider-specific extension fields.
 pub type OAuthTokenResponse = StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// Stored OAuth credential and its renewal metadata.
 pub struct Token {
+    /// OAuth access token value.
     pub access_token: String,
+    /// OAuth token type returned by the provider.
     pub token_type: String,
+    /// Optional refresh token used for renewal.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
     #[serde(
@@ -21,28 +26,38 @@ pub struct Token {
         default,
         skip_serializing_if = "Option::is_none"
     )]
+    /// Absolute expiration time, when supplied by the provider.
     pub expires_at: Option<OffsetDateTime>,
+    /// Scopes granted to the credential.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scopes: Vec<String>,
 }
 
 impl Token {
+    /// Return whether the credential expires within the supplied refresh buffer.
     pub fn needs_refresh(&self, now: OffsetDateTime, buffer: Duration) -> bool {
         self.expires_at.is_some_and(|expiry| expiry - now <= buffer)
     }
 
+    /// Return whether the credential has a nonempty access token and has not expired.
     pub fn is_valid(&self, now: OffsetDateTime) -> bool {
         !self.access_token.is_empty() && self.expires_at.is_none_or(|expiry| expiry > now)
     }
 
+    /// Convert the stored access token into the OAuth client type.
     pub fn access_token(&self) -> AccessToken {
         AccessToken::new(self.access_token.clone())
     }
 
+    /// Convert the stored refresh token into the OAuth client type when present.
     pub fn refresh_token(&self) -> Option<RefreshToken> {
         self.refresh_token.clone().map(RefreshToken::new)
     }
 
+    /// Convert a provider response into a stored credential.
+    ///
+    /// Refresh tokens and scopes omitted by the response are retained from the
+    /// previous credential. Returns an error when the access token is empty.
     pub fn from_response(
         response: &OAuthTokenResponse,
         now: OffsetDateTime,

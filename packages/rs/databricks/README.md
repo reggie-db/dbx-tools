@@ -12,10 +12,15 @@ Key features:
 - Flexible Lakebase addresses covering PostgreSQL URLs, resource paths,
   hostnames, and project ids.
 - `DatabricksClient` for authenticated JSON REST calls with one rejected-token
-  refresh retry.
+  refresh retry, plus unbuffered raw responses for streaming consumers.
 - Shared tracing initialization from `LOG_LEVEL`, defaulting to `info`.
 - UniFFI bindings published as `@dbx-tools/databricks` and
   `dbx-tools-databricks`.
+
+The bindings also export `parse_address` / `parseAddress` and
+`parse_resource_path` / `parseResourcePath`. Python Postgres consumers use
+these generated functions directly so Lakebase URL and resource parsing have
+one native implementation.
 
 Databricks-specific authentication lives under `src/auth`. Reusable OAuth flows
 and templates live under `src/oauth`. Credential records, token lifecycle, and
@@ -34,3 +39,14 @@ request headers contain `x-forwarded-access-token`, then falls back to `app_sp` 
 OBO tokens are returned directly without caching because the App front door
 refreshes them per request. Set `auth_type` or `profile` explicitly to override
 automatic App resolution.
+
+## Modules
+
+- `auth` resolves Databricks profiles and App authentication policy.
+- `oauth` contains provider-neutral authorization-code and client-credential
+  flows.
+- `credentials` owns token lifecycle and file, memory, or foreign storage.
+- `lakebase_address` parses PostgreSQL URLs and Databricks Postgres resources.
+- `client` provides authenticated JSON and raw REST requests.
+- `file_cache` and `file_lock` provide cross-process cache refresh.
+- `log` initializes the shared Rust tracing policy.

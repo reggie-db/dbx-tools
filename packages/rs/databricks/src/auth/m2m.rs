@@ -1,10 +1,14 @@
 use super::oauth_endpoints;
 use crate::{Profile, Result, Token};
+
+/// Databricks OAuth client credentials flow for a resolved profile.
 pub struct MachineToMachineFlow {
     profile: Profile,
     http: reqwest::Client,
 }
+
 impl MachineToMachineFlow {
+    /// Create a client credentials flow for the profile.
     pub fn new(profile: Profile) -> Result<Self> {
         Ok(Self {
             profile,
@@ -13,6 +17,8 @@ impl MachineToMachineFlow {
                 .build()?,
         })
     }
+
+    /// Request a token with the profile scopes and optional group role.
     pub async fn token(&self) -> Result<Token> {
         let endpoints = oauth_endpoints::resolve(&self.profile, &self.http).await?;
         crate::GenericOAuthFlow::new(crate::OAuthConfig {

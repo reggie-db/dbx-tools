@@ -65,6 +65,25 @@ export const ModelProfileSchema = z.object({
 });
 export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 
+/** Reasoning effort accepted by a Databricks model endpoint. */
+export enum ReasoningEffort {
+  None = "none",
+  Minimal = "minimal",
+  Low = "low",
+  Medium = "medium",
+  High = "high",
+  Xhigh = "xhigh",
+  Max = "max",
+}
+
+export const ReasoningEffortSchema = z.enum(ReasoningEffort);
+
+/** Lifecycle flags associated with one discovered model. */
+export const ModelStatusSchema = z.object({
+  deprecated: z.boolean().default(false),
+});
+export type ModelStatus = z.infer<typeof ModelStatusSchema>;
+
 /**
  * Minimal descriptor for a Databricks Model Serving endpoint - a
  * stable subset of the SDK type so cache hits and `/models` responses
@@ -97,6 +116,19 @@ export const ServingEndpointSummarySchema = z.object({
   class: ModelClassSchema.optional().describe(
     "Class the endpoint was classified into; absent when the classifier doesn't recognize it.",
   ),
+  serviceNames: z
+    .record(z.string(), z.string())
+    .optional()
+    .describe("Provider-specific model service names derived from Databricks metadata."),
+  modelServiceName: z
+    .string()
+    .optional()
+    .describe("Preferred first-party model service name for Databricks AI Gateway calls."),
+  reasoningEfforts: z
+    .array(ReasoningEffortSchema)
+    .optional()
+    .describe("Reasoning effort levels accepted by the endpoint."),
+  status: ModelStatusSchema.optional().describe("Lifecycle status derived from model metadata."),
   dimension: z
     .number()
     .optional()

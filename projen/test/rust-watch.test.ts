@@ -32,6 +32,7 @@ function fixture(): { root: string; config: RustWorkspaceMapping } {
           python: "packages/py/databricks-auth",
         },
       ],
+      binaries: [],
     },
   };
 }

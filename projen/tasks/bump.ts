@@ -55,8 +55,8 @@ import { exec, project } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
-import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import { releasePlatformFilter } from "../src/_release-platform.ts";
+import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import {
   type Semver,
   compareSemver,

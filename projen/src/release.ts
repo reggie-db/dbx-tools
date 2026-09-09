@@ -247,15 +247,15 @@ function addDocsJobs(
       { name: "Configure Pages", uses: "actions/configure-pages@v5" },
       { name: "Install dependencies", run: "bun install" },
       { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
-      {
-        name: "Check generated titles",
-        run: "bun docs/scripts/check-generated-titles.mjs",
-      },
       { name: "Install docs dependencies", run: "bun install --cwd .docs-build/site" },
       bunCacheSaveStep(),
       {
         name: "Generate TypeScript API docs",
         run: "bun docs/scripts/generate-api-docs.mjs",
+      },
+      {
+        name: "Check generated titles",
+        run: "bun docs/scripts/check-generated-titles.mjs",
       },
       { name: "Build docs", run: "bun run --cwd .docs-build/site build" },
       {

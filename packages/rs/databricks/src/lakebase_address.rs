@@ -2,14 +2,19 @@
 
 use url::Url;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// PostgreSQL TLS modes recognized in Lakebase connection URLs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, uniffi::Enum)]
 pub enum SslMode {
+    /// Require a TLS connection.
     Require,
+    /// Disable TLS for a local proxy connection.
     Disable,
+    /// Prefer TLS when the server supports it.
     Prefer,
 }
 
 impl SslMode {
+    /// Return the PostgreSQL `sslmode` spelling.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Require => "require",
@@ -19,22 +24,39 @@ impl SslMode {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// Connection and resource fields recovered from a Lakebase address.
+#[derive(Clone, Debug, Default, Eq, PartialEq, uniffi::Record)]
 pub struct ParsedAddress {
+    /// Lakebase Postgres project identifier.
     pub project: Option<String>,
+    /// Branch identifier within the project.
     pub branch: Option<String>,
+    /// Canonical endpoint resource path.
     pub endpoint: Option<String>,
+    /// Endpoint leaf identifier.
     pub endpoint_id: Option<String>,
+    /// PostgreSQL database name.
     pub database: Option<String>,
+    /// Database resource leaf identifier.
     pub database_resource_id: Option<String>,
+    /// PostgreSQL user or Databricks profile from a URL.
     pub user: Option<String>,
+    /// Endpoint or local proxy host.
     pub host: Option<String>,
+    /// PostgreSQL port.
     pub port: Option<u16>,
+    /// PostgreSQL TLS mode.
     pub ssl_mode: Option<SslMode>,
 }
 
-pub fn parse_address(input: Option<&str>) -> ParsedAddress {
-    let Some(value) = input.map(str::trim).filter(|value| !value.is_empty()) else {
+/// Parse a PostgreSQL URL, Lakebase resource path, hostname, or project id.
+#[uniffi::export]
+pub fn parse_address(input: Option<String>) -> ParsedAddress {
+    let Some(value) = input
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
         return ParsedAddress::default();
     };
     if value.split_once("://").is_some_and(|(scheme, _)| {
@@ -46,7 +68,7 @@ pub fn parse_address(input: Option<&str>) -> ParsedAddress {
         return parse_uri(value);
     }
     if value.starts_with("projects/") {
-        return parse_resource_path(Some(value));
+        return parse_resource_path(Some(value.to_owned()));
     }
     if is_hostname(value) {
         return ParsedAddress {
@@ -63,8 +85,11 @@ pub fn parse_address(input: Option<&str>) -> ParsedAddress {
     ParsedAddress::default()
 }
 
-pub fn parse_resource_path(input: Option<&str>) -> ParsedAddress {
+/// Parse a canonical Lakebase `projects/...` resource path.
+#[uniffi::export]
+pub fn parse_resource_path(input: Option<String>) -> ParsedAddress {
     let Some(value) = input
+        .as_deref()
         .map(str::trim)
         .filter(|value| value.starts_with("projects/"))
     else {
@@ -109,8 +134,9 @@ pub fn parse_resource_path(input: Option<&str>) -> ParsedAddress {
     }
 }
 
+/// Parse a required Lakebase target and reject unrecognized values.
 pub fn parse_lakebase_address(value: &str) -> Result<ParsedAddress, AddressError> {
-    let parsed = parse_address(Some(value));
+    let parsed = parse_address(Some(value.to_owned()));
     if parsed == ParsedAddress::default() {
         Err(AddressError::InvalidAddress(value.to_owned()))
     } else {
@@ -118,6 +144,7 @@ pub fn parse_lakebase_address(value: &str) -> Result<ParsedAddress, AddressError
     }
 }
 
+/// Build a local PostgreSQL URL that preserves a Lakebase target in its path.
 pub fn connection_url(target: &str, host: &str, port: u16) -> Result<String, AddressError> {
     parse_lakebase_address(target)?;
     let mut url = Url::parse("postgresql://localhost").expect("static PostgreSQL URL is valid");
@@ -156,7 +183,7 @@ fn parse_uri(value: &str) -> ParsedAddress {
             _ => None,
         });
     let target = decode(url.path().trim_start_matches('/'));
-    let mut parsed = parse_resource_path(Some(&target));
+    let mut parsed = parse_resource_path(Some(target.clone()));
     if parsed == ParsedAddress::default() && !target.is_empty() {
         parsed.database = Some(target);
     }
@@ -193,11 +220,15 @@ fn is_project_id(value: &str) -> bool {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Errors returned while validating and formatting Lakebase addresses.
 pub enum AddressError {
+    /// The target is not a supported URL, resource path, hostname, or project id.
     #[error("Lakebase address is not recognized: {0}")]
     InvalidAddress(String),
+    /// The local listener host is invalid.
     #[error("invalid listener host {0}")]
     InvalidHost(String),
+    /// The local listener port is invalid.
     #[error("invalid listener port {0}")]
     InvalidPort(u16),
 }

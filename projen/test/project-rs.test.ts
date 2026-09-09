@@ -247,6 +247,66 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
+  it("generates CLI release metadata from the selected Rust targets", () => {
+    const directory = mkdtempSync(join(tmpdir(), "project-rs-cli-"));
+    try {
+      mkdirSync(join(directory, "native/tool/src"), { recursive: true });
+      writeFileSync(join(directory, "native/tool/src/main.rs"), "fn main() {}\n");
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/root",
+        scope: "fixture",
+        outdir: directory,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+        github: true,
+        repository: "https://github.com/example/fixture.git",
+      });
+      const rust = new DBXToolsRustWorkspace(project, {
+        root: "native",
+        cliRegistryPath: "packages/js/cli/root/src/_rust-release-binaries.ts",
+        releasePlatforms: [
+          { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
+          { os: RustReleaseOs.WINDOWS, cpu: RustReleaseCpu.X64 },
+        ],
+        packages: {
+          tool: {
+            release: true,
+            releaseExcludeOs: [RustReleaseOs.WINDOWS],
+            binaryName: "fixture-tool",
+            description: "Run the fixture tool",
+            cli: { command: "tool" },
+          },
+        },
+      });
+      project.synth();
+
+      assert.deepEqual(rust.releaseBinaries, [
+        {
+          command: "tool",
+          description: "Run the fixture tool",
+          binaryName: "fixture-tool",
+          repository: "https://github.com/example/fixture",
+          assets: [
+            {
+              os: "linux",
+              cpu: "x64",
+              name: "fixture-tool-linux-x64-gnu.tar.gz",
+            },
+          ],
+        },
+      ]);
+      const registry = readFileSync(
+        join(directory, "packages/js/cli/root/src/_rust-release-binaries.ts"),
+        "utf8",
+      );
+      assert.match(registry, /export const RUST_RELEASE_BINARY_COMMANDS/);
+      assert.match(registry, /fixture-tool-linux-x64-gnu\.tar\.gz/);
+      assert.doesNotMatch(registry, /win32-x64-msvc/);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("builds every discovered binding once in each target job", () => {
     const multiOutdir = mkdtempSync(join(tmpdir(), "project-rs-multi-"));
     try {
@@ -454,6 +514,7 @@ describe("DBXToolsRustWorkspace", () => {
           pythonModule: "fixture.databricks_auth",
         },
       ],
+      binaries: [],
     });
     assert.deepEqual(project.dbxToolsConfig.rust, rust.workspaceMapping);
     assert.match(

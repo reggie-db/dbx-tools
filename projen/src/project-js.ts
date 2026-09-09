@@ -446,13 +446,13 @@ function defaultProjectOptions(
     devDeps: ["@types/node@^24.6.0"],
     ...(isRoot
       ? {
-        prettier: true,
-        prettierOptions: {
-          settings: PRETTIER_SETTINGS,
-          ignoreFile: true,
-          ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns({ test: false })] },
-        },
-      }
+          prettier: true,
+          prettierOptions: {
+            settings: PRETTIER_SETTINGS,
+            ignoreFile: true,
+            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns({ test: false })] },
+          },
+        }
       : {}),
     ...options,
     ...copiedGitIgnoreOptions(options),
@@ -508,10 +508,10 @@ const DEV_DEPS_ROOT: string[] = ["typescript@^5.9.3", `@types/bun@${BUN_VERSION}
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export interface DBXToolsJavaScriptProjectOptions
   extends
-  CommonProjectOptions,
-  Partial<javascript.NodeProjectOptions>,
-  DBXToolsConfigOptions,
-  DBXToolsPNPMWorkspaceOptions {
+    CommonProjectOptions,
+    Partial<javascript.NodeProjectOptions>,
+    DBXToolsConfigOptions,
+    DBXToolsPNPMWorkspaceOptions {
   /**
    * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
    * the (resolved) project name; a leading `@` is optional.
@@ -584,7 +584,8 @@ export interface DBXToolsTypeScriptProjectOptions
  */
 export class DBXToolsNodeProject
   extends javascript.NodeProject
-  implements DBXToolsJavaScriptProject {
+  implements DBXToolsJavaScriptProject
+{
   readonly language = "javascript" as const;
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
@@ -684,8 +685,8 @@ export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
       installDependencies(trigger: unknown): void;
       logInstallTrigger(trigger: unknown): void;
     };
-    nodePackage.installDependencies = () => { };
-    nodePackage.logInstallTrigger = () => { };
+    nodePackage.installDependencies = () => {};
+    nodePackage.logInstallTrigger = () => {};
   },
 );
 
@@ -698,7 +699,8 @@ export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
-  implements DBXToolsJavaScriptProject {
+  implements DBXToolsJavaScriptProject
+{
   readonly language = "javascript" as const;
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;

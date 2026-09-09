@@ -2,9 +2,12 @@
 
 use tracing_subscriber::{filter::LevelFilter, fmt, EnvFilter};
 
+/// Environment variable controlling dbx-tools Rust log verbosity.
 pub const LOG_LEVEL_ENV: &str = "LOG_LEVEL";
+/// Log level used when [`LOG_LEVEL_ENV`] is absent or invalid.
 pub const DEFAULT_LOG_LEVEL: &str = "info";
 
+/// Install the shared tracing subscriber for dbx-tools Rust binaries.
 pub fn init_logging() -> Result<(), LoggingError> {
     let level = parse_log_level(std::env::var(LOG_LEVEL_ENV).ok().as_deref());
     let filter = EnvFilter::new(format!(
@@ -17,6 +20,7 @@ pub fn init_logging() -> Result<(), LoggingError> {
         .map_err(|error| LoggingError::Initialize(error.to_string()))
 }
 
+/// Parse the supported four-level log vocabulary.
 pub fn parse_log_level(value: Option<&str>) -> LevelFilter {
     match value.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
         Some("debug") => LevelFilter::DEBUG,
@@ -28,7 +32,9 @@ pub fn parse_log_level(value: Option<&str>) -> LevelFilter {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Logging initialization errors.
 pub enum LoggingError {
+    /// Another subscriber is installed or tracing setup otherwise failed.
     #[error("could not initialize logging: {0}")]
     Initialize(String),
 }

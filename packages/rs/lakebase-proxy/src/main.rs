@@ -1,19 +1,17 @@
 use std::{
-    net::{IpAddr, SocketAddr},
-    sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
-        Arc,
-    },
+    net::IpAddr,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use clap::{Parser, Subcommand};
 use dbx_tools_databricks::{connection_url, init_logging, DatabricksAuthOptions};
-use dbx_tools_lakebase_proxy::{databricks::LakebaseClient, proxy::PostgresProxy};
+use dbx_tools_lakebase_proxy::{
+    databricks::LakebaseClient,
+    proxy::{report_connection_stats, ConnectionStats, PostgresProxy},
+};
 use tokio::{net::TcpListener, task::JoinSet};
-use tracing::{debug, error, info};
-
-const STATS_INTERVAL: Duration = Duration::from_secs(60);
+use tracing::{error, info};
 
 #[derive(Debug, Parser)]
 #[command(name = "dbx-lakebase-proxy", version)]
@@ -79,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let startup_timeout = Duration::from_secs(startup_timeout_seconds);
     let mut tasks = JoinSet::new();
     let stats = Arc::new(ConnectionStats::default());
-    tokio::spawn(report_stats(Arc::clone(&stats)));
+    tokio::spawn(report_connection_stats(Arc::clone(&stats)));
     info!(address = %listener.local_addr()?, "Lakebase proxy listening");
     loop {
         tokio::select! {
@@ -88,12 +86,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let proxy = proxy.clone();
                 let stats = Arc::clone(&stats);
                 tasks.spawn(async move {
-                    stats.open(peer);
+                    stats.connection_opened(peer);
                     let started = Instant::now();
                     match proxy.handle(socket, startup_timeout).await {
-                        Ok(()) => stats.close(peer, started.elapsed(), false, None),
+                        Ok(()) => {
+                            stats.connection_closed(peer, started.elapsed(), false, None)
+                        }
                         Err(error) => {
-                            stats.close(peer, started.elapsed(), true, Some(&error.to_string()))
+                            stats.connection_closed(
+                                peer,
+                                started.elapsed(),
+                                true,
+                                Some(&error.to_string()),
+                            )
                         }
                     }
                 });
@@ -110,54 +115,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
-}
-
-#[derive(Default)]
-struct ConnectionStats {
-    active: AtomicUsize,
-    opened: AtomicU64,
-    closed: AtomicU64,
-    failed: AtomicU64,
-}
-
-impl ConnectionStats {
-    fn open(&self, peer: SocketAddr) {
-        self.active.fetch_add(1, Ordering::Relaxed);
-        self.opened.fetch_add(1, Ordering::Relaxed);
-        debug!(%peer, active = self.active.load(Ordering::Relaxed), "connection opened");
-    }
-
-    fn close(&self, peer: SocketAddr, elapsed: Duration, failed: bool, error: Option<&str>) {
-        self.active.fetch_sub(1, Ordering::Relaxed);
-        self.closed.fetch_add(1, Ordering::Relaxed);
-        if failed {
-            self.failed.fetch_add(1, Ordering::Relaxed);
-        }
-        debug!(
-            %peer,
-            failed,
-            error = error.unwrap_or_default(),
-            duration_ms = elapsed.as_millis(),
-            active = self.active.load(Ordering::Relaxed),
-            "connection closed"
-        );
-    }
-}
-
-async fn report_stats(stats: Arc<ConnectionStats>) {
-    let mut interval = tokio::time::interval(STATS_INTERVAL);
-    interval.tick().await;
-    loop {
-        interval.tick().await;
-        info!(
-            period_seconds = STATS_INTERVAL.as_secs(),
-            opened = stats.opened.swap(0, Ordering::Relaxed),
-            closed = stats.closed.swap(0, Ordering::Relaxed),
-            failed = stats.failed.swap(0, Ordering::Relaxed),
-            active = stats.active.load(Ordering::Relaxed),
-            "connection stats"
-        );
-    }
 }
 
 async fn shutdown_signal() {

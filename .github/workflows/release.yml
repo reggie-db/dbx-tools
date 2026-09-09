@@ -235,9 +235,6 @@ jobs:
       - name: Generate docs from READMEs
         id: generate_docs_from_readmes
         run: bun docs/scripts/sync-readmes.mjs
-      - name: Check generated titles
-        id: check_generated_titles
-        run: bun docs/scripts/check-generated-titles.mjs
       - name: Install docs dependencies
         id: install_docs_dependencies
         run: bun install --cwd .docs-build/site
@@ -251,6 +248,9 @@ jobs:
       - name: Generate TypeScript API docs
         id: generate_typescript_api_docs
         run: bun docs/scripts/generate-api-docs.mjs
+      - name: Check generated titles
+        id: check_generated_titles
+        run: bun docs/scripts/check-generated-titles.mjs
       - name: Build docs
         id: build_docs
         run: bun run --cwd .docs-build/site build
@@ -909,16 +909,12 @@ jobs:
         run: |-
           uv build --package dbx-tools-core --out-dir dist/core
           uv build --package dbx-tools-postgres --out-dir dist/postgres
-          uv build --package dbx-tools-model --out-dir dist/model
-          uv build --package dbx-tools-litellm --out-dir dist/litellm
           uv build --package dbx-tools-graphiti --out-dir dist/graphiti
       - name: Validate distributions
         id: validate_distributions
         run: |-
           test "$(find dist/core -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
           test "$(find dist/postgres -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
-          test "$(find dist/model -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
-          test "$(find dist/litellm -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
           test "$(find dist/graphiti -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
           find dist/databricks -maxdepth 1 -name '*.whl' -print -quit | grep -q .
           find dist/google -maxdepth 1 -name '*.whl' -print -quit | grep -q .
@@ -979,56 +975,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/postgres
-          skip-existing: true
-    timeout-minutes: 10
-  publish-pypi-model:
-    needs:
-      - verify-context
-      - build-python
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: pypi-dbx-tools-model
-      url: https://pypi.org/project/dbx-tools-model/
-    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
-    steps:
-      - name: Download distributions
-        id: download_distributions
-        uses: actions/download-artifact@v8
-        with:
-          name: python-distributions
-          path: dist
-      - name: Publish dbx-tools-model to PyPI
-        id: publish_dbx-tools-model_to_pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/model
-          skip-existing: true
-    timeout-minutes: 10
-  publish-pypi-litellm:
-    needs:
-      - verify-context
-      - build-python
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: pypi-dbx-tools-litellm
-      url: https://pypi.org/project/dbx-tools-litellm/
-    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
-    steps:
-      - name: Download distributions
-        id: download_distributions
-        uses: actions/download-artifact@v8
-        with:
-          name: python-distributions
-          path: dist
-      - name: Publish dbx-tools-litellm to PyPI
-        id: publish_dbx-tools-litellm_to_pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/litellm
           skip-existing: true
     timeout-minutes: 10
   publish-pypi-graphiti:

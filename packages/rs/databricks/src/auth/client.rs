@@ -40,6 +40,7 @@ impl DatabricksCliFlow {
 }
 
 impl DatabricksAuthClient {
+    /// Create an authentication client for a resolved profile and credential store.
     pub fn new(
         profile: Profile,
         store: Arc<dyn CredentialStore>,
@@ -78,6 +79,8 @@ impl DatabricksAuthClient {
         let inner = crate::AuthClient::new(profile.cache_key(), Arc::new(flow), store, options);
         Ok(Self { profile, inner })
     }
+
+    /// Return the resolved Databricks profile.
     pub fn profile(&self) -> &Profile {
         &self.profile
     }

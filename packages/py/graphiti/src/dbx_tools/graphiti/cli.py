@@ -21,7 +21,7 @@ _APP = App(
 
 @dataclass
 class ModelOptions:
-    """Model, profile, and managed LiteLLM settings shared by commands."""
+    """Model, profile, and managed model proxy settings shared by commands."""
 
     profile: Annotated[
         str | None,
@@ -36,24 +36,28 @@ class ModelOptions:
         int | None,
         Parameter(name="--embedder-dimensions", env_var="EMBEDDER_DIMENSIONS"),
     ] = None
-    litellm_url: Annotated[
+    model_proxy_url: Annotated[
         str | None,
-        Parameter(name="--litellm-url", env_var="LITELLM_URL"),
+        Parameter(name="--model-proxy-url", env_var="MODEL_PROXY_URL"),
     ] = None
-    litellm_host: Annotated[
+    model_proxy_host: Annotated[
         str | None,
-        Parameter(name="--litellm-host", env_var="LITELLM_HOST"),
+        Parameter(name="--model-proxy-host", env_var="MODEL_PROXY_HOST"),
     ] = None
-    litellm_port: Annotated[
+    model_proxy_port: Annotated[
         int | None,
-        Parameter(name="--litellm-port", env_var="LITELLM_PORT"),
+        Parameter(name="--model-proxy-port", env_var="MODEL_PROXY_PORT"),
     ] = None
-    manage_litellm: Annotated[
+    model_proxy_command: Annotated[
+        str | None,
+        Parameter(name="--model-proxy-command", env_var="MODEL_PROXY_COMMAND"),
+    ] = None
+    manage_model_proxy: Annotated[
         bool | None,
         Parameter(
-            name="--manage-litellm",
-            env_var="MANAGE_LITELLM",
-            negative="--no-manage-litellm",
+            name="--manage-model-proxy",
+            env_var="MANAGE_MODEL_PROXY",
+            negative="--no-manage-model-proxy",
         ),
     ] = None
 
@@ -64,17 +68,18 @@ class ModelOptions:
             model=self.model,
             embedder_model=self.embedder_model,
             embedder_dimensions=self.embedder_dimensions,
-            litellm_url=self.litellm_url,
-            litellm_host=self.litellm_host,
-            litellm_port=self.litellm_port,
-            manage_litellm=self.manage_litellm,
+            model_proxy_url=self.model_proxy_url,
+            model_proxy_host=self.model_proxy_host,
+            model_proxy_port=self.model_proxy_port,
+            model_proxy_command=self.model_proxy_command,
+            manage_model_proxy=self.manage_model_proxy,
         )
 
 
 @_APP.command
 @dataclass
 class Start(ModelOptions):
-    """Start Neo4j, LiteLLM, and Graphiti."""
+    """Start Neo4j, the model proxy, and Graphiti."""
 
     graphiti_args: list[str] = field(default_factory=list, init=False)
 
@@ -85,7 +90,7 @@ class Start(ModelOptions):
 @_APP.command
 @dataclass
 class Up(ModelOptions):
-    """Start Neo4j, LiteLLM, and Graphiti in the background."""
+    """Start Neo4j, the model proxy, and Graphiti in the background."""
 
     graphiti_args: list[str] = field(default_factory=list, init=False)
 
@@ -102,7 +107,7 @@ class Up(ModelOptions):
 @_APP.command
 @dataclass
 class Down:
-    """Stop Graphiti, LiteLLM, and Neo4j."""
+    """Stop Graphiti, the model proxy, and Neo4j."""
 
     def __call__(self) -> None:
         Runtime().stop()

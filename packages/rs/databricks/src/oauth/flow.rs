@@ -20,17 +20,27 @@ type OAuthClient =
     BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
 
 #[derive(Clone)]
+/// Provider configuration for OAuth token acquisition.
 pub struct OAuthConfig {
+    /// Provider identity used in login-required errors.
     pub provider: String,
+    /// Authorization endpoint used by the authorization-code grant.
     pub authorization_endpoint: String,
+    /// Token endpoint used by all supported grants.
     pub token_endpoint: String,
+    /// OAuth client identifier.
     pub client_id: String,
+    /// Optional client secret for confidential clients.
     pub client_secret: Option<String>,
+    /// Scopes requested during authorization and token exchange.
     pub scopes: Vec<String>,
+    /// Additional parameters sent with client-credentials token requests.
     pub extra_token_params: Vec<(String, String)>,
+    /// Optional provider host linked from the successful callback page.
     pub host: Option<String>,
 }
 
+/// OAuth authorization-code, refresh-token, and client-credentials flow.
 pub struct OAuthFlow {
     config: OAuthConfig,
     http: reqwest::Client,
@@ -38,6 +48,10 @@ pub struct OAuthFlow {
 }
 
 impl OAuthFlow {
+    /// Create a flow after validating both provider endpoints.
+    ///
+    /// Returns an error when an endpoint is invalid, uses a scheme other than
+    /// HTTPS or loopback HTTP, or the HTTP client cannot be created.
     pub fn new(config: OAuthConfig) -> Result<Self> {
         for endpoint in [&config.authorization_endpoint, &config.token_endpoint] {
             let url = Url::parse(endpoint)?;
@@ -69,6 +83,10 @@ impl OAuthFlow {
         self
     }
 
+    /// Complete an authorization-code flow with PKCE through a loopback callback.
+    ///
+    /// Returns an error when no callback port is available, the callback times
+    /// out or is rejected, callback state is invalid, or token exchange fails.
     pub async fn login(&self, timeout: Duration) -> Result<Token> {
         let (listener, address) = bind_callback().await?;
         let redirect = format!("http://localhost:{}", address.port());
@@ -124,6 +142,10 @@ impl OAuthFlow {
         Ok(token)
     }
 
+    /// Exchange a stored refresh token for a renewed credential.
+    ///
+    /// Returns `Error::LoginRequired` when no refresh token is available and
+    /// returns an OAuth error when the provider rejects the exchange.
     pub async fn refresh(&self, token: &Token) -> Result<Token> {
         let client = self.client("http://localhost:8020")?;
         let refresh = token
@@ -137,6 +159,10 @@ impl OAuthFlow {
         Token::from_response(&response, time::OffsetDateTime::now_utc(), Some(token))
     }
 
+    /// Acquire a credential with the client-credentials grant.
+    ///
+    /// Returns a configuration error when no client secret is configured and an
+    /// OAuth error when the provider rejects the exchange.
     pub async fn client_credentials(&self) -> Result<Token> {
         let secret =
             self.config.client_secret.clone().ok_or_else(|| {

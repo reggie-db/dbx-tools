@@ -95,6 +95,7 @@ jspm_packages/
 .dev.token
 .dev.client.test/
 **/.logs/
+!/packages/js/cli/dbx-tools/src/_rust-release-binaries.ts
 target/
 packages/js/node/databricks/src/*dbx_tools_databricks.*
 packages/py/databricks/src/dbx_tools/databricks/bindings.py
@@ -109,8 +110,6 @@ packages/py/google/src/dbx_tools/google/*dbx_tools_google.*
 !/packages/py/google/pyproject.toml
 !/packages/py/core/pyproject.toml
 !/packages/py/postgres/pyproject.toml
-!/packages/py/model/pyproject.toml
-!/packages/py/litellm/pyproject.toml
 !/packages/py/graphiti/pyproject.toml
 .venv/
 .pytest_cache/

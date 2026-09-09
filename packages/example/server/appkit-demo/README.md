@@ -53,7 +53,7 @@ bun run demo
 ```
 
 From the repository root, this builds the client once, then starts AppKit at
-`http://localhost:8000`. Graphiti, managed LiteLLM, and Caddy use separate
+`http://localhost:8000`. Graphiti, the managed model proxy, and Caddy use separate
 loopback ports. A local uv Python emitter publishes `Hello world` onto the Bus
 page every random 5 to 10 seconds. The
 demo runner reads the endpoint from this package's bundle defaults and uses
@@ -64,7 +64,7 @@ workspace setup and environment behavior.
 
 On shutdown, AppKit closes the per-user MCP servers and internal client.
 `concurrently` terminates Graphiti and Caddy, Honcho forwards termination to
-Graphiti and managed LiteLLM, and both supervisors escalate unresponsive
+Graphiti and the managed model proxy, and both supervisors escalate unresponsive
 children after their bounded grace periods. The Python launcher stops Neo4j
 when Honcho exits.
 

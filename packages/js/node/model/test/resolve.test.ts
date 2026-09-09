@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
-import { polygotTest } from "@dbx-tools/test-polyglot/polyglot";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
 import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
@@ -96,102 +95,90 @@ describe("listServingEndpointsUncached tool capability", () => {
   });
 });
 
-await polygotTest(
-  () => import("../index.ts"),
-  "resolve",
-  (implementation, language) => {
-    const lookupModels = (...args: Parameters<typeof implementation.lookupModels>) =>
-      implementation.lookupModels(...args).map(({ endpoint, ...ranked }) => ({
-        ...ranked,
-        endpoint: { name: endpoint.name, task: endpoint.task },
-      }));
-    const resolveModel = (...args: Parameters<typeof implementation.resolveModel>) =>
-      implementation.resolveModel(...args);
+describe("model resolution", () => {
+  const lookupModelsForContract = (...args: Parameters<typeof lookupModels>) =>
+    lookupModels(...args).map(({ endpoint, ...ranked }) => ({
+      ...ranked,
+      endpoint: { name: endpoint.name, task: endpoint.task },
+    }));
 
-    describe(`model resolution parity (${language})`, () => {
-      it("ranks by a class ceiling without search", () => {
-        assert.deepEqual(
-          lookupModels([chat(OPUS_8), chat(SONNET), chat(HAIKU_5), embedding(BGE)], {
-            modelClass: ModelClass.ChatBalanced,
-          }),
-          [
-            { endpoint: chat(SONNET), modelClass: ModelClass.ChatBalanced },
-            { endpoint: chat(HAIKU_5), modelClass: ModelClass.ChatFast },
-          ],
-        );
-      });
+  describe("model resolution contract", () => {
+    it("ranks by a class ceiling without search", () => {
+      assert.deepEqual(
+        lookupModelsForContract([chat(OPUS_8), chat(SONNET), chat(HAIKU_5), embedding(BGE)], {
+          modelClass: ModelClass.ChatBalanced,
+        }),
+        [
+          { endpoint: chat(SONNET), modelClass: ModelClass.ChatBalanced },
+          { endpoint: chat(HAIKU_5), modelClass: ModelClass.ChatFast },
+        ],
+      );
+    });
 
-      it("returns an exact search with score zero", () => {
-        assert.deepEqual(
-          lookupModels([chat(OPUS_8), chat(SONNET)], {
-            search: SONNET,
-            limit: 1,
-          }),
-          [{ endpoint: chat(SONNET), modelClass: ModelClass.ChatBalanced, score: 0 }],
-        );
-      });
+    it("returns an exact search with score zero", () => {
+      assert.deepEqual(
+        lookupModelsForContract([chat(OPUS_8), chat(SONNET)], {
+          search: SONNET,
+          limit: 1,
+        }),
+        [{ endpoint: chat(SONNET), modelClass: ModelClass.ChatBalanced, score: 0 }],
+      );
+    });
 
-      it("prefers the newest deployed version for a family alias", () => {
-        const [selected] = lookupModels(
-          [
-            chat("databricks-gemini-2-5-pro"),
-            chat("databricks-gemini-3-5-flash"),
-            chat("databricks-gemini-3-1-pro"),
-          ],
-          { search: "gemini", limit: 1 },
-        );
-        assert.equal(selected?.endpoint.name, "databricks-gemini-3-5-flash");
-      });
+    it("prefers the newest deployed version for a family alias", () => {
+      const [selected] = lookupModelsForContract(
+        [
+          chat("databricks-gemini-2-5-pro"),
+          chat("databricks-gemini-3-5-flash"),
+          chat("databricks-gemini-3-1-pro"),
+        ],
+        { search: "gemini", limit: 1 },
+      );
+      assert.equal(selected?.endpoint.name, "databricks-gemini-3-5-flash");
+    });
 
-      it("prefers the discovered catalogue over the static fallback floor", () => {
-        const discovered = "databricks-claude-opus-99";
+    it("prefers the discovered catalogue over the static fallback floor", () => {
+      const discovered = "databricks-claude-opus-99";
 
-        assert.deepEqual(resolveModel([chat(discovered)], {}), {
-          modelId: discovered,
-          source: "fallback",
-        });
-      });
-
-      it("uses the static floor only when discovery returns no chat model", () => {
-        assert.deepEqual(resolveModel([], {}), {
-          modelId: FALLBACK_MODEL_IDS[0]!,
-          source: "fallback",
-        });
-      });
-
-      it("accepts only operator fallbacks present in discovery", () => {
-        const discovered = "databricks-approved-custom";
-
-        assert.deepEqual(resolveModel([chat(discovered)], { fallbacks: ["missing", discovered] }), {
-          modelId: discovered,
-          source: "fallback",
-        });
+      assert.deepEqual(resolveModel([chat(discovered)], {}), {
+        modelId: discovered,
+        source: "fallback",
       });
     });
-  },
-);
 
-await polygotTest(
-  () => import("../index.ts"),
-  "fallback",
-  (implementation, language) => {
-    describe(`model fallback parity (${language})`, () => {
-      it("keeps the same last-resort model floor", () => {
-        assert.deepEqual(implementation.FALLBACK_MODEL_IDS, [
-          "databricks-gpt-5-5-pro",
-          "databricks-claude-opus-4-8",
-          "databricks-gemini-3-1-pro",
-          "databricks-gpt-5-5",
-          "databricks-claude-sonnet-4-6",
-          "databricks-meta-llama-3-3-70b-instruct",
-          "databricks-gpt-5-nano",
-          "databricks-claude-haiku-4-5",
-          "databricks-meta-llama-3-1-8b-instruct",
-        ]);
+    it("uses the static floor only when discovery returns no chat model", () => {
+      assert.deepEqual(resolveModel([], {}), {
+        modelId: FALLBACK_MODEL_IDS[0]!,
+        source: "fallback",
       });
     });
-  },
-);
+
+    it("accepts only operator fallbacks present in discovery", () => {
+      const discovered = "databricks-approved-custom";
+
+      assert.deepEqual(resolveModel([chat(discovered)], { fallbacks: ["missing", discovered] }), {
+        modelId: discovered,
+        source: "fallback",
+      });
+    });
+  });
+});
+
+describe("model fallback contract", () => {
+  it("keeps the same last-resort model floor", () => {
+    assert.deepEqual(FALLBACK_MODEL_IDS, [
+      "databricks-gpt-5-5-pro",
+      "databricks-claude-opus-4-8",
+      "databricks-gemini-3-1-pro",
+      "databricks-gpt-5-5",
+      "databricks-claude-sonnet-4-6",
+      "databricks-meta-llama-3-3-70b-instruct",
+      "databricks-gpt-5-nano",
+      "databricks-claude-haiku-4-5",
+      "databricks-meta-llama-3-1-8b-instruct",
+    ]);
+  });
+});
 
 describe("lookupModels", () => {
   it("ranks a search match-then-class, version breaking the tie", () => {

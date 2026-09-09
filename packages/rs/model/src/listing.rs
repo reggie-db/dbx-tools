@@ -10,6 +10,7 @@ use crate::{
 
 const CODEX_BASE_INSTRUCTIONS: &str = "You are a coding agent. Follow the user's instructions and use the available tools to work in the current repository.";
 
+/// Build an OpenAI-compatible or Codex-compatible model-list response.
 pub fn models_payload(
     endpoints: &[ServingEndpointSummary],
     search: Option<&str>,
@@ -19,6 +20,7 @@ pub fn models_payload(
     models_payload_with_capabilities(endpoints, search, extended, codex, None)
 }
 
+/// Build a model-list response enriched with discovered Codex capabilities.
 pub fn models_payload_with_capabilities(
     endpoints: &[ServingEndpointSummary],
     search: Option<&str>,
@@ -119,7 +121,10 @@ fn codex_model(
             "base_instructions".to_owned(),
             json!(CODEX_BASE_INSTRUCTIONS),
         ),
-        ("supported_reasoning_levels".to_owned(), json!([])),
+        (
+            "supported_reasoning_levels".to_owned(),
+            json!(endpoint.reasoning_efforts),
+        ),
         ("shell_type".to_owned(), json!("unified_exec")),
         ("visibility".to_owned(), json!("list")),
         ("supported_in_api".to_owned(), json!(true)),
@@ -177,6 +182,7 @@ fn extend_model(entry: &mut Map<String, Value>, model: &ListedModel) {
         ("class", json!(model.model_class.or(endpoint.model_class))),
         ("serviceNames", json!(endpoint.service_names)),
         ("modelServiceName", json!(endpoint.model_service_name)),
+        ("reasoningEfforts", json!(endpoint.reasoning_efforts)),
         ("status", json!(endpoint.status)),
         ("score", json!(model.score)),
     ] {
@@ -186,6 +192,7 @@ fn extend_model(entry: &mut Map<String, Value>, model: &ListedModel) {
     }
 }
 
+/// Derive the Codex `system.ai` model name for a compatible Databricks endpoint.
 pub fn codex_model_name(endpoint: &ServingEndpointSummary) -> Option<String> {
     let parsed = parse_model_name(&endpoint.name)?;
     if parsed.model.iter().any(|part| part == "embedding")

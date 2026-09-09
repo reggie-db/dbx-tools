@@ -1,5 +1,8 @@
 //! Databricks runtime, authentication, caching, and filesystem primitives.
 
+#![deny(missing_docs)]
+#![deny(rustdoc::broken_intra_doc_links)]
+
 mod auth;
 mod client;
 mod credentials;

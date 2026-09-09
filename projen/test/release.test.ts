@@ -126,6 +126,11 @@ describe("unified release workflow", () => {
     });
     assert.equal(build.env?.DOCS_SITE_URL, "https://docs.example.com");
     assert.equal(build.env?.DOCS_BASE, "/fixture/");
+    const stepNames = build.steps.map((candidate) => candidate.name);
+    assert.ok(
+      stepNames.indexOf("Generate TypeScript API docs") <
+        stepNames.indexOf("Check generated titles"),
+    );
     assert.equal(step(build, "Upload Pages artifact").uses, "actions/upload-pages-artifact@v4");
 
     const deploy = release.jobs["deploy-docs"]!;

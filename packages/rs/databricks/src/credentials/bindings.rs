@@ -28,16 +28,25 @@ pub trait StorageAdapter: Send + Sync {
 /// Public credential result; deliberately excludes the refresh token.
 #[derive(Clone, uniffi::Record)]
 pub struct AccessToken {
+    /// Access token secret presented to protected resources.
     pub access_token: String,
+    /// OAuth token type returned by the provider.
     pub token_type: String,
+    /// Formatted absolute expiry, when known.
     pub expiry: Option<String>,
+    /// Scopes granted to the credential.
     pub scopes: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
+/// Authentication failure exposed through language bindings.
 pub enum AuthError {
+    /// Native authentication, storage, configuration, or callback failure.
     #[error("{message}")]
-    Failure { message: String },
+    Failure {
+        /// Human-readable failure description.
+        message: String,
+    },
 }
 
 impl From<uniffi::UnexpectedUniFFICallbackError> for AuthError {
@@ -48,15 +57,19 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for AuthError {
     }
 }
 
+/// Result returned by fallible language-binding operations.
 pub type BindingResult<T> = std::result::Result<T, AuthError>;
 
+/// Credential store backed by foreign-language callbacks.
 pub struct ForeignStore {
+    /// Foreign storage implementation receiving credential operations.
     pub storage: Arc<dyn StorageAdapter>,
 }
 
 #[derive(uniffi::Object)]
 /// Keeps storage callbacks in the native library that owns their converters.
 pub struct StorageHandle {
+    /// Native credential-store interface for the wrapped callbacks.
     pub store: Arc<dyn CredentialStore>,
 }
 

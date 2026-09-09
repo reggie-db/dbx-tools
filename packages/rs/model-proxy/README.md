@@ -1,9 +1,19 @@
 # dbx-tools-model-proxy
 
-Rust proxy between OpenAI or Anthropic clients and Databricks model-serving
+Rust proxy between OpenAI or Anthropic clients and Databricks Model Serving
 protocols.
 
-Install the public binary from crates.io:
+Install and run the version-matched release binary through `dbx`:
+
+```sh
+dbx model-proxy --profile PROFILE
+```
+
+The first invocation downloads the GitHub release asset matching the installed
+`@dbx-tools/cli` version and host platform. Later invocations reuse the
+validated executable.
+
+The public crate can also be installed from crates.io:
 
 ```sh
 cargo install dbx-tools-model-proxy
@@ -12,7 +22,7 @@ cargo install dbx-tools-model-proxy
 Release builds also publish `dbx-model-proxy` as a GitHub release asset for
 each configured platform.
 
-The prototype uses `aigw-openai` and `aigw-anthropic` as protocol adapters.
+The proxy uses `aigw-openai` and `aigw-anthropic` as protocol adapters.
 OpenAI Chat Completions and Anthropic Messages requests can target either
 Databricks Chat Completions or Responses. Native Responses input currently
 targets Responses without conversion.
@@ -47,6 +57,7 @@ workspace.
 Supported routes:
 
 - `GET /v1/models`
+- `POST /v1/embeddings`
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
 - `POST /v1/messages`
@@ -63,6 +74,10 @@ Use `?search=gpt` to apply the same fuzzy scoring and ordering as model
 resolution. Add `?extended=true` to include the score, service names,
 capability class, profile, task, state, and other catalogue metadata. Extended
 output defaults to `false`.
+
+`POST /v1/embeddings` resolves the requested model only among deployed
+embedding endpoints, forwards the request to that endpoint's `invocations`
+route, and preserves the OpenAI embedding response.
 
 `--target responses` forces Chat Completions or Anthropic Messages input
 through the Responses request translator. `--target chat` sends canonical
@@ -98,3 +113,14 @@ OpenAI Chat Completions output uses the prototype's canonical event encoder.
 
 Responses input currently targets only Responses, so Responses-to-Chat
 translation is outside this prototype's supported route matrix.
+
+Databricks errors are returned with their original status, body, and content
+type. The proxy also forwards `Retry-After`, request and correlation IDs,
+rate-limit headers, quota names, and Databricks limit details. It does not retry
+rate-limited requests; clients such as Codex retain control of retry timing.
+
+Set `DBX_MODEL_PROXY_TOKENS_PER_MINUTE` or pass `--tokens-per-minute` to enable
+an optional request queue. The configured budget applies independently to each
+resolved model in each Databricks workspace. Requests reserve an estimated
+input token count plus any explicit `max_output_tokens`,
+`max_completion_tokens`, or `max_tokens` value before they are sent upstream.

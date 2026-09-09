@@ -14,7 +14,7 @@ describe("resolveGraphitiConfig", () => {
 
     assert.deepEqual(resolveGraphitiConfig(), {
       graphitiPort: 0,
-      litellmPort: 0,
+      modelProxyPort: 0,
       proxyPort: 0,
       python: "python3",
       journalNamespace: "demo",

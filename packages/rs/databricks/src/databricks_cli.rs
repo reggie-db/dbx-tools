@@ -5,10 +5,13 @@ use std::{
 
 static DATABRICKS_CLI_AVAILABLE: OnceLock<bool> = OnceLock::new();
 
+/// Failures returned while invoking the Databricks CLI.
 #[derive(Debug, thiserror::Error)]
 pub enum DatabricksCliError {
+    /// The CLI process could not be started or read.
     #[error("could not run Databricks CLI: {0}")]
     Io(#[from] std::io::Error),
+    /// The CLI returned an unsuccessful status and diagnostic.
     #[error("{0}")]
     Command(String),
 }

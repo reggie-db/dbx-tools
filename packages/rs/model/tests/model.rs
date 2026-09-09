@@ -1,12 +1,13 @@
 use std::{collections::BTreeMap, time::Duration};
 
-use dbx_tools_databricks::FileCache;
+use dbx_tools_databricks::{DatabricksAuthOptions, DatabricksClient, FileCache};
 use dbx_tools_model::{
-    endpoints_from_response, lookup_models, model_search_query, model_service_names,
-    models_payload, models_payload_with_capabilities, parse_model_capabilities, parse_model_name,
-    parse_retired_models, rank_model_id, status_from_names, version_tuple,
-    ModelCapabilitiesResolver, ModelClass, ModelClient, ModelFamily, ModelQuery, ModelStatus,
-    ModelStatusResolver, ParsedModelName, ServingEndpointSummary,
+    endpoints_from_response, is_responses_only, lookup_models, model_search_query,
+    model_service_names, models_payload, models_payload_with_capabilities,
+    parse_model_capabilities, parse_model_name, parse_retired_models, rank_model_id,
+    reasoning_efforts_by_family, status_from_names, version_tuple, ModelCapabilitiesResolver,
+    ModelClass, ModelClient, ModelFamily, ModelQuery, ModelStatus, ModelStatusResolver,
+    ParsedModelName, ReasoningEffort, ServingEndpointSummary,
 };
 use serde_json::json;
 use wiremock::{
@@ -110,7 +111,7 @@ fn gpt_search_returns_the_highest_version_and_excludes_gpt_oss() {
 }
 
 #[test]
-fn model_listing_uses_openai_format_and_python_lookup_ordering() {
+fn model_listing_uses_openai_format_and_stable_lookup_ordering() {
     let mut sol = endpoint("databricks-gpt-5-6-sol", ModelClass::ChatBalanced);
     sol.display_name = Some("GPT 5.6 Sol".to_owned());
     sol.service_names
@@ -143,9 +144,38 @@ fn model_listing_uses_openai_format_and_python_lookup_ordering() {
 }
 
 #[test]
+fn responses_and_reasoning_policy_follow_model_identity() {
+    assert!(!is_responses_only("databricks-gpt-5-3"));
+    assert!(is_responses_only("databricks-gpt-5-4"));
+    assert!(is_responses_only("databricks-gpt-6"));
+    assert!(!is_responses_only("databricks-gpt-oss-120b"));
+    assert!(is_responses_only("databricks-gpt-5-3-codex"));
+    assert_eq!(
+        reasoning_efforts_by_family("databricks-gpt-5-6-sol"),
+        vec![
+            ReasoningEffort::None,
+            ReasoningEffort::Low,
+            ReasoningEffort::Medium,
+            ReasoningEffort::High,
+            ReasoningEffort::Xhigh,
+            ReasoningEffort::Max,
+        ]
+    );
+    assert_eq!(
+        reasoning_efforts_by_family("databricks-gpt-5-5-pro"),
+        vec![
+            ReasoningEffort::Medium,
+            ReasoningEffort::High,
+            ReasoningEffort::Xhigh,
+        ]
+    );
+}
+
+#[test]
 fn codex_originators_receive_the_codex_model_envelope() {
     let mut gpt = endpoint("databricks-gpt-5-6-sol", ModelClass::ChatBalanced);
     gpt.model_service_name = Some("system.ai.databricks-gpt-5-6-sol".to_owned());
+    gpt.reasoning_efforts = reasoning_efforts_by_family(&gpt.name);
     let endpoints = [
         gpt,
         endpoint("databricks-claude-sonnet-4-6", ModelClass::ChatBalanced),
@@ -157,10 +187,40 @@ fn codex_originators_receive_the_codex_model_envelope() {
     assert_eq!(payload["models"][0]["slug"], "system.ai.gpt-5-6-sol");
     assert_eq!(payload["models"][0]["priority"], 1);
     assert_eq!(payload["models"][0]["shell_type"], "unified_exec");
+    assert_eq!(
+        payload["models"][0]["supported_reasoning_levels"],
+        json!(["none", "low", "medium", "high", "xhigh", "max"])
+    );
     assert!(payload["models"][0]["apply_patch_tool_type"].is_null());
     assert!(payload["models"][0]["web_search_tool_type"].is_null());
     assert_eq!(payload["models"][0]["input_modalities"], json!(["text"]));
     assert_eq!(payload["models"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn codex_listing_excludes_unsupported_model_families() {
+    let endpoints = [
+        endpoint("databricks-gpt-oss-120b", ModelClass::ChatBalanced),
+        endpoint("databricks-qwen35-122b-a10b", ModelClass::ChatBalanced),
+        endpoint("databricks-claude-sonnet-4-6", ModelClass::ChatBalanced),
+        endpoint("databricks-gemini-3-5-flash", ModelClass::ChatFast),
+        endpoint("databricks-inkling-1", ModelClass::ChatBalanced),
+        endpoint("databricks-bge-large-en", ModelClass::Embedding),
+        endpoint("databricks-gte-large-en", ModelClass::Embedding),
+    ];
+
+    let payload = models_payload(&endpoints, None, false, true);
+    let slugs = payload["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["slug"].as_str().unwrap())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        slugs,
+        ["system.ai.gpt-oss-120b", "system.ai.qwen35-122b-a10b"]
+    );
 }
 
 #[test]
@@ -306,7 +366,8 @@ async fn client_discovers_resolves_and_caches_the_live_catalogue() {
                             "foundation_model": {"name": "system.ai.gemini-2-5-pro"}
                         }]
                     }
-                }
+                },
+                {"name": "databricks-gte-large-en", "task": "llm/v1/embeddings"}
             ]
         })))
         .expect(1)
@@ -326,8 +387,26 @@ async fn client_discovers_resolves_and_caches_the_live_catalogue() {
         ),
         format!("{}/retired-models", server.uri()),
     );
+    let config_file = directory.path().join("databrickscfg");
+    std::fs::write(
+        &config_file,
+        format!(
+            "[DEFAULT]\nhost = {}\nauth_type = pat\ntoken = token\n",
+            server.uri()
+        ),
+    )
+    .unwrap();
+    let databricks = DatabricksClient::with_options(DatabricksAuthOptions {
+        profile: Some("DEFAULT".into()),
+        config_file: Some(config_file.to_string_lossy().into_owned()),
+        cache_dir: Some(directory.path().join("auth").to_string_lossy().into_owned()),
+        prefer_user_to_machine: false,
+        ..Default::default()
+    })
+    .await
+    .unwrap();
     let client = ModelClient::with_cache_and_status(
-        server.uri(),
+        databricks,
         FileCache::new(
             directory.path().join("models.json"),
             Duration::from_secs(60),
@@ -336,16 +415,16 @@ async fn client_discovers_resolves_and_caches_the_live_catalogue() {
     );
 
     assert_eq!(
-        client.resolve("Bearer token", "gpt").await.unwrap(),
+        client.resolve_model("gpt").await.unwrap(),
         "databricks-gpt-5-6-sol"
     );
     assert_eq!(
-        client.resolve("Bearer token", "gpt").await.unwrap(),
+        client.resolve_model("gpt").await.unwrap(),
         "databricks-gpt-5-6-sol"
     );
     assert_eq!(
         client
-            .resolve_endpoint("Bearer token", "gpt")
+            .resolve_serving_endpoint("gpt")
             .await
             .unwrap()
             .unwrap()
@@ -353,9 +432,18 @@ async fn client_discovers_resolves_and_caches_the_live_catalogue() {
             .as_deref(),
         Some("system.ai.gpt-5-6-sol")
     );
+    assert_eq!(
+        client
+            .resolve_serving_endpoint_for_class("gte", ModelClass::Embedding)
+            .await
+            .unwrap()
+            .unwrap()
+            .name,
+        "databricks-gte-large-en"
+    );
     assert!(
         client
-            .models("Bearer token", false)
+            .list_serving_endpoints(false)
             .await
             .unwrap()
             .iter()
@@ -432,6 +520,7 @@ fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {
         model_class: Some(model_class),
         service_names: BTreeMap::new(),
         model_service_name: None,
+        reasoning_efforts: Vec::new(),
         status: ModelStatus::default(),
     }
 }

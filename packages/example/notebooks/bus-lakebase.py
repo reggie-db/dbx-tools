@@ -251,7 +251,7 @@ async def udf_round_trip() -> dict:
         while len(received) < len(published) and asyncio.get_running_loop().time() < deadline:
             try:
                 received.append(await asyncio.wait_for(inbox.get(), timeout=5))
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
         return {
             "publishedIds": published,

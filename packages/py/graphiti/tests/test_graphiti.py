@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shlex
 import sys
 from pathlib import Path
 from unittest.mock import Mock
@@ -16,9 +15,9 @@ from dbx_tools.graphiti.runtime import (
     UV_MISE_TOOL,
     Runtime,
     RuntimePaths,
+    _ArgvPopen,
     _link_tool,
 )
-from dbx_tools.graphiti.server import _upstream_config
 from dbx_tools.graphiti.settings import ModelSettings
 
 _PROFILE_ENV = {"DATABRICKS_CONFIG_PROFILE": "DEFAULT"}
@@ -117,6 +116,18 @@ def test_start_neo4j_does_not_poll_readiness(monkeypatch, tmp_path: Path) -> Non
     assert [call.args[0] for call in command.call_args_list] == ["status", "start"]
 
 
+def test_honcho_child_preserves_argv_without_a_shell() -> None:
+    argument = "value with spaces; exit 99"
+    process = _ArgvPopen(
+        [sys.executable, "-c", "import sys; sys.stdout.write(sys.argv[1])", argument]
+    )
+
+    output, _ = process.communicate(timeout=5)
+
+    assert process.returncode == 0
+    assert output.decode() == argument
+
+
 def test_cli_strips_argument_separator(monkeypatch) -> None:
     start = Mock(return_value=123)
     monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "DEFAULT")
@@ -129,7 +140,11 @@ def test_cli_strips_argument_separator(monkeypatch) -> None:
             "--profile",
             "DEV",
             "--model",
-            "dbx/databricks-gpt-5-mini",
+            "databricks-gpt-5-mini",
+            "--model-proxy-command",
+            "/opt/dbx-model-proxy --target openai",
+            "--model-proxy-port",
+            "4100",
             "--",
             "--port",
             "9000",
@@ -138,20 +153,25 @@ def test_cli_strips_argument_separator(monkeypatch) -> None:
 
     assert start.call_args.kwargs["foreground"] is False
     assert start.call_args.kwargs["extra_args"] == ["--port", "9000"]
-    assert start.call_args.kwargs["settings"].manage_litellm is True
+    assert start.call_args.kwargs["settings"].manage_model_proxy is True
     assert start.call_args.kwargs["settings"].profile == "DEV"
-    assert start.call_args.kwargs["settings"].model == "dbx/databricks-gpt-5-mini"
+    assert start.call_args.kwargs["settings"].model == "databricks-gpt-5-mini"
+    assert start.call_args.kwargs["settings"].model_proxy_command == (
+        "/opt/dbx-model-proxy --target openai"
+    )
+    assert start.call_args.kwargs["settings"].model_proxy_port == 4100
 
 
 def test_model_settings_default_to_managed_databricks_models() -> None:
     settings = ModelSettings.resolve(environ=_PROFILE_ENV)
 
-    assert settings.manage_litellm is True
+    assert settings.manage_model_proxy is True
     assert settings.openai_api_url == "http://127.0.0.1:4000/v1"
-    assert settings.model == "dbx/databricks-gpt-5-nano"
-    assert settings.embedder_model == "dbx/databricks-gte-large-en"
+    assert settings.model == "databricks-gpt-5-nano"
+    assert settings.embedder_model == "databricks-gte-large-en"
     assert settings.embedder_dimensions == 1024
     assert settings.profile == "DEFAULT"
+    assert settings.health_url == "http://127.0.0.1:4000/healthz"
 
 
 def test_model_settings_delegate_default_profile_resolution() -> None:
@@ -169,20 +189,72 @@ def test_model_settings_use_ambient_databricks_app_auth() -> None:
         }
     )
 
-    assert settings.manage_litellm is True
+    assert settings.manage_model_proxy is True
     assert settings.profile is None
 
 
-def test_model_settings_allow_external_litellm() -> None:
+def test_model_settings_allow_external_model_proxy() -> None:
     settings = ModelSettings.resolve(
-        litellm_url="https://models.example/v1/",
+        model_proxy_url="https://models.example/v1/",
         environ={"DATABRICKS_CONFIG_PROFILE": "DEV"},
     )
 
-    assert settings.manage_litellm is False
+    assert settings.manage_model_proxy is False
     assert settings.openai_api_url == "https://models.example/v1"
     assert settings.openai_api_key == "not-required"
     assert settings.profile == "DEV"
+
+
+def test_model_settings_resolve_model_proxy_environment() -> None:
+    settings = ModelSettings.resolve(
+        environ={
+            "MANAGE_MODEL_PROXY": "false",
+            "MODEL_PROXY_COMMAND": "/opt/dbx-model-proxy --target auto",
+            "MODEL_PROXY_HOST": "127.0.0.2",
+            "MODEL_PROXY_PORT": "4100",
+            "MODEL_PROXY_URL": "https://models.example/v1",
+        },
+    )
+
+    assert settings.manage_model_proxy is False
+    assert settings.model_proxy_command == "/opt/dbx-model-proxy --target auto"
+    assert settings.model_proxy_host == "127.0.0.2"
+    assert settings.model_proxy_port == 4100
+    assert settings.openai_api_url == "https://models.example/v1"
+    assert "model_proxy_command" not in settings.public_settings()
+
+
+def test_model_settings_preserve_external_openai_api_url() -> None:
+    settings = ModelSettings.resolve(
+        environ={
+            "OPENAI_API_URL": "https://openai.example/v1/",
+            "OPENAI_API_KEY": "secret",
+        },
+    )
+
+    assert settings.manage_model_proxy is False
+    assert settings.openai_api_url == "https://openai.example/v1"
+    assert settings.openai_api_key == "secret"
+
+
+def test_status_uses_model_proxy_health(monkeypatch, tmp_path: Path) -> None:
+    runtime = Runtime(RuntimePaths(tmp_path))
+    runtime._write_state(
+        {
+            "neo4j_password": "secret",
+            "model_settings": ModelSettings.resolve(environ=_PROFILE_ENV).public_settings(),
+        }
+    )
+    health_urls: list[str] = []
+    monkeypatch.setattr(
+        "dbx_tools.graphiti.runtime._url_ready",
+        lambda url: health_urls.append(url) or True,
+    )
+
+    status = runtime.status()
+
+    assert status["model_proxy"] == "running"
+    assert health_urls == ["http://127.0.0.1:4000/healthz"]
 
 
 def test_graphiti_command_does_not_require_config_yaml(tmp_path: Path) -> None:
@@ -197,15 +269,17 @@ def test_graphiti_command_does_not_require_config_yaml(tmp_path: Path) -> None:
         "--llm-provider",
         "openai",
         "--model",
-        "dbx/databricks-gpt-5-nano",
+        "databricks-gpt-5-nano",
         "--embedder-provider",
         "openai",
         "--embedder-model",
-        "dbx/databricks-gte-large-en",
+        "databricks-gte-large-en",
     ]
 
 
 def test_server_uses_temporary_empty_config(monkeypatch) -> None:
+    from dbx_tools.graphiti.server import _upstream_config
+
     monkeypatch.setattr("dbx_tools.graphiti.server.sys.argv", ["dbx-graphiti"])
 
     with _upstream_config():
@@ -236,11 +310,12 @@ def test_caddy_config_routes_to_graphiti() -> None:
     assert "reverse_proxy 127.0.0.1:8002" in config
 
 
-def test_managed_litellm_uses_selected_profile(monkeypatch, tmp_path: Path) -> None:
+def test_managed_model_proxy_uses_configured_argv_and_profile(monkeypatch, tmp_path: Path) -> None:
     runtime = Runtime(RuntimePaths(tmp_path))
     runtime._write_state({"neo4j_password": "secret"})
     settings = ModelSettings.resolve(
         profile="DEV",
+        model_proxy_command="/opt/dbx-model-proxy --target openai",
         environ={"DATABRICKS_CONFIG_PROFILE": "DEFAULT"},
     )
     manager = Mock()
@@ -251,23 +326,48 @@ def test_managed_litellm_uses_selected_profile(monkeypatch, tmp_path: Path) -> N
     result = runtime.supervise(settings, [])
 
     assert result == 0
-    litellm = manager.add_process.call_args_list[0]
-    assert litellm.args[0] == "litellm"
-    assert shlex.split(litellm.args[1]) == [
-        sys.executable,
-        "-m",
-        "dbx_tools.litellm",
+    model_proxy = manager.add_process.call_args_list[0]
+    assert model_proxy.args[0] == "model-proxy"
+    assert model_proxy.args[1] == [
+        "/opt/dbx-model-proxy",
+        "--target",
+        "openai",
         "--host",
         "127.0.0.1",
         "--port",
         "4000",
     ]
-    assert litellm.kwargs["env"]["DATABRICKS_CONFIG_PROFILE"] == "DEV"
+    assert model_proxy.kwargs["env"]["DATABRICKS_CONFIG_PROFILE"] == "DEV"
     assert manager.add_process.call_args_list[1].args[0] == "graphiti"
+    assert isinstance(manager.add_process.call_args_list[1].args[1], list)
     manager.loop.assert_called_once_with()
 
 
-def test_managed_litellm_rejects_an_occupied_port(monkeypatch, tmp_path: Path) -> None:
+def test_model_proxy_command_prefers_installed_binary(monkeypatch, tmp_path: Path) -> None:
+    runtime = Runtime(RuntimePaths(tmp_path))
+    monkeypatch.setattr(
+        "dbx_tools.graphiti.runtime.shutil.which",
+        lambda name: "/usr/local/bin/dbx-model-proxy" if name == "dbx-model-proxy" else None,
+    )
+
+    command = runtime._model_proxy_command(ModelSettings.resolve(environ=_PROFILE_ENV))
+
+    assert command[:1] == ["/usr/local/bin/dbx-model-proxy"]
+
+
+def test_model_proxy_command_falls_back_to_dbx(monkeypatch, tmp_path: Path) -> None:
+    runtime = Runtime(RuntimePaths(tmp_path))
+    monkeypatch.setattr(
+        "dbx_tools.graphiti.runtime.shutil.which",
+        lambda name: "/usr/local/bin/dbx" if name == "dbx" else None,
+    )
+
+    command = runtime._model_proxy_command(ModelSettings.resolve(environ=_PROFILE_ENV))
+
+    assert command[:2] == ["/usr/local/bin/dbx", "model-proxy"]
+
+
+def test_managed_model_proxy_rejects_an_occupied_port(monkeypatch, tmp_path: Path) -> None:
     runtime = Runtime(RuntimePaths(tmp_path))
     runtime._write_state({"neo4j_password": "secret"})
     manager = Mock()

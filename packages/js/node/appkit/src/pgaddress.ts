@@ -138,7 +138,11 @@ function parseUri(s: string): ParsedAddress {
   } catch {
     return {};
   }
-  const result: ParsedAddress = {};
+  const target = url.pathname.replace(/^\//, "");
+  const decodedTarget = target ? decodeURIComponent(target) : "";
+  const result: ParsedAddress = decodedTarget.startsWith("projects/")
+    ? parseResourcePathSegments(decodedTarget)
+    : {};
   if (url.hostname) result.host = url.hostname;
   const port = object.toNumber(url.port);
   if (port !== undefined) result.port = port;
@@ -149,8 +153,7 @@ function parseUri(s: string): ParsedAddress {
       result.user = url.username;
     }
   }
-  const db = url.pathname.replace(/^\//, "");
-  if (db) result.database = decodeURIComponent(db);
+  if (decodedTarget && !result.project) result.database = decodedTarget;
   const sslmodeRaw = url.searchParams.get("sslmode") ?? url.searchParams.get("sslMode");
   const sslmode = sslmodeRaw?.toLowerCase();
   if (isSslMode(sslmode)) {

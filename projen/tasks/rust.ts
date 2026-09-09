@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
@@ -40,7 +40,7 @@ function currentStructure(config: RustWorkspaceMapping): RustWorkspaceMapping {
     const binding = recorded.get(rust);
     return binding ? [binding] : [{ crate: "", rust }];
   });
-  return { root: config.root, crates, bindings };
+  return { root: config.root, crates, bindings, binaries: config.binaries ?? [] };
 }
 
 /** Whether discovered crate membership or UniFFI marker membership changed. */
@@ -92,8 +92,9 @@ export function affectedRustBindings(
   const affected = new Set(changed);
   const ordered = orderRustBindings(bindings);
   for (const binding of ordered) {
-    if (binding.dependencies?.some((dependency) => affected.has(dependency)))
+    if (binding.dependencies?.some((dependency) => affected.has(dependency))) {
       affected.add(binding.crate);
+    }
   }
   return ordered.filter((binding) => affected.has(binding.crate));
 }

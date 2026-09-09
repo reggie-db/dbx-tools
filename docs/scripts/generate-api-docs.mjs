@@ -104,7 +104,11 @@ function discoverPackages() {
 }
 
 function titleFromMarkdown(markdown, fallback) {
-  return markdown.match(/^#\s+(.+?)\s*$/m)?.[1]?.trim() || fallback;
+  const heading = markdown.match(/^#\s+(.+?)\s*$/m)?.[1]?.trim() || fallback;
+  return heading
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/~~|[*_`]/g, "")
+    .trim();
 }
 
 function stripLeadingH1(markdown) {

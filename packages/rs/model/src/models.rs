@@ -5,6 +5,8 @@ use std::{collections::BTreeMap, sync::LazyLock};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+use crate::reasoning::ReasoningEffort;
+
 static TOKEN_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-z0-9]+").expect("valid model token pattern"));
 static VERSION_SEPARATOR_PATTERN: LazyLock<Regex> =
@@ -12,25 +14,40 @@ static VERSION_SEPARATOR_PATTERN: LazyLock<Regex> =
 static VERSION_PART_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\d+").expect("valid version pattern"));
 
+/// Recognized foundation-model family.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModelFamily {
+    /// BGE embedding models.
     Bge,
+    /// Anthropic Claude models.
     Claude,
+    /// DeepSeek models.
     Deepseek,
+    /// Google Gemini models.
     Gemini,
+    /// Google Gemma models.
     Gemma,
+    /// GLM models.
     Glm,
+    /// OpenAI GPT models.
     Gpt,
+    /// xAI Grok models.
     Grok,
+    /// GTE embedding models.
     Gte,
+    /// Databricks Inkling embedding models.
     Inkling,
+    /// Moonshot Kimi models.
     Kimi,
+    /// Meta Llama models.
     Llama,
+    /// Alibaba Qwen models.
     Qwen,
 }
 
 impl ModelFamily {
+    /// Return the normalized family token.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Bge => "bge",
@@ -49,21 +66,28 @@ impl ModelFamily {
         }
     }
 
+    /// Return whether model names in this family carry comparable versions.
     pub fn is_versioned(self) -> bool {
         !matches!(self, Self::Bge | Self::Gte | Self::Inkling)
     }
 }
 
+/// Intent-oriented class used to select a Model Serving endpoint.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ModelClass {
+    /// Higher-quality chat models suited to deliberate reasoning.
     ChatThinking,
+    /// General-purpose chat models balancing quality and latency.
     ChatBalanced,
+    /// Low-latency chat models.
     ChatFast,
+    /// Text embedding models.
     Embedding,
 }
 
 impl ModelClass {
+    /// Model classes in fallback preference order.
     pub const ORDER: [Self; 4] = [
         Self::ChatThinking,
         Self::ChatBalanced,
@@ -71,6 +95,7 @@ impl ModelClass {
         Self::Embedding,
     ];
 
+    /// Return this class's position in the fallback order.
     pub fn order(self) -> usize {
         Self::ORDER
             .iter()
@@ -79,82 +104,124 @@ impl ModelClass {
     }
 }
 
+/// Structured components parsed from a model or endpoint name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParsedModelName {
+    /// Trimmed source name.
     pub source: String,
+    /// Recognized model family.
     pub family: ModelFamily,
+    /// Numeric version components.
     pub version: Vec<u32>,
+    /// Remaining model variant tokens.
     pub model: Vec<String>,
 }
 
+/// Databricks AI Gateway profile scores for an endpoint.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelProfile {
+    /// Relative model quality score.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<f64>,
+    /// Relative model speed score.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speed: Option<f64>,
+    /// Relative model cost score.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost: Option<f64>,
 }
 
+/// Lifecycle status associated with a model.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelStatus {
+    /// Whether Databricks lists the model as retired or deprecated.
     #[serde(default)]
     pub deprecated: bool,
 }
 
+/// Normalized metadata for a Databricks Model Serving endpoint.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServingEndpointSummary {
+    /// Model Serving endpoint name used for invocation.
     pub name: String,
+    /// Human-readable endpoint or model name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// Endpoint task, such as chat or embeddings.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task: Option<String>,
+    /// Endpoint readiness state.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<String>,
+    /// Endpoint description supplied by Databricks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Whether the endpoint supports tool calling.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_tools: Option<bool>,
+    /// AI Gateway model profile scores.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profile: Option<ModelProfile>,
+    /// Intent-oriented endpoint class.
     #[serde(rename = "class", skip_serializing_if = "Option::is_none")]
     pub model_class: Option<ModelClass>,
+    /// Provider names mapped to provider-specific model names.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub service_names: BTreeMap<String, String>,
+    /// Foundation model name reported by the served entity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_service_name: Option<String>,
+    /// Reasoning effort values accepted by the endpoint.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reasoning_efforts: Vec<ReasoningEffort>,
+    /// Retirement status for the served model.
     #[serde(default)]
     pub status: ModelStatus,
 }
 
+/// Filters and ranking controls for a model catalogue query.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModelQuery {
+    /// Optional fuzzy model-name search.
     pub search: Option<String>,
+    /// Requested model-class ceiling, or the exact embedding class.
     pub model_class: Option<ModelClass>,
+    /// Whether candidates must support tool calling.
     pub requires_tools: bool,
+    /// Whether retired models remain eligible.
     pub include_deprecated: bool,
+    /// Maximum number of results.
     pub limit: Option<usize>,
+    /// Maximum fuzzy-match distance.
     pub threshold: Option<f64>,
 }
 
+/// Model Serving endpoint plus its classification and search score.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RankedModel {
+    /// Matching endpoint metadata.
     pub endpoint: ServingEndpointSummary,
+    /// Intent-oriented endpoint class.
     pub model_class: ModelClass,
+    /// Fuzzy-match distance, where lower values are closer.
     pub score: Option<f64>,
 }
 
+/// Result of resolving a requested model name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedModel {
+    /// Resolved endpoint name or the original request when unmatched.
     pub model_id: String,
+    /// Whether the request matched a known endpoint.
     pub matched: bool,
+    /// Fuzzy-match distance when available.
     pub score: Option<f64>,
 }
 
+/// Parse a model or endpoint name into family, version, and variant tokens.
 pub fn parse_model_name(value: &str) -> Option<ParsedModelName> {
     let source = value.trim();
     if source.is_empty() {
@@ -181,6 +248,7 @@ pub fn parse_model_name(value: &str) -> Option<ParsedModelName> {
     })
 }
 
+/// Normalize a model name into tokens suitable for fuzzy catalogue search.
 pub fn model_search_query(value: &str) -> Option<String> {
     let parsed = parse_model_name(value)?;
     Some(
@@ -192,6 +260,26 @@ pub fn model_search_query(value: &str) -> Option<String> {
     )
 }
 
+/// Return whether a model requires Databricks' native Responses endpoint.
+pub fn is_responses_only(value: &str) -> bool {
+    if value.to_ascii_lowercase().contains("codex") {
+        return true;
+    }
+    let Some(parsed) = parse_model_name(value) else {
+        return false;
+    };
+    if parsed.family != ModelFamily::Gpt
+        || parsed.model.iter().any(|part| part == "oss")
+        || parsed.version.is_empty()
+    {
+        return false;
+    }
+    let major = parsed.version[0];
+    let minor = parsed.version.get(1).copied().unwrap_or(0);
+    major > 5 || (major == 5 && minor >= 4)
+}
+
+/// Derive provider-specific model names from a model identity.
 pub fn model_service_names(value: &str) -> BTreeMap<String, String> {
     let Some(parsed) = parse_model_name(value) else {
         return BTreeMap::new();
@@ -255,6 +343,7 @@ pub fn model_service_names(value: &str) -> BTreeMap<String, String> {
     names
 }
 
+/// Extract up to three numeric version components from a model name.
 pub fn version_tuple(name: &str) -> [u32; 3] {
     let Some(start) = name.find(|character: char| character.is_ascii_digit()) else {
         return [0, 0, 0];

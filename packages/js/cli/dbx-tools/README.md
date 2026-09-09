@@ -5,12 +5,14 @@ gated public tunnel.
 
 Available commands:
 
-| Command          | What it does                                                             |
-| ---------------- | ------------------------------------------------------------------------ |
-| `dbx dev`        | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
-| `dbx appkit env` | Print the environment an AppKit app resolves, as eval-able shell output. |
-| `dbx auth`       | Generate U2M or M2M OAuth tokens with secure credential storage.         |
-| `dbx tunnel`     | Front any command with a public portr tunnel and an email-OTP gate.      |
+| Command              | What it does                                                             |
+| -------------------- | ------------------------------------------------------------------------ |
+| `dbx dev`            | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
+| `dbx appkit env`     | Print the environment an AppKit app resolves, as eval-able shell output. |
+| `dbx auth`           | Generate U2M or M2M OAuth tokens with secure credential storage.         |
+| `dbx tunnel`         | Front any command with a public portr tunnel and an email-OTP gate.      |
+| `dbx model-proxy`    | Run the multi-protocol Databricks Model Serving proxy.                   |
+| `dbx lakebase-proxy` | Run the loopback PostgreSQL proxy for Databricks Lakebase.               |
 
 Key features:
 
@@ -31,6 +33,12 @@ its name is matched, so `dbx dev` never pays to load AppKit, native OAuth,
 SMTP, or X.509 code. Run
 `dbx <group> --help` for a group's own flags; each forwards `--help` to the child
 program rather than answering it at the root.
+
+Rust commands are generated from the workspace's release metadata. The first
+invocation downloads the exact GitHub release asset matching this CLI version
+and operating system, then installs it atomically in the user's home directory.
+Later invocations reuse the validated executable. Root help never downloads a
+binary, and all command arguments are forwarded directly to the Rust CLI.
 
 ## Bootstrap A Workspace
 

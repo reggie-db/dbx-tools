@@ -8,8 +8,8 @@
  * A string target is authoritative and may be a dotted module name, file URL,
  * or Python source path. A {@link PolyglotTarget} derives candidates from a
  * package specifier and export key. Public Python snake_case exports become
- * camelCase properties, dataclass-style `as_dict()` results become JavaScript
- * objects, and method signatures are cached for keyword-argument routing.
+ * camelCase properties, dataclass results become JavaScript objects, and
+ * method signatures are cached for keyword-argument routing.
  *
  * @module
  */
@@ -33,8 +33,11 @@ const { NamedArgument, ProxiedPyObject, python } = await import("bun_python");
 if (pythonSitePackages) python.import("sys").path.insert(0, pythonSitePackages);
 for (const path of workspacePythonRoots()) python.import("sys").path.insert(0, path);
 const testSupport = python.runModule(`
+import dataclasses
+import enum
 import importlib.util
 import inspect
+import json
 
 def load_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -55,6 +58,20 @@ def read_signature(function):
         (parameter.name, parameter.kind.name, parameter.default is inspect.Parameter.empty)
         for parameter in inspect.signature(function).parameters.values()
     ]
+
+def plain_value(value):
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return plain_value(vars(value))
+    if isinstance(value, enum.Enum):
+        return value.name.lower()
+    if isinstance(value, dict):
+        return {key: plain_value(item) for key, item in value.items() if item is not None}
+    if isinstance(value, (list, tuple)):
+        return [plain_value(item) for item in value]
+    return value
+
+def plain_json(value):
+    return json.dumps(plain_value(value))
 `);
 
 type PythonValue = PythonProxy &
@@ -242,8 +259,13 @@ function methodSignature(method: PythonValue): MethodSignature {
 
 function plainValue(value: unknown): unknown {
   if (isPythonProxy(value) && pythonObject(value).isNone) return null;
+  if (isPythonProxy(value) && python.builtins.hasattr(value, "__dataclass_fields__").valueOf()) {
+    return plainValue(JSON.parse(testSupport.plain_json(value).valueOf() as string));
+  }
   if (isPythonProxy(value) && python.builtins.hasattr(value, "as_dict").valueOf()) {
     value = pythonProperty(value, "as_dict")();
+  } else if (isPythonProxy(value)) {
+    value = testSupport.plain_value(value);
   }
   const plain = isPythonProxy(value) ? value.valueOf() : value;
   if (Array.isArray(plain)) return plain.map(plainValue);
@@ -256,6 +278,11 @@ function plainValue(value: unknown): unknown {
     return entries.every(([key]) => typeof key === "string")
       ? Object.fromEntries(entries)
       : new Map(entries);
+  }
+  if (isRecord(plain)) {
+    return Object.fromEntries(
+      Object.entries(plain).map(([key, item]) => [toCamelCase(key), plainValue(item)]),
+    );
   }
   return plain;
 }

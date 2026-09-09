@@ -1,25 +1,31 @@
 //! Daily Databricks model-capability discovery from the public documentation.
 
-use std::{
-    collections::BTreeSet,
-    path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{collections::BTreeSet, path::Path, time::Duration};
 
 use dbx_tools_databricks::{platform_cache_root, FileCache, FileCacheError};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{model_search_query, ServingEndpointSummary};
+use crate::{
+    documentation::{
+        collapse_text, load_page as load_documentation_page, read_snapshot, snapshot_is_fresh,
+        unix_timestamp, write_snapshot, DocumentationError,
+    },
+    models::{model_search_query, ServingEndpointSummary},
+};
 
+/// Cache lifetime for model capabilities loaded from Databricks documentation.
 pub const MODEL_CAPABILITIES_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+/// Databricks documentation URL for models that support the OpenAI Responses API.
 pub const OPENAI_RESPONSES_MODELS_URL: &str =
     "https://docs.databricks.com/aws/en/machine-learning/model-serving/query-openai-responses";
+/// Databricks documentation URL for models that support native web search.
 pub const WEB_SEARCH_MODELS_URL: &str =
     "https://docs.databricks.com/aws/en/machine-learning/model-serving/web-search";
 
 const GENERATED_MODEL_CAPABILITIES: &str = include_str!("../assets/model-capabilities.json");
 
+/// Model Serving capability sets derived from Databricks documentation.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCapabilities {
@@ -30,23 +36,28 @@ pub struct ModelCapabilities {
 }
 
 impl ModelCapabilities {
+    /// Return whether an endpoint accepts image input through the Responses API.
     pub fn supports_image_input(&self, endpoint: &ServingEndpointSummary) -> bool {
         endpoint_matches(&self.image_input, endpoint)
     }
 
+    /// Return whether an endpoint supports the `apply_patch` tool.
     pub fn supports_apply_patch(&self, endpoint: &ServingEndpointSummary) -> bool {
         endpoint_matches(&self.apply_patch, endpoint)
     }
 
+    /// Return whether an endpoint supports the native web-search tool.
     pub fn supports_web_search(&self, endpoint: &ServingEndpointSummary) -> bool {
         endpoint_matches(&self.web_search, endpoint)
     }
 
+    /// Return whether an endpoint supports the OpenAI Responses API.
     pub fn supports_responses(&self, endpoint: &ServingEndpointSummary) -> bool {
         endpoint_matches(&self.responses, endpoint)
     }
 }
 
+/// Resolves cached model capabilities with a generated snapshot fallback.
 #[derive(Clone)]
 pub struct ModelCapabilitiesResolver {
     client: reqwest::Client,
@@ -56,6 +67,7 @@ pub struct ModelCapabilitiesResolver {
 }
 
 impl ModelCapabilitiesResolver {
+    /// Create a resolver using the platform cache and Databricks documentation URLs.
     pub fn new() -> Result<Self, ModelCapabilitiesError> {
         Ok(Self::with_cache_urls(
             FileCache::new(
@@ -70,6 +82,7 @@ impl ModelCapabilitiesResolver {
         ))
     }
 
+    /// Create a resolver with an explicit cache and documentation URLs.
     pub fn with_cache_urls(
         cache: FileCache,
         responses_url: impl Into<String>,
@@ -83,6 +96,7 @@ impl ModelCapabilitiesResolver {
         }
     }
 
+    /// Load model capabilities from cache, refreshing from Databricks documentation as needed.
     pub async fn capabilities(&self) -> Result<ModelCapabilities, ModelCapabilitiesError> {
         let fallback = generated_model_capabilities()?.capabilities;
         let client = self.client.clone();
@@ -122,15 +136,14 @@ impl ModelCapabilitiesResolver {
     }
 }
 
+/// Refresh the generated model-capability snapshot when its TTL has expired.
 pub async fn refresh_generated_model_capabilities(
     output: &Path,
 ) -> Result<bool, ModelCapabilitiesError> {
-    let now = unix_timestamp()?;
-    let existing = std::fs::read(output)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<GeneratedModelCapabilities>(&bytes).ok());
+    let now = unix_timestamp().map_err(model_capabilities_documentation_error)?;
+    let existing = read_snapshot::<GeneratedModelCapabilities>(output);
     if existing.as_ref().is_some_and(|snapshot| {
-        now.saturating_sub(snapshot.generated_at) < MODEL_CAPABILITIES_TTL.as_secs()
+        snapshot_is_fresh(snapshot.generated_at, now, MODEL_CAPABILITIES_TTL)
     }) {
         return Ok(false);
     }
@@ -151,13 +164,11 @@ pub async fn refresh_generated_model_capabilities(
         generated_at: now,
         capabilities: parse_model_capabilities(&responses_html, &web_search_html)?,
     };
-    if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(output, serde_json::to_vec_pretty(&snapshot)?)?;
+    write_snapshot(output, &snapshot).map_err(model_capabilities_documentation_error)?;
     Ok(true)
 }
 
+/// Parse Responses and web-search documentation into model capability sets.
 pub fn parse_model_capabilities(
     responses_html: &str,
     web_search_html: &str,
@@ -282,26 +293,10 @@ fn selector(value: &str) -> Result<Selector, ModelCapabilitiesError> {
     Selector::parse(value).map_err(|_| ModelCapabilitiesError::InvalidSelector(value.to_owned()))
 }
 
-fn collapse_text(element: scraper::ElementRef<'_>) -> String {
-    element
-        .text()
-        .flat_map(str::split_whitespace)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 async fn load_page(client: &reqwest::Client, url: &str) -> Result<String, ModelCapabilitiesError> {
-    let response = client
-        .get(url)
-        .header("user-agent", "dbx-tools-model-capabilities/1")
-        .timeout(Duration::from_secs(15))
-        .send()
-        .await?;
-    let status = response.status();
-    if !status.is_success() {
-        return Err(ModelCapabilitiesError::HttpStatus(status.as_u16()));
-    }
-    Ok(response.text().await?)
+    load_documentation_page(client, url, "dbx-tools-model-capabilities/1")
+        .await
+        .map_err(model_capabilities_documentation_error)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -323,32 +318,54 @@ fn generated_model_capabilities() -> Result<GeneratedModelCapabilities, ModelCap
         .map_err(ModelCapabilitiesError::GeneratedSnapshot)
 }
 
-fn unix_timestamp() -> Result<u64, ModelCapabilitiesError> {
-    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
+fn model_capabilities_documentation_error(error: DocumentationError) -> ModelCapabilitiesError {
+    match error {
+        DocumentationError::HttpStatus(status) => ModelCapabilitiesError::HttpStatus(status),
+        DocumentationError::Http(error) => ModelCapabilitiesError::Http(error),
+        DocumentationError::MissingParent => ModelCapabilitiesError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "model-capability snapshot path has no parent",
+        )),
+        DocumentationError::Io(error) => ModelCapabilitiesError::Io(error),
+        DocumentationError::Json(error) => ModelCapabilitiesError::Json(error),
+        DocumentationError::Time(error) => ModelCapabilitiesError::Time(error),
+    }
 }
 
+/// Errors produced while discovering or caching model capabilities.
 #[derive(Debug, thiserror::Error)]
 pub enum ModelCapabilitiesError {
+    /// The file-backed capability cache failed.
     #[error(transparent)]
     Cache(#[from] FileCacheError),
+    /// A documentation CSS selector was invalid.
     #[error("invalid capability selector: {0}")]
     InvalidSelector(String),
+    /// A required documentation section was not found.
     #[error("Databricks capability page is missing section {0}")]
     MissingSection(String),
+    /// A required documentation section did not begin with a heading.
     #[error("Databricks capability section {0} is not a heading")]
     InvalidHeading(String),
+    /// A documentation section contained no model names.
     #[error("Databricks documentation contained no {0} models")]
     NoModels(&'static str),
+    /// A documentation request returned an unsuccessful HTTP status.
     #[error("Databricks capability page returned HTTP {0}")]
     HttpStatus(u16),
+    /// A documentation request failed.
     #[error("Databricks capability page request failed: {0}")]
     Http(#[from] reqwest::Error),
+    /// The generated capability snapshot could not be decoded.
     #[error("generated model-capability snapshot is invalid: {0}")]
     GeneratedSnapshot(serde_json::Error),
+    /// Reading or writing a capability snapshot failed.
     #[error("model-capability snapshot I/O failed: {0}")]
     Io(#[from] std::io::Error),
+    /// The system clock could not provide a Unix timestamp.
     #[error("system time is before the Unix epoch: {0}")]
     Time(#[from] std::time::SystemTimeError),
+    /// A capability snapshot could not be encoded or decoded as JSON.
     #[error("model-capability snapshot JSON failed: {0}")]
     Json(#[from] serde_json::Error),
 }

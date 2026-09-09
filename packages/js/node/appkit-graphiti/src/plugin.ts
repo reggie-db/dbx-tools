@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
+import { resolve as resolvePath } from "node:path";
 import { promisify } from "node:util";
 import {
   ConfigurationError,
@@ -22,6 +23,7 @@ import {
   identity as appkitIdentity,
   plugin as appkitPlugin,
 } from "@dbx-tools/appkit";
+import { ensureRustReleaseBinary, rustReleaseBinaryCommand } from "@dbx-tools/cli/rust-binary";
 import { config as coreConfig } from "@dbx-tools/core";
 import { async as asyncModule, log, object } from "@dbx-tools/shared-core";
 import { createTool, type Tool } from "@mastra/core/tools";
@@ -36,6 +38,7 @@ import {
 } from "./config.ts";
 
 const LAKEBASE_MANIFEST = appkitPlugin.data(lakebase).plugin.manifest;
+const MODEL_PROXY_RELEASE_BINARY = rustReleaseBinaryCommand("model-proxy");
 const PACKAGE_VERSION = (
   createRequire(import.meta.url)("@dbx-tools/appkit-graphiti/package.json") as { version: string }
 ).version;
@@ -129,17 +132,18 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
 
   private async startSidecars(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
-    const [graphitiPort, litellmPort, proxyPort] = await distinctPorts(
+    const [graphitiPort, modelProxyPort, proxyPort] = await distinctPorts(
       coreConfig.port(undefined, "DATABRICKS_APP_PORT", 8000, coreConfig.ENV_ONLY),
       configured.graphitiPort,
-      configured.litellmPort,
+      configured.modelProxyPort,
       configured.proxyPort,
     );
     await ensureGraphitiPython(configured.python);
+    const modelProxyCommand = await ensureGraphitiModelProxy();
     this.resolved = {
       ...configured,
       graphitiPort,
-      litellmPort,
+      modelProxyPort,
       proxyPort,
     };
     this.supervision = concurrently(
@@ -152,9 +156,10 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
             GRAPHITI_HOST: "127.0.0.1",
             GRAPHITI_PORT: String(this.resolved.graphitiPort),
             JOURNAL_NAMESPACE: this.resolved.journalNamespace,
-            LITELLM_HOST: "127.0.0.1",
-            LITELLM_PORT: String(this.resolved.litellmPort),
-            MANAGE_LITELLM: "true",
+            MANAGE_MODEL_PROXY: "true",
+            MODEL_PROXY_COMMAND: modelProxyCommand,
+            MODEL_PROXY_HOST: "127.0.0.1",
+            MODEL_PROXY_PORT: String(this.resolved.modelProxyPort),
           },
         },
         {
@@ -189,7 +194,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
     this.mcpServerSweep.unref();
     this.logger.info("sidecars launched", {
       graphitiPort: this.resolved.graphitiPort,
-      litellmPort: this.resolved.litellmPort,
+      modelProxyPort: this.resolved.modelProxyPort,
       proxyPort: this.resolved.proxyPort,
       mcpPath: MCP_PATH,
     });
@@ -402,6 +407,14 @@ export async function ensureGraphitiPython(
   }
 }
 
+/** Install the model proxy release binary used by the Python sidecar. */
+export async function ensureGraphitiModelProxy(
+  install: typeof ensureRustReleaseBinary = ensureRustReleaseBinary,
+): Promise<string> {
+  const installed = await install(MODEL_PROXY_RELEASE_BINARY);
+  return resolvePath(installed.path);
+}
+
 export const graphiti = toPlugin(GraphitiPlugin);
 
 function executionContextUserId(): string {
@@ -443,11 +456,11 @@ async function availablePort(): Promise<number> {
 async function distinctPorts(
   appPort: number,
   graphitiPort: number,
-  litellmPort: number,
+  modelProxyPort: number,
   proxyPort: number,
 ): Promise<[number, number, number]> {
   const ports = [appPort];
-  for (const configuredPort of [graphitiPort, litellmPort, proxyPort]) {
+  for (const configuredPort of [graphitiPort, modelProxyPort, proxyPort]) {
     if (configuredPort && ports.includes(configuredPort)) {
       throw new ConfigurationError("Graphiti sidecar ports must differ from DATABRICKS_APP_PORT");
     }

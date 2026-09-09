@@ -64,6 +64,24 @@ await polygotTest(
         assert.deepEqual(implementation.parseAddress("projects/demo/branches"), {});
       });
 
+      it("parses a canonical resource path from a PostgreSQL URL", () => {
+        assert.deepEqual(
+          implementation.parseAddress(
+            "postgresql://profile@localhost:5432/projects/demo/branches/production/endpoints/primary?sslmode=disable",
+          ),
+          {
+            project: "demo",
+            branch: "production",
+            endpointId: "primary",
+            endpoint: "projects/demo/branches/production/endpoints/primary",
+            host: "localhost",
+            port: 5432,
+            user: "profile",
+            sslMode: "disable",
+          },
+        );
+      });
+
       it("recognizes hostnames and project ids", () => {
         assert.deepEqual(implementation.parseAddress("ep-1.database.azuredatabricks.net"), {
           host: "ep-1.database.azuredatabricks.net",

@@ -12,6 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{FileLock, FileLockError};
 
+/// JSON file cache with a time-to-live and cross-process refresh lock.
 #[derive(Clone, Debug)]
 pub struct FileCache {
     path: PathBuf,
@@ -21,6 +22,7 @@ pub struct FileCache {
 }
 
 impl FileCache {
+    /// Create a cache at `path` with the supplied freshness duration.
     pub fn new(path: impl Into<PathBuf>, ttl: Duration) -> Self {
         let path = path.into();
         let lock_path = path.with_extension(format!(
@@ -38,15 +40,18 @@ impl FileCache {
         }
     }
 
+    /// Override the maximum wait for the cross-process refresh lock.
     pub fn with_lock_timeout(mut self, timeout: Duration) -> Self {
         self.lock_timeout = timeout;
         self
     }
 
+    /// Return the cache file path.
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    /// Read a fresh value or load and persist it under a check-lock-check sequence.
     pub async fn get_or_try_init<T, E, Load, Fut>(&self, load: Load) -> Result<T, E>
     where
         T: Clone + DeserializeOwned + Serialize + Send + 'static,
@@ -68,6 +73,7 @@ impl FileCache {
         Ok(value)
     }
 
+    /// Replace the cached value while holding the cross-process lock.
     pub async fn refresh<T, E, Load, Fut>(&self, load: Load) -> Result<T, E>
     where
         T: Clone + DeserializeOwned + Serialize + Send + 'static,
@@ -130,6 +136,7 @@ impl FileCache {
     }
 }
 
+/// Return the current platform's user cache directory.
 pub fn platform_cache_root() -> Result<PathBuf, FileCacheError> {
     BaseDirs::new()
         .map(|directories| directories.cache_dir().to_owned())
@@ -137,17 +144,24 @@ pub fn platform_cache_root() -> Result<PathBuf, FileCacheError> {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Errors returned by [`FileCache`].
 pub enum FileCacheError {
+    /// The operating system has no resolvable user cache directory.
     #[error("could not resolve the platform cache directory")]
     CacheDirectory,
+    /// The configured cache path has no parent directory.
     #[error("cache path has no parent directory")]
     MissingParent,
+    /// Acquiring the cache refresh lock failed.
     #[error(transparent)]
     Lock(#[from] FileLockError),
+    /// Reading or writing cache files failed.
     #[error("cache I/O failed: {0}")]
     Io(#[from] std::io::Error),
+    /// Serializing or deserializing the cached JSON failed.
     #[error("cache JSON failed: {0}")]
     Json(#[from] serde_json::Error),
+    /// A blocking cache task failed to complete.
     #[error("cache task failed: {0}")]
     Task(#[from] tokio::task::JoinError),
 }
