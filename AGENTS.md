@@ -109,7 +109,10 @@ Primary package areas:
   lifecycle durations and callback configuration. `StorageAdapter` remains
   caller-implementable. Built-in storage is file or memory only. Do not add
   keychain access, a Postgres adapter, or a Postgres dependency. U2M is
-  preferred by default. An explicit profile is never remapped. Profiles
+  preferred by default. An explicit profile is never remapped. Implicit profile
+  selection uses `__settings__.default_profile`, then an existing `DEFAULT`
+  section, then the sole configured profile, and finally the legacy `DEFAULT`
+  fallback. Profiles
   containing both client ID and secret remain M2M even when `auth_type` is
   absent. Outside Databricks Apps, automatic U2M uses
   `databricks auth token --profile` when the CLI is available; otherwise it

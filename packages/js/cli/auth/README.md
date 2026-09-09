@@ -40,6 +40,10 @@ makes it fail instead. The same policy applies with `--force-refresh`.
 the resolved profile, host, and storage name. `logout` produces no output when
 it succeeds.
 
+Implicit profile selection uses `__settings__.default_profile`, an existing
+`DEFAULT` profile, the sole configured profile, then the legacy `DEFAULT`
+fallback.
+
 ## Common options
 
 - `--profile <name>` selects a Databricks CLI profile.

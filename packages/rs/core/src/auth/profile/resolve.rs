@@ -202,6 +202,19 @@ fn resolve_profile_name(requested: Option<&str>, config: Option<&Ini>) -> Result
         }
         return Ok(profile);
     }
+    if let Some(config) = config {
+        let profiles = config
+            .sections()
+            .into_iter()
+            .filter(|profile| profile != SETTINGS_SECTION)
+            .collect::<Vec<_>>();
+        if profiles.iter().any(|profile| profile == "DEFAULT") {
+            return Ok("DEFAULT".to_owned());
+        }
+        if let [profile] = profiles.as_slice() {
+            return Ok(profile.clone());
+        }
+    }
     Ok("DEFAULT".to_owned())
 }
 
@@ -273,6 +286,41 @@ mod tests {
     #[test]
     fn default_is_the_legacy_fallback() {
         assert_eq!(resolve_profile_name(None, None).unwrap(), "DEFAULT");
+    }
+
+    #[test]
+    fn existing_default_precedes_other_profiles_without_a_setting() {
+        let mut config = Ini::new_cs();
+        config.set("DEFAULT", "host", Some("https://default.example".into()));
+        config.set("OTHER", "host", Some("https://other.example".into()));
+
+        assert_eq!(
+            resolve_profile_name(None, Some(&config)).unwrap(),
+            "DEFAULT"
+        );
+    }
+
+    #[test]
+    fn sole_profile_is_selected_without_a_setting_or_default() {
+        let mut config = Ini::new_cs();
+        config.set("XDEFAULT", "host", Some("https://workspace.example".into()));
+
+        assert_eq!(
+            resolve_profile_name(None, Some(&config)).unwrap(),
+            "XDEFAULT"
+        );
+    }
+
+    #[test]
+    fn multiple_profiles_without_a_default_use_the_legacy_fallback() {
+        let mut config = Ini::new_cs();
+        config.set("ONE", "host", Some("https://one.example".into()));
+        config.set("TWO", "host", Some("https://two.example".into()));
+
+        assert_eq!(
+            resolve_profile_name(None, Some(&config)).unwrap(),
+            "DEFAULT"
+        );
     }
 
     #[test]
@@ -432,6 +480,28 @@ mod tests {
         .unwrap();
         assert_eq!(profile.auth_kind, AuthKind::MachineToMachine);
         assert_eq!(profile.client_secret(), Some("secret"));
+    }
+
+    #[test]
+    fn sole_configured_profile_builds_without_a_default_setting() {
+        let directory = tempfile::tempdir().unwrap();
+        let config_file = directory.path().join("databrickscfg");
+        std::fs::write(
+            &config_file,
+            "[XDEFAULT]\nhost = https://workspace.example\nauth_type = databricks-cli\n",
+        )
+        .unwrap();
+
+        let profile = Profile::from_sources(ProfileOptions {
+            config_file: Some(config_file),
+            ignore_ambient_credentials: true,
+            ignore_ambient_auth_type: true,
+            ..ProfileOptions::default()
+        })
+        .unwrap();
+
+        assert_eq!(profile.name, "XDEFAULT");
+        assert_eq!(profile.host.as_str(), "https://workspace.example/");
     }
 
     #[test]

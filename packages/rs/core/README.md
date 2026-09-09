@@ -24,6 +24,10 @@ and templates live under `src/oauth`. Credential records, token lifecycle, and
 storage live under `src/credentials`. File cache and lock primitives remain at
 the crate root.
 
+Without an explicit profile, resolution uses `__settings__.default_profile`,
+then an existing `DEFAULT` section, then the sole configured profile, and
+finally the legacy `DEFAULT` fallback.
+
 Outside Databricks Apps, automatic U2M uses
 `databricks auth token --profile` when the CLI is available and falls back to
 the native browser flow otherwise. Missing or invalid credentials invoke login
