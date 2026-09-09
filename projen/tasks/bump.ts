@@ -330,7 +330,7 @@ program
             "-m",
             "🌸 Shipped with Kanna — https://kanna.sh",
             "-m",
-            "Co-Authored-By: Kanna <noreply@kanna.sh>\nKanna-Agent: codex/gpt",
+            "Co-Authored-By: Kanna <noreply@kanna.sh>\nKanna-Agent: codex/databricks-gpt-5-6-sol",
           ]);
         } else {
           logger.info("nothing to commit");

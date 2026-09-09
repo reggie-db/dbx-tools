@@ -450,10 +450,11 @@ Primary package areas:
   hardcoded package paths. Release generation uses one matrix
   row per selected target, builds the Cargo workspace once in that row, and
   packages every discovered UniFFI binding and release-enabled binary from the
-  shared output. A source-only crate may set `releaseExcludeOs` to stay out of
-  incompatible release rows; the generator adds Cargo `--exclude` arguments for
-  those rows and rejects exclusions on UniFFI or release-binary crates because
-  they require an artifact from every configured target. Generated Node facades
+  shared output. A source-only crate or release-enabled binary may set
+  `releaseExcludeOs` to stay out of incompatible release rows; the generator
+  adds Cargo `--exclude` arguments for those rows and skips binary packaging and
+  upload there. UniFFI crates cannot use exclusions because every configured
+  target must produce their artifacts. Generated Node facades
   carry `dbxToolsConfig.uniffi = true`;
   generated Python facades carry `[tool.dbx_tools.config] uniffi = true`.
   These are public packages prepared by Rust and published by the Node and Python

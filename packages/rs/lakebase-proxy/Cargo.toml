@@ -20,7 +20,7 @@ path = "src/main.rs"
 async-trait = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
-dbx-tools-databricks = { version = "0.6.185", path = "../databricks", default-features = false }
+dbx-tools-databricks = { version = "0.6.186", path = "../databricks", default-features = false }
 futures = { workspace = true }
 mini-moka = { workspace = true }
 pgwire = { workspace = true }

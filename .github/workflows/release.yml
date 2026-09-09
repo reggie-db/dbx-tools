@@ -402,6 +402,18 @@ jobs:
         run: |-
           SECONDS=0
           trap 'status=$?; echo "phase=binary_packaging duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
+          if [ "${{ matrix.os }}" != "win32" ]; then
+            mkdir -p "dist/release/dbx-tools-lakebase-proxy/${{ matrix.node }}/binary/stage"
+            SOURCE="target/${{ matrix.cargo }}/release/dbx-lakebase-proxy${{ matrix.os == 'win32' && '.exe' || '' }}"
+            DESTINATION="dist/release/dbx-tools-lakebase-proxy/${{ matrix.node }}/binary/stage/dbx-lakebase-proxy${{ matrix.os == 'win32' && '.exe' || '' }}"
+            cp "$SOURCE" "$DESTINATION"
+            if [ "${{ matrix.os }}" = "win32" ]; then
+              7z a "dist/release/dbx-tools-lakebase-proxy/${{ matrix.node }}/binary/dbx-lakebase-proxy-${{ matrix.node }}.zip" "$DESTINATION"
+            else
+              tar -C "dist/release/dbx-tools-lakebase-proxy/${{ matrix.node }}/binary/stage" -czf "dist/release/dbx-tools-lakebase-proxy/${{ matrix.node }}/binary/dbx-lakebase-proxy-${{ matrix.node }}.tar.gz" "dbx-lakebase-proxy"
+            fi
+            rm -rf "dist/release/dbx-tools-lakebase-proxy/${{ matrix.node }}/binary/stage"
+          fi
           mkdir -p "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage"
           SOURCE="target/${{ matrix.cargo }}/release/dbx-model-proxy${{ matrix.os == 'win32' && '.exe' || '' }}"
           DESTINATION="dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage/dbx-model-proxy${{ matrix.os == 'win32' && '.exe' || '' }}"
@@ -440,6 +452,14 @@ jobs:
         with:
           name: dbx-tools-google--${{ matrix.python }}--python-wheel
           path: dist/release/dbx-tools-google/${{ matrix.node }}/python/*.whl
+          retention-days: 7
+      - name: Upload dbx-tools-lakebase-proxy release binary
+        id: upload_dbx-tools-lakebase-proxy_release_binary
+        if: ${{ matrix.os != 'win32' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: dbx-tools-lakebase-proxy-${{ matrix.node }}-binary
+          path: dist/release/dbx-tools-lakebase-proxy/${{ matrix.node }}/binary/*
           retention-days: 7
       - name: Upload dbx-tools-model-proxy release binary
         id: upload_dbx-tools-model-proxy_release_binary

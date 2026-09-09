@@ -46,7 +46,7 @@ export interface RustPackageOptions {
   readonly private?: boolean;
   /** Build this crate's binary for each target and attach it to the GitHub release. */
   readonly release?: boolean;
-  /** Omit this source-only crate from release workspace builds on these operating systems. */
+  /** Omit this crate and any release binary artifact from these operating systems. */
   readonly releaseExcludeOs?: readonly RustReleaseOs[];
   readonly dependencies?: Readonly<Record<string, CargoDependency>>;
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
@@ -507,9 +507,9 @@ export class DBXToolsRustWorkspace {
       rustPackageDependencies(this.packages, pkg, project.outdir, options.workspaceDependencies);
     for (const pkg of this.packages) {
       const excludedOs = new Set(pkg.packageOptions.releaseExcludeOs ?? []);
-      if (excludedOs.size && (pkg.uniffi || pkg.packageOptions.release)) {
+      if (excludedOs.size && pkg.uniffi) {
         throw new Error(
-          `${pkg.crateName} cannot set releaseExcludeOs because it produces target-specific release artifacts`,
+          `${pkg.crateName} cannot set releaseExcludeOs because UniFFI requires every configured target`,
         );
       }
       for (const dependency of packageDependencies(pkg)) {
@@ -764,6 +764,7 @@ export class DBXToolsRustWorkspace {
       .map((pkg) => ({
         crate: pkg.crateName,
         binary: pkg.packageOptions.binaryName ?? pkg.crateName,
+        excludedOs: pkg.packageOptions.releaseExcludeOs ?? [],
       }));
     const publicCrates = orderRustBindings(
       this.packages
@@ -823,18 +824,30 @@ export class DBXToolsRustWorkspace {
         "--skip-build",
       ].join(" \\\n  "),
     );
-    const binaryCommands = releaseBinaries.flatMap((pkg) => [
-      `mkdir -p "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage"`,
-      `SOURCE="target/\${{ matrix.cargo }}/release/${pkg.binary}\${{ matrix.os == 'win32' && '.exe' || '' }}"`,
-      `DESTINATION="dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage/${pkg.binary}\${{ matrix.os == 'win32' && '.exe' || '' }}"`,
-      'cp "$SOURCE" "$DESTINATION"',
-      'if [ "${{ matrix.os }}" = "win32" ]; then',
-      `  7z a "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/${pkg.binary}-\${{ matrix.node }}.zip" "$DESTINATION"`,
-      "else",
-      `  tar -C "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage" -czf "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/${pkg.binary}-\${{ matrix.node }}.tar.gz" "${pkg.binary}"`,
-      "fi",
-      `rm -rf "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage"`,
-    ]);
+    const releaseBinaryCondition = (excludedOs: readonly RustReleaseOs[]) =>
+      excludedOs.length
+        ? `\${{ ${excludedOs.map((os) => `matrix.os != '${os}'`).join(" && ")} }}`
+        : undefined;
+    const binaryCommands = releaseBinaries.flatMap((pkg) => {
+      const commands = [
+        `mkdir -p "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage"`,
+        `SOURCE="target/\${{ matrix.cargo }}/release/${pkg.binary}\${{ matrix.os == 'win32' && '.exe' || '' }}"`,
+        `DESTINATION="dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage/${pkg.binary}\${{ matrix.os == 'win32' && '.exe' || '' }}"`,
+        'cp "$SOURCE" "$DESTINATION"',
+        'if [ "${{ matrix.os }}" = "win32" ]; then',
+        `  7z a "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/${pkg.binary}-\${{ matrix.node }}.zip" "$DESTINATION"`,
+        "else",
+        `  tar -C "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage" -czf "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/${pkg.binary}-\${{ matrix.node }}.tar.gz" "${pkg.binary}"`,
+        "fi",
+        `rm -rf "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage"`,
+      ];
+      const excludedCondition = pkg.excludedOs
+        .map((os) => `[ "\${{ matrix.os }}" != "${os}" ]`)
+        .join(" && ");
+      return excludedCondition
+        ? [`if ${excludedCondition}; then`, ...commands.map((command) => `  ${command}`), "fi"]
+        : commands;
+    });
     const artifactSteps: JobStep[] = [
       ...bindings.flatMap((binding) => [
         ...(binding.node
@@ -867,6 +880,9 @@ export class DBXToolsRustWorkspace {
       ...releaseBinaries.map((pkg) => ({
         name: `Upload ${pkg.crate} release binary`,
         uses: "actions/upload-artifact@v7",
+        ...(releaseBinaryCondition(pkg.excludedOs)
+          ? { if: releaseBinaryCondition(pkg.excludedOs) }
+          : {}),
         with: {
           name: `${pkg.crate}-\${{ matrix.node }}-binary`,
           path: `dist/release/${pkg.crate}/\${{ matrix.node }}/binary/*`,

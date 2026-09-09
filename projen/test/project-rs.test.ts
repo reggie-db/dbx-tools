@@ -188,13 +188,13 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
-  it("excludes source-only crates from incompatible release operating systems", () => {
+  it("excludes release binaries from incompatible operating systems", () => {
     const platformOutdir = mkdtempSync(join(tmpdir(), "project-rs-platform-"));
     try {
       mkdirSync(join(platformOutdir, "packages/rs/platform-helper/src"), { recursive: true });
       writeFileSync(
-        join(platformOutdir, "packages/rs/platform-helper/src/lib.rs"),
-        "pub fn value() {}\n",
+        join(platformOutdir, "packages/rs/platform-helper/src/main.rs"),
+        "fn main() {}\n",
       );
       mkdirSync(join(platformOutdir, "packages/rs/tool/src"), { recursive: true });
       writeFileSync(join(platformOutdir, "packages/rs/tool/src/main.rs"), "fn main() {}\n");
@@ -215,6 +215,7 @@ describe("DBXToolsRustWorkspace", () => {
         packages: {
           "platform-helper": {
             private: true,
+            release: true,
             releaseExcludeOs: [RustReleaseOs.WINDOWS],
           },
           tool: { release: true },
@@ -231,6 +232,15 @@ describe("DBXToolsRustWorkspace", () => {
       );
       assert.ok(
         workflowStep(buildJob, "Build Rust outputs").run?.includes("${{ matrix.cargoExcludes }}"),
+      );
+      assert.ok(
+        workflowStep(buildJob, "Package release binaries").run?.includes(
+          'if [ "${{ matrix.os }}" != "win32" ]; then',
+        ),
+      );
+      assert.equal(
+        workflowStep(buildJob, "Upload fixture-platform-helper release binary").if,
+        "${{ matrix.os != 'win32' }}",
       );
     } finally {
       rmSync(platformOutdir, { recursive: true, force: true });

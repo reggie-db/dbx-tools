@@ -1014,6 +1014,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     "lakebase-proxy": {
       description: "Loopback PostgreSQL proxy for Databricks Lakebase",
       private: true,
+      release: true,
       releaseExcludeOs: [project.RustReleaseOs.WINDOWS],
       binaryName: "dbx-lakebase-proxy",
       dependencies: {
