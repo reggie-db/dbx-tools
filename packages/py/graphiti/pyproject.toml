@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-graphiti"
-version = "0.6.190"
+version = "0.6.191"
 description = "Native Graphiti MCP and Neo4j launcher with Databricks models through dbx-model-proxy"
 readme = "README.md"
 requires-python = ">=3.11,<4"

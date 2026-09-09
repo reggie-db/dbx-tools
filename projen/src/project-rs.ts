@@ -998,12 +998,6 @@ export class DBXToolsRustWorkspace {
       env: {
         ...RUST_CACHE_ENV,
         SCCACHE_GHA_VERSION: `release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`,
-        ...(hasPythonBindings
-          ? {
-              UV_PYTHON_DOWNLOADS:
-                "${{ matrix.os == 'win32' && 'never' || 'automatic' }}",
-            }
-          : {}),
       },
       strategy: {
         failFast: false,
@@ -1011,20 +1005,7 @@ export class DBXToolsRustWorkspace {
       },
       steps: [
         ...releaseSourceSteps(),
-        ...(hasPythonBindings
-          ? [
-              {
-                name: "Setup Windows Python",
-                if: "${{ matrix.os == 'win32' }}",
-                uses: "actions/setup-python@v6",
-                with: {
-                  "python-version": "3.12",
-                  architecture: "${{ matrix.cpu }}",
-                },
-              },
-              { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
-            ]
-          : []),
+        ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
         {
           name: "Setup Rust",
           ...(usePreinstalledWindowsRust ? { if: "${{ matrix.os != 'win32' }}" } : {}),

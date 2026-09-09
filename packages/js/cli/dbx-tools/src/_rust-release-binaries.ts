@@ -60,6 +60,11 @@ export const RUST_RELEASE_BINARY_COMMANDS = [
         "os": "win32",
         "cpu": "x64",
         "name": "dbx-model-proxy-win32-x64-msvc.zip"
+      },
+      {
+        "os": "win32",
+        "cpu": "arm64",
+        "name": "dbx-model-proxy-win32-arm64-msvc.zip"
       }
     ]
   }

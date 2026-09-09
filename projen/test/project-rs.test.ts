@@ -210,6 +210,7 @@ describe("DBXToolsRustWorkspace", () => {
         releasePlatforms: [
           { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
           { os: RustReleaseOs.WINDOWS, cpu: RustReleaseCpu.X64 },
+          { os: RustReleaseOs.WINDOWS, cpu: RustReleaseCpu.ARM64 },
         ],
         packages: {
           "platform-helper": {
@@ -225,9 +226,14 @@ describe("DBXToolsRustWorkspace", () => {
       const buildJob = readWorkflow(platformOutdir).jobs["rust-build"]!;
       const matrix = buildJob.strategy?.matrix?.include ?? [];
       assert.equal(matrix.find((target) => target.os === "linux")?.cargoExcludes, "");
-      assert.equal(
-        matrix.find((target) => target.os === "win32")?.cargoExcludes,
-        "--exclude fixture-platform-helper",
+      assert.deepEqual(
+        matrix
+          .filter((target) => target.os === "win32")
+          .map((target) => [target.cpu, target.cargoExcludes]),
+        [
+          ["x64", "--exclude fixture-platform-helper"],
+          ["arm64", "--exclude fixture-platform-helper"],
+        ],
       );
       assert.ok(
         workflowStep(buildJob, "Build Rust outputs").run?.includes("${{ matrix.cargoExcludes }}"),

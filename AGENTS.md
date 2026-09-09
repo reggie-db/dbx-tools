@@ -185,7 +185,7 @@ Primary package areas:
   `generate-model-metadata` Rust example refreshes both committed snapshots.
 - `packages/rs/model-proxy` is the public `dbx-model-proxy` Rust binary that
   exposes OpenAI Chat, OpenAI Responses, Anthropic Messages, Codex Responses,
-  OpenAI Embeddings, and live model-list compatibility over Databricks. It depends on `databricks`
+  OpenAI Embeddings, and live model-list compatibility over Databricks. It depends on `core`
   for credentials and on `model` for cached discovery and ranking. Releases
   publish the crate to Cargo and attach the compiled binary for each selected
   platform to the GitHub release. It logs payload-free request summaries with
@@ -213,8 +213,8 @@ Primary package areas:
   lifetime. Auth sessions and discovery metadata use bounded `mini-moka`
   caches. Individual connections log at `debug`; one-minute aggregate
   connection statistics log at `info`. The package stays private and out of
-  public package lists. pgwire 0.41.0 sets the Rust workspace compatibility
-  floor to 1.89.
+  public package lists, and every Windows release row excludes it. pgwire
+  0.41.0 sets the Rust workspace compatibility floor to 1.89.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search

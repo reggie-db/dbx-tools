@@ -519,6 +519,13 @@ jobs:
             os: win32
             cpu: x64
             cargoExcludes: --exclude dbx-tools-lakebase-proxy
+          - runner: windows-11-vs2026-arm
+            cargo: aarch64-pc-windows-msvc
+            node: win32-arm64-msvc
+            python: win_arm64
+            os: win32
+            cpu: arm64
+            cargoExcludes: --exclude dbx-tools-lakebase-proxy
   publish-cargo:
     needs:
       - verify-context

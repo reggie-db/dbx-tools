@@ -18,7 +18,7 @@ path = "uniffi-bindgen.rs"
 
 [dependencies]
 async-trait = { workspace = true }
-dbx-tools-core = { version = "0.6.190", path = "../core" }
+dbx-tools-core = { version = "0.6.191", path = "../core" }
 google-cloud-auth = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }
