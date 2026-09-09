@@ -1033,7 +1033,11 @@ export class DBXToolsRustWorkspace {
         {
           name: "Install Linux native dependencies",
           if: "${{ matrix.os == 'linux' }}",
-          run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
+          run: [
+            "sudo rm -f /etc/apt/sources.list.d/google-chrome.list",
+            "sudo apt-get update",
+            "sudo apt-get install --yes libdbus-1-dev pkg-config",
+          ].join("\n"),
         },
         {
           name: "Build Rust outputs",

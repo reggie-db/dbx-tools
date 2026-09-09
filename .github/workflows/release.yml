@@ -349,7 +349,10 @@ jobs:
       - name: Install Linux native dependencies
         id: install_linux_native_dependencies
         if: ${{ matrix.os == 'linux' }}
-        run: sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config
+        run: |-
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install --yes libdbus-1-dev pkg-config
       - name: Build Rust outputs
         id: build_rust_outputs
         env:

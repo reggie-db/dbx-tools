@@ -347,6 +347,10 @@ describe("DBXToolsRustWorkspace", () => {
         stepNames(buildJob).filter((name) => name === "Install Linux native dependencies").length,
         1,
       );
+      assert.match(
+        workflowStep(buildJob, "Install Linux native dependencies").run ?? "",
+        /rm -f \/etc\/apt\/sources\.list\.d\/google-chrome\.list/,
+      );
       assert.equal(stepNames(buildJob).includes("Setup Bun"), false);
     } finally {
       rmSync(multiOutdir, { recursive: true, force: true });
@@ -659,6 +663,8 @@ describe("DBXToolsRustWorkspace", () => {
     assert.ok(packager.includes("command: process.execPath, args: [npmCli, ...args]"));
     assert.ok(packager.includes("repository: sourceManifest.repository"));
     assert.ok(packager.includes("npmPackageBase:"));
+    assert.match(packager, /cargoTargetRoot/);
+    assert.doesNotMatch(packager, /resolve\(\s*root,\s*"target",\s*cargoTarget/);
     assert.equal(packager.includes('required("ubrn")'), false);
     assert.equal(packager.includes('run("cargo", ["run"'), false);
     const nodeGenerator = readFileSync(

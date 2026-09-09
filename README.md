@@ -356,7 +356,3 @@ The READMEs are the current package-level source of truth. The GitHub Pages site
 is generated from those README files, so package docs are not maintained twice.
 See [`docs/README.md`](docs/README.md) for the local build command and Pages
 workflow.
-
-The continuation plan in
-[`plans/appkit-companion-continuation.md`](plans/appkit-companion-continuation.md)
-tracks remaining package-follow-up work.

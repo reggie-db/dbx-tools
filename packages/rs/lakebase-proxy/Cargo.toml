@@ -20,7 +20,7 @@ path = "src/main.rs"
 async-trait = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
-dbx-tools-core = { version = "0.6.187", path = "../core" }
+dbx-tools-core = { version = "0.6.188", path = "../core" }
 futures = { workspace = true }
 mini-moka = { workspace = true }
 pgwire = { workspace = true }

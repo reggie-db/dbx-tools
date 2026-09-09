@@ -431,8 +431,7 @@ const packagePython = ({
   const packageDirectory = resolve(pythonRoot, "src", ...pythonModule.split("."));
   const generatedDirectory = mkdtempSync(join(tmpdir(), `${packageName}-python-`));
   const generator = resolve(
-    root,
-    "target",
+    cargoTargetRoot,
     cargoTarget,
     "release",
     `${crate}-uniffi-bindgen${os === "win32" ? ".exe" : ""}`,

@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/databricks";
-export const PACKAGE_VERSION = "0.6.187";
+export const PACKAGE_VERSION = "0.6.188";
 export * as cloud from "./src/cloud.ts";
 export * as databricksFS from "./src/databricks-fs.ts";
 export * as databricksPath from "./src/databricks-path.ts";

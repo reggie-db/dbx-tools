@@ -43,7 +43,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.187",
+  "version": "0.6.188",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -56,11 +56,11 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@dbx-tools/core-rs-linux-x64-gnu": "0.6.187",
-    "@dbx-tools/core-rs-linux-arm64-gnu": "0.6.187",
-    "@dbx-tools/core-rs-darwin-x64": "0.6.187",
-    "@dbx-tools/core-rs-darwin-arm64": "0.6.187",
-    "@dbx-tools/core-rs-win32-x64-msvc": "0.6.187"
+    "@dbx-tools/core-rs-linux-x64-gnu": "0.6.188",
+    "@dbx-tools/core-rs-linux-arm64-gnu": "0.6.188",
+    "@dbx-tools/core-rs-darwin-x64": "0.6.188",
+    "@dbx-tools/core-rs-darwin-arm64": "0.6.188",
+    "@dbx-tools/core-rs-win32-x64-msvc": "0.6.188"
   },
   "dbxToolsConfig": {
     "uniffi": true,
