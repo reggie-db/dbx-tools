@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Project, TextFile, javascript } from "projen";
-import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { DBXToolsTypeScriptProject, projectRepositoryUrl } from "./project-js.ts";
@@ -84,7 +83,7 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly pythonRoot?: string;
   readonly pythonModulePrefix?: string;
   readonly private?: boolean;
-  /** Generate tag-driven cross-platform UniFFI package releases. */
+  /** Generate release-branch-driven cross-platform UniFFI package releases. */
   readonly release?: boolean;
   /** Native release targets; defaults to the maintained GitHub-hosted matrix. */
   readonly releaseTargets?: readonly UniFFIReleaseTarget[];
@@ -174,30 +173,35 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
   },
 ] as const;
 
+const UBRN_VERSION = "0.31.0-5";
+const RELEASE_PLATFORMS_ENV = "DBX_TOOLS_RELEASE_PLATFORMS";
 const RUST_CACHE_ENV = {
   CARGO_INCREMENTAL: "0",
   CARGO_TERM_COLOR: "always",
 } as const;
-const UBRN_VERSION = "0.31.0-5";
-const RELEASE_PLATFORMS_ENV = "DBX_TOOLS_RELEASE_PLATFORMS";
 
-function rustCacheSteps(
-  sharedKey: string,
-  idPrefix = "",
-  saveIf = true,
-): readonly Record<string, unknown>[] {
+function cargoCacheKeyStep(): Record<string, unknown> {
+  return {
+    name: "Resolve Cargo dependency cache key",
+    id: "cargo_cache_key",
+    run: "node .projen/cargo-cache-key.mjs",
+  };
+}
+
+function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
   return [
     {
-      name: "Cache Cargo registry and targets",
-      id: `${idPrefix}cargo_cache`,
+      name: "Cache Cargo registry and dependencies",
+      id: "cargo_cache",
       uses: "Swatinem/rust-cache@v2.9.2",
       with: {
         "cache-targets": true,
         "cache-workspace-crates": false,
         "add-job-id-key": false,
-        "add-rust-environment-hash-key": true,
+        "add-rust-environment-hash-key": false,
+        key: "${{ steps.cargo_cache_key.outputs.key }}",
         "shared-key": sharedKey,
-        "save-if": saveIf,
+        "save-if": "${{ github.event_name == 'push' }}",
       },
     },
   ];
@@ -271,6 +275,66 @@ function uniffiReleaseTaskSource(): string {
   const source = candidates.find(existsSync);
   if (!source) throw new Error("Could not locate tasks/uniffi-release.mjs");
   return readFileSync(source, "utf8");
+}
+
+function cargoCacheKeySource(): string {
+  return `#!/usr/bin/env node
+import { createHash } from "node:crypto";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+
+function command(command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(\`\${command} exited with \${result.status}\`);
+  return result.stdout;
+}
+
+const hasLock = existsSync("Cargo.lock");
+const metadata = JSON.parse(
+  command("cargo", [
+    "metadata",
+    ...(hasLock ? ["--locked"] : []),
+    "--format-version",
+    "1",
+    "--no-deps",
+  ]),
+);
+const workspaceNames = new Set(metadata.packages.map((pkg) => pkg.name));
+const dependencyLock = hasLock
+  ? readFileSync("Cargo.lock", "utf8")
+      .split("[[package]]")
+      .slice(1)
+      .filter((block) => {
+        const name = /^\\s*name = "([^"]+)"/m.exec(block)?.[1];
+        return name && !workspaceNames.has(name);
+      })
+      .map((block) => \`[[package]]\${block}\`)
+      .join("")
+  : "";
+const manifests = [
+  metadata.workspace_root + "/Cargo.toml",
+  ...metadata.packages.map((pkg) => pkg.manifest_path),
+]
+  .map((path) =>
+    readFileSync(path, "utf8").replace(/^version = "[0-9]+\\.[0-9]+\\.[0-9]+"\\s*$/gm, ""),
+  )
+  .join("\\n");
+const config = existsSync(".cargo/config.toml")
+  ? readFileSync(".cargo/config.toml", "utf8")
+  : "";
+const key = createHash("sha256")
+  .update(dependencyLock)
+  .update(manifests)
+  .update(config)
+  .update(command("rustc", ["-vV"]))
+  .digest("hex");
+if (process.env.GITHUB_OUTPUT) {
+  appendFileSync(process.env.GITHUB_OUTPUT, \`key=\${key}\\n\`);
+} else {
+  process.stdout.write(\`\${key}\\n\`);
+}
+`;
 }
 
 /** Persisted mapping consumed by the focused Rust source watcher. */
@@ -842,110 +906,11 @@ export class DBXToolsRustWorkspace {
     }
     project.removeTask("rs:bindings:demo");
     if (releaseEnabled) {
-      this.addCacheWorkflow(project, options, nativeTargets);
+      new TextFile(project, ".projen/cargo-cache-key.mjs", {
+        lines: cargoCacheKeySource().trimEnd().split("\n"),
+      });
       this.addReleaseWorkflow(project, options, nativeTargets);
     }
-  }
-
-  private addCacheWorkflow(
-    project: javascript.NodeProject,
-    options: DBXToolsRustWorkspaceOptions,
-    targets: readonly UniFFIReleaseTarget[],
-  ): void {
-    if (!project.github || !isDBXToolsJavaScriptProject()(project) || targets.length === 0) return;
-    const releaseRustVersion = options.releaseRustVersion ?? "stable";
-    const usePreinstalledWindowsRust = releaseRustVersion === "stable";
-    const usesCargoLock = existsSync(join(project.outdir, "Cargo.lock"));
-    const hasReleaseExclusions = this.packages.some(
-      (pkg) => pkg.packageOptions.releaseExcludeOs?.length,
-    );
-    const matrix = targets.map((target) => ({
-      ...target,
-      ...(hasReleaseExclusions
-        ? {
-            cargoExcludes: this.packages
-              .filter((pkg) => pkg.packageOptions.releaseExcludeOs?.includes(target.os))
-              .map((pkg) => `--exclude ${pkg.crateName}`)
-              .join(" "),
-          }
-        : {}),
-    }));
-    const workflow = new GithubWorkflow(project.github, "rust-cache", {
-      fileName: "rust-cache.yml",
-      limitConcurrency: true,
-      concurrencyOptions: { group: "rust-cache", cancelInProgress: true },
-    });
-    workflow.on({
-      push: {
-        branches: ["main"],
-        paths: [
-          ".cargo/**",
-          ".github/workflows/rust-cache.yml",
-          "Cargo.lock",
-          "Cargo.toml",
-          "packages/rs/**",
-        ],
-      },
-      workflowDispatch: {},
-    });
-    workflow.addJob("prime", {
-      name: "${{ matrix.node }}",
-      runsOn: ["${{ matrix.runner }}"],
-      permissions: { contents: JobPermission.READ },
-      env: RUST_CACHE_ENV,
-      strategy: {
-        failFast: false,
-        matrix: { include: matrix },
-      },
-      steps: [
-        { name: "Checkout", uses: "actions/checkout@v6" },
-        {
-          name: "Setup Rust",
-          ...(usePreinstalledWindowsRust ? { if: "${{ matrix.os != 'win32' }}" } : {}),
-          uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
-          with: { targets: "${{ matrix.cargo }}" },
-        },
-        ...(usePreinstalledWindowsRust
-          ? [
-              {
-                name: "Verify preinstalled Windows Rust",
-                if: "${{ matrix.os == 'win32' }}",
-                shell: "bash",
-                run: [
-                  "rustc --version --verbose",
-                  "cargo --version",
-                  'rustup target list --installed | grep -Fx "${{ matrix.cargo }}"',
-                  'test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.cargo }}/bin/rust-lld.exe"',
-                ].join("\n"),
-              },
-            ]
-          : []),
-        ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`),
-        {
-          name: "Install Linux native dependencies",
-          if: "${{ matrix.os == 'linux' }}",
-          run: [
-            "sudo rm -f /etc/apt/sources.list.d/google-chrome.list",
-            "sudo apt-get update",
-            "sudo apt-get install --yes libdbus-1-dev pkg-config",
-          ].join("\n"),
-        },
-        {
-          name: "Prime Cargo target cache",
-          shell: "bash",
-          env: {
-            CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER:
-              "${{ matrix.os == 'win32' && 'rust-lld' || '' }}",
-          },
-          run: timedBash(
-            "rust_cache",
-            `cargo build --release --workspace${usesCargoLock ? " --locked" : ""} --target "\${{ matrix.cargo }}"${
-              hasReleaseExclusions ? " ${{ matrix.cargoExcludes }}" : ""
-            }`,
-          ),
-        },
-      ],
-    });
   }
 
   private addReleaseWorkflow(
@@ -1142,15 +1107,8 @@ export class DBXToolsRustWorkspace {
               },
             ]
           : []),
-        ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`, "", false),
-        {
-          name: "Log cache configuration",
-          shell: "bash",
-          run: [
-            `echo "cargo_cache_namespace=release-\${{ matrix.cargo }}-rust-${releaseRustVersion}"`,
-            'echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"',
-          ].join("\n"),
-        },
+        cargoCacheKeyStep(),
+        ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`),
         {
           name: "Install Linux native dependencies",
           if: "${{ matrix.os == 'linux' }}",

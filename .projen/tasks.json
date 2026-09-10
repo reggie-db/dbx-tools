@@ -38,7 +38,7 @@
     },
     "bump": {
       "name": "bump",
-      "description": "Bump the release version (default patch), then commit, tag, and push it",
+      "description": "Bump the release version (default patch), then commit and push it",
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v",

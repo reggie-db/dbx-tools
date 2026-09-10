@@ -459,13 +459,14 @@ Primary package areas:
   on a separately installed `VCRUNTIME140.dll`. An explicitly pinned
   `releaseRustVersion` still uses the setup action on Windows.
   One generated `.github/workflows/release.yml` owns Rust, npm, PyPI, GitHub
-  binary, and documentation publication. An annotated `v*` tag starts it
-  directly. Its context job resolves the tag to a commit and requires both the
-  tag target and checked-out `HEAD` to equal that SHA. Every source job repeats
-  the shallow checkout and tag verification. A manual run requires the same tag
-  and commit plus dry-run mode, so it builds and validates without publishing
-  packages or deploying documentation. The workflow uses one `release`
-  concurrency group with `cancel-in-progress: true`.
+  binary, and documentation publication. A push to the configured release branch
+  starts it. Its context job reads `VERSION`, derives and creates the annotated
+  `v*` tag, or verifies that an existing tag points to the same commit. Every
+  source job repeats the shallow checkout and tag verification. A manual run
+  requires the same tag and commit plus dry-run mode, so it builds and validates
+  without publishing packages or deploying documentation. The workflow uses one
+  non-cancelling `release` concurrency group so a later release cannot interrupt
+  an earlier publication.
   Release workflow generation is non-destructive: it writes `release.yml` and
   never removes other workflow files. Consumers must explicitly delete exact
   workflow files they no longer want.
@@ -473,7 +474,7 @@ Primary package areas:
   Manual recovery selects `all`, `node`, `python`, or `docs`; a Node or Python
   recovery can name an earlier `release.yml` run whose commit must match the
   verified annotated tag. Dispatch the workflow with that tag as its Git ref so
-  release environment tag policies remain effective. Manual runs default to
+  the recovery run checks out the immutable release boundary. Manual runs default to
   dry-run, while clearing `dry_run` permits the selected publication stage. npm recovery compares the
   staged archive integrity and repository identity before skipping an exact
   published version. Normal workspace packages are packed with Bun for the same
@@ -485,15 +486,16 @@ Primary package areas:
   builds facades from committed generated TypeScript and publishes them in
   binding dependency order. Python combines every platform wheel with standard
   wheel and source builds, and publishes each distribution through its own PyPI
-  trusted-publisher environment. Cargo registry caches use one stable
-  target/toolchain key through `Swatinem/rust-cache`; each archive includes the
-  registry and cleaned dependency artifacts from the target directory, while
-  workspace crate outputs rebuild for their release version. Do not layer the
-  GHA sccache backend on top: its per-object entries exhaust the repository
-  cache quota. GitHub isolates caches by tag, so `rust-cache.yml` primes caches
-  in the default-branch scope on Rust, Cargo, or workflow changes and also
-  supports manual dispatch; release jobs restore those archives with
-  `save-if: false` instead of creating unusable tag-scoped copies. Set
+  trusted-publisher environment. Rust release rows cache the Cargo registry and
+  dependency artifacts through `Swatinem/rust-cache`. The release itself runs on
+  the default branch, so each release can restore and update the same cache scope;
+  manual tag recovery restores that default-branch cache without writing a
+  tag-scoped copy. `.projen/cargo-cache-key.mjs` excludes workspace package
+  versions from the dependency key, while `cache-workspace-crates: false` ensures
+  every release recompiles repository code. There is no separate cache workflow
+  and no sccache layer. `Cargo.lock` and `--locked` keep dependency resolution
+  reproducible.
+  Set
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
   Packaging must
@@ -513,7 +515,7 @@ Primary package areas:
   `bun run bump --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product; omit both to restore the maintained full
   matrix. GitHub environments referenced by release jobs must permit the
-  release tag pattern. Every PyPI trusted publisher, including UniFFI wheels,
+  configured release branch. Every PyPI trusted publisher, including UniFFI wheels,
   uses `release.yml`.
 - **Python workspace roots** — `DBXToolsPythonWorkspace.root` defaults to
   `packages/py`; consumers may place packages elsewhere without changing the
@@ -1429,7 +1431,7 @@ projen/                                   # the projen engine (`@dbx-tools/proje
     codegen.ts, module-exports.ts         # ts-to-zod codegen + exports-map generation
     watch.ts                              # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
     scaffold.ts                           # runSynth({ post })
-    release.ts                            # DBXToolsRelease: bump task + tag-driven publish workflow
+    release.ts                            # DBXToolsRelease: bump task + release-branch publish workflow
     publish.ts                            # compiled publish surface: publishConfig + rootDir/prepack wiring (publishesCompiled excludes `ui`)
     openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
     clean.ts, generated.ts, tsconfig.ts, bun-app.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
@@ -1657,8 +1659,8 @@ What is configured, and why:
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
   restores the corporate index when it is unavailable.
 
-`bun run bump` publishes the complete release: its `v*` tag triggers the unified
-release workflow; `--local-registry auto` also publishes npm packages to
+`bun run bump` publishes the complete release when it pushes the configured
+release branch; the workflow creates its annotated `v*` tag. `--local-registry auto` also publishes npm packages to
 loopback Verdaccio, and `--local-pypi auto` publishes Python packages when uv's
 default index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache
 is read-only and is not treated as a publish target.
@@ -1867,7 +1869,8 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 
 - **The engine is a normal member of the Node release.** `@dbx-tools/projen`
   shares the root `VERSION`, `v*` tag, and `release.yml` workflow with every
-  other npm workspace member. One `bun run bump` commits and pushes that tag;
+  other npm workspace member. One `bun run bump` commits and pushes the release
+  branch, and the workflow creates the tag;
   there is no separate Projen tag or workflow.
 - **Publishing leans on NATIVE bun - do not re-hand-roll what bun already does.**
   `tasks/publish.ts` sets each member's version with `bun pm pkg set version=<v>`

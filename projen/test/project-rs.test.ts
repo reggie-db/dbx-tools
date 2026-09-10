@@ -355,10 +355,10 @@ describe("DBXToolsRustWorkspace", () => {
       assert.ok(packageBindings.includes('--crate "fixture-alpha"'));
       assert.ok(packageBindings.includes('--crate "fixture-beta"'));
       assert.equal(
-        stepNames(buildJob).filter((name) => name === "Cache Cargo registry and targets").length,
+        stepNames(buildJob).filter((name) => name === "Cache Cargo registry and dependencies")
+          .length,
         1,
       );
-      assert.equal(stepNames(buildJob).includes("Setup sccache"), false);
       assert.equal(
         stepNames(buildJob).filter((name) => name === "Install Linux native dependencies").length,
         1,
@@ -541,6 +541,10 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(cargoConfig, /\[target\.x86_64-pc-windows-msvc\]/);
     assert.match(cargoConfig, /\[target\.aarch64-pc-windows-msvc\]/);
     assert.equal(cargoConfig.match(/target-feature=\+crt-static/g)?.length, 2);
+    const cargoCacheKey = readFileSync(join(outdir, ".projen/cargo-cache-key.mjs"), "utf8");
+    assert.match(cargoCacheKey, /workspaceNames/);
+    assert.match(cargoCacheKey, /!workspaceNames\.has\(name\)/);
+    assert.match(cargoCacheKey, /replace\(\/\^version =/);
     const node = JSON.parse(
       readFileSync(join(outdir, "packages/js/node/databricks-auth-rs/package.json"), "utf8"),
     ) as {
@@ -617,37 +621,20 @@ describe("DBXToolsRustWorkspace", () => {
         "fixture-tool-${{ matrix.node }}-binary",
       ],
     );
-    assert.deepEqual(workflowStep(rustBuild, "Cache Cargo registry and targets").with, {
+    assert.equal(
+      workflowStep(rustBuild, "Resolve Cargo dependency cache key").run,
+      "node .projen/cargo-cache-key.mjs",
+    );
+    assert.deepEqual(workflowStep(rustBuild, "Cache Cargo registry and dependencies").with, {
       "cache-targets": true,
       "cache-workspace-crates": false,
       "add-job-id-key": false,
-      "add-rust-environment-hash-key": true,
+      "add-rust-environment-hash-key": false,
+      key: "${{ steps.cargo_cache_key.outputs.key }}",
       "shared-key": "release-${{ matrix.cargo }}-rust-stable",
-      "save-if": false,
+      "save-if": "${{ github.event_name == 'push' }}",
     });
-    const cacheWorkflow = readWorkflow(outdir, "rust-cache");
-    assert.deepEqual(cacheWorkflow.on.workflow_dispatch, {});
-    assert.deepEqual(cacheWorkflow.on.push, {
-      branches: ["main"],
-      paths: [
-        ".cargo/**",
-        ".github/workflows/rust-cache.yml",
-        "Cargo.lock",
-        "Cargo.toml",
-        "packages/rs/**",
-      ],
-    });
-    const cachePrime = cacheWorkflow.jobs.prime!;
-    assert.equal(stepNames(cachePrime).includes("Setup uv"), false);
-    assert.match(
-      workflowStep(cachePrime, "Prime Cargo target cache").run ?? "",
-      /cargo build --release --workspace --target/,
-    );
-    assert.equal(
-      workflowStep(cachePrime, "Cache Cargo registry and targets").with?.["save-if"],
-      true,
-    );
-
+    assert.equal(existsSync(join(outdir, ".github/workflows/rust-cache.yml")), false);
     const cargoPublisher = release.jobs["publish-cargo"]!;
     assert.deepEqual(stepNames(cargoPublisher), [
       "Checkout release commit",

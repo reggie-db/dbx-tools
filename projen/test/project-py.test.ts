@@ -191,8 +191,8 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /Do not use an in-app browser or embedded webview/);
     assert.match(instructions, /Do not visit GitHub or use the GitHub API or CLI/);
     assert.match(instructions, /Every required GitHub owner, repository, workflow, environment/);
-    assert.match(instructions, /supplied tag policy value is v\*/);
-    assert.match(instructions, /GitHub environment tag: v\*/);
+    assert.match(instructions, /supplied branch policy value is main/);
+    assert.match(instructions, /GitHub environment branch: main/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
     assert.match(instructions, /Reuse an existing PyPI tab in the system browser/);
@@ -240,7 +240,7 @@ describe("optional Python release stages", () => {
       const workflow = readWorkflow(directOutdir);
       assert.deepEqual(workflow.concurrency, {
         group: "release",
-        "cancel-in-progress": true,
+        "cancel-in-progress": false,
       });
       assert.ok(workflow.jobs["build-python"]);
       assert.ok(workflow.jobs["publish-pypi-core"]);

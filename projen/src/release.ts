@@ -1,9 +1,9 @@
-/** Unified tag-driven release workflow generation. */
+/** Unified default-branch release workflow generation. */
 import { Component } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
-import type { DBXToolsJavaScriptProject } from "./project-js.ts";
+import { projectReleaseBranch, type DBXToolsJavaScriptProject } from "./project-js.ts";
 import { applyTasks, taskScript } from "./project.ts";
 import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
 
@@ -44,14 +44,14 @@ export function hasNodeRelease(project: DBXToolsJavaScriptProject): boolean {
   return nodeReleaseProjects.has(project);
 }
 
-/** Tag pattern accepted by release jobs and GitHub environments. */
+/** Tag pattern created by release jobs and accepted by manual recovery. */
 export function releaseTagPattern(project: DBXToolsJavaScriptProject): string {
   const prefix = releaseTagPrefixes.get(project);
   if (!prefix) throw new Error("Release workflow is not configured");
   return `${prefix}*`;
 }
 
-/** Run a release stage on tag pushes or when selected for manual recovery. */
+/** Run a release stage on default-branch pushes or when selected for manual recovery. */
 export function releaseStageCondition(stage: Exclude<ReleaseStage, "all">): string {
   return `\${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == '${stage}' }}`;
 }
@@ -121,10 +121,10 @@ export function npmPublishEnvironment(): Record<string, string> {
   };
 }
 
-function verifyContextJob(tagPrefix: string): Job {
+function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
   return {
     runsOn: ["ubuntu-latest"],
-    permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
+    permissions: { actions: JobPermission.READ, contents: JobPermission.WRITE },
     outputs: {
       release_tag: { stepId: "release", outputName: "release_tag" },
       expected_sha: { stepId: "release", outputName: "expected_sha" },
@@ -132,10 +132,10 @@ function verifyContextJob(tagPrefix: string): Job {
     },
     steps: [
       {
-        name: "Checkout release tag",
+        name: "Checkout release source",
         uses: "actions/checkout@v6",
         with: {
-          ref: "${{ github.event_name == 'push' && github.ref || inputs.expected_sha }}",
+          ref: "${{ github.event_name == 'push' && github.sha || inputs.expected_sha }}",
           "fetch-depth": 1,
         },
       },
@@ -145,18 +145,36 @@ function verifyContextJob(tagPrefix: string): Job {
         shell: "bash",
         env: {
           RELEASE_TAG:
-            "${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}",
+            "${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || '' }}",
           EXPECTED_SHA:
             "${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || '' }}",
           DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
         },
         run: [
-          `case "$RELEASE_TAG" in ${tagPrefix}*) ;; *) exit 1 ;; esac`,
-          'git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
-          'test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
-          'RELEASE_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
-          'test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
-          'if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then',
+          'if [ "$GITHUB_EVENT_NAME" = "push" ]; then',
+          '  test "$GITHUB_REF_TYPE" = "branch"',
+          `  test "$GITHUB_REF_NAME" = "${releaseBranch}"`,
+          '  RELEASE_SHA="$GITHUB_SHA"',
+          '  test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
+          "  RELEASE_VERSION=\"$(tr -d '\\r\\n' < VERSION)\"",
+          '  [[ "$RELEASE_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]',
+          `  RELEASE_TAG="${tagPrefix}$RELEASE_VERSION"`,
+          '  if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then',
+          '    git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
+          '    test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
+          '    test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$RELEASE_SHA"',
+          "  else",
+          '    git config user.name "github-actions[bot]"',
+          '    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
+          '    git tag -a "$RELEASE_TAG" "$RELEASE_SHA" -m "$RELEASE_TAG"',
+          '    git push origin "refs/tags/$RELEASE_TAG"',
+          "  fi",
+          "else",
+          `  case "$RELEASE_TAG" in ${tagPrefix}*) ;; *) exit 1 ;; esac`,
+          '  git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
+          '  test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
+          '  RELEASE_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
+          '  test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
           '  test "$GITHUB_REF_TYPE" = "tag"',
           '  test "$GITHUB_REF_NAME" = "$RELEASE_TAG"',
           '  test "$RELEASE_SHA" = "$EXPECTED_SHA"',
@@ -294,13 +312,14 @@ export class DBXToolsRelease extends Component {
   constructor(project: DBXToolsJavaScriptProject, options: DBXToolsReleaseOptions = {}) {
     super(project);
     const tagPrefix = options.tagPrefix ?? "v";
+    const releaseBranch = projectReleaseBranch(project);
     releaseTagPrefixes.set(project, tagPrefix);
     if (options.nodeRelease !== false) nodeReleaseProjects.add(project);
     applyTasks(project, {
       bump: {
         exec: taskScript(project, "bump.ts", `--prefix ${tagPrefix}`),
         receiveArgs: true,
-        description: "Bump the release version (default patch), then commit, tag, and push it",
+        description: "Bump the release version (default patch), then commit and push it",
       },
     });
     if (!project.github) return;
@@ -308,12 +327,12 @@ export class DBXToolsRelease extends Component {
     const workflow = new GithubWorkflow(project.github, "release", {
       fileName: "release.yml",
       limitConcurrency: true,
-      concurrencyOptions: { group: "release", cancelInProgress: true },
+      concurrencyOptions: { group: "release", cancelInProgress: false },
     });
     workflow.runName =
-      "release ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}";
+      "release ${{ github.event_name == 'push' && github.sha || inputs.release_tag }}";
     workflow.on({
-      push: { tags: [`${tagPrefix}*`] },
+      push: { branches: [releaseBranch] },
       workflowDispatch: {
         inputs: {
           release_tag: {
@@ -350,7 +369,7 @@ export class DBXToolsRelease extends Component {
     });
     workflow.file?.addOverride("permissions.contents", "read");
     workflow.file?.addOverride("on.workflow_dispatch.inputs.dry_run.default", true);
-    workflow.addJob("verify-context", verifyContextJob(tagPrefix));
+    workflow.addJob("verify-context", verifyContextJob(tagPrefix, releaseBranch));
     if (options.nodeRelease !== false) {
       workflow.addJob("publish-node", nodePublishJob(project));
     }

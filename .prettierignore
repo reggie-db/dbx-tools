@@ -53,12 +53,12 @@ packages/py/graphiti/pyproject.toml
 .github/workflows/build.yml
 .github/workflows/pull-request-lint.yml
 .github/workflows/release.yml
-.github/workflows/rust-cache.yml
 .gitignore
 .mergify.yml
 .prettierignore
 .prettierrc.json
 .projen/bun-cache-key.mjs
+.projen/cargo-cache-key.mjs
 .projen/deps.json
 .projen/files.json
 .projen/pypi-trusted-publisher-instructions.mjs

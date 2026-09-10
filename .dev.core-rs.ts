@@ -9,6 +9,7 @@ function _decodeJwt(value: string): { header: unknown; payload: unknown } | unde
   };
 }
 
+
 const auth = await createPersistentAuth(
   DatabricksAuthOptions.create({ profile: process.argv[2] }),
 );

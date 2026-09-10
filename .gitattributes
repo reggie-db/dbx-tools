@@ -8,13 +8,13 @@
 /.github/workflows/build.yml linguist-generated
 /.github/workflows/pull-request-lint.yml linguist-generated
 /.github/workflows/release.yml linguist-generated
-/.github/workflows/rust-cache.yml linguist-generated
 /.gitignore linguist-generated
 /.mergify.yml linguist-generated
 /.prettierignore linguist-generated
 /.prettierrc.json linguist-generated
 /.projen/** linguist-generated
 /.projen/bun-cache-key.mjs linguist-generated
+/.projen/cargo-cache-key.mjs linguist-generated
 /.projen/deps.json linguist-generated
 /.projen/files.json linguist-generated
 /.projen/pypi-trusted-publisher-instructions.mjs linguist-generated

@@ -38,9 +38,9 @@ after(() => {
 });
 
 describe("unified release workflow", () => {
-  it("uses verified annotated tags and selective manual recovery", () => {
+  it("releases the default branch with an annotated tag and supports manual recovery", () => {
     assert.equal(release.name, "release");
-    assert.deepEqual(workflowTrigger<{ tags: string[] }>(release, "push").tags, ["v*"]);
+    assert.deepEqual(workflowTrigger<{ branches: string[] }>(release, "push").branches, ["main"]);
     const inputs = workflowTrigger<{ inputs: Record<string, unknown> }>(
       release,
       "workflow_dispatch",
@@ -66,17 +66,21 @@ describe("unified release workflow", () => {
     });
     assert.deepEqual(release.concurrency, {
       group: "release",
-      "cancel-in-progress": true,
+      "cancel-in-progress": false,
     });
     assert.deepEqual(release.permissions, { contents: "read" });
 
     const verifyJob = release.jobs["verify-context"]!;
-    assert.deepEqual(verifyJob.permissions, { actions: "read", contents: "read" });
+    assert.deepEqual(verifyJob.permissions, { actions: "read", contents: "write" });
     const verify = step(verifyJob, "Verify release context");
     assert.equal(
       verify.env?.DRY_RUN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
     );
+    assert.ok(verify.run?.includes('test "$GITHUB_REF_NAME" = "main"'));
+    assert.ok(verify.run?.includes('RELEASE_VERSION="$(tr -d'));
+    assert.ok(verify.run?.includes('git tag -a "$RELEASE_TAG"'));
+    assert.ok(verify.run?.includes('git push origin "refs/tags/$RELEASE_TAG"'));
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
     assert.ok(verify.run?.includes('test "$GITHUB_REF_TYPE" = "tag"'));
@@ -188,16 +192,16 @@ describe("release task contracts", () => {
     );
   });
 
-  it("stamps members before pushing release tags", () => {
+  it("stamps members before pushing the release commit", () => {
     const bump = readFileSync(join(import.meta.dirname, "..", "tasks", "bump.ts"), "utf8");
     assert.ok(
       bump.indexOf('[publishScript, version, "--stamp-only"]') <
-        bump.indexOf('git(["push", "--no-verify", "origin", ...tags])'),
+        bump.indexOf('git(["push", "origin", "HEAD"])'),
     );
     assert.ok(
-      bump.indexOf("refreshing Cargo.lock workspace versions") <
-        bump.indexOf('git(["add", "-A"])'),
+      bump.indexOf("refreshing Cargo.lock workspace versions") < bump.indexOf('git(["add", "-A"])'),
     );
+    assert.ok(bump.includes('.option("--tag", "create the release tag locally'));
   });
 });
 

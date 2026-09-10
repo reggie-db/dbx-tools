@@ -416,7 +416,7 @@ function defaultProjectOptions(
     // the block to render, giving the root a `publishConfig` it does not have
     // today. Provenance is never written to a manifest here (projen only reads it
     // in its own `Publisher`, and `release: false` means none exists); the
-    // tag-driven `release` workflow opts in per-run via `npm_config_provenance`
+    // The release workflow opts in per run through `npm_config_provenance`.
     // instead, so LOCAL publishes to a verdaccio still work with no CI OIDC
     // provider. See {@link DBXToolsRelease}.
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),

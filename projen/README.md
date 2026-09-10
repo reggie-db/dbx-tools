@@ -129,13 +129,14 @@ removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
 without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 
-The workspace generates one `release.yml` workflow for every ecosystem. An
-annotated `v*` tag starts it directly. The context job resolves the tag to a
-commit, requires the tag object to be annotated, and exposes the verified tag,
-commit, and version to every source job. A manual run accepts that same tag and
+The workspace generates one `release.yml` workflow for every ecosystem. A push
+to the configured release branch starts it. The context job reads `VERSION`,
+creates the corresponding annotated `v*` tag, and exposes the verified tag,
+commit, and version to every source job. If the tag already exists, it must be
+annotated and reference the same commit. A manual run accepts that same tag and
 commit but requires dry-run mode, so it builds and validates without publishing
-packages or deploying documentation. One `release` concurrency group cancels a
-superseded run.
+packages or deploying documentation. One non-cancelling `release` concurrency
+group serializes publication.
 
 Release generation writes `release.yml` without scanning for or removing other
 workflow files. Consumers explicitly delete exact workflow files they no longer
@@ -146,15 +147,15 @@ For a separate recovery run, choose `node`, `python`, or `docs` instead of
 `all`. Node and Python recovery can supply the prior `release.yml` run ID; the
 workflow verifies that run used the commit selected by the annotated release
 tag before downloading its artifacts. Dispatch the workflow with the release
-tag as its Git ref so environment tag policies still apply. Manual recovery
+tag as its Git ref so recovery checks out the immutable release boundary. Manual recovery
 defaults to dry-run and publishes only when `dry_run` is cleared. npm retries skip an exact version only
 after the local archive integrity and repository identity match registry
 metadata. PyPI retries enable Twine's hash-aware existing-file behavior, which
 skips matching files and fails when an existing filename has different content.
 
 The Rust matrix has one row per target. Each row installs native dependencies,
-restores Cargo and sccache once, builds the Cargo workspace once, then packages
-every discovered output from that shared build. Set a source-only crate's or
+builds the Cargo workspace once, then packages every discovered output from
+that shared build. Set a source-only crate's or
 release-enabled binary's `releaseExcludeOs` package option to omit it from
 incompatible rows through Cargo `--exclude`. Release binary packaging and
 artifact upload are skipped in those rows. UniFFI crates cannot use this option
@@ -171,10 +172,11 @@ Node facades. A binary-only row therefore installs no language package tool.
 `rustVersion` remains the MSRV recorded in package manifests, while
 `releaseRustVersion` independently defaults release compilation to `stable`.
 Stable Windows rows verify and use the hosted runner's installed Rust toolchain
-and select `rust-lld` for the workspace build. Cargo registry caches
-and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain across
-version tags. Cache keys, restore results, sccache statistics, and phase timings
-are written to each build log. Python generation executes the already-built
+and select `rust-lld` for the workspace build. Rust release rows restore and
+update dependency-only Cargo caches in the release branch's cache scope. The
+cache key excludes workspace version changes, and manual tag recovery restores
+without saving a tag-scoped copy. There is no separate cache workflow or
+sccache layer. Phase timings are written to each build log. Python generation executes the already-built
 `target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging therefore
 does no Rust compilation after the main workspace build.
 
@@ -204,7 +206,7 @@ to run the optional nonblocking registry install and import check after facade
 publication. Python combines same-run platform wheels with standard wheel and
 source builds, then publishes each distribution through its own PyPI
 trusted-publisher environment. Binding publishers wait for their dependencies.
-Trusted-publisher instructions name `release.yml` and the release tag policy.
+Trusted-publisher instructions name `release.yml` and the release branch policy.
 The docs jobs generate README and TypeScript API content and deploy GitHub Pages
 from the same workflow. When a conventional Node binding path already belongs
 to a root subproject, Rust mapping reuses that project and adds binding
@@ -388,7 +390,7 @@ a new package is covered without a re-synth. Work from the root:
 | `bun run test`    | `eslint` once, then each member's tests               |
 | `bun run sync`    | re-synth (`--watch` to keep synthing)                 |
 | `bun run barrels` | regenerate the read-only `index.ts` barrels           |
-| `bun run bump`    | version, tag, and publish                             |
+| `bun run bump`    | version, commit, and push the current branch          |
 
 `bump` also mirrors a release into local registries when the active clients are
 pointed at loopback services. npm uses `npm config get registry` and publishes
@@ -408,12 +410,14 @@ Use `--local-registry false` or `--local-pypi false` to disable either local
 publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
 auto-detection; `--python-root` defaults to `packages/py`.
 
-The pushed `v*` tag is also the public release boundary. Available workflow
+The configured release branch is the publication trigger. Its workflow creates
+the annotated `v*` public release boundary from `VERSION`. Available workflow
 stages form the generated chain Rust -> Python -> Node -> docs: Rust builds and
 publishes native artifacts and Cargo crates, Python publishes standard
 distributions, Node publishes standard workspace packages, and docs deploys
-after publication. A stage with no corresponding outputs is omitted. Ordinary
-pushes to `main` publish none of those surfaces.
+after publication. A stage with no corresponding outputs is omitted. Keep
+ongoing development on another branch when every release-branch update should
+publish.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:

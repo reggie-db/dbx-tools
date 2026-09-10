@@ -6,7 +6,7 @@ import type { IResolver } from "projen/lib/file";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import { parse, stringify } from "smol-toml";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
-import { projectRepositoryUrl } from "./project-js.ts";
+import { projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
@@ -14,7 +14,6 @@ import {
   releaseArtifactSteps,
   releasePublishCondition,
   releaseStageCondition,
-  releaseTagPattern,
   releaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
@@ -577,13 +576,15 @@ export class DBXToolsPythonWorkspace extends Component {
   ): void {
     const repository = this.githubRepository();
     const publications = this.trustedPublisherPublications(options);
-    const releaseTags = isDBXToolsJavaScriptProject()(project) ? releaseTagPattern(project) : "v*";
+    const releaseBranch = isDBXToolsJavaScriptProject()(project)
+      ? projectReleaseBranch(project)
+      : "main";
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
       "Use the system browser to audit and configure the PyPI trusted publishers below.",
       "Do not use an in-app browser or embedded webview.",
-      "Do not visit GitHub or use the GitHub API or CLI. Every required GitHub owner, repository, workflow, environment, and tag value is provided below and is authoritative.",
+      "Do not visit GitHub or use the GitHub API or CLI. Every required GitHub owner, repository, workflow, environment, and branch value is provided below and is authoritative.",
       "Use only PyPI pages for this task.",
       "",
       "## Audit and confirmation",
@@ -601,7 +602,7 @@ export class DBXToolsPythonWorkspace extends Component {
       "",
       "## GitHub environment policy",
       "",
-      `- The supplied tag policy value is ${releaseTags}.`,
+      `- The supplied branch policy value is ${releaseBranch}.`,
       "- Do not inspect or configure GitHub environments during this task.",
       "- GitHub environment administration is a separate task; use the supplied values only when comparing PyPI publisher entries.",
       "",
@@ -642,7 +643,7 @@ export class DBXToolsPythonWorkspace extends Component {
           `- Repository name: ${repository.name}`,
           "- Workflow name: release.yml",
           `- Environment name: ${publication.environment}`,
-          `- GitHub environment tag: ${releaseTags}`,
+          `- GitHub environment branch: ${releaseBranch}`,
           ...(publication.artifacts ? [`- Artifacts: ${publication.artifacts}`] : []),
           "",
         ];

@@ -2,7 +2,8 @@
 /**
  * `projen bump` - compute the next release version, write it to the workspace
  * `VERSION` file, synth so every manifest copies it, then (by default) commit,
- * tag, and push. Pushing the tag is what triggers the release workflow.
+ * and push. Pushing the release branch triggers the workflow, which creates the
+ * annotated version tag before publishing.
  *
  * The base version is the HIGHEST published git tag across `<prefix>` and every
  * `--sibling` prefix (fetched from the remote so a release cut elsewhere wins),
@@ -22,27 +23,28 @@
  * tags. Both draw the fallback from the one root `VERSION` file, so the engine
  * and the packages share a single source of truth.
  *
- * Flags (all default ON; negate with the `--no-` form, per commander):
+ * Flags default ON unless noted; negate with the `--no-` form, per commander:
  *   --synth   / --no-synth     synth after writing VERSION so manifests copy it
  *   --version / --no-version   write the bumped version into `VERSION`
  *   --commit  / --no-commit    commit the release (staged with `git add -A`)
- *   --tag     / --no-tag       create the `<prefix><version>` git tag
- *   --push    / --no-push      push the CURRENT branch + tag to origin
+ *   --tag                       create the `<prefix><version>` git tag locally (default OFF)
+ *   --push    / --no-push      push the CURRENT branch to origin
  *
- * `--publish` / `--no-publish` is an alias for `--push` (pushing the tag is
- * what publishes). The tag prefix comes from `--prefix` (default `v`).
+ * `--publish` / `--no-publish` is an alias for `--push`. A push publishes only
+ * when the current branch is the configured release branch. The tag prefix
+ * comes from `--prefix` (default `v`).
  *
  * `--local-registry <value>` publishes npm packages to a LOCAL registry (e.g.
- * verdaccio) right after the tag push. `--local-pypi <value>` does the same for
+ * verdaccio) right after the branch push. `--local-pypi <value>` does the same for
  * Python packages through a writable devpi index. Values for both:
  *   - `auto` (default): publish only when `npm config get registry` is a
- *     loopback host, or when ANY active Python index — the primary
- *     `index-url` OR any `extra-index-url`, across uv and pip — is a loopback
+ *     loopback host, or when ANY active Python index - the primary
+ *     `index-url` OR any `extra-index-url`, across uv and pip - is a loopback
  *     devpi URL. Scanning the extras is what lets the corp proxy stay the
  *     primary index while a local devpi added as an extra is the detected
  *     publish target. The deploy endpoint for that index is taken from the
- *     GLOBAL uv config — an explicit `publish-url` on the matching `[[index]]`
- *     (or `UV_PUBLISH_URL`) — falling back to deriving it from the `+simple`
+ *     GLOBAL uv config - an explicit `publish-url` on the matching `[[index]]`
+ *     (or `UV_PUBLISH_URL`) - falling back to deriving it from the `+simple`
  *     URL shape when no such setting exists.
  *   - `false`: never publish locally.
  *   - a URL: always publish to that registry.
@@ -182,7 +184,7 @@ function localCargoRegistry(): string | undefined {
 
 const program = new Command();
 program
-  .description("Bump the release version, then commit, tag, and push it")
+  .description("Bump the release version, then commit and push it")
   .addOption(
     new Option("-l, --level <level>", "semver increment").choices([...LEVELS]).default("patch"),
   )
@@ -211,13 +213,13 @@ program
   .option("--no-synth", "do not run `projen` (synth) before bumping")
   .option("--no-version", "do not write the bumped version into package.json")
   .option("--no-commit", "do not commit the version change")
-  .option("--no-tag", "do not create the git tag")
-  .option("--no-push", "do not push the branch and tag to origin")
-  // `--publish` is a friendlier alias for `--push` (pushing the tag publishes).
+  .option("--tag", "create the release tag locally instead of leaving it to the workflow")
+  .option("--no-push", "do not push the current branch to origin")
+  // `--publish` is a friendlier alias for `--push`.
   .option("--no-publish", "alias for --no-push")
   .option(
     "--local-registry <value>",
-    "publish locally after the tag push: 'auto' (only a loopback npm registry), 'false', or a registry URL",
+    "publish locally after the branch push: 'auto' (only a loopback npm registry), 'false', or a registry URL",
     "auto",
   )
   .option(
@@ -280,6 +282,7 @@ program
       }
 
       const push = opts.push && opts.publish;
+      const createTags = opts.tag || siblings.length > 0;
 
       // Write the source of truth first, then synth so every generated manifest
       // COPIES it - synth never invents, resets, or drifts a version on its own.
@@ -338,7 +341,7 @@ program
             "-m",
             `chore(release): ${version}`,
             "-m",
-            "🌸 Shipped with Kanna — https://kanna.sh",
+            "Shipped with Kanna - https://kanna.sh",
             "-m",
             "Co-Authored-By: Kanna <noreply@kanna.sh>\nKanna-Agent: codex/databricks-gpt-5-6-sol",
           ]);
@@ -347,32 +350,24 @@ program
         }
       }
 
-      if (opts.tag) {
+      if (createTags) {
         for (const t of tags) git(["tag", "-a", t, "-m", t]);
         logger.info(`tagged ${tags.join(", ")}`);
       }
 
       if (push) {
         git(["push", "origin", "HEAD"]);
-        // The managed Databricks pre-push hook treats a newly created tag's
-        // all-zero remote SHA as a branch with no upstream and scans hundreds of
-        // historical commits. The release commit was already scanned by the
-        // branch push immediately above, and each annotated tag points to that
-        // exact commit, so bypass the hook only for the tag-ref transport.
-        // Push every tag in one invocation so a partial push cannot release
-        // only some namespaces at this version.
-        if (opts.tag) {
+        if (createTags) {
           assertReleaseTagsPointToHead(tags);
           git(["push", "--no-verify", "origin", ...tags]);
         }
-        logger.success(`pushed ${opts.tag ? tags.join(", ") : "HEAD"} to origin`);
+        logger.success(`pushed ${createTags ? tags.join(", ") : "HEAD"} to origin`);
       } else {
         logger.info("skipped push (--no-push / --no-publish)");
       }
 
-      // Local registry (e.g. verdaccio): publish AFTER the tag push so the
-      // GitHub release still owns the public registry. Skipped under
-      // `--no-version` (nothing bumped to publish).
+      // Local registry publication starts after the branch push so the GitHub
+      // release workflow can own public publication independently.
       const localRegistry = resolveLocalRegistry(opts.localRegistry);
       const publishToLocalRegistry = opts.version && localRegistry;
       if (opts.version === false && localRegistry) {
