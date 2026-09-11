@@ -10,7 +10,7 @@ use crate::error::ProxyError;
 
 const MAX_IMAGE_EDGE: u32 = 1_568;
 const MAX_IMAGE_PIXELS: u64 = 1_150_000;
-const MAX_IMAGE_INPUT_BYTES: usize = 2_000_000;
+pub(crate) const DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES: usize = 2_000_000;
 
 #[derive(Debug, Default, Eq, PartialEq)]
 pub(crate) struct ImageNormalization {
@@ -30,9 +30,10 @@ struct EncodedImage {
 /// Resize recognized base64 image inputs without fetching remote URLs.
 pub(crate) fn normalize_embedded_images(
     input: &mut Value,
+    resize_threshold_bytes: usize,
 ) -> Result<ImageNormalization, ProxyError> {
     let mut normalization = ImageNormalization::default();
-    visit(input, &mut normalization)?;
+    visit(input, resize_threshold_bytes, &mut normalization)?;
     if normalization.detected > 0 {
         tracing::debug!(
             detected = normalization.detected,
@@ -45,19 +46,23 @@ pub(crate) fn normalize_embedded_images(
     Ok(normalization)
 }
 
-fn visit(value: &mut Value, normalization: &mut ImageNormalization) -> Result<(), ProxyError> {
+fn visit(
+    value: &mut Value,
+    resize_threshold_bytes: usize,
+    normalization: &mut ImageNormalization,
+) -> Result<(), ProxyError> {
     match value {
-        Value::String(value) => normalize_data_url(value, normalization),
+        Value::String(value) => normalize_data_url(value, resize_threshold_bytes, normalization),
         Value::Array(values) => {
             for value in values {
-                visit(value, normalization)?;
+                visit(value, resize_threshold_bytes, normalization)?;
             }
             Ok(())
         }
         Value::Object(value) => {
-            normalize_base64_source(value, normalization)?;
+            normalize_base64_source(value, resize_threshold_bytes, normalization)?;
             for value in value.values_mut() {
-                visit(value, normalization)?;
+                visit(value, resize_threshold_bytes, normalization)?;
             }
             Ok(())
         }
@@ -67,6 +72,7 @@ fn visit(value: &mut Value, normalization: &mut ImageNormalization) -> Result<()
 
 fn normalize_data_url(
     value: &mut String,
+    resize_threshold_bytes: usize,
     normalization: &mut ImageNormalization,
 ) -> Result<(), ProxyError> {
     let Some(data) = value.strip_prefix("data:") else {
@@ -85,7 +91,7 @@ fn normalize_data_url(
         .split(';')
         .next()
         .is_some_and(|media_type| media_type.starts_with("image/"));
-    let Some(image) = decode_image(encoded, declared_image)? else {
+    let Some(image) = decode_image(encoded, declared_image, resize_threshold_bytes)? else {
         return Ok(());
     };
     record_image(normalization, &image);
@@ -103,6 +109,7 @@ fn normalize_data_url(
 
 fn normalize_base64_source(
     value: &mut Map<String, Value>,
+    resize_threshold_bytes: usize,
     normalization: &mut ImageNormalization,
 ) -> Result<(), ProxyError> {
     if value.get("type").and_then(Value::as_str) != Some("base64") {
@@ -115,7 +122,7 @@ fn normalize_base64_source(
     let Some(encoded) = value.get("data").and_then(Value::as_str) else {
         return Ok(());
     };
-    let Some(image) = decode_image(encoded, declared_image)? else {
+    let Some(image) = decode_image(encoded, declared_image, resize_threshold_bytes)? else {
         return Ok(());
     };
     record_image(normalization, &image);
@@ -132,7 +139,11 @@ fn normalize_base64_source(
     Ok(())
 }
 
-fn decode_image(encoded: &str, declared_image: bool) -> Result<Option<EncodedImage>, ProxyError> {
+fn decode_image(
+    encoded: &str,
+    declared_image: bool,
+    resize_threshold_bytes: usize,
+) -> Result<Option<EncodedImage>, ProxyError> {
     let compact = encoded
         .bytes()
         .filter(|byte| !byte.is_ascii_whitespace())
@@ -153,7 +164,7 @@ fn decode_image(encoded: &str, declared_image: bool) -> Result<Option<EncodedIma
     let decoded = image::load_from_memory_with_format(&bytes, format)
         .map_err(|error| ProxyError::Image(format!("invalid embedded image: {error}")))?;
     let input_bytes = bytes.len();
-    if input_bytes <= MAX_IMAGE_INPUT_BYTES {
+    if input_bytes <= resize_threshold_bytes {
         return Ok(Some(EncodedImage {
             bytes,
             format,
@@ -266,14 +277,15 @@ mod tests {
     #[test]
     fn resizes_large_data_url_images_for_model_input() {
         let image = noisy_png(3_000, 1_000);
-        assert!(image.len() > MAX_IMAGE_INPUT_BYTES);
+        assert!(image.len() > DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES);
         let mut input = json!({
             "messages": [{
                 "role": "user",
                 "content": [{"type": "image_url", "image_url": {"url": data_url(&image)}}]
             }]
         });
-        let result = normalize_embedded_images(&mut input).unwrap();
+        let result =
+            normalize_embedded_images(&mut input, DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES).unwrap();
         let encoded = input["messages"][0]["content"][0]["image_url"]["url"]
             .as_str()
             .unwrap()
@@ -290,13 +302,14 @@ mod tests {
     #[test]
     fn caps_square_images_by_total_pixels() {
         let image = noisy_png(2_000, 2_000);
-        assert!(image.len() > MAX_IMAGE_INPUT_BYTES);
+        assert!(image.len() > DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES);
         let mut input = json!({
             "type": "base64",
             "media_type": "application/octet-stream",
             "data": STANDARD.encode(image)
         });
-        let result = normalize_embedded_images(&mut input).unwrap();
+        let result =
+            normalize_embedded_images(&mut input, DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES).unwrap();
         let resized =
             image::load_from_memory(&STANDARD.decode(input["data"].as_str().unwrap()).unwrap())
                 .unwrap();
@@ -313,7 +326,8 @@ mod tests {
             "local": original,
             "remote": "https://example.com/image.png"
         });
-        let result = normalize_embedded_images(&mut input).unwrap();
+        let result =
+            normalize_embedded_images(&mut input, DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES).unwrap();
 
         assert_eq!(result.detected, 1);
         assert_eq!(result.resized, 0);
@@ -324,14 +338,25 @@ mod tests {
     #[test]
     fn preserves_compressed_images_below_two_mb_regardless_of_resolution() {
         let image = solid_png(3_000, 1_000);
-        assert!(image.len() <= MAX_IMAGE_INPUT_BYTES);
+        assert!(image.len() <= DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES);
         let original = data_url(&image);
         let mut input = json!({"image_url": original});
 
-        let result = normalize_embedded_images(&mut input).unwrap();
+        let result =
+            normalize_embedded_images(&mut input, DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES).unwrap();
 
         assert_eq!(result.detected, 1);
         assert_eq!(result.resized, 0);
         assert_eq!(input["image_url"], original);
+    }
+
+    #[test]
+    fn honors_a_custom_resize_threshold() {
+        let mut input = json!({"image_url": data_url(&solid_png(64, 32))});
+
+        let result = normalize_embedded_images(&mut input, 1).unwrap();
+
+        assert_eq!(result.detected, 1);
+        assert_eq!(result.resized, 1);
     }
 }
