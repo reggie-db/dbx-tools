@@ -656,15 +656,19 @@ Docs site rules:
   `[tool.dbx_tools.config] uniffi = true`, are published by the Rust flow, and
   remain included in public docs.
 - `docs/scripts/sync-readmes.mjs` generates the Starlight site under
-  `.docs-build/site`.
+  `.docs-build/site`. Relative README links must resolve to an existing local
+  file, package, guide, or root README; generation fails before converting a
+  missing target into a misleading GitHub URL. The PR build runs this lightweight
+  README generation check before TypeScript compilation.
 - `docs/scripts/generate-api-docs.mjs` generates TypeDoc Markdown into the same
   Starlight content tree from package `index.ts` exports.
 - `.github/workflows/release.yml` builds and deploys GitHub Pages from generated
   README and API content as part of the complete release.
 - Generated files under `.docs-build/` are build artifacts; never commit them.
-- The generated Linkinator command uses bounded concurrency, request timeouts,
-  and error retries. Its default concurrency can exhaust the local static
-  server and report valid generated API routes with synthetic status `0`.
+- `docs/scripts/check-dist-links.mjs` validates internal routes, assets, and
+  fragments directly from `.docs-build/dist`. It starts no HTTP server and does
+  not probe external URLs. Keep release link validation deterministic; external
+  availability belongs in a separate nonblocking monitor.
 - If navigation is wrong, update the generator. If prose is wrong, update the
   source README.
 - Content that belongs on GitHub but not on the site goes between
@@ -2330,9 +2334,9 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   `slugifyApiFiles` therefore rewrites intra-package links to
   `${base}/api/<pkg>/<slug>` (base derived like `sync-readmes.mjs` from
   `GITHUB_REPOSITORY`), which resolves identically from index/namespace/symbol
-  pages, and DROPS (unwraps to text) any link whose target page doesn't exist on
-  disk. When adding a docs generator change, keep links absolute — never emit a
-  bare or `./`-relative cross-page link.
+  pages, and DROPS (unwraps to text) any link whose target page or fragment does
+  not exist in the generated Markdown. When adding a docs generator change,
+  keep links absolute — never emit a bare or `./`-relative cross-page link.
 - **Model tool capability means a complete Responses round-trip, not merely a
   chat endpoint accepting `tools`.** Databricks endpoint list/OpenAPI metadata
   currently exposes no tools bit, so `ServingEndpointSummary.supportsTools` and
