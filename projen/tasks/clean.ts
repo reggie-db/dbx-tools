@@ -52,7 +52,7 @@ const picked = await clack.multiselect<string>({
   required: false,
 });
 
-if (clack.isCancel(picked)) {
+if (typeof picked === "symbol") {
   clack.cancel("clean cancelled - nothing removed");
   process.exit(0);
 }
