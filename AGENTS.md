@@ -1719,7 +1719,8 @@ complete history.
 `--approve` asks GitHub's merge API to merge the prepared release branch
 directly into the release base, so no PR checks are created and the main release
 starts directly. If branch policy blocks direct merge, it falls back to opening
-and admin-merging the release PR.
+and admin-merging the release PR. After either merge path, the task fast-forwards
+and pushes the still-active source branch to the new release commit.
 `--local-registry auto` publishes npm packages to loopback
 Verdaccio, and `--local-pypi auto` publishes Python packages when uv's default
 index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache is

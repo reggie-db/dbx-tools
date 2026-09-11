@@ -408,8 +408,9 @@ PR creation. Failed preparation can resume from that worktree; success removes
 it. `--message` sets the source commit message. The task never merges
 the PR unless `--approve` is passed; that option merges the release branch
 directly through GitHub's merge API so no PR checks are created. A repository
-that blocks direct merges falls back to an immediate admin-merged PR. npm uses
-`npm config get registry` and publishes to a local Verdaccio automatically.
+that blocks direct merges falls back to an immediate admin-merged PR. The task
+then fast-forwards the still-active source branch to the release commit. npm
+uses `npm config get registry` and publishes to a local Verdaccio automatically.
 Publishable JavaScript members compile once
 from the root in parallel, then upload through a bounded pool without rerunning
 their `prepack` tasks. Python prefers uv's default index and only

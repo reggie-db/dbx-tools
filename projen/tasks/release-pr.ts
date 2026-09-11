@@ -329,6 +329,9 @@ program
           run(root, "gh", ["pr", "merge", releaseBranch, "--admin", "--merge"], githubEnvironment);
         }
         git(releaseRoot, ["push", "--no-verify", "origin", "--delete", releaseBranch]);
+        git(root, ["fetch", "origin", opts.base]);
+        git(root, ["merge", "--ff-only", `origin/${opts.base}`]);
+        git(root, ["push", "origin", currentBranch]);
       } else {
         ensurePullRequest();
       }
