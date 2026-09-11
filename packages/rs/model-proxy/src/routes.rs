@@ -25,6 +25,7 @@ use tracing::info;
 use crate::{
     adapt::{adapt_request, adapt_response, select_request_target, upstream_path},
     error::ProxyError,
+    images::normalize_embedded_images,
     protocol::{is_codex_originator, ClientWire, TargetWire},
     stream::stream_response,
     throttle::RequestThrottle,
@@ -39,6 +40,7 @@ pub(crate) struct AppState {
     models: ModelClient,
     target: TargetWire,
     throttle: RequestThrottle,
+    image_resize_threshold_bytes: usize,
 }
 
 impl AppState {
@@ -48,6 +50,7 @@ impl AppState {
         models: ModelClient,
         target: TargetWire,
         tokens_per_minute: Option<NonZeroU64>,
+        image_resize_threshold_bytes: usize,
     ) -> Self {
         let throttle = RequestThrottle::new(databricks.host(), tokens_per_minute);
         Self {
@@ -56,6 +59,7 @@ impl AppState {
             models,
             target,
             throttle,
+            image_resize_threshold_bytes,
         }
     }
 }
@@ -192,6 +196,7 @@ async fn proxy(
 ) -> Result<Response, ProxyError> {
     let started = Instant::now();
     let mut input: Value = serde_json::from_slice(&body)?;
+    normalize_embedded_images(&mut input, state.image_resize_threshold_bytes)?;
     let requested_model = requested_model(&input)?.to_owned();
     let streaming = input
         .get("stream")

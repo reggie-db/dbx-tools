@@ -53,6 +53,7 @@ async fn standard_postgres_client_uses_tls_upstream_and_preserves_startup_parame
     )
     .unwrap();
     let databricks = LakebaseClient::with_auth_options(DatabricksAuthOptions {
+        host: Some(api.uri()),
         config_file: Some(config_file.to_string_lossy().into_owned()),
         ..Default::default()
     });

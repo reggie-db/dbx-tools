@@ -44,12 +44,14 @@ cargo run --manifest-path packages/rs/model-proxy/Cargo.toml -- \
 The server listens on `127.0.0.1:4000` by default. `--port` reads
 `DATABRICKS_APP_PORT` when present.
 
-Request bodies default to 4 MB through `--max-request-bytes` /
-`MAX_REQUEST_BYTES`. This follows the documented 4 MB payload limit for
-[Databricks Foundation Model APIs](https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/limits).
-Codex documents image processing limits but no smaller aggregate HTTP request
-limit, so the Databricks limit is the effective default. Increase the option
-only when the selected upstream endpoint accepts a larger payload.
+Request bodies default to 25 MB through `--max-request-bytes` /
+`MAX_REQUEST_BYTES`. Embedded JPEG, PNG, and WebP inputs are detected from their
+bytes across OpenAI Chat, Responses, and Anthropic base64 shapes. Images larger
+than 2 MB are re-encoded and resized proportionally to at most a 1,568-pixel
+edge and 1.15 megapixels before protocol translation. Images at or below 2 MB
+and remote image URLs are unchanged, and the proxy never fetches image URLs
+itself. Set `--image-resize-threshold-bytes` or
+`IMAGE_RESIZE_THRESHOLD_BYTES` to change the size threshold.
 
 `LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`, case-insensitively,
 and defaults to `info`. Request summaries include protocol, selected model,

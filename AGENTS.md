@@ -195,8 +195,14 @@ Primary package areas:
   publish the crate to Cargo and attach the compiled binary for each selected
   platform to the GitHub release. It logs payload-free request summaries with
   model, protocol, status, streaming mode, and latency. Request JSON is buffered
-  for model resolution and protocol adaptation with a 4 MB default limit;
-  `MAX_REQUEST_BYTES` / `--max-request-bytes` can override it. The local token
+  for model resolution and protocol adaptation with a 25 MB default limit;
+  `MAX_REQUEST_BYTES` / `--max-request-bytes` can override it. Embedded JPEG,
+  PNG, and WebP inputs are detected from bytes in OpenAI Chat, Responses, and
+  Anthropic base64 shapes. Inputs above 2 MB are re-encoded and resized
+  proportionally to at most a 1,568-pixel edge and 1.15 megapixels. Inputs at or
+  below 2 MB remain byte-for-byte unchanged. The threshold is configurable
+  through `--image-resize-threshold-bytes` /
+  `IMAGE_RESIZE_THRESHOLD_BYTES`. Do not fetch remote image URLs. The local token
   queue is disabled unless `TOKENS_PER_MINUTE` / `--tokens-per-minute` is set
   because Databricks limits vary by model and separate input from output
   tokens, while Codex limits vary by account tier.
@@ -1689,6 +1695,9 @@ branch, creates `release/v<version>`, calls the pure `bump` task, validates the
 workspace, publishes the exact candidate to detected loopback registries, and
 opens a reviewed PR into the configured release branch. Merging that PR starts
 the public workflow. `--message` sets the source commit message.
+`--approve` asks GitHub to merge the release PR immediately with admin bypass,
+so required PR checks are skipped and the main release starts directly; if the
+repository does not allow bypass, the command fails with the PR left open.
 `--local-registry auto` publishes npm packages to loopback
 Verdaccio, and `--local-pypi auto` publishes Python packages when uv's default
 index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache is

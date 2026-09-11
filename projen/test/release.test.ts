@@ -236,6 +236,8 @@ describe("release task contracts", () => {
         releasePr.indexOf('git(root, ["commit", "-m", `chore(release): ${next.version}`])'),
     );
     assert.match(releasePr, /"pr",\s*"create"/);
+    assert.ok(releasePr.includes('.option("--approve",'));
+    assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--admin",\s*"--merge"/);
   });
 
   it("publishes reviewed versions without repairing manifests", () => {

@@ -398,6 +398,7 @@ async fn client_discovers_resolves_and_caches_the_live_catalogue() {
     .unwrap();
     let databricks = DatabricksClient::with_options(DatabricksAuthOptions {
         profile: Some("DEFAULT".into()),
+        host: Some(server.uri()),
         config_file: Some(config_file.to_string_lossy().into_owned()),
         cache_dir: Some(directory.path().join("auth").to_string_lossy().into_owned()),
         prefer_user_to_machine: false,

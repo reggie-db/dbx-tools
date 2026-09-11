@@ -66,6 +66,24 @@ function gitSucceeds(root: string, args: string[]): boolean {
   );
 }
 
+function commandSucceeds(
+  root: string,
+  command: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+): boolean {
+  return (
+    exec.spawnSync(command, args, {
+      cwd: root,
+      env,
+      stdout: "ignore",
+      stderr: "ignore",
+      stdin: "ignore",
+      check: false,
+    }).exitCode === 0
+  );
+}
+
 function run(root: string, command: string, args: string[], env?: NodeJS.ProcessEnv): void {
   exec.spawnSync(command, args, {
     cwd: root,
@@ -120,6 +138,7 @@ program
   .option("--local-pypi <value>", "local PyPI index: auto, false, or an explicit URL", "auto")
   .option("--python-root <path>", "Python workspace package root", "packages/py")
   .option("--no-local-cargo", "skip local Cargo publication")
+  .option("--approve", "merge the release PR immediately with admin bypass")
   .action(
     async (opts: {
       level: VersionLevel;
@@ -132,6 +151,7 @@ program
       localPypi: string;
       pythonRoot: string;
       localCargo: boolean;
+      approve: boolean;
     }) => {
       const root = project.root() ?? process.cwd();
       const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
@@ -234,25 +254,31 @@ program
         "",
         "Merging this PR updates VERSION on main and starts the public release workflow.",
       ].join("\n");
-      run(
-        root,
-        "gh",
-        [
-          "pr",
-          "create",
-          "--base",
-          opts.base,
-          "--head",
-          releaseBranch,
-          "--title",
-          title,
-          "--body",
-          body,
-        ],
-        { ...process.env, GH_TOKEN: account.token },
-      );
+      const githubEnvironment = { ...process.env, GH_TOKEN: account.token };
+      if (!commandSucceeds(root, "gh", ["pr", "view", releaseBranch], githubEnvironment)) {
+        run(
+          root,
+          "gh",
+          [
+            "pr",
+            "create",
+            "--base",
+            opts.base,
+            "--head",
+            releaseBranch,
+            "--title",
+            title,
+            "--body",
+            body,
+          ],
+          githubEnvironment,
+        );
+      }
+      if (opts.approve) {
+        run(root, "gh", ["pr", "merge", releaseBranch, "--admin", "--merge"], githubEnvironment);
+      }
       if (!resuming) git(root, ["switch", currentBranch]);
-      logger.success(`opened ${releaseBranch} for ${releaseTag}`);
+      logger.success(`${opts.approve ? "merged" : "opened"} ${releaseBranch} for ${releaseTag}`);
     },
   );
 

@@ -275,6 +275,7 @@ mod tests {
         .unwrap();
         let client = DatabricksClient::with_options(DatabricksAuthOptions {
             profile: Some("DEFAULT".into()),
+            host: Some(format!("http://{address}")),
             config_file: Some(config_file.to_string_lossy().into_owned()),
             cache_dir: Some(
                 directory

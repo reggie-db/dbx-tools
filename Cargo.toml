@@ -4,7 +4,7 @@ default-members = ["packages/rs/lakebase-proxy", "packages/rs/model", "packages/
 resolver = "2"
 
 [workspace.package]
-version = "0.6.196"
+version = "0.6.197"
 edition = "2021"
 rust-version = "1.89"
 license = "Apache-2.0"
@@ -22,6 +22,7 @@ fs4 = "0.13"
 futures = "0.3"
 google-cloud-auth = "=0.18.0"
 http = "1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 mini-moka = "0.10"
 oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
 open = "5"
