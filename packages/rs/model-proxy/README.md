@@ -47,9 +47,10 @@ The server listens on `127.0.0.1:4000` by default. `--port` reads
 Request bodies default to 25 MB through `--max-request-bytes` /
 `MAX_REQUEST_BYTES`. Embedded JPEG, PNG, and WebP inputs are detected from their
 bytes across OpenAI Chat, Responses, and Anthropic base64 shapes. Images larger
-than a 1,568-pixel edge or 1.15 megapixels are resized proportionally before
-protocol translation. Smaller images and remote image URLs are unchanged, and
-the proxy never fetches image URLs itself.
+than 2 MB are re-encoded and resized proportionally to at most a 1,568-pixel
+edge and 1.15 megapixels before protocol translation. Images at or below 2 MB
+and remote image URLs are unchanged, and the proxy never fetches image URLs
+itself.
 
 `LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`, case-insensitively,
 and defaults to `info`. Request summaries include protocol, selected model,

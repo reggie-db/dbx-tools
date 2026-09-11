@@ -198,9 +198,9 @@ Primary package areas:
   for model resolution and protocol adaptation with a 25 MB default limit;
   `MAX_REQUEST_BYTES` / `--max-request-bytes` can override it. Embedded JPEG,
   PNG, and WebP inputs are detected from bytes in OpenAI Chat, Responses, and
-  Anthropic base64 shapes. Resize images proportionally when either edge exceeds
-  1,568 pixels or the image exceeds 1.15 megapixels. Do not fetch remote image
-  URLs. The local token
+  Anthropic base64 shapes. Inputs above 2 MB are re-encoded and resized
+  proportionally to at most a 1,568-pixel edge and 1.15 megapixels. Inputs at or
+  below 2 MB remain byte-for-byte unchanged. Do not fetch remote image URLs. The local token
   queue is disabled unless `TOKENS_PER_MINUTE` / `--tokens-per-minute` is set
   because Databricks limits vary by model and separate input from output
   tokens, while Codex limits vary by account tier.

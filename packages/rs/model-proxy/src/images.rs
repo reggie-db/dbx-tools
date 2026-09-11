@@ -3,13 +3,14 @@
 use std::io::Cursor;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use image::{imageops::FilterType, DynamicImage, ImageFormat};
+use image::{imageops::FilterType, DynamicImage, GenericImageView, ImageFormat};
 use serde_json::{Map, Value};
 
 use crate::error::ProxyError;
 
 const MAX_IMAGE_EDGE: u32 = 1_568;
 const MAX_IMAGE_PIXELS: u64 = 1_150_000;
+const MAX_IMAGE_INPUT_BYTES: usize = 2_000_000;
 
 #[derive(Debug, Default, Eq, PartialEq)]
 pub(crate) struct ImageNormalization {
@@ -152,15 +153,21 @@ fn decode_image(encoded: &str, declared_image: bool) -> Result<Option<EncodedIma
     let decoded = image::load_from_memory_with_format(&bytes, format)
         .map_err(|error| ProxyError::Image(format!("invalid embedded image: {error}")))?;
     let input_bytes = bytes.len();
-    let Some((width, height)) = target_dimensions(decoded.width(), decoded.height()) else {
+    if input_bytes <= MAX_IMAGE_INPUT_BYTES {
         return Ok(Some(EncodedImage {
             bytes,
             format,
             input_bytes,
             resized: false,
         }));
+    }
+    let (width, height) = target_dimensions(decoded.width(), decoded.height())
+        .unwrap_or_else(|| decoded.dimensions());
+    let resized = if (width, height) == decoded.dimensions() {
+        decoded
+    } else {
+        decoded.resize_exact(width, height, FilterType::Triangle)
     };
-    let resized = decoded.resize_exact(width, height, FilterType::Triangle);
     let bytes = encode_image(&resized, format)?;
     Ok(Some(EncodedImage {
         bytes,
@@ -226,16 +233,30 @@ fn record_image(normalization: &mut ImageNormalization, image: &EncodedImage) {
 
 #[cfg(test)]
 mod tests {
-    use image::{GenericImageView, RgbImage};
+    use image::{GenericImageView, Rgb, RgbImage};
     use serde_json::json;
 
     use super::*;
 
-    fn png(width: u32, height: u32) -> Vec<u8> {
-        let image = DynamicImage::ImageRgb8(RgbImage::new(width, height));
+    fn encode_png(image: RgbImage) -> Vec<u8> {
+        let image = DynamicImage::ImageRgb8(image);
         let mut output = Cursor::new(Vec::new());
         image.write_to(&mut output, ImageFormat::Png).unwrap();
         output.into_inner()
+    }
+
+    fn noisy_png(width: u32, height: u32) -> Vec<u8> {
+        encode_png(RgbImage::from_fn(width, height, |x, y| {
+            let mut value = u64::from(y) * u64::from(width) + u64::from(x);
+            value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            value ^= value >> 31;
+            Rgb([value as u8, (value >> 8) as u8, (value >> 16) as u8])
+        }))
+    }
+
+    fn solid_png(width: u32, height: u32) -> Vec<u8> {
+        encode_png(RgbImage::new(width, height))
     }
 
     fn data_url(bytes: &[u8]) -> String {
@@ -244,10 +265,12 @@ mod tests {
 
     #[test]
     fn resizes_large_data_url_images_for_model_input() {
+        let image = noisy_png(3_000, 1_000);
+        assert!(image.len() > MAX_IMAGE_INPUT_BYTES);
         let mut input = json!({
             "messages": [{
                 "role": "user",
-                "content": [{"type": "image_url", "image_url": {"url": data_url(&png(3_000, 1_000))}}]
+                "content": [{"type": "image_url", "image_url": {"url": data_url(&image)}}]
             }]
         });
         let result = normalize_embedded_images(&mut input).unwrap();
@@ -266,10 +289,12 @@ mod tests {
 
     #[test]
     fn caps_square_images_by_total_pixels() {
+        let image = noisy_png(2_000, 2_000);
+        assert!(image.len() > MAX_IMAGE_INPUT_BYTES);
         let mut input = json!({
             "type": "base64",
             "media_type": "application/octet-stream",
-            "data": STANDARD.encode(png(2_000, 2_000))
+            "data": STANDARD.encode(image)
         });
         let result = normalize_embedded_images(&mut input).unwrap();
         let resized =
@@ -283,7 +308,7 @@ mod tests {
 
     #[test]
     fn preserves_small_images_and_remote_urls() {
-        let original = data_url(&png(64, 32));
+        let original = data_url(&solid_png(64, 32));
         let mut input = json!({
             "local": original,
             "remote": "https://example.com/image.png"
@@ -294,5 +319,19 @@ mod tests {
         assert_eq!(result.resized, 0);
         assert_eq!(input["local"], original);
         assert_eq!(input["remote"], "https://example.com/image.png");
+    }
+
+    #[test]
+    fn preserves_compressed_images_below_two_mb_regardless_of_resolution() {
+        let image = solid_png(3_000, 1_000);
+        assert!(image.len() <= MAX_IMAGE_INPUT_BYTES);
+        let original = data_url(&image);
+        let mut input = json!({"image_url": original});
+
+        let result = normalize_embedded_images(&mut input).unwrap();
+
+        assert_eq!(result.detected, 1);
+        assert_eq!(result.resized, 0);
+        assert_eq!(input["image_url"], original);
     }
 }
