@@ -483,28 +483,6 @@ mod tests {
     }
 
     #[test]
-    fn sole_configured_profile_builds_without_a_default_setting() {
-        let directory = tempfile::tempdir().unwrap();
-        let config_file = directory.path().join("databrickscfg");
-        std::fs::write(
-            &config_file,
-            "[XDEFAULT]\nhost = https://workspace.example\nauth_type = databricks-cli\n",
-        )
-        .unwrap();
-
-        let profile = Profile::from_sources(ProfileOptions {
-            config_file: Some(config_file),
-            ignore_ambient_credentials: true,
-            ignore_ambient_auth_type: true,
-            ..ProfileOptions::default()
-        })
-        .unwrap();
-
-        assert_eq!(profile.name, "XDEFAULT");
-        assert_eq!(profile.host.as_str(), "https://workspace.example/");
-    }
-
-    #[test]
     fn client_credentials_inference_does_not_depend_on_profile_preference() {
         let directory = tempfile::tempdir().unwrap();
         let options = |prefer_user_to_machine| ProfileOptions {

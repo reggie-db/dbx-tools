@@ -104,6 +104,7 @@ async fn discovers_paginated_resources_and_refreshes_one_unauthorized_credential
     )
     .unwrap();
     let client = LakebaseClient::with_auth_options(DatabricksAuthOptions {
+        host: Some(server.uri()),
         config_file: Some(config.to_string_lossy().into_owned()),
         ..Default::default()
     });
