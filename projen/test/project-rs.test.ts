@@ -584,9 +584,10 @@ describe("DBXToolsRustWorkspace", () => {
     );
     const release = readWorkflow(outdir);
     const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
-      tasks: Record<string, { steps?: Array<{ spawn?: string }> }>;
+      tasks: Record<string, { steps?: Array<{ exec?: string; spawn?: string }> }>;
     };
-    assert.deepEqual(tasks.tasks["pre-compile"]?.steps, [{ spawn: "rs:bindings" }]);
+    assert.deepEqual(tasks.tasks["pre-compile"]?.steps ?? [], []);
+    assert.match(tasks.tasks["rs:bindings"]?.steps?.[0]?.exec ?? "", /tasks\/rust\.ts/);
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
 

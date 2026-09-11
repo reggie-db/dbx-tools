@@ -8,14 +8,14 @@
  * DEFAULT_VERSION} when it is absent on a fresh tree); it never rewrites it, so an
  * ordinary `bunx projen` cannot move a package version up or down.
  *
- * Only two callers change the number: `bump` (which increments it) and the
- * one-time bootstrap of a workspace that has no `VERSION` yet. Both resolve the
- * base from the remote git tags first ({@link resolveRemoteVersion}) so a release
- * cut elsewhere is respected, and fall back to the local file (or {@link
- * DEFAULT_VERSION}) when the remote is unreachable or has no tags. The remote is
- * consulted ONLY on those two paths, never on every synth/compile/commit.
+ * Only two callers change the number: the pure `bump` task used while preparing
+ * a reviewed release PR, and the one-time bootstrap of a workspace that has no
+ * `VERSION` yet. Both resolve the base from remote git tags first ({@link
+ * resolveRemoteVersion}) so a release cut elsewhere is respected, and fall back
+ * to the local file (or {@link DEFAULT_VERSION}) when the remote is unreachable
+ * or has no tags. The remote is consulted only on those paths.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { exec } from "@dbx-tools/core";
 
@@ -30,6 +30,9 @@ const SEMVER = /^\d+\.\d+\.\d+$/;
 /** A parsed `[major, minor, patch]` tuple. */
 export type Semver = [number, number, number];
 
+/** Supported semantic release increments. */
+export type VersionLevel = "patch" | "minor" | "major";
+
 /** Parse `x.y.z` (ignoring any leading `v`/prefix), or `undefined` when it does not match. */
 export function parseSemver(raw: string): Semver | undefined {
   const m = /(\d+)\.(\d+)\.(\d+)/.exec(raw.trim());
@@ -39,6 +42,13 @@ export function parseSemver(raw: string): Semver | undefined {
 /** Ordering comparator: negative when `a < b`, positive when `a > b`, zero when equal. */
 export function compareSemver(a: Semver, b: Semver): number {
   return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+}
+
+/** Increment a semantic version tuple by the requested release level. */
+export function incrementSemver(version: Semver, level: VersionLevel): Semver {
+  if (level === "major") return [version[0] + 1, 0, 0];
+  if (level === "minor") return [version[0], version[1] + 1, 0];
+  return [version[0], version[1], version[2] + 1];
 }
 
 /** Absolute path to the `VERSION` file for a workspace root. */
@@ -68,6 +78,30 @@ export function writeWorkspaceVersion(root: string, version: string): void {
     throw new Error(`workspace version must be x.y.z, got ${JSON.stringify(version)}`);
   }
   writeFileSync(versionPath(root), `${version}\n`);
+}
+
+/**
+ * Synchronize one existing workspace manifest with the authoritative version.
+ *
+ * This covers workspace members that synthesize themselves and therefore are
+ * not child projects of the root. Missing manifests are ignored so a freshly
+ * bootstrapped extra member can create its package metadata independently.
+ */
+export function syncWorkspaceManifestVersion(manifestPath: string, version: string): boolean {
+  if (!existsSync(manifestPath)) return false;
+  const content = readFileSync(manifestPath, "utf8");
+  const manifest = JSON.parse(content) as Record<string, unknown>;
+  if (manifest.version === version) return false;
+
+  manifest.version = version;
+  const { mode } = statSync(manifestPath);
+  chmodSync(manifestPath, mode | 0o200);
+  try {
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  } finally {
+    chmodSync(manifestPath, mode);
+  }
+  return true;
 }
 
 /** Run git in `cwd`, capturing stdout and swallowing failure (offline, no repo). */
@@ -136,6 +170,22 @@ export function resolveBaseVersion(
   const remote = resolveRemoteVersion(root, prefixes, options);
   if (remote) return { version: remote, source: "remote" };
   return { version: readWorkspaceVersion(root), source: "local" };
+}
+
+/** Resolve the next release version without mutating the workspace. */
+export function resolveNextVersion(
+  root: string,
+  prefixes: readonly string[],
+  level: VersionLevel,
+  options: { fetch?: boolean } = {},
+): { base: string; version: string; source: "remote" | "local" } {
+  const base = resolveBaseVersion(root, prefixes, options);
+  const parsed = parseSemver(base.version) ?? [0, 0, 1];
+  return {
+    base: parsed.join("."),
+    version: incrementSemver(parsed, level).join("."),
+    source: base.source,
+  };
 }
 
 /**

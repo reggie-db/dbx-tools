@@ -40,7 +40,10 @@ after(() => {
 describe("unified release workflow", () => {
   it("releases the default branch with an annotated tag and supports manual recovery", () => {
     assert.equal(release.name, "release");
-    assert.deepEqual(workflowTrigger<{ branches: string[] }>(release, "push").branches, ["main"]);
+    assert.deepEqual(workflowTrigger<{ branches: string[]; paths: string[] }>(release, "push"), {
+      branches: ["main"],
+      paths: ["VERSION"],
+    });
     const inputs = workflowTrigger<{ inputs: Record<string, unknown> }>(
       release,
       "workflow_dispatch",
@@ -79,6 +82,9 @@ describe("unified release workflow", () => {
     );
     assert.ok(verify.run?.includes('test "$GITHUB_REF_NAME" = "main"'));
     assert.ok(verify.run?.includes('RELEASE_VERSION="$(tr -d'));
+    assert.ok(verify.run?.includes('PREVIOUS_VERSION="$(git show'));
+    assert.ok(verify.run?.includes('test "$PREVIOUS_VERSION" != "$RELEASE_VERSION"'));
+    assert.ok(verify.run?.includes("LATEST_VERSION"));
     assert.ok(verify.run?.includes('git tag -a "$RELEASE_TAG"'));
     assert.ok(verify.run?.includes('git push origin "refs/tags/$RELEASE_TAG"'));
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
@@ -184,6 +190,18 @@ describe("unified release workflow", () => {
 });
 
 describe("release task contracts", () => {
+  it("exposes pure bump, version check, and reviewed release preparation tasks", () => {
+    const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
+      tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
+    };
+    assert.match(tasks.tasks.bump?.steps?.[0]?.exec ?? "", /tasks\/bump\.ts --prefix v/);
+    assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
+    assert.match(
+      tasks.tasks.release?.steps?.[0]?.exec ?? "",
+      /tasks\/release-pr\.ts --prefix v --base main/,
+    );
+  });
+
   it("compiles before applying publish configuration", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.ok(
@@ -192,16 +210,38 @@ describe("release task contracts", () => {
     );
   });
 
-  it("stamps members before pushing the release commit", () => {
+  it("keeps bump pure and lets release preparation own git and local publication", () => {
     const bump = readFileSync(join(import.meta.dirname, "..", "tasks", "bump.ts"), "utf8");
-    assert.ok(
-      bump.indexOf('[publishScript, version, "--stamp-only"]') <
-        bump.indexOf('git(["push", "origin", "HEAD"])'),
+    assert.ok(bump.includes("writeWorkspaceVersion(root, next.version)"));
+    assert.ok(bump.includes('process.execPath, [".projenrc.ts"]'));
+    assert.doesNotMatch(bump, /git\(\[/);
+    assert.doesNotMatch(bump, /publishLocalRelease|publish\.ts|gh/);
+
+    const releasePr = readFileSync(
+      join(import.meta.dirname, "..", "tasks", "release-pr.ts"),
+      "utf8",
     );
     assert.ok(
-      bump.indexOf("refreshing Cargo.lock workspace versions") < bump.indexOf('git(["add", "-A"])'),
+      releasePr.indexOf('git(root, ["commit", "-m", opts.message])') <
+        releasePr.indexOf("pushCurrentBranch(root, currentBranch)"),
     );
-    assert.ok(bump.includes('.option("--tag", "create the release tag locally'));
+    assert.ok(
+      releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
+        releasePr.indexOf('git(root, ["switch", "--create", releaseBranch])'),
+    );
+    assert.match(releasePr, /"test",\s*"--workspace"/);
+    assert.ok(releasePr.includes('["run", "rs:bindings"]'));
+    assert.ok(
+      releasePr.indexOf("await publishLocalRelease") <
+        releasePr.indexOf('git(root, ["commit", "-m", `chore(release): ${next.version}`])'),
+    );
+    assert.match(releasePr, /"pr",\s*"create"/);
+  });
+
+  it("publishes reviewed versions without repairing manifests", () => {
+    const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
+    assert.doesNotMatch(driver, /--stamp-only|pm", "pkg", "set/);
+    assert.ok(driver.includes("workspace manifests do not all match release version"));
   });
 });
 
@@ -221,6 +261,10 @@ describe("generated workflow safety", () => {
     const build = readWorkflow(outdir, "build");
     assert.deepEqual(workflowTrigger(build, "pull_request"), {});
     assert.equal("push" in build.on, false);
+    assert.equal(
+      step(build.jobs.build!, "Validate generated files and types").run,
+      "bunx projen default\nbun run compile",
+    );
   });
 
   it("uses a dependency-only Bun cache key", () => {

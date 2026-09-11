@@ -28,6 +28,7 @@ function synthTasks(): {
   child: TaskManifest;
   packageJson: { devDependencies?: Record<string, string> };
   prettierIgnore: string;
+  gitignore: string;
   attributes: string;
 } {
   process.env.PROJEN_DISABLE_POST = "1";
@@ -54,6 +55,7 @@ function synthTasks(): {
       devDependencies?: Record<string, string>;
     },
     prettierIgnore: readFileSync(join(outdir, ".prettierignore"), "utf8"),
+    gitignore: readFileSync(join(outdir, ".gitignore"), "utf8"),
     attributes: readFileSync(join(outdir, ".gitattributes"), "utf8"),
   };
 }
@@ -118,10 +120,15 @@ describe("workspace validation tasks", () => {
     assert.match(tasks.attributes, /^\/tooling\/index\.ts linguist-generated$/m);
   });
 
+  it("ignores local lockfiles independently of the active registry", () => {
+    assert.match(tasks.gitignore, /^\*\*\/\*\.lock$/m);
+    assert.match(tasks.prettierIgnore, /^\*\*\/\*\.lock$/m);
+  });
+
   // A root build is validation, not a release artifact fan-out. A child build is
   // intentionally more flexible: run it directly and projen performs the full
-  // compile/test/pack lifecycle for that one package. Root bump remains separate
-  // and calls filtered compile + `bun publish --ignore-scripts` itself.
+  // compile/test/pack lifecycle for that one package. Reviewed release preparation
+  // owns the workspace-wide validation and publication preflight.
   it("omits root packing but keeps per-package builds complete", () => {
     assert.deepEqual(tasks.root.tasks.package?.steps ?? [], []);
 

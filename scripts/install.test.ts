@@ -17,7 +17,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 
 import {
   ensureCommand,
@@ -30,6 +30,10 @@ import {
 
 const SCRIPT_PATH = join(import.meta.dir, "install.ts");
 const dockerIt = process.env.RUN_DOCKER_INSTALL_TESTS === "1" ? it : it.skip;
+const homebrewIt = process.platform === "darwin" ? it : it.skip;
+const originalPath = process.env.PATH;
+let miseFixtureDirectory: string | undefined;
+let miseFixturePromise: Promise<string> | undefined;
 
 interface InstallerRunOptions {
   args?: readonly string[];
@@ -46,11 +50,33 @@ interface InstallerRunResult {
 }
 
 async function findMiseExecutable(): Promise<string> {
-  const child = Bun.spawn(["which", "mise"], { stdout: "pipe" });
-  const output = (await new Response(child.stdout).text()).trim();
-  assert.equal(await child.exited, 0);
-  return output;
+  miseFixturePromise ??= (async () => {
+    miseFixtureDirectory = await mkdtemp(join(tmpdir(), "mise-fixture-"));
+    const executable = join(miseFixtureDirectory, "mise");
+    await writeFile(
+      executable,
+      [
+        "#!/bin/sh",
+        'if [ "${1:-}" = "--version" ]; then',
+        '  echo "mise 2026.9.0"',
+        "fi",
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    await chmod(executable, 0o755);
+    process.env.PATH = `${miseFixtureDirectory}:${originalPath ?? ""}`;
+    return executable;
+  })();
+  return miseFixturePromise;
 }
+
+after(async () => {
+  process.env.PATH = originalPath;
+  if (miseFixtureDirectory) {
+    await rm(miseFixtureDirectory, { recursive: true, force: true });
+  }
+});
 
 async function runInstaller(
   home: string,
@@ -602,7 +628,7 @@ describe("Unix shell profiles", () => {
 });
 
 describe("Homebrew selection", () => {
-  it("installs with Homebrew before direct download", async () => {
+  homebrewIt("installs with Homebrew before direct download", async () => {
     await withTemporaryHome(async (home) => {
       const bin = join(home, "fake-bin");
       const prefix = join(home, "brew-prefix");

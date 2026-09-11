@@ -1,27 +1,22 @@
 #!/usr/bin/env -S bun
 /**
  * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run]`
- * - ensure every workspace member and the Bun lock carry the release version,
+ * - verify every workspace member and the Bun lock carry the release version,
  * then publish each package owned by the standard Node release with `bun publish`.
  *
  * Bun has no `pnpm -r publish`, so this loop is the recursive-publish stand-in.
  * It leans on native bun for everything bun already does:
  *
- *   - **version stamping**, when needed, is `bun pm pkg set version=<version>`
- *     per member (bun's native package.json editor - idempotent, edits only that
- *     dir's manifest, no git side effects; `bun pm version` is for bumping and
- *     errors on an unchanged version, so `pkg set` is the right tool for an exact
- *     release value);
+ *   - **version validation** fails when any member differs from the reviewed
+ *     `VERSION`; publication never repairs committed release metadata;
  *   - **`workspace:` / `catalog:` rewriting** is NOT done here - `bun publish`
  *     strips both protocols in the PACKED tarball, resolving `workspace:*` to the
  *     sibling's version and `catalog:` to the root catalog entry. (Verified: a
  *     packed manifest shows `"@scope/x": "<version>"` and the real catalog range,
  *     while the on-disk manifest keeps the protocols.) Setting each member's
  *     version first is the only prerequisite, so a sibling resolves the release
- *     version; the disk manifest already carries the workspace `VERSION`, and
- *     this makes doubly sure it matches the value being published. When every
- *     manifest and Bun's workspace lock already carry the version, both this
- *     stamp and the lockfile refresh are skipped;
+ *     version. When Bun's workspace lock already carries the version, its
+ *     refresh is skipped;
  *   - **`publishConfig` substitution** (compiled `lib/` entry points) is done
  *     HERE, by {@link applyPublishConfig}, NOT by bun: unlike pnpm/npm, `bun
  *     publish`/`bun pm pack` do NOT fold `publishConfig`'s `main`/`types`/`bin`/
@@ -46,14 +41,12 @@
  * non-default registry (a local verdaccio); `--exclude <dir>` (repeatable,
  * repo-relative) skips a member owned by another publication flow.
  *
- * `--no-restore` keeps the edits on disk instead of undoing them at exit. Only
- * needed when a LATER process must still see them - `--stamp-only` implies it,
- * since its whole job is to stamp the workspace for a `bun publish` that runs
- * afterwards from another directory.
+ * `--no-restore` keeps the transient publishConfig edits on disk instead of
+ * undoing them at exit.
  *
  * The disk manifests carry the workspace `VERSION` (projen owns them, read-only);
  * this unlocks each only long enough to fold in the `publishConfig` entry points
- * (and re-affirm the version) + publish, then RESTORES every one it touched
+ * and publish, then RESTORES every one it touched
  * byte-for-byte (and re-locks the mode) on the way out - see
  * {@link restoreManifests}. Restore returns each manifest to its committed
  * content, which already equals the release version, so the worktree is never
@@ -92,17 +85,9 @@ interface ManifestBackup {
 /**
  * Original state of every manifest this task has unlocked, keyed by path.
  *
- * Publishing has to mutate manifests projen owns (the version stamp, so a
- * `workspace:*` sibling resolves to the release version, and the `publishConfig`
- * entry-point substitution bun won't do itself). Those edits are only ever meant
- * to reach the packed TARBALL, so every one is undone by {@link restoreManifests}
- * before the process ends.
- *
- * Leaving them on disk is what used to strand a local `bun run bump` with ~34
- * modified `package.json` files - version stamps and `lib/` entry points - after
- * the release commit was already made, so the tree diverged from the commit that
- * was just pushed and every subsequent `git status` needed a manual revert. CI
- * never noticed because a fresh checkout is discarded.
+ * Bun does not apply `publishConfig` while packing, so publication temporarily
+ * projects those entry points onto projen-owned manifests. The projection is
+ * only meant for the packed tarball and is restored before the process exits.
  */
 const manifestBackups = new Map<string, ManifestBackup>();
 
@@ -201,11 +186,9 @@ async function runConcurrent<T>(
 }
 
 /**
- * Make a projen-readonly manifest writable so `bun pm pkg set` / `bun publish` can
- * edit it, recording its original bytes + mode for {@link restoreManifests} the
- * first time it is seen. Idempotent, so a manifest unlocked twice (version stamp,
- * then `publishConfig`) keeps its PRE-EDIT backup rather than overwriting it with
- * the already-stamped content.
+ * Make a projen-readonly manifest writable so the publishConfig projection can
+ * edit it, recording its original bytes and mode for {@link restoreManifests}
+ * the first time it is seen.
  */
 function unlockManifest(pkgPath: string): void {
   const mode = statSync(pkgPath).mode;
@@ -220,11 +203,9 @@ function unlockManifest(pkgPath: string): void {
  *
  * Runs from an `exit` handler so a clean finish and a failure partway through the
  * publish loop are covered alike - a `bun publish` that dies on package 12 of 34
- * must not leave the first 11 stamped. Best-effort per file: one unwritable
+ * must not leave the first 11 projected. Best-effort per file: one unwritable
  * manifest is logged and the rest are still restored, since a partial restore
  * beats none.
- *
- * Not registered under `--stamp-only`, where the stamps ARE the deliverable.
  */
 function restoreManifests(): void {
   for (const [pkgPath, backup] of manifestBackups) {
@@ -248,8 +229,7 @@ const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const
  * doc). Idempotent, writes only when something changes, and leaves `publishConfig`
  * in place (npm ignores it once the top-level fields already point at `lib/`). The
  * manifest must already be unlocked. {@link restoreManifests} puts the `.ts` entry
- * points back at exit, so this only ever affects the packed tarball - like the
- * version stamp.
+ * points back at exit, so this only ever affects the packed tarball.
  */
 function applyPublishConfig(pkgPath: string): void {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
@@ -292,13 +272,8 @@ if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
   throw new Error(`--concurrency must be a positive integer, got ${String(parsedConcurrency)}`);
 }
 const concurrency = parsedConcurrency;
-// `--stamp-only`: set versions + refresh the lockfile, then STOP (no publish).
-// A separate package command can use this when its own publish process needs
-// workspace sibling versions resolved before it starts.
-const stampOnly = rest.includes("--stamp-only");
-// Undo the manifest edits at exit unless a later process still needs them. Implied
-// off by `--stamp-only`, whose stamps exist precisely for a subsequent `bun publish`.
-const restore = !stampOnly && !rest.includes("--no-restore");
+// Undo transient publishConfig edits at exit.
+const restore = !rest.includes("--no-restore");
 const excluded = new Set(
   rest.reduce<string[]>((acc, arg, i) => (arg === "--exclude" ? [...acc, rest[i + 1]] : acc), []),
 );
@@ -313,18 +288,11 @@ const members = workspaceMembers(root)
   .filter((dir) => existsSync(join(dir, "package.json")))
   .filter((dir) => !excluded.has(resolve(root, dir).replace(`${resolve(root)}/`, "")));
 
-// Ensure every member carries the release version before packing. A normal bump
-// already synthesized it everywhere; dry runs and standalone invocations may not
-// have, so retain the native `bun pm pkg set` fallback for those paths.
-if (manifestsMatchVersion(members, version)) {
-  logger.info(`all ${members.length} member manifests already carry ${version}`);
-} else {
-  logger.info(`setting ${version} across ${members.length} members`);
-  await runConcurrent(members, concurrency, async (dir) => {
-    unlockManifest(join(dir, "package.json"));
-    await runAsync(dir, "bun", ["pm", "pkg", "set", `version=${version}`], path);
-  });
+// Publication consumes the reviewed version state and never repairs it.
+if (!manifestsMatchVersion(members, version)) {
+  throw new Error(`workspace manifests do not all match release version ${version}; run projen`);
 }
+logger.info(`all ${members.length} member manifests carry ${version}`);
 
 // Ensure the lockfile resolves each `workspace:*` to the release version.
 // `bun publish`/`pm pack` reads workspace versions from the LOCKFILE, not just
@@ -337,11 +305,6 @@ if (lockfileMatchesVersion(root, members, version)) {
   if (existsSync(lockfile)) rmSync(lockfile);
   logger.info("refreshing lockfile so workspace deps resolve to the release version");
   run(root, "bun", ["install"], path);
-}
-
-if (stampOnly) {
-  logger.success(`stamped ${members.length} members @ ${version} (no publish)`);
-  process.exit(0);
 }
 
 const publishArgs = [

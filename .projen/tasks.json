@@ -38,7 +38,7 @@
     },
     "bump": {
       "name": "bump",
-      "description": "Bump the release version (default patch), then commit and push it",
+      "description": "Increment VERSION and synchronize generated workspace versions",
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v",
@@ -207,6 +207,15 @@
         }
       ]
     },
+    "model:metadata": {
+      "name": "model:metadata",
+      "description": "Refresh committed model retirement and capability snapshots",
+      "steps": [
+        {
+          "exec": "cargo run --quiet -p dbx-tools-model --example generate-model-metadata -- packages/rs/model/assets/retired-models.json packages/rs/model/assets/model-capabilities.json"
+        }
+      ]
+    },
     "openapi": {
       "name": "openapi",
       "steps": [
@@ -225,12 +234,7 @@
     },
     "pre-compile": {
       "name": "pre-compile",
-      "description": "Prepare the project for compilation",
-      "steps": [
-        {
-          "spawn": "rs:bindings"
-        }
-      ]
+      "description": "Prepare the project for compilation"
     },
     "py:build": {
       "name": "py:build",
@@ -283,6 +287,16 @@
       "steps": [
         {
           "exec": "node .projen/pypi-trusted-publisher-instructions.mjs",
+          "receiveArgs": true
+        }
+      ]
+    },
+    "release": {
+      "name": "release",
+      "description": "Prepare, validate, locally publish, and open a reviewed release PR",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main",
           "receiveArgs": true
         }
       ]
@@ -358,6 +372,15 @@
       "steps": [
         {
           "exec": "bun test scripts/install.test.ts"
+        }
+      ]
+    },
+    "version:check": {
+      "name": "version:check",
+      "description": "Verify every package and generated barrel matches VERSION",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/version-check.ts"
         }
       ]
     }

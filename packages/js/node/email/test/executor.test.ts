@@ -16,6 +16,7 @@ import {
 
 // The runtime is a process-wide singleton built from the environment on first
 // use, so the outbox mode has to be in place before any test sends.
+for (const key of ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"]) delete process.env[key];
 process.env.EMAIL_OUTBOX_MODE = "1";
 process.env.EMAIL_OUTBOX_DIR = mkdtempSync(join(tmpdir(), "email-executor-"));
 process.env.EMAIL_ALLOWED_SENDERS = "*@example.com";

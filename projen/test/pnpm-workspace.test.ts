@@ -92,8 +92,9 @@ describe("pnpm-workspace.yaml", () => {
     assert.doesNotMatch(yaml, /ignoredBuiltDependencies/);
   });
 
-  it("protects generated workspaces from deprecated glob transitive majors", () => {
+  it("pins transitive toolchain and glob versions", () => {
     assert.match(yaml, /^overrides:$/m);
+    assert.match(yaml, /^ {2}bun: 1\.3\.14$/m);
     assert.match(yaml, /^ {2}glob: \^13\.0\.0$/m);
   });
 
@@ -102,6 +103,7 @@ describe("pnpm-workspace.yaml", () => {
     // one projen captured; a key added later must still reach the file, and must
     // not displace what `workspaceYaml` passed in.
     assert.match(yaml, /^ {2}zod: \^4\.3\.6$/m);
+    assert.match(yaml, /^ {2}bun: 1\.3\.14$/m);
     assert.match(yaml, /^ {2}glob: \^13\.0\.0$/m);
     // Same dotted-name guard as the catalog: a plain object key, never a
     // projen `addOverride` path that would split into `socket: { io: ... }`.

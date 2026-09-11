@@ -40,6 +40,7 @@
  */
 import { relative } from "node:path";
 import { javascript, type Project } from "projen";
+import { BUN_VERSION } from "./bun-workflow.ts";
 import { toPosix } from "./packages.ts";
 
 /**
@@ -63,8 +64,8 @@ export type AllowBuilds = Record<string, boolean>;
  * always available at `catalog:` without a per-repo override.
  */
 const DEFAULT_CATALOG: Catalog = {
-  react: "^19.2.4",
-  "react-dom": "^19.2.4",
+  react: "~19.2.4",
+  "react-dom": "~19.2.4",
   "@types/react": "^19.2.2",
   "@types/react-dom": "^19.2.2",
   // Tailwind v4 compiler for bun's dev server + `Bun.build` (the `app` tag).
@@ -117,6 +118,7 @@ const DEFAULT_ALLOW_BUILDS: AllowBuilds = {
 };
 
 const DEFAULT_OVERRIDES: Readonly<Record<string, string>> = {
+  bun: BUN_VERSION,
   glob: "^13.0.0",
 };
 

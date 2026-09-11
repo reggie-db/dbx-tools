@@ -2,9 +2,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { project as coreProject } from "@dbx-tools/core";
+import { exec, project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
-import { Project, TextFile, javascript } from "projen";
+import { Component, Project, TextFile, javascript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { DBXToolsTypeScriptProject, projectRepositoryUrl } from "./project-js.ts";
@@ -335,6 +335,19 @@ if (process.env.GITHUB_OUTPUT) {
   process.stdout.write(\`\${key}\\n\`);
 }
 `;
+}
+
+/** Keep tracked workspace package versions in Cargo.lock aligned with VERSION. */
+class RustWorkspaceVersionLock extends Component {
+  public override postSynthesize(): void {
+    exec.spawnSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+      cwd: this.project.outdir,
+      stdout: "ignore",
+      stderr: "inherit",
+      stdin: "ignore",
+      check: true,
+    });
+  }
 }
 
 /** Persisted mapping consumed by the focused Rust source watcher. */
@@ -893,17 +906,15 @@ export class DBXToolsRustWorkspace {
         .trimEnd()
         .split("\n"),
     });
+    new RustWorkspaceVersionLock(project);
     project.addTask("rs:format", { exec: "cargo fmt --all" });
     project.addTask("rs:lint", { exec: "cargo clippy --workspace --all-targets --all-features" });
     project.addTask("rs:test", { exec: "cargo test --workspace" });
     project.addTask("rs:build", { exec: "cargo build --workspace" });
-    const bindingsTask = project.addTask("rs:bindings", {
+    project.addTask("rs:bindings", {
       exec: "bun node_modules/@dbx-tools/projen/tasks/rust.ts",
       description: "Generate language bindings for UniFFI-enabled Rust crates",
     });
-    if (this.bindingMappings.some((binding) => binding.node)) {
-      project.tasks.tryFind("pre-compile")?.spawn(bindingsTask);
-    }
     project.removeTask("rs:bindings:demo");
     if (releaseEnabled) {
       new TextFile(project, ".projen/cargo-cache-key.mjs", {

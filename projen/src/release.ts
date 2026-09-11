@@ -136,7 +136,7 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
         uses: "actions/checkout@v6",
         with: {
           ref: "${{ github.event_name == 'push' && github.sha || inputs.expected_sha }}",
-          "fetch-depth": 1,
+          "fetch-depth": 2,
         },
       },
       {
@@ -158,12 +158,26 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
           '  test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
           "  RELEASE_VERSION=\"$(tr -d '\\r\\n' < VERSION)\"",
           '  [[ "$RELEASE_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]',
+          '  PREVIOUS_VERSION="$(git show "$RELEASE_SHA^:VERSION" | tr -d \'\\r\\n\')"',
+          '  test "$PREVIOUS_VERSION" != "$RELEASE_VERSION"',
           `  RELEASE_TAG="${tagPrefix}$RELEASE_VERSION"`,
           '  if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then',
           '    git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
           '    test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
           '    test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$RELEASE_SHA"',
           "  else",
+          "    git fetch --force --tags origin",
+          '    LATEST_VERSION=""',
+          `    for TAG in $(git tag --sort=-version:refname --list '${tagPrefix}*'); do`,
+          `      CANDIDATE="\${TAG#${tagPrefix}}"`,
+          '      if [[ "$CANDIDATE" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then',
+          '        LATEST_VERSION="$CANDIDATE"',
+          "        break",
+          "      fi",
+          "    done",
+          '    if [ -n "$LATEST_VERSION" ]; then',
+          '      node -e \'const a=process.argv[1].split(".").map(Number); const b=process.argv[2].split(".").map(Number); if (!(b[0]>a[0] || b[0]===a[0] && (b[1]>a[1] || b[1]===a[1] && b[2]>a[2]))) process.exit(1)\' "$LATEST_VERSION" "$RELEASE_VERSION"',
+          "    fi",
           '    git config user.name "github-actions[bot]"',
           '    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
           '    git tag -a "$RELEASE_TAG" "$RELEASE_SHA" -m "$RELEASE_TAG"',
@@ -307,7 +321,7 @@ function addDocsJobs(
   });
 }
 
-/** Owns the single release workflow and the local bump task. */
+/** Owns the single release workflow and local release preparation tasks. */
 export class DBXToolsRelease extends Component {
   constructor(project: DBXToolsJavaScriptProject, options: DBXToolsReleaseOptions = {}) {
     super(project);
@@ -319,8 +333,25 @@ export class DBXToolsRelease extends Component {
       bump: {
         exec: taskScript(project, "bump.ts", `--prefix ${tagPrefix}`),
         receiveArgs: true,
-        description: "Bump the release version (default patch), then commit and push it",
+        description: "Increment VERSION and synchronize generated workspace versions",
       },
+      "version:check": {
+        exec: taskScript(project, "version-check.ts"),
+        description: "Verify every package and generated barrel matches VERSION",
+      },
+      ...(project.github
+        ? {
+            release: {
+              exec: taskScript(
+                project,
+                "release-pr.ts",
+                `--prefix ${tagPrefix} --base ${releaseBranch}`,
+              ),
+              receiveArgs: true,
+              description: "Prepare, validate, locally publish, and open a reviewed release PR",
+            },
+          }
+        : {}),
     });
     if (!project.github) return;
 
@@ -332,7 +363,7 @@ export class DBXToolsRelease extends Component {
     workflow.runName =
       "release ${{ github.event_name == 'push' && github.sha || inputs.release_tag }}";
     workflow.on({
-      push: { branches: [releaseBranch] },
+      push: { branches: [releaseBranch], paths: ["VERSION"] },
       workflowDispatch: {
         inputs: {
           release_tag: {
