@@ -44,6 +44,14 @@ const root = new projenProject.DBXToolsNodeProject({
   packageTagPaths: { polyglot: ["node"] },
   github: true,
   buildWorkflow: true,
+  buildWorkflowOptions: {
+    preBuildSteps: [
+      {
+        name: "Validate README documentation",
+        run: "bun docs/scripts/sync-readmes.mjs",
+      },
+    ],
+  },
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",

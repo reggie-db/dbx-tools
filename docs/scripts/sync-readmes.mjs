@@ -317,6 +317,11 @@ function transformLinks(markdown, fromDir, mappings) {
       const abs = path.resolve(fromDir, target);
       const docsTarget = localDocsTarget(abs, mappings);
       if (docsTarget) return `${open}${withBase(docsTarget)}${hash}${close}`;
+      if (!fs.existsSync(abs)) {
+        throw new Error(
+          `Missing local README link target ${target} from ${posix(path.relative(root, fromDir)) || "."}`,
+        );
+      }
       const repoPath = posix(path.relative(root, abs));
       const view = fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? "tree" : "blob";
       return `${open}${repoUrl}/${view}/main/${repoPath}${hash}${close}`;
@@ -474,13 +479,11 @@ function docsPackageJson() {
       scripts: {
         dev: "astro dev --host 127.0.0.1",
         build: "astro build",
-        "check-links":
-          "linkinator ../dist --recurse --directory-listing --clean-urls --concurrency 20 --timeout 10000 --retry-errors --skip '(?:dbx\\.tools|github\\.com/[^/]+/[^/]+/edit/)' --status-code '429:warn'",
+        "check-links": "node ../../docs/scripts/check-dist-links.mjs ../dist",
       },
       dependencies: {
         "@astrojs/starlight": "^0.41.0",
         astro: "^7.0.0",
-        linkinator: "^8.0.3",
         typedoc: "^0.28.20",
         "typedoc-plugin-markdown": "^4.12.0",
       },

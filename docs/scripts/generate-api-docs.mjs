@@ -148,6 +148,28 @@ function apiSlug(basenameNoExt) {
   return basenameNoExt.toLowerCase().replace(/\./g, "-");
 }
 
+function markdownAnchors(markdown) {
+  const anchors = new Set(
+    [...markdown.matchAll(/\b(?:id|name)=["']([^"']+)["']/g)].map((match) => match[1]),
+  );
+  const counts = new Map();
+  for (const match of markdown.matchAll(/^#{1,6}\s+(.+)$/gm)) {
+    const base = match[1]
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/<[^>]+>/g, "")
+      .replace(/[`*_~]/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{Letter}\p{Number}\s_-]/gu, "")
+      .replace(/\s+/g, "-");
+    if (!base) continue;
+    const count = counts.get(base) ?? 0;
+    anchors.add(count === 0 ? base : `${base}-${count}`);
+    counts.set(base, count + 1);
+  }
+  return anchors;
+}
+
 /**
  * Reconcile flat TypeDoc filenames with the routes Starlight actually serves,
  * and rewrite intra-package cross-links to absolute, always-resolvable routes.
@@ -179,10 +201,12 @@ function slugifyApiFiles(outDir) {
   // that actually exist on disk (index included) for the verify-and-drop pass.
   const rename = new Map();
   const slugs = new Set();
+  const anchors = new Map();
   for (const file of files) {
     const original = path.basename(file, ".md");
     const slug = original === "index" ? "index" : apiSlug(original);
     slugs.add(slug);
+    anchors.set(slug, markdownAnchors(read(file)));
     if (slug !== original) rename.set(original, slug);
   }
   const routeFor = (slug) =>
@@ -195,19 +219,29 @@ function slugifyApiFiles(outDir) {
   let droppedTotal = 0;
   for (const file of files) {
     const text = read(file);
-    const next = text.replace(
-      /(\[)([^\]]*)(\]\()(\.\/)?([^)#]+)(#[^)]*)?(\))/g,
-      (match, lb, label, open, _dot = "", target, hash = "", close) => {
-        // Leave external links, anchors, and already-absolute routes alone.
-        if (/^(https?:|mailto:|#|\/)/.test(target)) return match;
-        const slug = targetSlug(target);
-        if (slugs.has(slug)) return `${lb}${label}${open}${routeFor(slug)}${hash}${close}`;
-        // Verify-and-drop: no such page -> unwrap to plain text (keep the hash
-        // off; it pointed at a route that doesn't exist).
+    const next = text
+      .replace(
+        /(\[)([^\]]*)(\]\()(\.\/)?([^)#]+)(#[^)]*)?(\))/g,
+        (match, lb, label, open, _dot = "", target, hash = "", close) => {
+          // Leave external links, anchors, and already-absolute routes alone.
+          if (/^(https?:|mailto:|#|\/)/.test(target)) return match;
+          const slug = targetSlug(target);
+          if (slugs.has(slug) && (!hash || anchors.get(slug)?.has(hash.slice(1)))) {
+            return `${lb}${label}${open}${routeFor(slug)}${hash}${close}`;
+          }
+          // Verify-and-drop: no such page -> unwrap to plain text (keep the hash
+          // off; it pointed at a route that doesn't exist).
+          droppedTotal += 1;
+          return label;
+        },
+      )
+      .replace(/\[([^\]]+)\]\(#([^)]+)\)/g, (match, label, hash) => {
+        const slug = path.basename(file, ".md");
+        const current = rename.get(slug) ?? (slugs.has(slug) ? slug : apiSlug(slug));
+        if (anchors.get(current)?.has(hash)) return match;
         droppedTotal += 1;
         return label;
-      },
-    );
+      });
     if (next !== text) write(file, next);
   }
   if (droppedTotal > 0) {

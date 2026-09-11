@@ -45,6 +45,8 @@ jobs:
         with:
           path: ${{ steps.bun_cache_metadata.outputs.path }}
           key: ${{ steps.bun_cache.outputs.cache-primary-key }}
+      - name: Validate README documentation
+        run: bun docs/scripts/sync-readmes.mjs
       - name: Validate generated files and types
         run: |-
           bunx projen default
