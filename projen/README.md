@@ -399,14 +399,15 @@ a new package is covered without a re-synth. Work from the root:
 | `bun run version:check` | verify every version surface matches `VERSION`          |
 | `bun run release`       | run full local preflight and open a reviewed release PR |
 
-`release` commits pending work on the current branch, pushes it, creates a
-dedicated `release/v<version>` branch, invokes the pure `bump` task, validates
-the complete workspace, runs local publication, and opens a PR into the
-configured release branch. `--message` sets the source commit message. The task
-never merges the PR unless `--approve` is passed; that option requests an
-immediate admin merge so the main release can start without waiting for PR
-checks. npm uses `npm config get registry` and publishes to a local Verdaccio
-automatically. Publishable JavaScript members compile once
+`release` commits pending work on the current branch and pushes it. It prepares
+the dedicated `release/v<version>` branch inside `.worktrees/<tag>`, leaving the
+source checkout on its current branch throughout validation, local publication,
+and PR creation. Failed preparation can resume from that worktree; success
+removes it. `--message` sets the source commit message. The task never merges
+the PR unless `--approve` is passed; that option requests an immediate admin
+merge so the main release can start without waiting for PR checks. npm uses
+`npm config get registry` and publishes to a local Verdaccio automatically.
+Publishable JavaScript members compile once
 from the root in parallel, then upload through a bounded pool without rerunning
 their `prepack` tasks. Python prefers uv's default index and only
 treats a loopback `.../+simple/` URL as writable devpi; a read-only cache such as

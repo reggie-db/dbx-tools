@@ -227,13 +227,17 @@ describe("release task contracts", () => {
     );
     assert.ok(
       releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
-        releasePr.indexOf('git(root, ["switch", "--create", releaseBranch])'),
+        releasePr.indexOf('git(root, ["worktree", "add"'),
+    );
+    assert.doesNotMatch(releasePr, /git\(root, \["switch"/);
+    assert.ok(
+      releasePr.indexOf("if (opts.approve)") < releasePr.indexOf('git(root, ["worktree", "remove"'),
     );
     assert.match(releasePr, /"test",\s*"--workspace"/);
     assert.ok(releasePr.includes('["run", "rs:bindings"]'));
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
-        releasePr.indexOf('git(root, ["commit", "-m", `chore(release): ${next.version}`])'),
+        releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),
     );
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('.option("--approve",'));
@@ -253,7 +257,7 @@ describe("generated workflow safety", () => {
       const workflow = readWorkflow(outdir, name);
       assert.deepEqual(workflow.permissions, { contents: "read" });
       assert.deepEqual(workflow.concurrency, {
-        group: "${{ github.workflow }}-${{ github.ref }}",
+        group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
         "cancel-in-progress": true,
       });
     });
@@ -261,12 +265,24 @@ describe("generated workflow safety", () => {
 
   it("keeps CI separate from release", () => {
     const build = readWorkflow(outdir, "build");
-    assert.deepEqual(workflowTrigger(build, "pull_request"), {});
+    assert.deepEqual(workflowTrigger(build, "pull_request"), {
+      types: ["opened", "synchronize", "reopened", "closed"],
+    });
     assert.equal("push" in build.on, false);
+    assert.equal(
+      build.jobs.build?.if,
+      "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
+    );
     assert.equal(
       step(build.jobs.build!, "Validate generated files and types").run,
       "bunx projen default\nbun run compile",
     );
+
+    const lint = readWorkflow(outdir, "pull-request-lint");
+    assert.ok(
+      workflowTrigger<{ types: string[] }>(lint, "pull_request_target").types.includes("closed"),
+    );
+    assert.match(lint.jobs.validate?.if ?? "", /github\.event\.action != 'closed'/);
   });
 
   it("uses a dependency-only Bun cache key", () => {
