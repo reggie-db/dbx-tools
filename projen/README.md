@@ -406,8 +406,9 @@ release branch when needed, and pushes it. It prepares the dedicated
 checkout on its current branch throughout validation, local publication, and
 PR creation. Failed preparation can resume from that worktree; success removes
 it. `--message` sets the source commit message. The task never merges
-the PR unless `--approve` is passed; that option requests an immediate admin
-merge so the main release can start without waiting for PR checks. npm uses
+the PR unless `--approve` is passed; that option merges the release branch
+directly through GitHub's merge API so no PR checks are created. A repository
+that blocks direct merges falls back to an immediate admin-merged PR. npm uses
 `npm config get registry` and publishes to a local Verdaccio automatically.
 Publishable JavaScript members compile once
 from the root in parallel, then upload through a bounded pool without rerunning

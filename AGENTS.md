@@ -1711,9 +1711,15 @@ configured release branch. The source checkout never changes branches. A failed
 preparation leaves its worktree for the next invocation to resume; success
 removes it. Merging the PR starts the public workflow. `--message` sets the
 source commit message.
-`--approve` asks GitHub to merge the release PR immediately with admin bypass,
-so required PR checks are skipped and the main release starts directly; if the
-repository does not allow bypass, the command fails with the PR left open.
+The first push of the generated release branch uses `--no-verify`: pending
+source work was scanned by the source-branch push, and the release-only version
+diff was scanned by the commit hook. A new branch has no remote comparison
+point, so running the managed pre-push hook there would rescan the repository's
+complete history.
+`--approve` asks GitHub's merge API to merge the prepared release branch
+directly into the release base, so no PR checks are created and the main release
+starts directly. If branch policy blocks direct merge, it falls back to opening
+and admin-merging the release PR.
 `--local-registry auto` publishes npm packages to loopback
 Verdaccio, and `--local-pypi auto` publishes Python packages when uv's default
 index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache is

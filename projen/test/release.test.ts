@@ -240,12 +240,14 @@ describe("release task contracts", () => {
     assert.match(releasePr, /"test",\s*"--workspace"/);
     assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
     assert.doesNotMatch(releasePr, /process\.execPath, \["run", "test"\]/);
+    assert.match(releasePr, /\["push", "--no-verify", "--set-upstream", "origin", releaseBranch\]/);
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),
     );
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('.option("--approve",'));
+    assert.match(releasePr, /account\.repository}\/merges/);
     assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--admin",\s*"--merge"/);
   });
 
