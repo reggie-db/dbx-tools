@@ -1697,8 +1697,10 @@ What is configured, and why:
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
   restores the corporate index when it is unavailable.
 
-`bun run release` commits pending work on the current branch, pushes that source
-branch, creates `release/v<version>` in an ignored `.worktrees/<tag>` checkout,
+`bun run release` commits pending work on the current branch, incorporates the
+latest remote release branch with a normal Git merge when needed, pushes the
+source branch, and creates `release/v<version>` in an ignored
+`.worktrees/<tag>` checkout,
 calls the pure `bump` task there, validates the workspace, publishes the exact
 candidate to detected loopback registries, and opens a reviewed PR into the
 configured release branch. The source checkout never changes branches. A failed

@@ -399,11 +399,12 @@ a new package is covered without a re-synth. Work from the root:
 | `bun run version:check` | verify every version surface matches `VERSION`          |
 | `bun run release`       | run full local preflight and open a reviewed release PR |
 
-`release` commits pending work on the current branch and pushes it. It prepares
-the dedicated `release/v<version>` branch inside `.worktrees/<tag>`, leaving the
-source checkout on its current branch throughout validation, local publication,
-and PR creation. Failed preparation can resume from that worktree; success
-removes it. `--message` sets the source commit message. The task never merges
+`release` commits pending work on the current branch, merges the latest remote
+release branch when needed, and pushes it. It prepares the dedicated
+`release/v<version>` branch inside `.worktrees/<tag>`, leaving the source
+checkout on its current branch throughout validation, local publication, and
+PR creation. Failed preparation can resume from that worktree; success removes
+it. `--message` sets the source commit message. The task never merges
 the PR unless `--approve` is passed; that option requests an immediate admin
 merge so the main release can start without waiting for PR checks. npm uses
 `npm config get registry` and publishes to a local Verdaccio automatically.

@@ -174,15 +174,15 @@ program
         throw new Error(`Release tag already exists: ${releaseTag}`);
       }
 
-      if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
-        throw new Error(`Current branch must contain origin/${opts.base}`);
-      }
       const status = git(root, ["status", "--porcelain=v1", "--untracked-files=all"], {
         capture: true,
       });
       if (status) {
         git(root, ["add", "-A"]);
         git(root, ["commit", "-m", opts.message]);
+      }
+      if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
+        git(root, ["merge", "--no-edit", `origin/${opts.base}`]);
       }
       pushCurrentBranch(root, currentBranch);
 
@@ -198,7 +198,7 @@ program
         if (localBranch || remoteBranch) {
           throw new Error(`Release branch already exists without its worktree: ${releaseBranch}`);
         }
-        git(root, ["worktree", "add", "--branch", releaseBranch, releaseRoot, "HEAD"]);
+        git(root, ["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"]);
         run(releaseRoot, process.execPath, ["install"]);
       } else {
         logger.info(`resuming ${releaseBranch} in ${releaseRoot}`);
