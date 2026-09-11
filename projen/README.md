@@ -128,6 +128,10 @@ in dependency order; adding or
 removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
 without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
+`rs:bindings` is explicit rather than part of root `pre-compile`, so ordinary
+JavaScript PR builds type-check committed generated bindings without performing
+a host Rust build. Release preparation runs Cargo workspace tests and
+regenerates bindings before JavaScript validation.
 
 The workspace generates one `release.yml` workflow for every ecosystem. A push
 to the configured release branch starts it only when `VERSION` changed. The

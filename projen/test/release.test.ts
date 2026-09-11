@@ -229,6 +229,8 @@ describe("release task contracts", () => {
       releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
         releasePr.indexOf('git(root, ["switch", "--create", releaseBranch])'),
     );
+    assert.match(releasePr, /"test",\s*"--workspace"/);
+    assert.ok(releasePr.includes('["run", "rs:bindings"]'));
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(root, ["commit", "-m", `chore(release): ${next.version}`])'),

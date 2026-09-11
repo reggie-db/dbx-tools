@@ -911,13 +911,10 @@ export class DBXToolsRustWorkspace {
     project.addTask("rs:lint", { exec: "cargo clippy --workspace --all-targets --all-features" });
     project.addTask("rs:test", { exec: "cargo test --workspace" });
     project.addTask("rs:build", { exec: "cargo build --workspace" });
-    const bindingsTask = project.addTask("rs:bindings", {
+    project.addTask("rs:bindings", {
       exec: "bun node_modules/@dbx-tools/projen/tasks/rust.ts",
       description: "Generate language bindings for UniFFI-enabled Rust crates",
     });
-    if (this.bindingMappings.some((binding) => binding.node)) {
-      project.tasks.tryFind("pre-compile")?.spawn(bindingsTask);
-    }
     project.removeTask("rs:bindings:demo");
     if (releaseEnabled) {
       new TextFile(project, ".projen/cargo-cache-key.mjs", {

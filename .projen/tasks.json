@@ -234,12 +234,7 @@
     },
     "pre-compile": {
       "name": "pre-compile",
-      "description": "Prepare the project for compilation",
-      "steps": [
-        {
-          "spawn": "rs:bindings"
-        }
-      ]
+      "description": "Prepare the project for compilation"
     },
     "py:build": {
       "name": "py:build",

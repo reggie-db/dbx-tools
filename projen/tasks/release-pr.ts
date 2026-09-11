@@ -7,6 +7,8 @@
  * and local registry preflight. Public publication remains owned by the
  * main-branch release workflow.
  */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
@@ -195,6 +197,14 @@ program
       }
 
       run(root, process.execPath, [versionCheckScript]);
+      if (existsSync(join(root, "Cargo.toml"))) {
+        run(root, "cargo", [
+          "test",
+          "--workspace",
+          ...(existsSync(join(root, "Cargo.lock")) ? ["--locked"] : []),
+        ]);
+        run(root, process.execPath, ["run", "rs:bindings"]);
+      }
       run(root, process.execPath, ["run", "compile"]);
       run(root, process.execPath, ["run", "test"]);
       await publishLocalRelease({

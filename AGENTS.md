@@ -449,6 +449,11 @@ Primary package areas:
   floor written to Cargo manifests; `releaseRustVersion` is the build toolchain
   and defaults to `stable`, so a newly resolved dependency cannot make current
   Cargo metadata unreadable while the package still advertises its older MSRV.
+  `rs:bindings` remains explicit and is not attached to the root `pre-compile`
+  task. JavaScript PR builds type-check committed generated bindings without
+  compiling Rust. `bun run release` runs Cargo workspace tests and regenerates
+  host bindings before JavaScript validation; the main release owns the full
+  cross-platform Rust matrix and reusable target caches.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
   without a `bindings` namespace. Python keeps an empty `__init__.py`; consumers
