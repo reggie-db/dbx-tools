@@ -449,7 +449,9 @@ function defaultProjectOptions(
           prettierOptions: {
             settings: PRETTIER_SETTINGS,
             ignoreFile: true,
-            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns({ test: false })] },
+            ignoreFileOptions: {
+              ignorePatterns: [...ignore.ignorePatterns({ test: false, lock: true })],
+            },
           },
         }
       : {}),
@@ -1142,7 +1144,9 @@ function initProject(
   // to re-include a file whose parent directory is excluded - so every per-file
   // `!/.github/...` negation projen emits for its own generated files silently
   // does nothing, and the file cannot be added at all.
-  project.gitignore.addPatterns(...[...ignore.ignorePatterns({ test: false, dot: false })]);
+  project.gitignore.addPatterns(
+    ...[...ignore.ignorePatterns({ test: false, dot: false, lock: true })],
+  );
   // What the dot group was actually earning here, named explicitly: secrets and
   // local editor state. Both ignore CONTENTS (`.idea/*`) rather than the
   // directory, so a later `!` negation can still reach a file inside.
