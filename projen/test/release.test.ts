@@ -232,6 +232,7 @@ describe("release task contracts", () => {
     assert.match(releasePr, /\["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"\]/);
     assert.doesNotMatch(releasePr, /worktree", "add", "--branch"/);
     assert.ok(releasePr.includes('git(root, ["merge", "--no-edit", `origin/${opts.base}`])'));
+    assert.ok(releasePr.includes('"stash", "push", "--include-untracked"'));
     assert.doesNotMatch(releasePr, /git\(root, \["switch"/);
     assert.ok(
       releasePr.indexOf("if (opts.approve)") < releasePr.indexOf('git(root, ["worktree", "remove"'),

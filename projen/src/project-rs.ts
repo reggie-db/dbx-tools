@@ -340,7 +340,7 @@ if (process.env.GITHUB_OUTPUT) {
 /** Keep tracked workspace package versions in Cargo.lock aligned with VERSION. */
 class RustWorkspaceVersionLock extends Component {
   public override postSynthesize(): void {
-    exec.spawnSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+    exec.spawnSync("cargo", ["metadata", "--format-version", "1"], {
       cwd: this.project.outdir,
       stdout: "ignore",
       stderr: "inherit",

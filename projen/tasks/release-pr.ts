@@ -201,6 +201,20 @@ program
         git(root, ["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"]);
         run(releaseRoot, process.execPath, ["install"]);
       } else {
+        const releaseStatus = git(
+          releaseRoot,
+          ["status", "--porcelain=v1", "--untracked-files=all"],
+          { capture: true },
+        );
+        if (releaseStatus) {
+          git(releaseRoot, ["stash", "push", "--include-untracked", "--message", "release-resume"]);
+        }
+        if (!gitSucceeds(releaseRoot, ["merge-base", "--is-ancestor", currentBranch, "HEAD"])) {
+          git(releaseRoot, ["merge", "--no-edit", currentBranch]);
+        }
+        if (releaseStatus) {
+          git(releaseRoot, ["stash", "pop"]);
+        }
         logger.info(`resuming ${releaseBranch} in ${releaseRoot}`);
       }
 
@@ -219,6 +233,9 @@ program
         throw new Error(`Release preparation did not produce ${next.version}`);
       }
 
+      if (existsSync(join(releaseRoot, "Cargo.toml"))) {
+        run(releaseRoot, "cargo", ["metadata", "--format-version", "1"]);
+      }
       run(releaseRoot, process.execPath, [versionCheckScript]);
       if (existsSync(join(releaseRoot, "Cargo.toml"))) {
         run(releaseRoot, "cargo", [
