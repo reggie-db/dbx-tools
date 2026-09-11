@@ -64,7 +64,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.6.200",
+  "version": "0.6.201",
   "types": "index.ts",
   "type": "module",
   "exports": {
