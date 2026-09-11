@@ -21,6 +21,8 @@ pub(crate) enum ProxyError {
     Translation(String),
     #[error("unsupported protocol route: {0}")]
     Unsupported(String),
+    #[error("invalid image input: {0}")]
+    Image(String),
     #[error("invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error("Databricks request failed: {0}")]
@@ -34,6 +36,7 @@ impl IntoResponse for ProxyError {
         let status = match &self {
             Self::MissingModel
             | Self::EmbeddingModelNotFound(_)
+            | Self::Image(_)
             | Self::Json(_)
             | Self::Unsupported(_) => StatusCode::BAD_REQUEST,
             Self::Databricks(DatabricksClientError::Authentication(_))

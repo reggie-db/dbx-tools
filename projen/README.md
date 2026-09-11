@@ -403,8 +403,10 @@ a new package is covered without a re-synth. Work from the root:
 dedicated `release/v<version>` branch, invokes the pure `bump` task, validates
 the complete workspace, runs local publication, and opens a PR into the
 configured release branch. `--message` sets the source commit message. The task
-never merges the PR. npm uses `npm config get registry` and publishes to a local
-Verdaccio automatically. Publishable JavaScript members compile once
+never merges the PR unless `--approve` is passed; that option requests an
+immediate admin merge so the main release can start without waiting for PR
+checks. npm uses `npm config get registry` and publishes to a local Verdaccio
+automatically. Publishable JavaScript members compile once
 from the root in parallel, then upload through a bounded pool without rerunning
 their `prepack` tasks. Python prefers uv's default index and only
 treats a loopback `.../+simple/` URL as writable devpi; a read-only cache such as
