@@ -863,17 +863,36 @@ class WorkflowDefaults extends Component {
       }
     }
     const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
+    build?.addOverride("on.pull_request.types", ["opened", "synchronize", "reopened", "closed"]);
+    build?.addOverride(
+      "jobs.build.if",
+      "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
+    );
     for (const job of ["build", "self-mutation"]) {
       build?.addOverride(`jobs.${job}.timeout-minutes`, 30);
     }
-    this.project
-      .tryFindObjectFile(".github/workflows/pull-request-lint.yml")
-      ?.addOverride("jobs.validate.timeout-minutes", 10);
+    const pullRequestLint = this.project.tryFindObjectFile(
+      ".github/workflows/pull-request-lint.yml",
+    );
+    pullRequestLint?.addOverride("on.pull_request_target.types", [
+      "labeled",
+      "opened",
+      "synchronize",
+      "reopened",
+      "ready_for_review",
+      "edited",
+      "closed",
+    ]);
+    pullRequestLint?.addOverride(
+      "jobs.validate.if",
+      "(github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && github.event.action != 'closed'",
+    );
+    pullRequestLint?.addOverride("jobs.validate.timeout-minutes", 10);
     for (const name of ["build", "pull-request-lint"]) {
       const workflow = this.project.tryFindObjectFile(`.github/workflows/${name}.yml`);
       workflow?.addOverride("permissions", { contents: "read" });
       workflow?.addOverride("concurrency", {
-        group: "${{ github.workflow }}-${{ github.ref }}",
+        group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
         "cancel-in-progress": true,
       });
     }

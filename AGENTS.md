@@ -1656,6 +1656,9 @@ and tests. The GitHub PR workflow deliberately invokes only synth plus compile;
 and local publication before opening its PR. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
 package `prepack` remains for a standalone `bun publish`.
+Both PR workflows include the `closed` event in their PR-number concurrency
+group. Closing a PR cancels its running checks and the close-event run skips
+replacement jobs.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
 runs them with its own fast runner). The generated task runs `bun test test`
@@ -1695,10 +1698,13 @@ What is configured, and why:
   restores the corporate index when it is unavailable.
 
 `bun run release` commits pending work on the current branch, pushes that source
-branch, creates `release/v<version>`, calls the pure `bump` task, validates the
-workspace, publishes the exact candidate to detected loopback registries, and
-opens a reviewed PR into the configured release branch. Merging that PR starts
-the public workflow. `--message` sets the source commit message.
+branch, creates `release/v<version>` in an ignored `.worktrees/<tag>` checkout,
+calls the pure `bump` task there, validates the workspace, publishes the exact
+candidate to detected loopback registries, and opens a reviewed PR into the
+configured release branch. The source checkout never changes branches. A failed
+preparation leaves its worktree for the next invocation to resume; success
+removes it. Merging the PR starts the public workflow. `--message` sets the
+source commit message.
 `--approve` asks GitHub to merge the release PR immediately with admin bypass,
 so required PR checks are skipped and the main release starts directly; if the
 repository does not allow bypass, the command fails with the PR left open.

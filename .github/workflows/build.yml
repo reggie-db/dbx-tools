@@ -2,7 +2,12 @@
 
 name: build
 on:
-  pull_request: {}
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
   workflow_dispatch: {}
 jobs:
   build:
@@ -71,6 +76,7 @@ jobs:
           echo "::error::Files were changed during build (see build log). If this was triggered from a fork, you will need to update your branch."
           cat repo.patch
           exit 1
+    if: ${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}
     timeout-minutes: 30
   self-mutation:
     needs: build
@@ -112,5 +118,5 @@ jobs:
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
