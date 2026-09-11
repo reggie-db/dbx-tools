@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
-import { readDbxToolsConfig } from "../src/packages.ts";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
+import { readDbxToolsConfig } from "../src/packages.ts";
 
 const logger = log.logger("projen:local-publish");
 

@@ -223,10 +223,10 @@ describe("release task contracts", () => {
     );
     assert.ok(
       releasePr.indexOf('git(root, ["commit", "-m", opts.message])') <
-        releasePr.indexOf("pushCurrentBranch(root, sourceBranch)"),
+        releasePr.indexOf("pushCurrentBranch(root, currentBranch)"),
     );
     assert.ok(
-      releasePr.indexOf("pushCurrentBranch(root, sourceBranch)") <
+      releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
         releasePr.indexOf('git(root, ["switch", "--create", releaseBranch])'),
     );
     assert.ok(

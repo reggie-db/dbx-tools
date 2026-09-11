@@ -80,6 +80,7 @@ package.json
 test/tsconfig.json
 uniffi-bindgen.rs
 uniffi.toml
+**/src/generated/**
 packages/example/app/appkit-demo/index.ts
 packages/example/server/appkit-demo/index.ts
 packages/js/cli/appkit-env/index.ts

@@ -19,6 +19,7 @@
     "projen": "projen"
   },
   "devDependencies": {
+    "@dbx-tools/core": "workspace:*",
     "@types/bun": "1.3.14",
     "@types/node": "catalog:",
     "typescript": "^5.9.3",
@@ -43,7 +44,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.195",
+  "version": "0.6.196",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -56,12 +57,12 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@dbx-tools/core-rs-linux-x64-gnu": "0.6.195",
-    "@dbx-tools/core-rs-linux-arm64-gnu": "0.6.195",
-    "@dbx-tools/core-rs-darwin-x64": "0.6.195",
-    "@dbx-tools/core-rs-darwin-arm64": "0.6.195",
-    "@dbx-tools/core-rs-win32-x64-msvc": "0.6.195",
-    "@dbx-tools/core-rs-win32-arm64-msvc": "0.6.195"
+    "@dbx-tools/core-rs-linux-x64-gnu": "0.6.196",
+    "@dbx-tools/core-rs-linux-arm64-gnu": "0.6.196",
+    "@dbx-tools/core-rs-darwin-x64": "0.6.196",
+    "@dbx-tools/core-rs-darwin-arm64": "0.6.196",
+    "@dbx-tools/core-rs-win32-x64-msvc": "0.6.196",
+    "@dbx-tools/core-rs-win32-arm64-msvc": "0.6.196"
   },
   "dbxToolsConfig": {
     "uniffi": true,

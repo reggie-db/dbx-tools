@@ -54,6 +54,7 @@
     "packages/test/**/index.ts",
     "packages/example/openapi/**",
     "packages/example/**/index.ts",
+    "**/src/generated/**",
     "projen/index.ts",
     "**/dev.ts",
     "**/build.ts",

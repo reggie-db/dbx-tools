@@ -11,12 +11,12 @@ import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
+import { publishLocalRelease } from "./local-publish.ts";
 import {
   type VersionLevel,
   readWorkspaceVersion,
   resolveNextVersion,
 } from "../src/workspace-version.ts";
-import { publishLocalRelease } from "./local-publish.ts";
 
 const logger = log.logger("projen:release");
 const LEVELS = ["patch", "minor", "major"] as const;
@@ -113,37 +113,16 @@ program
       localCargo: boolean;
     }) => {
       const root = project.root() ?? process.cwd();
-      const sourceBranch = git(root, ["branch", "--show-current"], { capture: true });
-      if (!sourceBranch) throw new Error("Release preparation requires a local branch");
-      if (sourceBranch.startsWith("release/")) {
-        throw new Error("Release preparation must start from a source branch");
-      }
+      const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
+      if (!currentBranch) throw new Error("Release preparation requires a local branch");
       run(root, "gh", ["auth", "status"]);
-
       git(root, ["fetch", "--tags", "origin", opts.base]);
-      if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
-        throw new Error(`Current branch must contain origin/${opts.base}`);
-      }
-      const status = git(root, ["status", "--porcelain=v1", "--untracked-files=all"], {
-        capture: true,
-      });
-      if (status) {
-        git(root, ["add", "-A"]);
-        git(root, ["commit", "-m", opts.message]);
-      }
-      pushCurrentBranch(root, sourceBranch);
-
       const next = resolveNextVersion(root, [opts.prefix], opts.level, { fetch: false });
       const releaseTag = `${opts.prefix}${next.version}`;
       const releaseBranch = `release/${releaseTag}`;
-      const localBranch = git(root, ["branch", "--list", releaseBranch], { capture: true });
-      const remoteBranch = git(
-        root,
-        ["ls-remote", "--heads", "origin", `refs/heads/${releaseBranch}`],
-        { capture: true, check: false },
-      );
-      if (localBranch || remoteBranch) {
-        throw new Error(`Release branch already exists: ${releaseBranch}`);
+      const resuming = currentBranch === releaseBranch;
+      if (currentBranch.startsWith("release/") && !resuming) {
+        throw new Error(`Expected release branch ${releaseBranch}, got ${currentBranch}`);
       }
       if (
         git(root, ["ls-remote", "--tags", "origin", `refs/tags/${releaseTag}`], {
@@ -154,7 +133,33 @@ program
         throw new Error(`Release tag already exists: ${releaseTag}`);
       }
 
-      git(root, ["switch", "--create", releaseBranch]);
+      if (!resuming) {
+        if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
+          throw new Error(`Current branch must contain origin/${opts.base}`);
+        }
+        const status = git(root, ["status", "--porcelain=v1", "--untracked-files=all"], {
+          capture: true,
+        });
+        if (status) {
+          git(root, ["add", "-A"]);
+          git(root, ["commit", "-m", opts.message]);
+        }
+        pushCurrentBranch(root, currentBranch);
+
+        const localBranch = git(root, ["branch", "--list", releaseBranch], { capture: true });
+        const remoteBranch = git(
+          root,
+          ["ls-remote", "--heads", "origin", `refs/heads/${releaseBranch}`],
+          { capture: true, check: false },
+        );
+        if (localBranch || remoteBranch) {
+          throw new Error(`Release branch already exists: ${releaseBranch}`);
+        }
+        git(root, ["switch", "--create", releaseBranch]);
+      } else {
+        logger.info(`resuming ${releaseBranch}`);
+      }
+
       const bumpScript = fileURLToPath(new URL("./bump.ts", import.meta.url));
       const versionCheckScript = fileURLToPath(new URL("./version-check.ts", import.meta.url));
       run(root, process.execPath, [
@@ -185,15 +190,17 @@ program
 
       git(root, ["add", "-A"]);
       const staged = git(root, ["diff", "--cached", "--name-only"], { capture: true });
-      if (!staged) throw new Error("Release preparation produced no changes");
-      git(root, ["commit", "-m", `chore(release): ${next.version}`]);
+      if (staged) {
+        git(root, ["commit", "-m", `chore(release): ${next.version}`]);
+      } else if (!resuming) {
+        throw new Error("Release preparation produced no changes");
+      }
       git(root, ["push", "--set-upstream", "origin", releaseBranch]);
 
       const title = `chore(release): ${next.version}`;
       const body = [
         `Release ${releaseTag}.`,
         "",
-        `Source branch: ${sourceBranch}`,
         `Source commit: ${git(root, ["rev-parse", `${releaseBranch}^`], { capture: true })}`,
         "",
         "Merging this PR updates VERSION on main and starts the public release workflow.",
@@ -210,7 +217,7 @@ program
         "--body",
         body,
       ]);
-      git(root, ["switch", sourceBranch]);
+      if (!resuming) git(root, ["switch", currentBranch]);
       logger.success(`opened ${releaseBranch} for ${releaseTag}`);
     },
   );

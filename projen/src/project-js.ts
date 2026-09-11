@@ -893,6 +893,7 @@ class PrettierIgnoreGenerated extends Component {
   public override preSynthesize(): void {
     const prettier = javascript.Prettier.of(this.project);
     if (!prettier) return;
+    prettier.addIgnorePattern("**/src/generated/**");
     const rootAbs = resolve(this.project.outdir);
     for (const sub of this.project.subprojects) {
       if (!(sub instanceof javascript.NodeProject)) continue;
@@ -1159,6 +1160,7 @@ function initProject(
     eslint.addIgnorePattern(`${root}/openapi/**`);
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
+  eslint.addIgnorePattern("**/src/generated/**");
   eslint.addIgnorePattern("projen/index.ts");
   // The generated bun app scripts + unmanaged overrides live at the package root,
   // outside any `src/**` tsconfig include, so the type-aware parser cannot resolve

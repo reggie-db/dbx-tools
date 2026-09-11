@@ -1053,6 +1053,10 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   },
 });
 
+project.applyToProjects(root, { identifierName: "core-rs", tags: "node" }, (p) => {
+  p.addDevDeps("@dbx-tools/core@workspace:*");
+});
+
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
