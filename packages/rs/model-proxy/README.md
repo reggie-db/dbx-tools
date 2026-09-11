@@ -50,7 +50,8 @@ bytes across OpenAI Chat, Responses, and Anthropic base64 shapes. Images larger
 than 2 MB are re-encoded and resized proportionally to at most a 1,568-pixel
 edge and 1.15 megapixels before protocol translation. Images at or below 2 MB
 and remote image URLs are unchanged, and the proxy never fetches image URLs
-itself.
+itself. Set `--image-resize-threshold-bytes` or
+`IMAGE_RESIZE_THRESHOLD_BYTES` to change the size threshold.
 
 `LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`, case-insensitively,
 and defaults to `info`. Request summaries include protocol, selected model,
