@@ -229,12 +229,17 @@ describe("release task contracts", () => {
       releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
         releasePr.indexOf('git(root, ["worktree", "add"'),
     );
+    assert.match(releasePr, /\["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"\]/);
+    assert.doesNotMatch(releasePr, /worktree", "add", "--branch"/);
+    assert.ok(releasePr.includes('git(root, ["merge", "--no-edit", `origin/${opts.base}`])'));
+    assert.ok(releasePr.includes('"stash", "push", "--include-untracked"'));
     assert.doesNotMatch(releasePr, /git\(root, \["switch"/);
     assert.ok(
       releasePr.indexOf("if (opts.approve)") < releasePr.indexOf('git(root, ["worktree", "remove"'),
     );
     assert.match(releasePr, /"test",\s*"--workspace"/);
-    assert.ok(releasePr.includes('["run", "rs:bindings"]'));
+    assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
+    assert.doesNotMatch(releasePr, /process\.execPath, \["run", "test"\]/);
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),

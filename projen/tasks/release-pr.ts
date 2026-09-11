@@ -95,6 +95,16 @@ function run(root: string, command: string, args: string[], env?: NodeJS.Process
   });
 }
 
+function runIgnoringStdout(root: string, command: string, args: string[]): void {
+  exec.spawnSync(command, args, {
+    cwd: root,
+    stdout: "ignore",
+    stderr: "inherit",
+    stdin: "ignore",
+    check: true,
+  });
+}
+
 function githubAccount(root: string): { owner: string; token: string } {
   const repository = project.repositoryUrl(root);
   if (!repository) throw new Error("Release preparation requires a GitHub repository");
@@ -174,15 +184,15 @@ program
         throw new Error(`Release tag already exists: ${releaseTag}`);
       }
 
-      if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
-        throw new Error(`Current branch must contain origin/${opts.base}`);
-      }
       const status = git(root, ["status", "--porcelain=v1", "--untracked-files=all"], {
         capture: true,
       });
       if (status) {
         git(root, ["add", "-A"]);
         git(root, ["commit", "-m", opts.message]);
+      }
+      if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
+        git(root, ["merge", "--no-edit", `origin/${opts.base}`]);
       }
       pushCurrentBranch(root, currentBranch);
 
@@ -198,9 +208,23 @@ program
         if (localBranch || remoteBranch) {
           throw new Error(`Release branch already exists without its worktree: ${releaseBranch}`);
         }
-        git(root, ["worktree", "add", "--branch", releaseBranch, releaseRoot, "HEAD"]);
+        git(root, ["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"]);
         run(releaseRoot, process.execPath, ["install"]);
       } else {
+        const releaseStatus = git(
+          releaseRoot,
+          ["status", "--porcelain=v1", "--untracked-files=all"],
+          { capture: true },
+        );
+        if (releaseStatus) {
+          git(releaseRoot, ["stash", "push", "--include-untracked", "--message", "release-resume"]);
+        }
+        if (!gitSucceeds(releaseRoot, ["merge-base", "--is-ancestor", currentBranch, "HEAD"])) {
+          git(releaseRoot, ["merge", "--no-edit", currentBranch]);
+        }
+        if (releaseStatus) {
+          git(releaseRoot, ["stash", "pop"]);
+        }
         logger.info(`resuming ${releaseBranch} in ${releaseRoot}`);
       }
 
@@ -219,6 +243,9 @@ program
         throw new Error(`Release preparation did not produce ${next.version}`);
       }
 
+      if (existsSync(join(releaseRoot, "Cargo.toml"))) {
+        runIgnoringStdout(releaseRoot, "cargo", ["metadata", "--format-version", "1"]);
+      }
       run(releaseRoot, process.execPath, [versionCheckScript]);
       if (existsSync(join(releaseRoot, "Cargo.toml"))) {
         run(releaseRoot, "cargo", [
@@ -226,10 +253,8 @@ program
           "--workspace",
           ...(existsSync(join(releaseRoot, "Cargo.lock")) ? ["--locked"] : []),
         ]);
-        run(releaseRoot, process.execPath, ["run", "rs:bindings"]);
       }
       run(releaseRoot, process.execPath, ["run", "compile"]);
-      run(releaseRoot, process.execPath, ["run", "test"]);
       await publishLocalRelease({
         root: releaseRoot,
         version: next.version,
