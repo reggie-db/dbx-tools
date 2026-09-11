@@ -207,6 +207,15 @@
         }
       ]
     },
+    "model:metadata": {
+      "name": "model:metadata",
+      "description": "Refresh committed model retirement and capability snapshots",
+      "steps": [
+        {
+          "exec": "cargo run --quiet -p dbx-tools-model --example generate-model-metadata -- packages/rs/model/assets/retired-models.json packages/rs/model/assets/model-capabilities.json"
+        }
+      ]
+    },
     "openapi": {
       "name": "openapi",
       "steps": [

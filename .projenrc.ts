@@ -32,33 +32,6 @@ class BrandPackageAssets extends Component {
   }
 }
 
-/** Generate committed model metadata fallbacks after project synthesis. */
-class ModelMetadataSource extends Component {
-  /** Refresh generated model metadata after generated manifests are available. */
-  public override postSynthesize(): void {
-    execFileSync(
-      "cargo",
-      [
-        "run",
-        "--quiet",
-        "-p",
-        "dbx-tools-model",
-        "--example",
-        "generate-model-metadata",
-        "--",
-        resolve(this.project.outdir, "packages/rs/model/assets/retired-models.json"),
-        resolve(
-          this.project.outdir,
-          "packages/rs/model/assets/model-capabilities.json",
-        ),
-      ],
-      {
-        stdio: "inherit",
-      },
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Root construction
 // ---------------------------------------------------------------------------
@@ -1116,7 +1089,14 @@ new projenProject.DBXToolsPythonWorkspace(root, {
 root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
 new BrandPackageAssets(root);
-new ModelMetadataSource(root);
+root.addTask("model:metadata", {
+  exec: [
+    "cargo run --quiet -p dbx-tools-model --example generate-model-metadata --",
+    "packages/rs/model/assets/retired-models.json",
+    "packages/rs/model/assets/model-capabilities.json",
+  ].join(" "),
+  description: "Refresh committed model retirement and capability snapshots",
+});
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",
   description: "Emit local Python hello-world messages onto the demo bus",

@@ -20,6 +20,7 @@
     "eslint": "projen eslint",
     "eslint:fix": "projen eslint:fix",
     "format": "projen format",
+    "model:metadata": "projen model:metadata",
     "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",

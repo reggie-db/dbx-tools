@@ -185,7 +185,9 @@ Primary package areas:
   through a daily `FileCache` and falls back to the generated
   `assets/retired-models.json` snapshot. Model capabilities follow the same
   daily refresh and generated-fallback policy. The
-  `generate-model-metadata` Rust example refreshes both committed snapshots.
+  `bun run model:metadata` task invokes the `generate-model-metadata` Rust
+  example to refresh both committed snapshots. Ordinary Projen synthesis never
+  compiles or runs that network-backed generator.
 - `packages/rs/model-proxy` is the public `dbx-model-proxy` Rust binary that
   exposes OpenAI Chat, OpenAI Responses, Anthropic Messages, Codex Responses,
   OpenAI Embeddings, and live model-list compatibility over Databricks. It depends on `core`
