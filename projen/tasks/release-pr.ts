@@ -64,14 +64,33 @@ function gitSucceeds(root: string, args: string[]): boolean {
   );
 }
 
-function run(root: string, command: string, args: string[]): void {
+function run(root: string, command: string, args: string[], env?: NodeJS.ProcessEnv): void {
   exec.spawnSync(command, args, {
     cwd: root,
+    env,
     stdout: "inherit",
     stderr: "inherit",
     stdin: "ignore",
     check: true,
   });
+}
+
+function githubAccount(root: string): { owner: string; token: string } {
+  const repository = project.repositoryUrl(root);
+  if (!repository) throw new Error("Release preparation requires a GitHub repository");
+  const owner = new URL(repository).pathname.split("/").filter(Boolean)[0];
+  if (!owner) throw new Error(`Cannot determine GitHub owner from ${repository}`);
+  const token = exec
+    .spawnSync("gh", ["auth", "token", "--user", owner], {
+      cwd: root,
+      stdout: "capture",
+      stderr: "ignore",
+      stdin: "ignore",
+      check: true,
+    })
+    .stdout?.trim();
+  if (!token) throw new Error(`No GitHub CLI authentication found for ${owner}`);
+  return { owner, token };
 }
 
 const program = new Command();
@@ -115,7 +134,7 @@ program
       const root = project.root() ?? process.cwd();
       const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
       if (!currentBranch) throw new Error("Release preparation requires a local branch");
-      run(root, "gh", ["auth", "status"]);
+      const account = githubAccount(root);
       git(root, ["fetch", "--tags", "origin", opts.base]);
       const next = resolveNextVersion(root, [opts.prefix], opts.level, { fetch: false });
       const releaseTag = `${opts.prefix}${next.version}`;
@@ -205,18 +224,23 @@ program
         "",
         "Merging this PR updates VERSION on main and starts the public release workflow.",
       ].join("\n");
-      run(root, "gh", [
-        "pr",
-        "create",
-        "--base",
-        opts.base,
-        "--head",
-        releaseBranch,
-        "--title",
-        title,
-        "--body",
-        body,
-      ]);
+      run(
+        root,
+        "gh",
+        [
+          "pr",
+          "create",
+          "--base",
+          opts.base,
+          "--head",
+          releaseBranch,
+          "--title",
+          title,
+          "--body",
+          body,
+        ],
+        { ...process.env, GH_TOKEN: account.token },
+      );
       if (!resuming) git(root, ["switch", currentBranch]);
       logger.success(`opened ${releaseBranch} for ${releaseTag}`);
     },

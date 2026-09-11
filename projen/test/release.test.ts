@@ -233,7 +233,7 @@ describe("release task contracts", () => {
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(root, ["commit", "-m", `chore(release): ${next.version}`])'),
     );
-    assert.ok(releasePr.includes('"pr",\n        "create"'));
+    assert.match(releasePr, /"pr",\s*"create"/);
   });
 
   it("publishes reviewed versions without repairing manifests", () => {

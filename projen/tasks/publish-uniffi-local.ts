@@ -5,8 +5,11 @@ import { arch, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { log } from "@dbx-tools/shared-core";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import type { RustBindingMapping, RustWorkspaceMapping } from "../src/project-rs.ts";
+
+const logger = log.logger("projen:publish-uniffi-local");
 
 const parsed = parseArgs({
   options: {
@@ -85,7 +88,16 @@ function artifacts(directory: string, suffix: string): string[] {
     .map((name) => join(directory, name));
 }
 
-function publishCargo(config: RustWorkspaceMapping, registry: string): void {
+function cargoVersionExists(crateName: string, version: string, registry: string): boolean {
+  return (
+    spawnSync("cargo", ["info", `${crateName}@${version}`, "--registry", registry], {
+      cwd: repoRoot,
+      stdio: "ignore",
+    }).status === 0
+  );
+}
+
+function publishCargo(config: RustWorkspaceMapping, registry: string, version: string): void {
   const manifests = config.crates
     .map((crate) => resolve(repoRoot, crate, "Cargo.toml"))
     .filter((manifest) => !/^publish = false$/m.test(readFileSync(manifest, "utf8")));
@@ -115,6 +127,10 @@ function publishCargo(config: RustWorkspaceMapping, registry: string): void {
     }
     for (const crateName of crateNames) {
       if (!crateName) continue;
+      if (cargoVersionExists(crateName, version, registry)) {
+        logger.info(`skip published ${crateName} @ ${version}`);
+        continue;
+      }
       run("cargo", [
         "publish",
         "--package",
@@ -180,12 +196,18 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
   ]);
 
   if (includeNode) {
-    const packages = [
-      ...artifacts(join(output, "npm"), ".tgz"),
-      ...artifacts(join(output, "npm-facade"), ".tgz"),
-    ];
-    for (const packageFile of packages) {
-      run("npm", ["publish", packageFile, "--registry", registry!]);
+    const publishNpmScript = resolve(dirname(fileURLToPath(import.meta.url)), "publish-npm.ts");
+    for (const directory of [join(output, "npm"), join(output, "npm-facade")]) {
+      if (artifacts(directory, ".tgz").length === 0) continue;
+      run(process.execPath, [
+        publishNpmScript,
+        "--directory",
+        directory,
+        "--version",
+        version,
+        "--registry",
+        registry!,
+      ]);
     }
   }
   if (includePython) {
@@ -215,5 +237,5 @@ if (config?.bindings.length) {
 }
 const cargoRegistry = parsed.values["cargo-registry"];
 if (cargoRegistry && config?.crates.length) {
-  publishCargo(config, cargoRegistry);
+  publishCargo(config, cargoRegistry, version);
 }
