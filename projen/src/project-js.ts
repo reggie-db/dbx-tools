@@ -44,7 +44,7 @@ import { DBXToolsRelease, type ReleaseDocsOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
-import { readWorkspaceVersion } from "./workspace-version.ts";
+import { readWorkspaceVersion, syncWorkspaceManifestVersion } from "./workspace-version.ts";
 
 /**
  * The dbx-tools project surface, backed by projen's Node toolchain. A single
@@ -415,10 +415,10 @@ function defaultProjectOptions(
     // would omit the key - except that `npmProvenance` then defaults on and forces
     // the block to render, giving the root a `publishConfig` it does not have
     // today. Provenance is never written to a manifest here (projen only reads it
-    // in its own `Publisher`, and `release: false` means none exists); the
-    // The release workflow opts in per run through `npm_config_provenance`.
-    // instead, so LOCAL publishes to a verdaccio still work with no CI OIDC
-    // provider. See {@link DBXToolsRelease}.
+    // in its own `Publisher`, and `release: false` means none exists). The release
+    // workflow opts in per run through `npm_config_provenance`, so local publishes
+    // to Verdaccio still work without a CI OIDC provider. See
+    // {@link DBXToolsRelease}.
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     buildWorkflow: false,
     workflowPackageCache: false,
@@ -426,8 +426,7 @@ function defaultProjectOptions(
     // The root build validates the whole workspace and must not also pack every
     // member into unused `dist/js` tarballs. Child projects keep projen's package
     // task so `bun run build` in ONE package remains a complete compile/test/pack
-    // operation. The root bump does not invoke child builds: its publish driver
-    // compiles once with filtered root tasks and packs via
+    // operation. Release publication compiles once with filtered root tasks and packs via
     // `bun publish --ignore-scripts` (see {@link applyCompiledPublish}).
     ...(isRoot ? { package: false } : {}),
     jest: false,
@@ -656,6 +655,10 @@ export class DBXToolsNodeProject
   public override preSynthesize(): void {
     if (this.rootInstallOnly) this.with(ROOT_INSTALL_ONLY_MIXIN);
     super.preSynthesize();
+    const version = readWorkspaceVersion(this.outdir);
+    for (const member of this.extraWorkspaceMembers) {
+      syncWorkspaceManifestVersion(join(this.outdir, member, "package.json"), version);
+    }
     // Members come from the attached subprojects, which the root's scan appends
     // after construction - so the list is filled here, not in the constructor.
     // `extraWorkspaceMembers` adds self-synthesizing siblings (e.g. `projen/`).
@@ -1253,9 +1256,8 @@ function initProject(
   new PrettierIgnoreGenerated(project);
 
   new GeneratedSource(project);
-  // The `bump` task (compute next version + commit + tag + push) is useful on
-  // any root; the actual publish is a tag-triggered GitHub workflow the caller
-  // authors. Independent of projen's own `release` component.
+  // Version mutation, reviewed release preparation, and public publication are
+  // separate surfaces owned by one release component.
   new DBXToolsRelease(project as DBXToolsNodeProject, {
     tagPrefix: options.releaseTagPrefix,
     nodeRelease: options.nodeRelease,

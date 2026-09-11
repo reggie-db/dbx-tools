@@ -130,8 +130,9 @@ without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 
 The workspace generates one `release.yml` workflow for every ecosystem. A push
-to the configured release branch starts it. The context job reads `VERSION`,
-creates the corresponding annotated `v*` tag, and exposes the verified tag,
+to the configured release branch starts it only when `VERSION` changed. The
+context job requires the version to differ from its parent and exceed the latest
+tag, creates the corresponding annotated `v*` tag, and exposes the verified tag,
 commit, and version to every source job. If the tag already exists, it must be
 annotated and reference the same commit. A manual run accepts that same tag and
 commit but requires dry-run mode, so it builds and validates without publishing
@@ -189,7 +190,7 @@ Set `LOCAL_CARGO_REGISTRY` to a named Cargo registry such as a loopback
 Cargo crates also publish directly to crates.io
 with `CARGO_REGISTRY_TOKEN`. Override `releaseTargets` only when a consumer has
 additional native runners; ordinary projects inherit the maintained matrix
-automatically. `bun run bump` also accepts repeatable `--os` and `--arch`
+automatically. `bun run release` also accepts repeatable `--os` and `--arch`
 selectors; every selected operating system is crossed with every selected
 architecture. Omit both filters to regenerate the complete maintained matrix.
 `DBX_TOOLS_RELEASE_PLATFORMS` can select the generated matrix without repeating
@@ -383,22 +384,25 @@ Every repo-wide task lives on the root, and the root's `compile` / `test`
 delegate with `bun run --filter '*'` rather than emitting a step per member - so
 a new package is covered without a re-synth. Work from the root:
 
-| Task              | What it does                                          |
-| ----------------- | ----------------------------------------------------- |
-| `bun run build`   | workspace `compile` + `test`; no root package fan-out |
-| `bun run compile` | `tsc --build` in each member, in parallel             |
-| `bun run test`    | `eslint` once, then each member's tests               |
-| `bun run sync`    | re-synth (`--watch` to keep synthing)                 |
-| `bun run barrels` | regenerate the read-only `index.ts` barrels           |
-| `bun run bump`    | version, commit, and push the current branch          |
+| Task                    | What it does                                           |
+| ----------------------- | ------------------------------------------------------ |
+| `bun run build`         | workspace `compile` + `test`; no root package fan-out  |
+| `bun run compile`       | `tsc --build` in each member, in parallel              |
+| `bun run test`          | `eslint` once, then each member's tests                |
+| `bun run sync`          | re-synth (`--watch` to keep synthing)                  |
+| `bun run barrels`       | regenerate the read-only `index.ts` barrels            |
+| `bun run bump`          | increment `VERSION` and synchronize generated versions |
+| `bun run version:check` | verify every version surface matches `VERSION`         |
+| `bun run release`       | validate locally and open a reviewed release PR        |
 
-`bump` also mirrors a release into local registries when the active clients are
-pointed at loopback services. npm uses `npm config get registry` and publishes
-to a local Verdaccio automatically. Publishable JavaScript members compile once
+`release` commits pending work on the current branch, pushes it, creates a
+dedicated `release/v<version>` branch, invokes the pure `bump` task, validates
+the complete workspace, runs local publication, and opens a PR into the
+configured release branch. `--message` sets the source commit message. The task
+never merges the PR. npm uses `npm config get registry` and publishes to a local
+Verdaccio automatically. Publishable JavaScript members compile once
 from the root in parallel, then upload through a bounded pool without rerunning
-their `prepack` tasks. When synth already made the manifests and Bun workspace
-lock release-current, publishing also skips redundant version stamping and the
-lockfile reinstall. Python prefers uv's default index and only
+their `prepack` tasks. Python prefers uv's default index and only
 treats a loopback `.../+simple/` URL as writable devpi; a read-only cache such as
 proxpi (`.../index/`) is deliberately ignored. The task stamps every Python
 member and its sibling dependencies to the release version, builds the workspace
@@ -410,14 +414,13 @@ Use `--local-registry false` or `--local-pypi false` to disable either local
 publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
 auto-detection; `--python-root` defaults to `packages/py`.
 
-The configured release branch is the publication trigger. Its workflow creates
-the annotated `v*` public release boundary from `VERSION`. Available workflow
+The configured release branch publishes only when a reviewed PR changes
+`VERSION`. Its workflow creates the annotated `v*` public release boundary.
+Available workflow
 stages form the generated chain Rust -> Python -> Node -> docs: Rust builds and
 publishes native artifacts and Cargo crates, Python publishes standard
 distributions, Node publishes standard workspace packages, and docs deploys
-after publication. A stage with no corresponding outputs is omitted. Keep
-ongoing development on another branch when every release-branch update should
-publish.
+after publication. A stage with no corresponding outputs is omitted.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
@@ -429,8 +432,8 @@ invokes, so there is no second place to run the same thing:
 - `watch` - a single-package `tsc --build -w`, for narrowing a long
   edit/compile loop to one package.
 - `build` / `package` - a complete compile/test/pack lifecycle when invoked in
-  one package. Root bump deliberately bypasses these and uses filtered compile
-  plus concurrent `bun publish --ignore-scripts`. The package phase also packs
+  one package. Release preparation validates through the root's filtered tasks,
+  and publication uses concurrent `bun publish --ignore-scripts`. The package phase also packs
   with `--ignore-scripts` because its build already compiled; `prepack` remains
   available for a standalone publish that did not run `build` first.
 - `install` / `install:ci` / `default` / `pre-compile` / `post-compile` -
@@ -452,9 +455,9 @@ example apps - so the packages, the engine, and the examples always match.
 `src/workspace-version.ts` owns reading and writing it. Synth only ever reads it;
 it never resets, upgrades, or downgrades a version on its own.
 
-`bun run bump` is the only command that changes the number: it fetches the remote
-tags once, takes the highest tag across `v*` and every sibling prefix as the base
-(falling back to the local `VERSION` file when the remote is unreachable or has no
-tag), increments by `--level`, writes `VERSION`, then synths so every manifest
-copies it. The remote is consulted only on `bump` and on one-time creation of a
-missing `VERSION` file - never on an ordinary synth.
+`bun run bump` is the only command that changes the number: it fetches remote
+tags once, takes the highest `v*` tag as the base, increments by `--level`, writes
+`VERSION`, then synths so every manifest copies it. It has no git or publication
+side effects. `bun run release` invokes it while preparing the reviewed release
+PR. The remote is consulted only on `bump` and on one-time creation of a missing
+`VERSION` file, never on an ordinary synth.

@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.6.194";
+export const PACKAGE_VERSION = "0.6.195";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -64,4 +64,4 @@ export type { TypeScriptBindingModule } from "./src/uniffi.ts";
 export { DBXToolsVsCode } from "./src/vscode.ts";
 export type { IgnoreGroupOptions } from "./src/watch.ts";
 export { VERSION_FILE, DEFAULT_VERSION } from "./src/workspace-version.ts";
-export type { Semver } from "./src/workspace-version.ts";
+export type { Semver, VersionLevel } from "./src/workspace-version.ts";

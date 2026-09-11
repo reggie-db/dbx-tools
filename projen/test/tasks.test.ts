@@ -120,8 +120,8 @@ describe("workspace validation tasks", () => {
 
   // A root build is validation, not a release artifact fan-out. A child build is
   // intentionally more flexible: run it directly and projen performs the full
-  // compile/test/pack lifecycle for that one package. Root bump remains separate
-  // and calls filtered compile + `bun publish --ignore-scripts` itself.
+  // compile/test/pack lifecycle for that one package. Reviewed release preparation
+  // owns the workspace-wide validation and publication preflight.
   it("omits root packing but keeps per-package builds complete", () => {
     assert.deepEqual(tasks.root.tasks.package?.steps ?? [], []);
 

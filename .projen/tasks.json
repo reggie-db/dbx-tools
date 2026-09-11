@@ -38,7 +38,7 @@
     },
     "bump": {
       "name": "bump",
-      "description": "Bump the release version (default patch), then commit and push it",
+      "description": "Increment VERSION and synchronize generated workspace versions",
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v",
@@ -287,6 +287,16 @@
         }
       ]
     },
+    "release": {
+      "name": "release",
+      "description": "Prepare, validate, locally publish, and open a reviewed release PR",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main",
+          "receiveArgs": true
+        }
+      ]
+    },
     "rs:bindings": {
       "name": "rs:bindings",
       "description": "Generate language bindings for UniFFI-enabled Rust crates",
@@ -358,6 +368,15 @@
       "steps": [
         {
           "exec": "bun test scripts/install.test.ts"
+        }
+      ]
+    },
+    "version:check": {
+      "name": "version:check",
+      "description": "Verify every package and generated barrel matches VERSION",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/version-check.ts"
         }
       ]
     }

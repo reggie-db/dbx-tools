@@ -65,7 +65,7 @@ const project = new typescript.TypeScriptProject({
     "@clack/prompts@^1.7.0",
     // `workspace:*` now that `projen/` is a MEMBER of the single bun workspace:
     // bun links these three from local source and rewrites them to the real
-    // published range at publish time (the shared root bump stamps that version),
+    // published range at publish time (root synthesis supplies that version),
     // so the engine still cannot resolve an older sibling than it was built with.
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/path@workspace:*",
@@ -98,7 +98,7 @@ const project = new typescript.TypeScriptProject({
   ],
 });
 
-// Preserve the version stamped by the shared root bump. The TypeScriptProject
+// Preserve the version read from the shared workspace VERSION. The TypeScriptProject
 // constructor's `version` option is ignored when `release: false`, so write the
 // generated manifest field explicitly.
 project.package.addField("version", PACKAGE_VERSION);
