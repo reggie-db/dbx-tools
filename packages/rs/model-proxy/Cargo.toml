@@ -19,8 +19,8 @@ async-stream = "0.3"
 axum = "0.8"
 base64 = { workspace = true }
 clap = { workspace = true }
-dbx-tools-core = { version = "0.6.197", path = "../core" }
-dbx-tools-model = { version = "0.6.197", path = "../model" }
+dbx-tools-core = { version = "0.6.198", path = "../core" }
+dbx-tools-model = { version = "0.6.198", path = "../model" }
 eventsource-stream = "0.2"
 futures-util = "0.3"
 image = { workspace = true }

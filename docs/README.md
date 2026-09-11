@@ -52,6 +52,10 @@ bun run --cwd .docs-build/site build
 bun run --cwd .docs-build/site check-links
 ```
 
+`check-links` validates built internal routes, assets, and fragments directly
+from `.docs-build/dist`. It starts no HTTP server and makes no external network
+requests, so release validation is deterministic.
+
 Generated files live under `.docs-build/` and should not be committed.
 The published site uses `https://docs.dbx.tools` with a root base path. GitHub Pages
 custom-domain state is configured through repository settings or the Pages API;
