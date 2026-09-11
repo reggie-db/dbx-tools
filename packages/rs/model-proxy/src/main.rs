@@ -2,6 +2,7 @@
 
 mod adapt;
 mod error;
+mod images;
 mod protocol;
 mod routes;
 mod stream;
@@ -20,7 +21,7 @@ use routes::AppState;
 use tracing::info;
 
 const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
-    NonZeroUsize::new(4_000_000).expect("default request limit is non-zero");
+    NonZeroUsize::new(25_000_000).expect("default request limit is non-zero");
 
 #[derive(Debug, Parser)]
 #[command(name = "dbx-model-proxy", version)]
@@ -106,9 +107,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn request_limit_defaults_to_databricks_foundation_model_limit() {
+    fn request_limit_defaults_to_image_capable_proxy_limit() {
         let cli = Cli::try_parse_from(["dbx-model-proxy"]).unwrap();
         assert_eq!(cli.max_request_bytes, DEFAULT_MAX_REQUEST_BYTES);
+        assert_eq!(cli.max_request_bytes.get(), 25_000_000);
         assert_eq!(cli.tokens_per_minute, None);
 
         let cli =

@@ -25,6 +25,7 @@ use tracing::info;
 use crate::{
     adapt::{adapt_request, adapt_response, select_request_target, upstream_path},
     error::ProxyError,
+    images::normalize_embedded_images,
     protocol::{is_codex_originator, ClientWire, TargetWire},
     stream::stream_response,
     throttle::RequestThrottle,
@@ -192,6 +193,7 @@ async fn proxy(
 ) -> Result<Response, ProxyError> {
     let started = Instant::now();
     let mut input: Value = serde_json::from_slice(&body)?;
+    normalize_embedded_images(&mut input)?;
     let requested_model = requested_model(&input)?.to_owned();
     let streaming = input
         .get("stream")
