@@ -253,7 +253,6 @@ program
           "--workspace",
           ...(existsSync(join(releaseRoot, "Cargo.lock")) ? ["--locked"] : []),
         ]);
-        run(releaseRoot, process.execPath, ["run", "rs:bindings"]);
       }
       run(releaseRoot, process.execPath, ["run", "compile"]);
       run(releaseRoot, process.execPath, ["run", "test"]);

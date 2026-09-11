@@ -238,7 +238,7 @@ describe("release task contracts", () => {
       releasePr.indexOf("if (opts.approve)") < releasePr.indexOf('git(root, ["worktree", "remove"'),
     );
     assert.match(releasePr, /"test",\s*"--workspace"/);
-    assert.ok(releasePr.includes('["run", "rs:bindings"]'));
+    assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),

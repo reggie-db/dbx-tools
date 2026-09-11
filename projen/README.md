@@ -130,8 +130,9 @@ without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 `rs:bindings` is explicit rather than part of root `pre-compile`, so ordinary
 JavaScript PR builds type-check committed generated bindings without performing
-a host Rust build. Release preparation runs Cargo workspace tests and
-regenerates bindings before JavaScript validation.
+a host Rust build. Regenerate bindings through the focused watcher or explicit
+task while changing a UniFFI API. Release preparation runs Cargo workspace tests
+without invoking UBRN.
 
 The workspace generates one `release.yml` workflow for every ecosystem. A push
 to the configured release branch starts it only when `VERSION` changed. The
@@ -424,8 +425,7 @@ auto-detection; `--python-root` defaults to `packages/py`.
 
 The GitHub PR workflow runs synth plus the workspace TypeScript compile rather
 than the complete root build. Release preparation has already run Rust tests,
-binding generation, workspace tests, and local package preflight before opening
-the PR.
+workspace tests, and local package preflight before opening the PR.
 
 The configured release branch publishes only when a reviewed PR changes
 `VERSION`. Its workflow creates the annotated `v*` public release boundary.

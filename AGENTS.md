@@ -457,9 +457,11 @@ Primary package areas:
   Cargo metadata unreadable while the package still advertises its older MSRV.
   `rs:bindings` remains explicit and is not attached to the root `pre-compile`
   task. JavaScript PR builds type-check committed generated bindings without
-  compiling Rust. `bun run release` runs Cargo workspace tests and regenerates
-  host bindings before JavaScript validation; the main release owns the full
-  cross-platform Rust matrix and reusable target caches.
+  compiling Rust. Regenerate bindings while changing a UniFFI API through the
+  focused watcher or `bun run rs:bindings`; release preparation does not invoke
+  UBRN or download its build-time dependencies. `bun run release` runs Cargo
+  workspace tests, while the main release owns the full cross-platform Rust
+  matrix and reusable target caches.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
   without a `bindings` namespace. Python keeps an empty `__init__.py`; consumers
@@ -1652,8 +1654,9 @@ export, and the tests catch behavior.
 Run `bun run build` inside one JavaScript package when you want its complete
 compile/test/pack lifecycle. The root `build` runs synth plus workspace compile
 and tests. The GitHub PR workflow deliberately invokes only synth plus compile;
-`bun run release` already owns Rust tests, binding generation, workspace tests,
-and local publication before opening its PR. Child `package` uses
+`bun run release` already owns Rust and JavaScript tests plus local publication
+before opening its PR. Binding generation stays explicit during UniFFI API
+development. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
 package `prepack` remains for a standalone `bun publish`.
 Both PR workflows include the `closed` event in their PR-number concurrency
