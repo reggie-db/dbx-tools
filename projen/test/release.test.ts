@@ -261,6 +261,10 @@ describe("generated workflow safety", () => {
     const build = readWorkflow(outdir, "build");
     assert.deepEqual(workflowTrigger(build, "pull_request"), {});
     assert.equal("push" in build.on, false);
+    assert.equal(
+      step(build.jobs.build!, "Validate generated files and types").run,
+      "bunx projen default\nbun run compile",
+    );
   });
 
   it("uses a dependency-only Bun cache key", () => {

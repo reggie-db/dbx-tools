@@ -45,8 +45,10 @@ jobs:
         with:
           path: ${{ steps.bun_cache_metadata.outputs.path }}
           key: ${{ steps.bun_cache.outputs.cache-primary-key }}
-      - name: build
-        run: bunx projen build
+      - name: Validate generated files and types
+        run: |-
+          bunx projen default
+          bun run compile
       - name: Find mutations
         id: self_mutation
         run: |-

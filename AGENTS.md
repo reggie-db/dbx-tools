@@ -1626,6 +1626,10 @@ bun run clean                # remove generated files (read-only ones); interact
 bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
 bun run test:installer       # standalone installer tests; RUN_DOCKER_INSTALL_TESTS=1 adds container coverage
+bun run model:metadata       # refresh committed model capability and retirement snapshots
+bun run bump                 # increment VERSION and synth; no git or publication side effects
+bun run version:check        # verify every committed version surface
+bun run release              # validate locally, publish to loopback registries, and open a release PR
 bun run eslint               # lint (autofix) every package under `packages/js`
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
 ```
@@ -1636,12 +1640,12 @@ manifest or barrel that no longer matches the source tree, compile catches a mov
 export, and the tests catch behavior.
 
 Run `bun run build` inside one JavaScript package when you want its complete
-compile/test/pack lifecycle. The root `build` deliberately has no package fan-out,
-and root `bump` bypasses child builds in favor of one filtered compile plus
-concurrent `bun publish --ignore-scripts`, so keeping package-local builds useful
-does not slow releases. Child `package` uses `npm pack --ignore-scripts` because
-the enclosing build already compiled; package `prepack` remains for a standalone
-`bun publish`.
+compile/test/pack lifecycle. The root `build` runs synth plus workspace compile
+and tests. The GitHub PR workflow deliberately invokes only synth plus compile;
+`bun run release` already owns Rust tests, binding generation, workspace tests,
+and local publication before opening its PR. Child `package` uses
+`npm pack --ignore-scripts` because the enclosing build already compiled;
+package `prepack` remains for a standalone `bun publish`.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
 runs them with its own fast runner). The generated task runs `bun test test`

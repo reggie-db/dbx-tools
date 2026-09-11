@@ -837,6 +837,29 @@ class WorkspaceValidationTasks extends Component {
  */
 class WorkflowDefaults extends Component {
   public override preSynthesize(): void {
+    const project = this.project as javascript.NodeProject;
+    const workflow = project.buildWorkflow?.workflow;
+    if (workflow) {
+      const job = workflow.getJob("build");
+      if ("steps" in job) {
+        const mutableJob = job as unknown as { steps: JobStep[] | (() => JobStep[]) };
+        const configuredSteps = mutableJob.steps;
+        const rewrite = (steps: JobStep[]): JobStep[] =>
+          steps.map((step) =>
+            step.name === "build"
+              ? {
+                  ...step,
+                  name: "Validate generated files and types",
+                  run: "bunx projen default\nbun run compile",
+                }
+              : step,
+          );
+        mutableJob.steps =
+          typeof configuredSteps === "function"
+            ? () => rewrite(configuredSteps())
+            : rewrite(configuredSteps);
+      }
+    }
     const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
     for (const job of ["build", "self-mutation"]) {
       build?.addOverride(`jobs.${job}.timeout-minutes`, 30);

@@ -388,16 +388,16 @@ Every repo-wide task lives on the root, and the root's `compile` / `test`
 delegate with `bun run --filter '*'` rather than emitting a step per member - so
 a new package is covered without a re-synth. Work from the root:
 
-| Task                    | What it does                                           |
-| ----------------------- | ------------------------------------------------------ |
-| `bun run build`         | workspace `compile` + `test`; no root package fan-out  |
-| `bun run compile`       | `tsc --build` in each member, in parallel              |
-| `bun run test`          | `eslint` once, then each member's tests                |
-| `bun run sync`          | re-synth (`--watch` to keep synthing)                  |
-| `bun run barrels`       | regenerate the read-only `index.ts` barrels            |
-| `bun run bump`          | increment `VERSION` and synchronize generated versions |
-| `bun run version:check` | verify every version surface matches `VERSION`         |
-| `bun run release`       | validate locally and open a reviewed release PR        |
+| Task                    | What it does                                            |
+| ----------------------- | ------------------------------------------------------- |
+| `bun run build`         | synth + workspace compile and tests                     |
+| `bun run compile`       | `tsc --build` in each member, in parallel               |
+| `bun run test`          | `eslint` once, then each member's tests                 |
+| `bun run sync`          | re-synth (`--watch` to keep synthing)                   |
+| `bun run barrels`       | regenerate the read-only `index.ts` barrels             |
+| `bun run bump`          | increment `VERSION` and synchronize generated versions  |
+| `bun run version:check` | verify every version surface matches `VERSION`          |
+| `bun run release`       | run full local preflight and open a reviewed release PR |
 
 `release` commits pending work on the current branch, pushes it, creates a
 dedicated `release/v<version>` branch, invokes the pure `bump` task, validates
@@ -417,6 +417,11 @@ trees. Devpi client authentication remains in its normal `~/.devpi` state.
 Use `--local-registry false` or `--local-pypi false` to disable either local
 publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
 auto-detection; `--python-root` defaults to `packages/py`.
+
+The GitHub PR workflow runs synth plus the workspace TypeScript compile rather
+than the complete root build. Release preparation has already run Rust tests,
+binding generation, workspace tests, and local package preflight before opening
+the PR.
 
 The configured release branch publishes only when a reviewed PR changes
 `VERSION`. Its workflow creates the annotated `v*` public release boundary.
