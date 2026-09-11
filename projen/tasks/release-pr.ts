@@ -95,6 +95,16 @@ function run(root: string, command: string, args: string[], env?: NodeJS.Process
   });
 }
 
+function runIgnoringStdout(root: string, command: string, args: string[]): void {
+  exec.spawnSync(command, args, {
+    cwd: root,
+    stdout: "ignore",
+    stderr: "inherit",
+    stdin: "ignore",
+    check: true,
+  });
+}
+
 function githubAccount(root: string): { owner: string; token: string } {
   const repository = project.repositoryUrl(root);
   if (!repository) throw new Error("Release preparation requires a GitHub repository");
@@ -234,7 +244,7 @@ program
       }
 
       if (existsSync(join(releaseRoot, "Cargo.toml"))) {
-        run(releaseRoot, "cargo", ["metadata", "--format-version", "1"]);
+        runIgnoringStdout(releaseRoot, "cargo", ["metadata", "--format-version", "1"]);
       }
       run(releaseRoot, process.execPath, [versionCheckScript]);
       if (existsSync(join(releaseRoot, "Cargo.toml"))) {

@@ -28,7 +28,7 @@ function cargoVersions(root: string): Array<{ name: string; version: string }> {
   const locked = existsSync(join(root, "Cargo.lock"));
   const result = exec.spawnSync(
     "cargo",
-    ["metadata", ...(locked ? ["--locked"] : []), "--format-version", "1"],
+    ["metadata", ...(locked ? ["--locked"] : []), "--format-version", "1", "--no-deps"],
     {
       cwd: root,
       stdout: "capture",
