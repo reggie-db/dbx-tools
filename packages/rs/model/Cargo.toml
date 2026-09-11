@@ -12,7 +12,7 @@ name = "dbx_tools_model"
 path = "src/lib.rs"
 
 [dependencies]
-dbx-tools-core = { version = "0.6.197", path = "../core" }
+dbx-tools-core = { version = "0.6.198", path = "../core" }
 difflib-fast = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
