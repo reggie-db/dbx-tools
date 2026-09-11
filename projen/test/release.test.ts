@@ -239,6 +239,7 @@ describe("release task contracts", () => {
     );
     assert.match(releasePr, /"test",\s*"--workspace"/);
     assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
+    assert.doesNotMatch(releasePr, /process\.execPath, \["run", "test"\]/);
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),

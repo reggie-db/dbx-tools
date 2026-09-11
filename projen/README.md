@@ -425,7 +425,8 @@ auto-detection; `--python-root` defaults to `packages/py`.
 
 The GitHub PR workflow runs synth plus the workspace TypeScript compile rather
 than the complete root build. Release preparation has already run Rust tests,
-workspace tests, and local package preflight before opening the PR.
+workspace type-checking, and local package preflight before opening the PR.
+JavaScript behavior tests remain an explicit developer task.
 
 The configured release branch publishes only when a reviewed PR changes
 `VERSION`. Its workflow creates the annotated `v*` public release boundary.

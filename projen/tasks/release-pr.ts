@@ -255,7 +255,6 @@ program
         ]);
       }
       run(releaseRoot, process.execPath, ["run", "compile"]);
-      run(releaseRoot, process.execPath, ["run", "test"]);
       await publishLocalRelease({
         root: releaseRoot,
         version: next.version,

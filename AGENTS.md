@@ -1654,9 +1654,10 @@ export, and the tests catch behavior.
 Run `bun run build` inside one JavaScript package when you want its complete
 compile/test/pack lifecycle. The root `build` runs synth plus workspace compile
 and tests. The GitHub PR workflow deliberately invokes only synth plus compile;
-`bun run release` already owns Rust and JavaScript tests plus local publication
-before opening its PR. Binding generation stays explicit during UniFFI API
-development. Child `package` uses
+`bun run release` owns Rust tests, workspace type-checking, and local publication
+before opening its PR. JavaScript behavior tests remain explicit rather than
+making every release repeat the complete package test fan-out. Binding
+generation stays explicit during UniFFI API development. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
 package `prepack` remains for a standalone `bun publish`.
 Both PR workflows include the `closed` event in their PR-number concurrency
