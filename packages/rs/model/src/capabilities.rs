@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     documentation::{
-        collapse_text, load_page as load_documentation_page, read_snapshot, snapshot_is_fresh,
-        unix_timestamp, write_snapshot, DocumentationError,
+        cached_documentation, collapse_text, load_page as load_documentation_page, read_snapshot,
+        snapshot_is_fresh, unix_timestamp, write_snapshot, CachedDocumentation, DocumentationError,
     },
     models::{model_search_query, ServingEndpointSummary},
 };
@@ -74,7 +74,7 @@ impl ModelCapabilitiesResolver {
                 platform_cache_root()?
                     .join("dbx-tools")
                     .join("model")
-                    .join("capabilities.v1.json"),
+                    .join("capabilities.v2.json"),
                 MODEL_CAPABILITIES_TTL,
             ),
             OPENAI_RESPONSES_MODELS_URL,
@@ -102,37 +102,28 @@ impl ModelCapabilitiesResolver {
         let client = self.client.clone();
         let responses_url = self.responses_url.clone();
         let web_search_url = self.web_search_url.clone();
-        let snapshot = self
-            .cache
-            .get_or_try_init(|| async move {
-                let (responses, web_search) = tokio::join!(
-                    load_page(&client, &responses_url),
-                    load_page(&client, &web_search_url),
-                );
-                let mut capabilities = fallback;
-                let mut errors = Vec::new();
-                match responses.and_then(|html| parse_responses_capabilities(&html)) {
-                    Ok(parsed) => {
-                        capabilities.responses = parsed.responses;
-                        capabilities.image_input = parsed.image_input;
-                        capabilities.apply_patch = parsed.apply_patch;
-                    }
-                    Err(error) => errors.push(error.to_string()),
+        cached_documentation(&self.cache, "model-capabilities", || async move {
+            let (responses, web_search) = tokio::join!(
+                load_page(&client, &responses_url),
+                load_page(&client, &web_search_url),
+            );
+            let mut capabilities = fallback;
+            let mut errors = Vec::new();
+            match responses.and_then(|html| parse_responses_capabilities(&html)) {
+                Ok(parsed) => {
+                    capabilities.responses = parsed.responses;
+                    capabilities.image_input = parsed.image_input;
+                    capabilities.apply_patch = parsed.apply_patch;
                 }
-                match web_search.and_then(|html| parse_web_search_models(&html)) {
-                    Ok(models) => capabilities.web_search = models,
-                    Err(error) => errors.push(error.to_string()),
-                }
-                Ok::<_, ModelCapabilitiesError>(CachedModelCapabilities {
-                    capabilities,
-                    errors,
-                })
-            })
-            .await?;
-        for error in &snapshot.errors {
-            tracing::warn!(error, "Databricks model-capability discovery failed");
-        }
-        Ok(snapshot.capabilities)
+                Err(error) => errors.push(error.to_string()),
+            }
+            match web_search.and_then(|html| parse_web_search_models(&html)) {
+                Ok(models) => capabilities.web_search = models,
+                Err(error) => errors.push(error.to_string()),
+            }
+            Ok::<_, ModelCapabilitiesError>(CachedDocumentation::new(capabilities, errors))
+        })
+        .await
     }
 }
 
@@ -297,13 +288,6 @@ async fn load_page(client: &reqwest::Client, url: &str) -> Result<String, ModelC
     load_documentation_page(client, url, "dbx-tools-model-capabilities/1")
         .await
         .map_err(model_capabilities_documentation_error)
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CachedModelCapabilities {
-    capabilities: ModelCapabilities,
-    errors: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

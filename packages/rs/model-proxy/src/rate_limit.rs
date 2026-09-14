@@ -154,8 +154,16 @@ pub(crate) struct RateLimitPermit {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct RateLimitDetails {
+    /// Human-readable Databricks rejection message.
     pub(crate) message: Option<String>,
+    /// Suggested retry delay from the JSON body.
     pub(crate) retry_after: Option<Duration>,
+    /// Limit category such as input tokens per minute.
+    pub(crate) limit_type: Option<String>,
+    /// Configured limit for the rejected category.
+    pub(crate) limit: Option<u64>,
+    /// Current usage reported for the rejected category.
+    pub(crate) current: Option<u64>,
 }
 
 /// Parse the documented Databricks Foundation Model API 429 error fields.
@@ -176,9 +184,27 @@ pub(crate) fn rate_limit_details(body: &[u8]) -> RateLimitDetails {
         .get("retry_after")
         .or_else(|| value.get("retry_after"))
         .and_then(retry_after_value);
+    let limit_type = error
+        .get("limit_type")
+        .or_else(|| value.get("limit_type"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|limit_type| !limit_type.is_empty())
+        .map(str::to_owned);
+    let limit = error
+        .get("limit")
+        .or_else(|| value.get("limit"))
+        .and_then(integer_value);
+    let current = error
+        .get("current")
+        .or_else(|| value.get("current"))
+        .and_then(integer_value);
     RateLimitDetails {
         message,
         retry_after,
+        limit_type,
+        limit,
+        current,
     }
 }
 
@@ -207,10 +233,13 @@ pub(crate) fn server_retry_after(
 }
 
 fn retry_after_value(value: &Value) -> Option<Duration> {
+    integer_value(value).map(Duration::from_secs)
+}
+
+fn integer_value(value: &Value) -> Option<u64> {
     value
         .as_u64()
-        .or_else(|| value.as_str()?.trim().parse().ok())
-        .map(Duration::from_secs)
+        .or_else(|| value.as_str()?.trim().replace(',', "").parse().ok())
 }
 
 #[cfg(test)]
@@ -235,15 +264,24 @@ mod tests {
     #[test]
     fn parses_databricks_rate_limit_message_and_retry_delay() {
         let details =
-            rate_limit_details(br#"{"error":{"message":"Rate limit exceeded","retry_after":15}}"#);
+            rate_limit_details(
+                br#"{"error":{"message":"Rate limit exceeded","retry_after":15,"limit_type":"input_tokens_per_minute","limit":200000,"current":200150}}"#,
+            );
 
         assert_eq!(details.message.as_deref(), Some("Rate limit exceeded"));
         assert_eq!(details.retry_after, Some(Duration::from_secs(15)));
+        assert_eq!(
+            details.limit_type.as_deref(),
+            Some("input_tokens_per_minute")
+        );
+        assert_eq!(details.limit, Some(200_000));
+        assert_eq!(details.current, Some(200_150));
         assert_eq!(
             rate_limit_details(br#"{"message":"  quota exhausted  ","retry_after":"7"}"#),
             RateLimitDetails {
                 message: Some("quota exhausted".to_owned()),
                 retry_after: Some(Duration::from_secs(7)),
+                ..Default::default()
             }
         );
         assert_eq!(rate_limit_details(b"not json"), RateLimitDetails::default());

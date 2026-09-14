@@ -1,13 +1,61 @@
 //! Shared Databricks documentation loading and generated-snapshot persistence.
 
 use std::{
+    fmt::Display,
+    future::Future,
     io::Write,
     path::Path,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use dbx_tools_core::{FileCache, FileCacheError};
 use scraper::ElementRef;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+/// Cached documentation value plus non-fatal refresh errors.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct CachedDocumentation<T> {
+    value: T,
+    errors: Vec<String>,
+}
+
+impl<T> CachedDocumentation<T> {
+    /// Create a cache envelope from a value and refresh errors.
+    pub(crate) fn new(value: T, errors: Vec<String>) -> Self {
+        Self { value, errors }
+    }
+
+    /// Keep a fallback value when a documentation load fails.
+    pub(crate) fn from_result<E: Display>(result: Result<T, E>, fallback: T) -> Self {
+        match result {
+            Ok(value) => Self::new(value, Vec::new()),
+            Err(error) => Self::new(fallback, vec![error.to_string()]),
+        }
+    }
+}
+
+/// Resolve one cached documentation envelope and emit its fallback warnings.
+pub(crate) async fn cached_documentation<T, E, Load, Fut>(
+    cache: &FileCache,
+    label: &'static str,
+    load: Load,
+) -> Result<T, E>
+where
+    T: Clone + DeserializeOwned + Serialize + Send + 'static,
+    E: From<FileCacheError>,
+    Load: FnOnce() -> Fut,
+    Fut: Future<Output = Result<CachedDocumentation<T>, E>>,
+{
+    let snapshot = cache.get_or_try_init(load).await?;
+    for error in snapshot.errors {
+        tracing::warn!(
+            source = label,
+            error,
+            "Databricks documentation refresh failed; using generated fallback"
+        );
+    }
+    Ok(snapshot.value)
+}
 
 pub(crate) async fn load_page(
     client: &reqwest::Client,

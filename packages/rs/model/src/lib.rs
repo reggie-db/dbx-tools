@@ -7,6 +7,7 @@ pub mod capabilities;
 pub mod classify;
 pub mod client;
 mod documentation;
+pub mod limits;
 pub mod listing;
 pub mod model_status;
 pub mod models;
@@ -22,6 +23,11 @@ pub use classify::{
     classify_by_family, classify_endpoints, supports_tools_by_family, CHAT_TASK, EMBEDDING_TASK,
 };
 pub use client::{endpoints_from_response, ModelClient, ModelError, DEFAULT_MODEL_CACHE_TTL};
+pub use limits::{
+    parse_model_rate_limits, refresh_generated_model_rate_limits, ModelRateLimitCatalogue,
+    ModelRateLimits, ModelRateLimitsError, ModelRateLimitsResolver, MODEL_RATE_LIMITS_TTL,
+    MODEL_RATE_LIMITS_URL,
+};
 pub use listing::{codex_model_name, models_payload, models_payload_with_capabilities};
 pub use model_status::{
     parse_retired_models, refresh_generated_retired_models, status_from_names, ModelStatusError,

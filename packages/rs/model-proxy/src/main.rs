@@ -10,18 +10,19 @@ mod stream;
 mod throttle;
 
 use std::{
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     num::{NonZeroU64, NonZeroUsize},
     time::Duration,
 };
 
 use clap::Parser;
 use dbx_tools_core::{init_logging, DatabricksClient};
-use dbx_tools_model::{ModelCapabilitiesResolver, ModelClient};
+use dbx_tools_model::{ModelCapabilitiesResolver, ModelClient, ModelRateLimitsResolver};
 use images::DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES;
 use protocol::TargetWire;
 use rate_limit::RateLimitPolicy;
 use routes::AppState;
+use throttle::ThrottleConfig;
 use tracing::info;
 
 const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
@@ -29,7 +30,7 @@ const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
 const DEFAULT_IMAGE_RESIZE_THRESHOLD: NonZeroUsize =
     NonZeroUsize::new(DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES)
         .expect("default image resize threshold is non-zero");
-const DEFAULT_RATE_LIMIT_RETRIES: u32 = 10;
+const DEFAULT_RATE_LIMIT_RETRIES: u32 = 5;
 const DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS: NonZeroU64 =
     NonZeroU64::new(1_000).expect("default retry delay is non-zero");
 const DEFAULT_RATE_LIMIT_MAX_DELAY_MS: NonZeroU64 =
@@ -60,9 +61,15 @@ struct Cli {
         default_value_t = DEFAULT_IMAGE_RESIZE_THRESHOLD
     )]
     image_resize_threshold_bytes: NonZeroUsize,
-    /// Optional token reservations per minute for each workspace and resolved model.
-    #[arg(long, env = "TOKENS_PER_MINUTE")]
-    tokens_per_minute: Option<NonZeroU64>,
+    /// Override input tokens per minute for pay-per-token models.
+    #[arg(long, env = "INPUT_TOKENS_PER_MINUTE")]
+    input_tokens_per_minute: Option<NonZeroU64>,
+    /// Override output tokens per minute for pay-per-token models.
+    #[arg(long, env = "OUTPUT_TOKENS_PER_MINUTE")]
+    output_tokens_per_minute: Option<NonZeroU64>,
+    /// Disable pay-per-token TPM controls for provisioned throughput.
+    #[arg(long, env = "PROVISIONED_THROUGHPUT", default_value_t = false)]
+    provisioned_throughput: bool,
     /// Retries after an upstream 429 response; zero disables coordinated backoff.
     #[arg(
         long,
@@ -97,7 +104,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         target,
         max_request_bytes,
         image_resize_threshold_bytes,
-        tokens_per_minute,
+        input_tokens_per_minute,
+        output_tokens_per_minute,
+        provisioned_throughput,
         rate_limit_retries,
         rate_limit_initial_delay_ms,
         rate_limit_max_delay_ms,
@@ -107,12 +116,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let databricks = DatabricksClient::new(profile).await?;
     let models = ModelClient::new(databricks.clone())?;
+    let model_rate_limits = if provisioned_throughput {
+        Default::default()
+    } else {
+        ModelRateLimitsResolver::new()?.rate_limits().await?
+    };
     let state = AppState::new(
         ModelCapabilitiesResolver::new()?,
         databricks,
         models,
         target,
-        tokens_per_minute,
+        ThrottleConfig {
+            input_tokens_per_minute,
+            output_tokens_per_minute,
+            provisioned_throughput,
+            documented_limits: model_rate_limits,
+        },
         image_resize_threshold_bytes.get(),
         RateLimitPolicy {
             max_retries: rate_limit_retries,
@@ -126,15 +145,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ?target,
         max_request_bytes = max_request_bytes.get(),
         image_resize_threshold_bytes = image_resize_threshold_bytes.get(),
-        tokens_per_minute = tokens_per_minute.map(NonZeroU64::get),
+        input_tokens_per_minute = input_tokens_per_minute.map(NonZeroU64::get),
+        output_tokens_per_minute = output_tokens_per_minute.map(NonZeroU64::get),
+        provisioned_throughput,
         rate_limit_retries,
         rate_limit_initial_delay_ms = rate_limit_initial_delay_ms.get(),
         rate_limit_max_delay_ms = rate_limit_max_delay_ms.get(),
         "model proxy listening"
     );
-    axum::serve(listener, routes::routes(state, max_request_bytes))
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        routes::routes(state, max_request_bytes)
+            .into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 
@@ -173,9 +198,11 @@ mod tests {
             cli.image_resize_threshold_bytes,
             DEFAULT_IMAGE_RESIZE_THRESHOLD
         );
-        assert_eq!(cli.tokens_per_minute, None);
+        assert_eq!(cli.input_tokens_per_minute, None);
+        assert_eq!(cli.output_tokens_per_minute, None);
+        assert!(!cli.provisioned_throughput);
         assert_eq!(cli.rate_limit_retries, DEFAULT_RATE_LIMIT_RETRIES);
-        assert_eq!(cli.rate_limit_retries, 10);
+        assert_eq!(cli.rate_limit_retries, 5);
         assert_eq!(
             cli.rate_limit_initial_delay_ms,
             DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS
@@ -188,6 +215,11 @@ mod tests {
             "8388608",
             "--image-resize-threshold-bytes",
             "3145728",
+            "--input-tokens-per-minute",
+            "200000",
+            "--output-tokens-per-minute",
+            "20000",
+            "--provisioned-throughput",
             "--rate-limit-retries",
             "0",
             "--rate-limit-initial-delay-ms",
@@ -198,6 +230,9 @@ mod tests {
         .unwrap();
         assert_eq!(cli.max_request_bytes.get(), 8 * 1024 * 1024);
         assert_eq!(cli.image_resize_threshold_bytes.get(), 3 * 1024 * 1024);
+        assert_eq!(cli.input_tokens_per_minute.unwrap().get(), 200_000);
+        assert_eq!(cli.output_tokens_per_minute.unwrap().get(), 20_000);
+        assert!(cli.provisioned_throughput);
         assert_eq!(cli.rate_limit_retries, 0);
         assert_eq!(cli.rate_limit_initial_delay_ms.get(), 250);
         assert_eq!(cli.rate_limit_max_delay_ms.get(), 5_000);

@@ -1,0 +1,307 @@
+{
+  "generatedAt": 1789417822,
+  "catalogue": {
+    "models": {
+      "bge-large-en": {
+        "inputTokensPerMinute": null,
+        "outputTokensPerMinute": null,
+        "queriesPerHour": 2160000
+      },
+      "claude-4-1-opus": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-5-haiku": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-5-opus": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-5-sonnet": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-6-opus": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-6-sonnet": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-7-opus": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-8-opus": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-4-sonnet": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-5-1-fable": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-5-fable": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-5-opus": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "claude-5-sonnet": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "deepseek-4-1-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 10000,
+        "queriesPerHour": 7200
+      },
+      "deepseek-4-flash-0731": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 10000,
+        "queriesPerHour": null
+      },
+      "deepseek-4-pro-0813": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 4000,
+        "queriesPerHour": 7200
+      },
+      "gemini-2-5-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-2-5-pro": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-1-flash-image": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-1-flash-lite": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-1-pro-preview": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-5-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-5-flash-lite": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-6-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-7-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-8-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemini-3-pro-image": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gemma-3-12b": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      },
+      "glm-5-2": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 7200
+      },
+      "glm-5-3": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 7200
+      },
+      "glm-5-3-flash": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 7200
+      },
+      "gpt-5": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-1": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-2": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-3-codex": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-4": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-4-mini": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-4-nano": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-5": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-5-pro": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-6-luna": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-6-sol": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-6-terra": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-mini": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-5-nano": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-6-astra": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gpt-oss-120b": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      },
+      "gpt-oss-20b": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      },
+      "grok-4-6": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 20000,
+        "queriesPerHour": 360000
+      },
+      "gte-large-en": {
+        "inputTokensPerMinute": null,
+        "outputTokensPerMinute": null,
+        "queriesPerHour": 540000
+      },
+      "inkling": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 10000,
+        "queriesPerHour": 7200
+      },
+      "kimi-3": {
+        "inputTokensPerMinute": 200000,
+        "outputTokensPerMinute": 10000,
+        "queriesPerHour": null
+      },
+      "llama-3-1-8b-instruct": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      },
+      "llama-3-3-70b-instruct": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      },
+      "llama-4-maverick": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      },
+      "qwen-3-5-122b-a10b": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      },
+      "qwen-3-embedding-0-6b": {
+        "inputTokensPerMinute": null,
+        "outputTokensPerMinute": null,
+        "queriesPerHour": 2160000
+      },
+      "qwen-3-next-80b-a3b-instruct": {
+        "inputTokensPerMinute": 1000000,
+        "outputTokensPerMinute": 100000,
+        "queriesPerHour": 360000
+      }
+    }
+  }
+}
