@@ -13,7 +13,7 @@ import { ignore, match } from "@dbx-tools/path";
 import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
-import type { JobStep } from "projen/lib/github/workflows-model";
+import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { ReleaseTrigger } from "projen/lib/release";
 import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
@@ -456,6 +456,10 @@ function defaultProjectOptions(
         }
       : {}),
     ...options,
+    githubOptions: {
+      ...options.githubOptions,
+      pullRequestLint: false,
+    },
     ...copiedGitIgnoreOptions(options),
   };
 }
@@ -861,6 +865,23 @@ class WorkflowDefaults extends Component {
             ? () => rewrite(configuredSteps())
             : rewrite(configuredSteps);
       }
+      workflow.addJob("pr-title", {
+        name: "Validate PR title",
+        runsOn: ["ubuntu-latest"],
+        permissions: { pullRequests: JobPermission.READ },
+        if: "${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}",
+        steps: [
+          {
+            name: "Validate semantic title",
+            uses: "amannn/action-semantic-pull-request@v6",
+            env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" },
+            with: {
+              types: ["feat", "fix", "chore"].join("\n"),
+              requireScope: false,
+            },
+          },
+        ],
+      });
     }
     const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
     build?.addOverride("on.pull_request.types", ["opened", "synchronize", "reopened", "closed"]);
@@ -871,31 +892,11 @@ class WorkflowDefaults extends Component {
     for (const job of ["build", "self-mutation"]) {
       build?.addOverride(`jobs.${job}.timeout-minutes`, 30);
     }
-    const pullRequestLint = this.project.tryFindObjectFile(
-      ".github/workflows/pull-request-lint.yml",
-    );
-    pullRequestLint?.addOverride("on.pull_request_target.types", [
-      "labeled",
-      "opened",
-      "synchronize",
-      "reopened",
-      "ready_for_review",
-      "edited",
-      "closed",
-    ]);
-    pullRequestLint?.addOverride(
-      "jobs.validate.if",
-      "(github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && github.event.action != 'closed'",
-    );
-    pullRequestLint?.addOverride("jobs.validate.timeout-minutes", 10);
-    for (const name of ["build", "pull-request-lint"]) {
-      const workflow = this.project.tryFindObjectFile(`.github/workflows/${name}.yml`);
-      workflow?.addOverride("permissions", { contents: "read" });
-      workflow?.addOverride("concurrency", {
-        group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
-        "cancel-in-progress": true,
-      });
-    }
+    build?.addOverride("permissions", { contents: "read" });
+    build?.addOverride("concurrency", {
+      group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
+      "cancel-in-progress": true,
+    });
   }
 }
 

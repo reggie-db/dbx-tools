@@ -165,6 +165,7 @@ describe("unified release workflow", () => {
       "node-release.yml",
       "python-release.yml",
       "docs.yml",
+      "pull-request-lint.yml",
     ]) {
       assert.equal(existsSync(join(outdir, ".github", "workflows", file)), false);
     }
@@ -259,7 +260,7 @@ describe("release task contracts", () => {
 });
 
 describe("generated workflow safety", () => {
-  for (const name of ["build", "pull-request-lint"]) {
+  for (const name of ["build"]) {
     it(`${name} is read-only and cancels superseded runs`, () => {
       const workflow = readWorkflow(outdir, name);
       assert.deepEqual(workflow.permissions, { contents: "read" });
@@ -285,11 +286,15 @@ describe("generated workflow safety", () => {
       "bunx projen default\nbun run compile",
     );
 
-    const lint = readWorkflow(outdir, "pull-request-lint");
-    assert.ok(
-      workflowTrigger<{ types: string[] }>(lint, "pull_request_target").types.includes("closed"),
+    assert.equal(build.jobs["pr-title"]?.name, "Validate PR title");
+    assert.equal(
+      build.jobs["pr-title"]?.if,
+      "${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}",
     );
-    assert.match(lint.jobs.validate?.if ?? "", /github\.event\.action != 'closed'/);
+    assert.equal(
+      step(build.jobs["pr-title"]!, "Validate semantic title").uses,
+      "amannn/action-semantic-pull-request@v6",
+    );
   });
 
   it("uses a dependency-only Bun cache key", () => {

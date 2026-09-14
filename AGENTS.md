@@ -219,7 +219,11 @@ Primary package areas:
   `--rate-limit-retries 0` disables retries and the shared cooldown;
   `RATE_LIMIT_INITIAL_DELAY_MS` and `RATE_LIMIT_MAX_DELAY_MS` plus matching CLI
   flags tune the fallback. Never replay an SSE request after response streaming
-  has begun.
+  has begun. Forwarded headers and JWT claims partition the gate only; they do
+  not replace the upstream credential held by the startup
+  `DatabricksClient`. The binary resolves one client at startup, so an App uses
+  App SP unless a host integration explicitly constructs request-scoped OBO
+  clients.
   `dbx model-proxy` downloads and runs the release asset matching the installed
   `@dbx-tools/cli` version and host platform.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
@@ -1674,9 +1678,9 @@ making every release repeat the complete package test fan-out. Binding
 generation stays explicit during UniFFI API development. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
 package `prepack` remains for a standalone `bun publish`.
-Both PR workflows include the `closed` event in their PR-number concurrency
-group. Closing a PR cancels its running checks and the close-event run skips
-replacement jobs.
+One PR workflow owns both title lint and source validation. Its `closed` event
+uses a PR-number concurrency group to cancel running checks, while both jobs
+skip the close-event replacement run.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
 runs them with its own fast runner). The generated task runs `bun test test`

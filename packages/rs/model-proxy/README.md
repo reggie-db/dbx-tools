@@ -34,6 +34,40 @@ retries one upstream `401` after refreshing the rejected token.
 catalogue for five minutes, and resolves loose model values before forwarding.
 For example, `"model": "gpt"` selects the highest-ranked deployed GPT model.
 
+## Authentication And Rate-Limit Identity
+
+The binary creates one `DatabricksClient` at startup. That client owns upstream
+authentication, while each incoming request supplies the principal used to
+partition reactive rate-limit cooldowns. Identity selection never calls a
+Databricks API:
+
+- With `dbx model-proxy --profile PROFILE`, `dbx-tools-core` resolves that
+  profile and uses its normal cached token lifecycle. U2M profiles use the
+  Databricks CLI when available and may invoke login when renewal requires it.
+  PAT and U2M requests key cooldowns by the profile name; the token itself is
+  never part of the key.
+- M2M profiles key cooldowns by OAuth client ID. Token refreshes can replace the
+  access token without changing the rate-limit identity.
+- In a Databricks App using App SP, startup resolves
+  `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and
+  `DATABRICKS_CLIENT_SECRET`. The key is therefore the normalized App host,
+  service-principal client ID, and resolved serving endpoint.
+- Trusted `x-forwarded-user` and `x-forwarded-email` headers partition requests
+  by App user. When those are absent, the proxy may decode `sub`, `user_id`,
+  `oid`, `client_id`, `azp`, `email`, or `preferred_username` from an incoming
+  bearer JWT without verifying it. This decode is only a local rate-limit
+  partitioning hint and never authenticates the request.
+- Forwarded OBO identity does not replace the startup client's upstream
+  credential. The standalone binary has no request-scoped AppKit context, so
+  automatic App startup normally resolves App SP. A host that needs true OBO
+  upstream calls must construct request-scoped clients and pass the request
+  headers through `DatabricksAuthOptions`.
+
+The resulting key is `[normalized Databricks host, current principal, resolved
+model]`. Different users, service principals, hosts, or serving endpoints never
+share a cooldown. Keys are stored only in process memory, have no default count
+limit, and disappear when the proxy exits.
+
 ## Run
 
 ```sh
@@ -127,18 +161,14 @@ Databricks errors are returned with their original status, body, and content
 type. The proxy also forwards `Retry-After`, request and correlation IDs,
 rate-limit headers, quota names, and Databricks limit details.
 
-HTTP 429 responses pause a process-local gate keyed by Databricks host,
-authenticated principal, and resolved model. Trusted `x-forwarded-user` or
-`x-forwarded-email` headers identify an OBO user. Otherwise the proxy decodes
-identity claims from an already-present bearer JWT without verifying or calling
-an identity API, then falls back to the principal cached by
-`DatabricksClient`: client ID for a service principal or profile for other
-local authentication. Gate keys remain in memory for the process lifetime with
-no default capacity limit. One request probes after the shared cooldown while
-other requests for the same key remain paused. `Retry-After` controls the delay
-when present; otherwise the proxy uses BackON jittered exponential delays from
-one second to one minute. The default four retries match Codex HTTP request
-retry behavior. Configure `RATE_LIMIT_RETRIES`,
+HTTP 429 responses pause the process-local host/principal/model gate described
+above. One request probes after the shared cooldown while other streaming and
+non-streaming requests for the same key remain paused. `Retry-After` controls
+the delay when present; otherwise the proxy uses BackON jittered exponential
+delays from one second to one minute. The default four retries mean one initial
+request plus up to four retries, matching Codex HTTP request retry behavior.
+After the final attempt, the original 429 status, body, and rate-limit headers
+are returned to the caller. Configure `RATE_LIMIT_RETRIES`,
 `RATE_LIMIT_INITIAL_DELAY_MS`, and `RATE_LIMIT_MAX_DELAY_MS`, or the matching
 CLI flags. Set retries to `0` to disable both retries and coordinated cooldowns.
 Only an initial HTTP 429 is retried; an SSE error after streaming begins cannot
