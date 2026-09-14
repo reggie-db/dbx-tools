@@ -13,7 +13,6 @@
 /.prettierrc.json linguist-generated
 /.projen/** linguist-generated
 /.projen/bun-cache-key.mjs linguist-generated
-/.projen/cargo-cache-key.mjs linguist-generated
 /.projen/deps.json linguist-generated
 /.projen/files.json linguist-generated
 /.projen/pypi-trusted-publisher-instructions.mjs linguist-generated

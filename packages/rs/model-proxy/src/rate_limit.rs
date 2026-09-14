@@ -8,6 +8,7 @@ use std::{
 
 use axum::http::{header, HeaderMap};
 use backon::{BackoffBuilder, ExponentialBackoff, ExponentialBuilder};
+use serde_json::Value;
 use tokio::{
     sync::{Mutex, Notify},
     time::Instant,
@@ -151,6 +152,37 @@ pub(crate) struct RateLimitPermit {
     probe: bool,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct RateLimitDetails {
+    pub(crate) message: Option<String>,
+    pub(crate) retry_after: Option<Duration>,
+}
+
+/// Parse the documented Databricks Foundation Model API 429 error fields.
+pub(crate) fn rate_limit_details(body: &[u8]) -> RateLimitDetails {
+    let Ok(value) = serde_json::from_slice::<Value>(body) else {
+        return RateLimitDetails::default();
+    };
+    let error = value.get("error").unwrap_or(&value);
+    let message = error
+        .get("message")
+        .or_else(|| value.get("message"))
+        .and_then(Value::as_str)
+        .or_else(|| error.as_str())
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+        .map(str::to_owned);
+    let retry_after = error
+        .get("retry_after")
+        .or_else(|| value.get("retry_after"))
+        .and_then(retry_after_value);
+    RateLimitDetails {
+        message,
+        retry_after,
+    }
+}
+
+/// Parse an HTTP Retry-After header as seconds or an HTTP date.
 pub(crate) fn retry_after(headers: &HeaderMap) -> Option<Duration> {
     let value = headers.get(header::RETRY_AFTER)?.to_str().ok()?.trim();
     if let Ok(seconds) = value.parse::<u64>() {
@@ -162,6 +194,23 @@ pub(crate) fn retry_after(headers: &HeaderMap) -> Option<Duration> {
             .duration_since(SystemTime::now())
             .unwrap_or(Duration::ZERO),
     )
+}
+
+/// Resolve server-provided retry timing with the HTTP header taking precedence.
+pub(crate) fn server_retry_after(
+    headers: &HeaderMap,
+    details: &RateLimitDetails,
+) -> Option<(Duration, &'static str)> {
+    retry_after(headers)
+        .map(|delay| (delay, "header"))
+        .or_else(|| details.retry_after.map(|delay| (delay, "body")))
+}
+
+fn retry_after_value(value: &Value) -> Option<Duration> {
+    value
+        .as_u64()
+        .or_else(|| value.as_str()?.trim().parse().ok())
+        .map(Duration::from_secs)
 }
 
 #[cfg(test)]
@@ -181,6 +230,35 @@ mod tests {
                 .unwrap(),
         );
         assert!(retry_after(&headers).is_some_and(|delay| delay <= Duration::from_secs(30)));
+    }
+
+    #[test]
+    fn parses_databricks_rate_limit_message_and_retry_delay() {
+        let details =
+            rate_limit_details(br#"{"error":{"message":"Rate limit exceeded","retry_after":15}}"#);
+
+        assert_eq!(details.message.as_deref(), Some("Rate limit exceeded"));
+        assert_eq!(details.retry_after, Some(Duration::from_secs(15)));
+        assert_eq!(
+            rate_limit_details(br#"{"message":"  quota exhausted  ","retry_after":"7"}"#),
+            RateLimitDetails {
+                message: Some("quota exhausted".to_owned()),
+                retry_after: Some(Duration::from_secs(7)),
+            }
+        );
+        assert_eq!(rate_limit_details(b"not json"), RateLimitDetails::default());
+
+        let mut headers = HeaderMap::new();
+        headers.insert(header::RETRY_AFTER, "3".parse().unwrap());
+        assert_eq!(
+            server_retry_after(&headers, &details),
+            Some((Duration::from_secs(3), "header"))
+        );
+        headers.clear();
+        assert_eq!(
+            server_retry_after(&headers, &details),
+            Some((Duration::from_secs(15), "body"))
+        );
     }
 
     #[tokio::test]

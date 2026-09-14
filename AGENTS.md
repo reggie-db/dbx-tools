@@ -219,9 +219,12 @@ Primary package areas:
   identity claims decoded from an already-present bearer JWT, then the in-memory
   client ID/profile captured by `DatabricksClient`. Principal resolution must
   not call an identity API. Keep the gate map unbounded by default; the caller
-  owns connection scope and process lifetime. Honor `Retry-After`; otherwise use
-  BackON jittered exponential delay from one second to one minute. Match Codex's
-  four request retries by default. `RATE_LIMIT_RETRIES=0` or
+  owns connection scope and process lifetime. Honor the `Retry-After` response
+  header first, then the documented Foundation Model API
+  `error.retry_after` body value; otherwise use BackON jittered exponential
+  delay from one second to one minute. Log a returned `error.message` on every
+  429, including the final attempt. Use ten request retries by default.
+  `RATE_LIMIT_RETRIES=0` or
   `--rate-limit-retries 0` disables retries and the shared cooldown;
   `RATE_LIMIT_INITIAL_DELAY_MS` and `RATE_LIMIT_MAX_DELAY_MS` plus matching CLI
   flags tune the fallback. Never replay an SSE request after response streaming
@@ -531,10 +534,14 @@ Primary package areas:
   dependency artifacts through `Swatinem/rust-cache`. The release itself runs on
   the default branch, so each release can restore and update the same cache scope;
   manual tag recovery restores that default-branch cache without writing a
-  tag-scoped copy. `.projen/cargo-cache-key.mjs` excludes workspace package
-  versions from the dependency key, while `cache-workspace-crates: false` ensures
-  every release recompiles repository code. There is no separate cache workflow
-  and no sccache layer. `Cargo.lock` and `--locked` keep dependency resolution
+  tag-scoped copy. The action's environment hash includes the Rust toolchain,
+  compiler environment, Cargo manifests, lockfile dependencies, and Cargo
+  configuration while normalizing workspace package versions and path
+  dependencies. Keep it enabled: a `shared-key` causes the action to ignore its
+  separate `key` input, and disabling the environment hash would leave one
+  immutable stale cache per target. `cache-workspace-crates: false` ensures every
+  release recompiles repository code. There is no separate cache workflow and no
+  sccache layer. `Cargo.lock` and `--locked` keep dependency resolution
   reproducible.
   Set
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the

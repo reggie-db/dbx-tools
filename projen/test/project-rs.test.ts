@@ -541,10 +541,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(cargoConfig, /\[target\.x86_64-pc-windows-msvc\]/);
     assert.match(cargoConfig, /\[target\.aarch64-pc-windows-msvc\]/);
     assert.equal(cargoConfig.match(/target-feature=\+crt-static/g)?.length, 2);
-    const cargoCacheKey = readFileSync(join(outdir, ".projen/cargo-cache-key.mjs"), "utf8");
-    assert.match(cargoCacheKey, /workspaceNames/);
-    assert.match(cargoCacheKey, /!workspaceNames\.has\(name\)/);
-    assert.match(cargoCacheKey, /replace\(\/\^version =/);
+    assert.equal(existsSync(join(outdir, ".projen/cargo-cache-key.mjs")), false);
     const node = JSON.parse(
       readFileSync(join(outdir, "packages/js/node/databricks-auth-rs/package.json"), "utf8"),
     ) as {
@@ -622,16 +619,12 @@ describe("DBXToolsRustWorkspace", () => {
         "fixture-tool-${{ matrix.node }}-binary",
       ],
     );
-    assert.equal(
-      workflowStep(rustBuild, "Resolve Cargo dependency cache key").run,
-      "node .projen/cargo-cache-key.mjs",
-    );
+    assert.equal(stepNames(rustBuild).includes("Resolve Cargo dependency cache key"), false);
     assert.deepEqual(workflowStep(rustBuild, "Cache Cargo registry and dependencies").with, {
       "cache-targets": true,
       "cache-workspace-crates": false,
       "add-job-id-key": false,
-      "add-rust-environment-hash-key": false,
-      key: "${{ steps.cargo_cache_key.outputs.key }}",
+      "add-rust-environment-hash-key": true,
       "shared-key": "release-${{ matrix.cargo }}-rust-stable",
       "save-if": "${{ github.event_name == 'push' }}",
     });
