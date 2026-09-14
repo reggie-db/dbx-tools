@@ -1,11 +1,17 @@
 //! OpenAI and Codex model-list envelopes built from a Databricks catalogue.
 
+use std::{cmp::Ordering, collections::BTreeMap};
+
 use serde_json::{json, Map, Value};
 
 use crate::{
     capabilities::ModelCapabilities,
+    classify::EMBEDDING_TASK,
     lookup_models,
-    models::{parse_model_name, ModelFamily, ModelQuery, RankedModel, ServingEndpointSummary},
+    models::{
+        parse_model_name, ModelClass, ModelFamily, ModelQuery, RankedModel, ServingEndpointSummary,
+    },
+    resolve::compare_model_preference,
 };
 
 const CODEX_BASE_INSTRUCTIONS: &str = "You are a coding agent. Follow the user's instructions and use the available tools to work in the current repository.";
@@ -28,7 +34,10 @@ pub fn models_payload_with_capabilities(
     codex: bool,
     capabilities: Option<&ModelCapabilities>,
 ) -> Value {
-    let listed = listed_models(endpoints, search);
+    let mut listed = listed_models(endpoints, search);
+    if search.is_none_or(|value| value.trim().is_empty()) {
+        listed = rank_listed_models(listed, endpoints);
+    }
     if codex {
         json!({
             "models": listed
@@ -75,6 +84,121 @@ fn listed_models(endpoints: &[ServingEndpointSummary], search: Option<&str>) -> 
     .into_iter()
     .map(ListedModel::from)
     .collect()
+}
+
+/// Order an unfiltered catalogue by capability tier, model family, and search preference.
+fn rank_listed_models(
+    mut models: Vec<ListedModel>,
+    endpoints: &[ServingEndpointSummary],
+) -> Vec<ListedModel> {
+    let mut base = Vec::with_capacity(models.len());
+    let candidates = lookup_models(endpoints, &ModelQuery::default())
+        .into_iter()
+        .chain(lookup_models(
+            endpoints,
+            &ModelQuery {
+                model_class: Some(ModelClass::Embedding),
+                ..Default::default()
+            },
+        ));
+    for candidate in candidates {
+        if let Some(index) = models
+            .iter()
+            .position(|model| model.endpoint.name == candidate.endpoint.name)
+        {
+            let mut model = models.remove(index);
+            model.model_class = Some(candidate.model_class);
+            base.push(model);
+        }
+    }
+    base.extend(models);
+
+    let mut chat_families: BTreeMap<&'static str, (bool, Vec<ListedModel>)> = BTreeMap::new();
+    let mut embedding_families: BTreeMap<&'static str, (bool, Vec<ListedModel>)> = BTreeMap::new();
+    let mut custom = Vec::new();
+    for model in base {
+        let Some(family) = databricks_model_family(&model.endpoint) else {
+            custom.push(model);
+            continue;
+        };
+        let families = if model.model_class == Some(ModelClass::Embedding)
+            || model.endpoint.task.as_deref() == Some(EMBEDDING_TASK)
+        {
+            &mut embedding_families
+        } else {
+            &mut chat_families
+        };
+        families
+            .entry(family.as_str())
+            .or_insert_with(|| (family.is_versioned(), Vec::new()))
+            .1
+            .push(model);
+    }
+
+    let mut listed = Vec::with_capacity(
+        custom.len()
+            + chat_families
+                .values()
+                .map(|(_, models)| models.len())
+                .sum::<usize>()
+            + embedding_families
+                .values()
+                .map(|(_, models)| models.len())
+                .sum::<usize>(),
+    );
+    append_ranked_families(&mut listed, chat_families);
+    append_ranked_families(&mut listed, embedding_families);
+    custom.sort_by(|left, right| {
+        left.endpoint
+            .name
+            .to_ascii_lowercase()
+            .cmp(&right.endpoint.name.to_ascii_lowercase())
+            .then_with(|| left.endpoint.name.cmp(&right.endpoint.name))
+    });
+    listed.extend(custom);
+    listed
+}
+
+/// Append alphabetically keyed families using the search comparator within each family.
+fn append_ranked_families(
+    listed: &mut Vec<ListedModel>,
+    families: BTreeMap<&'static str, (bool, Vec<ListedModel>)>,
+) {
+    for (_, (versioned, mut models)) in families {
+        models.sort_by(|left, right| compare_listed_preference(left, right, versioned));
+        listed.extend(models);
+    }
+}
+
+/// Return the recognized family for a Databricks foundation-model endpoint.
+fn databricks_model_family(endpoint: &ServingEndpointSummary) -> Option<ModelFamily> {
+    let foundation_model = endpoint.name.starts_with("databricks-")
+        || endpoint
+            .model_service_name
+            .as_deref()
+            .is_some_and(|name| name.starts_with("system.ai."));
+    foundation_model
+        .then(|| parse_model_name(&endpoint.name))
+        .flatten()
+        .map(|parsed| parsed.family)
+}
+
+/// Compare listed models without fuzzy distance while keeping non-chat members last.
+fn compare_listed_preference(left: &ListedModel, right: &ListedModel, versioned: bool) -> Ordering {
+    match (left.model_class, right.model_class) {
+        (Some(ModelClass::Embedding), Some(ModelClass::Embedding)) | (None, None) => {
+            Ordering::Equal
+        }
+        (Some(ModelClass::Embedding), _) | (None, Some(_)) => Ordering::Greater,
+        (_, Some(ModelClass::Embedding)) | (Some(_), None) => Ordering::Less,
+        (Some(left_class), Some(right_class)) => compare_model_preference(
+            &left.endpoint,
+            left_class,
+            &right.endpoint,
+            right_class,
+            versioned,
+        ),
+    }
 }
 
 fn openai_model(model: &ListedModel, extended: bool) -> Map<String, Value> {

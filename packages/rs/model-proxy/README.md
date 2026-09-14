@@ -112,6 +112,12 @@ whose value starts with `codex` receives a Codex `models` envelope. Both use
 the identities returned by Databricks directly: OpenAI uses the serving
 endpoint name, while Codex maps `databricks-<model>` to the gateway's
 `system.ai.<model>` identity. No `databricks/` or `dbx/` namespace is added.
+Unfiltered responses list chat/LLM families first and embedding families
+second, alphabetically sorting families within each tier. Each family uses the
+same version, variant, and class preference as a search for that family.
+Recognized unclassified models remain in the chat/LLM tier. Custom and
+unrecognized endpoints sort by name last. Codex priorities follow the resulting
+order.
 
 Use `?search=gpt` to apply the same fuzzy scoring and ordering as model
 resolution. Add `?extended=true` to include the score, service names,
