@@ -134,8 +134,8 @@ root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
 // pulls it, but the pin belongs with the other add-on runtime deps.
 root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
-root.pnpmWorkspace?.addCatalog("better-auth", "^1.6.25");
-root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "^1.6.25");
+root.pnpmWorkspace?.addCatalog("better-auth", "1.7.3");
+root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.3");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind

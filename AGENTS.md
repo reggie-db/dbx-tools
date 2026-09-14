@@ -1546,6 +1546,11 @@ caret range can cross a minor boundary while a registry mirror still lacks the
 required scheduler release. Move both React entries to a new minor together
 after that complete package set resolves.
 
+The `better-auth` and `@better-auth/passkey` catalogue entries are exact and
+move together. Better Auth releases a synchronized internal package family; a
+floating install can select the new root package while the registry mirror still
+lacks the matching `@better-auth/*` packages.
+
 `bun-plugin-tailwind` has a `bun` peer, so the package manager installs the
 `bun` npm package and puts its executable in `node_modules/.bin`. Pin that
 transitive package to `BUN_VERSION` through the default workspace override. A
