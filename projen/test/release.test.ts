@@ -274,20 +274,12 @@ describe("generated workflow safety", () => {
   it("keeps CI separate from release", () => {
     const build = readWorkflow(outdir, "build");
     assert.deepEqual(workflowTrigger(build, "pull_request"), {
-      types: [
-        "labeled",
-        "opened",
-        "synchronize",
-        "reopened",
-        "ready_for_review",
-        "edited",
-        "closed",
-      ],
+      types: ["opened", "synchronize", "reopened", "closed"],
     });
     assert.equal("push" in build.on, false);
     assert.equal(
       build.jobs.build?.if,
-      "${{ github.event_name != 'pull_request' || github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened' || github.event.action == 'ready_for_review' }}",
+      "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
     );
     assert.equal(
       step(build.jobs.build!, "Validate generated files and types").run,

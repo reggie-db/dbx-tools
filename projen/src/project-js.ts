@@ -884,18 +884,10 @@ class WorkflowDefaults extends Component {
       });
     }
     const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
-    build?.addOverride("on.pull_request.types", [
-      "labeled",
-      "opened",
-      "synchronize",
-      "reopened",
-      "ready_for_review",
-      "edited",
-      "closed",
-    ]);
+    build?.addOverride("on.pull_request.types", ["opened", "synchronize", "reopened", "closed"]);
     build?.addOverride(
       "jobs.build.if",
-      "${{ github.event_name != 'pull_request' || github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened' || github.event.action == 'ready_for_review' }}",
+      "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
     );
     for (const job of ["build", "self-mutation"]) {
       build?.addOverride(`jobs.${job}.timeout-minutes`, 30);
