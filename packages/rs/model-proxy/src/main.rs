@@ -29,7 +29,7 @@ const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
 const DEFAULT_IMAGE_RESIZE_THRESHOLD: NonZeroUsize =
     NonZeroUsize::new(DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES)
         .expect("default image resize threshold is non-zero");
-const DEFAULT_RATE_LIMIT_RETRIES: u32 = 4;
+const DEFAULT_RATE_LIMIT_RETRIES: u32 = 10;
 const DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS: NonZeroU64 =
     NonZeroU64::new(1_000).expect("default retry delay is non-zero");
 const DEFAULT_RATE_LIMIT_MAX_DELAY_MS: NonZeroU64 =
@@ -175,6 +175,7 @@ mod tests {
         );
         assert_eq!(cli.tokens_per_minute, None);
         assert_eq!(cli.rate_limit_retries, DEFAULT_RATE_LIMIT_RETRIES);
+        assert_eq!(cli.rate_limit_retries, 10);
         assert_eq!(
             cli.rate_limit_initial_delay_ms,
             DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS

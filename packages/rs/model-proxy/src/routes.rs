@@ -31,7 +31,9 @@ use crate::{
     error::ProxyError,
     images::normalize_embedded_images,
     protocol::{is_codex_originator, ClientWire, TargetWire},
-    rate_limit::{retry_after, RateLimitGate, RateLimitPolicy},
+    rate_limit::{
+        rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
+    },
     stream::stream_response,
     throttle::RequestThrottle,
 };
@@ -329,13 +331,21 @@ async fn send_upstream(
 ) -> Result<reqwest::Response, DatabricksClientError> {
     let policy = rate_limits.policy();
     if policy.max_retries == 0 {
-        return client
+        let response = client
             .request_builder(path, Method::POST)?
             .headers(headers)
             .body(body)
             .send()
             .await
-            .map_err(Into::into);
+            .map_err(DatabricksClientError::from)?;
+        if response.status() != StatusCode::TOO_MANY_REQUESTS {
+            return Ok(response);
+        }
+        let (response, details) = inspect_rate_limit_response(response).await?;
+        let (delay, delay_source) = server_retry_after(response.headers(), &details)
+            .unwrap_or((std::time::Duration::ZERO, "disabled"));
+        log_rate_limit(client, model, 0, policy, delay, delay_source, &details);
+        return Ok(response);
     }
     let mut backoff = policy.backoff();
     let mut retries = 0;
@@ -358,27 +368,74 @@ async fn send_upstream(
             rate_limits.completed(&permit).await;
             return Ok(response);
         }
-        let delay = retry_after(response.headers()).unwrap_or_else(|| {
-            backoff
-                .next()
-                .unwrap_or(policy.max_delay)
-                .min(policy.max_delay)
-        });
+        let (response, details) = match inspect_rate_limit_response(response).await {
+            Ok(inspected) => inspected,
+            Err(error) => {
+                rate_limits.completed(&permit).await;
+                return Err(error);
+            }
+        };
+        let server_delay = server_retry_after(response.headers(), &details);
+        let delay_source = server_delay.map_or("backoff", |(_, source)| source);
+        let delay = server_delay.map_or_else(
+            || {
+                backoff
+                    .next()
+                    .unwrap_or(policy.max_delay)
+                    .min(policy.max_delay)
+            },
+            |(delay, _)| delay,
+        );
         rate_limits.rejected(&permit, delay).await;
-        if retries >= policy.max_retries {
+        let exhausted = retries >= policy.max_retries;
+        let retry = if exhausted { retries } else { retries + 1 };
+        log_rate_limit(client, model, retry, policy, delay, delay_source, &details);
+        if exhausted {
             return Ok(response);
         }
         retries += 1;
-        tracing::warn!(
-            host = client.host(),
-            model,
-            retry = retries,
-            max_retries = policy.max_retries,
-            delay_ms = delay.as_millis(),
-            "model request rate limited; pausing profile-model key"
-        );
         drop(response);
     }
+}
+
+/// Log a 429 and any Databricks error message without exposing request payloads.
+fn log_rate_limit(
+    client: &DatabricksClient,
+    model: &str,
+    retry: u32,
+    policy: RateLimitPolicy,
+    delay: std::time::Duration,
+    delay_source: &str,
+    details: &RateLimitDetails,
+) {
+    let exhausted = retry >= policy.max_retries;
+    tracing::warn!(
+        host = client.host(),
+        model,
+        retry,
+        max_retries = policy.max_retries,
+        delay_ms = delay.as_millis(),
+        delay_source,
+        rate_limit_message = details.message.as_deref().unwrap_or_default(),
+        exhausted,
+        "model request rate limited; pausing profile-model key"
+    );
+}
+
+/// Buffer a 429 for metadata inspection and rebuild it for retries or forwarding.
+async fn inspect_rate_limit_response(
+    response: reqwest::Response,
+) -> Result<(reqwest::Response, RateLimitDetails), DatabricksClientError> {
+    let status = response.status();
+    let version = response.version();
+    let headers = response.headers().clone();
+    let body = response.bytes().await?;
+    let details = rate_limit_details(&body);
+    let mut rebuilt = axum::http::Response::new(body);
+    *rebuilt.status_mut() = status;
+    *rebuilt.version_mut() = version;
+    *rebuilt.headers_mut() = headers;
+    Ok((reqwest::Response::from(rebuilt), details))
 }
 
 fn requested_model(input: &Value) -> Result<&str, ProxyError> {
@@ -570,7 +627,12 @@ mod tests {
     impl Respond for RateLimitedOnce {
         fn respond(&self, _request: &Request) -> ResponseTemplate {
             if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
-                ResponseTemplate::new(429).insert_header("Retry-After", "0")
+                ResponseTemplate::new(429).set_body_json(json!({
+                    "error": {
+                        "message": "Rate limit exceeded",
+                        "retry_after": 0
+                    }
+                }))
             } else {
                 ResponseTemplate::new(200).set_body_json(json!({"ok": true}))
             }
@@ -633,20 +695,24 @@ mod tests {
         let client = test_client(&server).await;
         let gate = RateLimitGate::new(RateLimitPolicy {
             max_retries: 4,
-            initial_delay: Duration::from_millis(1),
-            max_delay: Duration::from_millis(10),
+            initial_delay: Duration::from_secs(1),
+            max_delay: Duration::from_secs(1),
         });
 
-        let response = send_upstream(
-            &client,
-            &gate,
-            "principal",
-            "model",
-            "/test",
-            upstream_headers(None),
-            br#"{"model":"model"}"#.to_vec(),
+        let response = tokio::time::timeout(
+            Duration::from_millis(900),
+            send_upstream(
+                &client,
+                &gate,
+                "principal",
+                "model",
+                "/test",
+                upstream_headers(None),
+                br#"{"model":"model"}"#.to_vec(),
+            ),
         )
         .await
+        .unwrap()
         .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
@@ -657,7 +723,11 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/test"))
-            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "60"))
+            .respond_with(
+                ResponseTemplate::new(429)
+                    .insert_header("Retry-After", "60")
+                    .set_body_json(json!({"error": {"message": "quota exhausted"}})),
+            )
             .expect(1)
             .mount(&server)
             .await;
@@ -681,6 +751,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            response.bytes().await.unwrap(),
+            br#"{"error":{"message":"quota exhausted"}}"#.as_slice()
+        );
     }
 
     #[test]

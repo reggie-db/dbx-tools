@@ -358,9 +358,6 @@ jobs:
           rustup target list --installed | grep -Fx "${{ matrix.cargo }}"
           test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.cargo }}/bin/rust-lld.exe"
         shell: bash
-      - name: Resolve Cargo dependency cache key
-        id: cargo_cache_key
-        run: node .projen/cargo-cache-key.mjs
       - name: Cache Cargo registry and dependencies
         id: cargo_cache
         uses: Swatinem/rust-cache@v2.9.2
@@ -368,8 +365,7 @@ jobs:
           cache-targets: true
           cache-workspace-crates: false
           add-job-id-key: false
-          add-rust-environment-hash-key: false
-          key: ${{ steps.cargo_cache_key.outputs.key }}
+          add-rust-environment-hash-key: true
           shared-key: release-${{ matrix.cargo }}-rust-stable
           save-if: ${{ github.event_name == 'push' }}
       - name: Install Linux native dependencies

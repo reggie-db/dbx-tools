@@ -169,10 +169,12 @@ rate-limit headers, quota names, and Databricks limit details.
 
 HTTP 429 responses pause the process-local host/principal/model gate described
 above. One request probes after the shared cooldown while other streaming and
-non-streaming requests for the same key remain paused. `Retry-After` controls
-the delay when present; otherwise the proxy uses BackON jittered exponential
-delays from one second to one minute. The default four retries mean one initial
-request plus up to four retries, matching Codex HTTP request retry behavior.
+non-streaming requests for the same key remain paused. The `Retry-After`
+response header controls the delay when present, followed by the documented
+Foundation Model API `error.retry_after` JSON value. Otherwise the proxy uses
+BackON jittered exponential delays from one second to one minute. Every 429
+logs a returned `error.message`, including the final attempt. The default ten
+retries mean one initial request plus up to ten retries.
 After the final attempt, the original 429 status, body, and rate-limit headers
 are returned to the caller. Configure `RATE_LIMIT_RETRIES`,
 `RATE_LIMIT_INITIAL_DELAY_MS`, and `RATE_LIMIT_MAX_DELAY_MS`, or the matching

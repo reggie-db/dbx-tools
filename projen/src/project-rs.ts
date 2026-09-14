@@ -180,14 +180,6 @@ const RUST_CACHE_ENV = {
   CARGO_TERM_COLOR: "always",
 } as const;
 
-function cargoCacheKeyStep(): Record<string, unknown> {
-  return {
-    name: "Resolve Cargo dependency cache key",
-    id: "cargo_cache_key",
-    run: "node .projen/cargo-cache-key.mjs",
-  };
-}
-
 function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
   return [
     {
@@ -198,8 +190,7 @@ function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
         "cache-targets": true,
         "cache-workspace-crates": false,
         "add-job-id-key": false,
-        "add-rust-environment-hash-key": false,
-        key: "${{ steps.cargo_cache_key.outputs.key }}",
+        "add-rust-environment-hash-key": true,
         "shared-key": sharedKey,
         "save-if": "${{ github.event_name == 'push' }}",
       },
@@ -275,66 +266,6 @@ function uniffiReleaseTaskSource(): string {
   const source = candidates.find(existsSync);
   if (!source) throw new Error("Could not locate tasks/uniffi-release.mjs");
   return readFileSync(source, "utf8");
-}
-
-function cargoCacheKeySource(): string {
-  return `#!/usr/bin/env node
-import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
-
-function command(command, args) {
-  const result = spawnSync(command, args, { encoding: "utf8" });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(\`\${command} exited with \${result.status}\`);
-  return result.stdout;
-}
-
-const hasLock = existsSync("Cargo.lock");
-const metadata = JSON.parse(
-  command("cargo", [
-    "metadata",
-    ...(hasLock ? ["--locked"] : []),
-    "--format-version",
-    "1",
-    "--no-deps",
-  ]),
-);
-const workspaceNames = new Set(metadata.packages.map((pkg) => pkg.name));
-const dependencyLock = hasLock
-  ? readFileSync("Cargo.lock", "utf8")
-      .split("[[package]]")
-      .slice(1)
-      .filter((block) => {
-        const name = /^\\s*name = "([^"]+)"/m.exec(block)?.[1];
-        return name && !workspaceNames.has(name);
-      })
-      .map((block) => \`[[package]]\${block}\`)
-      .join("")
-  : "";
-const manifests = [
-  metadata.workspace_root + "/Cargo.toml",
-  ...metadata.packages.map((pkg) => pkg.manifest_path),
-]
-  .map((path) =>
-    readFileSync(path, "utf8").replace(/^version = "[0-9]+\\.[0-9]+\\.[0-9]+"\\s*$/gm, ""),
-  )
-  .join("\\n");
-const config = existsSync(".cargo/config.toml")
-  ? readFileSync(".cargo/config.toml", "utf8")
-  : "";
-const key = createHash("sha256")
-  .update(dependencyLock)
-  .update(manifests)
-  .update(config)
-  .update(command("rustc", ["-vV"]))
-  .digest("hex");
-if (process.env.GITHUB_OUTPUT) {
-  appendFileSync(process.env.GITHUB_OUTPUT, \`key=\${key}\\n\`);
-} else {
-  process.stdout.write(\`\${key}\\n\`);
-}
-`;
 }
 
 /** Keep tracked workspace package versions in Cargo.lock aligned with VERSION. */
@@ -917,9 +848,6 @@ export class DBXToolsRustWorkspace {
     });
     project.removeTask("rs:bindings:demo");
     if (releaseEnabled) {
-      new TextFile(project, ".projen/cargo-cache-key.mjs", {
-        lines: cargoCacheKeySource().trimEnd().split("\n"),
-      });
       this.addReleaseWorkflow(project, options, nativeTargets);
     }
   }
@@ -1118,7 +1046,6 @@ export class DBXToolsRustWorkspace {
               },
             ]
           : []),
-        cargoCacheKeyStep(),
         ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`),
         {
           name: "Install Linux native dependencies",
