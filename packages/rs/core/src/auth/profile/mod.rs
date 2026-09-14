@@ -78,6 +78,16 @@ pub struct Profile {
 }
 
 impl Profile {
+    /// Return the user profile or service-principal client identifier.
+    pub fn principal_key(&self) -> &str {
+        match self.auth_kind {
+            AuthKind::MachineToMachine | AuthKind::AppServicePrincipal => &self.client_id,
+            AuthKind::UserToMachine | AuthKind::PersonalAccessToken | AuthKind::AppOnBehalfOf => {
+                &self.name
+            }
+        }
+    }
+
     /// Return the credential cache key for this profile and authentication strategy.
     pub fn cache_key(&self) -> String {
         match self.auth_kind {

@@ -868,6 +868,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   cliRegistryPath: "packages/js/cli/dbx-tools/src/_rust-release-binaries.ts",
   workspaceDependencies: {
     "async-trait": "0.1",
+    backon: { version: "=1.6.0", defaultFeatures: false, features: ["tokio-sleep"] },
     base64: "0.22",
     bytes: "1",
     clap: { version: "4.6", features: ["derive", "env"] },
@@ -878,6 +879,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     futures: "0.3",
     "google-cloud-auth": "=0.18.0",
     http: "1",
+    httpdate: "1",
     image: {
       version: "0.25",
       defaultFeatures: false,
@@ -991,6 +993,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         "aigw-openai": "=0.6.0",
         "async-stream": "0.3",
         axum: "0.8",
+        backon: { workspace: true },
         base64: { workspace: true },
         clap: { workspace: true },
         [`${root.scope}-core`]: { path: "../core" },
@@ -998,12 +1001,17 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         "eventsource-stream": "0.2",
         "futures-util": "0.3",
         image: { workspace: true },
+        httpdate: { workspace: true },
         reqwest: { workspace: true, features: ["stream"] },
         serde: { workspace: true },
         "serde_json": { workspace: true },
         thiserror: { workspace: true },
         tokio: { workspace: true, features: ["signal"] },
         tracing: { workspace: true },
+      },
+      devDependencies: {
+        tempfile: { workspace: true },
+        wiremock: { workspace: true },
       },
     },
     "lakebase-proxy": {

@@ -150,6 +150,8 @@ Primary package areas:
   API takes a path, optional body, and optional method; a body defaults the
   method to `POST`, otherwise it defaults to `GET`. `request_builder` exposes
   the middleware-enabled reqwest builder for streaming and custom headers.
+  `principal()` returns the OAuth client ID for M2M/App SP authentication and
+  the resolved profile name for user, PAT, and App OBO authentication.
   Keep this client in `rs/core`; do not restore a generated API client crate or
   Databricks OpenAPI generator.
   `lakebase_address` in core parses PostgreSQL URLs, canonical resource paths,
@@ -205,7 +207,19 @@ Primary package areas:
   `IMAGE_RESIZE_THRESHOLD_BYTES`. Do not fetch remote image URLs. The local token
   queue is disabled unless `TOKENS_PER_MINUTE` / `--tokens-per-minute` is set
   because Databricks limits vary by model and separate input from output
-  tokens, while Codex limits vary by account tier.
+  tokens, while Codex limits vary by account tier. HTTP 429 recovery is a
+  separate process-local gate keyed by Databricks host, current principal, and
+  resolved model. Prefer trusted forwarded user ID/email, then unverified
+  identity claims decoded from an already-present bearer JWT, then the in-memory
+  client ID/profile captured by `DatabricksClient`. Principal resolution must
+  not call an identity API. Keep the gate map unbounded by default; the caller
+  owns connection scope and process lifetime. Honor `Retry-After`; otherwise use
+  BackON jittered exponential delay from one second to one minute. Match Codex's
+  four request retries by default. `RATE_LIMIT_RETRIES=0` or
+  `--rate-limit-retries 0` disables retries and the shared cooldown;
+  `RATE_LIMIT_INITIAL_DELAY_MS` and `RATE_LIMIT_MAX_DELAY_MS` plus matching CLI
+  flags tune the fallback. Never replay an SSE request after response streaming
+  has begun.
   `dbx model-proxy` downloads and runs the release asset matching the installed
   `@dbx-tools/cli` version and host platform.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
@@ -1719,7 +1733,8 @@ complete history.
 `--approve` asks GitHub's merge API to merge the prepared release branch
 directly into the release base, so no PR checks are created and the main release
 starts directly. If branch policy blocks direct merge, it falls back to opening
-and admin-merging the release PR.
+and admin-merging the release PR. After either merge path, the task fast-forwards
+and pushes the still-active source branch to the new release commit.
 `--local-registry auto` publishes npm packages to loopback
 Verdaccio, and `--local-pypi auto` publishes Python packages when uv's default
 index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache is

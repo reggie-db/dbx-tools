@@ -17,6 +17,7 @@ use crate::{create_persistent_auth, AuthError, DatabricksAuthOptions, Persistent
 pub struct DatabricksClient {
     auth: Arc<PersistentAuth>,
     host: String,
+    principal: String,
     http: ClientWithMiddleware,
 }
 
@@ -123,7 +124,13 @@ impl DatabricksClient {
                 auth: Arc::clone(&auth),
             })
             .build();
-        Ok(Self { auth, host, http })
+        let principal = auth.principal_key().to_owned();
+        Ok(Self {
+            auth,
+            host,
+            principal,
+            http,
+        })
     }
 
     /// Return the resolved Databricks profile name.
@@ -134,6 +141,11 @@ impl DatabricksClient {
     /// Return the normalized workspace or account host.
     pub fn host(&self) -> &str {
         &self.host
+    }
+
+    /// Return the resolved user profile or service-principal client identifier.
+    pub fn principal(&self) -> &str {
+        &self.principal
     }
 
     /// Create a middleware-enabled request builder for a relative path or absolute URL.
@@ -289,6 +301,7 @@ mod tests {
         })
         .await
         .unwrap();
+        assert_eq!(client.principal(), "DEFAULT");
         let response = client
             .request_builder("/serving-endpoints/embedding/invocations", Method::POST)
             .unwrap()

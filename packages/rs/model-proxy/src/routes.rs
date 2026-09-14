@@ -13,6 +13,10 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use base64::{
+    engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
+    Engine,
+};
 use dbx_tools_core::{DatabricksClient, DatabricksClientError};
 use dbx_tools_model::{
     codex_model_name, is_responses_only, models_payload_with_capabilities,
@@ -27,11 +31,14 @@ use crate::{
     error::ProxyError,
     images::normalize_embedded_images,
     protocol::{is_codex_originator, ClientWire, TargetWire},
+    rate_limit::{retry_after, RateLimitGate, RateLimitPolicy},
     stream::stream_response,
     throttle::RequestThrottle,
 };
 
 const ORIGINATOR_HEADER: &str = "originator";
+const USER_ID_HEADER: &str = "x-forwarded-user";
+const USER_EMAIL_HEADER: &str = "x-forwarded-email";
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -41,6 +48,7 @@ pub(crate) struct AppState {
     target: TargetWire,
     throttle: RequestThrottle,
     image_resize_threshold_bytes: usize,
+    rate_limits: RateLimitGate,
 }
 
 impl AppState {
@@ -51,8 +59,10 @@ impl AppState {
         target: TargetWire,
         tokens_per_minute: Option<NonZeroU64>,
         image_resize_threshold_bytes: usize,
+        rate_limit_policy: RateLimitPolicy,
     ) -> Self {
         let throttle = RequestThrottle::new(databricks.host(), tokens_per_minute);
+        let rate_limits = RateLimitGate::new(rate_limit_policy);
         Self {
             capabilities,
             databricks,
@@ -60,6 +70,7 @@ impl AppState {
             target,
             throttle,
             image_resize_threshold_bytes,
+            rate_limits,
         }
     }
 }
@@ -166,10 +177,14 @@ async fn embeddings(
         .await?
         .ok_or_else(|| ProxyError::EmbeddingModelNotFound(requested_model.clone()))?;
     let throttle_wait = state.throttle.acquire(&endpoint.name, &input).await;
+    let principal = request_principal(&headers, &state.databricks);
     let (path, request_body) = prepare_embedding_request(input, &endpoint.name)?;
     let originator = request_originator(&headers);
     let upstream = send_upstream(
         &state.databricks,
+        &state.rate_limits,
+        &principal,
+        &endpoint.name,
         &path,
         upstream_headers(originator),
         request_body,
@@ -203,6 +218,7 @@ async fn proxy(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let originator = request_originator(&headers);
+    let principal = request_principal(&headers, &state.databricks);
     let codex = originator.is_some_and(is_codex_originator);
     let endpoint = state
         .models
@@ -247,6 +263,9 @@ async fn proxy(
     let request_body = adapt_request(client_wire, target, input)?;
     let upstream = send_upstream(
         &state.databricks,
+        &state.rate_limits,
+        &principal,
+        &model,
         upstream_path(target, codex, native_responses),
         upstream_headers(originator),
         request_body,
@@ -301,17 +320,65 @@ async fn proxy(
 
 async fn send_upstream(
     client: &DatabricksClient,
+    rate_limits: &RateLimitGate,
+    principal: &str,
+    model: &str,
     path: &str,
     headers: HeaderMap,
     body: Vec<u8>,
 ) -> Result<reqwest::Response, DatabricksClientError> {
-    client
-        .request_builder(path, Method::POST)?
-        .headers(headers)
-        .body(body)
-        .send()
-        .await
-        .map_err(Into::into)
+    let policy = rate_limits.policy();
+    if policy.max_retries == 0 {
+        return client
+            .request_builder(path, Method::POST)?
+            .headers(headers)
+            .body(body)
+            .send()
+            .await
+            .map_err(Into::into);
+    }
+    let mut backoff = policy.backoff();
+    let mut retries = 0;
+    loop {
+        let permit = rate_limits.acquire(client.host(), principal, model).await;
+        let response = match client
+            .request_builder(path, Method::POST)?
+            .headers(headers.clone())
+            .body(body.clone())
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                rate_limits.completed(&permit).await;
+                return Err(error.into());
+            }
+        };
+        if response.status() != StatusCode::TOO_MANY_REQUESTS {
+            rate_limits.completed(&permit).await;
+            return Ok(response);
+        }
+        let delay = retry_after(response.headers()).unwrap_or_else(|| {
+            backoff
+                .next()
+                .unwrap_or(policy.max_delay)
+                .min(policy.max_delay)
+        });
+        rate_limits.rejected(&permit, delay).await;
+        if retries >= policy.max_retries {
+            return Ok(response);
+        }
+        retries += 1;
+        tracing::warn!(
+            host = client.host(),
+            model,
+            retry = retries,
+            max_retries = policy.max_retries,
+            delay_ms = delay.as_millis(),
+            "model request rate limited; pausing profile-model key"
+        );
+        drop(response);
+    }
 }
 
 fn requested_model(input: &Value) -> Result<&str, ProxyError> {
@@ -357,6 +424,48 @@ fn request_originator(headers: &HeaderMap) -> Option<&str> {
         .and_then(|value| value.to_str().ok())
         .map(str::trim)
         .filter(|value| !value.is_empty())
+}
+
+fn request_principal(headers: &HeaderMap, client: &DatabricksClient) -> String {
+    [USER_ID_HEADER, USER_EMAIL_HEADER]
+        .into_iter()
+        .find_map(|name| headers.get(name))
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .or_else(|| jwt_principal(headers))
+        .unwrap_or_else(|| client.principal().to_owned())
+}
+
+fn jwt_principal(headers: &HeaderMap) -> Option<String> {
+    let token = headers
+        .get(header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .split_once(' ')
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))?
+        .1;
+    let payload = token.split('.').nth(1)?;
+    let payload = URL_SAFE_NO_PAD
+        .decode(payload)
+        .or_else(|_| URL_SAFE.decode(payload))
+        .ok()?;
+    let claims: Value = serde_json::from_slice(&payload).ok()?;
+    [
+        "sub",
+        "user_id",
+        "oid",
+        "client_id",
+        "azp",
+        "email",
+        "preferred_username",
+    ]
+    .into_iter()
+    .find_map(|claim| claims.get(claim).and_then(Value::as_str))
+    .map(str::trim)
+    .filter(|value| !value.is_empty())
+    .map(str::to_owned)
 }
 
 fn upstream_status(response: &reqwest::Response) -> Result<StatusCode, ProxyError> {
@@ -441,7 +550,55 @@ fn forwarded_response_headers(upstream: &HeaderMap) -> HeaderMap {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use std::time::Duration;
+
+    use dbx_tools_core::DatabricksAuthOptions;
+    use wiremock::{
+        matchers::{method, path},
+        Mock, MockServer, Request, Respond, ResponseTemplate,
+    };
+
     use super::*;
+
+    #[derive(Clone, Default)]
+    struct RateLimitedOnce(Arc<AtomicUsize>);
+
+    impl Respond for RateLimitedOnce {
+        fn respond(&self, _request: &Request) -> ResponseTemplate {
+            if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
+                ResponseTemplate::new(429).insert_header("Retry-After", "0")
+            } else {
+                ResponseTemplate::new(200).set_body_json(json!({"ok": true}))
+            }
+        }
+    }
+
+    async fn test_client(server: &MockServer) -> DatabricksClient {
+        let directory = tempfile::tempdir().unwrap();
+        let config_file = directory.path().join("databrickscfg");
+        std::fs::write(
+            &config_file,
+            format!(
+                "[DEFAULT]\nhost = {}\nauth_type = pat\ntoken = test-token\n",
+                server.uri()
+            ),
+        )
+        .unwrap();
+        DatabricksClient::with_options(DatabricksAuthOptions {
+            profile: Some("DEFAULT".into()),
+            host: Some(server.uri()),
+            config_file: Some(config_file.to_string_lossy().into_owned()),
+            cache_dir: Some(directory.path().join("auth").to_string_lossy().into_owned()),
+            prefer_user_to_machine: false,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+    }
 
     #[test]
     fn embeddings_use_the_resolved_endpoint_invocation_path() {
@@ -464,6 +621,68 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn retries_rate_limits_after_updating_the_shared_gate() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(RateLimitedOnce::default())
+            .expect(2)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 4,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_millis(10),
+        });
+
+        let response = send_upstream(
+            &client,
+            &gate,
+            "principal",
+            "model",
+            "/test",
+            upstream_headers(None),
+            br#"{"model":"model"}"#.to_vec(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn zero_retries_disables_rate_limit_recovery() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "60"))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 0,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_millis(10),
+        });
+
+        let response = send_upstream(
+            &client,
+            &gate,
+            "principal",
+            "model",
+            "/test",
+            upstream_headers(None),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
     #[test]
     fn codex_originator_is_forwarded() {
         assert!(is_codex_originator(" Codex_CLI_RS "));
@@ -476,6 +695,23 @@ mod tests {
         assert!(upstream_headers(Some("other-client"))
             .get(ORIGINATOR_HEADER)
             .is_none());
+    }
+
+    #[test]
+    fn reads_principal_from_an_unverified_bearer_jwt_without_network_access() {
+        let payload = URL_SAFE_NO_PAD.encode(br#"{"sub":"service-principal-id"}"#);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            format!("Bearer header.{payload}.signature")
+                .parse()
+                .unwrap(),
+        );
+
+        assert_eq!(
+            jwt_principal(&headers).as_deref(),
+            Some("service-principal-id")
+        );
     }
 
     #[test]
