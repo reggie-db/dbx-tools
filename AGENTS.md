@@ -219,7 +219,11 @@ Primary package areas:
   `--rate-limit-retries 0` disables retries and the shared cooldown;
   `RATE_LIMIT_INITIAL_DELAY_MS` and `RATE_LIMIT_MAX_DELAY_MS` plus matching CLI
   flags tune the fallback. Never replay an SSE request after response streaming
-  has begun.
+  has begun. Forwarded headers and JWT claims partition the gate only; they do
+  not replace the upstream credential held by the startup
+  `DatabricksClient`. The binary resolves one client at startup, so an App uses
+  App SP unless a host integration explicitly constructs request-scoped OBO
+  clients.
   `dbx model-proxy` downloads and runs the release asset matching the installed
   `@dbx-tools/cli` version and host platform.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
