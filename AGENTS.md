@@ -1678,9 +1678,9 @@ making every release repeat the complete package test fan-out. Binding
 generation stays explicit during UniFFI API development. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
 package `prepack` remains for a standalone `bun publish`.
-Both PR workflows include the `closed` event in their PR-number concurrency
-group. Closing a PR cancels its running checks and the close-event run skips
-replacement jobs.
+One PR workflow owns both title lint and source validation. Its `closed` event
+uses a PR-number concurrency group to cancel running checks, while both jobs
+skip the close-event replacement run.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
 runs them with its own fast runner). The generated task runs `bun test test`

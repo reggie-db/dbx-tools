@@ -4,9 +4,12 @@ name: build
 on:
   pull_request:
     types:
+      - labeled
       - opened
       - synchronize
       - reopened
+      - ready_for_review
+      - edited
       - closed
   workflow_dispatch: {}
 jobs:
@@ -76,7 +79,7 @@ jobs:
           echo "::error::Files were changed during build (see build log). If this was triggered from a fork, you will need to update your branch."
           cat repo.patch
           exit 1
-    if: ${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}
+    if: ${{ github.event_name != 'pull_request' || github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened' || github.event.action == 'ready_for_review' }}
     timeout-minutes: 30
   self-mutation:
     needs: build
@@ -115,6 +118,24 @@ jobs:
           git commit -s -m "chore: self mutation"
           git push origin "HEAD:$PULL_REQUEST_REF"
     timeout-minutes: 30
+  pr-title:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
+    steps:
+      - name: Validate semantic title
+        id: validate_semantic_title
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |-
+            feat
+            fix
+            chore
+          requireScope: false
 permissions:
   contents: read
 concurrency:
