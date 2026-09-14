@@ -215,10 +215,15 @@ Primary package areas:
   Responses, Codex Responses, Anthropic translations, and embeddings reconcile
   process-local input/output reservations with reported actual usage. A smaller
   actual output credits the unused reservation immediately, while output usage
-  without a requested maximum is added to the current window. Streaming Chat
-  Completions defaults `stream_options.include_usage` to `true`; an explicit
-  caller value wins. Request JSON is buffered for model resolution and protocol
-  adaptation with a 25 MB default limit;
+  without a requested maximum is added to the current window. Each
+  workspace/model queue admits requests FIFO and wakes its head when
+  reconciliation frees capacity; independent models do not block each other.
+  A bounded per-model exponential moving ratio compares raw input estimates to
+  actual usage and begins calibrating later estimates after three consistent
+  samples outside a five-percent deadband. Streaming Chat Completions defaults
+  `stream_options.include_usage` to `true`; an explicit caller value wins.
+  Request JSON is buffered for model resolution and protocol adaptation with a
+  25 MB default limit;
   `MAX_REQUEST_BYTES` / `--max-request-bytes` can override it. Embedded JPEG,
   PNG, and WebP inputs are detected from bytes in OpenAI Chat, Responses, and
   Anthropic base64 shapes. Inputs above 2 MB are re-encoded and resized

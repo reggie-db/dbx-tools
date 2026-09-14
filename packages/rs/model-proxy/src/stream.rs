@@ -44,14 +44,6 @@ pub(crate) struct StreamLogContext {
     pub(crate) peer: SocketAddr,
     /// Raw inbound request size.
     pub(crate) request_bytes: usize,
-    /// Estimated model-visible input tokens.
-    pub(crate) estimated_input_tokens: u64,
-    /// Output capacity reserved before admission.
-    pub(crate) reserved_output_tokens: u64,
-    /// Combined input estimate and output reservation.
-    pub(crate) estimated_tokens: u64,
-    /// Time spent waiting in the local TPM queue.
-    pub(crate) throttle_wait_ms: u128,
     /// Start of the complete proxy request.
     pub(crate) started: Instant,
     /// Local token reservation reconciled when usage is reported.
@@ -151,13 +143,15 @@ impl Drop for StreamCompletion {
             client_port = self.context.peer.port(),
             request_bytes = self.context.request_bytes,
             response_bytes = self.response_bytes,
-            estimated_input_tokens = self.context.estimated_input_tokens,
-            reserved_output_tokens = self.context.reserved_output_tokens,
-            estimated_tokens = self.context.estimated_tokens,
+            raw_estimated_input_tokens = self.context.throttle.raw_estimated_input_tokens,
+            estimate_factor = self.context.throttle.estimate_factor,
+            estimated_input_tokens = self.context.throttle.estimated_input_tokens,
+            reserved_output_tokens = self.context.throttle.reserved_output_tokens,
+            estimated_tokens = self.context.throttle.estimated_tokens,
             input_tokens = self.usage.input,
             output_tokens = self.usage.output,
             total_tokens = self.usage.total,
-            throttle_wait_ms = self.context.throttle_wait_ms,
+            throttle_wait_ms = self.context.throttle.wait.as_millis(),
             duration_ms = self.context.started.elapsed().as_millis(),
             finished = self.finished,
             failed = self.failed,
