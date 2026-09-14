@@ -101,7 +101,12 @@ from both translated and pass-through Chat or Responses events. Reported usage
 reconciles process-local reservations across Chat Completions, Responses, Codex,
 Anthropic translations, and embeddings. Unused output reservations are
 credited immediately, and actual output is recorded when no maximum was
-specified. Streaming Chat Completions defaults
+specified. Each workspace/model queue admits requests FIFO and wakes its head
+when reconciliation frees capacity, without blocking unrelated models. After
+three consistent samples outside a five-percent noise band, a bounded
+per-model exponential moving ratio calibrates raw input estimates against
+actual usage. Logs include both the raw estimate and applied factor. Streaming
+Chat Completions defaults
 `stream_options.include_usage` to `true`; an explicit caller value is
 preserved.
 

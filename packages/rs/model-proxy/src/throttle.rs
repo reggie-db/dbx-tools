@@ -17,6 +17,11 @@ use tokio::{
 
 const WINDOW: Duration = Duration::from_secs(60);
 const CLAUDE_SONNET_4_DEFAULT_OUTPUT_TOKENS: u64 = 1_000;
+const CALIBRATION_ALPHA: f64 = 0.25;
+const CALIBRATION_MIN_SAMPLES: u32 = 3;
+const CALIBRATION_DEADBAND: f64 = 0.05;
+const CALIBRATION_MIN_FACTOR: f64 = 0.25;
+const CALIBRATION_MAX_FACTOR: f64 = 4.0;
 
 #[derive(Clone, Debug)]
 pub(crate) struct RequestThrottle {
@@ -48,6 +53,10 @@ pub(crate) struct ThrottleAcquisition {
     pub(crate) wait: Duration,
     /// Estimated input tokens reserved for the request.
     pub(crate) estimated_input_tokens: u64,
+    /// Uncalibrated input estimate produced by tokenx.
+    pub(crate) raw_estimated_input_tokens: u64,
+    /// Process-local model calibration applied to the raw estimate.
+    pub(crate) estimate_factor: f64,
     /// Requested or documented default output tokens reserved for the request.
     pub(crate) reserved_output_tokens: u64,
     /// Estimated input plus reserved output tokens.
@@ -75,7 +84,12 @@ impl ThrottleAcquisition {
             return;
         };
         let mut state = reservation.queue.state.lock().await;
-        state.input.reconcile(reservation.id, usage.input);
+        if usage.input > 0 {
+            state
+                .calibration
+                .observe(reservation.raw_estimated_input, usage.input);
+            state.input.reconcile(reservation.id, usage.input);
+        }
         state.output.reconcile(reservation.id, usage.output);
         drop(state);
         reservation.queue.notify.notify_waiters();
@@ -102,15 +116,6 @@ impl RequestThrottle {
     ) -> ThrottleAcquisition {
         let estimate = token_estimate(model, request);
         let limits = self.limits(model, model_class);
-        if !limits.enabled() {
-            return ThrottleAcquisition {
-                wait: Duration::ZERO,
-                estimated_input_tokens: estimate.input,
-                reserved_output_tokens: estimate.output,
-                estimated_tokens: estimate.total(),
-                reservation: None,
-            };
-        }
         let key = ThrottleKey {
             workspace: self.workspace.clone(),
             model: Arc::from(model),
@@ -119,12 +124,15 @@ impl RequestThrottle {
             let mut queues = self.queues.lock().await;
             queues.entry(key).or_default().clone()
         };
-        let (wait, reservation) = reserve(queue, estimate, limits, WINDOW).await;
+        let (wait, reservation, adjusted_input, estimate_factor) =
+            reserve(queue, estimate, limits, WINDOW).await;
         ThrottleAcquisition {
             wait,
-            estimated_input_tokens: estimate.input,
+            estimated_input_tokens: adjusted_input,
+            raw_estimated_input_tokens: estimate.input,
+            estimate_factor,
             reserved_output_tokens: estimate.output,
-            estimated_tokens: estimate.total(),
+            estimated_tokens: adjusted_input.saturating_add(estimate.output),
             reservation: Some(reservation),
         }
     }
@@ -159,6 +167,8 @@ struct ThrottleKey {
 
 #[derive(Debug, Default)]
 struct TokenQueue {
+    /// Tokio mutex acquisition order provides FIFO admission for this key.
+    admission: Mutex<()>,
     state: Mutex<WindowState>,
     notify: Notify,
 }
@@ -166,6 +176,7 @@ struct TokenQueue {
 #[derive(Debug, Default)]
 struct WindowState {
     next_id: u64,
+    calibration: InputCalibration,
     input: TokenWindow,
     output: TokenWindow,
 }
@@ -174,6 +185,7 @@ struct WindowState {
 struct ThrottleReservation {
     queue: Arc<TokenQueue>,
     id: u64,
+    raw_estimated_input: u64,
 }
 
 #[derive(Debug)]
@@ -244,9 +256,49 @@ struct TokenEstimate {
     output: u64,
 }
 
-impl TokenEstimate {
-    fn total(self) -> u64 {
-        self.input.saturating_add(self.output)
+/// Bounded per-model ratio between raw estimates and reported input usage.
+#[derive(Clone, Copy, Debug)]
+struct InputCalibration {
+    samples: u32,
+    ratio: f64,
+}
+
+impl Default for InputCalibration {
+    fn default() -> Self {
+        Self {
+            samples: 0,
+            ratio: 1.0,
+        }
+    }
+}
+
+impl InputCalibration {
+    fn observe(&mut self, estimated: u64, actual: u64) {
+        if estimated == 0 || actual == 0 {
+            return;
+        }
+        let observed = (actual as f64 / estimated as f64)
+            .clamp(CALIBRATION_MIN_FACTOR, CALIBRATION_MAX_FACTOR);
+        self.ratio = if self.samples == 0 {
+            observed
+        } else {
+            self.ratio * (1.0 - CALIBRATION_ALPHA) + observed * CALIBRATION_ALPHA
+        };
+        self.samples = self.samples.saturating_add(1);
+    }
+
+    fn factor(self) -> f64 {
+        if self.samples < CALIBRATION_MIN_SAMPLES
+            || (self.ratio - 1.0).abs() <= CALIBRATION_DEADBAND
+        {
+            1.0
+        } else {
+            self.ratio
+        }
+    }
+
+    fn apply(self, estimate: u64) -> u64 {
+        ((estimate as f64 * self.factor()).ceil()).clamp(1.0, u64::MAX as f64) as u64
     }
 }
 
@@ -256,23 +308,14 @@ struct TokenLimits {
     output: Option<u64>,
 }
 
-impl TokenLimits {
-    fn enabled(self) -> bool {
-        self.input.is_some() || self.output.is_some()
-    }
-}
-
 async fn reserve(
     queue: Arc<TokenQueue>,
     estimate: TokenEstimate,
     limits: TokenLimits,
     window: Duration,
-) -> (Duration, ThrottleReservation) {
+) -> (Duration, ThrottleReservation, u64, f64) {
     let started = Instant::now();
-    let input_tokens = limits
-        .input
-        .map(|limit| estimate.input.min(limit))
-        .unwrap_or_default();
+    let _admission = queue.admission.lock().await;
     let output_tokens = limits
         .output
         .map(|limit| estimate.output.min(limit))
@@ -282,6 +325,12 @@ async fn reserve(
         let delay = {
             let now = Instant::now();
             let mut state = queue.state.lock().await;
+            let estimate_factor = state.calibration.factor();
+            let adjusted_input = state.calibration.apply(estimate.input);
+            let input_tokens = limits
+                .input
+                .map(|limit| adjusted_input.min(limit))
+                .unwrap_or_default();
             state.input.prune(now, window);
             state.output.prune(now, window);
             let delay = [
@@ -309,7 +358,10 @@ async fn reserve(
                     ThrottleReservation {
                         queue: Arc::clone(&queue),
                         id,
+                        raw_estimated_input: estimate.input,
                     },
+                    adjusted_input,
+                    estimate_factor,
                 );
             }
             delay
@@ -450,7 +502,10 @@ mod tests {
 
         assert!(estimate.input > 0);
         assert_eq!(estimate.output, 50);
-        assert_eq!(estimate.total(), estimate.input + 50);
+        assert_eq!(
+            estimate.input.saturating_add(estimate.output),
+            estimate.input + 50
+        );
         assert_eq!(
             requested_output_tokens("databricks-claude-sonnet-4-6", &json!({})),
             1_000
@@ -492,10 +547,28 @@ mod tests {
         assert_eq!(window.delay(now, 80, 100, WINDOW), None);
     }
 
+    #[test]
+    fn calibration_adjusts_after_consistent_actual_usage() {
+        let mut calibration = InputCalibration::default();
+        calibration.observe(100, 80);
+        calibration.observe(100, 80);
+        assert_eq!(calibration.factor(), 1.0);
+        calibration.observe(100, 80);
+        assert!((calibration.factor() - 0.8).abs() < f64::EPSILON);
+        assert_eq!(calibration.apply(100), 80);
+
+        let mut calibration = InputCalibration::default();
+        for _ in 0..3 {
+            calibration.observe(100, 125);
+        }
+        assert!((calibration.factor() - 1.25).abs() < f64::EPSILON);
+        assert_eq!(calibration.apply(100), 125);
+    }
+
     #[tokio::test]
     async fn reported_usage_reconciles_input_and_output_reservations() {
         let queue = Arc::new(TokenQueue::default());
-        let (_, reservation) = reserve(
+        let (_, reservation, _, _) = reserve(
             Arc::clone(&queue),
             TokenEstimate {
                 input: 80,
@@ -511,6 +584,8 @@ mod tests {
         let acquisition = ThrottleAcquisition {
             wait: Duration::ZERO,
             estimated_input_tokens: 80,
+            raw_estimated_input_tokens: 80,
+            estimate_factor: 1.0,
             reserved_output_tokens: 70,
             estimated_tokens: 150,
             reservation: Some(reservation),
@@ -537,7 +612,7 @@ mod tests {
             input: Some(100),
             output: None,
         };
-        let (_, reservation) = reserve(
+        let (_, reservation, _, _) = reserve(
             Arc::clone(&queue),
             TokenEstimate {
                 input: 100,
@@ -568,6 +643,8 @@ mod tests {
         let acquisition = ThrottleAcquisition {
             wait: Duration::ZERO,
             estimated_input_tokens: 100,
+            raw_estimated_input_tokens: 100,
+            estimate_factor: 1.0,
             reserved_output_tokens: 0,
             estimated_tokens: 100,
             reservation: Some(reservation),
@@ -576,9 +653,9 @@ mod tests {
         acquisition
             .reconcile(ResponseTokenUsage {
                 reported: true,
-                input: 0,
+                input: 1,
                 output: 0,
-                total: 0,
+                total: 1,
             })
             .await;
 
@@ -586,6 +663,80 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn admission_is_fifo_for_each_workspace_model_queue() {
+        let queue = Arc::new(TokenQueue::default());
+        let limits = TokenLimits {
+            input: Some(100),
+            output: None,
+        };
+        let (_, reservation, _, _) = reserve(
+            Arc::clone(&queue),
+            TokenEstimate {
+                input: 100,
+                output: 0,
+            },
+            limits,
+            Duration::from_secs(1),
+        )
+        .await;
+        let (completed, mut order) = tokio::sync::mpsc::unbounded_channel();
+        let first_queue = Arc::clone(&queue);
+        let first_completed = completed.clone();
+        let first = tokio::spawn(async move {
+            reserve(
+                first_queue,
+                TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                limits,
+                Duration::from_secs(1),
+            )
+            .await;
+            first_completed.send(1).unwrap();
+        });
+        tokio::task::yield_now().await;
+        let second_queue = Arc::clone(&queue);
+        let second = tokio::spawn(async move {
+            reserve(
+                second_queue,
+                TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                limits,
+                Duration::from_secs(1),
+            )
+            .await;
+            completed.send(2).unwrap();
+        });
+        tokio::task::yield_now().await;
+        let acquisition = ThrottleAcquisition {
+            wait: Duration::ZERO,
+            estimated_input_tokens: 100,
+            raw_estimated_input_tokens: 100,
+            estimate_factor: 1.0,
+            reserved_output_tokens: 0,
+            estimated_tokens: 100,
+            reservation: Some(reservation),
+        };
+
+        acquisition
+            .reconcile(ResponseTokenUsage {
+                reported: true,
+                input: 1,
+                output: 0,
+                total: 1,
+            })
+            .await;
+
+        assert_eq!(order.recv().await, Some(1));
+        assert_eq!(order.recv().await, Some(2));
+        first.await.unwrap();
+        second.await.unwrap();
     }
 
     #[test]
