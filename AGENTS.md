@@ -181,8 +181,14 @@ Primary package areas:
   latter can still be the `databricks-*` endpoint id. Foundation metadata may
   itself return `system.ai.databricks-*`, which the Codex gateway does not
   accept. Codex listing and inference derive `system.ai.<model>` by removing
-  the leading `databricks-` from the serving endpoint name. The serving
-  endpoint name remains the OpenAI-facing id.
+  the leading `databricks-` from the serving endpoint name. Unfiltered OpenAI
+  and Codex model lists put chat/LLM families first and embedding families
+  second, alphabetically sorting the families within each tier, then apply the
+  same post-match ordering used by a search for that family without running
+  fuzzy matching. Recognized unclassified models remain with the chat/LLM
+  families; custom and unrecognized endpoints sort by name at the end. Codex
+  priorities follow that order. The serving endpoint name remains the
+  OpenAI-facing id.
   Retirement status refreshes the Databricks Foundation Model retirement page
   through a daily `FileCache` and falls back to the generated
   `assets/retired-models.json` snapshot. Model capabilities follow the same

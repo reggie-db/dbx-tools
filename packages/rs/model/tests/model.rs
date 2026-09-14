@@ -144,6 +144,59 @@ fn model_listing_uses_openai_format_and_stable_lookup_ordering() {
 }
 
 #[test]
+fn unfiltered_listing_sorts_families_and_matches_family_search_order() {
+    let mut embedding = endpoint("databricks-bge-large-en", ModelClass::Embedding);
+    embedding.task = Some("llm/v1/embeddings".to_owned());
+    let endpoints = [
+        endpoint("zeta-custom", ModelClass::ChatBalanced),
+        endpoint("databricks-qwen35-122b-a10b", ModelClass::ChatBalanced),
+        endpoint("databricks-gpt-5-6-luna", ModelClass::ChatBalanced),
+        endpoint("databricks-grok-4-6", ModelClass::ChatBalanced),
+        endpoint("databricks-gpt-5-6-sol", ModelClass::ChatBalanced),
+        endpoint("databricks-claude-opus-4-8", ModelClass::ChatThinking),
+        endpoint("databricks-gpt-6-astra", ModelClass::ChatBalanced),
+        embedding,
+        endpoint("alpha-custom", ModelClass::ChatBalanced),
+    ];
+
+    let full = models_payload(&endpoints, None, false, false);
+    let searched = models_payload(&endpoints, Some("gpt"), false, false);
+    let full_ids = full["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    let searched_ids = searched["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    let full_gpt_ids = full_ids
+        .iter()
+        .copied()
+        .filter(|name| name.starts_with("databricks-gpt-"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        full_ids,
+        [
+            "databricks-claude-opus-4-8",
+            "databricks-gpt-6-astra",
+            "databricks-gpt-5-6-sol",
+            "databricks-gpt-5-6-luna",
+            "databricks-grok-4-6",
+            "databricks-qwen35-122b-a10b",
+            "databricks-bge-large-en",
+            "alpha-custom",
+            "zeta-custom",
+        ]
+    );
+    assert_eq!(full_gpt_ids, searched_ids);
+}
+
+#[test]
 fn responses_and_reasoning_policy_follow_model_identity() {
     assert!(!is_responses_only("databricks-gpt-5-3"));
     assert!(is_responses_only("databricks-gpt-5-4"));
@@ -195,6 +248,27 @@ fn codex_originators_receive_the_codex_model_envelope() {
     assert!(payload["models"][0]["web_search_tool_type"].is_null());
     assert_eq!(payload["models"][0]["input_modalities"], json!(["text"]));
     assert_eq!(payload["models"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn codex_priorities_follow_unfiltered_model_order() {
+    let endpoints = [
+        endpoint("databricks-qwen35-122b-a10b", ModelClass::ChatBalanced),
+        endpoint("databricks-gpt-5-6-sol", ModelClass::ChatBalanced),
+        endpoint("databricks-glm-5-3", ModelClass::ChatBalanced),
+        endpoint("databricks-gpt-6-astra", ModelClass::ChatBalanced),
+    ];
+
+    let payload = models_payload(&endpoints, None, false, true);
+
+    assert_eq!(payload["models"][0]["slug"], "system.ai.glm-5-3");
+    assert_eq!(payload["models"][0]["priority"], 1);
+    assert_eq!(payload["models"][1]["slug"], "system.ai.gpt-6-astra");
+    assert_eq!(payload["models"][1]["priority"], 2);
+    assert_eq!(payload["models"][2]["slug"], "system.ai.gpt-5-6-sol");
+    assert_eq!(payload["models"][2]["priority"], 3);
+    assert_eq!(payload["models"][3]["slug"], "system.ai.qwen35-122b-a10b");
+    assert_eq!(payload["models"][3]["priority"], 4);
 }
 
 #[test]
@@ -256,15 +330,19 @@ fn codex_capabilities_follow_discovered_databricks_documentation() {
     let payload =
         models_payload_with_capabilities(&endpoints, None, false, true, Some(&capabilities));
     let models = payload["models"].as_array().unwrap();
+    let model = |slug: &str| models.iter().find(|model| model["slug"] == slug).unwrap();
+    let future = model("system.ai.gpt-7-future");
+    let sol = model("system.ai.gpt-5-6-sol");
+    let qwen = model("system.ai.qwen35-122b-a10b");
 
-    assert_eq!(models[0]["input_modalities"], json!(["text", "image"]));
-    assert_eq!(models[0]["apply_patch_tool_type"], "freeform");
-    assert!(models[0]["web_search_tool_type"].is_null());
-    assert_eq!(models[1]["input_modalities"], json!(["text", "image"]));
-    assert_eq!(models[1]["apply_patch_tool_type"], "freeform");
-    assert_eq!(models[1]["web_search_tool_type"], "text");
-    assert_eq!(models[2]["input_modalities"], json!(["text"]));
-    assert!(models[2]["apply_patch_tool_type"].is_null());
+    assert_eq!(future["input_modalities"], json!(["text", "image"]));
+    assert_eq!(future["apply_patch_tool_type"], "freeform");
+    assert_eq!(future["web_search_tool_type"], "text");
+    assert_eq!(sol["input_modalities"], json!(["text", "image"]));
+    assert_eq!(sol["apply_patch_tool_type"], "freeform");
+    assert!(sol["web_search_tool_type"].is_null());
+    assert_eq!(qwen["input_modalities"], json!(["text"]));
+    assert!(qwen["apply_patch_tool_type"].is_null());
 }
 
 #[test]

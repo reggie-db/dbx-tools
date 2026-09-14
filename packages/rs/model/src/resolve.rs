@@ -189,19 +189,34 @@ fn endpoint_supports_tools(endpoint: &ServingEndpointSummary) -> bool {
 fn compare_ranked(left: &RankedModel, right: &RankedModel, versioned: bool) -> Ordering {
     let left_score = (left.score.unwrap_or(0.0) * 1000.0).round() as i64;
     let right_score = (right.score.unwrap_or(0.0) * 1000.0).round() as i64;
-    left_score
-        .cmp(&right_score)
-        .then_with(|| {
-            if versioned {
-                version_tuple(&right.endpoint.name).cmp(&version_tuple(&left.endpoint.name))
-            } else {
-                Ordering::Equal
-            }
-        })
-        .then_with(|| {
-            model_variant_rank(&left.endpoint.name).cmp(&model_variant_rank(&right.endpoint.name))
-        })
-        .then_with(|| left.model_class.order().cmp(&right.model_class.order()))
+    left_score.cmp(&right_score).then_with(|| {
+        compare_model_preference(
+            &left.endpoint,
+            left.model_class,
+            &right.endpoint,
+            right.model_class,
+            versioned,
+        )
+    })
+}
+
+/// Compare equally matched models by version, preferred variant, and class.
+pub(crate) fn compare_model_preference(
+    left_endpoint: &ServingEndpointSummary,
+    left_class: ModelClass,
+    right_endpoint: &ServingEndpointSummary,
+    right_class: ModelClass,
+    versioned: bool,
+) -> Ordering {
+    (if versioned {
+        version_tuple(&right_endpoint.name).cmp(&version_tuple(&left_endpoint.name))
+    } else {
+        Ordering::Equal
+    })
+    .then_with(|| {
+        model_variant_rank(&left_endpoint.name).cmp(&model_variant_rank(&right_endpoint.name))
+    })
+    .then_with(|| left_class.order().cmp(&right_class.order()))
 }
 
 fn model_variant_rank(name: &str) -> u8 {
