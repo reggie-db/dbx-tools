@@ -209,7 +209,6 @@ program
           throw new Error(`Release branch already exists without its worktree: ${releaseBranch}`);
         }
         git(root, ["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"]);
-        run(releaseRoot, process.execPath, ["install"]);
       } else {
         const releaseStatus = git(
           releaseRoot,
@@ -227,6 +226,7 @@ program
         }
         logger.info(`resuming ${releaseBranch} in ${releaseRoot}`);
       }
+      run(releaseRoot, process.execPath, ["install"]);
 
       const bumpScript = fileURLToPath(new URL("./bump.ts", import.meta.url));
       const versionCheckScript = fileURLToPath(new URL("./version-check.ts", import.meta.url));
