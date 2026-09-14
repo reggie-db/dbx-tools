@@ -214,7 +214,11 @@ Primary package areas:
   proportionally to at most a 1,568-pixel edge and 1.15 megapixels. Inputs at or
   below 2 MB remain byte-for-byte unchanged. The threshold is configurable
   through `--image-resize-threshold-bytes` /
-  `IMAGE_RESIZE_THRESHOLD_BYTES`. Do not fetch remote image URLs. The local token
+  `IMAGE_RESIZE_THRESHOLD_BYTES`. Do not fetch remote image URLs. Every request
+  targeting Responses defaults a missing `truncation` field to `"auto"` while
+  preserving an explicit caller value. Live AI Gateway checks cover Open
+  Responses for Claude and Kimi and Codex Responses for GPT and Kimi; the Codex
+  route does not enable Claude. The local token
   queue uses separate process-local ITPM and OTPM windows from Databricks'
   published Enterprise pay-per-token model limits. Callers can override them
   through `INPUT_TOKENS_PER_MINUTE` / `OUTPUT_TOKENS_PER_MINUTE` or matching

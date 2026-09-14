@@ -116,6 +116,10 @@ whose value starts with `codex` receives a Codex `models` envelope. Both use
 the identities returned by Databricks directly: OpenAI uses the serving
 endpoint name, while Codex maps `databricks-<model>` to the gateway's
 `system.ai.<model>` identity. No `databricks/` or `dbx/` namespace is added.
+Requests targeting Responses default a missing `truncation` field to `"auto"`;
+an explicit caller value is preserved. Databricks AI Gateway accepts this
+default on Open Responses for Claude and Kimi and on Codex Responses for GPT
+and Kimi. Claude itself is not enabled on the Codex route.
 Unfiltered responses list chat/LLM families first and embedding families
 second, alphabetically sorting families within each tier. Each family uses the
 same version, variant, and class preference as a search for that family.

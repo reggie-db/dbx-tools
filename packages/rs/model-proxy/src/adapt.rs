@@ -47,6 +47,9 @@ pub(crate) fn adapt_request(
     target: TargetWire,
     mut input: Value,
 ) -> Result<Vec<u8>, ProxyError> {
+    if target == TargetWire::Responses {
+        default_responses_fields(&mut input);
+    }
     if client == ClientWire::Responses {
         return match target {
             TargetWire::Responses => serde_json::to_vec(&input).map_err(Into::into),
@@ -87,6 +90,15 @@ pub(crate) fn adapt_request(
             serde_json::to_vec(&request).map_err(Into::into)
         }
         TargetWire::Auto => unreachable!(),
+    }
+}
+
+/// Apply safe Responses defaults while preserving explicit caller choices.
+fn default_responses_fields(input: &mut Value) {
+    if let Some(input) = input.as_object_mut() {
+        input
+            .entry("truncation")
+            .or_insert_with(|| Value::String("auto".to_owned()));
     }
 }
 
@@ -318,6 +330,7 @@ mod tests {
         assert_eq!(value["instructions"], "Be concise");
         assert_eq!(value["input"][0]["role"], "user");
         assert_eq!(value["tools"][0]["name"], "lookup");
+        assert_eq!(value["truncation"], "auto");
     }
 
     #[test]
@@ -405,8 +418,10 @@ mod tests {
 
         let output =
             adapt_request(ClientWire::Responses, TargetWire::Responses, input.clone()).unwrap();
+        let mut expected = input;
+        expected["truncation"] = json!("auto");
 
-        assert_eq!(serde_json::from_slice::<Value>(&output).unwrap(), input);
+        assert_eq!(serde_json::from_slice::<Value>(&output).unwrap(), expected);
     }
 
     #[test]
@@ -431,6 +446,24 @@ mod tests {
         assert_eq!(value["instructions"], "Use tools");
         assert_eq!(value["input"][0]["role"], "user");
         assert_eq!(value["tools"][0]["name"], "lookup");
+        assert_eq!(value["truncation"], "auto");
+    }
+
+    #[test]
+    fn responses_preserve_an_explicit_truncation_policy() {
+        let output = adapt_request(
+            ClientWire::Responses,
+            TargetWire::Responses,
+            json!({
+                "model": "system.ai.gpt-5-6-sol",
+                "input": "Hello",
+                "truncation": "disabled"
+            }),
+        )
+        .unwrap();
+        let value: Value = serde_json::from_slice(&output).unwrap();
+
+        assert_eq!(value["truncation"], "disabled");
     }
 
     #[test]
