@@ -4,10 +4,11 @@ use dbx_tools_core::{DatabricksAuthOptions, DatabricksClient, FileCache};
 use dbx_tools_model::{
     endpoints_from_response, is_responses_only, lookup_models, model_search_query,
     model_service_names, models_payload, models_payload_with_capabilities,
-    parse_model_capabilities, parse_model_name, parse_retired_models, rank_model_id,
-    reasoning_efforts_by_family, status_from_names, version_tuple, ModelCapabilitiesResolver,
-    ModelClass, ModelClient, ModelFamily, ModelQuery, ModelStatus, ModelStatusResolver,
-    ParsedModelName, ReasoningEffort, ServingEndpointSummary,
+    parse_model_capabilities, parse_model_name, parse_model_rate_limits, parse_retired_models,
+    rank_model_id, reasoning_efforts_by_family, status_from_names, version_tuple,
+    ModelCapabilitiesResolver, ModelClass, ModelClient, ModelFamily, ModelQuery,
+    ModelRateLimitsResolver, ModelStatus, ModelStatusResolver, ParsedModelName, ReasoningEffort,
+    ServingEndpointSummary,
 };
 use serde_json::json;
 use wiremock::{
@@ -585,6 +586,63 @@ async fn capability_refresh_failure_uses_the_embedded_snapshot() {
     assert!(capabilities.supports_image_input(&endpoint));
     assert!(capabilities.supports_apply_patch(&endpoint));
     assert!(capabilities.supports_web_search(&endpoint));
+}
+
+#[test]
+fn parses_documented_model_rate_limits() {
+    let catalogue = parse_model_rate_limits(
+        r#"
+        <table>
+          <tr><th>Large language models</th><th>ITPM limit</th><th>OTPM limit</th><th>QPH limit</th></tr>
+          <tr><td>GPT-5.6 Sol</td><td>200,000</td><td>20,000</td><td>360,000</td></tr>
+          <tr><td>DeepSeek V4 Pro (0813)</td><td>200,000</td><td>4,000</td><td>7,200</td></tr>
+        </table>
+        "#,
+    )
+    .unwrap();
+
+    let gpt = catalogue.limits_for_name("databricks-gpt-5-6-sol").unwrap();
+    assert_eq!(gpt.input_tokens_per_minute, Some(200_000));
+    assert_eq!(gpt.output_tokens_per_minute, Some(20_000));
+    assert_eq!(gpt.queries_per_hour, Some(360_000));
+    assert_eq!(
+        catalogue
+            .limits_for_name("databricks-deepseek-v4-pro-0813")
+            .unwrap()
+            .output_tokens_per_minute,
+        Some(4_000)
+    );
+}
+
+#[tokio::test]
+async fn rate_limit_refresh_failure_is_cached_with_the_generated_fallback() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/limits"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let directory = tempfile::tempdir().unwrap();
+    let resolver = ModelRateLimitsResolver::with_cache_url(
+        FileCache::new(
+            directory.path().join("rate-limits.json"),
+            Duration::from_secs(60),
+        ),
+        format!("{}/limits", server.uri()),
+    );
+
+    let first = resolver.rate_limits().await.unwrap();
+    let second = resolver.rate_limits().await.unwrap();
+
+    assert_eq!(
+        first
+            .limits_for_name("databricks-gpt-5-6-sol")
+            .unwrap()
+            .input_tokens_per_minute,
+        Some(200_000)
+    );
+    assert_eq!(first, second);
 }
 
 fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {

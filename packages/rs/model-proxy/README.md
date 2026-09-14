@@ -89,7 +89,11 @@ itself. Set `--image-resize-threshold-bytes` or
 
 `LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`, case-insensitively,
 and defaults to `info`. Request summaries include protocol, selected model,
-streaming mode, status, and latency without logging request bodies or tokens.
+streaming mode, status, latency, raw request bytes, a fast `tokenx-rs` token
+estimate, and the immediate TCP peer IP and port without logging request bodies
+or credentials. The peer can be a local or platform proxy rather than the end
+user. Buffered responses also report upstream input, output, and total usage;
+stream connection logs retain the preflight estimate without buffering SSE.
 
 Import `postman/model-proxy.postman_collection.json` into Postman. The
 collection has separate folders for `--target chat` and `--target responses`;
@@ -173,8 +177,8 @@ non-streaming requests for the same key remain paused. The `Retry-After`
 response header controls the delay when present, followed by the documented
 Foundation Model API `error.retry_after` JSON value. Otherwise the proxy uses
 BackON jittered exponential delays from one second to one minute. Every 429
-logs a returned `error.message`, including the final attempt. The default ten
-retries mean one initial request plus up to ten retries.
+logs a returned `error.message`, including the final attempt. The default five
+retries mean one initial request plus up to five retries.
 After the final attempt, the original 429 status, body, and rate-limit headers
 are returned to the caller. Configure `RATE_LIMIT_RETRIES`,
 `RATE_LIMIT_INITIAL_DELAY_MS`, and `RATE_LIMIT_MAX_DELAY_MS`, or the matching
@@ -182,13 +186,18 @@ CLI flags. Set retries to `0` to disable both retries and coordinated cooldowns.
 Only an initial HTTP 429 is retried; an SSE error after streaming begins cannot
 be replayed safely.
 
-The local token queue is disabled by default. Databricks publishes different
-input and output token limits for each pay-per-token model, while provisioned
-endpoints use allocated capacity. Codex limits vary by account tier. There is
-no single documented value that is correct for every routed model.
+The process-local token queue reads Databricks' published Enterprise
+pay-per-token ITPM and OTPM limits from the same daily documentation cache and
+generated-fallback pattern used for model capabilities and retirement status.
+Input and output windows are tracked separately for each resolved model and
+workspace. Requests reserve a `tokenx-rs` input estimate plus any explicit
+`max_output_tokens`, `max_completion_tokens`, or `max_tokens` value. Claude
+Sonnet 4 reserves its documented 1,000-token default when no output limit is
+present.
 
-Set `TOKENS_PER_MINUTE` or pass `--tokens-per-minute` to enable an explicit
-combined budget. The configured budget applies independently to each resolved
-model in each Databricks workspace. Requests reserve an estimated input token
-count plus any explicit `max_output_tokens`, `max_completion_tokens`, or
-`max_tokens` value before they are sent upstream.
+Use `INPUT_TOKENS_PER_MINUTE` / `--input-tokens-per-minute` and
+`OUTPUT_TOKENS_PER_MINUTE` / `--output-tokens-per-minute` to override the
+published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
+`--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
+Databricks because process-local tracking cannot coordinate a workspace across
+proxy replicas.

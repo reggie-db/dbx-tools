@@ -14,8 +14,10 @@ Databricks.
 - Refreshes the live catalogue once when a search misses.
 - Resolves Codex gateway identities, Responses-only routing, reasoning efforts,
   and complete function-tool support.
-- Refreshes Databricks retirement and model-capability documentation daily.
-- Embeds committed retirement and capability snapshots for offline fallback.
+- Refreshes Databricks retirement, model-capability, and pay-per-token limit
+  documentation daily.
+- Embeds committed retirement, capability, and rate-limit snapshots for offline
+  fallback.
 - Builds OpenAI and Codex model-list envelopes from one catalogue.
 
 ## Resolve a serving endpoint
@@ -36,19 +38,21 @@ above Luna when both variants have the same GPT version.
 
 ## Metadata refresh
 
-`ModelStatusResolver` and `ModelCapabilitiesResolver` cache Databricks
-documentation results for one day. A failed refresh uses the corresponding
-embedded snapshot without blocking endpoint discovery.
+`ModelStatusResolver`, `ModelCapabilitiesResolver`, and
+`ModelRateLimitsResolver` cache Databricks documentation results for one day. A
+failed refresh uses the corresponding embedded snapshot without blocking
+endpoint discovery.
 
 Repository synthesis runs:
 
 ```sh
 cargo run -p dbx-tools-model --example generate-model-metadata -- \
   packages/rs/model/assets/retired-models.json \
-  packages/rs/model/assets/model-capabilities.json
+  packages/rs/model/assets/model-capabilities.json \
+  packages/rs/model/assets/model-rate-limits.json
 ```
 
-Both JSON files are generated artifacts. Change the parsers or generator rather
+The JSON files are generated artifacts. Change the parsers or generator rather
 than editing a snapshot by hand.
 
 ## Modules
@@ -61,4 +65,5 @@ than editing a snapshot by hand.
 - `reasoning` infers supported reasoning efforts.
 - `model_status` parses retirement metadata.
 - `capabilities` parses Responses, image, patch, and web-search support.
+- `limits` parses published pay-per-token ITPM, OTPM, and QPH limits.
 - `listing` builds OpenAI and Codex model-list responses.

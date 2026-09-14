@@ -906,6 +906,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     tempfile: "3",
     thiserror: "2",
     time: { version: "0.3", features: ["serde", "formatting", "parsing"] },
+    "tokenx-rs": "=0.1.0",
     tokio: {
       version: "1",
       features: ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"],
@@ -1006,6 +1007,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         serde: { workspace: true },
         "serde_json": { workspace: true },
         thiserror: { workspace: true },
+        "tokenx-rs": { workspace: true },
         tokio: { workspace: true, features: ["signal"] },
         tracing: { workspace: true },
       },
@@ -1117,8 +1119,9 @@ root.addTask("model:metadata", {
     "cargo run --quiet -p dbx-tools-model --example generate-model-metadata --",
     "packages/rs/model/assets/retired-models.json",
     "packages/rs/model/assets/model-capabilities.json",
+    "packages/rs/model/assets/model-rate-limits.json",
   ].join(" "),
-  description: "Refresh committed model retirement and capability snapshots",
+  description: "Refresh committed model retirement, capability, and rate-limit snapshots",
 });
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",

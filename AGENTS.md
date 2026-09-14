@@ -191,19 +191,23 @@ Primary package areas:
   OpenAI-facing id.
   Retirement status refreshes the Databricks Foundation Model retirement page
   through a daily `FileCache` and falls back to the generated
-  `assets/retired-models.json` snapshot. Model capabilities follow the same
-  daily refresh and generated-fallback policy. The
+  `assets/retired-models.json` snapshot. Model capabilities and published
+  pay-per-token limits follow the same daily refresh and generated-fallback
+  policy through a shared documentation cache envelope. The
   `bun run model:metadata` task invokes the `generate-model-metadata` Rust
-  example to refresh both committed snapshots. Ordinary Projen synthesis never
-  compiles or runs that network-backed generator.
+  example to refresh all three committed snapshots. Ordinary Projen synthesis
+  never compiles or runs that network-backed generator.
 - `packages/rs/model-proxy` is the public `dbx-model-proxy` Rust binary that
   exposes OpenAI Chat, OpenAI Responses, Anthropic Messages, Codex Responses,
   OpenAI Embeddings, and live model-list compatibility over Databricks. It depends on `core`
   for credentials and on `model` for cached discovery and ranking. Releases
   publish the crate to Cargo and attach the compiled binary for each selected
   platform to the GitHub release. It logs payload-free request summaries with
-  model, protocol, status, streaming mode, and latency. Request JSON is buffered
-  for model resolution and protocol adaptation with a 25 MB default limit;
+  model, protocol, status, streaming mode, latency, raw request bytes, a
+  `tokenx-rs` input estimate, reserved output tokens, and the transport peer IP
+  and port. The peer identifies the immediate TCP connection, which can be a
+  local or platform proxy rather than the end user. Request JSON is buffered for
+  model resolution and protocol adaptation with a 25 MB default limit;
   `MAX_REQUEST_BYTES` / `--max-request-bytes` can override it. Embedded JPEG,
   PNG, and WebP inputs are detected from bytes in OpenAI Chat, Responses, and
   Anthropic base64 shapes. Inputs above 2 MB are re-encoded and resized
@@ -211,9 +215,13 @@ Primary package areas:
   below 2 MB remain byte-for-byte unchanged. The threshold is configurable
   through `--image-resize-threshold-bytes` /
   `IMAGE_RESIZE_THRESHOLD_BYTES`. Do not fetch remote image URLs. The local token
-  queue is disabled unless `TOKENS_PER_MINUTE` / `--tokens-per-minute` is set
-  because Databricks limits vary by model and separate input from output
-  tokens, while Codex limits vary by account tier. HTTP 429 recovery is a
+  queue uses separate process-local ITPM and OTPM windows from Databricks'
+  published Enterprise pay-per-token model limits. Callers can override them
+  through `INPUT_TOKENS_PER_MINUTE` / `OUTPUT_TOKENS_PER_MINUTE` or matching
+  flags. `PROVISIONED_THROUGHPUT=true` / `--provisioned-throughput` disables
+  both TPM windows because provisioned endpoints have no TPM restriction. QPH
+  remains Databricks-owned because correct workspace-wide enforcement across
+  replicas requires shared state. HTTP 429 recovery is a
   separate process-local gate keyed by Databricks host, current principal, and
   resolved model. Prefer trusted forwarded user ID/email, then unverified
   identity claims decoded from an already-present bearer JWT, then the in-memory
@@ -223,7 +231,7 @@ Primary package areas:
   header first, then the documented Foundation Model API
   `error.retry_after` body value; otherwise use BackON jittered exponential
   delay from one second to one minute. Log a returned `error.message` on every
-  429, including the final attempt. Use ten request retries by default.
+  429, including the final attempt. Use five request retries by default.
   `RATE_LIMIT_RETRIES=0` or
   `--rate-limit-retries 0` disables retries and the shared cooldown;
   `RATE_LIMIT_INITIAL_DELAY_MS` and `RATE_LIMIT_MAX_DELAY_MS` plus matching CLI
@@ -1674,7 +1682,7 @@ bun run clean                # remove generated files (read-only ones); interact
 bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
 bun run test:installer       # standalone installer tests; RUN_DOCKER_INSTALL_TESTS=1 adds container coverage
-bun run model:metadata       # refresh committed model capability and retirement snapshots
+bun run model:metadata       # refresh committed model capability, retirement, and limit snapshots
 bun run bump                 # increment VERSION and synth; no git or publication side effects
 bun run version:check        # verify every committed version surface
 bun run release              # validate locally, publish to loopback registries, and open a release PR

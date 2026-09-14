@@ -1,13 +1,10 @@
 //! HTTP routes for model listing, generation, and embeddings.
 
-use std::{
-    num::{NonZeroU64, NonZeroUsize},
-    time::Instant,
-};
+use std::{net::SocketAddr, num::NonZeroUsize, time::Instant};
 
 use axum::{
     body::Bytes,
-    extract::{DefaultBodyLimit, Query, State},
+    extract::{ConnectInfo, DefaultBodyLimit, Query, State},
     http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -35,7 +32,7 @@ use crate::{
         rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
     },
     stream::stream_response,
-    throttle::RequestThrottle,
+    throttle::{response_token_usage, RequestThrottle, ThrottleConfig},
 };
 
 const ORIGINATOR_HEADER: &str = "originator";
@@ -59,11 +56,11 @@ impl AppState {
         databricks: DatabricksClient,
         models: ModelClient,
         target: TargetWire,
-        tokens_per_minute: Option<NonZeroU64>,
+        throttle_config: ThrottleConfig,
         image_resize_threshold_bytes: usize,
         rate_limit_policy: RateLimitPolicy,
     ) -> Self {
-        let throttle = RequestThrottle::new(databricks.host(), tokens_per_minute);
+        let throttle = RequestThrottle::new(databricks.host(), throttle_config);
         let rate_limits = RateLimitGate::new(rate_limit_policy);
         Self {
             capabilities,
@@ -84,6 +81,13 @@ struct ModelsQuery {
     search: Option<String>,
 }
 
+/// Logical rate-limit principal and immediate transport peer for one request.
+#[derive(Debug)]
+struct RequestCaller {
+    principal: String,
+    peer: SocketAddr,
+}
+
 pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router {
     Router::new()
         .route("/healthz", get(health))
@@ -92,24 +96,33 @@ pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router
         .route(
             "/v1/chat/completions",
             post(
-                |State(state): State<AppState>, headers: HeaderMap, body: Bytes| async move {
-                    proxy(state, ClientWire::Chat, headers, body).await
+                |ConnectInfo(peer): ConnectInfo<SocketAddr>,
+                 State(state): State<AppState>,
+                 headers: HeaderMap,
+                 body: Bytes| async move {
+                    proxy(state, ClientWire::Chat, peer, headers, body).await
                 },
             ),
         )
         .route(
             "/v1/responses",
             post(
-                |State(state): State<AppState>, headers: HeaderMap, body: Bytes| async move {
-                    proxy(state, ClientWire::Responses, headers, body).await
+                |ConnectInfo(peer): ConnectInfo<SocketAddr>,
+                 State(state): State<AppState>,
+                 headers: HeaderMap,
+                 body: Bytes| async move {
+                    proxy(state, ClientWire::Responses, peer, headers, body).await
                 },
             ),
         )
         .route(
             "/v1/messages",
             post(
-                |State(state): State<AppState>, headers: HeaderMap, body: Bytes| async move {
-                    proxy(state, ClientWire::Anthropic, headers, body).await
+                |ConnectInfo(peer): ConnectInfo<SocketAddr>,
+                 State(state): State<AppState>,
+                 headers: HeaderMap,
+                 body: Bytes| async move {
+                    proxy(state, ClientWire::Anthropic, peer, headers, body).await
                 },
             ),
         )
@@ -122,6 +135,7 @@ async fn health() -> Json<Value> {
 }
 
 async fn list_models(
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
     Query(query): Query<ModelsQuery>,
     headers: HeaderMap,
@@ -159,6 +173,8 @@ async fn list_models(
         search = query.search.as_deref().unwrap_or_default(),
         extended = query.extended,
         models = count,
+        client_ip = %peer.ip(),
+        client_port = peer.port(),
         latency_ms = started.elapsed().as_millis(),
         "model request completed"
     );
@@ -166,11 +182,13 @@ async fn list_models(
 }
 
 async fn embeddings(
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, ProxyError> {
     let started = Instant::now();
+    let request_bytes = body.len();
     let input: Value = serde_json::from_slice(&body)?;
     let requested_model = requested_model(&input)?.to_owned();
     let endpoint = state
@@ -178,14 +196,17 @@ async fn embeddings(
         .resolve_serving_endpoint_for_class(&requested_model, ModelClass::Embedding)
         .await?
         .ok_or_else(|| ProxyError::EmbeddingModelNotFound(requested_model.clone()))?;
-    let throttle_wait = state.throttle.acquire(&endpoint.name, &input).await;
-    let principal = request_principal(&headers, &state.databricks);
+    let throttle = state
+        .throttle
+        .acquire(&endpoint.name, endpoint.model_class, &input)
+        .await;
+    let caller = request_caller(&headers, &state.databricks, peer);
     let (path, request_body) = prepare_embedding_request(input, &endpoint.name)?;
     let originator = request_originator(&headers);
     let upstream = send_upstream(
         &state.databricks,
         &state.rate_limits,
-        &principal,
+        &caller,
         &endpoint.name,
         &path,
         upstream_headers(originator),
@@ -193,12 +214,24 @@ async fn embeddings(
     )
     .await?;
     let upstream = buffered_response(upstream).await?;
+    let usage = serde_json::from_slice::<Value>(&upstream.body)
+        .map(|output| response_token_usage(&output))
+        .unwrap_or_default();
     info!(
         route = "/v1/embeddings",
         requested_model,
         resolved_model = endpoint.name,
         status = upstream.status.as_u16(),
-        throttle_wait_ms = throttle_wait.as_millis(),
+        client_ip = %caller.peer.ip(),
+        client_port = caller.peer.port(),
+        request_bytes,
+        estimated_input_tokens = throttle.estimated_input_tokens,
+        reserved_output_tokens = throttle.reserved_output_tokens,
+        estimated_tokens = throttle.estimated_tokens,
+        input_tokens = usage.input,
+        output_tokens = usage.output,
+        total_tokens = usage.total,
+        throttle_wait_ms = throttle.wait.as_millis(),
         latency_ms = started.elapsed().as_millis(),
         "embedding request completed"
     );
@@ -208,10 +241,12 @@ async fn embeddings(
 async fn proxy(
     state: AppState,
     client_wire: ClientWire,
+    peer: SocketAddr,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, ProxyError> {
     let started = Instant::now();
+    let request_bytes = body.len();
     let mut input: Value = serde_json::from_slice(&body)?;
     normalize_embedded_images(&mut input, state.image_resize_threshold_bytes)?;
     let requested_model = requested_model(&input)?.to_owned();
@@ -220,7 +255,7 @@ async fn proxy(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let originator = request_originator(&headers);
-    let principal = request_principal(&headers, &state.databricks);
+    let caller = request_caller(&headers, &state.databricks, peer);
     let codex = originator.is_some_and(is_codex_originator);
     let endpoint = state
         .models
@@ -245,7 +280,14 @@ async fn proxy(
         .as_ref()
         .map(|endpoint| endpoint.name.clone())
         .unwrap_or_else(|| requested_model.clone());
-    let throttle_wait = state.throttle.acquire(&model, &input).await;
+    let throttle = state
+        .throttle
+        .acquire(
+            &model,
+            endpoint.as_ref().and_then(|endpoint| endpoint.model_class),
+            &input,
+        )
+        .await;
     let upstream_model = if codex {
         endpoint
             .as_ref()
@@ -266,7 +308,7 @@ async fn proxy(
     let upstream = send_upstream(
         &state.databricks,
         &state.rate_limits,
-        &principal,
+        &caller,
         &model,
         upstream_path(target, codex, native_responses),
         upstream_headers(originator),
@@ -283,7 +325,13 @@ async fn proxy(
             resolved_model = model,
             streaming,
             status = status.as_u16(),
-            throttle_wait_ms = throttle_wait.as_millis(),
+            client_ip = %caller.peer.ip(),
+            client_port = caller.peer.port(),
+            request_bytes,
+            estimated_input_tokens = throttle.estimated_input_tokens,
+            reserved_output_tokens = throttle.reserved_output_tokens,
+            estimated_tokens = throttle.estimated_tokens,
+            throttle_wait_ms = throttle.wait.as_millis(),
             latency_ms = started.elapsed().as_millis(),
             "model stream connected"
         );
@@ -298,7 +346,13 @@ async fn proxy(
             resolved_model = model,
             streaming,
             status = upstream.status.as_u16(),
-            throttle_wait_ms = throttle_wait.as_millis(),
+            client_ip = %caller.peer.ip(),
+            client_port = caller.peer.port(),
+            request_bytes,
+            estimated_input_tokens = throttle.estimated_input_tokens,
+            reserved_output_tokens = throttle.reserved_output_tokens,
+            estimated_tokens = throttle.estimated_tokens,
+            throttle_wait_ms = throttle.wait.as_millis(),
             latency_ms = started.elapsed().as_millis(),
             "model request completed"
         );
@@ -306,6 +360,9 @@ async fn proxy(
     }
 
     let output = adapt_response(client_wire, target, upstream.status, &upstream.body)?;
+    let usage = serde_json::from_slice::<Value>(&output)
+        .map(|output| response_token_usage(&output))
+        .unwrap_or_default();
     info!(
         ?client_wire,
         ?target,
@@ -313,7 +370,16 @@ async fn proxy(
         resolved_model = model,
         streaming,
         status = upstream.status.as_u16(),
-        throttle_wait_ms = throttle_wait.as_millis(),
+        client_ip = %caller.peer.ip(),
+        client_port = caller.peer.port(),
+        request_bytes,
+        estimated_input_tokens = throttle.estimated_input_tokens,
+        reserved_output_tokens = throttle.reserved_output_tokens,
+        estimated_tokens = throttle.estimated_tokens,
+        input_tokens = usage.input,
+        output_tokens = usage.output,
+        total_tokens = usage.total,
+        throttle_wait_ms = throttle.wait.as_millis(),
         latency_ms = started.elapsed().as_millis(),
         "model request completed"
     );
@@ -323,7 +389,7 @@ async fn proxy(
 async fn send_upstream(
     client: &DatabricksClient,
     rate_limits: &RateLimitGate,
-    principal: &str,
+    caller: &RequestCaller,
     model: &str,
     path: &str,
     headers: HeaderMap,
@@ -344,13 +410,23 @@ async fn send_upstream(
         let (response, details) = inspect_rate_limit_response(response).await?;
         let (delay, delay_source) = server_retry_after(response.headers(), &details)
             .unwrap_or((std::time::Duration::ZERO, "disabled"));
-        log_rate_limit(client, model, 0, policy, delay, delay_source, &details);
+        log_rate_limit(
+            client,
+            caller,
+            model,
+            0,
+            policy,
+            (delay, delay_source),
+            &details,
+        );
         return Ok(response);
     }
     let mut backoff = policy.backoff();
     let mut retries = 0;
     loop {
-        let permit = rate_limits.acquire(client.host(), principal, model).await;
+        let permit = rate_limits
+            .acquire(client.host(), &caller.principal, model)
+            .await;
         let response = match client
             .request_builder(path, Method::POST)?
             .headers(headers.clone())
@@ -389,7 +465,15 @@ async fn send_upstream(
         rate_limits.rejected(&permit, delay).await;
         let exhausted = retries >= policy.max_retries;
         let retry = if exhausted { retries } else { retries + 1 };
-        log_rate_limit(client, model, retry, policy, delay, delay_source, &details);
+        log_rate_limit(
+            client,
+            caller,
+            model,
+            retry,
+            policy,
+            (delay, delay_source),
+            &details,
+        );
         if exhausted {
             return Ok(response);
         }
@@ -401,11 +485,11 @@ async fn send_upstream(
 /// Log a 429 and any Databricks error message without exposing request payloads.
 fn log_rate_limit(
     client: &DatabricksClient,
+    caller: &RequestCaller,
     model: &str,
     retry: u32,
     policy: RateLimitPolicy,
-    delay: std::time::Duration,
-    delay_source: &str,
+    delay: (std::time::Duration, &str),
     details: &RateLimitDetails,
 ) {
     let exhausted = retry >= policy.max_retries;
@@ -414,9 +498,14 @@ fn log_rate_limit(
         model,
         retry,
         max_retries = policy.max_retries,
-        delay_ms = delay.as_millis(),
-        delay_source,
+        delay_ms = delay.0.as_millis(),
+        delay_source = delay.1,
         rate_limit_message = details.message.as_deref().unwrap_or_default(),
+        limit_type = details.limit_type.as_deref().unwrap_or_default(),
+        limit = details.limit.unwrap_or_default(),
+        current = details.current.unwrap_or_default(),
+        client_ip = %caller.peer.ip(),
+        client_port = caller.peer.port(),
         exhausted,
         "model request rate limited; pausing profile-model key"
     );
@@ -481,6 +570,18 @@ fn request_originator(headers: &HeaderMap) -> Option<&str> {
         .and_then(|value| value.to_str().ok())
         .map(str::trim)
         .filter(|value| !value.is_empty())
+}
+
+/// Resolve the logical principal and preserve the TCP peer used for diagnostics.
+fn request_caller(
+    headers: &HeaderMap,
+    client: &DatabricksClient,
+    peer: SocketAddr,
+) -> RequestCaller {
+    RequestCaller {
+        principal: request_principal(headers, client),
+        peer,
+    }
 }
 
 fn request_principal(headers: &HeaderMap, client: &DatabricksClient) -> String {
@@ -662,6 +763,13 @@ mod tests {
         .unwrap()
     }
 
+    fn test_caller() -> RequestCaller {
+        RequestCaller {
+            principal: "principal".to_owned(),
+            peer: "127.0.0.1:54321".parse().unwrap(),
+        }
+    }
+
     #[test]
     fn embeddings_use_the_resolved_endpoint_invocation_path() {
         let (path, body) = prepare_embedding_request(
@@ -698,13 +806,14 @@ mod tests {
             initial_delay: Duration::from_secs(1),
             max_delay: Duration::from_secs(1),
         });
+        let caller = test_caller();
 
         let response = tokio::time::timeout(
             Duration::from_millis(900),
             send_upstream(
                 &client,
                 &gate,
-                "principal",
+                &caller,
                 "model",
                 "/test",
                 upstream_headers(None),
@@ -737,11 +846,12 @@ mod tests {
             initial_delay: Duration::from_millis(1),
             max_delay: Duration::from_millis(10),
         });
+        let caller = test_caller();
 
         let response = send_upstream(
             &client,
             &gate,
-            "principal",
+            &caller,
             "model",
             "/test",
             upstream_headers(None),
