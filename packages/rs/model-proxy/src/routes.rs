@@ -31,7 +31,7 @@ use crate::{
     rate_limit::{
         rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
     },
-    stream::stream_response,
+    stream::{stream_response, StreamLogContext},
     throttle::{response_token_usage, RequestThrottle, ThrottleConfig},
 };
 
@@ -217,6 +217,7 @@ async fn embeddings(
     let usage = serde_json::from_slice::<Value>(&upstream.body)
         .map(|output| response_token_usage(&output))
         .unwrap_or_default();
+    throttle.reconcile(usage).await;
     info!(
         route = "/v1/embeddings",
         requested_model,
@@ -335,7 +336,27 @@ async fn proxy(
             latency_ms = started.elapsed().as_millis(),
             "model stream connected"
         );
-        return stream_response(client_wire, target, upstream, model, response_headers);
+        return stream_response(
+            client_wire,
+            target,
+            upstream,
+            model.clone(),
+            response_headers,
+            StreamLogContext {
+                client_wire,
+                target,
+                requested_model,
+                resolved_model: model,
+                peer: caller.peer,
+                request_bytes,
+                estimated_input_tokens: throttle.estimated_input_tokens,
+                reserved_output_tokens: throttle.reserved_output_tokens,
+                estimated_tokens: throttle.estimated_tokens,
+                throttle_wait_ms: throttle.wait.as_millis(),
+                started,
+                throttle,
+            },
+        );
     }
     let upstream = buffered_response(upstream).await?;
     if !upstream.status.is_success() {
@@ -363,6 +384,7 @@ async fn proxy(
     let usage = serde_json::from_slice::<Value>(&output)
         .map(|output| response_token_usage(&output))
         .unwrap_or_default();
+    throttle.reconcile(usage).await;
     info!(
         ?client_wire,
         ?target,

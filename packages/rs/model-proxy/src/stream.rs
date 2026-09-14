@@ -2,7 +2,8 @@
 
 use std::{
     io,
-    time::{SystemTime, UNIX_EPOCH},
+    net::SocketAddr,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use aigw_anthropic::translate::{stream_event_to_anthropic_sse, NativeSseContext};
@@ -17,13 +18,153 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use eventsource_stream::Eventsource;
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::StreamExt;
 use serde_json::{json, Value};
 
 use crate::{
     error::ProxyError,
     protocol::{ClientWire, TargetWire},
+    throttle::{token_usage_value, ResponseTokenUsage, ThrottleAcquisition},
 };
+
+const USAGE_TAIL_BYTES: usize = 128 * 1024;
+
+/// Request metadata emitted when an SSE body completes or is dropped.
+#[derive(Debug)]
+pub(crate) struct StreamLogContext {
+    /// Protocol presented by the caller.
+    pub(crate) client_wire: ClientWire,
+    /// Protocol selected for the upstream request.
+    pub(crate) target: TargetWire,
+    /// Model requested by the caller.
+    pub(crate) requested_model: String,
+    /// Databricks endpoint selected by the proxy.
+    pub(crate) resolved_model: String,
+    /// Immediate TCP peer.
+    pub(crate) peer: SocketAddr,
+    /// Raw inbound request size.
+    pub(crate) request_bytes: usize,
+    /// Estimated model-visible input tokens.
+    pub(crate) estimated_input_tokens: u64,
+    /// Output capacity reserved before admission.
+    pub(crate) reserved_output_tokens: u64,
+    /// Combined input estimate and output reservation.
+    pub(crate) estimated_tokens: u64,
+    /// Time spent waiting in the local TPM queue.
+    pub(crate) throttle_wait_ms: u128,
+    /// Start of the complete proxy request.
+    pub(crate) started: Instant,
+    /// Local token reservation reconciled when usage is reported.
+    pub(crate) throttle: ThrottleAcquisition,
+}
+
+#[derive(Debug, Default)]
+struct NativeUsageObserver {
+    tail: Vec<u8>,
+}
+
+impl NativeUsageObserver {
+    fn push(&mut self, chunk: &[u8]) {
+        self.tail.extend_from_slice(chunk);
+        if self.tail.len() > USAGE_TAIL_BYTES {
+            self.tail.drain(..self.tail.len() - USAGE_TAIL_BYTES);
+        }
+    }
+
+    fn usage(&self) -> ResponseTokenUsage {
+        let marker = br#""usage":"#;
+        let Some(index) = self
+            .tail
+            .windows(marker.len())
+            .rposition(|window| window == marker)
+        else {
+            return ResponseTokenUsage::default();
+        };
+        let source = &self.tail[index + marker.len()..];
+        let Some(Ok(usage)) = serde_json::Deserializer::from_slice(source)
+            .into_iter::<Value>()
+            .next()
+        else {
+            return ResponseTokenUsage::default();
+        };
+        token_usage_value(&usage)
+    }
+}
+
+struct StreamCompletion {
+    context: StreamLogContext,
+    response_bytes: u64,
+    usage: ResponseTokenUsage,
+    finished: bool,
+    failed: bool,
+}
+
+impl StreamCompletion {
+    fn new(context: StreamLogContext) -> Self {
+        Self {
+            context,
+            response_bytes: 0,
+            usage: ResponseTokenUsage::default(),
+            finished: false,
+            failed: false,
+        }
+    }
+
+    fn record_bytes(&mut self, bytes: usize) {
+        self.response_bytes = self.response_bytes.saturating_add(bytes as u64);
+    }
+
+    fn observe(&mut self, event: &StreamEvent) {
+        if let StreamEvent::Usage(usage) = event {
+            let input = usage.prompt_tokens.unwrap_or_default();
+            let output = usage.completion_tokens.unwrap_or_default();
+            self.usage = ResponseTokenUsage {
+                reported: true,
+                input,
+                output,
+                total: usage
+                    .total_tokens
+                    .unwrap_or_else(|| input.saturating_add(output)),
+            };
+        }
+    }
+
+    fn finish(&mut self, failed: bool) {
+        self.finished = true;
+        self.failed = failed;
+    }
+
+    async fn reconcile(&self) {
+        self.context.throttle.reconcile(self.usage).await;
+    }
+}
+
+impl Drop for StreamCompletion {
+    fn drop(&mut self) {
+        tracing::info!(
+            ?self.context.client_wire,
+            ?self.context.target,
+            requested_model = self.context.requested_model,
+            resolved_model = self.context.resolved_model,
+            streaming = true,
+            client_ip = %self.context.peer.ip(),
+            client_port = self.context.peer.port(),
+            request_bytes = self.context.request_bytes,
+            response_bytes = self.response_bytes,
+            estimated_input_tokens = self.context.estimated_input_tokens,
+            reserved_output_tokens = self.context.reserved_output_tokens,
+            estimated_tokens = self.context.estimated_tokens,
+            input_tokens = self.usage.input,
+            output_tokens = self.usage.output,
+            total_tokens = self.usage.total,
+            throttle_wait_ms = self.context.throttle_wait_ms,
+            duration_ms = self.context.started.elapsed().as_millis(),
+            finished = self.finished,
+            failed = self.failed,
+            "model stream completed"
+        );
+    }
+}
 
 pub(crate) fn stream_response(
     client_wire: ClientWire,
@@ -31,18 +172,36 @@ pub(crate) fn stream_response(
     upstream: reqwest::Response,
     model: String,
     response_headers: HeaderMap,
+    log_context: StreamLogContext,
 ) -> Result<Response, ProxyError> {
     // Preserve native SSE framing when no protocol translation is required.
     if matches!(
         (client_wire, target),
         (ClientWire::Chat, TargetWire::Chat) | (ClientWire::Responses, TargetWire::Responses)
     ) {
-        let body = Body::from_stream(
-            upstream
-                .bytes_stream()
-                .map_err(|error| io::Error::other(error.to_string())),
-        );
-        return Ok(sse_response(body, response_headers));
+        let mut upstream = upstream.bytes_stream();
+        let stream = async_stream::stream! {
+            let mut completion = StreamCompletion::new(log_context);
+            let mut usage = NativeUsageObserver::default();
+            while let Some(chunk) = upstream.next().await {
+                match chunk {
+                    Ok(chunk) => {
+                        usage.push(&chunk);
+                        completion.record_bytes(chunk.len());
+                        yield Ok::<Bytes, io::Error>(chunk);
+                    }
+                    Err(error) => {
+                        completion.finish(true);
+                        yield Err(io::Error::other(error.to_string()));
+                        return;
+                    }
+                }
+            }
+            completion.usage = usage.usage();
+            completion.reconcile().await;
+            completion.finish(false);
+        };
+        return Ok(sse_response(Body::from_stream(stream), response_headers));
     }
 
     let mut parser: Box<dyn StreamParser> = match target {
@@ -52,6 +211,7 @@ pub(crate) fn stream_response(
     };
     let mut events = upstream.bytes_stream().eventsource();
     let stream = async_stream::stream! {
+        let mut completion = StreamCompletion::new(log_context);
         let mut anthropic = NativeSseContext::with_pinned_model(model.clone());
         let mut chat = ChatSseContext::new(model);
         let mut failed = false;
@@ -60,7 +220,9 @@ pub(crate) fn stream_response(
             let event = match event {
                 Ok(event) => event,
                 Err(error) => {
-                    yield Ok::<Bytes, io::Error>(stream_error(client_wire, &error.to_string()));
+                    let frame = stream_error(client_wire, &error.to_string());
+                    completion.record_bytes(frame.len());
+                    yield Ok::<Bytes, io::Error>(frame);
                     failed = true;
                     break;
                 }
@@ -68,18 +230,22 @@ pub(crate) fn stream_response(
             let parsed = match parser.parse_event(&event.event, &event.data) {
                 Ok(parsed) => parsed,
                 Err(error) => {
-                    yield Ok(stream_error(client_wire, &error.to_string()));
+                    let frame = stream_error(client_wire, &error.to_string());
+                    completion.record_bytes(frame.len());
+                    yield Ok(frame);
                     failed = true;
                     break;
                 }
             };
             for canonical in parsed {
+                completion.observe(&canonical);
                 for frame in encode_stream_event(
                     client_wire,
                     &mut anthropic,
                     &mut chat,
                     canonical,
                 ) {
+                    completion.record_bytes(frame.len());
                     yield Ok(frame);
                 }
             }
@@ -89,21 +255,28 @@ pub(crate) fn stream_response(
             match parser.finish() {
                 Ok(parsed) => {
                     for canonical in parsed {
+                        completion.observe(&canonical);
                         for frame in encode_stream_event(
                             client_wire,
                             &mut anthropic,
                             &mut chat,
                             canonical,
                         ) {
+                            completion.record_bytes(frame.len());
                             yield Ok(frame);
                         }
                     }
                 }
                 Err(error) => {
-                    yield Ok(stream_error(client_wire, &error.to_string()));
+                    failed = true;
+                    let frame = stream_error(client_wire, &error.to_string());
+                    completion.record_bytes(frame.len());
+                    yield Ok(frame);
                 }
             }
         }
+        completion.reconcile().await;
+        completion.finish(failed);
     };
     Ok(sse_response(Body::from_stream(stream), response_headers))
 }
@@ -243,6 +416,36 @@ mod tests {
     use aigw_core::model::{FinishReason, Usage};
 
     use super::*;
+
+    #[test]
+    fn native_usage_observer_reads_split_responses_and_chat_events() {
+        let mut responses = NativeUsageObserver::default();
+        responses.push(br#"data: {"type":"response.completed","response":{"usage":{"input_"#);
+        responses.push(br#"tokens":12,"output_tokens":3,"total_tokens":15}}}"#);
+        assert_eq!(
+            responses.usage(),
+            ResponseTokenUsage {
+                reported: true,
+                input: 12,
+                output: 3,
+                total: 15,
+            }
+        );
+
+        let mut chat = NativeUsageObserver::default();
+        chat.push(
+            br#"data: {"usage":{"prompt_tokens":8,"completion_tokens":2,"total_tokens":10}}"#,
+        );
+        assert_eq!(
+            chat.usage(),
+            ResponseTokenUsage {
+                reported: true,
+                input: 8,
+                output: 2,
+                total: 10,
+            }
+        );
+    }
 
     #[test]
     fn canonical_events_encode_as_chat_completion_chunks() {

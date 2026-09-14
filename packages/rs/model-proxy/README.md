@@ -92,8 +92,18 @@ and defaults to `info`. Request summaries include protocol, selected model,
 streaming mode, status, latency, raw request bytes, a fast `tokenx-rs` token
 estimate, and the immediate TCP peer IP and port without logging request bodies
 or credentials. The peer can be a local or platform proxy rather than the end
-user. Buffered responses also report upstream input, output, and total usage;
-stream connection logs retain the preflight estimate without buffering SSE.
+user. The estimate includes model-visible JSON but excludes encrypted
+reasoning/compaction state, signatures, and embedded image, file, audio, and
+screenshot payloads. Buffered responses also report upstream input, output, and
+total usage. Streams log connection and completion separately; completion
+includes response bytes, total duration, cancellation/failure state, and usage
+from both translated and pass-through Chat or Responses events. Reported usage
+reconciles process-local reservations across Chat Completions, Responses, Codex,
+Anthropic translations, and embeddings. Unused output reservations are
+credited immediately, and actual output is recorded when no maximum was
+specified. Streaming Chat Completions defaults
+`stream_options.include_usage` to `true`; an explicit caller value is
+preserved.
 
 Import `postman/model-proxy.postman_collection.json` into Postman. The
 collection has separate folders for `--target chat` and `--target responses`;

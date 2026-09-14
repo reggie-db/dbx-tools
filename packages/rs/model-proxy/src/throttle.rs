@@ -10,7 +10,10 @@ use std::{
 use dbx_tools_model::{ModelClass, ModelRateLimitCatalogue};
 use serde_json::Value;
 use tokenx_rs::estimate_token_count;
-use tokio::{sync::Mutex, time::Instant};
+use tokio::{
+    sync::{Mutex, Notify},
+    time::Instant,
+};
 
 const WINDOW: Duration = Duration::from_secs(60);
 const CLAUDE_SONNET_4_DEFAULT_OUTPUT_TOKENS: u64 = 1_000;
@@ -22,7 +25,7 @@ pub(crate) struct RequestThrottle {
     output_tokens_per_minute: Option<NonZeroU64>,
     provisioned_throughput: bool,
     documented_limits: ModelRateLimitCatalogue,
-    queues: Arc<Mutex<HashMap<ThrottleKey, Arc<Mutex<WindowState>>>>>,
+    queues: Arc<Mutex<HashMap<ThrottleKey, Arc<TokenQueue>>>>,
 }
 
 /// Configuration for process-local pay-per-token admission control.
@@ -39,7 +42,7 @@ pub(crate) struct ThrottleConfig {
 }
 
 /// Token estimate and time spent waiting for a local reservation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub(crate) struct ThrottleAcquisition {
     /// Time spent waiting for capacity in the local queue.
     pub(crate) wait: Duration,
@@ -49,17 +52,34 @@ pub(crate) struct ThrottleAcquisition {
     pub(crate) reserved_output_tokens: u64,
     /// Estimated input plus reserved output tokens.
     pub(crate) estimated_tokens: u64,
+    reservation: Option<ThrottleReservation>,
 }
 
 /// Token usage reported by a completed upstream response.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ResponseTokenUsage {
+    /// Whether the upstream response included a usage object.
+    pub(crate) reported: bool,
     /// Input or prompt tokens consumed.
     pub(crate) input: u64,
     /// Output or completion tokens consumed.
     pub(crate) output: u64,
     /// Total tokens consumed.
     pub(crate) total: u64,
+}
+
+impl ThrottleAcquisition {
+    /// Replace estimated reservations with reported upstream usage.
+    pub(crate) async fn reconcile(&self, usage: ResponseTokenUsage) {
+        let Some(reservation) = self.reservation.as_ref().filter(|_| usage.reported) else {
+            return;
+        };
+        let mut state = reservation.queue.state.lock().await;
+        state.input.reconcile(reservation.id, usage.input);
+        state.output.reconcile(reservation.id, usage.output);
+        drop(state);
+        reservation.queue.notify.notify_waiters();
+    }
 }
 
 impl RequestThrottle {
@@ -88,6 +108,7 @@ impl RequestThrottle {
                 estimated_input_tokens: estimate.input,
                 reserved_output_tokens: estimate.output,
                 estimated_tokens: estimate.total(),
+                reservation: None,
             };
         }
         let key = ThrottleKey {
@@ -98,12 +119,13 @@ impl RequestThrottle {
             let mut queues = self.queues.lock().await;
             queues.entry(key).or_default().clone()
         };
-        let wait = reserve(queue, estimate, limits, WINDOW).await;
+        let (wait, reservation) = reserve(queue, estimate, limits, WINDOW).await;
         ThrottleAcquisition {
             wait,
             estimated_input_tokens: estimate.input,
             reserved_output_tokens: estimate.output,
             estimated_tokens: estimate.total(),
+            reservation: Some(reservation),
         }
     }
 
@@ -136,14 +158,34 @@ struct ThrottleKey {
 }
 
 #[derive(Debug, Default)]
+struct TokenQueue {
+    state: Mutex<WindowState>,
+    notify: Notify,
+}
+
+#[derive(Debug, Default)]
 struct WindowState {
+    next_id: u64,
     input: TokenWindow,
     output: TokenWindow,
 }
 
+#[derive(Clone, Debug)]
+struct ThrottleReservation {
+    queue: Arc<TokenQueue>,
+    id: u64,
+}
+
+#[derive(Debug)]
+struct Reservation {
+    id: u64,
+    reserved_at: Instant,
+    tokens: u64,
+}
+
 #[derive(Debug, Default)]
 struct TokenWindow {
-    reservations: VecDeque<(Instant, u64)>,
+    reservations: VecDeque<Reservation>,
     reserved_tokens: u64,
 }
 
@@ -152,13 +194,13 @@ impl TokenWindow {
         while self
             .reservations
             .front()
-            .is_some_and(|(reserved_at, _)| now.duration_since(*reserved_at) >= window)
+            .is_some_and(|reservation| now.duration_since(reservation.reserved_at) >= window)
         {
-            let (_, tokens) = self
+            let reservation = self
                 .reservations
                 .pop_front()
                 .expect("front reservation exists");
-            self.reserved_tokens = self.reserved_tokens.saturating_sub(tokens);
+            self.reserved_tokens = self.reserved_tokens.saturating_sub(reservation.tokens);
         }
     }
 
@@ -168,12 +210,31 @@ impl TokenWindow {
         }
         self.reservations
             .front()
-            .map(|(reserved_at, _)| window.saturating_sub(now.duration_since(*reserved_at)))
+            .map(|reservation| window.saturating_sub(now.duration_since(reservation.reserved_at)))
     }
 
-    fn reserve(&mut self, now: Instant, tokens: u64) {
-        self.reservations.push_back((now, tokens));
+    fn reserve(&mut self, id: u64, now: Instant, tokens: u64) {
+        self.reservations.push_back(Reservation {
+            id,
+            reserved_at: now,
+            tokens,
+        });
         self.reserved_tokens = self.reserved_tokens.saturating_add(tokens);
+    }
+
+    fn reconcile(&mut self, id: u64, actual: u64) {
+        let Some(reservation) = self
+            .reservations
+            .iter_mut()
+            .find(|reservation| reservation.id == id)
+        else {
+            return;
+        };
+        self.reserved_tokens = self
+            .reserved_tokens
+            .saturating_sub(reservation.tokens)
+            .saturating_add(actual);
+        reservation.tokens = actual;
     }
 }
 
@@ -202,60 +263,114 @@ impl TokenLimits {
 }
 
 async fn reserve(
-    queue: Arc<Mutex<WindowState>>,
+    queue: Arc<TokenQueue>,
     estimate: TokenEstimate,
     limits: TokenLimits,
     window: Duration,
-) -> Duration {
+) -> (Duration, ThrottleReservation) {
     let started = Instant::now();
-    let mut state = queue.lock().await;
+    let input_tokens = limits
+        .input
+        .map(|limit| estimate.input.min(limit))
+        .unwrap_or_default();
+    let output_tokens = limits
+        .output
+        .map(|limit| estimate.output.min(limit))
+        .unwrap_or_default();
     loop {
-        let now = Instant::now();
-        state.input.prune(now, window);
-        state.output.prune(now, window);
-        let input_tokens = limits
-            .input
-            .map(|limit| estimate.input.min(limit))
-            .unwrap_or_default();
-        let output_tokens = limits
-            .output
-            .map(|limit| estimate.output.min(limit))
-            .unwrap_or_default();
-        let delay = [
-            limits
-                .input
-                .and_then(|limit| state.input.delay(now, input_tokens, limit, window)),
-            limits
-                .output
-                .and_then(|limit| state.output.delay(now, output_tokens, limit, window)),
-        ]
-        .into_iter()
-        .flatten()
-        .max();
+        let notified = queue.notify.notified();
+        let delay = {
+            let now = Instant::now();
+            let mut state = queue.state.lock().await;
+            state.input.prune(now, window);
+            state.output.prune(now, window);
+            let delay = [
+                limits
+                    .input
+                    .and_then(|limit| state.input.delay(now, input_tokens, limit, window)),
+                limits
+                    .output
+                    .and_then(|limit| state.output.delay(now, output_tokens, limit, window)),
+            ]
+            .into_iter()
+            .flatten()
+            .max();
+            if delay.is_none() {
+                let id = state.next_id;
+                state.next_id = state.next_id.wrapping_add(1);
+                if limits.input.is_some() {
+                    state.input.reserve(id, now, input_tokens);
+                }
+                if limits.output.is_some() {
+                    state.output.reserve(id, now, output_tokens);
+                }
+                return (
+                    started.elapsed(),
+                    ThrottleReservation {
+                        queue: Arc::clone(&queue),
+                        id,
+                    },
+                );
+            }
+            delay
+        };
         if let Some(delay) = delay {
-            tokio::time::sleep(delay).await;
-            continue;
+            tokio::select! {
+                () = tokio::time::sleep(delay) => {}
+                () = notified => {}
+            }
         }
-        if limits.input.is_some() {
-            state.input.reserve(now, input_tokens);
-        }
-        if limits.output.is_some() {
-            state.output.reserve(now, output_tokens);
-        }
-        return started.elapsed();
     }
 }
 
 /// Estimate input tokens with tokenx and reserve caller-selected output capacity.
 fn token_estimate(model: &str, request: &Value) -> TokenEstimate {
-    let input = serde_json::to_string(request)
-        .map(|body| estimate_token_count(&body) as u64)
-        .unwrap_or_default()
-        .max(1);
+    let input = estimate_rendered_tokens(request, None).max(1);
     TokenEstimate {
         input,
         output: requested_output_tokens(model, request),
     }
+}
+
+/// Estimate model-visible JSON while excluding opaque binary and encrypted fields.
+fn estimate_rendered_tokens(value: &Value, field: Option<&str>) -> u64 {
+    if field.is_some_and(opaque_field) {
+        return 0;
+    }
+    match value {
+        Value::Null => 0,
+        Value::Bool(_) | Value::Number(_) => 1,
+        Value::String(value) if value.starts_with("data:") => 0,
+        Value::String(value) => estimate_token_count(value) as u64,
+        Value::Array(values) => values.iter().fold(0, |total, value| {
+            total.saturating_add(estimate_rendered_tokens(value, None))
+        }),
+        Value::Object(values) => {
+            let base64_data = values.get("type").and_then(Value::as_str) == Some("base64");
+            values.iter().fold(0_u64, |total, (name, value)| {
+                if base64_data && name == "data" {
+                    return total;
+                }
+                total
+                    .saturating_add(estimate_token_count(name) as u64)
+                    .saturating_add(estimate_rendered_tokens(value, Some(name)))
+            })
+        }
+    }
+}
+
+/// Return whether a field carries bytes or encrypted state rather than rendered text.
+fn opaque_field(field: &str) -> bool {
+    matches!(
+        field,
+        "encrypted_content"
+            | "signature"
+            | "image_url"
+            | "file_data"
+            | "file_url"
+            | "audio_data"
+            | "screenshot"
+    )
 }
 
 fn requested_output_tokens(model: &str, request: &Value) -> u64 {
@@ -280,6 +395,14 @@ pub(crate) fn response_token_usage(response: &Value) -> ResponseTokenUsage {
     let Some(usage) = usage else {
         return ResponseTokenUsage::default();
     };
+    token_usage_value(usage)
+}
+
+/// Read provider-neutral token fields from one usage object.
+pub(crate) fn token_usage_value(usage: &Value) -> ResponseTokenUsage {
+    if !usage.is_object() {
+        return ResponseTokenUsage::default();
+    }
     let input = ["input_tokens", "prompt_tokens"]
         .into_iter()
         .find_map(|field| usage.get(field).and_then(Value::as_u64))
@@ -293,6 +416,7 @@ pub(crate) fn response_token_usage(response: &Value) -> ResponseTokenUsage {
         .and_then(Value::as_u64)
         .unwrap_or_else(|| input.saturating_add(output));
     ResponseTokenUsage {
+        reported: true,
         input,
         output,
         total,
@@ -334,12 +458,134 @@ mod tests {
     }
 
     #[test]
+    fn token_estimate_excludes_opaque_encrypted_and_image_content() {
+        let visible = json!({
+            "model": "gpt",
+            "input": [{"type": "message", "content": "Keep this visible"}]
+        });
+        let opaque = json!({
+            "model": "gpt",
+            "input": [
+                {"type": "message", "content": "Keep this visible"},
+                {"type": "reasoning", "encrypted_content": "A".repeat(1_000_000), "signature": "B".repeat(100_000)},
+                {"type": "input_image", "image_url": format!("data:image/png;base64,{}", "C".repeat(1_000_000))},
+                {"type": "base64", "media_type": "image/png", "data": "D".repeat(1_000_000)}
+            ]
+        });
+
+        let visible_tokens = token_estimate("databricks-gpt-6-astra", &visible).input;
+        let opaque_tokens = token_estimate("databricks-gpt-6-astra", &opaque).input;
+
+        assert!(opaque_tokens < visible_tokens + 100);
+        assert!(opaque_tokens < 200);
+    }
+
+    #[test]
     fn token_window_reports_oldest_reservation_delay() {
         let now = Instant::now();
         let mut window = TokenWindow::default();
-        window.reserve(now, 80);
+        window.reserve(1, now, 80);
         assert_eq!(window.delay(now, 20, 100, WINDOW), None);
         assert_eq!(window.delay(now, 21, 100, WINDOW), Some(WINDOW));
+        window.reconcile(1, 20);
+        assert_eq!(window.reserved_tokens, 20);
+        assert_eq!(window.delay(now, 80, 100, WINDOW), None);
+    }
+
+    #[tokio::test]
+    async fn reported_usage_reconciles_input_and_output_reservations() {
+        let queue = Arc::new(TokenQueue::default());
+        let (_, reservation) = reserve(
+            Arc::clone(&queue),
+            TokenEstimate {
+                input: 80,
+                output: 70,
+            },
+            TokenLimits {
+                input: Some(100),
+                output: Some(100),
+            },
+            WINDOW,
+        )
+        .await;
+        let acquisition = ThrottleAcquisition {
+            wait: Duration::ZERO,
+            estimated_input_tokens: 80,
+            reserved_output_tokens: 70,
+            estimated_tokens: 150,
+            reservation: Some(reservation),
+        };
+
+        acquisition
+            .reconcile(ResponseTokenUsage {
+                reported: true,
+                input: 30,
+                output: 20,
+                total: 50,
+            })
+            .await;
+
+        let state = queue.state.lock().await;
+        assert_eq!(state.input.reserved_tokens, 30);
+        assert_eq!(state.output.reserved_tokens, 20);
+    }
+
+    #[tokio::test]
+    async fn reconciliation_wakes_requests_waiting_for_capacity() {
+        let queue = Arc::new(TokenQueue::default());
+        let limits = TokenLimits {
+            input: Some(100),
+            output: None,
+        };
+        let (_, reservation) = reserve(
+            Arc::clone(&queue),
+            TokenEstimate {
+                input: 100,
+                output: 0,
+            },
+            limits,
+            Duration::from_secs(1),
+        )
+        .await;
+        let waiting_queue = Arc::clone(&queue);
+        let mut waiting = tokio::spawn(async move {
+            reserve(
+                waiting_queue,
+                TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                limits,
+                Duration::from_secs(1),
+            )
+            .await
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut waiting)
+                .await
+                .is_err()
+        );
+        let acquisition = ThrottleAcquisition {
+            wait: Duration::ZERO,
+            estimated_input_tokens: 100,
+            reserved_output_tokens: 0,
+            estimated_tokens: 100,
+            reservation: Some(reservation),
+        };
+
+        acquisition
+            .reconcile(ResponseTokenUsage {
+                reported: true,
+                input: 0,
+                output: 0,
+                total: 0,
+            })
+            .await;
+
+        tokio::time::timeout(Duration::from_millis(100), waiting)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     #[test]
@@ -408,6 +654,7 @@ mod tests {
                 &json!({"usage": {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14}})
             ),
             ResponseTokenUsage {
+                reported: true,
                 input: 10,
                 output: 4,
                 total: 14,
@@ -416,6 +663,7 @@ mod tests {
         assert_eq!(
             response_token_usage(&json!({"usage": {"input_tokens": 7, "output_tokens": 3}})),
             ResponseTokenUsage {
+                reported: true,
                 input: 7,
                 output: 3,
                 total: 10,

@@ -206,8 +206,19 @@ Primary package areas:
   model, protocol, status, streaming mode, latency, raw request bytes, a
   `tokenx-rs` input estimate, reserved output tokens, and the transport peer IP
   and port. The peer identifies the immediate TCP connection, which can be a
-  local or platform proxy rather than the end user. Request JSON is buffered for
-  model resolution and protocol adaptation with a 25 MB default limit;
+  local or platform proxy rather than the end user. Token estimation walks
+  model-visible JSON and excludes encrypted reasoning/compaction state,
+  signatures, and embedded image, file, audio, and screenshot payloads.
+  Streaming requests log both connection and body completion; the latter
+  includes response bytes, duration, cancellation/failure state, and translated
+  or pass-through usage when available. Buffered and streamed Chat Completions,
+  Responses, Codex Responses, Anthropic translations, and embeddings reconcile
+  process-local input/output reservations with reported actual usage. A smaller
+  actual output credits the unused reservation immediately, while output usage
+  without a requested maximum is added to the current window. Streaming Chat
+  Completions defaults `stream_options.include_usage` to `true`; an explicit
+  caller value wins. Request JSON is buffered for model resolution and protocol
+  adaptation with a 25 MB default limit;
   `MAX_REQUEST_BYTES` / `--max-request-bytes` can override it. Embedded JPEG,
   PNG, and WebP inputs are detected from bytes in OpenAI Chat, Responses, and
   Anthropic base64 shapes. Inputs above 2 MB are re-encoded and resized
