@@ -4,6 +4,7 @@ mod adapt;
 mod error;
 mod images;
 mod protocol;
+mod rate_limit;
 mod routes;
 mod stream;
 mod throttle;
@@ -11,6 +12,7 @@ mod throttle;
 use std::{
     net::IpAddr,
     num::{NonZeroU64, NonZeroUsize},
+    time::Duration,
 };
 
 use clap::Parser;
@@ -18,6 +20,7 @@ use dbx_tools_core::{init_logging, DatabricksClient};
 use dbx_tools_model::{ModelCapabilitiesResolver, ModelClient};
 use images::DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES;
 use protocol::TargetWire;
+use rate_limit::RateLimitPolicy;
 use routes::AppState;
 use tracing::info;
 
@@ -26,6 +29,11 @@ const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
 const DEFAULT_IMAGE_RESIZE_THRESHOLD: NonZeroUsize =
     NonZeroUsize::new(DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES)
         .expect("default image resize threshold is non-zero");
+const DEFAULT_RATE_LIMIT_RETRIES: u32 = 4;
+const DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS: NonZeroU64 =
+    NonZeroU64::new(1_000).expect("default retry delay is non-zero");
+const DEFAULT_RATE_LIMIT_MAX_DELAY_MS: NonZeroU64 =
+    NonZeroU64::new(60_000).expect("default maximum retry delay is non-zero");
 
 #[derive(Debug, Parser)]
 #[command(name = "dbx-model-proxy", version)]
@@ -55,6 +63,28 @@ struct Cli {
     /// Optional token reservations per minute for each workspace and resolved model.
     #[arg(long, env = "TOKENS_PER_MINUTE")]
     tokens_per_minute: Option<NonZeroU64>,
+    /// Retries after an upstream 429 response; zero disables coordinated backoff.
+    #[arg(
+        long,
+        env = "RATE_LIMIT_RETRIES",
+        default_value_t = DEFAULT_RATE_LIMIT_RETRIES,
+        value_parser = clap::value_parser!(u32).range(..=100)
+    )]
+    rate_limit_retries: u32,
+    /// Initial jittered exponential delay when Retry-After is absent.
+    #[arg(
+        long,
+        env = "RATE_LIMIT_INITIAL_DELAY_MS",
+        default_value_t = DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS
+    )]
+    rate_limit_initial_delay_ms: NonZeroU64,
+    /// Maximum exponential delay when Retry-After is absent.
+    #[arg(
+        long,
+        env = "RATE_LIMIT_MAX_DELAY_MS",
+        default_value_t = DEFAULT_RATE_LIMIT_MAX_DELAY_MS
+    )]
+    rate_limit_max_delay_ms: NonZeroU64,
 }
 
 #[tokio::main]
@@ -68,7 +98,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_request_bytes,
         image_resize_threshold_bytes,
         tokens_per_minute,
+        rate_limit_retries,
+        rate_limit_initial_delay_ms,
+        rate_limit_max_delay_ms,
     } = Cli::parse();
+    if rate_limit_initial_delay_ms > rate_limit_max_delay_ms {
+        return Err("RATE_LIMIT_INITIAL_DELAY_MS must not exceed RATE_LIMIT_MAX_DELAY_MS".into());
+    }
     let databricks = DatabricksClient::new(profile).await?;
     let models = ModelClient::new(databricks.clone())?;
     let state = AppState::new(
@@ -78,6 +114,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         target,
         tokens_per_minute,
         image_resize_threshold_bytes.get(),
+        RateLimitPolicy {
+            max_retries: rate_limit_retries,
+            initial_delay: Duration::from_millis(rate_limit_initial_delay_ms.get()),
+            max_delay: Duration::from_millis(rate_limit_max_delay_ms.get()),
+        },
     );
     let listener = tokio::net::TcpListener::bind((host, port)).await?;
     info!(
@@ -86,6 +127,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_request_bytes = max_request_bytes.get(),
         image_resize_threshold_bytes = image_resize_threshold_bytes.get(),
         tokens_per_minute = tokens_per_minute.map(NonZeroU64::get),
+        rate_limit_retries,
+        rate_limit_initial_delay_ms = rate_limit_initial_delay_ms.get(),
+        rate_limit_max_delay_ms = rate_limit_max_delay_ms.get(),
         "model proxy listening"
     );
     axum::serve(listener, routes::routes(state, max_request_bytes))
@@ -130,6 +174,12 @@ mod tests {
             DEFAULT_IMAGE_RESIZE_THRESHOLD
         );
         assert_eq!(cli.tokens_per_minute, None);
+        assert_eq!(cli.rate_limit_retries, DEFAULT_RATE_LIMIT_RETRIES);
+        assert_eq!(
+            cli.rate_limit_initial_delay_ms,
+            DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS
+        );
+        assert_eq!(cli.rate_limit_max_delay_ms, DEFAULT_RATE_LIMIT_MAX_DELAY_MS);
 
         let cli = Cli::try_parse_from([
             "dbx-model-proxy",
@@ -137,9 +187,18 @@ mod tests {
             "8388608",
             "--image-resize-threshold-bytes",
             "3145728",
+            "--rate-limit-retries",
+            "0",
+            "--rate-limit-initial-delay-ms",
+            "250",
+            "--rate-limit-max-delay-ms",
+            "5000",
         ])
         .unwrap();
         assert_eq!(cli.max_request_bytes.get(), 8 * 1024 * 1024);
         assert_eq!(cli.image_resize_threshold_bytes.get(), 3 * 1024 * 1024);
+        assert_eq!(cli.rate_limit_retries, 0);
+        assert_eq!(cli.rate_limit_initial_delay_ms.get(), 250);
+        assert_eq!(cli.rate_limit_max_delay_ms.get(), 5_000);
     }
 }

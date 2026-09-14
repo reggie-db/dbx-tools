@@ -479,6 +479,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(profile.auth_kind, AuthKind::MachineToMachine);
+        assert_eq!(profile.principal_key(), "client");
         assert_eq!(profile.client_secret(), Some("secret"));
     }
 

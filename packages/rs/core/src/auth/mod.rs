@@ -368,6 +368,17 @@ impl PersistentAuth {
     }
 }
 
+impl PersistentAuth {
+    /// Return the stable principal identity used for process-local coordination.
+    pub(crate) fn principal_key(&self) -> &str {
+        let profile = match &self.inner {
+            PersistentAuthInner::Managed(inner) => inner.profile(),
+            PersistentAuthInner::AppOnBehalfOf { profile, .. } => profile,
+        };
+        profile.principal_key()
+    }
+}
+
 async fn open_binding_store(
     options: &DatabricksAuthOptions,
     storage: Storage,

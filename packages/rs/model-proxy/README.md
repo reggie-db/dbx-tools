@@ -125,8 +125,24 @@ translation is outside the supported route matrix.
 
 Databricks errors are returned with their original status, body, and content
 type. The proxy also forwards `Retry-After`, request and correlation IDs,
-rate-limit headers, quota names, and Databricks limit details. It does not retry
-rate-limited requests; clients such as Codex retain control of retry timing.
+rate-limit headers, quota names, and Databricks limit details.
+
+HTTP 429 responses pause a process-local gate keyed by Databricks host,
+authenticated principal, and resolved model. Trusted `x-forwarded-user` or
+`x-forwarded-email` headers identify an OBO user. Otherwise the proxy decodes
+identity claims from an already-present bearer JWT without verifying or calling
+an identity API, then falls back to the principal cached by
+`DatabricksClient`: client ID for a service principal or profile for other
+local authentication. Gate keys remain in memory for the process lifetime with
+no default capacity limit. One request probes after the shared cooldown while
+other requests for the same key remain paused. `Retry-After` controls the delay
+when present; otherwise the proxy uses BackON jittered exponential delays from
+one second to one minute. The default four retries match Codex HTTP request
+retry behavior. Configure `RATE_LIMIT_RETRIES`,
+`RATE_LIMIT_INITIAL_DELAY_MS`, and `RATE_LIMIT_MAX_DELAY_MS`, or the matching
+CLI flags. Set retries to `0` to disable both retries and coordinated cooldowns.
+Only an initial HTTP 429 is retried; an SSE error after streaming begins cannot
+be replayed safely.
 
 The local token queue is disabled by default. Databricks publishes different
 input and output token limits for each pay-per-token model, while provisioned
