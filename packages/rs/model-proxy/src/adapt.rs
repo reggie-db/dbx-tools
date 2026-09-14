@@ -49,6 +49,8 @@ pub(crate) fn adapt_request(
 ) -> Result<Vec<u8>, ProxyError> {
     if target == TargetWire::Responses {
         default_responses_fields(&mut input);
+    } else if target == TargetWire::Chat {
+        default_chat_stream_usage(&mut input);
     }
     if client == ClientWire::Responses {
         return match target {
@@ -99,6 +101,24 @@ fn default_responses_fields(input: &mut Value) {
         input
             .entry("truncation")
             .or_insert_with(|| Value::String("auto".to_owned()));
+    }
+}
+
+/// Request the terminal Chat Completions usage chunk unless the caller opted out.
+fn default_chat_stream_usage(input: &mut Value) {
+    let Some(input) = input.as_object_mut() else {
+        return;
+    };
+    if input.get("stream").and_then(Value::as_bool) != Some(true) {
+        return;
+    }
+    let stream_options = input
+        .entry("stream_options")
+        .or_insert_with(|| Value::Object(Map::new()));
+    if let Some(stream_options) = stream_options.as_object_mut() {
+        stream_options
+            .entry("include_usage")
+            .or_insert(Value::Bool(true));
     }
 }
 
@@ -180,7 +200,6 @@ fn request_requires_responses(client: ClientWire, input: &Value) -> bool {
             "prompt_cache_key",
             "prompt_cache_retention",
             "safety_identifier",
-            "stream_options",
             "truncation",
         ]
         .iter()
@@ -464,6 +483,36 @@ mod tests {
         let value: Value = serde_json::from_slice(&output).unwrap();
 
         assert_eq!(value["truncation"], "disabled");
+    }
+
+    #[test]
+    fn chat_streams_request_usage_unless_the_caller_opts_out() {
+        let output = adapt_request(
+            ClientWire::Chat,
+            TargetWire::Chat,
+            json!({
+                "model": "databricks-gpt-5-4-mini",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": true
+            }),
+        )
+        .unwrap();
+        let value: Value = serde_json::from_slice(&output).unwrap();
+        assert_eq!(value["stream_options"]["include_usage"], true);
+
+        let output = adapt_request(
+            ClientWire::Chat,
+            TargetWire::Chat,
+            json!({
+                "model": "databricks-gpt-5-4-mini",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "stream": true,
+                "stream_options": {"include_usage": false}
+            }),
+        )
+        .unwrap();
+        let value: Value = serde_json::from_slice(&output).unwrap();
+        assert_eq!(value["stream_options"]["include_usage"], false);
     }
 
     #[test]
