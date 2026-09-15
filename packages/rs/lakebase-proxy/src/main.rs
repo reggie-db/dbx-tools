@@ -5,7 +5,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use dbx_tools_core::{connection_url, init_logging, DatabricksAuthOptions};
+use dbx_tools_core::{connection_url, init_logging, shutdown_signal, DatabricksAuthOptions};
 use dbx_tools_lakebase_proxy::{
     databricks::LakebaseClient,
     proxy::{report_connection_stats, ConnectionStats, PostgresProxy},
@@ -115,26 +115,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
-}
-
-async fn shutdown_signal() {
-    let interrupt = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl-C handler");
-    };
-    #[cfg(unix)]
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
-            .recv()
-            .await;
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        () = interrupt => {}
-        () = terminate => {}
-    }
 }

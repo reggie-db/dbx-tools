@@ -12,24 +12,19 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
-import { Command, Option } from "commander";
-import { publishLocalRelease } from "./local-publish.ts";
+import { Command } from "commander";
 import {
+  releaseArchitectureOption,
+  releaseLevelOption,
+  releaseOperatingSystemOption,
+  type ReleaseArch,
+  type ReleaseOs,
   type VersionLevel,
-  readWorkspaceVersion,
-  resolveNextVersion,
-} from "../src/workspace-version.ts";
+} from "../src/_release-platform.ts";
+import { publishLocalRelease } from "./local-publish.ts";
+import { readWorkspaceVersion, resolveNextVersion } from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
-const LEVELS = ["patch", "minor", "major"] as const;
-const RELEASE_OSES = ["darwin", "linux", "win32"] as const;
-const RELEASE_ARCHES = ["arm64", "x64"] as const;
-type ReleaseOs = (typeof RELEASE_OSES)[number];
-type ReleaseArch = (typeof RELEASE_ARCHES)[number];
-
-function collectValue<T extends string>(value: T, previous: T[]): T[] {
-  return [...previous, value];
-}
 
 function git(
   root: string,
@@ -126,24 +121,12 @@ function githubAccount(root: string): { owner: string; repository: string; token
 const program = new Command();
 program
   .description("Prepare, validate, locally publish, and open a reviewed release PR")
-  .addOption(
-    new Option("-l, --level <level>", "semver increment").choices([...LEVELS]).default("patch"),
-  )
+  .addOption(releaseLevelOption())
   .option("--prefix <prefix>", "release tag prefix", "v")
   .option("--base <branch>", "release pull request base branch", "main")
   .option("--message <message>", "commit message for pending source work", "chore: prepare release")
-  .addOption(
-    new Option("--os <os>", "release operating system, repeatable; crossed with every --arch")
-      .choices([...RELEASE_OSES])
-      .argParser((value, previous: ReleaseOs[]) => collectValue(value as ReleaseOs, previous))
-      .default([] as ReleaseOs[]),
-  )
-  .addOption(
-    new Option("--arch <arch>", "release CPU architecture, repeatable; crossed with every --os")
-      .choices([...RELEASE_ARCHES])
-      .argParser((value, previous: ReleaseArch[]) => collectValue(value as ReleaseArch, previous))
-      .default([] as ReleaseArch[]),
-  )
+  .addOption(releaseOperatingSystemOption())
+  .addOption(releaseArchitectureOption())
   .option("--local-registry <value>", "local npm registry: auto, false, or an explicit URL", "auto")
   .option("--local-pypi <value>", "local PyPI index: auto, false, or an explicit URL", "auto")
   .option("--python-root <path>", "Python workspace package root", "packages/py")

@@ -21,6 +21,7 @@ from dbx_tools.graphiti.runtime import (
     _link_tool,
 )
 from dbx_tools.graphiti.settings import ModelSettings
+from dbx_tools.graphiti.supervisor import main as supervisor_main
 
 _PROFILE_ENV = {"DATABRICKS_CONFIG_PROFILE": "DEFAULT"}
 
@@ -169,6 +170,16 @@ def test_cli_strips_argument_separator(monkeypatch) -> None:
         "/opt/dbx-model-proxy --target openai"
     )
     assert start.call_args.kwargs["settings"].model_proxy_port == 4100
+
+
+def test_supervisor_strips_argument_separator(monkeypatch, tmp_path: Path) -> None:
+    supervise = Mock(return_value=0)
+    monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "DEFAULT")
+    monkeypatch.setattr("dbx_tools.graphiti.supervisor.Runtime.supervise", supervise)
+
+    supervisor_main(["--home", str(tmp_path), "--", "--port", "9000"])
+
+    assert supervise.call_args.args[1] == ["--port", "9000"]
 
 
 def test_model_settings_default_to_managed_databricks_models() -> None:

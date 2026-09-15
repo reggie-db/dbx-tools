@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,6 +7,7 @@ from typing import Annotated
 
 from cyclopts import App, Parameter
 
+from ._cli import run_forwarding_app
 from .runtime import Runtime, RuntimePaths
 from .settings import ModelSettings
 
@@ -34,22 +34,14 @@ _APP = App(
 )
 
 
+def _bind_forwarded(options: object, forwarded: list[str]) -> None:
+    if isinstance(options, SupervisorOptions):
+        options.graphiti_args.extend(forwarded)
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Run the supervisor in a detached process."""
-    arguments = list(sys.argv[1:] if argv is None else argv)
-    forwarded: list[str] = []
-    if "--" in arguments:
-        separator = arguments.index("--")
-        forwarded = arguments[separator + 1 :]
-        arguments = arguments[:separator]
-    command, bound, _ = _APP.parse_args(arguments)
-    options = command(*bound.args, **bound.kwargs)
-    if options is None:
-        return
-    options.graphiti_args.extend(forwarded)
-    result = options()
-    if isinstance(result, int) and result:
-        raise SystemExit(result)
+    run_forwarding_app(_APP, argv, bind_forwarded=_bind_forwarded)
 
 
 if __name__ == "__main__":

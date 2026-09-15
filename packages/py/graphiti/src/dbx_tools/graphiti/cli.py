@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Annotated
 
 from cyclopts import App, Parameter
 
+from ._cli import run_forwarding_app
 from .runtime import Runtime
 from .settings import ModelSettings
 
@@ -141,21 +141,15 @@ class Env(ModelOptions):
         )
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    arguments = list(sys.argv[1:] if argv is None else argv)
-    if not arguments or arguments[0].startswith("-"):
-        arguments.insert(0, "start")
-    forwarded: list[str] = []
-    if "--" in arguments:
-        separator = arguments.index("--")
-        forwarded = arguments[separator + 1 :]
-        arguments = arguments[:separator]
-    command, bound, _ = _APP.parse_args(arguments)
-    options = command(*bound.args, **bound.kwargs)
-    if options is None:
-        return
+def _bind_forwarded(options: object, forwarded: list[str]) -> None:
     if isinstance(options, (Start, Up)):
         options.graphiti_args.extend(forwarded)
-    result = options()
-    if isinstance(result, int) and result:
-        raise SystemExit(result)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    run_forwarding_app(
+        _APP,
+        argv,
+        bind_forwarded=_bind_forwarded,
+        default_command="start",
+    )

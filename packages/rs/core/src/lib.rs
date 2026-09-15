@@ -28,6 +28,6 @@ pub use lakebase_address::{
 };
 pub use log::{init_logging, parse_log_level, LoggingError, DEFAULT_LOG_LEVEL, LOG_LEVEL_ENV};
 pub use oauth::*;
-pub use runtime::{is_databricks_app, is_databricks_app_environment};
+pub use runtime::{is_databricks_app, is_databricks_app_environment, shutdown_signal};
 
 uniffi::setup_scaffolding!();

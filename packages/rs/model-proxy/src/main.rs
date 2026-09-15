@@ -17,7 +17,7 @@ use std::{
 };
 
 use clap::Parser;
-use dbx_tools_core::{init_logging, DatabricksClient};
+use dbx_tools_core::{init_logging, shutdown_signal, DatabricksClient};
 use dbx_tools_model::{ModelCapabilitiesResolver, ModelClient, ModelRateLimitsResolver};
 use images::DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES;
 use protocol::TargetWire;
@@ -168,28 +168,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_graceful_shutdown(shutdown_signal())
     .await?;
     Ok(())
-}
-
-async fn shutdown_signal() {
-    let interrupt = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl-C handler");
-    };
-    #[cfg(unix)]
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
-            .recv()
-            .await;
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        () = interrupt => {}
-        () = terminate => {}
-    }
 }
 
 #[cfg(test)]

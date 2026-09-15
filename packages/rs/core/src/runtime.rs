@@ -30,6 +30,29 @@ pub fn is_databricks_app_environment(environment: &HashMap<String, String>) -> b
             .is_some_and(|value| valid_port(value))
 }
 
+/// Wait for the process to receive Ctrl-C or, on Unix, SIGTERM.
+pub async fn shutdown_signal() {
+    let interrupt = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = interrupt => {}
+        () = terminate => {}
+    }
+}
+
 fn parse_boolean(value: &str) -> Option<bool> {
     match value.trim().to_ascii_lowercase().as_str() {
         "true" | "t" | "on" | "1" | "yes" | "y" => Some(true),

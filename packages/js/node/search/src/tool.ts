@@ -20,6 +20,7 @@ import { z } from "zod";
 import { toCreateIndexOptions } from "./index-tools.ts";
 import { toDocumentArray } from "./query.ts";
 import { getSearchRuntime } from "./runtime.ts";
+import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
 import {
   ADD_DOCUMENTS_TOOL_DESCRIPTION,
   CREATE_INDEX_TOOL_DESCRIPTION,
@@ -64,15 +65,7 @@ export function searchTool(options: SearchToolOptions = {}) {
     execute: async (input, context) => {
       const request = searchToolSchema.parse(input);
       const { client } = getSearchRuntime();
-      return client.search(request.query, {
-        ...(request.index ? { index: request.index } : {}),
-        ...(request.limit ? { limit: request.limit } : {}),
-        ...(request.mode ? { mode: request.mode } : {}),
-        ...(request.columns ? { columns: request.columns } : {}),
-        ...(request.filter ? { filter: request.filter } : {}),
-        ...(request.scoreThreshold !== undefined ? { scoreThreshold: request.scoreThreshold } : {}),
-        ...(context?.abortSignal ? { signal: context.abortSignal } : {}),
-      });
+      return client.search(request.query, toSearchOptions(request, context?.abortSignal));
     },
   });
 }
@@ -87,12 +80,10 @@ export function universalSearchTool(options: SearchToolOptions = {}) {
     execute: async (input, context) => {
       const request = universalSearchToolSchema.parse(input);
       const { client } = getSearchRuntime();
-      return client.universalSearch(request.query, {
-        ...(request.indexes ? { indexes: request.indexes } : {}),
-        ...(request.limit ? { limit: request.limit } : {}),
-        ...(request.mode ? { mode: request.mode } : {}),
-        ...(context?.abortSignal ? { signal: context.abortSignal } : {}),
-      });
+      return client.universalSearch(
+        request.query,
+        toUniversalSearchOptions(request, context?.abortSignal),
+      );
     },
   });
 }
