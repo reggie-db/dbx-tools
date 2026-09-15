@@ -43,15 +43,14 @@ above Luna when both variants have the same GPT version.
 failed refresh uses the corresponding embedded snapshot without blocking
 endpoint discovery.
 
-Repository synthesis runs:
+Refresh all three committed snapshots explicitly with:
 
 ```sh
-cargo run -p dbx-tools-model --example generate-model-metadata -- \
-  packages/rs/model/assets/retired-models.json \
-  packages/rs/model/assets/model-capabilities.json \
-  packages/rs/model/assets/model-rate-limits.json
+bun run model:metadata
 ```
 
+Normal repository synthesis remains offline and never compiles or runs the
+network-backed metadata generator.
 The JSON files are generated artifacts. Change the parsers or generator rather
 than editing a snapshot by hand.
 

@@ -93,6 +93,10 @@ const DEFAULT_LEVEL: LogLevel = "info";
  */
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+/**
+ * Dependency-free leveled logger. Standard methods honor `LOG_LEVEL`; `start`
+ * and `success` are informational aliases with distinct presentation.
+ */
 export type Logger = {
   [K in LogLevel]: (...args: any[]) => void;
 } & {

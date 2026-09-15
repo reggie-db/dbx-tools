@@ -18,7 +18,6 @@
  * @module
  */
 
-import { ValidationError } from "@databricks/appkit";
 import { error, log } from "@dbx-tools/shared-core";
 import type {
   MastraClearHistoryResponse,
@@ -28,10 +27,14 @@ import type {
 import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
 import type { Agent } from "@mastra/core/agent";
 import type { MastraDBMessage } from "@mastra/core/agent/message-list";
-import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import type { ContextWithMastra } from "@mastra/core/server";
 import { registerApiRoute } from "@mastra/core/server";
 
+import {
+  resolveAgentRequestContext,
+  resolveAgentRouteOptions,
+  type AgentRouteOptions,
+} from "./_agent-route-context.ts";
 import { clampPerPage, parseIntParam } from "./pagination.ts";
 
 const logger = log.logger("mastra/history");
@@ -180,8 +183,7 @@ export async function clearHistory(opts: ClearHistoryOptions): Promise<{ cleared
 }
 
 /** Options accepted by {@link historyRoute}. */
-export type HistoryRouteOptions =
-  { path: `${string}:agentId${string}`; agent?: never } | { path: string; agent: string };
+export type HistoryRouteOptions = AgentRouteOptions;
 
 /**
  * Register the `<path>` Mastra custom API route. Handles two
@@ -204,52 +206,13 @@ export type HistoryRouteOptions =
  * no cookie or user lookups happen here.
  */
 export function historyRoute(options: HistoryRouteOptions) {
-  const { path } = options;
-  const fixedAgent = "agent" in options ? options.agent : undefined;
-  if (!fixedAgent && !path.includes(":agentId")) {
-    throw ValidationError.invalidValue(
-      "historyRoute.path",
-      path,
-      "a path containing `:agentId`, or an explicit `agent`",
-    );
-  }
-  // Tiny resolver shared by GET / DELETE: derive the active agent
-  // and thread id, returning a JSON error response when either is
-  // missing. Keeps both handlers thin and gives them identical
-  // validation behaviour.
-  const resolveContext = (c: ContextWithMastra) => {
-    const mastra = c.get("mastra");
-    const requestContext = c.get("requestContext");
-    const agentId = fixedAgent ?? c.req.param("agentId");
-    if (!agentId) {
-      return { error: c.json({ error: "agentId is required" }, 400) } as const;
-    }
-    const agent = mastra.getAgentById(agentId);
-    if (!agent) {
-      return {
-        error: c.json({ error: `Unknown agent "${agentId}"` }, 404),
-      } as const;
-    }
-    const threadId = requestContext.get(MASTRA_THREAD_ID_KEY) as string | undefined;
-    if (!threadId) {
-      return {
-        error: c.json({ error: "thread id missing from request context" }, 400),
-      } as const;
-    }
-    const resourceId = requestContext.get(MASTRA_RESOURCE_ID_KEY) as string | undefined;
-    if (!resourceId) {
-      return {
-        error: c.json({ error: "resource id missing from request context" }, 400),
-      } as const;
-    }
-    return { agentId, agent, threadId, resourceId } as const;
-  };
+  const { path, fixedAgent } = resolveAgentRouteOptions(options, "historyRoute.path");
 
   return [
     registerApiRoute(path, {
       method: "GET",
       handler: async (c: ContextWithMastra) => {
-        const ctx = resolveContext(c);
+        const ctx = resolveAgentRequestContext(c, { fixedAgent, threadId: "required" });
         if ("error" in ctx) return ctx.error;
         const payload = await loadHistory({
           agent: ctx.agent,
@@ -264,7 +227,7 @@ export function historyRoute(options: HistoryRouteOptions) {
     registerApiRoute(path, {
       method: "DELETE",
       handler: async (c: ContextWithMastra) => {
-        const ctx = resolveContext(c);
+        const ctx = resolveAgentRequestContext(c, { fixedAgent, threadId: "required" });
         if ("error" in ctx) return ctx.error;
         const { cleared } = await clearHistory({
           agent: ctx.agent,

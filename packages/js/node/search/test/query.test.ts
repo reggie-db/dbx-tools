@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { search as sharedSearch } from "@dbx-tools/shared-search";
 import { defaultAlias, resolveSearchConfig, resolveIndexName } from "../src/config.ts";
 import { toDocumentArray } from "../src/query.ts";
+import { toSearchOptions, toUniversalSearchOptions } from "../src/_search-options.ts";
 
 describe("search query translation", () => {
   it("maps modes onto AppKit AI Search query types", () => {
@@ -15,6 +16,40 @@ describe("search query translation", () => {
     assert.deepEqual(toDocumentArray('{"id":"1"}'), [{ id: "1" }]);
     assert.deepEqual(toDocumentArray([{ id: "1" }, { id: "2" }]), [{ id: "1" }, { id: "2" }]);
     assert.throws(() => toDocumentArray("not json"));
+  });
+
+  it("maps validated requests onto shared client options", () => {
+    const signal = AbortSignal.abort();
+    assert.deepEqual(
+      toSearchOptions(
+        {
+          query: "billing",
+          index: "main.support.docs",
+          limit: 4,
+          mode: "keyword",
+          columns: ["title"],
+          filter: { locale: "en" },
+          scoreThreshold: 0,
+        },
+        signal,
+      ),
+      {
+        index: "main.support.docs",
+        limit: 4,
+        mode: "keyword",
+        columns: ["title"],
+        filter: { locale: "en" },
+        scoreThreshold: 0,
+        signal,
+      },
+    );
+    assert.deepEqual(
+      toUniversalSearchOptions(
+        { query: "billing", indexes: ["docs", "tickets"], limit: 3, mode: "hybrid" },
+        signal,
+      ),
+      { indexes: ["docs", "tickets"], limit: 3, mode: "hybrid", signal },
+    );
   });
 });
 

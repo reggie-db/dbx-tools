@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/cli-tunnel",
+  "description": "Public Portr and FRP tunnel commands protected by the dbx-tools authentication gate",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -35,7 +36,7 @@
     "http-proxy-3": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",
@@ -64,7 +65,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.211",
+  "version": "0.6.212",
   "types": "index.ts",
   "type": "module",
   "exports": {

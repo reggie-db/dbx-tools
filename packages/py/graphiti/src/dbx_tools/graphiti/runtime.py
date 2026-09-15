@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import sysconfig
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -507,9 +508,10 @@ def _graphiti_port() -> str:
 
 
 def _child_python_paths() -> list[str]:
-    """Expose this package and its dependencies to the upstream virtualenv."""
+    """Expose package roots without mixing interpreter standard libraries."""
     paths = [str(Path(__file__).resolve().parents[2])]
-    for value in sys.path:
+    for name in ("purelib", "platlib"):
+        value = sysconfig.get_path(name)
         if not value:
             continue
         resolved = str(Path(value).resolve())

@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-search",
+  "description": "React search box and results for Databricks AI Search",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -21,22 +22,25 @@
     "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "^5.9.3"
   },
-  "dependencies": {
-    "@databricks/appkit-ui": "catalog:",
-    "@dbx-tools/shared-core": "workspace:*",
-    "@dbx-tools/shared-search": "workspace:*",
-    "@dbx-tools/ui-appkit": "workspace:*",
-    "lucide-react": "catalog:",
+  "peerDependencies": {
     "react": "catalog:",
     "react-dom": "catalog:"
   },
-  "license": "UNLICENSED",
+  "dependencies": {
+    "@databricks/appkit-ui": "catalog:",
+    "@dbx-tools/shared-search": "workspace:*",
+    "@dbx-tools/ui-appkit": "workspace:*",
+    "lucide-react": "catalog:"
+  },
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.6.211",
+  "version": "0.6.212",
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",

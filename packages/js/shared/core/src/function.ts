@@ -1,3 +1,4 @@
+/** Cache lifetime controls for {@link memoize}; failures are always evicted. */
 export interface MemoizeOptions {
   /**
    * Time-to-live in milliseconds. The cached value expires `ttlMs` after

@@ -26,12 +26,11 @@
     "uniffi-bindgen-react-native": "0.31.0-5"
   },
   "dependencies": {
-    "@dbx-tools/shared-core": "workspace:*",
     "@ubjs/core": "0.31.0-5",
     "@ubjs/node": "0.31.0-5"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",
@@ -44,7 +43,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.211",
+  "version": "0.6.212",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -57,12 +56,12 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@dbx-tools/core-rs-linux-x64-gnu": "0.6.211",
-    "@dbx-tools/core-rs-linux-arm64-gnu": "0.6.211",
-    "@dbx-tools/core-rs-darwin-x64": "0.6.211",
-    "@dbx-tools/core-rs-darwin-arm64": "0.6.211",
-    "@dbx-tools/core-rs-win32-x64-msvc": "0.6.211",
-    "@dbx-tools/core-rs-win32-arm64-msvc": "0.6.211"
+    "@dbx-tools/core-rs-linux-x64-gnu": "0.6.212",
+    "@dbx-tools/core-rs-linux-arm64-gnu": "0.6.212",
+    "@dbx-tools/core-rs-darwin-x64": "0.6.212",
+    "@dbx-tools/core-rs-darwin-arm64": "0.6.212",
+    "@dbx-tools/core-rs-win32-x64-msvc": "0.6.212",
+    "@dbx-tools/core-rs-win32-arm64-msvc": "0.6.212"
   },
   "dbxToolsConfig": {
     "uniffi": true,

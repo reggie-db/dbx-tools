@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-teams",
+  "description": "React renderer for Microsoft Teams Adaptive Cards and Teams chat surfaces",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -21,22 +22,26 @@
     "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-teams": "workspace:*",
     "@dbx-tools/ui-appkit": "workspace:*",
     "adaptivecards": "catalog:",
-    "marked": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:"
+    "marked": "catalog:"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.6.211",
+  "version": "0.6.212",
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",

@@ -29,6 +29,10 @@ newer guidance and the current source tree.
 When you update docs, README positioning, or agent instructions:
 
 - Make the change in `AGENTS.md` first when it affects future-agent behavior.
+- Keep active technical-debt audits and enhancement plans under
+  `docs/enhancements` with a `YYYY-MM-DD-` filename prefix. Update their status
+  and completed findings in place, then move them to
+  `docs/archived/enhancements` when the tracked work is complete or abandoned.
 - Keep the root `README.md` focused on Databricks developer value, not internal
   projen mechanics.
 - Put detailed monorepo/projen/generator instructions in

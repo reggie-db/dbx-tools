@@ -25,11 +25,6 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
       "name": "@ubjs/core",
       "version": "0.31.0-5",
       "type": "runtime"

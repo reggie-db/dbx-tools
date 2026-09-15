@@ -21,17 +21,32 @@
       "type": "build"
     },
     {
+      "name": "react-dom",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
+      "name": "react",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "type": "build"
     },
     {
-      "name": "@databricks/appkit-ui",
+      "name": "react-dom",
       "version": "catalog:",
-      "type": "runtime"
+      "type": "peer"
     },
     {
-      "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "name": "react",
+      "version": "catalog:",
+      "type": "peer"
+    },
+    {
+      "name": "@databricks/appkit-ui",
+      "version": "catalog:",
       "type": "runtime"
     },
     {
@@ -46,16 +61,6 @@
     },
     {
       "name": "lucide-react",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "react-dom",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "react",
       "version": "catalog:",
       "type": "runtime"
     }

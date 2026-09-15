@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/genie",
+  "description": "Server-side Databricks Genie chat drivers",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -29,7 +30,7 @@
     "@dbx-tools/shared-genie": "workspace:*"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",
@@ -42,7 +43,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.211",
+  "version": "0.6.212",
   "types": "index.ts",
   "type": "module",
   "exports": {

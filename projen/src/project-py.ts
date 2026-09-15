@@ -1,12 +1,12 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
-import { Component, TextFile, type Project, javascript, python, vscode } from "projen";
+import { Component, License, TextFile, type Project, javascript, python, vscode } from "projen";
 import type { IResolver } from "projen/lib/file";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import { parse, stringify } from "smol-toml";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
-import { projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
+import { DBX_TOOLS_LICENSE, projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
@@ -169,6 +169,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
       authorEmail: "",
       version: options.version,
       description: pkg.description,
+      license: DBX_TOOLS_LICENSE,
       github: false,
       sample: false,
       pytest: false,
@@ -187,6 +188,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
           version: options.version,
           description: pkg.description,
           readme: "README.md",
+          licenseFiles: ["LICENSE"],
           requiresPython: options.requiresPython,
           dependencies: [...(pkg.dependencies ?? [])],
           urls: {
@@ -206,6 +208,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
         },
       },
     });
+    new License(this, { spdx: DBX_TOOLS_LICENSE });
     this.packageOptions = pkg;
     if (!(this.packagingManager instanceof python.Uv)) {
       throw new Error(`Expected uv packaging for ${pkg.name}`);

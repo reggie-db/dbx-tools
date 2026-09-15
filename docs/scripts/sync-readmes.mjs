@@ -2,6 +2,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { brand, project as coreProject } from "../../packages/js/node/core/index.ts";
+import { loadDocsToolchain } from "./docs-toolchain.mjs";
+import {
+  discoverRepositoryPackages,
+  groupTitle,
+  posix,
+  summaryText,
+  withBasePath,
+} from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
 const root = process.cwd();
@@ -12,6 +20,7 @@ const repoUrl = coreProject.repositoryUrl(root);
 if (!repoUrl) throw new Error("Could not resolve the repository URL");
 const brandFile = path.join(root, "branding", "brand.yaml");
 const brandContext = await brand.loadBrandContextFile(brandFile);
+const docsToolchain = loadDocsToolchain(path.join(root, "docs", "toolchain.json"));
 const { base, site } = docsSiteConfig();
 
 // The route base must match the generated Astro config. Starlight auto-prefixes
@@ -19,9 +28,7 @@ const { base, site } = docsSiteConfig();
 // llms files, so those go through `withBase`.
 /** Prefix a site-absolute path (`/packages/x`) with the deployment {@link base}. */
 function withBase(sitePath) {
-  if (!sitePath.startsWith("/")) return sitePath;
-  if (base && (sitePath === base || sitePath.startsWith(`${base}/`))) return sitePath;
-  return `${base}${sitePath}`;
+  return withBasePath(base, sitePath);
 }
 
 const rm = (p) => fs.rmSync(p, { recursive: true, force: true });
@@ -40,167 +47,6 @@ const write = (p, text) => {
   mkdir(path.dirname(p));
   fs.writeFileSync(p, text);
 };
-
-const posix = (p) => p.split(path.sep).join("/");
-
-function packageSlug(name) {
-  return name
-    .replace(/^@dbx-tools\//, "")
-    .replace(/^@/, "")
-    .replace(/\//g, "-");
-}
-
-/**
- * The `<group>` of a repo-relative `packages/js/<group>/<pkg>` path - the tier
- * (`node`, `shared`, `cli`, `ui`) the sidebar groups by, NOT the `js` language
- * segment that precedes it.
- */
-function packageGroup(pkgPath) {
-  const [, , group] = posix(pkgPath).split("/");
-  return group ?? "other";
-}
-
-function groupTitle(group) {
-  switch (group) {
-    case "node":
-      return "Node and AppKit";
-    case "shared":
-      return "Shared Contracts";
-    case "cli":
-      return "CLI Tools";
-    case "ui":
-      return "React UI";
-    case "python":
-      return "Python";
-    case "rust":
-      return "Rust";
-    default:
-      return group.charAt(0).toUpperCase() + group.slice(1);
-  }
-}
-
-function walk(dir, files = []) {
-  if (!fs.existsSync(dir)) return files;
-  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ent.name === "node_modules" || ent.name === ".git") continue;
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) walk(p, files);
-    else files.push(p);
-  }
-  return files;
-}
-
-/**
- * Every PUBLISHED package under `packages/js/`, as the site's page set.
- *
- * A `private: true` manifest is skipped: it never reaches npm, so a page for it
- * documents something a reader cannot install. That also relaxes the
- * missing-README throw below to the packages it should apply to - an unpublished
- * spike is allowed to have no docs, a published package is not.
- */
-function discoverPackages() {
-  return walk(path.join(root, "packages/js"))
-    .filter((p) => path.basename(p) === "package.json")
-    .filter((packageJson) => JSON.parse(read(packageJson)).private !== true)
-    .map((packageJson) => {
-      const pkg = JSON.parse(read(packageJson));
-      const dir = path.dirname(packageJson);
-      const readme = path.join(dir, "README.md");
-      if (!fs.existsSync(readme)) {
-        throw new Error(`Missing README for ${pkg.name} at ${posix(path.relative(root, dir))}`);
-      }
-      return {
-        name: pkg.name,
-        dir,
-        readme,
-        relDir: posix(path.relative(root, dir)),
-        group: packageGroup(path.relative(root, dir)),
-        slug: packageSlug(pkg.name),
-      };
-    })
-    .sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
-}
-
-/**
- * Every package under `packages/py/`, as site pages alongside the JavaScript
- * ones.
- *
- * Their distribution name comes out of `pyproject.toml` instead of a
- * `package.json`. The layout is flat (`packages/py/<name>`, no tier segment),
- * which is why they all share one `python` group rather than reusing
- * {@link packageGroup}. UniFFI packages remain public even though the Rust
- * release flow publishes them.
- */
-function discoverPythonPackages() {
-  const dir = path.join(root, "packages/py");
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((ent) => ent.isDirectory())
-    .map((ent) => path.join(dir, ent.name))
-    .filter((pkgDir) => fs.existsSync(path.join(pkgDir, "pyproject.toml")))
-    .map((pkgDir) => {
-      const readme = path.join(pkgDir, "README.md");
-      const relDir = posix(path.relative(root, pkgDir));
-      if (!fs.existsSync(readme)) {
-        throw new Error(`Missing README for ${relDir}`);
-      }
-      const name = pythonDistribution(path.join(pkgDir, "pyproject.toml")) ?? path.basename(pkgDir);
-      return {
-        name,
-        dir: pkgDir,
-        readme,
-        relDir,
-        group: "python",
-        slug: `py-${path.basename(pkgDir)}`,
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** Every publishable Cargo package under `packages/rs/`. */
-function discoverRustPackages() {
-  const dir = path.join(root, "packages", "rs");
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((ent) => ent.isDirectory())
-    .map((ent) => path.join(dir, ent.name))
-    .filter((pkgDir) => fs.existsSync(path.join(pkgDir, "Cargo.toml")))
-    .filter((pkgDir) => !rustPrivate(path.join(pkgDir, "Cargo.toml")))
-    .map((pkgDir) => {
-      const manifest = path.join(pkgDir, "Cargo.toml");
-      const readme = path.join(pkgDir, "README.md");
-      const relDir = posix(path.relative(root, pkgDir));
-      if (!fs.existsSync(readme)) throw new Error(`Missing README for ${relDir}`);
-      const name = cargoPackageName(manifest) ?? path.basename(pkgDir);
-      return {
-        name,
-        dir: pkgDir,
-        readme,
-        relDir,
-        group: "rust",
-        slug: `rs-${path.basename(pkgDir)}`,
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function cargoPackageName(manifest) {
-  const section = read(manifest).match(/^\[package\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
-  return section.match(/^\s*name\s*=\s*["']([^"']+)["']/m)?.[1];
-}
-
-function rustPrivate(manifest) {
-  const section = read(manifest).match(/^\[package\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
-  return /^\s*publish\s*=\s*false\s*$/m.test(section);
-}
-
-/** The `[project] name` of a `pyproject.toml`, read without a TOML parser. */
-function pythonDistribution(pyproject) {
-  const match = read(pyproject).match(/^\s*name\s*=\s*["']([^"']+)["']/m);
-  return match?.[1];
-}
 
 /**
  * Hand-written contributor guides that live in `docs/*.md` (not package
@@ -226,22 +72,6 @@ function discoverGuides() {
 
 function docsPathForGuide(guide) {
   return `/guides/${guide.slug}`;
-}
-
-function firstParagraph(markdown) {
-  const withoutTitle = markdown.replace(/^# .*(\r?\n)+/, "");
-  return withoutTitle
-    .split(/\r?\n\r?\n/)
-    .map((s) => s.trim())
-    .find((s) => s && !s.startsWith("```") && !s.startsWith("|"))
-    ?.replace(/\s+/g, " ");
-}
-
-/** Plain prose for package indexes and llms summaries. */
-function summaryText(markdown) {
-  return (firstParagraph(markdown) ?? "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/`([^`]*)`/g, "$1");
 }
 
 function docsPathForPackage(pkg) {
@@ -418,7 +248,7 @@ function nav(packages, guides) {
       items: items.map((item) => ({ label: item.text, link: item.link })),
     })),
     // API reference sorts after the README guides: readers reach the
-    // hand-written package guides first, then the generated TypeScript API.
+    // hand-written package guides first, then generated language API pages.
     { label: "API Reference", link: "/api/" },
   ];
   return {
@@ -481,12 +311,7 @@ function docsPackageJson() {
         build: "astro build",
         "check-links": "node ../../docs/scripts/check-dist-links.mjs ../dist",
       },
-      dependencies: {
-        "@astrojs/starlight": "^0.41.0",
-        astro: "^7.0.0",
-        typedoc: "^0.28.20",
-        "typedoc-plugin-markdown": "^4.12.0",
-      },
+      dependencies: docsToolchain,
       devDependencies: {},
       pnpm: {
         onlyBuiltDependencies: ["esbuild", "sharp"],
@@ -623,7 +448,7 @@ export const collections = {
 }
 
 function main() {
-  const packages = [...discoverPackages(), ...discoverPythonPackages(), ...discoverRustPackages()];
+  const packages = discoverRepositoryPackages(root);
   const guides = discoverGuides();
   const mappings = { byDir: new Map(), byFile: new Map() };
   for (const pkg of packages) {
@@ -654,9 +479,10 @@ function main() {
   );
 
   for (const pkg of packages) {
+    const packagePage = generatedPage(pkg.readme, read(pkg.readme), pkg.name, pkg.dir, mappings);
     write(
       path.join(docsContentRoot, "packages", `${pkg.slug}.md`),
-      generatedPage(pkg.readme, read(pkg.readme), pkg.name, pkg.dir, mappings),
+      `${packagePage.trimEnd()}\n\n## API Reference\n\n[Open the generated API reference](${withBase(`/api/${pkg.slug}/`)})\n`,
     );
   }
 

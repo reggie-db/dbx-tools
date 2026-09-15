@@ -24,6 +24,7 @@
 /bun.lockb linguist-generated
 /bunfig.toml linguist-generated
 /Cargo.toml linguist-generated
+/LICENSE linguist-generated
 /package.json linguist-generated
 /packages/example/**/index.ts linguist-generated
 /packages/example/openapi/** linguist-generated

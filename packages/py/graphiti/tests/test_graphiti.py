@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import sysconfig
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -16,9 +17,11 @@ from dbx_tools.graphiti.runtime import (
     Runtime,
     RuntimePaths,
     _ArgvPopen,
+    _child_python_paths,
     _link_tool,
 )
 from dbx_tools.graphiti.settings import ModelSettings
+from dbx_tools.graphiti.supervisor import main as supervisor_main
 
 _PROFILE_ENV = {"DATABRICKS_CONFIG_PROFILE": "DEFAULT"}
 
@@ -45,6 +48,13 @@ def test_environment_preserves_explicit_neo4j_values(monkeypatch, tmp_path: Path
     assert environment["EMBEDDER__PROVIDERS__OPENAI__API_KEY"] == "not-required"
     assert environment[UPSTREAM_MCP_PATH_ENV] == str(runtime.paths.graphiti / "mcp_server")
     assert str(Path(__file__).parents[1] / "src") in environment["PYTHONPATH"]
+
+
+def test_child_python_paths_exclude_standard_library() -> None:
+    paths = _child_python_paths()
+
+    assert str(Path(sysconfig.get_path("purelib")).resolve()) in paths
+    assert str(Path(sysconfig.get_path("stdlib")).resolve()) not in paths
 
 
 def test_connection_settings_do_not_expose_unrelated_environment(
@@ -160,6 +170,16 @@ def test_cli_strips_argument_separator(monkeypatch) -> None:
         "/opt/dbx-model-proxy --target openai"
     )
     assert start.call_args.kwargs["settings"].model_proxy_port == 4100
+
+
+def test_supervisor_strips_argument_separator(monkeypatch, tmp_path: Path) -> None:
+    supervise = Mock(return_value=0)
+    monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "DEFAULT")
+    monkeypatch.setattr("dbx_tools.graphiti.supervisor.Runtime.supervise", supervise)
+
+    supervisor_main(["--home", str(tmp_path), "--", "--port", "9000"])
+
+    assert supervise.call_args.args[1] == ["--port", "9000"]
 
 
 def test_model_settings_default_to_managed_databricks_models() -> None:

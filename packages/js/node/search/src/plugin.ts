@@ -39,6 +39,7 @@ import { toCreateIndexOptions } from "./index-tools.ts";
 import { nativeAiSearchBackend } from "./native.ts";
 import { toDocumentArray } from "./query.ts";
 import { getSearchRuntime, resetSearchRuntime } from "./runtime.ts";
+import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
 import {
   ADD_DOCUMENTS_TOOL_DESCRIPTION,
   CREATE_INDEX_TOOL_DESCRIPTION,
@@ -426,26 +427,13 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
   private async runSearch(args: unknown, signal?: AbortSignal) {
     const request = sharedSearch.searchRequestSchema.parse(args);
     const { client } = getSearchRuntime();
-    return client.search(request.query, {
-      ...(request.index ? { index: request.index } : {}),
-      ...(request.limit ? { limit: request.limit } : {}),
-      ...(request.mode ? { mode: request.mode } : {}),
-      ...(request.columns ? { columns: request.columns } : {}),
-      ...(request.filter ? { filter: request.filter } : {}),
-      ...(request.scoreThreshold !== undefined ? { scoreThreshold: request.scoreThreshold } : {}),
-      ...(signal ? { signal } : {}),
-    });
+    return client.search(request.query, toSearchOptions(request, signal));
   }
 
   private async runUniversalSearch(args: unknown, signal?: AbortSignal) {
     const request = sharedSearch.universalSearchRequestSchema.parse(args);
     const { client } = getSearchRuntime();
-    return client.universalSearch(request.query, {
-      ...(request.indexes ? { indexes: request.indexes } : {}),
-      ...(request.limit ? { limit: request.limit } : {}),
-      ...(request.mode ? { mode: request.mode } : {}),
-      ...(signal ? { signal } : {}),
-    });
+    return client.universalSearch(request.query, toUniversalSearchOptions(request, signal));
   }
 
   private async runAddDocuments(args: unknown, signal?: AbortSignal) {

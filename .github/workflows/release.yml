@@ -260,12 +260,23 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+      - name: Setup Python
+        id: setup_python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Setup Rust
+        id: setup_rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Configure Pages
         id: configure_pages
         uses: actions/configure-pages@v5
       - name: Install dependencies
         id: install_dependencies
         run: bun install
+      - name: Validate public source documentation
+        id: validate_public_source_documentation
+        run: bun docs/scripts/check-source-docs.mjs
       - name: Generate docs from READMEs
         id: generate_docs_from_readmes
         run: bun docs/scripts/sync-readmes.mjs
@@ -279,8 +290,8 @@ jobs:
         with:
           path: ${{ steps.bun_cache_metadata.outputs.path }}
           key: ${{ steps.bun_cache.outputs.cache-primary-key }}
-      - name: Generate TypeScript API docs
-        id: generate_typescript_api_docs
+      - name: Generate API docs
+        id: generate_api_docs
         run: bun docs/scripts/generate-api-docs.mjs
       - name: Check generated titles
         id: check_generated_titles

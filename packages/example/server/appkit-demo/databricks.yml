@@ -100,6 +100,17 @@ resources:
           - bun
           - src/launch.ts
         env:
+          # Databricks Apps installs requirements.txt into this Python 3.11
+          # environment. The Graphiti plugin otherwise falls back to the
+          # platform's `python3`, which can be an older interpreter and cannot
+          # import the already-installed dbx-tools-graphiti release.
+          - name: PYTHON
+            value: ./.venv/bin/python
+          # Keep uv's upstream Graphiti environment on the same Python minor as
+          # the Databricks Apps environment. This also protects published
+          # launchers that forwarded their outer interpreter search paths.
+          - name: UV_PYTHON
+            value: "3.11"
           # OTP gate allow-list (was the tunnel CLI's `--allow`). No subject /
           # brand-name override: the defaults are the conventional one-time-code
           # wording ("Your verification code") that iOS, Gmail, Outlook, and

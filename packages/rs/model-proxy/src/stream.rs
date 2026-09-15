@@ -2,8 +2,7 @@
 
 use std::{
     io,
-    net::SocketAddr,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use aigw_anthropic::translate::{stream_event_to_anthropic_sse, NativeSseContext};
@@ -24,7 +23,8 @@ use serde_json::{json, Value};
 use crate::{
     error::ProxyError,
     protocol::{ClientWire, TargetWire},
-    throttle::{token_usage_value, ResponseTokenUsage, ThrottleAcquisition},
+    request_log::RequestLogContext,
+    throttle::{token_usage_value, ResponseTokenUsage},
 };
 
 const USAGE_TAIL_BYTES: usize = 128 * 1024;
@@ -36,20 +36,8 @@ pub(crate) struct StreamLogContext {
     pub(crate) client_wire: ClientWire,
     /// Protocol selected for the upstream request.
     pub(crate) target: TargetWire,
-    /// Model requested by the caller.
-    pub(crate) requested_model: String,
-    /// Databricks endpoint selected by the proxy.
-    pub(crate) resolved_model: String,
-    /// Immediate TCP peer.
-    pub(crate) peer: SocketAddr,
-    /// Raw inbound request size.
-    pub(crate) request_bytes: usize,
-    /// Start of the complete proxy request.
-    pub(crate) started: Instant,
-    /// Local token reservation reconciled when usage is reported.
-    pub(crate) throttle: ThrottleAcquisition,
-    /// Number of upstream attempts before the stream connected.
-    pub(crate) upstream_attempt: u32,
+    /// Shared request metadata and local token reservation.
+    pub(crate) request: RequestLogContext,
 }
 
 #[derive(Debug, Default)]
@@ -129,42 +117,19 @@ impl StreamCompletion {
     }
 
     async fn reconcile(&self) {
-        self.context.throttle.reconcile(self.usage).await;
+        self.context.request.reconcile(self.usage).await;
     }
 }
 
 impl Drop for StreamCompletion {
     fn drop(&mut self) {
-        tracing::info!(
-            client_wire = ?self.context.client_wire,
-            target = ?self.context.target,
-            requested_model = self.context.requested_model,
-            resolved_model = self.context.resolved_model,
-            streaming = true,
-            client_ip = %self.context.peer.ip(),
-            client_port = self.context.peer.port(),
-            request_bytes = self.context.request_bytes,
-            response_bytes = self.response_bytes,
-            raw_estimated_input_tokens = self.context.throttle.raw_estimated_input_tokens,
-            estimate_factor = self.context.throttle.estimate_factor,
-            estimated_input_tokens = self.context.throttle.estimated_input_tokens,
-            reserved_output_tokens = self.context.throttle.reserved_output_tokens,
-            estimated_tokens = self.context.throttle.estimated_tokens,
-            input_tokens = self.usage.input,
-            output_tokens = self.usage.output,
-            total_tokens = self.usage.total,
-            upstream_attempt = self.context.upstream_attempt,
-            token_throttle_mode = ?self.context.throttle.mode,
-            token_throttle_active = self.context.throttle.active,
-            token_limit_input = self.context.throttle.input_limit,
-            token_reservation_input = self.context.throttle.reserved_input_tokens,
-            token_window_used_before = self.context.throttle.input_window_used_before,
-            token_window_wait_ms = self.context.throttle.wait.as_millis(),
-            oversized_request = false,
-            duration_ms = self.context.started.elapsed().as_millis(),
-            finished = self.finished,
-            failed = self.failed,
-            "model stream completed"
+        self.context.request.stream_completed(
+            self.context.client_wire,
+            self.context.target,
+            self.response_bytes,
+            self.usage,
+            self.finished,
+            self.failed,
         );
     }
 }

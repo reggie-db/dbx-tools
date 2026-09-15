@@ -54,6 +54,10 @@ export type PollProducer<T, A = Record<string, unknown>> = (
   ctx: PollContext<T, A>,
 ) => T | PromiseLike<T>;
 
+/**
+ * Controls poll cadence, filtering, termination, cancellation, timeout, and
+ * the mutable per-run attributes exposed through {@link PollContext}.
+ */
 export interface PollOptions<T, A = Record<string, unknown>> {
   /** Milliseconds to wait between polls. */
   intervalMs: number;

@@ -64,8 +64,13 @@ export const PACKAGE_TAG_MIXINS = {
   // compile (typecheck). No app build / index.html: a full browser app is an
   // `app`-tagged package (see below) that layers Bun's build tooling on top.
   ui: create(projectPredicate.hasTag("ui"), (p) => {
-    p.addDeps("react@catalog:", "react-dom@catalog:");
-    p.addDevDeps("@types/react@catalog:", "@types/react-dom@catalog:");
+    p.addPeerDeps("react@catalog:", "react-dom@catalog:");
+    p.addDevDeps(
+      "react@catalog:",
+      "react-dom@catalog:",
+      "@types/react@catalog:",
+      "@types/react-dom@catalog:",
+    );
     // `jsx` is not set here: it is in the shared floor for EVERY package, because
     // packages resolve each other to source and so every consumer of a `.tsx`
     // module needs it too (see SHARED_COMPILER_OPTIONS). What this tag adds is the

@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/postgres",
+  "description": "Connection-correct PostgreSQL advisory locks and LISTEN/NOTIFY topic bus for Node.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -33,7 +34,7 @@
     "pg": "^8.22.0"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",
@@ -46,7 +47,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.211",
+  "version": "0.6.212",
   "types": "index.ts",
   "type": "module",
   "exports": {

@@ -4,6 +4,12 @@ Keep plans here while code or documentation changes are still active. Move a
 plan to `docs/archived/enhancements` once it is mostly implemented or no longer
 being worked on.
 
+Prefix new audits and plans with their creation date in `YYYY-MM-DD-` form so
+repeated reviews remain distinct. Update the active document as findings are
+completed or reprioritized. When all tracked work is complete or intentionally
+closed, move the document to `docs/archived/enhancements` and record its archive
+date and final status.
+
 ## Cross-repository suggestions
 
 When work in another repository identifies a change for this project, copy a

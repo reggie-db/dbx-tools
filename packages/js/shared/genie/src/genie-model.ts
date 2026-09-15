@@ -46,7 +46,6 @@ import * as dashboards from "./dashboards.ts";
 // engine's codegen from the upstream `.d.ts`. Alias the handful Genie extends so
 // the widened schemas below read against short, local names.
 const {
-  messageStatusSchema: MessageStatusSchema,
   genieAttachmentSchema: SDKGenieAttachmentSchema,
   genieMessageSchema: SDKGenieMessageSchema,
   genieQueryAttachmentSchema: SDKGenieQueryAttachmentSchema,
@@ -61,9 +60,8 @@ const {
  */
 export type MessageStatus = dashboards.MessageStatus;
 
-// Re-export the SDK's `MessageStatus` schema so callers can parse a
-// raw status without reaching back into the generated namespace.
-export { MessageStatusSchema };
+/** Runtime validator for a raw Genie message status from the generated SDK contract. */
+export const MessageStatusSchema = dashboards.messageStatusSchema;
 
 /* ----------------------------- thoughts ---------------------------- */
 
@@ -104,6 +102,7 @@ export const GenieThoughtSchema = z.object({
   thought_type: z.custom<GenieThoughtType>((v) => typeof v === "string"),
   content: z.string(),
 });
+/** One typed reasoning entry attached to a Genie query. */
 export type GenieThought = z.infer<typeof GenieThoughtSchema>;
 
 /* ----------------------- attachment discriminator ---------------------- */
@@ -128,7 +127,9 @@ export const ATTACHMENT_TYPES = [
   "text",
   "suggested_questions",
 ] as const satisfies readonly string[];
+/** Attachment discriminator values understood by this package version. */
 export type KnownAttachmentType = (typeof ATTACHMENT_TYPES)[number];
+/** Forward-compatible attachment discriminator, including future Genie values. */
 export type AttachmentType = KnownAttachmentType | (string & {});
 
 /* ------------------- widened wire schemas + types ------------------ */
@@ -144,6 +145,7 @@ export type AttachmentType = KnownAttachmentType | (string & {});
 export const GenieQueryAttachmentSchema = SDKGenieQueryAttachmentSchema.extend({
   thoughts: z.array(GenieThoughtSchema).optional(),
 });
+/** Query attachment widened with Genie's streamed reasoning thoughts. */
 export type GenieQueryAttachment = z.infer<typeof GenieQueryAttachmentSchema>;
 
 /**
@@ -162,6 +164,7 @@ export type GenieTextAttachmentPurpose =
 export const GenieTextAttachmentSchema = dashboards.textAttachmentSchema.extend({
   purpose: z.custom<GenieTextAttachmentPurpose>((value) => typeof value === "string").optional(),
 });
+/** Narrative text attachment, including its optional semantic purpose. */
 export type GenieTextAttachment = z.infer<typeof GenieTextAttachmentSchema>;
 
 /**
@@ -189,6 +192,7 @@ export const GenieAttachmentSchema = SDKGenieAttachmentSchema.extend({
   text: GenieTextAttachmentSchema.optional(),
   attachment_type: z.custom<AttachmentType>((v) => typeof v === "string").optional(),
 });
+/** Genie message attachment with an optional computed discriminator. */
 export type GenieAttachment = z.infer<typeof GenieAttachmentSchema>;
 
 /**
@@ -211,6 +215,7 @@ export const GenieMessageSchema = SDKGenieMessageSchema.extend({
   attachments: z.array(GenieAttachmentSchema).optional(),
   auto_regenerate_count: z.number().optional(),
 });
+/** Genie message snapshot widened with typed attachments and regeneration count. */
 export type GenieMessage = z.infer<typeof GenieMessageSchema>;
 
 /**
@@ -225,6 +230,7 @@ export type GenieMessage = z.infer<typeof GenieMessageSchema>;
  * attachments and not the surrounding message envelope.
  */
 export const GenieResponseSchema = GenieMessageSchema.transform((m) => m.attachments ?? []);
+/** Normalized attachment array extracted from a Genie message response. */
 export type GenieResponse = z.infer<typeof GenieResponseSchema>;
 
 /**
@@ -247,6 +253,7 @@ export const GenieSpaceSchema = SDKGenieSpaceSchema.extend({
       "The contents of the Genie Space in serialized string form. This field is excluded in List Genie spaces responses. This field provides the structure of the JSON string that represents the space's layout and components.",
     ),
 });
+/** Genie space metadata with the identifiers required by chat consumers. */
 export type GenieSpace = z.infer<typeof GenieSpaceSchema>;
 
 /* ------------------------ terminal helpers ------------------------- */
@@ -257,6 +264,7 @@ export type GenieSpace = z.infer<typeof GenieSpaceSchema>;
  * statuses.
  */
 export const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"] as const;
+/** Message status that ends a Genie turn and produces a final result event. */
 export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
 /** Narrow `MessageStatus | undefined` to a {@link TerminalStatus}. */
@@ -345,6 +353,7 @@ export const GenieChatLocationSchema = z.object({
   message_id: z.string().optional(),
   attachment_id: z.string().optional(),
 });
+/** Conversation, message, and attachment coordinates shared by attachment events. */
 export type GenieChatLocation = z.infer<typeof GenieChatLocationSchema>;
 
 /**
@@ -372,6 +381,7 @@ export const QuestionEventSchema = GenieChatLocationSchema.omit({
   type: z.literal("question"),
   content: z.string(),
 });
+/** Initial event carrying the user's question after Genie assigns a message id. */
 export type QuestionEvent = z.infer<typeof QuestionEventSchema>;
 
 /**
@@ -387,6 +397,7 @@ export const MessageEventSchema = GenieChatLocationSchema.omit({
   type: z.literal("message"),
   message: GenieMessageSchema,
 });
+/** Raw Genie message snapshot emitted on every poll iteration. */
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
 
 /**
@@ -402,6 +413,7 @@ export const StatusEventSchema = GenieChatLocationSchema.omit({
   status: MessageStatusSchema,
   previous_status: MessageStatusSchema.optional(),
 });
+/** Message-status transition, including the previous status when available. */
 export type StatusEvent = z.infer<typeof StatusEventSchema>;
 
 /**
@@ -416,6 +428,7 @@ export const AttachmentEventSchema = GenieChatLocationSchema.extend({
   index: z.number(),
   attachment_type: z.custom<AttachmentType>((v) => typeof v === "string"),
 });
+/** Event emitted when a new typed attachment appears on the message. */
 export type AttachmentEvent = z.infer<typeof AttachmentEventSchema>;
 
 /**
@@ -431,6 +444,7 @@ export const ThinkingEventSchema = GenieChatLocationSchema.extend({
   text: z.string(),
   thought_type: z.custom<GenieThoughtType>((v) => typeof v === "string"),
 });
+/** Incremental Genie reasoning event derived from query thoughts. */
 export type ThinkingEvent = z.infer<typeof ThinkingEventSchema>;
 
 /**
@@ -442,6 +456,7 @@ export const TextEventSchema = GenieChatLocationSchema.extend({
   type: z.literal("text"),
   text: z.string(),
 });
+/** Narrative answer fragment emitted from a Genie text attachment. */
 export type TextEvent = z.infer<typeof TextEventSchema>;
 
 /**
@@ -458,6 +473,7 @@ export const QueryEventSchema = GenieChatLocationSchema.extend({
   title: z.string().optional(),
   description: z.string().optional(),
 });
+/** Finalized or rewritten SQL emitted for a Genie query attachment. */
 export type QueryEvent = z.infer<typeof QueryEventSchema>;
 
 /**
@@ -471,6 +487,7 @@ export const StatementEventSchema = GenieChatLocationSchema.extend({
   type: z.literal("statement"),
   statement_id: z.string(),
 });
+/** Event indicating that a query received an executable statement id. */
 export type StatementEvent = z.infer<typeof StatementEventSchema>;
 
 /**
@@ -485,6 +502,7 @@ export const RowsEventSchema = GenieChatLocationSchema.extend({
   previous_row_count: z.number().optional(),
   statement_id: z.string().optional(),
 });
+/** Row-count transition for a Genie query result. */
 export type RowsEvent = z.infer<typeof RowsEventSchema>;
 
 /**
@@ -496,6 +514,7 @@ export const SuggestedQuestionsEventSchema = GenieChatLocationSchema.extend({
   type: z.literal("suggested_questions"),
   questions: z.array(z.string()),
 });
+/** Follow-up question list emitted when Genie adds or rewrites suggestions. */
 export type SuggestedQuestionsEvent = z.infer<typeof SuggestedQuestionsEventSchema>;
 
 /**
@@ -511,6 +530,7 @@ export const ResultEventSchema = GenieChatLocationSchema.omit({
   status: z.enum(TERMINAL_STATUSES),
   message: GenieMessageSchema,
 });
+/** Final event for a Genie turn, carrying its terminal status and message snapshot. */
 export type ResultEvent = z.infer<typeof ResultEventSchema>;
 
 /**
@@ -560,6 +580,7 @@ export const GenieChatEventSchema = z.discriminatedUnion("type", [
   SuggestedQuestionsEventSchema,
   ResultEventSchema,
 ]);
+/** Ordered event union yielded by `genieEventChat`; failures are thrown, not emitted. */
 export type GenieChatEvent = z.infer<typeof GenieChatEventSchema>;
 
 /** Discriminator type for {@link GenieChatEvent}. */

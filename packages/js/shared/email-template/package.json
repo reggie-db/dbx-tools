@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/shared-email-template",
+  "description": "Universal React Email presentation shared by dbx-tools server and browser surfaces",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -29,7 +30,7 @@
     "react": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",
@@ -42,7 +43,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.211",
+  "version": "0.6.212",
   "types": "index.ts",
   "type": "module",
   "exports": {

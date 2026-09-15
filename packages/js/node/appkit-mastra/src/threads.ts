@@ -21,7 +21,6 @@
  * @module
  */
 
-import { ValidationError } from "@databricks/appkit";
 import { log } from "@dbx-tools/shared-core";
 import {
   wire,
@@ -32,10 +31,14 @@ import {
 } from "@dbx-tools/shared-mastra";
 import type { Agent } from "@mastra/core/agent";
 import type { StorageThreadType } from "@mastra/core/memory";
-import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import type { ContextWithMastra } from "@mastra/core/server";
 import { registerApiRoute } from "@mastra/core/server";
 
+import {
+  resolveAgentRequestContext,
+  resolveAgentRouteOptions,
+  type AgentRouteOptions,
+} from "./_agent-route-context.ts";
 import { clampPerPage, parseIntParam } from "./pagination.ts";
 import { invalidFields } from "./validation.ts";
 
@@ -196,8 +199,7 @@ export async function renameThread(opts: RenameThreadOptions): Promise<MastraThr
 }
 
 /** Options accepted by {@link threadsRoute}. */
-export type ThreadsRouteOptions =
-  { path: `${string}:agentId${string}`; agent?: never } | { path: string; agent: string };
+export type ThreadsRouteOptions = AgentRouteOptions;
 
 /**
  * Register the `<path>` Mastra custom API route. Handles three methods
@@ -221,45 +223,13 @@ export type ThreadsRouteOptions =
  * agent) and `/route/threads/:agentId`.
  */
 export function threadsRoute(options: ThreadsRouteOptions) {
-  const { path } = options;
-  const fixedAgent = "agent" in options ? options.agent : undefined;
-  if (!fixedAgent && !path.includes(":agentId")) {
-    throw ValidationError.invalidValue(
-      "threadsRoute.path",
-      path,
-      "a path containing `:agentId`, or an explicit `agent`",
-    );
-  }
-  // Shared by GET / DELETE: resolve the active agent and the caller's
-  // resource id, returning a JSON error response when either is
-  // missing. Keeps both handlers thin with identical validation.
-  const resolveContext = (c: ContextWithMastra) => {
-    const mastra = c.get("mastra");
-    const requestContext = c.get("requestContext");
-    const agentId = fixedAgent ?? c.req.param("agentId");
-    if (!agentId) {
-      return { error: c.json({ error: "agentId is required" }, 400) } as const;
-    }
-    const agent = mastra.getAgentById(agentId);
-    if (!agent) {
-      return {
-        error: c.json({ error: `Unknown agent "${agentId}"` }, 404),
-      } as const;
-    }
-    const resourceId = requestContext.get(MASTRA_RESOURCE_ID_KEY) as string | undefined;
-    if (!resourceId) {
-      return {
-        error: c.json({ error: "resource id missing from request context" }, 400),
-      } as const;
-    }
-    return { agentId, agent, requestContext, resourceId } as const;
-  };
+  const { path, fixedAgent } = resolveAgentRouteOptions(options, "threadsRoute.path");
 
   return [
     registerApiRoute(path, {
       method: "GET",
       handler: async (c: ContextWithMastra) => {
-        const ctx = resolveContext(c);
+        const ctx = resolveAgentRequestContext(c, { fixedAgent });
         if ("error" in ctx) return ctx.error;
         const payload = await listThreads({
           agent: ctx.agent,
@@ -273,21 +243,17 @@ export function threadsRoute(options: ThreadsRouteOptions) {
     registerApiRoute(path, {
       method: "DELETE",
       handler: async (c: ContextWithMastra) => {
-        const ctx = resolveContext(c);
+        const ctx = resolveAgentRequestContext(c, { fixedAgent, threadId: "required" });
         if ("error" in ctx) return ctx.error;
-        const threadId = ctx.requestContext.get(MASTRA_THREAD_ID_KEY) as string | undefined;
-        if (!threadId) {
-          return c.json({ error: "thread id missing from request context" }, 400);
-        }
         const { deleted } = await deleteThread({
           agent: ctx.agent,
-          threadId,
+          threadId: ctx.threadId,
           resourceId: ctx.resourceId,
         });
         const payload: MastraDeleteThreadResponse = {
           ok: true,
           agentId: ctx.agentId,
-          threadId,
+          threadId: ctx.threadId,
           deleted,
         };
         return c.json(payload);
@@ -296,12 +262,8 @@ export function threadsRoute(options: ThreadsRouteOptions) {
     registerApiRoute(path, {
       method: "PATCH",
       handler: async (c: ContextWithMastra) => {
-        const ctx = resolveContext(c);
+        const ctx = resolveAgentRequestContext(c, { fixedAgent, threadId: "required" });
         if ("error" in ctx) return ctx.error;
-        const threadId = ctx.requestContext.get(MASTRA_THREAD_ID_KEY) as string | undefined;
-        if (!threadId) {
-          return c.json({ error: "thread id missing from request context" }, 400);
-        }
         const body = wire.MastraUpdateThreadRequestSchema.safeParse(await c.req.json());
         if (!body.success) {
           logger.warn("rename:invalid", { error: body.error.message });
@@ -309,12 +271,12 @@ export function threadsRoute(options: ThreadsRouteOptions) {
         }
         const thread = await renameThread({
           agent: ctx.agent,
-          threadId,
+          threadId: ctx.threadId,
           resourceId: ctx.resourceId,
           title: body.data.title,
         });
         if (!thread) {
-          return c.json({ error: `Unknown thread "${threadId}"` }, 404);
+          return c.json({ error: `Unknown thread "${ctx.threadId}"` }, 404);
         }
         const payload: MastraUpdateThreadResponse = {
           ok: true,

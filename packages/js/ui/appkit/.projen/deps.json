@@ -21,8 +21,28 @@
       "type": "build"
     },
     {
+      "name": "react-dom",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
+      "name": "react",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "type": "build"
+    },
+    {
+      "name": "react-dom",
+      "version": "catalog:",
+      "type": "peer"
+    },
+    {
+      "name": "react",
+      "version": "catalog:",
+      "type": "peer"
     },
     {
       "name": "@databricks/appkit-ui",
@@ -37,16 +57,6 @@
     {
       "name": "@dbx-tools/ui-branding",
       "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "react-dom",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "react",
-      "version": "catalog:",
       "type": "runtime"
     },
     {

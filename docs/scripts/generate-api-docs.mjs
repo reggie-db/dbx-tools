@@ -2,104 +2,52 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
+import {
+  discoverJavaScriptPackages,
+  discoverPythonPackages,
+  discoverRustPackages,
+  groupTitle,
+  posix,
+  summaryText,
+  walk,
+  withBasePath,
+} from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
 const root = process.cwd();
 const siteRoot = path.join(root, ".docs-build", "site");
 const docsRoot = path.join(siteRoot, "src", "content", "docs");
 const apiRoot = path.join(docsRoot, "api");
-const typedocTsconfig = path.join(siteRoot, "typedoc.tsconfig.json");
+const publicRoot = path.join(siteRoot, "public");
 
 const read = (p) => fs.readFileSync(p, "utf8");
 const write = (p, text) => {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, text);
 };
-const posix = (p) => p.split(path.sep).join("/");
-
 // Use the same route base as the README generator so absolute API links resolve
 // under either the custom-domain root or a project-site subpath.
 const { base } = docsSiteConfig();
 
-function walk(dir, files = []) {
-  if (!fs.existsSync(dir)) return files;
-  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ent.name === "node_modules" || ent.name === ".git") continue;
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) walk(p, files);
-    else files.push(p);
-  }
-  return files;
-}
-
-function packageSlug(name) {
-  return name
-    .replace(/^@dbx-tools\//, "")
-    .replace(/^@/, "")
-    .replace(/\//g, "-");
-}
-
-/** Human label for a package's `packages/js/<group>/…` area (mirrors sync-readmes). */
-function groupTitle(group) {
-  switch (group) {
-    case "node":
-      return "Node and AppKit";
-    case "shared":
-      return "Shared Contracts";
-    case "cli":
-      return "CLI Tools";
-    case "ui":
-      return "React UI";
-    default:
-      return group.charAt(0).toUpperCase() + group.slice(1);
-  }
-}
-
-/** First real prose paragraph of a README (skips the H1, code fences, tables). */
-function firstParagraph(markdown) {
-  return markdown
-    .replace(/^# .*(\r?\n)+/, "")
-    .split(/\r?\n\r?\n/)
-    .map((s) => s.trim())
-    .find((s) => s && !s.startsWith("```") && !s.startsWith("|"))
-    ?.replace(/\s+/g, " ");
-}
-
-/** Plain prose for API package index summaries. */
-function summaryText(markdown) {
-  return (firstParagraph(markdown) ?? "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/`([^`]*)`/g, "$1");
+function withBase(sitePath) {
+  return withBasePath(base, sitePath);
 }
 
 /**
- * Every PUBLISHED package under `packages/js/` that has a barrel to document.
+ * Every PUBLISHED package under `packages/js/` that has a TypeScript export.
  *
  * `private: true` manifests are skipped for the same reason the README sync
  * skips them: an unpublished package has no installable API surface, so
  * generating a reference for it only adds pages a reader cannot use.
  */
 function discoverPackages() {
-  return walk(path.join(root, "packages/js"))
-    .filter((p) => path.basename(p) === "package.json")
-    .filter((packageJson) => JSON.parse(read(packageJson)).private !== true)
-    .map((packageJson) => {
-      const pkg = JSON.parse(read(packageJson));
-      const dir = path.dirname(packageJson);
-      const entry = path.join(dir, "index.ts");
-      const readme = path.join(dir, "README.md");
-      // `packages/js/<group>/<pkg>` -> the `<group>` segment, for the area column.
-      const group = posix(path.relative(root, dir)).split("/")[2] ?? "other";
-      return {
-        name: pkg.name,
-        slug: packageSlug(pkg.name),
-        dir,
-        entry,
-        readme,
-        group,
-      };
-    })
-    .filter((pkg) => fs.existsSync(pkg.entry))
+  return discoverJavaScriptPackages(root)
+    .map((pkg) => ({
+      ...pkg,
+      entries: resolvePackageTypeScriptExports(pkg.manifest),
+    }))
+    .filter((pkg) => pkg.entries.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -277,18 +225,24 @@ function stripReExports(indexPath) {
   );
 }
 
-function addFrontmatter(file, fallbackTitle, sourcePath) {
+function addFrontmatter(file, pkg) {
   const markdown = normalizeTypedocLinks(read(file));
   if (markdown.startsWith("---\n")) return;
-  const title = titleFromMarkdown(markdown, fallbackTitle);
-  const body = stripLeadingH1(markdown);
+  const title = titleFromMarkdown(markdown, pkg.name);
+  const publishedEntries = pkg.entries.map((entry) => `\`${entry.importPath}\``).join(", ");
+  const body = [
+    path.basename(file) === "index.md" ? `Published entry points: ${publishedEntries}.` : undefined,
+    stripLeadingH1(markdown),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   write(
     file,
     [
       "---",
       `title: ${yamlString(title)}`,
-      `description: ${yamlString(`Generated TypeScript API reference for ${fallbackTitle}.`)}`,
-      `source: ${yamlString(posix(path.relative(root, sourcePath)))}`,
+      `description: ${yamlString(`Generated TypeScript API reference for ${pkg.name}.`)}`,
+      `source: ${yamlString(posix(path.relative(root, pkg.manifest)))}`,
       "editUrl: false",
       "---",
       "",
@@ -303,7 +257,6 @@ function addFrontmatter(file, fallbackTitle, sourcePath) {
 }
 
 function buildApiIndex(packages) {
-  const indexPath = path.join(apiRoot, "index.md");
   const rows = packages
     .map((pkg) => {
       const link = `./${pkg.slug}/`;
@@ -317,8 +270,8 @@ function buildApiIndex(packages) {
   return [
     "---",
     'title: "API Reference"',
-    'description: "Generated TypeScript API reference for dbx-tools packages."',
-    'source: "packages/js"',
+    'description: "Generated TypeScript, Python, and Rust API reference for dbx-tools packages."',
+    'source: "packages"',
     "editUrl: false",
     "---",
     "",
@@ -327,7 +280,7 @@ function buildApiIndex(packages) {
     "  Do not edit generated files under .docs-build/.",
     "-->",
     "",
-    "Generated from each package's TypeScript exports and JSDoc. For usage guides and rationale, start with the package's README under Package Reference; edit the source types / JSDoc and rerun the docs generator to update these pages.",
+    "Generated from published TypeScript export maps, Python source ASTs and docstrings, and Cargo rustdoc. For usage guides and rationale, start with the package README under Package Reference; edit the owning source documentation and rerun the docs generator to update these pages.",
     "",
     "| Package | Area | Summary |",
     "| --- | --- | --- |",
@@ -409,11 +362,17 @@ function generatePackageApi(pkg) {
       "--package",
       "typedoc-plugin-markdown",
       "typedoc",
-      posix(path.relative(siteRoot, pkg.entry)),
+      ...[...new Set(pkg.entries.map((entry) => entry.file))].map((entry) =>
+        posix(path.relative(siteRoot, entry)),
+      ),
       "--plugin",
       "typedoc-plugin-markdown",
       "--tsconfig",
-      posix(path.relative(siteRoot, typedocTsconfig)),
+      posix(path.relative(siteRoot, pkg.tsconfig)),
+      "--entryPointStrategy",
+      "resolve",
+      "--name",
+      pkg.name,
       "--out",
       posix(path.relative(siteRoot, outDir)),
       "--entryFileName",
@@ -427,7 +386,6 @@ function generatePackageApi(pkg) {
       "none",
       "--hidePageHeader",
       "--hideBreadcrumbs",
-      "--skipErrorChecking",
       "--disableSources",
       "--cleanOutputDir",
       "true",
@@ -446,24 +404,19 @@ function generatePackageApi(pkg) {
 
   const mdFiles = walk(outDir).filter((p) => p.endsWith(".md"));
   for (const file of mdFiles) {
-    addFrontmatter(file, pkg.name, pkg.entry);
+    addFrontmatter(file, pkg);
   }
 
   pruneEmptyNamespacePages(outDir);
 
-  // A package with real API surface emits per-symbol pages. With flat output
-  // TypeDoc names them `<scope>.<Kind>.<Symbol>.md` (e.g.
-  // `resolve.Function.rankModels.md`, `model.Enumeration.ModelClass.md`); the
-  // singular capitalized `<Kind>` marks a documented symbol. `index.md` and
-  // `Namespace.<x>.md` stubs carry no symbol of their own. If nothing but
-  // stubs was produced there's nothing worth publishing, so drop the dir.
-  // Test against the flat TypeDoc names, before slugification rewrites them.
+  // A package with real API surface emits per-symbol pages. Keep the package
+  // landing even when it has no declarations so every published package README
+  // can link to a stable API route that still records its public import paths.
   const hasSymbols = mdFiles.some((p) =>
-    /\.(Function|Interface|TypeAlias|Enumeration|Variable|Class)\./.test(path.basename(p)),
+    /(?:^|\.)(Function|Interface|TypeAlias|Enumeration|Variable|Class)\./.test(path.basename(p)),
   );
   if (!hasSymbols) {
-    fs.rmSync(outDir, { recursive: true, force: true });
-    return false;
+    console.warn(`  ${pkg.name}: no public TypeScript declarations`);
   }
 
   // Drop the re-export noise, then rename files + rewrite links so the on-disk
@@ -473,40 +426,150 @@ function generatePackageApi(pkg) {
   return true;
 }
 
+function checkedSpawn(command, args, description, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "pipe",
+    ...options,
+  });
+  if (result.status !== 0) {
+    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
+    throw new Error(`${description} failed${output ? `\n${output}` : ""}`);
+  }
+  if (result.stdout?.trim()) process.stdout.write(`${result.stdout.trim()}\n`);
+}
+
+function generatePythonPackageApi(pkg) {
+  const output = path.join(apiRoot, pkg.slug, "index.md");
+  checkedSpawn(
+    "python3",
+    [
+      path.join(root, "docs", "scripts", "generate_python_api.py"),
+      "--package",
+      pkg.dir,
+      "--output",
+      output,
+      "--repo-root",
+      root,
+    ],
+    `Python API generation for ${pkg.name}`,
+  );
+  return fs.existsSync(output);
+}
+
+function rustLandingPage(pkg) {
+  if (!pkg.hasLibrary) {
+    return [
+      "---",
+      `title: ${yamlString(`${pkg.name} Rust API`)}`,
+      `description: ${yamlString(`${pkg.name} publishes an executable and has no Rust library API.`)}`,
+      `source: ${yamlString(posix(path.relative(root, pkg.manifest)))}`,
+      "editUrl: false",
+      "---",
+      "",
+      "<!--",
+      "  Generated by docs/scripts/generate-api-docs.mjs.",
+      "  Do not edit generated files under .docs-build/.",
+      "-->",
+      "",
+      `This package publishes the \`${pkg.binaryName ?? pkg.name}\` executable and has no Rust library API.`,
+      "",
+      `[Open the package guide](${withBase(`/packages/${pkg.slug}/`)})`,
+      "",
+    ].join("\n");
+  }
+  const rustdocRoute = withBase(`/rustdoc/${pkg.rustdocTarget}/index.html`);
+  return [
+    "---",
+    `title: ${yamlString(`${pkg.name} Rust API`)}`,
+    `description: ${yamlString(`Generated rustdoc API reference for ${pkg.name}.`)}`,
+    `source: ${yamlString(posix(path.relative(root, pkg.manifest)))}`,
+    "editUrl: false",
+    "---",
+    "",
+    "<!--",
+    "  Generated by docs/scripts/generate-api-docs.mjs.",
+    "  Do not edit generated files under .docs-build/.",
+    "-->",
+    "",
+    `The complete API reference is generated by Cargo from the crate's rustdoc comments.`,
+    "",
+    `[Open rustdoc for \`${pkg.name}\`](${rustdocRoute})`,
+    "",
+  ].join("\n");
+}
+
+function generateRustApis(packages) {
+  if (packages.length === 0) return [];
+  const libraryPackages = packages.filter((pkg) => pkg.hasLibrary);
+  const targetRoot = path.join(root, ".docs-build", "rustdoc-target");
+  const generatedRoot = path.join(targetRoot, "doc");
+  const publishedRoot = path.join(publicRoot, "rustdoc");
+  fs.rmSync(targetRoot, { force: true, recursive: true });
+  fs.rmSync(publishedRoot, { force: true, recursive: true });
+  if (libraryPackages.length > 0) {
+    checkedSpawn(
+      "cargo",
+      [
+        "doc",
+        "--locked",
+        "--no-deps",
+        "--lib",
+        "--target-dir",
+        targetRoot,
+        ...libraryPackages.flatMap((pkg) => ["--package", pkg.name]),
+      ],
+      "Rust API generation",
+    );
+    fs.cpSync(generatedRoot, publishedRoot, { recursive: true });
+  }
+
+  const generated = [];
+  for (const pkg of packages) {
+    if (pkg.hasLibrary) {
+      const rustdocIndex = path.join(publishedRoot, pkg.rustdocTarget, "index.html");
+      if (!fs.existsSync(rustdocIndex)) {
+        throw new Error(`Cargo did not generate rustdoc for ${pkg.name}: ${rustdocIndex}`);
+      }
+    }
+    write(path.join(apiRoot, pkg.slug, "index.md"), rustLandingPage(pkg));
+    generated.push(pkg);
+  }
+  return generated;
+}
+
 function main() {
   if (!fs.existsSync(siteRoot)) {
     throw new Error("Missing .docs-build/site. Run docs/scripts/sync-readmes.mjs first.");
   }
 
-  write(
-    typedocTsconfig,
-    `${JSON.stringify(
-      {
-        extends: "../../tsconfig.base.json",
-        compilerOptions: {
-          noEmit: true,
-          skipLibCheck: true,
-        },
-        include: ["../../packages/js/**/*.ts", "../../packages/js/**/*.tsx"],
-        exclude: ["../../**/dist", "../../**/node_modules"],
-      },
-      null,
-      2,
-    )}\n`,
-  );
-
-  const packages = discoverPackages();
+  const typescriptPackages = discoverPackages();
+  const pythonPackages = discoverPythonPackages(root);
+  const rustPackages = discoverRustPackages(root);
   fs.rmSync(apiRoot, { recursive: true, force: true });
   fs.mkdirSync(apiRoot, { recursive: true });
 
   const generated = [];
-  for (const pkg of packages) {
+  for (const pkg of typescriptPackages) {
     if (generatePackageApi(pkg)) generated.push(pkg);
   }
+  for (const pkg of pythonPackages) {
+    if (generatePythonPackageApi(pkg)) generated.push(pkg);
+  }
+  generated.push(...generateRustApis(rustPackages));
 
-  write(path.join(apiRoot, "index.md"), buildApiIndex(generated));
+  write(
+    path.join(apiRoot, "index.md"),
+    buildApiIndex(
+      generated.sort(
+        (left, right) =>
+          left.group.localeCompare(right.group) || left.name.localeCompare(right.name),
+      ),
+    ),
+  );
   console.log(
-    `Generated TypeScript API docs for ${generated.length} packages into ${posix(path.relative(root, apiRoot))}`,
+    `Generated API docs for ${generated.length} packages into ${posix(path.relative(root, apiRoot))}`,
   );
 }
 

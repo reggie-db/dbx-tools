@@ -378,6 +378,9 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
  */
 export const PROJEN_VERSION = "^0.101.16";
 
+/** SPDX license shared by generated JavaScript, Python, and Rust packages. */
+export const DBX_TOOLS_LICENSE = "Apache-2.0";
+
 /**
  * The engine's opinionated `NodeProject` defaults. A caller's own options override
  * these (they are spread AFTER this). Root-only concerns key off `options.parent`,
@@ -432,7 +435,8 @@ function defaultProjectOptions(
     jest: false,
     github: false,
     npmignoreEnabled: false,
-    licensed: false,
+    license: DBX_TOOLS_LICENSE,
+    licensed: true,
     entrypoint: "",
     depsUpgrade: false,
     // Bins are declared explicitly via `p.package.addBin(...)`. projen's default
@@ -527,6 +531,12 @@ export interface DBXToolsJavaScriptProjectOptions
    * Only a ROOT scans. Defaults to {@link DEFAULT_PACKAGE_ROOTS}.
    */
   readonly packageRoots?: readonly string[];
+  /**
+   * Descriptions for published packages, keyed by repository-relative package
+   * directory. When configured, synthesis rejects every public JavaScript
+   * package whose final manifest has no non-empty description.
+   */
+  readonly packageDescriptions?: Readonly<Record<string, string>>;
   /**
    * Leading path segment(s) dropped from a discovered package's relative path
    * before its npm name is derived, so a tier folder doesn't become a name
@@ -1062,6 +1072,48 @@ function registerRootTasks(project: javascript.NodeProject): void {
   });
 }
 
+function descendantJavaScriptProjects(
+  parent: Project,
+): Array<DBXToolsNodeProject | DBXToolsTypeScriptProject> {
+  return parent.subprojects.flatMap((subproject) => [
+    ...(subproject instanceof DBXToolsNodeProject || subproject instanceof DBXToolsTypeScriptProject
+      ? [subproject]
+      : []),
+    ...descendantJavaScriptProjects(subproject),
+  ]);
+}
+
+class PublishedPackageDescriptionValidation extends Component {
+  constructor(
+    project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
+    private readonly configuredDescriptions: Readonly<Record<string, string>>,
+  ) {
+    super(project);
+  }
+
+  public override preSynthesize(): void {
+    const root = this.project as DBXToolsNodeProject | DBXToolsTypeScriptProject;
+    const packages = new Map(
+      descendantJavaScriptProjects(root).map((pkg) => [
+        toPosix(relative(root.outdir, pkg.outdir)),
+        pkg,
+      ]),
+    );
+    for (const packagePath of Object.keys(this.configuredDescriptions)) {
+      if (!packages.has(packagePath)) {
+        throw new Error(`Package description targets unknown package ${packagePath}`);
+      }
+    }
+    for (const [packagePath, pkg] of packages) {
+      if (pkg.package.manifest.private === true) continue;
+      const description = pkg.package.manifest.description;
+      if (typeof description !== "string" || !description.trim()) {
+        throw new Error(`Published package ${packagePath} requires a non-empty description`);
+      }
+    }
+  }
+}
+
 /**
  * `bun node_modules/@dbx-tools/projen/tasks/<script>` command for a projen task.
  *
@@ -1287,6 +1339,15 @@ function initProject(
       name: packageNameFor(project.scope, p.relPath, omitPrefixes),
       tags,
     });
+  }
+
+  if (options.packageDescriptions) {
+    for (const pkg of descendantJavaScriptProjects(project)) {
+      const packagePath = toPosix(relative(rootAbs, pkg.outdir));
+      const description = options.packageDescriptions[packagePath];
+      if (description !== undefined) pkg.package.addField("description", description.trim());
+    }
+    new PublishedPackageDescriptionValidation(project, options.packageDescriptions);
   }
 
   // The root project may itself carry tags (via a `""`/`"."` tag-path key).

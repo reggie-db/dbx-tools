@@ -3,11 +3,12 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-mastra";
-export const PACKAGE_VERSION = "0.6.211";
+export const PACKAGE_VERSION = "0.6.212";
 export * as feedback from "./src/feedback.ts";
 export * as marker from "./src/marker.ts";
 export * as override from "./src/override.ts";
 export * as routes from "./src/routes.ts";
+export * as stream from "./src/stream.ts";
 export * as thread from "./src/thread.ts";
 export * as wire from "./src/wire.ts";
 export { MLFLOW_TRACE_ID_HEADER, DEFAULT_FEEDBACK_NAME, DEFAULT_COMMENT_NAME, MastraFeedbackValueSchema, MastraFeedbackRequestSchema, MastraFeedbackResponseSchema } from "./src/feedback.ts";
@@ -15,6 +16,8 @@ export type { MastraFeedbackValue, MastraFeedbackRequest, MastraFeedbackResponse
 export type { MarkerType, ParsedMarker } from "./src/marker.ts";
 export { MODEL_OVERRIDE_HEADER, MODEL_OVERRIDE_QUERY, MODEL_OVERRIDE_BODY_FIELDS } from "./src/override.ts";
 export { MASTRA_ROUTES } from "./src/routes.ts";
+export { KnownMastraStreamChunkSchema, MastraStreamChunkSchema } from "./src/stream.ts";
+export type { UnknownMastraStreamChunk, MastraStreamChunk } from "./src/stream.ts";
 export { THREAD_ID_HEADER, THREAD_ID_QUERY } from "./src/thread.ts";
 export { MastraClientConfigSchema, DefaultModelResponseSchema, ServingEndpointsResponseSchema, MastraHistoryUIMessageSchema, MastraHistoryResponseSchema, MastraClearHistoryResponseSchema, MastraThreadSchema, MastraThreadsResponseSchema, MastraDeleteThreadResponseSchema, MASTRA_THREAD_TITLE_MAX, MastraUpdateThreadRequestSchema, MastraUpdateThreadResponseSchema, MastraSuggestionsResponseSchema, ChartTypeSchema, ChartResultSchema, ChartSchema, StatementDataSchema, StartedEventSchema, AskGenieDoneEventSchema, MastraGenieErrorEventSchema, SummaryEventSchema, GenieAgentEventSchema, GenieWriterEventSchema, GenieDatasetDataSchema, GenieDatasetChartSchema, GenieDatasetSchema, GenieSummaryItemSchema, GenieAgentResultSchema } from "./src/wire.ts";
 export type { MastraClientConfig, DefaultModelResponse, ServingEndpointsResponse, MastraHistoryUIMessage, MastraHistoryResponse, MastraClearHistoryResponse, MastraThread, MastraThreadsResponse, MastraDeleteThreadResponse, MastraUpdateThreadRequest, MastraUpdateThreadResponse, MastraSuggestionsResponse, ChartType, ChartResult, Chart, StatementData, MastraWriter, StartedEvent, AskGenieDoneEvent, MastraGenieErrorEvent, SummaryEvent, GenieAgentEvent, GenieWriterEvent, GenieWriterEventType, GenieDatasetData, GenieDatasetChart, GenieDataset, GenieSummaryItem, GenieSummaryItemType, GenieAgentResult } from "./src/wire.ts";

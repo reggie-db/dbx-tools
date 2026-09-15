@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.6.211";
+export const PACKAGE_VERSION = "0.6.212";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -46,7 +46,7 @@ export type { RecordedPackage } from "./src/packages.ts";
 export { PnpmWorkspaceState } from "./src/pnpm-workspace.ts";
 export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace.ts";
 export type { DBXToolsProjectLanguage, DBXToolsProjectOptions, DBXToolsProject, ApplyToProjectsOptions } from "./src/project.ts";
-export { PackageIdentifier, PROJEN_VERSION, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject } from "./src/project-js.ts";
+export { PackageIdentifier, PROJEN_VERSION, DBX_TOOLS_LICENSE, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject } from "./src/project-js.ts";
 export type { DBXToolsJavaScriptProject, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
 export { DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";
 export type { PythonRepositoryOptions, PythonPackageOptions, PythonTrustedPublisherOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";

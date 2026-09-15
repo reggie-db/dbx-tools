@@ -1,3 +1,5 @@
+"""Stable Postgres advisory-lock ids and connection-owning context managers."""
+
 from __future__ import annotations
 
 import hashlib
@@ -14,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 @dataclass(frozen=True, slots=True)
 class ExplicitAdvisoryLockId:
+    """A caller-supplied 64-bit lock id that bypasses stable-key hashing."""
+
     value: int
 
 
@@ -28,6 +32,14 @@ class AsyncQueryable(Protocol):
 
 
 def advisory_lock_id(key: object) -> int:
+    """Return the deterministic signed 64-bit Postgres lock id for ``key``.
+
+    Lists and tuples are treated as ordered composite keys. Other values are
+    canonicalized with :func:`dbx_tools.core.to_stable_key`, joined with a null
+    separator, and hashed with SHA-256. ``ExplicitAdvisoryLockId`` values are
+    normalized directly into Postgres's signed 64-bit range.
+    """
+
     if isinstance(key, ExplicitAdvisoryLockId):
         return _signed_64(key.value)
     parts = key if isinstance(key, (list, tuple)) else [key]
@@ -36,6 +48,8 @@ def advisory_lock_id(key: object) -> int:
 
 
 def explicit_advisory_lock_id(value: int) -> ExplicitAdvisoryLockId:
+    """Mark ``value`` as an explicit Postgres lock id instead of a value to hash."""
+
     return ExplicitAdvisoryLockId(value)
 
 
@@ -46,6 +60,14 @@ def acquire_advisory_lock(
     transaction: bool = False,
     wait: bool = True,
 ) -> bool:
+    """Acquire a session or transaction advisory lock on ``connection``.
+
+    The supplied connection owns the lock. With ``wait=True`` this blocks and
+    returns ``True`` after acquisition. With ``wait=False`` it returns whether
+    the lock was acquired. Transaction locks are released by transaction end;
+    session locks must be released on the same connection.
+    """
+
     function = _function_name(transaction=transaction, wait=wait)
     result = connection.execute(
         text(f"SELECT {function}(:lock_id)"), {"lock_id": advisory_lock_id(key)}
@@ -60,6 +82,11 @@ async def acquire_advisory_lock_async(
     transaction: bool = False,
     wait: bool = True,
 ) -> bool:
+    """Asynchronously acquire a session or transaction lock on ``connection``.
+
+    Ownership and ``wait`` behavior match :func:`acquire_advisory_lock`.
+    """
+
     function = _function_name(transaction=transaction, wait=wait)
     result = await connection.execute(
         text(f"SELECT {function}(:lock_id)"), {"lock_id": advisory_lock_id(key)}
@@ -68,6 +95,12 @@ async def acquire_advisory_lock_async(
 
 
 def release_advisory_lock(connection: SyncQueryable, key: object) -> None:
+    """Release a session lock on its owning connection.
+
+    Raises ``RuntimeError`` when the connection does not hold the derived lock.
+    Transaction-scoped locks release automatically and should not use this API.
+    """
+
     lock_id = advisory_lock_id(key)
     result = connection.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
     if result.scalar_one() is not True:
@@ -75,6 +108,8 @@ def release_advisory_lock(connection: SyncQueryable, key: object) -> None:
 
 
 async def release_advisory_lock_async(connection: AsyncQueryable, key: object) -> None:
+    """Asynchronously release a session lock on its owning connection."""
+
     lock_id = advisory_lock_id(key)
     result = await connection.execute(
         text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id}
@@ -85,6 +120,13 @@ async def release_advisory_lock_async(connection: AsyncQueryable, key: object) -
 
 @contextmanager
 def advisory_lock(engine: Engine, key: object) -> Iterator[Connection]:
+    """Hold a blocking session lock on one owned connection for the context.
+
+    The checked-out connection is yielded to the caller and retained until the
+    lock is released. If body and unlock both fail, the unlock failure is added
+    as a note to the original exception.
+    """
+
     with engine.connect() as connection:
         acquire_advisory_lock(connection, key)
         failure: Exception | None = None
@@ -103,6 +145,8 @@ def advisory_lock(engine: Engine, key: object) -> Iterator[Connection]:
 
 @contextmanager
 def try_advisory_lock(engine: Engine, key: object) -> Iterator[Connection | None]:
+    """Try to hold a session lock, yielding ``None`` without waiting on contention."""
+
     with engine.connect() as connection:
         if not acquire_advisory_lock(connection, key, wait=False):
             yield None
@@ -123,6 +167,11 @@ def try_advisory_lock(engine: Engine, key: object) -> Iterator[Connection | None
 
 @contextmanager
 def advisory_transaction_lock(engine: Engine, key: object) -> Iterator[Connection]:
+    """Hold a blocking transaction lock for an owned transaction context.
+
+    The lock is released automatically when the context commits or rolls back.
+    """
+
     with engine.begin() as connection:
         acquire_advisory_lock(connection, key, transaction=True)
         yield connection
@@ -130,6 +179,8 @@ def advisory_transaction_lock(engine: Engine, key: object) -> Iterator[Connectio
 
 @contextmanager
 def try_advisory_transaction_lock(engine: Engine, key: object) -> Iterator[Connection | None]:
+    """Try to hold a transaction lock, yielding ``None`` without waiting."""
+
     with engine.begin() as connection:
         if not acquire_advisory_lock(connection, key, transaction=True, wait=False):
             yield None
@@ -139,6 +190,8 @@ def try_advisory_transaction_lock(engine: Engine, key: object) -> Iterator[Conne
 
 @asynccontextmanager
 async def advisory_lock_async(engine: AsyncEngine, key: object) -> AsyncIterator[AsyncConnection]:
+    """Asynchronously hold a session lock on one owned connection for the context."""
+
     async with engine.connect() as connection:
         await acquire_advisory_lock_async(connection, key)
         failure: Exception | None = None
@@ -159,6 +212,8 @@ async def advisory_lock_async(engine: AsyncEngine, key: object) -> AsyncIterator
 async def try_advisory_lock_async(
     engine: AsyncEngine, key: object
 ) -> AsyncIterator[AsyncConnection | None]:
+    """Asynchronously try a session lock, yielding ``None`` without waiting."""
+
     async with engine.connect() as connection:
         if not await acquire_advisory_lock_async(connection, key, wait=False):
             yield None
@@ -181,6 +236,8 @@ async def try_advisory_lock_async(
 async def advisory_transaction_lock_async(
     engine: AsyncEngine, key: object
 ) -> AsyncIterator[AsyncConnection]:
+    """Asynchronously hold a transaction lock until commit or rollback."""
+
     async with engine.begin() as connection:
         await acquire_advisory_lock_async(connection, key, transaction=True)
         yield connection
@@ -190,6 +247,8 @@ async def advisory_transaction_lock_async(
 async def try_advisory_transaction_lock_async(
     engine: AsyncEngine, key: object
 ) -> AsyncIterator[AsyncConnection | None]:
+    """Asynchronously try a transaction lock, yielding ``None`` without waiting."""
+
     async with engine.begin() as connection:
         if not await acquire_advisory_lock_async(connection, key, transaction=True, wait=False):
             yield None
