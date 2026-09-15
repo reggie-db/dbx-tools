@@ -12,8 +12,9 @@ excluded because it is run frequently by the maintainer.
 
 ## Executive Summary
 
-- The largest maintenance risk is concentrated in four handwritten control
-  points: the Mastra chat hook, the Mastra chat view, the Mastra AppKit route
+- The first high-risk control point, the Mastra chat hook, was decomposed on
+  2026-09-15 without changing its published facade. The largest remaining
+  maintenance risks are the Mastra chat view, the Mastra AppKit route
   registrar, and the Rust workspace/release generator.
 - The repository is not broadly copy-pasted. `jscpd` found 437 duplicated lines
   across 108,989 scanned lines, approximately 0.4 percent. The actionable DRY
@@ -64,7 +65,7 @@ longer matches the public product surface.
 
 | ID | Category | File:Line | Severity | Effort | Description | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- |
-| ARCH-01 | Architectural decay | `packages/js/ui/mastra/src/react/mastra-chat.tsx:255` | High | L | `useMastraChat` spans roughly 1,269 lines and owns client resolution, persisted model selection, thread/session state, history paging, streaming, approvals, steering, feedback, suggestions, and embed fetch state. Independent behavior changes converge on one closure and one dependency graph. | Preserve the public hook, but move thread storage, history loading, stream reduction, approval state, and feedback into internal hooks/reducers with explicit inputs and outputs. |
+| ARCH-01 | Architectural decay | `packages/js/ui/mastra/src/react/mastra-chat.tsx:219` | High | L | Completed 2026-09-15. `useMastraChat` previously spanned roughly 1,269 lines and owned client resolution, persisted model selection, thread/session state, history paging, streaming, approvals, steering, feedback, suggestions, and embed fetch state. | The public hook remains the facade. Session storage, history paging, stream processing, approval resumption, and feedback submission now live in focused internal hooks with explicit inputs and outputs. |
 | ARCH-02 | Architectural decay | `packages/js/ui/mastra/src/react/chat-view.tsx:117` | High | L | `ChatView` occupies the remaining 897 lines of its file and combines transcript rendering, scrolling, side panels, model selection, composer behavior, queue management, exports, approvals, feedback, and responsive layout. | Split the controlled view into transcript, composer, navigation, side-panel, and overlay components while keeping `ChatViewProps` as the compatibility facade. |
 | ARCH-03 | Architectural decay | `packages/js/node/appkit-mastra/src/plugin.ts:457` | High | M | `MastraPlugin.injectRoutes` is a 317-line route registrar containing MCP rewriting, models, history, threads, suggestions, feedback, chart and statement fetches, agent dispatch, authorization gates, and error mapping. Route ordering is implicit in one method. | Extract ordered feature registrars such as `registerMcpRoutes`, `registerThreadRoutes`, and `registerAgentRoutes`; keep the catch-all registration visibly last. |
 | ARCH-04 | Architectural decay | `projen/src/project-rs.ts:543` | High | L | The Rust workspace constructor is approximately 311 lines and performs crate discovery, package construction, binding inference, binary mapping, facade creation, task registration, dependency graph work, and workspace-file synthesis. This file is also a high-churn hotspot. | Normalize options first, then delegate discovery, binding mapping, facade generation, and task wiring to pure builders that return typed plans. |
@@ -98,19 +99,33 @@ longer matches the public product surface.
 | DRY-06 | Observability | `packages/rs/model-proxy/src/routes.rs:266`<br>`packages/rs/model-proxy/src/routes.rs:429`<br>`packages/rs/model-proxy/src/routes.rs:463` | High | M | Embeddings, unsuccessful buffered requests, and successful adapted requests repeat a large throttle/request logging field set; reconciliation and completion semantics are interleaved with route-specific response handling. Field drift would make operational comparisons unreliable. | Build typed request-completion and stream-connection log contexts, and centralize reconcile-plus-log behavior while retaining route-specific message names. |
 | DRY-07 | Release tooling | `projen/tasks/bump.ts:17`<br>`projen/tasks/release-pr.ts:23` | Medium | S | Release level, OS, architecture constants, types, and repeatable-option collection are duplicated between bump and release-PR commands. | Export the shared option vocabulary and Commander option builders from the existing release-platform module. |
 
+## Implementation Progress
+
+- [x] `ARCH-01` completed on 2026-09-15. The published
+  `@dbx-tools/ui-mastra/react` barrel is unchanged. `useMastraChat` now delegates
+  session registry ownership, history paging, stream chunk handling, approval
+  resumption, and feedback submission to five internal hooks. The source file
+  fell from 1,545 to 1,006 lines, and the hook facade fell from roughly 1,269 to
+  766 lines. Focused validation passed: TypeScript compilation, Prettier, and 38
+  package tests.
+- [ ] `DEP-01` is the next scheduled finding. No other high, medium, or low
+  finding is included in the current implementation batch.
+
 ## Top Five
 
 ### 1. Decompose the Mastra UI without changing its public API
 
 Refactor outline:
 
-1. Keep `useMastraChat(options)` and `ChatView(props)` as stable facades.
-2. Move thread/session persistence into `useMastraSessions` backed by a reducer.
-3. Move history paging and thread mutations into `useMastraHistory`.
-4. Move SSE chunk handling into a pure, exhaustively typed stream reducer.
-5. Split `ChatView` into transcript, composer, navigation, detail-panel, and
+1. [x] Keep `useMastraChat(options)` and `ChatView(props)` as stable facades.
+2. [x] Move thread/session state behind a focused internal registry hook.
+3. [x] Move history paging into an internal history hook.
+4. [x] Move SSE chunk handling behind an internal stream hook. Runtime schema
+   validation and exhaustive reduction remain tracked separately by `TYPE-01`
+   and `TYPE-02`.
+5. [ ] Split `ChatView` into transcript, composer, navigation, detail-panel, and
    approval-overlay components.
-6. Pass narrow state/actions into each component instead of the entire hook
+6. [ ] Pass narrow state/actions into each component instead of the entire hook
    result.
 
 This reduces the blast radius of changes while preserving package consumers.

@@ -1,20 +1,16 @@
 import { error as sharedError, hash, log } from "@dbx-tools/shared-core";
-import { feedback, type MastraThread } from "@dbx-tools/shared-mastra";
+import type { MastraThread } from "@dbx-tools/shared-mastra";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useChatApprovals } from "./chat-approvals.ts";
 import { ChatView } from "./chat-view.tsx";
+import { useChatFeedback } from "./chat-feedback.ts";
+import { useChatHistory } from "./chat-history.ts";
+import { useChatSessions } from "./chat-sessions.ts";
+import { useChatStream } from "./chat-stream.ts";
 import { dedupeSuggestions } from "./suggestions.ts";
-import type {
-  ApprovalDecision,
-  ChatViewProps,
-  FeedbackSubmission,
-  MessageFeedback,
-  ThreadPlacement,
-  ThreadSummary,
-  ToolEvent,
-  ToolProgress,
-} from "./types.ts";
+import type { ChatViewProps, ThreadPlacement, ThreadSummary } from "./types.ts";
 import type { EmbedResolver, ExportFormat } from "../support/export.ts";
 import {
   useMastraClient,
@@ -30,13 +26,11 @@ import {
   storeSelectedModel,
 } from "../support/model-selection.ts";
 import {
-  createThreadSession,
   DEFAULT_THREAD_SESSION_KEY,
   enqueueSteer,
   isSessionRunning,
   removeSteer as removeSteerFromQueue,
   reorderSteers as reorderSteerQueue,
-  sessionKey,
   terminateRunningToolEvents,
   type ThreadSession,
 } from "../support/thread-sessions.ts";
@@ -64,8 +58,6 @@ const _loadChatExport = () => import("../support/export.ts");
 // preserving the visual scroll position across the prepend.
 
 const logger = log.logger("ui-mastra/chat");
-
-const HISTORY_PAGE_SIZE = 20;
 
 const makeUserMessage = (text: string): UIMessage => ({
   id: hash.id(),
@@ -149,27 +141,6 @@ const storeStoredSidebarOpen = (key: string, open: boolean): void => {
   }
 };
 
-/**
- * Pull the MLflow trace id (`tr-<hex>`) the server stamped on a stream
- * response, if present. `@mastra/client-js`'s `agent.stream()` returns
- * a Response-shaped object, so the header is read defensively (the
- * shape isn't guaranteed across client versions). Returns `undefined`
- * when absent - which is the "no feedback for this turn" signal.
- */
-const readMlflowTraceId = (stream: unknown): string | undefined => {
-  const headers = (stream as { headers?: { get?: (name: string) => string | null } })?.headers;
-  const raw = headers?.get?.(feedback.MLFLOW_TRACE_ID_HEADER);
-  return raw?.trim() || undefined;
-};
-
-// `tool-output` chunks carry arbitrary tool-defined payloads; only the
-// `{type: ...}` shape we know how to render in `ToolSessionPill` is
-// surfaced. Anything else (other tools, raw data, etc.) is ignored.
-const isToolProgress = (value: unknown): value is ToolProgress =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as { type?: unknown }).type === "string";
-
 /** Options for {@link useMastraChat}. */
 export interface UseMastraChatOptions {
   /**
@@ -236,13 +207,6 @@ export interface UseMastraChatOptions {
    */
   enableFeedback?: boolean;
 }
-
-/**
- * Thrown out of the chunk handler to unwind `processDataStream` when
- * the user stops a turn. Callers treat it as a clean stop, not an
- * error, so the composer just returns to idle.
- */
-class StreamAborted extends Error {}
 
 /**
  * Headless driver for the Mastra chat experience. Owns the full
@@ -397,327 +361,38 @@ export const useMastraChat = (
     () => explicitSuggestions ?? dedupeSuggestions(genieSuggestions),
     [explicitSuggestions, genieSuggestions],
   );
-  const [sessionsTick, setSessionsTick] = useState(0);
-  const sessionsRef = useRef<Map<string, ThreadSession>>(new Map());
-  const notifySessions = useCallback(() => {
-    setSessionsTick((tick) => tick + 1);
-  }, []);
-  const getSession = useCallback((threadId: string): ThreadSession => {
-    let session = sessionsRef.current.get(threadId);
-    if (!session) {
-      session = createThreadSession();
-      sessionsRef.current.set(threadId, session);
-    }
-    return session;
-  }, []);
-  const updateSession = useCallback(
-    (threadId: string, updater: (session: ThreadSession) => ThreadSession) => {
-      const next = updater(getSession(threadId));
-      sessionsRef.current.set(threadId, next);
-      notifySessions();
-    },
-    [getSession, notifySessions],
-  );
-  const activeKey = sessionKey(activeThreadId);
-  const activeSession = useMemo(() => getSession(activeKey), [activeKey, getSession, sessionsTick]);
-  const streamingThreadIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const [id, session] of sessionsRef.current.entries()) {
-      if (id === DEFAULT_THREAD_SESSION_KEY) continue;
-      if (isSessionRunning(session)) ids.push(id);
-    }
-    return ids;
-  }, [sessionsTick]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [loadingMoreThreads, setLoadingMoreThreads] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const isLoadingMore = loadingMoreThreads.has(activeKey);
-  const historyInFlightRef = useRef(new Set<string>());
-  const feedbackByMessageRef = useRef<Record<string, MessageFeedback>>({});
-  feedbackByMessageRef.current = activeSession.feedbackByMessage;
+  const {
+    activeKey,
+    activeSession,
+    getSession,
+    removeSession,
+    resetSession,
+    streamingThreadIds,
+    updateSession,
+    writeMessages,
+  } = useChatSessions(activeThreadId);
+  const { isLoadingHistory, isLoadingMore, loadOlderHistory } = useChatHistory({
+    activeKey,
+    activeThreadId,
+    agentId,
+    getSession,
+    mastraClient,
+    updateSession,
+    writeMessages,
+  });
+  const submitFeedback = useChatFeedback({
+    activeKey,
+    feedbackByMessage: activeSession.feedbackByMessage,
+    mastraClient,
+    updateSession,
+  });
   // Drains the next queued steer when a turn ends. Held in a ref because it
   // closes over `runStream`, which is defined below and itself calls
   // `driveStream` (which invokes this) - the ref breaks that cycle without a
   // stale-closure hazard (assigned each render, same pattern as `loadMoreRef`).
   const drainQueueRef = useRef<(threadId: string) => void>(() => {});
 
-  const writeMessages = useCallback(
-    (threadId: string, next: UIMessage[]) => {
-      updateSession(threadId, (session) => ({ ...session, messages: next }));
-    },
-    [updateSession],
-  );
-
-  /**
-   * Pipe a Mastra stream Response through the same chunk handler used
-   * for the initial turn. `assistantId` identifies the in-progress
-   * assistant message so resumed streams (from approveToolCall /
-   * declineToolCall) keep mutating the same bubble instead of
-   * spawning a new one. `runId` is captured in a ref so the approval
-   * handler can later resume the suspended workflow.
-   */
-  const processStream = useCallback(
-    async (
-      threadId: string,
-      stream: MastraStreamResponse,
-      assistantId: string,
-      runIdRef: { current: string | null },
-      signal: AbortSignal,
-    ) => {
-      const traceId = readMlflowTraceId(stream);
-      if (traceId) {
-        updateSession(threadId, (session) =>
-          session.feedbackByMessage[assistantId]?.traceId === traceId
-            ? session
-            : {
-                ...session,
-                feedbackByMessage: {
-                  ...session.feedbackByMessage,
-                  [assistantId]: {
-                    ...session.feedbackByMessage[assistantId],
-                    traceId,
-                  },
-                },
-              },
-        );
-      }
-      const existing = getSession(threadId).messages.find((m) => m.id === assistantId);
-      // Text is tracked as ordered segments, one per `text-start` the
-      // agent emits. In a multi-step turn the model opens a fresh text
-      // block in each step (a short preamble before each tool call),
-      // and those blocks read as distinct "updates". Keeping them as
-      // separate segments lets the bubble render each as its own block
-      // instead of mashing "...summary.This is..." into one paragraph.
-      const textSegments: string[] = [];
-      let assistantReasoning = "";
-      if (existing) {
-        for (const part of existing.parts) {
-          if (part.type === "text") {
-            textSegments.push(part.text);
-          } else if (part.type === "reasoning") {
-            assistantReasoning += (part as { text?: string }).text ?? "";
-          }
-        }
-      }
-      // Append a text delta to the current (most recent) segment,
-      // opening one if none exists yet (defensive: a provider could
-      // stream deltas without a leading `text-start`).
-      const appendText = (delta: string) => {
-        if (textSegments.length === 0) textSegments.push("");
-        textSegments[textSegments.length - 1] += delta;
-      };
-
-      const upsertAssistant = () => {
-        const prev = getSession(threadId).messages;
-        const next = [...prev];
-        const idx = next.findIndex((m) => m.id === assistantId);
-        const parts: UIMessage["parts"] = [];
-        if (assistantReasoning) {
-          parts.push({ type: "reasoning", text: assistantReasoning });
-        }
-        for (const segment of textSegments) {
-          if (segment.length > 0) parts.push({ type: "text", text: segment });
-        }
-        const message: UIMessage = {
-          id: assistantId,
-          role: "assistant",
-          parts: parts.length > 0 ? parts : [{ type: "text", text: "" }],
-        };
-        if (idx === -1) next.push(message);
-        else next[idx] = message;
-        writeMessages(threadId, next);
-      };
-
-      const patchToolEvents = (update: (list: ToolEvent[]) => ToolEvent[]) => {
-        updateSession(threadId, (session) => ({
-          ...session,
-          toolEventsByMessage: {
-            ...session.toolEventsByMessage,
-            [assistantId]: update(session.toolEventsByMessage[assistantId] ?? []),
-          },
-        }));
-      };
-
-      let started = false;
-      const markStreaming = () => {
-        if (started) return;
-        started = true;
-        updateSession(threadId, (session) =>
-          session.status === "streaming" ? session : { ...session, status: "streaming" },
-        );
-      };
-
-      try {
-        await stream.processDataStream({
-          onChunk: async (chunk: { type: string; payload?: any; runId?: string }) => {
-            // The user hit Stop: unwind the read loop. Throwing (rather
-            // than returning) is what actually stops `processDataStream`
-            // from pulling the next chunk; the wrapper below swallows it.
-            if (signal.aborted) throw new StreamAborted();
-            // Mastra stamps the stream's runId on most chunks. Capturing
-            // it the first time we see it (rather than relying on a
-            // separate API) keeps approve/decline calls correct even if
-            // the client-supplied runId got overridden server-side.
-            if (chunk.runId && !runIdRef.current) {
-              runIdRef.current = chunk.runId;
-              updateSession(threadId, (session) => ({
-                ...session,
-                runId: chunk.runId!,
-              }));
-            }
-            switch (chunk.type) {
-              case "text-start":
-                // Open a new text segment so each step's preamble stays
-                // a separate part (and thus a separate rendered block).
-                textSegments.push("");
-                break;
-              case "text-delta":
-                appendText(chunk.payload?.text ?? "");
-                upsertAssistant();
-                markStreaming();
-                break;
-              case "text-end":
-                // Segment boundary is driven by `text-start`; nothing to
-                // do on end - the next start opens the next segment.
-                break;
-              case "reasoning-delta":
-                assistantReasoning += chunk.payload?.text ?? "";
-                upsertAssistant();
-                markStreaming();
-                break;
-              case "tool-call": {
-                const { toolCallId, toolName } = chunk.payload ?? {};
-                if (typeof toolCallId !== "string") break;
-                patchToolEvents((list) => [
-                  ...list,
-                  { id: toolCallId, toolName, status: "running" },
-                ]);
-                // Make sure the assistant message exists in `messages`
-                // even when the model goes straight to a tool call with
-                // no preceding text, so the bubble (and its inline
-                // tool indicator) renders right away.
-                upsertAssistant();
-                markStreaming();
-                break;
-              }
-              case "tool-call-approval": {
-                // Mastra paused the agent loop on a `requireApproval`
-                // tool call. The chunk carries the runId we'll need to
-                // resume the suspended workflow later. We surface the
-                // approval card via `pendingApprovalsByMessage` so the
-                // existing ChatView UI lights up without us having to
-                // inject a synthetic data part.
-                const { toolCallId, toolName, args } = chunk.payload ?? {};
-                const approvalRunId = chunk.runId ?? runIdRef.current;
-                if (
-                  typeof toolCallId !== "string" ||
-                  typeof toolName !== "string" ||
-                  !approvalRunId
-                ) {
-                  logger.warn("malformed tool-call-approval chunk", {
-                    toolCallId,
-                    toolName,
-                    hasRunId: Boolean(approvalRunId),
-                  });
-                  break;
-                }
-                updateSession(threadId, (session) => {
-                  const existingApprovals = session.pendingApprovalsByMessage[assistantId] ?? [];
-                  if (existingApprovals.some((a) => a.toolCallId === toolCallId)) {
-                    return session;
-                  }
-                  return {
-                    ...session,
-                    pendingApprovalsByMessage: {
-                      ...session.pendingApprovalsByMessage,
-                      [assistantId]: [
-                        ...existingApprovals,
-                        {
-                          toolName,
-                          toolCallId,
-                          runId: approvalRunId,
-                          input: args,
-                        },
-                      ],
-                    },
-                  };
-                });
-                upsertAssistant();
-                markStreaming();
-                break;
-              }
-              case "tool-result": {
-                const toolCallId = chunk.payload?.toolCallId;
-                if (typeof toolCallId !== "string") break;
-                // Charts resolve from `[chart:<id>]` markers in the
-                // assistant's prose (the model embeds the id returned
-                // by `prepare_chart`), so the tool-result payload is
-                // opaque here - we only need it to flip the pill.
-                // Genie tools (`ask_genie`, `get_statement`,
-                // `prepare_chart`) stream their entire progress
-                // surface through `ctx.writer` and arrive on this
-                // page via the `tool-output` path. The settled
-                // tool-result return value is opaque to the UI -
-                // we only need it to flip the pill to `done`.
-                patchToolEvents((list) =>
-                  list.map((e) => (e.id === toolCallId ? { ...e, status: "done" } : e)),
-                );
-                break;
-              }
-              case "tool-error": {
-                const toolCallId = chunk.payload?.toolCallId;
-                if (typeof toolCallId !== "string") break;
-                patchToolEvents((list) =>
-                  list.map((e) => (e.id === toolCallId ? { ...e, status: "error" } : e)),
-                );
-                break;
-              }
-              case "tool-output": {
-                // Mid-flight progress pushed by a tool via `ctx.writer`
-                // (e.g. genie.ts forwarding `status`/`sql`/`data` events
-                // from the Genie space). Append to the matching pill so
-                // the user sees SQL/row info as soon as Genie publishes
-                // it, not only when the LLM call completes.
-                const { toolCallId, output } = chunk.payload ?? {};
-                if (typeof toolCallId !== "string") break;
-                if (!isToolProgress(output)) break;
-                patchToolEvents((list) =>
-                  list.map((e) =>
-                    e.id === toolCallId ? { ...e, progress: [...(e.progress ?? []), output] } : e,
-                  ),
-                );
-                break;
-              }
-              case "error": {
-                // Surface a stream-reported error through the same path as
-                // a thrown one: throwing here propagates out of
-                // `processDataStream` to `driveStream`, which records the
-                // message and pins `status` to "error" (a plain
-                // setStatus would be clobbered by the clean-close "ready").
-                const detail = chunk.payload?.error ?? chunk.payload?.message;
-                throw new Error(
-                  typeof detail === "string" && detail
-                    ? detail
-                    : "The assistant stream reported an error.",
-                );
-              }
-              default:
-                break;
-            }
-          },
-        });
-      } catch (error) {
-        // A stop (signal aborted) unwinds the loop cleanly - not a
-        // failure. Anything else is a real stream error and propagates
-        // to the driver's catch.
-        if (error instanceof StreamAborted || signal.aborted) return;
-        throw error;
-      }
-    },
-    [getSession, updateSession, writeMessages],
-  );
-
+  const processStream = useChatStream({ getSession, updateSession, writeMessages });
   const driveStream = useCallback(
     async (
       threadId: string,
@@ -853,68 +528,14 @@ export const useMastraChat = (
     [activeKey, updateSession],
   );
 
-  /**
-   * Approve or deny an in-flight `requireApproval` tool call. The
-   * suspended workflow lives on the server keyed by `runId`; we resume
-   * via {@link MastraPluginClient.approveToolCallStream} /
-   * `declineToolCallStream` and pipe the SSE chunk stream back into
-   * the same bubble `runStream` was building.
-   */
-  const handleApproval = useCallback(
-    async (decision: ApprovalDecision) => {
-      const { runId: decisionRunId, toolCallId, toolName } = decision;
-      const session = getSession(activeKey);
-      const assistantId = session.assistantId;
-      const runId = decisionRunId ?? session.runId;
-      if (!runId || !assistantId) {
-        logger.warn("approval missing runId or assistantId, cannot resume", {
-          tool: toolName,
-          toolCallId,
-          hasRunId: Boolean(runId),
-          hasAssistantId: Boolean(assistantId),
-        });
-        return;
-      }
-      updateSession(activeKey, (current) => {
-        const existing = current.pendingApprovalsByMessage[assistantId];
-        if (!existing) return current;
-        const next = existing.filter((a) => a.toolCallId !== toolCallId);
-        if (next.length === 0) {
-          const { [assistantId]: _drop, ...rest } = current.pendingApprovalsByMessage;
-          return { ...current, pendingApprovalsByMessage: rest };
-        }
-        return {
-          ...current,
-          pendingApprovalsByMessage: {
-            ...current.pendingApprovalsByMessage,
-            [assistantId]: next,
-          },
-        };
-      });
-      logger.info(decision.approved ? "approved" : "denied", {
-        tool: toolName,
-        toolCallId,
-        runId,
-      });
-      const streamThreadId = activeKey === DEFAULT_THREAD_SESSION_KEY ? undefined : activeKey;
-      await driveStream(activeKey, assistantId, (signal) =>
-        decision.approved
-          ? mastraClient.approveToolCallStream(agentId, {
-              runId,
-              toolCallId,
-              threadId: streamThreadId,
-              signal,
-            })
-          : mastraClient.declineToolCallStream(agentId, {
-              runId,
-              toolCallId,
-              threadId: streamThreadId,
-              signal,
-            }),
-      );
-    },
-    [activeKey, driveStream, getSession, mastraClient, agentId, updateSession],
-  );
+  const handleApproval = useChatApprovals({
+    activeKey,
+    agentId,
+    driveStream,
+    getSession,
+    mastraClient,
+    updateSession,
+  });
 
   // Append a user message to a thread's transcript, stamping `lastUserText`,
   // thread-activity, and a provisional title for a brand-new thread. Returns
@@ -1025,12 +646,7 @@ export const useMastraChat = (
         error: sharedError.errorMessage(error),
       });
     }
-    const session = getSession(threadId);
-    session.abortController?.abort();
-    updateSession(threadId, () => ({
-      ...createThreadSession(),
-      historyLoaded: true,
-    }));
+    resetSession(threadId, true);
     if (activeThreadId) {
       setOptimisticThreads((prev) => {
         if (!prev[activeThreadId]) return prev;
@@ -1044,15 +660,7 @@ export const useMastraChat = (
       });
     }
     refreshThreadsSoon();
-  }, [
-    mastraClient,
-    agentId,
-    activeKey,
-    activeThreadId,
-    getSession,
-    refreshThreadsSoon,
-    updateSession,
-  ]);
+  }, [mastraClient, agentId, activeKey, activeThreadId, refreshThreadsSoon, resetSession]);
 
   const selectThread = useCallback(
     (threadId: string) => {
@@ -1064,10 +672,9 @@ export const useMastraChat = (
 
   const newThread = useCallback(() => {
     const id = hash.id();
-    sessionsRef.current.set(id, { ...createThreadSession(), historyLoaded: true });
-    notifySessions();
+    resetSession(id, true);
     setActiveThreadId(id);
-  }, [notifySessions]);
+  }, [resetSession]);
 
   const deleteThread = useCallback(
     async (threadId: string) => {
@@ -1080,10 +687,7 @@ export const useMastraChat = (
           error: sharedError.errorMessage(error),
         });
       }
-      const session = sessionsRef.current.get(threadId);
-      session?.abortController?.abort();
-      sessionsRef.current.delete(threadId);
-      notifySessions();
+      removeSession(threadId);
       setOptimisticThreads((prev) => {
         if (!prev[threadId]) return prev;
         const { [threadId]: _drop, ...rest } = prev;
@@ -1096,13 +700,12 @@ export const useMastraChat = (
       });
       if (threadId === activeThreadId) {
         const id = hash.id();
-        sessionsRef.current.set(id, { ...createThreadSession(), historyLoaded: true });
-        notifySessions();
+        resetSession(id, true);
         setActiveThreadId(id);
       }
       refreshThreads();
     },
-    [mastraClient, agentId, activeThreadId, notifySessions, refreshThreads],
+    [activeThreadId, agentId, mastraClient, refreshThreads, removeSession, resetSession],
   );
 
   /**
@@ -1163,107 +766,6 @@ export const useMastraChat = (
     writeMessages(threadId, trimmed);
     void runStream(threadId, trimmed);
   }, [activeKey, getSession, runStream, updateSession, writeMessages]);
-
-  // Hydrate the active thread from the server when it has no local
-  // session yet. In-flight streams keep updating their session in the
-  // background, so switching back shows live partial text without
-  // refetching or aborting other threads' runs.
-  useEffect(() => {
-    const threadId = activeKey;
-    const session = getSession(threadId);
-    if (session.historyLoaded) {
-      setIsLoadingHistory(false);
-      return;
-    }
-
-    let cancelled = false;
-    const controller = new AbortController();
-    historyInFlightRef.current.add(threadId);
-    setIsLoadingHistory(true);
-    mastraClient
-      .history({
-        agentId,
-        threadId: activeThreadId,
-        page: 0,
-        perPage: HISTORY_PAGE_SIZE,
-        signal: controller.signal,
-      })
-      .then((response) => {
-        if (cancelled) return;
-        updateSession(threadId, (current) => ({
-          ...current,
-          messages: response.uiMessages as unknown as UIMessage[],
-          historyLoaded: true,
-          hasMoreHistory: response.hasMore,
-          historyPage: 1,
-          toolEventsByMessage: {},
-          pendingApprovalsByMessage: {},
-          feedbackByMessage: {},
-        }));
-      })
-      .catch((error: unknown) => {
-        if (cancelled || (error as { name?: string }).name === "AbortError") return;
-        logger.error("history load error", {
-          error: sharedError.errorMessage(error),
-        });
-        updateSession(threadId, (current) => ({
-          ...current,
-          historyLoaded: true,
-          hasMoreHistory: false,
-        }));
-      })
-      .finally(() => {
-        historyInFlightRef.current.delete(threadId);
-        if (!cancelled) setIsLoadingHistory(false);
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [mastraClient, agentId, activeThreadId, activeKey, getSession, updateSession]);
-
-  const loadOlderHistory = useCallback(() => {
-    const threadId = activeKey;
-    const session = getSession(threadId);
-    if (historyInFlightRef.current.has(threadId) || !session.hasMoreHistory) return;
-    historyInFlightRef.current.add(threadId);
-    setLoadingMoreThreads((current) => new Set(current).add(threadId));
-    const page = session.historyPage;
-    updateSession(threadId, (current) => ({ ...current, historyPage: page + 1 }));
-    mastraClient
-      .history({ agentId, threadId: activeThreadId, page, perPage: HISTORY_PAGE_SIZE })
-      .then((response) => {
-        const uiMessages = response.uiMessages as unknown as UIMessage[];
-        if (uiMessages.length > 0) {
-          const currentMessages = getSession(threadId).messages;
-          writeMessages(threadId, [...uiMessages, ...currentMessages]);
-        }
-        updateSession(threadId, (current) => ({
-          ...current,
-          hasMoreHistory: response.hasMore,
-        }));
-      })
-      .catch((error: unknown) => {
-        logger.error("history load-more error", {
-          page,
-          error: sharedError.errorMessage(error),
-        });
-        updateSession(threadId, (current) => ({
-          ...current,
-          historyPage: page,
-          hasMoreHistory: false,
-        }));
-      })
-      .finally(() => {
-        historyInFlightRef.current.delete(threadId);
-        setLoadingMoreThreads((current) => {
-          if (!current.has(threadId)) return current;
-          const next = new Set(current);
-          next.delete(threadId);
-          return next;
-        });
-      });
-  }, [activeKey, activeThreadId, getSession, mastraClient, agentId, updateSession, writeMessages]);
 
   // Chat export (opt-in). Resolves `[chart:<id>]` / `[data:<id>]` embeds
   // straight off the client so the export inlines the same charts /
@@ -1343,47 +845,6 @@ export const useMastraChat = (
       }
     },
     [exportResolver, exportUserLabel, exportBrand],
-  );
-
-  // Submit thumbs / comment feedback for an assistant message to MLflow
-  // via the plugin's feedback route. The message's captured trace id
-  // scopes the assessment; without one there's nothing to attach to, so
-  // the call is skipped. A thumbs value is reflected optimistically so
-  // the active button highlights immediately; a soft "not recorded"
-  // (e.g. the trace is still exporting) is logged, not surfaced as an
-  // error, to keep the chat calm.
-  const submitFeedback = useCallback(
-    async (message: UIMessage, submission: FeedbackSubmission) => {
-      const traceId = feedbackByMessageRef.current[message.id]?.traceId;
-      if (!traceId) return;
-      if (submission.value) {
-        updateSession(activeKey, (session) => ({
-          ...session,
-          feedbackByMessage: {
-            ...session.feedbackByMessage,
-            [message.id]: { traceId, value: submission.value },
-          },
-        }));
-      }
-      try {
-        const result = await mastraClient.feedback({
-          traceId,
-          ...(submission.value !== undefined ? { value: submission.value === "up" } : {}),
-          ...(submission.comment ? { comment: submission.comment } : {}),
-        });
-        if (!result.ok) {
-          logger.warn("feedback not recorded (trace may still be exporting)", {
-            traceId,
-          });
-        }
-      } catch (error) {
-        logger.error("feedback error", {
-          traceId,
-          error: sharedError.errorMessage(error),
-        });
-      }
-    },
-    [activeKey, mastraClient, updateSession],
   );
 
   // Merge optimistic rows over the server list, newest first, dropping any
