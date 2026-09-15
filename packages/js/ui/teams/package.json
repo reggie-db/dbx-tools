@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-teams",
+  "description": "React renderer for Microsoft Teams Adaptive Cards and Teams chat surfaces",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -36,7 +37,7 @@
     "adaptivecards": "catalog:",
     "marked": "catalog:"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

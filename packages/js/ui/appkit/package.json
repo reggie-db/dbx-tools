@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-appkit",
+  "description": "Shared React and Tailwind foundation for AppKit-oriented UI packages",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -36,7 +37,7 @@
     "streamdown": "catalog:",
     "tailwindcss": "catalog:"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

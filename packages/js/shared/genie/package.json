@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/shared-genie",
+  "description": "Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -28,7 +29,7 @@
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

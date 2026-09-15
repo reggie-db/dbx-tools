@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/shared-mastra",
+  "description": "Browser-safe contracts for the AppKit Mastra plugin",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -23,13 +24,12 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-genie": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

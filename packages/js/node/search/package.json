@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/search",
+  "description": "Agent tools, federated search, index lifecycle, and Lakebase full-text extensions for AppKit AI Search",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -39,7 +40,7 @@
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

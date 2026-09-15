@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/appkit",
+  "description": "Node-side helpers for Databricks AppKit applications",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -34,7 +35,7 @@
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

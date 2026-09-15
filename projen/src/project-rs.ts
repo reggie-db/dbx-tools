@@ -8,6 +8,7 @@ import { Component, Project, TextFile, javascript } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import {
+  DBX_TOOLS_LICENSE,
   type DBXToolsJavaScriptProject,
   DBXToolsTypeScriptProject,
   projectRepositoryUrl,
@@ -940,7 +941,7 @@ function configureRustWorkspaceFiles(
       version: readWorkspaceVersion(project.outdir),
       edition: options.edition ?? "2021",
       "rust-version": options.rustVersion ?? "1.82",
-      license: options.license ?? "Apache-2.0",
+      license: options.license ?? DBX_TOOLS_LICENSE,
       repository: resolved.repository,
     },
     ...(options.workspaceDependencies

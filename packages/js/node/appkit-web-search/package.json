@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/appkit-web-search",
+  "description": "Server-side web search runtime, Mastra tools, and AppKit plugin",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -36,7 +37,7 @@
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

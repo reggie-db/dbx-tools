@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/teams",
+  "description": "Server-side Microsoft Teams Adaptive Card runtime, agent tool, and AppKit plugin",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -34,7 +35,7 @@
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

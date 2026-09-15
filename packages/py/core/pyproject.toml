@@ -6,6 +6,8 @@ version = "0.6.211"
 description = "Dependency-free configuration, identity, and mise-backed executable helpers for dbx-tools Python packages"
 readme = "README.md"
 requires-python = ">=3.11,<4"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = []
 
 [project.urls]

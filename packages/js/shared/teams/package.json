@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/shared-teams",
+  "description": "Browser-safe Adaptive Card and Bot Framework activity schemas for the Teams add-on",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -23,11 +24,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/shared-core": "workspace:*",
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

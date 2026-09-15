@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/auth-gate",
+  "description": "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -32,7 +33,7 @@
     "env-paths": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/path",
+  "description": "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -30,7 +31,7 @@
     "minimatch": "^10.2.5"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

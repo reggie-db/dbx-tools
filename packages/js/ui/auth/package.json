@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-auth",
+  "description": "React passwordless authentication surfaces for the dbx-tools authentication gate",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -37,7 +38,7 @@
     "@dbx-tools/ui-branding": "workspace:*",
     "better-auth": "catalog:"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

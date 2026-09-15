@@ -24,11 +24,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/shared-core": "workspace:*",
     "bun_python": "github:codehz/bun_python#3fae2f3e72fa1bbcb998894ad61e72cfd809671b"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

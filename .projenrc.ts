@@ -22,6 +22,110 @@ import { Component, DependencyType } from "projen";
 
 const SCOPE = "dbx-tools";
 
+const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  "packages/js/cli/appkit-env":
+    "CLI and formatting helpers for exporting AppKit auto-configuration results",
+  "packages/js/cli/auth": "Databricks OAuth commands mounted under dbx auth",
+  "packages/js/cli/dbx-tools":
+    "The dbx CLI for workspace lifecycle, AppKit environment, Databricks OAuth, and gated tunnels",
+  "packages/js/cli/tunnel":
+    "Public Portr and FRP tunnel commands protected by the dbx-tools authentication gate",
+  "packages/js/node/appkit": "Node-side helpers for Databricks AppKit applications",
+  "packages/js/node/appkit-graphiti":
+    "AppKit process plugin for the Python dbx-tools Graphiti MCP runtime",
+  "packages/js/node/appkit-mastra":
+    "AppKit plugin and server-side toolkit for hosting Mastra agents in Databricks Apps",
+  "packages/js/node/appkit-web-search":
+    "Server-side web search runtime, Mastra tools, and AppKit plugin",
+  "packages/js/node/auth-gate":
+    "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
+  "packages/js/node/core":
+    "Node helpers for layered configuration, binary installation, process execution, locking, and project discovery",
+  "packages/js/node/core-rs": "Node bindings for dbx-tools-core",
+  "packages/js/node/databricks":
+    "Databricks workspace, filesystem, cloud, and network utilities",
+  "packages/js/node/databricks-zerobus":
+    "Region-aware Zerobus ingest helpers for Databricks workspaces",
+  "packages/js/node/email": "Server-side email runtime, agent tools, and AppKit plugin",
+  "packages/js/node/fs":
+    "Node local-disk implementation of the dbx-tools browser-safe filesystem contract",
+  "packages/js/node/genie": "Server-side Databricks Genie chat drivers",
+  "packages/js/node/google-rs": "Node bindings for dbx-tools-google",
+  "packages/js/node/model": "Workspace-aware Databricks Model Serving selection",
+  "packages/js/node/path":
+    "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
+  "packages/js/node/postgres":
+    "Connection-correct PostgreSQL advisory locks and LISTEN/NOTIFY topic bus for Node.js",
+  "packages/js/node/search":
+    "Agent tools, federated search, index lifecycle, and Lakebase full-text extensions for AppKit AI Search",
+  "packages/js/node/teams":
+    "Server-side Microsoft Teams Adaptive Card runtime, agent tool, and AppKit plugin",
+  "packages/js/node/tunnel":
+    "In-process public Portr and FRP tunnels protected by the dbx-tools authentication gate",
+  "packages/js/shared/auth":
+    "Browser-safe schemas and types for the dbx-tools passwordless authentication gate",
+  "packages/js/shared/core": "Browser-safe utility foundation for dbx-tools packages",
+  "packages/js/shared/email": "Browser-safe email sending schemas and inferred types",
+  "packages/js/shared/email-template":
+    "Universal React Email presentation shared by dbx-tools server and browser surfaces",
+  "packages/js/shared/fs":
+    "Browser-safe filesystem contract and abstract base for rooted storage backends",
+  "packages/js/shared/genie":
+    "Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers",
+  "packages/js/shared/mastra": "Browser-safe contracts for the AppKit Mastra plugin",
+  "packages/js/shared/model": "Browser-safe model selection contract and classifier",
+  "packages/js/shared/search":
+    "Browser-safe schemas and extension types for AppKit-compatible AI Search providers",
+  "packages/js/shared/teams":
+    "Browser-safe Adaptive Card and Bot Framework activity schemas for the Teams add-on",
+  "packages/js/ui/appkit":
+    "Shared React and Tailwind foundation for AppKit-oriented UI packages",
+  "packages/js/ui/auth":
+    "React passwordless authentication surfaces for the dbx-tools authentication gate",
+  "packages/js/ui/branding":
+    "Portable dbx-tools brand assets and React and browser bindings",
+  "packages/js/ui/email": "React email surfaces for AppKit chat and admin workflows",
+  "packages/js/ui/mastra": "React chat UI for the AppKit Mastra plugin",
+  "packages/js/ui/search": "React search box and results for Databricks AI Search",
+  "packages/js/ui/teams":
+    "React renderer for Microsoft Teams Adaptive Cards and Teams chat surfaces",
+};
+
+const SHARED_CORE_DEPENDENT_PATHS = [
+  "packages/js/cli/appkit-env",
+  "packages/js/cli/auth",
+  "packages/js/cli/dbx-tools",
+  "packages/js/cli/tunnel",
+  "packages/js/node/appkit",
+  "packages/js/node/appkit-graphiti",
+  "packages/js/node/appkit-mastra",
+  "packages/js/node/appkit-web-search",
+  "packages/js/node/auth-gate",
+  "packages/js/node/core",
+  "packages/js/node/databricks",
+  "packages/js/node/email",
+  "packages/js/node/fs",
+  "packages/js/node/genie",
+  "packages/js/node/model",
+  "packages/js/node/path",
+  "packages/js/node/postgres",
+  "packages/js/node/search",
+  "packages/js/node/teams",
+  "packages/js/node/tunnel",
+  "packages/js/shared/email-template",
+  "packages/js/shared/fs",
+  "packages/js/shared/genie",
+  "packages/js/shared/model",
+  "packages/js/ui/appkit",
+  "packages/js/ui/auth",
+  "packages/js/ui/branding",
+  "packages/js/ui/email",
+  "packages/js/ui/mastra",
+  "packages/js/ui/teams",
+  "packages/example/app/appkit-demo",
+  "packages/example/server/appkit-demo",
+] as const;
+
 /** Copy canonical branding into published package trees after synthesis. */
 class BrandPackageAssets extends Component {
   /** Refresh crate-local and UI package brand copies after generated manifests are available. */
@@ -41,6 +145,7 @@ const root = new projenProject.DBXToolsNodeProject({
   // `packages/js` is the JavaScript product tree; `packages/example` holds the
   // runnable demo app as `workspace:*` source siblings of the packages it uses.
   packageRoots: ["packages/js", "packages/test", "packages/example"],
+  packageDescriptions: PACKAGE_DESCRIPTIONS,
   packageTagPaths: { polyglot: ["node"] },
   github: true,
   buildWorkflow: true,
@@ -208,10 +313,10 @@ for (const identifierName of ["shared-core", "appkit", "postgres"]) {
   });
 }
 
-// shared-core is the light, browser-safe base: every package (except
-// shared-core itself) gets it automatically, regardless of root or tag. When in
-// doubt, reach for shared-core so per-package rules never add it.
-project.applyToProjects(root, { identifierName: "!shared-core" }, (p) => {
+// shared-core is the light, browser-safe base, but only packages whose
+// production source imports it declare it. Keep this explicit path list aligned
+// with source imports rather than forcing the dependency onto every package.
+project.applyToProjects(root, { path: [...SHARED_CORE_DEPENDENT_PATHS] }, (p) => {
   p.addDeps("@dbx-tools/shared-core@workspace:*");
 });
 
@@ -227,8 +332,8 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // (node types + ES2022 lib, no DOM). shared-core stays browser-safe; anything
 // needing child_process / fs / process depends on node-core instead. zod is here
 // for `config.ts`, which validates `databricks bundle validate` output.
-// (shared-core is added by the blanket base-dep mixin above, so this package
-// needs no rule of its own.) YAML belongs here because `config.ts` owns both
+// shared-core is listed in the explicit source-dependent rule above. YAML
+// belongs here because `config.ts` owns both
 // bundle and app.yaml config-source parsing.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml", "zod@catalog:");

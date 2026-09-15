@@ -50,11 +50,6 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/shared-search",
       "version": "workspace:*",
       "type": "runtime"

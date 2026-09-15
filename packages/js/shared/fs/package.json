@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/shared-fs",
+  "description": "Browser-safe filesystem contract and abstract base for rooted storage backends",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -26,7 +27,7 @@
     "@dbx-tools/shared-core": "workspace:*"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

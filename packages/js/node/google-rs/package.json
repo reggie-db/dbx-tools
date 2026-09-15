@@ -26,12 +26,11 @@
   },
   "dependencies": {
     "@dbx-tools/core-rs": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*",
     "@ubjs/core": "0.31.0-5",
     "@ubjs/node": "0.31.0-5"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

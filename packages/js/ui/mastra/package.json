@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-mastra",
+  "description": "React chat UI for the AppKit Mastra plugin",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -47,7 +48,7 @@
     "sql-formatter": "catalog:",
     "streamdown": "catalog:"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

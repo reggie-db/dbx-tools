@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/shared-model",
+  "description": "Browser-safe model selection contract and classifier",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -27,7 +28,7 @@
     "zod": "catalog:"
   },
   "main": "index.ts",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "main": "./lib/index.js",

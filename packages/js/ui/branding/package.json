@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-branding",
+  "description": "Portable dbx-tools brand assets and React and browser bindings",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -32,7 +33,7 @@
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

@@ -1,5 +1,6 @@
 {
   "name": "@dbx-tools/ui-email",
+  "description": "React email surfaces for AppKit chat and admin workflows",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -37,7 +38,7 @@
     "@dbx-tools/ui-branding": "workspace:*",
     "lucide-react": "catalog:"
   },
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

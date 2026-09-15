@@ -94,6 +94,12 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(gitignore, /^python\/packages\/\*\*\/dist\/$/m);
 
     const app = readFileSync(join(outdir, "python/packages/app/pyproject.toml"), "utf8");
+    assert.match(app, /license = "Apache-2\.0"/);
+    assert.match(app, /license-files = \[\s*"LICENSE"\s*\]/);
+    assert.match(
+      readFileSync(join(outdir, "python/packages/app/LICENSE"), "utf8"),
+      /Apache License/,
+    );
     assert.match(
       app,
       /fixture-core @ git\+https:\/\/github\.com\/example\/fixture\.git@main#subdirectory=python\/packages\/core/,
