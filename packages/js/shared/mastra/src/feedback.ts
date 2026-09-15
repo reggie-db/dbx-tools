@@ -40,6 +40,7 @@ export const DEFAULT_COMMENT_NAME = "user_comment";
  * when no thumbs value is present).
  */
 export const MastraFeedbackValueSchema = z.union([z.boolean(), z.number(), z.string()]);
+/** Value recorded on the MLflow assessment for a Mastra turn. */
 export type MastraFeedbackValue = z.infer<typeof MastraFeedbackValueSchema>;
 
 /**
@@ -67,6 +68,7 @@ export const MastraFeedbackRequestSchema = z
   .refine((v) => v.value !== undefined || (v.comment?.trim().length ?? 0) > 0, {
     message: "feedback requires a value or a non-empty comment",
   });
+/** Validated request body accepted by the Mastra feedback route. */
 export type MastraFeedbackRequest = z.infer<typeof MastraFeedbackRequestSchema>;
 
 /**
@@ -83,4 +85,5 @@ export const MastraFeedbackResponseSchema = z.object({
   ok: z.boolean(),
   assessmentId: z.string().optional(),
 });
+/** Feedback-route result, including the assessment id when MLflow accepted it. */
 export type MastraFeedbackResponse = z.infer<typeof MastraFeedbackResponseSchema>;

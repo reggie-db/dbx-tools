@@ -75,6 +75,7 @@ export const MastraClientConfigSchema = z.object({
   feedbackEnabled: z.boolean().default(false),
   chatAlwaysAvailable: z.boolean().default(false),
 });
+/** Browser-safe Mastra plugin descriptor used to construct route and stream clients. */
 export type MastraClientConfig = z.infer<typeof MastraClientConfigSchema>;
 
 /**
@@ -93,6 +94,7 @@ export const DefaultModelResponseSchema = z.object({
   model: z.string().nullable(),
   displayName: z.string().nullable(),
 });
+/** Response identifying the model currently selected as the plugin default. */
 export type DefaultModelResponse = z.infer<typeof DefaultModelResponseSchema>;
 
 /* ---------------------------- model catalogue ---------------------------- */
@@ -107,6 +109,7 @@ export type DefaultModelResponse = z.infer<typeof DefaultModelResponseSchema>;
 export const ServingEndpointsResponseSchema = z.object({
   endpoints: z.array(model.ServingEndpointSummarySchema),
 });
+/** Available Databricks serving endpoints returned by the Mastra model route. */
 export type ServingEndpointsResponse = z.infer<typeof ServingEndpointsResponseSchema>;
 
 /* ----------------------------- chat history ----------------------------- */
@@ -125,6 +128,7 @@ export const MastraHistoryUIMessageSchema = z.object({
   parts: z.array(z.unknown()).readonly(),
   metadata: z.unknown().optional(),
 });
+/** Persisted chat message normalized into the browser UI message contract. */
 export type MastraHistoryUIMessage = z.infer<typeof MastraHistoryUIMessageSchema>;
 
 /**
@@ -148,6 +152,7 @@ export const MastraHistoryResponseSchema = z.object({
   total: z.number(),
   hasMore: z.boolean(),
 });
+/** One cursor page of normalized messages for a Mastra thread. */
 export type MastraHistoryResponse = z.infer<typeof MastraHistoryResponseSchema>;
 
 /**
@@ -176,6 +181,7 @@ export const MastraClearHistoryResponseSchema = z.object({
   threadId: z.string(),
   cleared: z.number(),
 });
+/** Result of clearing the messages owned by one Mastra thread. */
 export type MastraClearHistoryResponse = z.infer<typeof MastraClearHistoryResponseSchema>;
 
 /* -------------------------------- threads -------------------------------- */
@@ -207,6 +213,7 @@ export const MastraThreadSchema = z.object({
   updatedAt: z.string(),
   metadata: z.unknown().optional(),
 });
+/** User-visible thread metadata, separate from the thread's message history. */
 export type MastraThread = z.infer<typeof MastraThreadSchema>;
 
 /**
@@ -227,6 +234,7 @@ export const MastraThreadsResponseSchema = z.object({
   total: z.number(),
   hasMore: z.boolean(),
 });
+/** One cursor page of Mastra threads owned by the active resource. */
 export type MastraThreadsResponse = z.infer<typeof MastraThreadsResponseSchema>;
 
 /**
@@ -247,6 +255,7 @@ export const MastraDeleteThreadResponseSchema = z.object({
   threadId: z.string(),
   deleted: z.boolean(),
 });
+/** Result of deleting one thread and its associated memory records. */
 export type MastraDeleteThreadResponse = z.infer<typeof MastraDeleteThreadResponseSchema>;
 
 /** Longest thread title the rename route accepts (trimmed server-side). */
@@ -265,6 +274,7 @@ export const MASTRA_THREAD_TITLE_MAX = 200;
 export const MastraUpdateThreadRequestSchema = z.object({
   title: z.string().trim().min(1).max(MASTRA_THREAD_TITLE_MAX),
 });
+/** Validated mutable fields accepted when renaming a Mastra thread. */
 export type MastraUpdateThreadRequest = z.infer<typeof MastraUpdateThreadRequestSchema>;
 
 /**
@@ -282,6 +292,7 @@ export const MastraUpdateThreadResponseSchema = z.object({
   agentId: z.string(),
   thread: MastraThreadSchema,
 });
+/** Updated thread returned after a successful rename. */
 export type MastraUpdateThreadResponse = z.infer<typeof MastraUpdateThreadResponseSchema>;
 
 /* ------------------------------ suggestions ------------------------------ */
@@ -299,6 +310,7 @@ export type MastraUpdateThreadResponse = z.infer<typeof MastraUpdateThreadRespon
 export const MastraSuggestionsResponseSchema = z.object({
   questions: z.array(z.string()),
 });
+/** Follow-up prompts suggested for the current agent and thread context. */
 export type MastraSuggestionsResponse = z.infer<typeof MastraSuggestionsResponseSchema>;
 
 /* --------------------------------- charts --------------------------------- */
@@ -373,6 +385,7 @@ export const ChartTypeSchema = z
       ),
   ])
   .describe("The chart shape that best matches the data and intent.");
+/** Supported chart family selected by the server-side chart planner. */
 export type ChartType = z.infer<typeof ChartTypeSchema>;
 
 /**
@@ -388,6 +401,7 @@ export const ChartResultSchema = z.object({
       "Fully-resolved Echarts `EChartsOption` JSON for this chart - drop directly into an Echarts instance (or `<ReactECharts option={...} />`) without further processing. Includes title / tooltip / legend / grid / axis / series defaults already merged in.",
     ),
 });
+/** Render-ready chart plan stored behind a chart embed identifier. */
 export type ChartResult = z.infer<typeof ChartResultSchema>;
 
 /**
@@ -420,6 +434,7 @@ export const ChartSchema = z.object({
     "Resolved chart plan. Absent while processing and when the run errored.",
   ),
 });
+/** Pollable chart-cache entry representing pending, successful, or failed planning. */
 export type Chart = z.infer<typeof ChartSchema>;
 
 /* ------------------------------- statements ------------------------------- */
@@ -452,6 +467,7 @@ export const StatementDataSchema = z.object({
   rowCount: z.number(),
   truncated: z.boolean(),
 });
+/** Tabular statement payload resolved from a `[data:<statement_id>]` embed marker. */
 export type StatementData = z.infer<typeof StatementDataSchema>;
 
 /* ----------------------------- writer surface ---------------------------- */
@@ -503,6 +519,7 @@ export const StartedEventSchema = z.object({
   /** Question the Genie agent sent to Genie. */
   content: z.string(),
 });
+/** Immediate lifecycle event emitted when an `ask_genie` invocation begins. */
 export type StartedEvent = z.infer<typeof StartedEventSchema>;
 
 /**
@@ -530,6 +547,7 @@ export const AskGenieDoneEventSchema = z.object({
    */
   status: z.custom<MessageStatus>((v) => typeof v === "string"),
 });
+/** Completion event for one `ask_genie` invocation, including its terminal status. */
 export type AskGenieDoneEvent = z.infer<typeof AskGenieDoneEventSchema>;
 
 /**
@@ -547,6 +565,7 @@ export const MastraGenieErrorEventSchema = z.object({
   messageId: z.string().optional(),
   error: z.string(),
 });
+/** Mastra-side failure event for errors outside Genie's normal terminal result. */
 export type MastraGenieErrorEvent = z.infer<typeof MastraGenieErrorEventSchema>;
 
 /**
@@ -577,6 +596,7 @@ export const SummaryEventSchema = z.object({
    */
   dataItems: z.number().int().nonnegative(),
 });
+/** Lifecycle event emitted before summary data items are hydrated into charts. */
 export type SummaryEvent = z.infer<typeof SummaryEventSchema>;
 
 /**
@@ -590,6 +610,7 @@ export const GenieAgentEventSchema = z.discriminatedUnion("type", [
   MastraGenieErrorEventSchema,
   SummaryEventSchema,
 ]);
+/** Mastra-owned lifecycle events layered on top of Genie's wire event stream. */
 export type GenieAgentEvent = z.infer<typeof GenieAgentEventSchema>;
 
 /**
@@ -608,6 +629,7 @@ export const GenieWriterEventSchema = z.union([
   genieModel.GenieChatEventSchema,
   GenieAgentEventSchema,
 ]);
+/** Complete event vocabulary written by the Mastra Genie integration. */
 export type GenieWriterEvent = z.infer<typeof GenieWriterEventSchema>;
 
 /** Discriminator type for {@link GenieWriterEvent}. */
@@ -632,6 +654,7 @@ export const GenieDatasetDataSchema = z.object({
   rows: z.array(z.record(z.string(), z.unknown())),
   rowCount: z.number(),
 });
+/** Hydrated tabular data that always backs a Genie visualization item. */
 export type GenieDatasetData = z.infer<typeof GenieDatasetDataSchema>;
 
 /**
@@ -652,6 +675,7 @@ export const GenieDatasetChartSchema = z.object({
   chartId: z.string(),
   chartType: ChartTypeSchema,
 });
+/** Lightweight reference to a chart plan stored in the Mastra chart cache. */
 export type GenieDatasetChart = z.infer<typeof GenieDatasetChartSchema>;
 
 /**
@@ -665,6 +689,7 @@ export const GenieDatasetSchema = z.object({
   data: GenieDatasetDataSchema,
   chart: GenieDatasetChartSchema.optional(),
 });
+/** Visualization dataset with required table data and an optional planned chart. */
 export type GenieDataset = z.infer<typeof GenieDatasetSchema>;
 
 /**
@@ -696,6 +721,7 @@ export const GenieSummaryItemSchema = z.discriminatedUnion("type", [
     dataset: GenieDatasetSchema,
   }),
 ]);
+/** Ordered prose or visualization item in the Genie agent's final summary. */
 export type GenieSummaryItem = z.infer<typeof GenieSummaryItemSchema>;
 
 /** Discriminator type for {@link GenieSummaryItem}. */
@@ -714,4 +740,5 @@ export const GenieAgentResultSchema = z.object({
   summary: z.array(GenieSummaryItemSchema),
   error: z.string().optional(),
 });
+/** Final renderable output returned by the Genie agent tool to its caller. */
 export type GenieAgentResult = z.infer<typeof GenieAgentResultSchema>;

@@ -32,14 +32,17 @@ export type TokenizeOptions = {
   camelCase?: boolean;
 };
 
-// Keys/identifiers/slugs are always lowercased; `lowerCase` is not a
-// caller-configurable option.
+/**
+ * Tokenization and overflow controls for lowercase keys and slugs. The default
+ * length is unlimited; overflow uses a six-character hash unless overridden.
+ */
 export type KeyOptions = Omit<TokenizeOptions, "lowerCase" | "capitalize"> & {
   maxLength?: number;
   truncateStrategy?: "hash" | "trim" | "empty";
   truncateHashLength?: number;
 };
 
+/** {@link KeyOptions} plus the token delimiter used by identifier generation. */
 export type IdentifierOptions = KeyOptions & {
   delimiter?: string;
 };

@@ -11,6 +11,7 @@ import { z } from "zod";
 const nonBlankString = z.string().trim().min(1);
 const color = z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
 
+/** Package asset references used when a brand context supplies no custom artwork. */
 export const DEFAULT_BRAND_ASSETS = {
   icon: {
     light: "@dbx-tools/ui-branding/assets/icon-light.svg",
@@ -23,6 +24,7 @@ export const DEFAULT_BRAND_ASSETS = {
   favicon: "@dbx-tools/ui-branding/assets/icon-light.svg",
 } as const;
 
+/** Validates light and optional dark variants for one visual asset. */
 export const BrandAssetSetSchema = z
   .object({
     light: nonBlankString.describe("Asset for light surfaces."),
@@ -31,6 +33,7 @@ export const BrandAssetSetSchema = z
   .strict()
   .describe("Theme-aware references to one visual asset.");
 
+/** Strict brand palette whose omitted colors resolve to the dbx tools defaults. */
 export const BrandColorsSchema = z
   .object({
     primary: color.default("#1B3139").describe("Primary action and identity color."),
@@ -45,6 +48,7 @@ export const BrandColorsSchema = z
   .strict()
   .prefault({});
 
+/** Strict audience, tone, principle, and avoidance lists with practical defaults. */
 export const BrandVoiceSchema = z
   .object({
     audience: z
@@ -65,6 +69,10 @@ export const BrandVoiceSchema = z
   .strict()
   .prefault({});
 
+/**
+ * Strict portable brand contract that fills identity, assets, colors,
+ * typography, voice, links, and extension defaults during parsing.
+ */
 export const BrandContextSchema = z
   .object({
     schemaVersion: z.literal("1").default("1"),
@@ -111,8 +119,11 @@ export const BrandContextSchema = z
   .strict()
   .describe("Portable identity, visual, and voice context for UI, libraries, and LLMs.");
 
+/** Fully validated brand context after every schema default has been applied. */
 export type BrandContext = z.output<typeof BrandContextSchema>;
+/** Input accepted by {@link BrandContextSchema}, before defaults are materialized. */
 export type BrandContextInput = z.input<typeof BrandContextSchema>;
+/** Theme-aware light and optional dark references for one brand asset. */
 export type BrandAssetSet = z.output<typeof BrandAssetSetSchema>;
 
 /** Validate input and fill every dbx tools default. */
@@ -120,6 +131,7 @@ export function parseBrandContext(input: unknown = {}): BrandContext {
   return BrandContextSchema.parse(input);
 }
 
+/** Canonical dbx tools brand context with all schema defaults resolved. */
 export const defaultBrandContext: BrandContext = parseBrandContext();
 
 /** JSON Schema representation suitable for structured-output and tool definitions. */

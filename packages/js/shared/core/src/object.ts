@@ -46,6 +46,7 @@ export type Container<T = unknown> = Iterable<T>;
  */
 export type Collection<T> = ReadonlyArray<T> | ReadonlySet<T> | ReadonlyMap<unknown, T>;
 
+/** Non-empty tuple used where an API requires at least one value. */
 export type OneOrMany<T> = [T, ...T[]];
 
 /** Narrow a readonly array to a non-empty {@link OneOrMany} tuple. */
@@ -804,6 +805,7 @@ export interface NameLike {
   name?: string;
 }
 
+/** Property keys of `T` whose values are not callable. */
 export type NonFunctionKeys<T> = {
   [K in keyof T]: T[K] extends (...args: any[]) => any ? never : K;
 }[keyof T];
