@@ -5,6 +5,7 @@ mod error;
 mod images;
 mod protocol;
 mod rate_limit;
+mod request_log;
 mod routes;
 mod stream;
 mod throttle;

@@ -31,10 +31,11 @@ use crate::{
     rate_limit::{
         rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
     },
+    request_log::RequestLogContext,
     stream::{stream_response, StreamLogContext},
     throttle::{
-        is_input_limit_message, response_token_usage, RequestThrottle, ThrottleAcquisition,
-        ThrottleConfig, TokenEstimate,
+        is_input_limit_message, response_token_usage, RequestThrottle, ResponseTokenUsage,
+        ThrottleAcquisition, ThrottleConfig, TokenEstimate,
     },
 };
 
@@ -259,37 +260,18 @@ async fn embeddings(
         upstream_attempt,
     } = upstream;
     let upstream = buffered_response(response).await?;
-    let usage = serde_json::from_slice::<Value>(&upstream.body)
-        .map(|output| response_token_usage(&output))
-        .unwrap_or_default();
-    throttle.reconcile(usage).await;
-    info!(
-        route = "/v1/embeddings",
+    let usage = response_usage(&upstream.body);
+    RequestLogContext::new(
         requested_model,
-        resolved_model = endpoint.name,
-        status = upstream.status.as_u16(),
-        client_ip = %caller.peer.ip(),
-        client_port = caller.peer.port(),
+        endpoint.name,
+        caller.peer,
         request_bytes,
-        raw_estimated_input_tokens = throttle.raw_estimated_input_tokens,
-        estimate_factor = throttle.estimate_factor,
-        estimated_input_tokens = throttle.estimated_input_tokens,
-        reserved_output_tokens = throttle.reserved_output_tokens,
-        estimated_tokens = throttle.estimated_tokens,
-        input_tokens = usage.input,
-        output_tokens = usage.output,
-        total_tokens = usage.total,
+        started,
+        throttle,
         upstream_attempt,
-        token_throttle_mode = ?throttle.mode,
-        token_throttle_active = throttle.active,
-        token_limit_input = throttle.input_limit,
-        token_reservation_input = throttle.reserved_input_tokens,
-        token_window_used_before = throttle.input_window_used_before,
-        token_window_wait_ms = throttle.wait.as_millis(),
-        oversized_request = false,
-        latency_ms = started.elapsed().as_millis(),
-        "embedding request completed"
-    );
+    )
+    .complete_embedding(upstream.status, usage)
+    .await;
     Ok(upstream.into_raw_response())
 }
 
@@ -376,35 +358,19 @@ async fn proxy(
         throttle,
         upstream_attempt,
     } = upstream;
+    let request_log = RequestLogContext::new(
+        requested_model,
+        model.clone(),
+        caller.peer,
+        request_bytes,
+        started,
+        throttle,
+        upstream_attempt,
+    );
     let status = upstream_status(&upstream)?;
     if status.is_success() && streaming {
         let response_headers = forwarded_response_headers(upstream.headers());
-        info!(
-            ?client_wire,
-            ?target,
-            requested_model,
-            resolved_model = model,
-            streaming,
-            status = status.as_u16(),
-            client_ip = %caller.peer.ip(),
-            client_port = caller.peer.port(),
-            request_bytes,
-            raw_estimated_input_tokens = throttle.raw_estimated_input_tokens,
-            estimate_factor = throttle.estimate_factor,
-            estimated_input_tokens = throttle.estimated_input_tokens,
-            reserved_output_tokens = throttle.reserved_output_tokens,
-            estimated_tokens = throttle.estimated_tokens,
-            upstream_attempt,
-            token_throttle_mode = ?throttle.mode,
-            token_throttle_active = throttle.active,
-            token_limit_input = throttle.input_limit,
-            token_reservation_input = throttle.reserved_input_tokens,
-            token_window_used_before = throttle.input_window_used_before,
-            token_window_wait_ms = throttle.wait.as_millis(),
-            oversized_request = false,
-            latency_ms = started.elapsed().as_millis(),
-            "model stream connected"
-        );
+        request_log.stream_connected(client_wire, target, status);
         return stream_response(
             client_wire,
             target,
@@ -414,82 +380,36 @@ async fn proxy(
             StreamLogContext {
                 client_wire,
                 target,
-                requested_model,
-                resolved_model: model,
-                peer: caller.peer,
-                request_bytes,
-                started,
-                throttle,
-                upstream_attempt,
+                request: request_log,
             },
         );
     }
     let upstream = buffered_response(upstream).await?;
     if !upstream.status.is_success() {
-        info!(
-            ?client_wire,
-            ?target,
-            requested_model,
-            resolved_model = model,
-            streaming,
-            status = upstream.status.as_u16(),
-            client_ip = %caller.peer.ip(),
-            client_port = caller.peer.port(),
-            request_bytes,
-            raw_estimated_input_tokens = throttle.raw_estimated_input_tokens,
-            estimate_factor = throttle.estimate_factor,
-            estimated_input_tokens = throttle.estimated_input_tokens,
-            reserved_output_tokens = throttle.reserved_output_tokens,
-            estimated_tokens = throttle.estimated_tokens,
-            upstream_attempt,
-            token_throttle_mode = ?throttle.mode,
-            token_throttle_active = throttle.active,
-            token_limit_input = throttle.input_limit,
-            token_reservation_input = throttle.reserved_input_tokens,
-            token_window_used_before = throttle.input_window_used_before,
-            token_window_wait_ms = throttle.wait.as_millis(),
-            oversized_request = false,
-            latency_ms = started.elapsed().as_millis(),
-            "model request completed"
-        );
+        request_log
+            .complete_model(
+                client_wire,
+                target,
+                streaming,
+                upstream.status,
+                ResponseTokenUsage::default(),
+            )
+            .await;
         return Ok(upstream.into_raw_response());
     }
 
     let output = adapt_response(client_wire, target, upstream.status, &upstream.body)?;
-    let usage = serde_json::from_slice::<Value>(&output)
-        .map(|output| response_token_usage(&output))
-        .unwrap_or_default();
-    throttle.reconcile(usage).await;
-    info!(
-        ?client_wire,
-        ?target,
-        requested_model,
-        resolved_model = model,
-        streaming,
-        status = upstream.status.as_u16(),
-        client_ip = %caller.peer.ip(),
-        client_port = caller.peer.port(),
-        request_bytes,
-        raw_estimated_input_tokens = throttle.raw_estimated_input_tokens,
-        estimate_factor = throttle.estimate_factor,
-        estimated_input_tokens = throttle.estimated_input_tokens,
-        reserved_output_tokens = throttle.reserved_output_tokens,
-        estimated_tokens = throttle.estimated_tokens,
-        input_tokens = usage.input,
-        output_tokens = usage.output,
-        total_tokens = usage.total,
-        upstream_attempt,
-        token_throttle_mode = ?throttle.mode,
-        token_throttle_active = throttle.active,
-        token_limit_input = throttle.input_limit,
-        token_reservation_input = throttle.reserved_input_tokens,
-        token_window_used_before = throttle.input_window_used_before,
-        token_window_wait_ms = throttle.wait.as_millis(),
-        oversized_request = false,
-        latency_ms = started.elapsed().as_millis(),
-        "model request completed"
-    );
+    let usage = response_usage(&output);
+    request_log
+        .complete_model(client_wire, target, streaming, upstream.status, usage)
+        .await;
     Ok(upstream.into_json_response(output))
+}
+
+fn response_usage(body: &[u8]) -> ResponseTokenUsage {
+    serde_json::from_slice::<Value>(body)
+        .map(|output| response_token_usage(&output))
+        .unwrap_or_default()
 }
 
 async fn send_upstream(
