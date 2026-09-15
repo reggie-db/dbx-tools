@@ -12,10 +12,10 @@ excluded because it is run frequently by the maintainer.
 
 ## Executive Summary
 
-- The first high-risk control point, the Mastra chat hook, was decomposed on
-  2026-09-15 without changing its published facade. The largest remaining
-  maintenance risks are the Mastra chat view, the Mastra AppKit route
-  registrar, and the Rust workspace/release generator.
+- The high-risk Mastra UI, AppKit routing, and Rust generator control points
+  were decomposed on 2026-09-15 without changing their published contracts or
+  generated workflows. The remaining High work is concentrated in
+  documentation correctness, coverage, and source-documentation enforcement.
 - The repository is not broadly copy-pasted. `jscpd` found 437 duplicated lines
   across 108,989 scanned lines, approximately 0.4 percent. The actionable DRY
   issues are small policy duplicates, not a reason for a repo-wide abstraction
@@ -24,8 +24,8 @@ excluded because it is run frequently by the maintainer.
   export maps for subpath-only UI packages, and it omits Python and Rust APIs.
 - TypeDoc is configured to skip error checking, so documentation can be
   generated even when its entry points or references are invalid.
-- Public contract validation is inconsistent at two browser network boundaries:
-  Mastra SSE chunks and universal-search JSON are trusted after parsing.
+- The two audited browser network boundaries now validate Mastra SSE chunks and
+  universal-search JSON with schemas from their owning shared packages.
 - Public source documentation is uneven. An AST scan found 189 undocumented
   importable TypeScript symbols among 1,027 inspected symbols, with the largest
   concentrations in shared contract packages. Generated bindings should remain
@@ -68,8 +68,8 @@ longer matches the public product surface.
 | ARCH-01 | Architectural decay       | `packages/js/ui/mastra/src/react/mastra-chat.tsx:219`                                                                             | High     | L      | Completed 2026-09-15. `useMastraChat` previously spanned roughly 1,269 lines and owned client resolution, persisted model selection, thread/session state, history paging, streaming, approvals, steering, feedback, suggestions, and embed fetch state.                                                       | The public hook remains the facade. Session storage, history paging, stream processing, approval resumption, and feedback submission now live in focused internal hooks with explicit inputs and outputs.           |
 | ARCH-02 | Architectural decay       | `packages/js/ui/mastra/src/react/chat-view.tsx:13`                                                                                | High     | L      | Completed 2026-09-15. `ChatView` previously occupied roughly 897 lines and combined transcript rendering, scrolling, side panels, model selection, composer behavior, queue management, exports, approvals, feedback, and responsive layout.                                                                   | `ChatViewProps` remains the compatibility contract. The 119-line facade now delegates responsive thread navigation, transcript scrolling/rendering, and composer/queue ownership to three focused internal modules. |
 | ARCH-03 | Architectural decay       | `packages/js/node/appkit-mastra/src/plugin.ts:457`                                                                                | High     | M      | Completed 2026-09-15. `MastraPlugin.injectRoutes` previously contained roughly 317 lines of MCP rewriting, models, suggestions, feedback, embed fetches, agent dispatch, authorization gates, and error mapping.                                                                                               | `injectRoutes` is now a seven-line ordered composition of focused MCP, model, embed, suggestion, feedback, and agent registrars. The gated Mastra catch-all is mechanically last.                                   |
-| ARCH-04 | Architectural decay       | `projen/src/project-rs.ts:543`                                                                                                    | High     | L      | The Rust workspace constructor is approximately 311 lines and performs crate discovery, package construction, binding inference, binary mapping, facade creation, task registration, dependency graph work, and workspace-file synthesis. This file is also a high-churn hotspot.                              | Normalize options first, then delegate discovery, binding mapping, facade generation, and task wiring to pure builders that return typed plans.                                                                     |
-| ARCH-05 | Architectural decay       | `projen/src/project-rs.ts:855`                                                                                                    | High     | L      | `addReleaseWorkflow` is approximately 396 lines and encodes release matrices, artifact naming, Rust builds, Node and Python bindings, registry publication, facades, and smoke commands in one workflow-construction method.                                                                                   | Build typed job fragments per artifact family and compose them in `addReleaseWorkflow`; centralize repeated environment and asset conventions.                                                                      |
+| ARCH-04 | Architectural decay       | `projen/src/project-rs.ts:1430`                                                                                                   | High     | L      | Completed 2026-09-15. The Rust workspace constructor previously performed crate discovery, package construction, binding inference, binary mapping, facade creation, task registration, dependency graph work, and workspace-file synthesis inline.                                                            | The 39-line constructor now orchestrates normalized workspace options, typed release/binding plans, focused package builders, generated-file writers, and task registration helpers.                                |
+| ARCH-05 | Architectural decay       | `projen/src/project-rs.ts:1471`                                                                                                   | High     | L      | Completed 2026-09-15. `addReleaseWorkflow` previously encoded release matrices, artifact naming, Rust builds, Node and Python bindings, registry publication, facades, and smoke commands in one approximately 396-line method.                                                                                | The 31-line composer now installs jobs from one typed release plan and dedicated Rust-build, Cargo, GitHub-asset, native-npm, and Node-facade builders.                                                             |
 | DEP-01  | Dependency debt           | `.projenrc.ts:202`                                                                                                                | Medium   | S      | A blanket rule adds `@dbx-tools/shared-core` to every JavaScript package. A source-import scan found nine published packages with the generated dependency but no direct import: core-rs, databricks-zerobus, google-rs, shared-auth, shared-email, shared-mastra, shared-search, shared-teams, and ui-search. | Remove the blanket rule and add the dependency through package tags or explicit package rules only where source imports require it.                                                                                 |
 | DEP-02  | Dependency debt           | `projen/src/tags.ts:67`                                                                                                           | High     | M      | Completed 2026-09-15. Every UI library previously received React and React DOM as regular dependencies, so all seven packages advertised ownership of a React runtime.                                                                                                                                         | The `ui` tag now generates React and React DOM as peer dependencies with matching development dependencies. App-tagged browser applications continue to own their runtime dependencies.                             |
 | DEP-03  | Published contract        | `.projenrc.ts:630`<br>`packages/js/node/tunnel/package.json:34`                                                                   | High     | S      | Completed 2026-09-15. Published Tunnel declarations referenced Express request and response types while the manifest declared no corresponding type dependency.                                                                                                                                                | Tunnel now declares `@types/express` as a runtime package dependency because Express types are part of its emitted declaration contract. Focused middleware tests and package compilation pass.                     |
@@ -125,6 +125,11 @@ longer matches the public product surface.
 - [x] `DRY-06` completed on 2026-09-15. Buffered and streamed model requests now
       share one typed logging context for throttle fields, usage reconciliation,
       connection timing, and completion timing. All 43 model-proxy tests pass.
+- [x] `ARCH-04` and `ARCH-05` completed on 2026-09-15. Rust workspace options,
+      dependencies, binding packages, workspace files, and release artifacts now
+      flow through typed plans and focused builders. The constructor is 39 lines
+      and `addReleaseWorkflow` is 31 lines. Focused validation passed: Projen
+      compilation, Prettier, and all 12 Rust-workspace generator tests.
 - [ ] Continue the remaining High findings before beginning any Medium item.
       Low findings remain intentionally deferred for maintainer review.
 
@@ -166,13 +171,13 @@ possible one feature at a time.
 
 Refactor outline:
 
-1. Convert raw options into a `ResolvedRustWorkspacePlan` with crates, bindings,
-   binaries, facades, and release targets.
-2. Make discovery and dependency ordering pure functions over that plan.
-3. Give Node bindings, Python bindings, binaries, and facades separate workflow
-   job builders.
-4. Keep one thin Projen adapter that writes files, adds tasks, and installs the
-   composed jobs.
+1. [x] Normalize raw options before crate and package construction.
+2. [x] Make discovery, dependency ordering, and binding mapping focused planning
+       functions.
+3. [x] Give Rust builds, Cargo publishing, GitHub assets, native npm packages,
+       and Node facades separate workflow job builders.
+4. [x] Keep thin Projen adapters that write files, add tasks, and install the
+       composed jobs.
 5. Move release OS/CPU option vocabulary into the same release-platform source
    used by command-line tasks.
 
