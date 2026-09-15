@@ -32,7 +32,10 @@ use crate::{
         rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
     },
     stream::{stream_response, StreamLogContext},
-    throttle::{response_token_usage, RequestThrottle, ThrottleConfig},
+    throttle::{
+        is_input_limit_message, response_token_usage, RequestThrottle, ThrottleAcquisition,
+        ThrottleConfig, TokenEstimate,
+    },
 };
 
 const ORIGINATOR_HEADER: &str = "originator";
@@ -94,6 +97,22 @@ struct UpstreamControls<'a> {
     throttle: &'a RequestThrottle,
 }
 
+struct UpstreamRequest<'a> {
+    model: &'a str,
+    model_class: Option<ModelClass>,
+    estimate: TokenEstimate,
+    path: &'a str,
+    headers: HeaderMap,
+    body: Vec<u8>,
+}
+
+#[derive(Debug)]
+struct UpstreamResult {
+    response: reqwest::Response,
+    throttle: ThrottleAcquisition,
+    upstream_attempt: u32,
+}
+
 pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router {
     Router::new()
         .route("/healthz", get(health))
@@ -136,8 +155,19 @@ pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router
         .with_state(state)
 }
 
-async fn health() -> Json<Value> {
-    Json(json!({"status": "ok"}))
+async fn health(State(state): State<AppState>) -> Json<Value> {
+    let counters = state.throttle.counters();
+    Json(json!({
+        "status": "ok",
+        "rateLimits": {
+            "automaticActivations": counters.automatic_activations,
+            "admissionWaits": counters.admission_waits,
+            "oversizedRejections": counters.oversized_rejections,
+            "input429AfterAdmission": counters.input_429_after_admission,
+            "retryReacquisitions": counters.retry_reacquisitions,
+            "fallbackWindowDelays": counters.fallback_window_delays
+        }
+    }))
 }
 
 async fn list_models(
@@ -202,10 +232,7 @@ async fn embeddings(
         .resolve_serving_endpoint_for_class(&requested_model, ModelClass::Embedding)
         .await?
         .ok_or_else(|| ProxyError::EmbeddingModelNotFound(requested_model.clone()))?;
-    let throttle = state
-        .throttle
-        .acquire(&endpoint.name, endpoint.model_class, &input)
-        .await;
+    let estimate = state.throttle.estimate(&endpoint.name, &input);
     let caller = request_caller(&headers, &state.databricks, peer);
     let (path, request_body) = prepare_embedding_request(input, &endpoint.name)?;
     let originator = request_originator(&headers);
@@ -216,13 +243,22 @@ async fn embeddings(
             throttle: &state.throttle,
         },
         &caller,
-        &endpoint.name,
-        &path,
-        upstream_headers(originator),
-        request_body,
+        UpstreamRequest {
+            model: &endpoint.name,
+            model_class: endpoint.model_class,
+            estimate,
+            path: &path,
+            headers: upstream_headers(originator),
+            body: request_body,
+        },
     )
     .await?;
-    let upstream = buffered_response(upstream).await?;
+    let UpstreamResult {
+        response,
+        throttle,
+        upstream_attempt,
+    } = upstream;
+    let upstream = buffered_response(response).await?;
     let usage = serde_json::from_slice::<Value>(&upstream.body)
         .map(|output| response_token_usage(&output))
         .unwrap_or_default();
@@ -243,7 +279,14 @@ async fn embeddings(
         input_tokens = usage.input,
         output_tokens = usage.output,
         total_tokens = usage.total,
-        throttle_wait_ms = throttle.wait.as_millis(),
+        upstream_attempt,
+        token_throttle_mode = ?throttle.mode,
+        token_throttle_active = throttle.active,
+        token_limit_input = throttle.input_limit,
+        token_reservation_input = throttle.reserved_input_tokens,
+        token_window_used_before = throttle.input_window_used_before,
+        token_window_wait_ms = throttle.wait.as_millis(),
+        oversized_request = false,
         latency_ms = started.elapsed().as_millis(),
         "embedding request completed"
     );
@@ -292,14 +335,8 @@ async fn proxy(
         .as_ref()
         .map(|endpoint| endpoint.name.clone())
         .unwrap_or_else(|| requested_model.clone());
-    let throttle = state
-        .throttle
-        .acquire(
-            &model,
-            endpoint.as_ref().and_then(|endpoint| endpoint.model_class),
-            &input,
-        )
-        .await;
+    let model_class = endpoint.as_ref().and_then(|endpoint| endpoint.model_class);
+    let estimate = state.throttle.estimate(&model, &input);
     let upstream_model = if codex {
         endpoint
             .as_ref()
@@ -324,12 +361,21 @@ async fn proxy(
             throttle: &state.throttle,
         },
         &caller,
-        &model,
-        upstream_path(target, codex, native_responses),
-        upstream_headers(originator),
-        request_body,
+        UpstreamRequest {
+            model: &model,
+            model_class,
+            estimate,
+            path: upstream_path(target, codex, native_responses),
+            headers: upstream_headers(originator),
+            body: request_body,
+        },
     )
     .await?;
+    let UpstreamResult {
+        response: upstream,
+        throttle,
+        upstream_attempt,
+    } = upstream;
     let status = upstream_status(&upstream)?;
     if status.is_success() && streaming {
         let response_headers = forwarded_response_headers(upstream.headers());
@@ -348,7 +394,14 @@ async fn proxy(
             estimated_input_tokens = throttle.estimated_input_tokens,
             reserved_output_tokens = throttle.reserved_output_tokens,
             estimated_tokens = throttle.estimated_tokens,
-            throttle_wait_ms = throttle.wait.as_millis(),
+            upstream_attempt,
+            token_throttle_mode = ?throttle.mode,
+            token_throttle_active = throttle.active,
+            token_limit_input = throttle.input_limit,
+            token_reservation_input = throttle.reserved_input_tokens,
+            token_window_used_before = throttle.input_window_used_before,
+            token_window_wait_ms = throttle.wait.as_millis(),
+            oversized_request = false,
             latency_ms = started.elapsed().as_millis(),
             "model stream connected"
         );
@@ -367,6 +420,7 @@ async fn proxy(
                 request_bytes,
                 started,
                 throttle,
+                upstream_attempt,
             },
         );
     }
@@ -387,7 +441,14 @@ async fn proxy(
             estimated_input_tokens = throttle.estimated_input_tokens,
             reserved_output_tokens = throttle.reserved_output_tokens,
             estimated_tokens = throttle.estimated_tokens,
-            throttle_wait_ms = throttle.wait.as_millis(),
+            upstream_attempt,
+            token_throttle_mode = ?throttle.mode,
+            token_throttle_active = throttle.active,
+            token_limit_input = throttle.input_limit,
+            token_reservation_input = throttle.reserved_input_tokens,
+            token_window_used_before = throttle.input_window_used_before,
+            token_window_wait_ms = throttle.wait.as_millis(),
+            oversized_request = false,
             latency_ms = started.elapsed().as_millis(),
             "model request completed"
         );
@@ -417,7 +478,14 @@ async fn proxy(
         input_tokens = usage.input,
         output_tokens = usage.output,
         total_tokens = usage.total,
-        throttle_wait_ms = throttle.wait.as_millis(),
+        upstream_attempt,
+        token_throttle_mode = ?throttle.mode,
+        token_throttle_active = throttle.active,
+        token_limit_input = throttle.input_limit,
+        token_reservation_input = throttle.reserved_input_tokens,
+        token_window_used_before = throttle.input_window_used_before,
+        token_window_wait_ms = throttle.wait.as_millis(),
+        oversized_request = false,
         latency_ms = started.elapsed().as_millis(),
         "model request completed"
     );
@@ -427,49 +495,63 @@ async fn proxy(
 async fn send_upstream(
     controls: UpstreamControls<'_>,
     caller: &RequestCaller,
-    model: &str,
-    path: &str,
-    headers: HeaderMap,
-    body: Vec<u8>,
-) -> Result<reqwest::Response, DatabricksClientError> {
+    request: UpstreamRequest<'_>,
+) -> Result<UpstreamResult, ProxyError> {
     let UpstreamControls {
         client,
         rate_limits,
         throttle,
     } = controls;
+    let UpstreamRequest {
+        model,
+        model_class,
+        estimate,
+        path,
+        headers,
+        body,
+    } = request;
     let policy = rate_limits.policy();
-    if policy.max_retries == 0 {
-        let response = client
-            .request_builder(path, Method::POST)?
-            .headers(headers)
-            .body(body)
-            .send()
-            .await
-            .map_err(DatabricksClientError::from)?;
-        if response.status() != StatusCode::TOO_MANY_REQUESTS {
-            return Ok(response);
-        }
-        let (response, details) = inspect_rate_limit_response(response).await?;
-        activate_token_throttle(throttle, client, model, &details).await;
-        let (delay, delay_source) = server_retry_after(response.headers(), &details)
-            .unwrap_or((std::time::Duration::ZERO, "disabled"));
-        log_rate_limit(
-            client,
-            caller,
-            model,
-            0,
-            policy,
-            (delay, delay_source),
-            &details,
-        );
-        return Ok(response);
-    }
     let mut backoff = policy.backoff();
     let mut retries = 0;
     loop {
-        let permit = rate_limits
-            .acquire(client.host(), &caller.principal, model)
-            .await;
+        let upstream_attempt = retries + 1;
+        let permit = if policy.max_retries == 0 {
+            None
+        } else {
+            Some(
+                rate_limits
+                    .acquire(client.host(), &caller.principal, model)
+                    .await,
+            )
+        };
+        let admission = match throttle.acquire(model, model_class, estimate).await {
+            Ok(admission) => admission,
+            Err(error) => {
+                if let Some(permit) = permit.as_ref() {
+                    rate_limits.completed(permit).await;
+                }
+                tracing::warn!(
+                    host = client.host(),
+                    model,
+                    estimated_input_tokens = error.estimated_input_tokens,
+                    token_limit_input = error.input_limit,
+                    token_window_used_before = error.input_window_used_before,
+                    token_throttle_mode = ?error.mode,
+                    token_throttle_active = true,
+                    upstream_attempt,
+                    oversized_request = true,
+                    "model request rejected by local input-token budget"
+                );
+                return Err(ProxyError::OversizedInput {
+                    model: model.to_owned(),
+                    estimated_input_tokens: error.estimated_input_tokens,
+                    input_limit: error.input_limit,
+                });
+            }
+        };
+        if retries > 0 && admission.active {
+            throttle.record_retry_reacquisition();
+        }
         let response = match client
             .request_builder(path, Method::POST)?
             .headers(headers.clone())
@@ -479,48 +561,105 @@ async fn send_upstream(
         {
             Ok(response) => response,
             Err(error) => {
-                rate_limits.completed(&permit).await;
-                return Err(error.into());
+                admission.release().await;
+                if let Some(permit) = permit.as_ref() {
+                    rate_limits.completed(permit).await;
+                }
+                return Err(DatabricksClientError::from(error).into());
             }
         };
         if response.status() != StatusCode::TOO_MANY_REQUESTS {
-            rate_limits.completed(&permit).await;
-            return Ok(response);
+            if let Some(permit) = permit.as_ref() {
+                rate_limits.completed(permit).await;
+            }
+            return Ok(UpstreamResult {
+                response,
+                throttle: admission,
+                upstream_attempt,
+            });
         }
         let (response, details) = match inspect_rate_limit_response(response).await {
             Ok(inspected) => inspected,
             Err(error) => {
-                rate_limits.completed(&permit).await;
-                return Err(error);
+                admission.release().await;
+                if let Some(permit) = permit.as_ref() {
+                    rate_limits.completed(permit).await;
+                }
+                return Err(error.into());
             }
         };
+        let input_token_limit = details
+            .message
+            .as_deref()
+            .is_some_and(is_input_limit_message);
+        if input_token_limit && admission.active {
+            throttle.record_input_429_after_admission();
+        }
+        admission.release().await;
         activate_token_throttle(throttle, client, model, &details).await;
+        let exhausted = retries >= policy.max_retries;
+        if exhausted {
+            if let Some(permit) = permit.as_ref() {
+                rate_limits.completed(permit).await;
+            }
+            log_rate_limit(RetryLog {
+                client,
+                caller,
+                model,
+                upstream_attempt,
+                retry: retries,
+                policy,
+                delay: std::time::Duration::ZERO,
+                delay_source: "exhausted",
+                admission: &admission,
+                details: &details,
+            });
+            return Ok(UpstreamResult {
+                response,
+                throttle: admission,
+                upstream_attempt,
+            });
+        }
         let server_delay = server_retry_after(response.headers(), &details);
-        let delay_source = server_delay.map_or("backoff", |(_, source)| source);
-        let delay = server_delay.map_or_else(
-            || {
+        let (delay, delay_source) = if let Some((delay, _)) = server_delay {
+            (delay, "retry-after")
+        } else if input_token_limit {
+            match throttle
+                .token_window_delay(model, model_class, estimate)
+                .await
+            {
+                Some(delay) => (delay, "token-window"),
+                None => {
+                    throttle.record_fallback_window_delay();
+                    (std::time::Duration::from_secs(60), "token-window-fallback")
+                }
+            }
+        } else {
+            (
                 backoff
                     .next()
                     .unwrap_or(policy.max_delay)
-                    .min(policy.max_delay)
-            },
-            |(delay, _)| delay,
-        );
-        rate_limits.rejected(&permit, delay).await;
-        let exhausted = retries >= policy.max_retries;
-        let retry = if exhausted { retries } else { retries + 1 };
-        log_rate_limit(
+                    .min(policy.max_delay),
+                "backoff",
+            )
+        };
+        if let Some(permit) = permit.as_ref() {
+            rate_limits.rejected(permit, delay).await;
+        } else {
+            tokio::time::sleep(delay).await;
+        }
+        log_rate_limit(RetryLog {
             client,
             caller,
             model,
-            retry,
+            upstream_attempt,
+            retry: retries + 1,
             policy,
-            (delay, delay_source),
-            &details,
-        );
-        if exhausted {
-            return Ok(response);
-        }
+            delay,
+            delay_source,
+            admission: &admission,
+            details: &details,
+        });
         retries += 1;
         drop(response);
     }
@@ -545,32 +684,45 @@ async fn activate_token_throttle(
     }
 }
 
-/// Log a 429 and any Databricks error message without exposing request payloads.
-fn log_rate_limit(
-    client: &DatabricksClient,
-    caller: &RequestCaller,
-    model: &str,
+struct RetryLog<'a> {
+    client: &'a DatabricksClient,
+    caller: &'a RequestCaller,
+    model: &'a str,
+    upstream_attempt: u32,
     retry: u32,
     policy: RateLimitPolicy,
-    delay: (std::time::Duration, &str),
-    details: &RateLimitDetails,
-) {
-    let exhausted = retry >= policy.max_retries;
+    delay: std::time::Duration,
+    delay_source: &'a str,
+    admission: &'a ThrottleAcquisition,
+    details: &'a RateLimitDetails,
+}
+
+/// Log a 429 and any Databricks error message without exposing request payloads.
+fn log_rate_limit(log: RetryLog<'_>) {
+    let exhausted = log.delay_source == "exhausted";
     tracing::warn!(
-        host = client.host(),
-        model,
-        retry,
-        max_retries = policy.max_retries,
-        delay_ms = delay.0.as_millis(),
-        delay_source = delay.1,
-        rate_limit_message = details.message.as_deref().unwrap_or_default(),
-        limit_type = details.limit_type.as_deref().unwrap_or_default(),
-        limit = details.limit.unwrap_or_default(),
-        current = details.current.unwrap_or_default(),
-        client_ip = %caller.peer.ip(),
-        client_port = caller.peer.port(),
+        host = log.client.host(),
+        model = log.model,
+        retry = log.retry,
+        max_retries = log.policy.max_retries,
+        upstream_attempt = log.upstream_attempt,
+        retry_delay_ms = log.delay.as_millis(),
+        retry_delay_source = log.delay_source,
+        rate_limit_message = log.details.message.as_deref().unwrap_or_default(),
+        limit_type = log.details.limit_type.as_deref().unwrap_or_default(),
+        limit = log.details.limit.unwrap_or_default(),
+        current = log.details.current.unwrap_or_default(),
+        token_throttle_mode = ?log.admission.mode,
+        token_throttle_active = log.admission.active,
+        token_limit_input = log.admission.input_limit,
+        token_reservation_input = log.admission.reserved_input_tokens,
+        token_window_used_before = log.admission.input_window_used_before,
+        token_window_wait_ms = log.admission.wait.as_millis(),
+        oversized_request = false,
+        client_ip = %log.caller.peer.ip(),
+        client_port = log.caller.peer.port(),
         exhausted,
-        "model request rate limited; pausing profile-model key"
+        "model request rate limited"
     );
 }
 
@@ -771,6 +923,7 @@ fn forwarded_response_headers(upstream: &HeaderMap) -> HeaderMap {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU64;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -890,17 +1043,28 @@ mod tests {
                     throttle: &throttle,
                 },
                 &caller,
-                "model",
-                "/test",
-                upstream_headers(None),
-                br#"{"model":"model"}"#.to_vec(),
+                UpstreamRequest {
+                    model: "model",
+                    model_class: None,
+                    estimate: TokenEstimate {
+                        input: 1,
+                        output: 0,
+                    },
+                    path: "/test",
+                    headers: upstream_headers(None),
+                    body: br#"{"model":"model"}"#.to_vec(),
+                },
             ),
         )
         .await
         .unwrap()
         .unwrap();
 
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.response.status(), StatusCode::OK);
+        assert_eq!(response.upstream_attempt, 2);
+        let counters = throttle.counters();
+        assert_eq!(counters.automatic_activations, 1);
+        assert_eq!(counters.retry_reacquisitions, 1);
         assert!(
             !throttle
                 .activate_from_message("model", Some("Exceeded workspace input tokens per minute"))
@@ -946,19 +1110,144 @@ mod tests {
                 throttle: &throttle,
             },
             &caller,
-            "model",
-            "/test",
-            upstream_headers(None),
-            Vec::new(),
+            UpstreamRequest {
+                model: "model",
+                model_class: None,
+                estimate: TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                path: "/test",
+                headers: upstream_headers(None),
+                body: Vec::new(),
+            },
         )
         .await
         .unwrap();
 
-        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.upstream_attempt, 1);
         assert_eq!(
-            response.bytes().await.unwrap(),
+            response.response.bytes().await.unwrap(),
             br#"{"error":{"message":"quota exhausted"}}"#.as_slice()
         );
+    }
+
+    #[tokio::test]
+    async fn permanently_rate_limited_upstream_stops_after_configured_retries() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(
+                ResponseTemplate::new(429)
+                    .insert_header("Retry-After", "0")
+                    .set_body_json(json!({"error": {"message": "request count exceeded"}})),
+            )
+            .expect(3)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 2,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_millis(10),
+        });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: None,
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::Off,
+                documented_limits: Default::default(),
+            },
+        );
+        let caller = test_caller();
+
+        let response = send_upstream(
+            UpstreamControls {
+                client: &client,
+                rate_limits: &gate,
+                throttle: &throttle,
+            },
+            &caller,
+            UpstreamRequest {
+                model: "model",
+                model_class: None,
+                estimate: TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                path: "/test",
+                headers: upstream_headers(None),
+                body: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.upstream_attempt, 3);
+    }
+
+    #[tokio::test]
+    async fn oversized_input_is_rejected_before_upstream_send() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 1,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_millis(10),
+        });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: NonZeroU64::new(100),
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::On,
+                documented_limits: Default::default(),
+            },
+        );
+        let caller = test_caller();
+
+        let error = send_upstream(
+            UpstreamControls {
+                client: &client,
+                rate_limits: &gate,
+                throttle: &throttle,
+            },
+            &caller,
+            UpstreamRequest {
+                model: "model",
+                model_class: None,
+                estimate: TokenEstimate {
+                    input: 101,
+                    output: 0,
+                },
+                path: "/test",
+                headers: upstream_headers(None),
+                body: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ProxyError::OversizedInput {
+                estimated_input_tokens: 101,
+                input_limit: 100,
+                ..
+            }
+        ));
+        assert_eq!(throttle.counters().oversized_rejections, 1);
     }
 
     #[test]

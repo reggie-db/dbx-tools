@@ -48,6 +48,8 @@ pub(crate) struct StreamLogContext {
     pub(crate) started: Instant,
     /// Local token reservation reconciled when usage is reported.
     pub(crate) throttle: ThrottleAcquisition,
+    /// Number of upstream attempts before the stream connected.
+    pub(crate) upstream_attempt: u32,
 }
 
 #[derive(Debug, Default)]
@@ -134,8 +136,8 @@ impl StreamCompletion {
 impl Drop for StreamCompletion {
     fn drop(&mut self) {
         tracing::info!(
-            ?self.context.client_wire,
-            ?self.context.target,
+            client_wire = ?self.context.client_wire,
+            target = ?self.context.target,
             requested_model = self.context.requested_model,
             resolved_model = self.context.resolved_model,
             streaming = true,
@@ -151,7 +153,14 @@ impl Drop for StreamCompletion {
             input_tokens = self.usage.input,
             output_tokens = self.usage.output,
             total_tokens = self.usage.total,
-            throttle_wait_ms = self.context.throttle.wait.as_millis(),
+            upstream_attempt = self.context.upstream_attempt,
+            token_throttle_mode = ?self.context.throttle.mode,
+            token_throttle_active = self.context.throttle.active,
+            token_limit_input = self.context.throttle.input_limit,
+            token_reservation_input = self.context.throttle.reserved_input_tokens,
+            token_window_used_before = self.context.throttle.input_window_used_before,
+            token_window_wait_ms = self.context.throttle.wait.as_millis(),
+            oversized_request = false,
             duration_ms = self.context.started.elapsed().as_millis(),
             finished = self.finished,
             failed = self.failed,

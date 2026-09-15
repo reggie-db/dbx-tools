@@ -194,10 +194,13 @@ HTTP 429 responses pause the process-local host/principal/model gate described
 above. One request probes after the shared cooldown while other streaming and
 non-streaming requests for the same key remain paused. The `Retry-After`
 response header controls the delay when present, followed by the documented
-Foundation Model API `error.retry_after` JSON value. Otherwise the proxy uses
-BackON jittered exponential delays from one second to one minute. Every 429
-logs a returned `error.message`, including the final attempt. The default five
-retries mean one initial request plus up to five retries.
+Foundation Model API `error.retry_after` JSON value. An input-token 429 without
+either waits for the local token window, or 60 seconds when process-local
+history cannot explain the workspace limit. Other 429s use BackON jittered
+exponential delays from one second to one minute. Every retry reacquires token
+admission and owns exactly one reservation. Every 429 logs a returned
+`error.message`, including the final attempt. The default five retries mean one
+initial request plus up to five retries.
 After the final attempt, the original 429 status, body, and rate-limit headers
 are returned to the caller. Configure `RATE_LIMIT_RETRIES`,
 `RATE_LIMIT_INITIAL_DELAY_MS`, and `RATE_LIMIT_MAX_DELAY_MS`, or the matching
@@ -212,7 +215,8 @@ Input and output windows are tracked separately for each resolved model and
 workspace. Requests reserve a `tokenx-rs` input estimate plus any explicit
 `max_output_tokens`, `max_completion_tokens`, or `max_tokens` value. Claude
 Sonnet 4 reserves its documented 1,000-token default when no output limit is
-present.
+present. An active queue rejects an input estimate above its complete
+per-minute budget with a local structured 429 rather than clamping it.
 
 `RATE_LIMIT_MODE` / `--rate-limit-mode` accepts `auto`, `on`, or `off` and
 defaults to `auto`. Auto mode leaves each workspace/model key unthrottled until
@@ -224,4 +228,6 @@ Use `INPUT_TOKENS_PER_MINUTE` / `--input-tokens-per-minute` and
 published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
 `--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
 Databricks because process-local tracking cannot coordinate a workspace across
-proxy replicas.
+proxy replicas. `/healthz` exposes process-local counters for automatic
+activation, admission waits, oversized rejections, post-admission input 429s,
+retry reacquisition, and fallback full-window delays.
