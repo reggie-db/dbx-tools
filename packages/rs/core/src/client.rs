@@ -10,7 +10,10 @@ use reqwest::{
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware, Next, RequestBuilder};
 use serde_json::Value;
 
-use crate::{create_persistent_auth, AuthError, DatabricksAuthOptions, PersistentAuth};
+use crate::{
+    create_persistent_auth, AuthError, DatabricksAuthOptions, PersistentAuth,
+    DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER,
+};
 
 /// Authenticated Databricks REST client with shared token lifecycle.
 #[derive(Clone)]
@@ -18,6 +21,7 @@ pub struct DatabricksClient {
     auth: Arc<PersistentAuth>,
     host: String,
     principal: String,
+    workspace_id: Option<String>,
     http: ClientWithMiddleware,
 }
 
@@ -58,23 +62,31 @@ impl Middleware for AuthorizationMiddleware {
 impl AuthorizationMiddleware {
     async fn authorize(&self, request: &mut Request) -> reqwest_middleware::Result<Option<String>> {
         request.headers_mut().remove(AUTHORIZATION);
-        let Some(header) = self
+        request.headers_mut().remove(WORKSPACE_ID_HEADER);
+        let mut headers = self
             .auth
-            .authorization_header_for_url(request.url().to_string(), None)
+            .request_headers_for_url(request.url().to_string(), None)
             .await
-            .map_err(reqwest_middleware::Error::middleware)?
-        else {
+            .map_err(reqwest_middleware::Error::middleware)?;
+        let Some(authorization) = headers.remove(DEFAULT_ACCESS_TOKEN_HEADER) else {
             return Ok(None);
         };
-        let stale_access_token = header
+        let stale_access_token = authorization
             .split_once(' ')
             .map(|(_, access_token)| access_token)
-            .unwrap_or(&header)
+            .unwrap_or(&authorization)
             .to_owned();
         request.headers_mut().insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&header).map_err(reqwest_middleware::Error::middleware)?,
+            HeaderValue::from_str(&authorization).map_err(reqwest_middleware::Error::middleware)?,
         );
+        if let Some(workspace_id) = headers.remove(WORKSPACE_ID_HEADER) {
+            request.headers_mut().insert(
+                WORKSPACE_ID_HEADER,
+                HeaderValue::from_str(&workspace_id)
+                    .map_err(reqwest_middleware::Error::middleware)?,
+            );
+        }
         Ok(Some(stale_access_token))
     }
 }
@@ -125,10 +137,12 @@ impl DatabricksClient {
             })
             .build();
         let principal = auth.principal_key().to_owned();
+        let workspace_id = auth.workspace_id().map(str::to_owned);
         Ok(Self {
             auth,
             host,
             principal,
+            workspace_id,
             http,
         })
     }
@@ -146,6 +160,11 @@ impl DatabricksClient {
     /// Return the resolved user profile or service-principal client identifier.
     pub fn principal(&self) -> &str {
         &self.principal
+    }
+
+    /// Return the workspace identifier resolved from options or the profile.
+    pub fn workspace_id(&self) -> Option<&str> {
+        self.workspace_id.as_deref()
     }
 
     /// Create a middleware-enabled request builder for a relative path or absolute URL.
@@ -264,6 +283,7 @@ mod tests {
                 let length = socket.read(&mut request).await.unwrap();
                 let request = String::from_utf8_lossy(&request[..length]).to_ascii_lowercase();
                 assert!(request.contains("authorization: bearer test-token"));
+                assert!(request.contains("x-databricks-workspace-id: 123456789"));
                 assert!(request.contains("originator: codex_cli_rs"));
                 assert!(request.ends_with(r#"{"input":"hello"}"#));
                 socket
@@ -282,7 +302,9 @@ mod tests {
         let config_file = directory.path().join("databrickscfg");
         std::fs::write(
             &config_file,
-            format!("[DEFAULT]\nhost = http://{address}\nauth_type = pat\ntoken = test-token\n"),
+            format!(
+                "[DEFAULT]\nhost = http://{address}\nworkspace_id = 123456789\nauth_type = pat\ntoken = test-token\n"
+            ),
         )
         .unwrap();
         let client = DatabricksClient::with_options(DatabricksAuthOptions {
@@ -302,6 +324,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(client.principal(), "DEFAULT");
+        assert_eq!(client.workspace_id(), Some("123456789"));
         let response = client
             .request_builder("/serving-endpoints/embedding/invocations", Method::POST)
             .unwrap()
@@ -329,6 +352,7 @@ mod tests {
             let length = socket.read(&mut request).await.unwrap();
             let request = String::from_utf8_lossy(&request[..length]).to_ascii_lowercase();
             assert!(!request.contains("authorization:"));
+            assert!(!request.contains("x-databricks-workspace-id:"));
             socket
                 .write_all(
                     b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}",
@@ -339,6 +363,7 @@ mod tests {
         let client = DatabricksClient::with_host(
             DatabricksAuthOptions {
                 host: Some("https://credentials.example".into()),
+                workspace_id: Some("123456789".into()),
                 auth_type: Some("app_obo".into()),
                 request_headers: Some(HashMap::from([(
                     "authorization".into(),
@@ -351,7 +376,13 @@ mod tests {
         .await
         .unwrap();
 
-        client.request("/test", None, None).await.unwrap();
+        client
+            .request_builder("/test", Method::GET)
+            .unwrap()
+            .header(WORKSPACE_ID_HEADER, "spoofed")
+            .send()
+            .await
+            .unwrap();
         server.await.unwrap();
     }
 }

@@ -137,8 +137,12 @@ Primary package areas:
   suppresses automatic tiering, and a profile forced inside an App reads its
   profile credentials instead of ambient App credentials.
   `PersistentAuth::authorization_header_for_url` returns a current header only
-  when the request URL and resolved profile host have the same origin;
-  `DatabricksClient` uses it through `reqwest-middleware`.
+  when the request URL and resolved profile host have the same origin. Its
+  internal request-header generator also returns
+  `X-Databricks-Workspace-Id` when the resolved profile supplies
+  `workspace_id`. `DatabricksClient` strips caller-supplied authorization and
+  workspace-id headers, then applies both generated values through
+  `reqwest-middleware`.
   File-backed refresh locks preserve unrelated entries in
   `~/.databricks/token-cache.json`.
   Profile files are parsed once per absolute path, including missing files and
