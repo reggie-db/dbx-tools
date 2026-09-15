@@ -23,6 +23,9 @@ excluded because it is run frequently by the maintainer.
 - The generated API site now resolves JavaScript entry points from package
   export maps, generates Python API pages and Rust library rustdoc, and gives
   binary-only crates an explicit package landing page.
+- README and API generation now share one package catalogue and summary policy,
+  while a committed exact-version toolchain file makes clean docs builds
+  reviewable and reproducible.
 - TypeDoc now performs normal error checking, and the complete documentation
   build validates generated titles and internal links.
 - The two audited browser network boundaries now validate Mastra SSE chunks and
@@ -77,13 +80,13 @@ longer matches the public product surface.
 | DOC-02  | Documentation drift       | `docs/scripts/generate-api-docs.mjs:89`                                                                                           | High     | M      | Completed 2026-09-15. npm packages were documented from generated root barrels rather than their installable manifest export maps.                                                                                                                       | A tested export-map resolver now follows root, subpath, and conditional TypeScript targets and rejects targets outside the package before invoking TypeDoc.                                                          |
 | DOC-03  | Documentation drift       | `packages/js/ui/mastra/package.json:52`<br>`packages/js/ui/mastra/src/react/index.ts:13`                                          | High     | M      | Completed 2026-09-15. `@dbx-tools/ui-mastra` publishes `./react`, styles, and package metadata, but documentation previously read its broader generated root barrel.                                                                                     | Its API page now comes only from the published `./react` entry. Internal chat orchestration hooks remain absent from the generated consumer surface.                                                                 |
 | DOC-04  | Documentation correctness | `docs/scripts/generate-api-docs.mjs:430`                                                                                          | High     | S      | Completed 2026-09-15. TypeDoc previously used `--skipErrorChecking`, allowing invalid entry points or declaration references to appear successful.                                                                                                       | Error suppression is removed. The complete 49-package API generation, 2,431-page Astro build, generated-title check, and internal-link check pass.                                                                   |
-| DRY-01  | Documentation tooling     | `docs/scripts/generate-api-docs.mjs:24`<br>`docs/scripts/sync-readmes.mjs:82`                                                     | Medium   | S      | The two documentation scripts duplicate filesystem walking, package discovery, slugging, and summary extraction. The copies already differ in what metadata they retain, which enabled the API/readme package-set mismatch.                              | Move repository/package discovery and markdown-summary helpers into one dependency-free docs module used by both scripts.                                                                                            |
-| DOC-05  | Reproducibility           | `docs/scripts/sync-readmes.mjs:474`<br>`.gitignore:87`                                                                            | Medium   | S      | The docs script writes caret-ranged Astro and TypeDoc dependencies into an ignored generated tree. A clean build can resolve a different documentation toolchain without a reviewed lockfile change.                                                     | Pin exact versions from the root catalogue or generate and validate a committed docs lock input outside `.docs-build`.                                                                                               |
+| DRY-01  | Documentation tooling     | `docs/scripts/repository-docs.mjs:1`<br>`docs/scripts/sync-readmes.mjs:6`<br>`docs/scripts/generate-api-docs.mjs:6`               | Medium   | S      | Completed 2026-09-15. README and API generation previously duplicated filesystem walking, package discovery, slugging, group labels, base paths, and summary extraction.                                                                                 | One dependency-free repository-docs module now owns the published JavaScript, Python, and Rust package catalogue plus shared route and summary helpers; focused fixture tests cover all three ecosystems.            |
+| DOC-05  | Reproducibility           | `docs/toolchain.json:1`<br>`docs/scripts/docs-toolchain.mjs:1`                                                                    | Medium   | S      | Completed 2026-09-15. The generated docs site previously used caret-ranged Astro and TypeDoc dependencies inside an ignored tree, allowing clean builds to resolve unreviewed versions.                                                                  | A committed toolchain input exact-pins Astro, Starlight, TypeDoc, and the Markdown plugin. Generation rejects ranges, missing tools, and unknown entries before writing the site package.                            |
 | META-01 | Package metadata          | `projen/src/project-js.ts:435`                                                                                                    | Medium   | S      | Completed 2026-09-15. The JavaScript generator previously forced `UNLICENSED` even though Rust already declared Apache-2.0.                                                                                                                              | One `DBX_TOOLS_LICENSE` constant now drives JavaScript, Python, and Rust generation. All 40 public npm manifests declare Apache-2.0 and package-local license files are generated.                                   |
 | META-02 | Package metadata          | `packages/js/ui/mastra/package.json:1`                                                                                            | Medium   | S      | Completed 2026-09-15. Thirty-six of 40 public npm manifests previously had no description.                                                                                                                                                               | The root catalogue now owns all 40 package descriptions by stable package path, and synthesis rejects a public JavaScript package whose final manifest has no non-empty description.                                 |
 | META-03 | Package metadata          | `packages/js/ui/mastra/package.json:1`                                                                                            | Low      | S      | All 40 public npm manifests omit `homepage`; consumers receive repository coordinates but no canonical package documentation URL.                                                                                                                        | Generate package-specific docs URLs once the site route convention is stable.                                                                                                                                        |
 | META-04 | Package metadata          | `projen/src/project-py.ts:185`                                                                                                    | Medium   | S      | Completed 2026-09-15. The Python project generator previously omitted license metadata from all five packages.                                                                                                                                           | Every generated Python package now declares `Apache-2.0`, lists `LICENSE` as its PEP 639 license file, and receives the generated license text.                                                                      |
-| DOC-06  | Documentation drift       | `packages/rs/model/README.md:46`                                                                                                  | Medium   | S      | The model README says repository synthesis runs the network-backed metadata generator. Current configuration exposes an explicit `model:metadata` task instead, and normal synthesis intentionally avoids it.                                            | Replace the synthesis claim with `bun run model:metadata` and document that normal synthesis is offline.                                                                                                             |
+| DOC-06  | Documentation drift       | `packages/rs/model/README.md:39`                                                                                                  | Medium   | S      | Completed 2026-09-15. The model README previously claimed normal repository synthesis ran the network-backed metadata generator.                                                                                                                         | The README now directs maintainers to `bun run model:metadata` for explicit snapshot refreshes and states that normal synthesis remains offline.                                                                     |
 | DOC-07  | Source documentation      | `packages/js/shared/mastra/src/feedback.ts:43`                                                                                    | High     | M      | Completed 2026-09-15. Public TypeScript documentation had no automated guard, so new undocumented exports could silently expand the existing backlog.                                                                                                    | A manifest-aware AST ratchet records 183 existing undocumented handwritten exports, excludes generated bindings, rejects new debt, and runs in build and documentation release workflows.                            |
 | DOC-08  | Source documentation      | `packages/js/shared/mastra/src/wire.ts:78`                                                                                        | Medium   | M      | `@dbx-tools/shared-mastra` has the largest documentation concentration in the scan: 30 of 77 inspected public symbols lack JSDoc, including client config and wire response contracts.                                                                   | Document wire semantics, optional-field meaning, ownership, and compatibility expectations before lower-level helpers.                                                                                               |
 | DOC-09  | Source documentation      | `packages/js/shared/genie/src/genie-model.ts:49`                                                                                  | Medium   | M      | `@dbx-tools/shared-genie` has 24 of 61 inspected public symbols without JSDoc, including event and attachment contracts used across server and browser packages.                                                                                         | Document event ordering, terminal states, optional attachment fields, and schema/type relationships at the owning declarations.                                                                                      |
@@ -145,6 +148,12 @@ longer matches the public product surface.
       descriptions, and all five Python packages carry PEP 639 license metadata.
       Focused validation passed: Projen compilation, 16 generator tests, all nine
       affected package compiles, and direct generated-manifest checks.
+- [x] `DRY-01`, `DOC-05`, and `DOC-06` completed on 2026-09-15. Both docs
+      generators now use one tested package catalogue and summary policy. The
+      generated site consumes exact versions from `docs/toolchain.json`, and the
+      model README documents the explicit offline-safe metadata workflow. Focused
+      validation passed: four helper tests, Prettier, source-doc ratchet, all 49
+      API packages, a 2,431-page Astro build, and 5,416-file link validation.
 - [ ] Complete every Medium finding in focused batches. Low findings remain
       intentionally deferred for maintainer review.
 
@@ -232,7 +241,7 @@ contract, not parallel handwritten descriptions.
 
 ## Quick Wins
 
-- [ ] Fix the model metadata task wording in `packages/rs/model/README.md`.
+- [x] Fix the model metadata task wording in `packages/rs/model/README.md`.
 - [x] Remove unused blanket `@dbx-tools/shared-core` dependencies from the nine
       packages identified by the import scan.
 - [x] Resolve the Express type leak in the Tunnel declaration surface.
@@ -241,7 +250,7 @@ contract, not parallel handwritten descriptions.
       the existing release-platform module.
 - [ ] Extract the shared Rust shutdown signal future.
 - [ ] Extract the Graphiti `--` forwarding runner.
-- [ ] Share docs discovery and markdown-summary helpers.
+- [x] Share docs discovery and markdown-summary helpers.
 - [x] Remove `--skipErrorChecking` after API entries follow export maps.
 - [x] Add generated validation requiring description metadata for public npm
       packages.
@@ -279,8 +288,8 @@ contract, not parallel handwritten descriptions.
 
 1. Should React be supplied by every host application as a peer, or is bundling
    an isolated React runtime an explicit product requirement for any UI package?
-2. Should the docs site resolve its toolchain from the root Bun catalogue, or is
-   a separately pinned docs environment preferred?
+2. Resolved 2026-09-15: the docs site uses a separately pinned, validated
+   toolchain input at `docs/toolchain.json` so upgrades remain explicit.
 
 ## Method
 

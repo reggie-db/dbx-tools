@@ -19,6 +19,10 @@ Source of truth:
 - `docs/scripts/generate-api-docs.mjs` resolves TypeScript entries from npm
   export maps, generates Python references from source ASTs and docstrings, and
   runs Cargo rustdoc for publishable Rust crates.
+- `docs/scripts/repository-docs.mjs` owns the package catalogue, route slugging,
+  and README summary rules shared by both generators.
+- `docs/toolchain.json` pins the exact Astro, Starlight, TypeDoc, and TypeDoc
+  Markdown versions written into the generated site package.
 - `docs/scripts/check-source-docs.mjs` rejects new undocumented handwritten
   TypeScript declarations exposed by package export maps. Its committed baseline
   ratchets downward as existing declarations are documented.
@@ -64,6 +68,8 @@ from `.docs-build/dist`. It starts no HTTP server and makes no external network
 requests, so release validation is deterministic.
 
 Generated files live under `.docs-build/` and should not be committed.
+Update `docs/toolchain.json` in a reviewed change when upgrading documentation
+dependencies; the generator rejects ranges, missing tools, and unknown entries.
 When existing public TypeScript declarations gain JSDoc, refresh the ratchet with
 `bun docs/scripts/check-source-docs.mjs --write-baseline` and review the baseline
 diff before committing it.

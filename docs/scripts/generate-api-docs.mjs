@@ -3,6 +3,16 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
+import {
+  discoverJavaScriptPackages,
+  discoverPythonPackages,
+  discoverRustPackages,
+  groupTitle,
+  posix,
+  summaryText,
+  walk,
+  withBasePath,
+} from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
 const root = process.cwd();
@@ -16,71 +26,12 @@ const write = (p, text) => {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, text);
 };
-const posix = (p) => p.split(path.sep).join("/");
-
 // Use the same route base as the README generator so absolute API links resolve
 // under either the custom-domain root or a project-site subpath.
 const { base } = docsSiteConfig();
 
 function withBase(sitePath) {
-  if (!sitePath.startsWith("/")) return sitePath;
-  if (base && (sitePath === base || sitePath.startsWith(`${base}/`))) return sitePath;
-  return `${base}${sitePath}`;
-}
-
-function walk(dir, files = []) {
-  if (!fs.existsSync(dir)) return files;
-  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ent.name === "node_modules" || ent.name === ".git") continue;
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) walk(p, files);
-    else files.push(p);
-  }
-  return files;
-}
-
-function packageSlug(name) {
-  return name
-    .replace(/^@dbx-tools\//, "")
-    .replace(/^@/, "")
-    .replace(/\//g, "-");
-}
-
-/** Human label for a package's `packages/js/<group>/…` area (mirrors sync-readmes). */
-function groupTitle(group) {
-  switch (group) {
-    case "node":
-      return "Node and AppKit";
-    case "shared":
-      return "Shared Contracts";
-    case "cli":
-      return "CLI Tools";
-    case "ui":
-      return "React UI";
-    case "python":
-      return "Python";
-    case "rust":
-      return "Rust";
-    default:
-      return group.charAt(0).toUpperCase() + group.slice(1);
-  }
-}
-
-/** First real prose paragraph of a README (skips the H1, code fences, tables). */
-function firstParagraph(markdown) {
-  return markdown
-    .replace(/^# .*(\r?\n)+/, "")
-    .split(/\r?\n\r?\n/)
-    .map((s) => s.trim())
-    .find((s) => s && !s.startsWith("```") && !s.startsWith("|"))
-    ?.replace(/\s+/g, " ");
-}
-
-/** Plain prose for API package index summaries. */
-function summaryText(markdown) {
-  return (firstParagraph(markdown) ?? "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/`([^`]*)`/g, "$1");
+  return withBasePath(base, sitePath);
 }
 
 /**
@@ -91,105 +42,13 @@ function summaryText(markdown) {
  * generating a reference for it only adds pages a reader cannot use.
  */
 function discoverPackages() {
-  return walk(path.join(root, "packages/js"))
-    .filter((p) => path.basename(p) === "package.json")
-    .filter((packageJson) => JSON.parse(read(packageJson)).private !== true)
-    .map((packageJson) => {
-      const pkg = JSON.parse(read(packageJson));
-      const dir = path.dirname(packageJson);
-      const readme = path.join(dir, "README.md");
-      // `packages/js/<group>/<pkg>` -> the `<group>` segment, for the area column.
-      const group = posix(path.relative(root, dir)).split("/")[2] ?? "other";
-      return {
-        name: pkg.name,
-        slug: packageSlug(pkg.name),
-        dir,
-        manifest: packageJson,
-        entries: resolvePackageTypeScriptExports(packageJson),
-        tsconfig: path.join(dir, "tsconfig.json"),
-        readme,
-        group,
-      };
-    })
+  return discoverJavaScriptPackages(root)
+    .map((pkg) => ({
+      ...pkg,
+      entries: resolvePackageTypeScriptExports(pkg.manifest),
+    }))
     .filter((pkg) => pkg.entries.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function tomlPackageSection(manifest) {
-  return read(manifest).match(/^\[package\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
-}
-
-function tomlNamedSection(manifest, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return (
-    read(manifest).match(
-      new RegExp(`^\\[${escaped}\\]\\s*\\n([\\s\\S]*?)(?=^\\[|(?![\\s\\S]))`, "m"),
-    )?.[1] ?? ""
-  );
-}
-
-function tomlString(section, key) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return section.match(new RegExp(`^\\s*${escaped}\\s*=\\s*["']([^"']+)["']`, "m"))?.[1];
-}
-
-function discoverPythonPackages() {
-  const directory = path.join(root, "packages", "py");
-  if (!fs.existsSync(directory)) return [];
-  return fs
-    .readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(directory, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, "pyproject.toml")))
-    .map((dir) => {
-      const manifest = path.join(dir, "pyproject.toml");
-      const project =
-        read(manifest).match(/^\[project\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
-      return {
-        name: tomlString(project, "name") ?? path.basename(dir),
-        slug: `py-${path.basename(dir)}`,
-        dir,
-        manifest,
-        readme: path.join(dir, "README.md"),
-        group: "python",
-      };
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-function discoverRustPackages() {
-  const directory = path.join(root, "packages", "rs");
-  if (!fs.existsSync(directory)) return [];
-  return fs
-    .readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(directory, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, "Cargo.toml")))
-    .map((dir) => {
-      const manifest = path.join(dir, "Cargo.toml");
-      const packageSection = tomlPackageSection(manifest);
-      if (/^\s*publish\s*=\s*false\s*$/m.test(packageSection)) return undefined;
-      const name = tomlString(packageSection, "name") ?? path.basename(dir);
-      const libName = tomlString(tomlNamedSection(manifest, "lib"), "name");
-      const binarySection =
-        read(manifest).match(/^\[\[bin\]\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
-      const binaryName = tomlString(binarySection, "name");
-      const hasLibrary = fs.existsSync(path.join(dir, "src", "lib.rs"));
-      const targetName = libName ?? name;
-      return {
-        name,
-        slug: `rs-${path.basename(dir)}`,
-        dir,
-        manifest,
-        readme: path.join(dir, "README.md"),
-        group: "rust",
-        binaryName,
-        hasLibrary,
-        rustdocTarget: targetName.replaceAll("-", "_"),
-      };
-    })
-    .filter(Boolean)
-    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function titleFromMarkdown(markdown, fallback) {
@@ -686,8 +545,8 @@ function main() {
   }
 
   const typescriptPackages = discoverPackages();
-  const pythonPackages = discoverPythonPackages();
-  const rustPackages = discoverRustPackages();
+  const pythonPackages = discoverPythonPackages(root);
+  const rustPackages = discoverRustPackages(root);
   fs.rmSync(apiRoot, { recursive: true, force: true });
   fs.mkdirSync(apiRoot, { recursive: true });
 
