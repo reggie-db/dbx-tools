@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-mastra";
-export const PACKAGE_VERSION = "0.6.211";
+export const PACKAGE_VERSION = "0.6.212";
 export * as reactBubbles from "./src/react/bubbles.tsx";
 export * as reactChatApprovals from "./src/react/chat-approvals.ts";
 export * as reactChatComposer from "./src/react/chat-composer.tsx";
