@@ -145,6 +145,15 @@
         }
       ]
     },
+    "docs:check-source": {
+      "name": "docs:check-source",
+      "description": "Reject new undocumented public TypeScript exports",
+      "steps": [
+        {
+          "exec": "bun docs/scripts/check-source-docs.mjs"
+        }
+      ]
+    },
     "eject": {
       "name": "eject",
       "description": "Remove projen from the project",

@@ -1,3 +1,5 @@
+"""Lakebase connection resolution and connect-time credential injection."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -22,10 +24,11 @@ from .address import (
     parse_resource_path,
 )
 
-"""Lakebase connection resolution and connect-time credential injection."""
-
 CredentialProvider = Callable[[], str]
+"""Return a current database credential for a new physical connection."""
+
 CredentialLoader = Callable[[], tuple[str, dt.datetime | None]]
+"""Load a database credential and its optional absolute expiration time."""
 
 _API_BASE = "/api/2.0/postgres"
 _CREDENTIAL_REFRESH_LEAD = dt.timedelta(minutes=5)
@@ -42,6 +45,8 @@ class WorkspaceApiClient(Protocol):
 
 
 class WorkspaceClientLike(Protocol):
+    """WorkspaceClient surface required for Lakebase discovery and credentials."""
+
     api_client: WorkspaceApiClient
     config: Any
     current_user: Any
@@ -50,6 +55,14 @@ class WorkspaceClientLike(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class PostgresEngineConfig:
+    """Explicit Lakebase/Postgres connection inputs.
+
+    Explicit fields take precedence over parsed address values and environment
+    variables. Missing autoscaling project, branch, endpoint, host, database,
+    and user values may be discovered through the supplied ``WorkspaceClient``.
+    ``instance_name`` selects provisioned Lakebase discovery and credentials.
+    """
+
     address: str | None = None
     instance_name: str | None = None
     project: str | None = None
@@ -64,6 +77,12 @@ class PostgresEngineConfig:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedPostgresConnection:
+    """Concrete connection coordinates with no embedded password.
+
+    ``project``, ``branch``, ``endpoint``, and ``instance_name`` retain the
+    resolved Lakebase resource identity used to choose a credential provider.
+    """
+
     host: str
     database: str
     user: str
@@ -75,6 +94,8 @@ class ResolvedPostgresConnection:
     instance_name: str | None = None
 
     def url(self, drivername: str) -> URL:
+        """Build a SQLAlchemy URL using the driver's expected SSL query key."""
+
         ssl_parameter = "ssl" if drivername.endswith("+asyncpg") else "sslmode"
         return URL.create(
             drivername,
@@ -113,6 +134,13 @@ def workspace_credential_provider(
     workspace_client: WorkspaceClientLike,
     instance_name: str,
 ) -> CredentialProvider:
+    """Create a cached provisioned-Lakebase credential provider.
+
+    The provider mints through ``WorkspaceClient.database`` and caches the token
+    until five minutes before its reported expiry. Refresh uses process-local
+    check-lock-check serialization so concurrent pool connects share one mint.
+    """
+
     if not instance_name.strip():
         raise ValueError("instance_name must not be empty")
 
@@ -133,6 +161,12 @@ def autoscaling_credential_provider(
     workspace_client: WorkspaceClientLike,
     endpoint: str,
 ) -> CredentialProvider:
+    """Create a cached Autoscaling-Lakebase endpoint credential provider.
+
+    Tokens come from ``POST /api/2.0/postgres/credentials`` and use the same
+    process-local early-refresh and refresh-lock policy as provisioned tokens.
+    """
+
     if not endpoint.strip():
         raise ValueError("endpoint must not be empty")
 
@@ -152,6 +186,13 @@ def autoscaling_credential_provider(
 
 
 def install_credential_injection(engine: Engine, provider: CredentialProvider) -> None:
+    """Install ``provider`` on SQLAlchemy's physical ``do_connect`` boundary.
+
+    The password is requested for every new DBAPI connection and never stored in
+    the engine URL. The caller owns caching and refresh when supplying a custom
+    provider.
+    """
+
     @event.listens_for(engine, "do_connect")
     def provide_token(
         dialect: Any,
@@ -171,6 +212,14 @@ def create_engine(
     drivername: str = "postgresql+psycopg",
     **engine_options: Any,
 ) -> Engine:
+    """Create a synchronous SQLAlchemy engine with connect-time credentials.
+
+    Connection coordinates are resolved once. The built-in provider is selected
+    from the resolved provisioned instance or Autoscaling endpoint and caches
+    credentials; a caller-supplied provider owns its complete lifecycle.
+    Additional keyword arguments pass directly to SQLAlchemy.
+    """
+
     resolved = resolve_postgres_connection(workspace_client, config)
     engine = sqlalchemy_create_engine(resolved.url(drivername), **engine_options)
     provider = credential_provider or _default_provider(workspace_client, resolved)
@@ -186,6 +235,13 @@ def create_async_engine(
     drivername: str = "postgresql+asyncpg",
     **engine_options: Any,
 ) -> AsyncEngine:
+    """Create an async SQLAlchemy engine with connect-time credentials.
+
+    Credential injection is installed on the async engine's underlying sync
+    engine. Resolution, provider ownership, and keyword forwarding match
+    :func:`create_engine`.
+    """
+
     resolved = resolve_postgres_connection(workspace_client, config)
     engine = sqlalchemy_create_async_engine(resolved.url(drivername), **engine_options)
     provider = credential_provider or _default_provider(workspace_client, resolved)
@@ -199,6 +255,14 @@ def resolve_postgres_connection(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> ResolvedPostgresConnection:
+    """Resolve complete Postgres coordinates without minting credentials.
+
+    Values are layered from explicit config, parsed address/resource inputs,
+    ``LAKEBASE_*`` and ``PG*`` environment variables, then Workspace APIs for
+    missing Lakebase resources. Ambiguous discovery and unresolved host or user
+    values raise ``ValueError``.
+    """
+
     config = config or PostgresEngineConfig()
     env = os.environ if environ is None else environ
     raw_address = _first(config.address, config.endpoint, env.get("LAKEBASE_ENDPOINT"))

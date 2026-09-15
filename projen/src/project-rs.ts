@@ -1113,7 +1113,7 @@ function rustBindingCommands(plan: RustReleasePlan): string[] {
       '--version "$VERSION"',
       `--output "dist/release/${binding.crate}/\${{ matrix.node }}"`,
       "--skip-build",
-    ].join(" \\\\n  "),
+    ].join(" \\\n  "),
   );
 }
 

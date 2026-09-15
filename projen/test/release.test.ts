@@ -137,10 +137,13 @@ describe("unified release workflow", () => {
     assert.equal(build.env?.DOCS_SITE_URL, "https://docs.example.com");
     assert.equal(build.env?.DOCS_BASE, "/fixture/");
     const stepNames = build.steps.map((candidate) => candidate.name);
+    assert.equal(step(build, "Setup Python").uses, "actions/setup-python@v6");
+    assert.equal(step(build, "Setup Rust").uses, "dtolnay/rust-toolchain@stable");
     assert.ok(
-      stepNames.indexOf("Generate TypeScript API docs") <
-        stepNames.indexOf("Check generated titles"),
+      stepNames.indexOf("Validate public source documentation") <
+        stepNames.indexOf("Generate docs from READMEs"),
     );
+    assert.ok(stepNames.indexOf("Generate API docs") < stepNames.indexOf("Check generated titles"));
     assert.equal(step(build, "Upload Pages artifact").uses, "actions/upload-pages-artifact@v4");
 
     const deploy = release.jobs["deploy-docs"]!;

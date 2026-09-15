@@ -16,6 +16,7 @@
     "default": "projen default",
     "demo": "projen demo",
     "demo:emitter": "projen demo:emitter",
+    "docs:check-source": "projen docs:check-source",
     "eject": "projen eject",
     "eslint": "projen eslint",
     "eslint:fix": "projen eslint:fix",

@@ -50,6 +50,8 @@ jobs:
         with:
           path: ${{ steps.bun_cache_metadata.outputs.path }}
           key: ${{ steps.bun_cache.outputs.cache-primary-key }}
+      - name: Validate public source documentation
+        run: bun docs/scripts/check-source-docs.mjs
       - name: Validate README documentation
         run: bun docs/scripts/sync-readmes.mjs
       - name: Validate generated files and types

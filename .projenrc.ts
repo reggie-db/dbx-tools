@@ -47,6 +47,10 @@ const root = new projenProject.DBXToolsNodeProject({
   buildWorkflowOptions: {
     preBuildSteps: [
       {
+        name: "Validate public source documentation",
+        run: "bun docs/scripts/check-source-docs.mjs",
+      },
+      {
         name: "Validate README documentation",
         run: "bun docs/scripts/sync-readmes.mjs",
       },
@@ -80,6 +84,11 @@ const installerTest = root.addTask("test:installer", {
 });
 installerTest.exec("bun test scripts/install.test.ts");
 root.testTask.spawn(installerTest);
+
+const sourceDocs = root.addTask("docs:check-source", {
+  description: "Reject new undocumented public TypeScript exports",
+});
+sourceDocs.exec("bun docs/scripts/check-source-docs.mjs");
 
 // ---------------------------------------------------------------------------
 // JavaScript and Python lockfiles stay UNTRACKED

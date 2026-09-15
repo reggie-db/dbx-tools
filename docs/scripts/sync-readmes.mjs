@@ -418,7 +418,7 @@ function nav(packages, guides) {
       items: items.map((item) => ({ label: item.text, link: item.link })),
     })),
     // API reference sorts after the README guides: readers reach the
-    // hand-written package guides first, then the generated TypeScript API.
+    // hand-written package guides first, then generated language API pages.
     { label: "API Reference", link: "/api/" },
   ];
   return {
@@ -654,9 +654,10 @@ function main() {
   );
 
   for (const pkg of packages) {
+    const packagePage = generatedPage(pkg.readme, read(pkg.readme), pkg.name, pkg.dir, mappings);
     write(
       path.join(docsContentRoot, "packages", `${pkg.slug}.md`),
-      generatedPage(pkg.readme, read(pkg.readme), pkg.name, pkg.dir, mappings),
+      `${packagePage.trimEnd()}\n\n## API Reference\n\n[Open the generated API reference](${withBase(`/api/${pkg.slug}/`)})\n`,
     );
   }
 

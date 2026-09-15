@@ -354,6 +354,8 @@ describe("DBXToolsRustWorkspace", () => {
       const packageBindings = workflowStep(buildJob, "Package UniFFI outputs").run!;
       assert.ok(packageBindings.includes('--crate "fixture-alpha"'));
       assert.ok(packageBindings.includes('--crate "fixture-beta"'));
+      assert.doesNotMatch(packageBindings, /\\n/);
+      assert.match(packageBindings, /build \\\n  --crate/);
       assert.equal(
         stepNames(buildJob).filter((name) => name === "Cache Cargo registry and dependencies")
           .length,

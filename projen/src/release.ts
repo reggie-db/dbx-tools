@@ -276,13 +276,23 @@ function addDocsJobs(
         uses: "actions/setup-node@v6",
         with: { "node-version": "22" },
       },
+      {
+        name: "Setup Python",
+        uses: "actions/setup-python@v6",
+        with: { "python-version": "3.11" },
+      },
+      { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
       { name: "Configure Pages", uses: "actions/configure-pages@v5" },
       { name: "Install dependencies", run: "bun install" },
+      {
+        name: "Validate public source documentation",
+        run: "bun docs/scripts/check-source-docs.mjs",
+      },
       { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
       { name: "Install docs dependencies", run: "bun install --cwd .docs-build/site" },
       bunCacheSaveStep(),
       {
-        name: "Generate TypeScript API docs",
+        name: "Generate API docs",
         run: "bun docs/scripts/generate-api-docs.mjs",
       },
       {

@@ -1,3 +1,5 @@
+"""Lakebase/Postgres resolution, engines, advisory locks, and live topic fan-out."""
+
 from .address import (
     SSL_MODES,
     LakebaseConnectionInputs,

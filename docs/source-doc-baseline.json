@@ -1,0 +1,921 @@
+{
+  "version": 1,
+  "policy": "Manifest-exported handwritten TypeScript declarations may not add undocumented symbols. Remove entries as source documentation is added.",
+  "undocumented": [
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "bundleAppResourceSchema",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "BundleValidateJson",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "ConfigFile",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "ConfigMapValue",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "ConfigSource",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "flattenAppEnv",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "flattenAppYamlEnv",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "getBundlePath",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit",
+      "name": "ResolveConfigValueOptions",
+      "source": "packages/js/node/appkit/src/bundle.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-graphiti",
+      "name": "GRAPHITI_CONFIG_SCHEMA",
+      "source": "packages/js/node/appkit-graphiti/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-graphiti",
+      "name": "GraphitiPluginConfig",
+      "source": "packages/js/node/appkit-graphiti/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-graphiti",
+      "name": "ResolvedGraphitiPluginConfig",
+      "source": "packages/js/node/appkit-graphiti/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-graphiti",
+      "name": "graphiti",
+      "source": "packages/js/node/appkit-graphiti/src/plugin.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-graphiti",
+      "name": "GraphitiPlugin",
+      "source": "packages/js/node/appkit-graphiti/src/plugin.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-mastra",
+      "name": "ChartPlannerRequest",
+      "source": "packages/js/node/appkit-mastra/src/chart.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-mastra",
+      "name": "MASTRA_USER_EMAIL_KEY",
+      "source": "packages/js/node/appkit-mastra/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-mastra",
+      "name": "BuildObservabilityOptions",
+      "source": "packages/js/node/appkit-mastra/src/observability.ts"
+    },
+    {
+      "package": "@dbx-tools/appkit-mastra",
+      "name": "MLFLOW_SPAN_OUTPUTS_ATTR",
+      "source": "packages/js/node/appkit-mastra/src/trace-io.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthEmailOptions",
+      "source": "packages/js/node/auth-gate/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthorizeIdentity",
+      "source": "packages/js/node/auth-gate/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "PasswordlessAuthOptions",
+      "source": "packages/js/node/auth-gate/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "PasswordlessAuthRuntime",
+      "source": "packages/js/node/auth-gate/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthDatabase",
+      "source": "packages/js/node/auth-gate/src/storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthStorage",
+      "source": "packages/js/node/auth-gate/src/storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthStorageConfig",
+      "source": "packages/js/node/auth-gate/src/storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthStorageMode",
+      "source": "packages/js/node/auth-gate/src/storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "ResolvedAuthStorageConfig",
+      "source": "packages/js/node/auth-gate/src/storage.ts"
+    },
+    {
+      "package": "@dbx-tools/cli-appkit-env",
+      "name": "defaultEnvExportFormat",
+      "source": "packages/js/cli/appkit-env/src/env-export.ts"
+    },
+    {
+      "package": "@dbx-tools/cli-tunnel",
+      "name": "ResolvedTunnelOptions",
+      "source": "packages/js/cli/tunnel/src/options.ts"
+    },
+    {
+      "package": "@dbx-tools/cli-tunnel",
+      "name": "resolveTunnelOptions",
+      "source": "packages/js/cli/tunnel/src/options.ts"
+    },
+    {
+      "package": "@dbx-tools/cli-tunnel",
+      "name": "ProxyOptions",
+      "source": "packages/js/cli/tunnel/src/proxy.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "BrandContext",
+      "source": "packages/js/node/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "BrandContextInput",
+      "source": "packages/js/node/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "brandContextJsonSchema",
+      "source": "packages/js/node/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "brandContextPrompt",
+      "source": "packages/js/node/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "BrandContextSchema",
+      "source": "packages/js/node/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "defaultBrandContext",
+      "source": "packages/js/node/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "parseBrandContext",
+      "source": "packages/js/node/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "appEnvEntrySchema",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "appSchema",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "bundleAppSchema",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "bundleEnvEntrySchema",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "ConfigData",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "ConfigMapValue",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "ConfigOptions",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "valueSchema",
+      "source": "packages/js/node/core/src/config.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "SpawnArgs",
+      "source": "packages/js/node/core/src/exec.ts"
+    },
+    {
+      "package": "@dbx-tools/core",
+      "name": "FileLockOptions",
+      "source": "packages/js/node/core/src/file-lock.ts"
+    },
+    {
+      "package": "@dbx-tools/path",
+      "name": "FileFindOptions",
+      "source": "packages/js/node/path/src/find.ts"
+    },
+    {
+      "package": "@dbx-tools/path",
+      "name": "PathMatchPredicate",
+      "source": "packages/js/node/path/src/match.ts"
+    },
+    {
+      "package": "@dbx-tools/path",
+      "name": "FileScanOptions",
+      "source": "packages/js/node/path/src/scan.ts"
+    },
+    {
+      "package": "@dbx-tools/path",
+      "name": "FOLLOW_SYMLINKS_DEFAULT",
+      "source": "packages/js/node/path/src/scan.ts"
+    },
+    {
+      "package": "@dbx-tools/path",
+      "name": "FileWatchOptions",
+      "source": "packages/js/node/path/src/watch.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "DurationInput",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "messageBusGrantStatements",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "provisionMessageBusSchema",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "ResolvedTopicBusPersistenceOptions",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "resolvePersistenceOptions",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "StoredTopicMessage",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "TopicBusPersistenceOptions",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "TopicHistoryPage",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/postgres",
+      "name": "TopicPersistenceScope",
+      "source": "packages/js/node/postgres/src/persistence.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "AuthLogoutResult",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "authLogoutResultSchema",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "AuthRequest",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "AuthRequestResult",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "authRequestResultSchema",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "authRequestSchema",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "AuthStatus",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "authStatusSchema",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "AuthVerify",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "AuthVerifyResult",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "authVerifyResultSchema",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "authVerifySchema",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-auth",
+      "name": "SESSION_COOKIE_NAME",
+      "source": "packages/js/shared/auth/src/auth.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "PollOptions",
+      "source": "packages/js/shared/core/src/async.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "BrandAssetSet",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "BrandAssetSetSchema",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "BrandColorsSchema",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "BrandContext",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "BrandContextInput",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "BrandContextSchema",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "BrandVoiceSchema",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "DEFAULT_BRAND_ASSETS",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "defaultBrandContext",
+      "source": "packages/js/shared/core/src/brand.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "MemoizeOptions",
+      "source": "packages/js/shared/core/src/function.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "Logger",
+      "source": "packages/js/shared/core/src/log.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "NonFunctionKeys",
+      "source": "packages/js/shared/core/src/object.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "OneOrMany",
+      "source": "packages/js/shared/core/src/object.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "IdentifierOptions",
+      "source": "packages/js/shared/core/src/string.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-core",
+      "name": "KeyOptions",
+      "source": "packages/js/shared/core/src/string.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "BaseFileSystemOptions",
+      "source": "packages/js/shared/fs/src/base-fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "FileSystemError",
+      "source": "packages/js/shared/fs/src/base-fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "FileSystemErrorCode",
+      "source": "packages/js/shared/fs/src/base-fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "CopyOptions",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "FileContent",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "FileEntry",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "FileEntryType",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "FileStat",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "ListOptions",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "MakeDirectoryOptions",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "ReadFileOptions",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "RemoveOptions",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "WriteFileOptions",
+      "source": "packages/js/shared/fs/src/fs.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-fs",
+      "name": "NormalizeResult",
+      "source": "packages/js/shared/fs/src/posix-path.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "AttachmentEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "AttachmentType",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieAttachment",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieChatEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieChatLocation",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieMessage",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieQueryAttachment",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieResponse",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieSpace",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieTextAttachment",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "GenieThought",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "KnownAttachmentType",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "MessageEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "MessageStatusSchema",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "QueryEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "QuestionEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "ResultEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "RowsEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "StatementEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "StatusEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "SuggestedQuestionsEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "TerminalStatus",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "TextEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-genie",
+      "name": "ThinkingEvent",
+      "source": "packages/js/shared/genie/src/genie-model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraFeedbackRequest",
+      "source": "packages/js/shared/mastra/src/feedback.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraFeedbackResponse",
+      "source": "packages/js/shared/mastra/src/feedback.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraFeedbackValue",
+      "source": "packages/js/shared/mastra/src/feedback.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "AskGenieDoneEvent",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "Chart",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "ChartResult",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "ChartType",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "DefaultModelResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "GenieAgentEvent",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "GenieAgentResult",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "GenieDataset",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "GenieDatasetChart",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "GenieDatasetData",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "GenieSummaryItem",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "GenieWriterEvent",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraClearHistoryResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraClientConfig",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraDeleteThreadResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraGenieErrorEvent",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraHistoryResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraHistoryUIMessage",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraSuggestionsResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraThread",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraThreadsResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraUpdateThreadRequest",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "MastraUpdateThreadResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "ServingEndpointsResponse",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "StartedEvent",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "StatementData",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-mastra",
+      "name": "SummaryEvent",
+      "source": "packages/js/shared/mastra/src/wire.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-model",
+      "name": "ModelClassSchema",
+      "source": "packages/js/shared/model/src/model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-model",
+      "name": "ModelProfile",
+      "source": "packages/js/shared/model/src/model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-model",
+      "name": "ModelQuery",
+      "source": "packages/js/shared/model/src/model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-model",
+      "name": "ModelStatus",
+      "source": "packages/js/shared/model/src/model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-model",
+      "name": "RankedModel",
+      "source": "packages/js/shared/model/src/model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-model",
+      "name": "ReasoningEffortSchema",
+      "source": "packages/js/shared/model/src/model.ts"
+    },
+    {
+      "package": "@dbx-tools/shared-model",
+      "name": "ServingEndpointSummary",
+      "source": "packages/js/shared/model/src/model.ts"
+    },
+    {
+      "package": "@dbx-tools/tunnel",
+      "name": "AUTH_PREFIX",
+      "source": "packages/js/node/tunnel/src/gate.ts"
+    },
+    {
+      "package": "@dbx-tools/tunnel",
+      "name": "LoginPageOptions",
+      "source": "packages/js/node/tunnel/src/login-page.ts"
+    },
+    {
+      "package": "@dbx-tools/tunnel",
+      "name": "ProcessSupervisor",
+      "source": "packages/js/node/tunnel/src/supervisor.ts"
+    },
+    {
+      "package": "@dbx-tools/ui-auth",
+      "name": "getAuthStatus",
+      "source": "packages/js/ui/auth/src/react/auth-client.ts"
+    },
+    {
+      "package": "@dbx-tools/ui-auth",
+      "name": "logout",
+      "source": "packages/js/ui/auth/src/react/auth-client.ts"
+    },
+    {
+      "package": "@dbx-tools/ui-auth",
+      "name": "AuthGateProps",
+      "source": "packages/js/ui/auth/src/react/auth-gate.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-auth",
+      "name": "PasskeyManagerProps",
+      "source": "packages/js/ui/auth/src/react/passkey-manager.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "ApplyBrandContextOptions",
+      "source": "packages/js/ui/branding/src/browser.ts"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "BrandAssetResolver",
+      "source": "packages/js/ui/branding/src/browser.ts"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "BrandIcon",
+      "source": "packages/js/ui/branding/src/react/brand.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "BrandImageProps",
+      "source": "packages/js/ui/branding/src/react/brand.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "BrandLogo",
+      "source": "packages/js/ui/branding/src/react/brand.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "BrandProvider",
+      "source": "packages/js/ui/branding/src/react/brand.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "BrandProviderProps",
+      "source": "packages/js/ui/branding/src/react/brand.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-branding",
+      "name": "useBrand",
+      "source": "packages/js/ui/branding/src/react/brand.tsx"
+    },
+    {
+      "package": "@dbx-tools/ui-mastra",
+      "name": "ChatStatus",
+      "source": "packages/js/ui/mastra/src/react/types.ts"
+    },
+    {
+      "package": "@dbx-tools/ui-mastra",
+      "name": "ChatViewProps",
+      "source": "packages/js/ui/mastra/src/react/types.ts"
+    }
+  ]
+}

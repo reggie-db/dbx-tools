@@ -1,3 +1,5 @@
+"""Live Postgres LISTEN/NOTIFY topic fan-out with Node-compatible envelopes."""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,9 +23,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 SerializableValue: TypeAlias = (
     str | int | float | bool | None | list["SerializableValue"] | dict[str, "SerializableValue"]
 )
+"""A JSON value accepted without coercion by the topic-bus wire format."""
+
 TopicMetadata: TypeAlias = dict[str, SerializableValue]
+"""JSON metadata merged into a published topic message."""
+
 TopicListener: TypeAlias = Callable[["TopicMessage"], Awaitable[None] | None]
+"""Synchronous or asynchronous callback for one topic message."""
+
 TopicMetadataProvider: TypeAlias = Callable[[], Awaitable[TopicMetadata] | TopicMetadata]
+"""Synchronous or asynchronous provider evaluated for each broadcast."""
 
 _DEFAULT_CHANNEL = "dbx_tools_topic_bus"
 _MAX_CHANNEL_LENGTH = 63
@@ -42,6 +51,12 @@ class AsyncEngineLike(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class TopicPublishInput:
+    """Caller-supplied message type, body, and per-message metadata.
+
+    Per-message metadata overrides configured and machine metadata with the same
+    key. The complete payload must remain JSON serializable without coercion.
+    """
+
     type: str
     body: SerializableValue
     metadata: TopicMetadata = field(default_factory=dict)
@@ -49,6 +64,8 @@ class TopicPublishInput:
 
 @dataclass(frozen=True, slots=True)
 class TopicMessage:
+    """Immutable Node-compatible topic message returned and delivered by the bus."""
+
     id: str
     topic: str
     type: str
@@ -58,9 +75,13 @@ class TopicMessage:
 
     @property
     def publishedAt(self) -> str:
+        """Return the wire-compatible camelCase publication timestamp."""
+
         return self.published_at
 
     def as_dict(self) -> dict[str, SerializableValue]:
+        """Return the JSON wire envelope with a ``publishedAt`` field."""
+
         return {
             "id": self.id,
             "topic": self.topic,
@@ -73,12 +94,28 @@ class TopicMessage:
 
 @dataclass(frozen=True, slots=True)
 class PostgresTopicBusOptions:
+    """Channel identity, automatic metadata, and asynchronous error handling.
+
+    ``metadata`` may be a static mapping or a provider evaluated for each
+    broadcast. ``on_error`` receives listener, reconnect, and cleanup failures
+    that cannot be raised back through the originating callback.
+    """
+
     channel: object = _DEFAULT_CHANNEL
     metadata: TopicMetadata | TopicMetadataProvider | None = None
     on_error: Callable[[BaseException], None] | None = None
 
 
 class PostgresTopicBus:
+    """Publish and receive live topic messages over Postgres LISTEN/NOTIFY.
+
+    The caller owns the SQLAlchemy engine. Listening lazily checks out one
+    dedicated raw connection that remains bound to the event loop until
+    :meth:`close`; broadcasts use independent transaction-scoped engine
+    connections. A terminated listener connection reconnects with bounded
+    exponential delay while listeners remain. Delivery is live and unstored.
+    """
+
     def __init__(
         self,
         engine: AsyncEngine | AsyncEngineLike,
@@ -103,9 +140,17 @@ class PostgresTopicBus:
 
     @property
     def channelName(self) -> str:
+        """Return the Node-compatible camelCase channel name property."""
+
         return self.channel_name
 
     async def start(self) -> None:
+        """Start the dedicated LISTEN connection once.
+
+        Calls are idempotent while active and serialized across concurrent
+        callers. A bus cannot be restarted after :meth:`close`.
+        """
+
         if self._driver_connection is not None:
             return
         if self._closed:
@@ -140,6 +185,13 @@ class PostgresTopicBus:
         topic: str,
         message_input: TopicPublishInput | Mapping[str, Any],
     ) -> TopicMessage:
+        """Publish one validated message and return its complete wire envelope.
+
+        Broadcasting does not require or create the dedicated LISTEN connection.
+        The encoded notification must fit within the package's conservative
+        7,900-byte Postgres payload limit.
+        """
+
         if not topic.strip():
             raise TypeError("Topic must not be empty")
         if self._closed:
@@ -169,6 +221,13 @@ class PostgresTopicBus:
         return message
 
     async def listen(self, topic: str, listener: TopicListener) -> Callable[[], Awaitable[None]]:
+        """Register ``listener`` and return an asynchronous unsubscribe callback.
+
+        The first listener starts the dedicated connection. Unsubscribing removes
+        only this callback; call :meth:`close` to release the LISTEN connection.
+        Listener failures are reported through ``on_error``.
+        """
+
         if not topic.strip():
             raise TypeError("Topic must not be empty")
         await self.start()
@@ -183,6 +242,11 @@ class PostgresTopicBus:
         return unsubscribe
 
     async def close(self) -> None:
+        """Permanently stop reconnecting, clear listeners, and close LISTEN state.
+
+        The operation is idempotent and does not dispose the caller-owned engine.
+        """
+
         if self._closed:
             return
         self._closed = True
@@ -280,6 +344,13 @@ class PostgresTopicBus:
 
 
 def channel_name(channel: object = _DEFAULT_CHANNEL) -> str:
+    """Derive a stable PostgreSQL channel identifier from one or more values.
+
+    The readable prefix is normalized and truncated, then suffixed with the same
+    stable-key FNV hash used by the Node package. The result fits PostgreSQL's
+    63-byte identifier limit and remains deterministic across runtimes.
+    """
+
     parts = list(channel) if isinstance(channel, (list, tuple)) else [channel]
     stable = "\0".join(to_stable_key(part) for part in parts)
     suffix = fnv_hash(stable, length=_CHANNEL_HASH_LENGTH)

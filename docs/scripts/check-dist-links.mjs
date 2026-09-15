@@ -71,7 +71,15 @@ function main() {
   );
   const failures = [];
 
+  let checkedPages = 0;
   for (const [source, content] of html) {
+    // Cargo owns rustdoc's self-contained output. Its generated pages contain
+    // runtime template URLs and rustdoc-specific encoded fragments that this
+    // simple static checker cannot interpret. Keep the files in the target set
+    // so Starlight links into rustdoc are verified, but do not revalidate links
+    // emitted inside rustdoc itself.
+    if (source.startsWith("rustdoc/")) continue;
+    checkedPages += 1;
     const route = sourceRoute(path.join(distRoot, source));
     for (const link of links(content)) {
       if (!link || link.startsWith("//") || /^[a-z][a-z\d+.-]*:/i.test(link)) {
@@ -96,7 +104,7 @@ function main() {
     throw new Error(`Broken internal documentation links:\n${failures.join("\n")}`);
   }
   process.stderr.write(
-    `Validated ${html.size} HTML pages and ${files.size} built files without HTTP requests.\n`,
+    `Validated ${checkedPages} Starlight HTML pages and ${files.size} built files without HTTP requests.\n`,
   );
 }
 
