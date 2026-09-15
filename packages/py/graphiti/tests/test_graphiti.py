@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import sysconfig
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -16,6 +17,7 @@ from dbx_tools.graphiti.runtime import (
     Runtime,
     RuntimePaths,
     _ArgvPopen,
+    _child_python_paths,
     _link_tool,
 )
 from dbx_tools.graphiti.settings import ModelSettings
@@ -45,6 +47,13 @@ def test_environment_preserves_explicit_neo4j_values(monkeypatch, tmp_path: Path
     assert environment["EMBEDDER__PROVIDERS__OPENAI__API_KEY"] == "not-required"
     assert environment[UPSTREAM_MCP_PATH_ENV] == str(runtime.paths.graphiti / "mcp_server")
     assert str(Path(__file__).parents[1] / "src") in environment["PYTHONPATH"]
+
+
+def test_child_python_paths_exclude_standard_library() -> None:
+    paths = _child_python_paths()
+
+    assert str(Path(sysconfig.get_path("purelib")).resolve()) in paths
+    assert str(Path(sysconfig.get_path("stdlib")).resolve()) not in paths
 
 
 def test_connection_settings_do_not_expose_unrelated_environment(

@@ -41,8 +41,18 @@ handle the topic bus, static delivery, deployment staging, and shared types.
 - `databricks.yml` — Asset Bundle: the Lakebase autoscaling Postgres project,
   the app resource, and the deployed `command`/`env` overrides.
 - `stage-deploy.ts` — stages a self-contained deploy tree (see Deploy).
-- `appkit.plugins.json` — native AppKit template plugins synchronized by
-  `appkit plugin sync`; Graphiti is registered directly in `server.ts`.
+- `appkit.plugins.json` — the AppKit v2 native template-plugin catalogue;
+  Graphiti and the dbx-tools add-ons are registered directly in `server.ts`.
+
+Refresh and validate the catalogue from the trusted installed AppKit package:
+
+```bash
+bunx @databricks/appkit plugin sync --write --allow-js-manifest \
+  --plugins-dir ../../../../node_modules/@databricks/appkit/dist/plugins \
+  --package-name @databricks/appkit \
+  --require-plugins server,genie,lakebase
+bunx @databricks/appkit plugin validate appkit.plugins.json
+```
 
 ## Run
 
@@ -86,7 +96,9 @@ databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
 
 The staged app includes both `package.json` and `requirements.txt`. Databricks
 Apps installs the Node server and matching `dbx-tools-graphiti` Python release;
-the Graphiti plugin installs Caddy through mise on first start.
+the bundle sets `PYTHON=./.venv/bin/python` so the Graphiti plugin uses that
+Python 3.11 environment and `UV_PYTHON=3.11` so the upstream Graphiti project
+uses the same interpreter minor, then installs Caddy through mise on first start.
 Staging replaces workspace dependencies with `^<workspace-version>` and writes
 `dbx-tools-graphiti==<workspace-version>`. Uncommitted package changes are not
 included unless that version has been published.

@@ -76,7 +76,7 @@ const deployPkg = {
   type: "module",
   // Runtime deps only, all resolved to npm-installable specifiers. `bun` is added
   // so the platform's pnpm install fetches the runtime the command runs (`bun
-  // src/server.ts`). The public tunnel is `@dbx-tools/tunnel`, already a normal
+  // src/launch.ts`). The public tunnel is `@dbx-tools/tunnel`, already a normal
   // dependency of the server (resolved through `resolveDeps` above), consumed
   // in-process via `tunnelInterceptor()` - no wrapper bin to inject.
   dependencies: {
