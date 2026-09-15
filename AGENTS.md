@@ -236,12 +236,17 @@ Primary package areas:
   Responses for Claude and Kimi and Codex Responses for GPT and Kimi; the Codex
   route does not enable Claude. The local token
   queue uses separate process-local ITPM and OTPM windows from Databricks'
-  published Enterprise pay-per-token model limits. Callers can override them
-  through `INPUT_TOKENS_PER_MINUTE` / `OUTPUT_TOKENS_PER_MINUTE` or matching
-  flags. `PROVISIONED_THROUGHPUT=true` / `--provisioned-throughput` disables
-  both TPM windows because provisioned endpoints have no TPM restriction. QPH
-  remains Databricks-owned because correct workspace-wide enforcement across
-  replicas requires shared state. HTTP 429 recovery is a
+  published Enterprise pay-per-token model limits. `RATE_LIMIT_MODE` /
+  `--rate-limit-mode` accepts `auto`, `on`, or `off` and defaults to `auto`.
+  Auto mode starts with TPM admission disabled for each workspace/model key and
+  activates it only after that key receives a 429 whose message contains
+  `Exceeded workspace input tokens`, case-insensitively. Callers can override
+  the budgets through `INPUT_TOKENS_PER_MINUTE` /
+  `OUTPUT_TOKENS_PER_MINUTE` or matching flags. Explicit `off` and
+  `PROVISIONED_THROUGHPUT=true` / `--provisioned-throughput` prevent activation;
+  provisioned endpoints have no TPM restriction. QPH remains Databricks-owned
+  because correct workspace-wide enforcement across replicas requires shared
+  state. HTTP 429 recovery is a
   separate process-local gate keyed by Databricks host, current principal, and
   resolved model. Prefer trusted forwarded user ID/email, then unverified
   identity claims decoded from an already-present bearer JWT, then the in-memory

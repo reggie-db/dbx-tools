@@ -22,7 +22,7 @@ use images::DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES;
 use protocol::TargetWire;
 use rate_limit::RateLimitPolicy;
 use routes::AppState;
-use throttle::ThrottleConfig;
+use throttle::{RateLimitMode, ThrottleConfig};
 use tracing::info;
 
 const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
@@ -70,6 +70,9 @@ struct Cli {
     /// Disable pay-per-token TPM controls for provisioned throughput.
     #[arg(long, env = "PROVISIONED_THROUGHPUT", default_value_t = false)]
     provisioned_throughput: bool,
+    /// Process-local TPM admission mode.
+    #[arg(long, env = "RATE_LIMIT_MODE", value_enum, default_value_t = RateLimitMode::Auto)]
+    rate_limit_mode: RateLimitMode,
     /// Retries after an upstream 429 response; zero disables coordinated backoff.
     #[arg(
         long,
@@ -107,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input_tokens_per_minute,
         output_tokens_per_minute,
         provisioned_throughput,
+        rate_limit_mode,
         rate_limit_retries,
         rate_limit_initial_delay_ms,
         rate_limit_max_delay_ms,
@@ -116,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let databricks = DatabricksClient::new(profile).await?;
     let models = ModelClient::new(databricks.clone())?;
-    let model_rate_limits = if provisioned_throughput {
+    let model_rate_limits = if provisioned_throughput || rate_limit_mode == RateLimitMode::Off {
         Default::default()
     } else {
         ModelRateLimitsResolver::new()?.rate_limits().await?
@@ -130,6 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             input_tokens_per_minute,
             output_tokens_per_minute,
             provisioned_throughput,
+            mode: rate_limit_mode,
             documented_limits: model_rate_limits,
         },
         image_resize_threshold_bytes.get(),
@@ -148,6 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input_tokens_per_minute = input_tokens_per_minute.map(NonZeroU64::get),
         output_tokens_per_minute = output_tokens_per_minute.map(NonZeroU64::get),
         provisioned_throughput,
+        ?rate_limit_mode,
         rate_limit_retries,
         rate_limit_initial_delay_ms = rate_limit_initial_delay_ms.get(),
         rate_limit_max_delay_ms = rate_limit_max_delay_ms.get(),
@@ -201,6 +207,7 @@ mod tests {
         assert_eq!(cli.input_tokens_per_minute, None);
         assert_eq!(cli.output_tokens_per_minute, None);
         assert!(!cli.provisioned_throughput);
+        assert_eq!(cli.rate_limit_mode, RateLimitMode::Auto);
         assert_eq!(cli.rate_limit_retries, DEFAULT_RATE_LIMIT_RETRIES);
         assert_eq!(cli.rate_limit_retries, 5);
         assert_eq!(
@@ -220,6 +227,8 @@ mod tests {
             "--output-tokens-per-minute",
             "20000",
             "--provisioned-throughput",
+            "--rate-limit-mode",
+            "off",
             "--rate-limit-retries",
             "0",
             "--rate-limit-initial-delay-ms",
@@ -233,6 +242,7 @@ mod tests {
         assert_eq!(cli.input_tokens_per_minute.unwrap().get(), 200_000);
         assert_eq!(cli.output_tokens_per_minute.unwrap().get(), 20_000);
         assert!(cli.provisioned_throughput);
+        assert_eq!(cli.rate_limit_mode, RateLimitMode::Off);
         assert_eq!(cli.rate_limit_retries, 0);
         assert_eq!(cli.rate_limit_initial_delay_ms.get(), 250);
         assert_eq!(cli.rate_limit_max_delay_ms.get(), 5_000);

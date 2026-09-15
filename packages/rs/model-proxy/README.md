@@ -214,6 +214,11 @@ workspace. Requests reserve a `tokenx-rs` input estimate plus any explicit
 Sonnet 4 reserves its documented 1,000-token default when no output limit is
 present.
 
+`RATE_LIMIT_MODE` / `--rate-limit-mode` accepts `auto`, `on`, or `off` and
+defaults to `auto`. Auto mode leaves each workspace/model key unthrottled until
+its first 429 message containing `Exceeded workspace input tokens`,
+case-insensitively. `on` applies budgets immediately; `off` never applies them.
+
 Use `INPUT_TOKENS_PER_MINUTE` / `--input-tokens-per-minute` and
 `OUTPUT_TOKENS_PER_MINUTE` / `--output-tokens-per-minute` to override the
 published limits. Set `PROVISIONED_THROUGHPUT=true` or pass

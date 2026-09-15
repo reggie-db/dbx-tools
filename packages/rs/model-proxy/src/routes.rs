@@ -88,6 +88,12 @@ struct RequestCaller {
     peer: SocketAddr,
 }
 
+struct UpstreamControls<'a> {
+    client: &'a DatabricksClient,
+    rate_limits: &'a RateLimitGate,
+    throttle: &'a RequestThrottle,
+}
+
 pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router {
     Router::new()
         .route("/healthz", get(health))
@@ -204,8 +210,11 @@ async fn embeddings(
     let (path, request_body) = prepare_embedding_request(input, &endpoint.name)?;
     let originator = request_originator(&headers);
     let upstream = send_upstream(
-        &state.databricks,
-        &state.rate_limits,
+        UpstreamControls {
+            client: &state.databricks,
+            rate_limits: &state.rate_limits,
+            throttle: &state.throttle,
+        },
         &caller,
         &endpoint.name,
         &path,
@@ -309,8 +318,11 @@ async fn proxy(
     );
     let request_body = adapt_request(client_wire, target, input)?;
     let upstream = send_upstream(
-        &state.databricks,
-        &state.rate_limits,
+        UpstreamControls {
+            client: &state.databricks,
+            rate_limits: &state.rate_limits,
+            throttle: &state.throttle,
+        },
         &caller,
         &model,
         upstream_path(target, codex, native_responses),
@@ -413,14 +425,18 @@ async fn proxy(
 }
 
 async fn send_upstream(
-    client: &DatabricksClient,
-    rate_limits: &RateLimitGate,
+    controls: UpstreamControls<'_>,
     caller: &RequestCaller,
     model: &str,
     path: &str,
     headers: HeaderMap,
     body: Vec<u8>,
 ) -> Result<reqwest::Response, DatabricksClientError> {
+    let UpstreamControls {
+        client,
+        rate_limits,
+        throttle,
+    } = controls;
     let policy = rate_limits.policy();
     if policy.max_retries == 0 {
         let response = client
@@ -434,6 +450,7 @@ async fn send_upstream(
             return Ok(response);
         }
         let (response, details) = inspect_rate_limit_response(response).await?;
+        activate_token_throttle(throttle, client, model, &details).await;
         let (delay, delay_source) = server_retry_after(response.headers(), &details)
             .unwrap_or((std::time::Duration::ZERO, "disabled"));
         log_rate_limit(
@@ -477,6 +494,7 @@ async fn send_upstream(
                 return Err(error);
             }
         };
+        activate_token_throttle(throttle, client, model, &details).await;
         let server_delay = server_retry_after(response.headers(), &details);
         let delay_source = server_delay.map_or("backoff", |(_, source)| source);
         let delay = server_delay.map_or_else(
@@ -505,6 +523,25 @@ async fn send_upstream(
         }
         retries += 1;
         drop(response);
+    }
+}
+
+/// Activate auto TPM admission once Databricks reports an input-token limit.
+async fn activate_token_throttle(
+    throttle: &RequestThrottle,
+    client: &DatabricksClient,
+    model: &str,
+    details: &RateLimitDetails,
+) {
+    if throttle
+        .activate_from_message(model, details.message.as_deref())
+        .await
+    {
+        tracing::info!(
+            host = client.host(),
+            model,
+            "model token rate limiting activated"
+        );
     }
 }
 
@@ -756,7 +793,7 @@ mod tests {
             if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
                 ResponseTemplate::new(429).set_body_json(json!({
                     "error": {
-                        "message": "Rate limit exceeded",
+                        "message": "Exceeded workspace input tokens per minute",
                         "retry_after": 0
                     }
                 }))
@@ -832,13 +869,26 @@ mod tests {
             initial_delay: Duration::from_secs(1),
             max_delay: Duration::from_secs(1),
         });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: None,
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::Auto,
+                documented_limits: Default::default(),
+            },
+        );
         let caller = test_caller();
 
         let response = tokio::time::timeout(
             Duration::from_millis(900),
             send_upstream(
-                &client,
-                &gate,
+                UpstreamControls {
+                    client: &client,
+                    rate_limits: &gate,
+                    throttle: &throttle,
+                },
                 &caller,
                 "model",
                 "/test",
@@ -851,6 +901,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        assert!(
+            !throttle
+                .activate_from_message("model", Some("Exceeded workspace input tokens per minute"))
+                .await
+        );
     }
 
     #[tokio::test]
@@ -872,11 +927,24 @@ mod tests {
             initial_delay: Duration::from_millis(1),
             max_delay: Duration::from_millis(10),
         });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: None,
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::Off,
+                documented_limits: Default::default(),
+            },
+        );
         let caller = test_caller();
 
         let response = send_upstream(
-            &client,
-            &gate,
+            UpstreamControls {
+                client: &client,
+                rate_limits: &gate,
+                throttle: &throttle,
+            },
             &caller,
             "model",
             "/test",
