@@ -26,6 +26,8 @@ pub use storage::{open_databricks_store, StoreOptions};
 
 /// Default request header carrying an access token.
 pub const DEFAULT_ACCESS_TOKEN_HEADER: &str = "authorization";
+/// Request header selecting the workspace associated with a unified or dogfood host.
+pub const WORKSPACE_ID_HEADER: &str = "x-databricks-workspace-id";
 
 /// Configuration shared by the generated Node and Python auth bindings.
 #[derive(Clone, uniffi::Record)]
@@ -298,19 +300,10 @@ impl PersistentAuth {
         request_url: String,
         login: Option<bool>,
     ) -> BindingResult<Option<String>> {
-        let profile_url =
-            Url::parse(&self.status().host).map_err(|error| DatabricksAuthError::Failure {
-                message: format!("resolved Databricks host is invalid: {error}"),
-            })?;
-        let request_url =
-            Url::parse(&request_url).map_err(|error| DatabricksAuthError::Failure {
-                message: format!("request URL is invalid: {error}"),
-            })?;
-        if profile_url.origin() != request_url.origin() {
-            return Ok(None);
-        }
-        let token = self.token(login).await?;
-        Ok(Some(format!("{} {}", token.token_type, token.access_token)))
+        Ok(self
+            .request_headers_for_url(request_url, login)
+            .await?
+            .remove(DEFAULT_ACCESS_TOKEN_HEADER))
     }
 
     /// Renew the stored credential, permitting login by default when renewal fails.
@@ -369,13 +362,56 @@ impl PersistentAuth {
 }
 
 impl PersistentAuth {
-    /// Return the stable principal identity used for process-local coordination.
-    pub(crate) fn principal_key(&self) -> &str {
-        let profile = match &self.inner {
+    /// Return the resolved profile backing this authentication facade.
+    fn profile(&self) -> &Profile {
+        match &self.inner {
             PersistentAuthInner::Managed(inner) => inner.profile(),
             PersistentAuthInner::AppOnBehalfOf { profile, .. } => profile,
-        };
-        profile.principal_key()
+        }
+    }
+
+    /// Generate same-origin authorization and workspace-selection headers.
+    pub(crate) async fn request_headers_for_url(
+        &self,
+        request_url: String,
+        login: Option<bool>,
+    ) -> BindingResult<HashMap<String, String>> {
+        let profile = self.profile();
+        let profile_url =
+            Url::parse(profile.host.as_str()).map_err(|error| DatabricksAuthError::Failure {
+                message: format!("resolved Databricks host is invalid: {error}"),
+            })?;
+        let request_url =
+            Url::parse(&request_url).map_err(|error| DatabricksAuthError::Failure {
+                message: format!("request URL is invalid: {error}"),
+            })?;
+        if profile_url.origin() != request_url.origin() {
+            return Ok(HashMap::new());
+        }
+        let token = self.token(login).await?;
+        let mut headers = HashMap::from([(
+            DEFAULT_ACCESS_TOKEN_HEADER.to_owned(),
+            format!("{} {}", token.token_type, token.access_token),
+        )]);
+        if let Some(workspace_id) = profile
+            .workspace_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|workspace_id| !workspace_id.is_empty())
+        {
+            headers.insert(WORKSPACE_ID_HEADER.to_owned(), workspace_id.to_owned());
+        }
+        Ok(headers)
+    }
+
+    /// Return the stable principal identity used for process-local coordination.
+    pub(crate) fn principal_key(&self) -> &str {
+        self.profile().principal_key()
+    }
+
+    /// Return the workspace identifier resolved from options or the profile.
+    pub(crate) fn workspace_id(&self) -> Option<&str> {
+        self.profile().workspace_id.as_deref()
     }
 }
 
@@ -492,7 +528,7 @@ mod tests {
                     name: "app-request".into(),
                     host: url::Url::parse("https://workspace.example").unwrap(),
                     account_id: None,
-                    workspace_id: None,
+                    workspace_id: Some("123456789".into()),
                     client_id: String::new(),
                     group_id: None,
                     scopes: vec![],
@@ -531,6 +567,21 @@ mod tests {
             .unwrap()
             .as_deref(),
             Some("Bearer request-token")
+        );
+        let headers = auth
+            .request_headers_for_url(
+                "https://workspace.example/serving-endpoints/model/invocations".into(),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            headers.get(DEFAULT_ACCESS_TOKEN_HEADER).map(String::as_str),
+            Some("Bearer request-token")
+        );
+        assert_eq!(
+            headers.get(WORKSPACE_ID_HEADER).map(String::as_str),
+            Some("123456789")
         );
         assert_eq!(
             auth.authorization_header_for_url(

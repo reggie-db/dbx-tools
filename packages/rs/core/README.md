@@ -10,7 +10,8 @@ Key features:
 - Profile, account, workspace, scope, and endpoint resolution.
 - Shared token lifecycle with file, memory, or caller-provided storage.
 - A `reqwest-middleware` client that defaults to the resolved credential host,
-  omits credentials for other origins, and retries one rejected token.
+  omits credentials for other origins, adds the resolved
+  `X-Databricks-Workspace-Id`, and retries one rejected token.
 - Flexible JSON requests with an optional body and method.
 - Lakebase address parsing for PostgreSQL URLs, resource paths, hosts, and
   project ids.
@@ -56,6 +57,11 @@ let endpoints = client
     .request("/api/2.0/serving-endpoints", None, None)
     .await?;
 ```
+
+Profiles containing `workspace_id` add `X-Databricks-Workspace-Id` to every
+same-origin request, including PAT-authenticated Model Serving, Responses, and
+AI Gateway routes. Caller-supplied authorization and workspace headers are
+removed before the resolved values are applied.
 
 ## Modules
 
