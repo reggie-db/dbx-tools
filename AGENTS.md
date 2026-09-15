@@ -244,8 +244,12 @@ Primary package areas:
   `--rate-limit-mode` accepts `auto`, `on`, or `off` and defaults to `auto`.
   Auto mode starts with TPM admission disabled for each workspace/model key and
   activates it only after that key receives a 429 whose message contains
-  `Exceeded workspace input tokens`, case-insensitively. Callers can override
-  the budgets through `INPUT_TOKENS_PER_MINUTE` /
+  `Exceeded workspace input tokens`, case-insensitively. Every upstream attempt,
+  including retries after automatic activation, acquires one token reservation;
+  rejected or failed attempts release it. An active queue rejects an input
+  estimate above its complete per-minute budget with a structured local 429
+  instead of clamping it. Callers can override the budgets through
+  `INPUT_TOKENS_PER_MINUTE` /
   `OUTPUT_TOKENS_PER_MINUTE` or matching flags. Explicit `off` and
   `PROVISIONED_THROUGHPUT=true` / `--provisioned-throughput` prevent activation;
   provisioned endpoints have no TPM restriction. QPH remains Databricks-owned
@@ -258,9 +262,14 @@ Primary package areas:
   not call an identity API. Keep the gate map unbounded by default; the caller
   owns connection scope and process lifetime. Honor the `Retry-After` response
   header first, then the documented Foundation Model API
-  `error.retry_after` body value; otherwise use BackON jittered exponential
-  delay from one second to one minute. Log a returned `error.message` on every
-  429, including the final attempt. Use five request retries by default.
+  `error.retry_after` body value. An input-token 429 without either waits for the
+  local token window, or uses a conservative 60-second fallback when local
+  history cannot explain the workspace limit. Other 429s use BackON jittered
+  exponential delay from one second to one minute. Exhaustion logs no future
+  unslept delay. `/healthz` exposes process-local activation, wait, oversized,
+  post-admission 429, retry-reacquisition, and fallback-delay counters. Log a
+  returned `error.message` on every 429, including the final attempt. Use five
+  request retries by default.
   `RATE_LIMIT_RETRIES=0` or
   `--rate-limit-retries 0` disables retries and the shared cooldown;
   `RATE_LIMIT_INITIAL_DELAY_MS` and `RATE_LIMIT_MAX_DELAY_MS` plus matching CLI

@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, VecDeque},
     num::NonZeroU64,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::Duration,
@@ -48,6 +48,7 @@ pub(crate) struct RequestThrottle {
     mode: RateLimitMode,
     documented_limits: ModelRateLimitCatalogue,
     queues: Arc<Mutex<HashMap<ThrottleKey, Arc<TokenQueue>>>>,
+    counters: Arc<ThrottleCounters>,
 }
 
 /// Configuration for process-local pay-per-token admission control.
@@ -80,7 +81,30 @@ pub(crate) struct ThrottleAcquisition {
     pub(crate) reserved_output_tokens: u64,
     /// Estimated input plus reserved output tokens.
     pub(crate) estimated_tokens: u64,
+    /// Configured activation mode.
+    pub(crate) mode: RateLimitMode,
+    /// Whether token admission was active for this attempt.
+    pub(crate) active: bool,
+    /// Input-token budget applied to this attempt.
+    pub(crate) input_limit: Option<u64>,
+    /// Input tokens reserved in the local window.
+    pub(crate) reserved_input_tokens: u64,
+    /// Input tokens already reserved before this attempt.
+    pub(crate) input_window_used_before: u64,
     reservation: Option<ThrottleReservation>,
+}
+
+/// Local rejection for a request larger than its active input-token budget.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct OversizedInput {
+    /// Calibrated input estimate.
+    pub(crate) estimated_input_tokens: u64,
+    /// Active input-token budget.
+    pub(crate) input_limit: u64,
+    /// Input tokens already reserved in the current window.
+    pub(crate) input_window_used_before: u64,
+    /// Configured activation mode.
+    pub(crate) mode: RateLimitMode,
 }
 
 /// Token usage reported by a completed upstream response.
@@ -113,6 +137,18 @@ impl ThrottleAcquisition {
         drop(state);
         reservation.queue.notify.notify_waiters();
     }
+
+    /// Remove a reservation for an attempt rejected before token consumption.
+    pub(crate) async fn release(&self) {
+        let Some(reservation) = self.reservation.as_ref() else {
+            return;
+        };
+        let mut state = reservation.queue.state.lock().await;
+        state.input.remove(reservation.id);
+        state.output.remove(reservation.id);
+        drop(state);
+        reservation.queue.notify.notify_waiters();
+    }
 }
 
 impl RequestThrottle {
@@ -125,32 +161,72 @@ impl RequestThrottle {
             mode: config.mode,
             documented_limits: config.documented_limits,
             queues: Arc::default(),
+            counters: Arc::default(),
         }
     }
 
+    /// Estimate the model-visible input and requested output reservation.
+    pub(crate) fn estimate(&self, model: &str, request: &Value) -> TokenEstimate {
+        token_estimate(model, request)
+    }
+
+    /// Admit one upstream attempt through the active token window.
     pub(crate) async fn acquire(
         &self,
         model: &str,
         model_class: Option<ModelClass>,
-        request: &Value,
-    ) -> ThrottleAcquisition {
-        let estimate = token_estimate(model, request);
+        estimate: TokenEstimate,
+    ) -> Result<ThrottleAcquisition, OversizedInput> {
         let queue = self.queue(model).await;
-        let limits = if self.enabled(&queue) {
-            self.limits(model, model_class)
+        let active = self.enabled(&queue);
+        let configured_limits = self.limits(model, model_class);
+        let limits = if active {
+            configured_limits
         } else {
             TokenLimits::default()
         };
-        let (wait, reservation, adjusted_input, estimate_factor) =
-            reserve(queue, estimate, limits, WINDOW).await;
-        ThrottleAcquisition {
-            wait,
-            estimated_input_tokens: adjusted_input,
-            raw_estimated_input_tokens: estimate.input,
-            estimate_factor,
-            reserved_output_tokens: estimate.output,
-            estimated_tokens: adjusted_input.saturating_add(estimate.output),
-            reservation: Some(reservation),
+        let result = reserve(
+            Arc::clone(&queue),
+            estimate,
+            limits,
+            configured_limits.input,
+            self.mode,
+            active,
+            WINDOW,
+        )
+        .await;
+        match result {
+            Ok(acquisition) => {
+                if !active
+                    && self.mode == RateLimitMode::Auto
+                    && configured_limits.input.is_some_and(|limit| {
+                        acquisition.estimated_input_tokens >= limit.saturating_mul(4) / 5
+                    })
+                    && !queue.cold_warning.swap(true, Ordering::AcqRel)
+                {
+                    tracing::warn!(
+                        workspace = self.workspace.as_ref(),
+                        model,
+                        estimated_input_tokens = acquisition.estimated_input_tokens,
+                        token_limit_input = configured_limits.input,
+                        token_throttle_mode = ?self.mode,
+                        token_throttle_active = false,
+                        "automatic token throttling is inactive for a near-limit request"
+                    );
+                }
+                if !acquisition.wait.is_zero() {
+                    self.counters
+                        .admission_waits
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                Ok(acquisition)
+            }
+            Err(error) => {
+                self.counters
+                    .oversized_rejections
+                    .fetch_add(1, Ordering::Relaxed);
+                Err(error)
+            }
         }
     }
 
@@ -158,15 +234,74 @@ impl RequestThrottle {
     pub(crate) async fn activate_from_message(&self, model: &str, message: Option<&str>) -> bool {
         if self.provisioned_throughput
             || self.mode != RateLimitMode::Auto
-            || !message.is_some_and(|message| {
-                message
-                    .to_ascii_lowercase()
-                    .contains("exceeded workspace input tokens")
-            })
+            || !message.is_some_and(is_input_limit_message)
         {
             return false;
         }
-        !self.queue(model).await.active.swap(true, Ordering::AcqRel)
+        let activated = !self.queue(model).await.active.swap(true, Ordering::AcqRel);
+        if activated {
+            self.counters
+                .automatic_activations
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        activated
+    }
+
+    /// Return the local input-window delay for another attempt when known.
+    pub(crate) async fn token_window_delay(
+        &self,
+        model: &str,
+        model_class: Option<ModelClass>,
+        estimate: TokenEstimate,
+    ) -> Option<Duration> {
+        let queue = self.queue(model).await;
+        if !self.enabled(&queue) {
+            return None;
+        }
+        let input_limit = self.limits(model, model_class).input?;
+        let now = Instant::now();
+        let mut state = queue.state.lock().await;
+        state.input.prune(now, WINDOW);
+        let adjusted_input = state.calibration.apply(estimate.input);
+        (adjusted_input <= input_limit)
+            .then(|| state.input.delay(now, adjusted_input, input_limit, WINDOW))
+            .flatten()
+    }
+
+    /// Record an input-token 429 received after local token admission.
+    pub(crate) fn record_input_429_after_admission(&self) {
+        self.counters
+            .input_429_after_admission
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a retry that reacquired local token admission.
+    pub(crate) fn record_retry_reacquisition(&self) {
+        self.counters
+            .retry_reacquisitions
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record use of the conservative full-window retry delay.
+    pub(crate) fn record_fallback_window_delay(&self) {
+        self.counters
+            .fallback_window_delays
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Snapshot process-local rate-limit counters.
+    pub(crate) fn counters(&self) -> ThrottleCounterSnapshot {
+        ThrottleCounterSnapshot {
+            automatic_activations: self.counters.automatic_activations.load(Ordering::Relaxed),
+            admission_waits: self.counters.admission_waits.load(Ordering::Relaxed),
+            oversized_rejections: self.counters.oversized_rejections.load(Ordering::Relaxed),
+            input_429_after_admission: self
+                .counters
+                .input_429_after_admission
+                .load(Ordering::Relaxed),
+            retry_reacquisitions: self.counters.retry_reacquisitions.load(Ordering::Relaxed),
+            fallback_window_delays: self.counters.fallback_window_delays.load(Ordering::Relaxed),
+        }
     }
 
     async fn queue(&self, model: &str) -> Arc<TokenQueue> {
@@ -218,10 +353,32 @@ struct ThrottleKey {
 }
 
 #[derive(Debug, Default)]
+struct ThrottleCounters {
+    automatic_activations: AtomicU64,
+    admission_waits: AtomicU64,
+    oversized_rejections: AtomicU64,
+    input_429_after_admission: AtomicU64,
+    retry_reacquisitions: AtomicU64,
+    fallback_window_delays: AtomicU64,
+}
+
+/// Process-local rate-limit counters exposed through the health route.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ThrottleCounterSnapshot {
+    pub(crate) automatic_activations: u64,
+    pub(crate) admission_waits: u64,
+    pub(crate) oversized_rejections: u64,
+    pub(crate) input_429_after_admission: u64,
+    pub(crate) retry_reacquisitions: u64,
+    pub(crate) fallback_window_delays: u64,
+}
+
+#[derive(Debug, Default)]
 struct TokenQueue {
     /// Tokio mutex acquisition order provides FIFO admission for this key.
     admission: Mutex<()>,
     active: AtomicBool,
+    cold_warning: AtomicBool,
     state: Mutex<WindowState>,
     notify: Notify,
 }
@@ -301,12 +458,30 @@ impl TokenWindow {
             .saturating_add(actual);
         reservation.tokens = actual;
     }
+
+    fn remove(&mut self, id: u64) {
+        let Some(index) = self
+            .reservations
+            .iter()
+            .position(|reservation| reservation.id == id)
+        else {
+            return;
+        };
+        let reservation = self
+            .reservations
+            .remove(index)
+            .expect("reservation index exists");
+        self.reserved_tokens = self.reserved_tokens.saturating_sub(reservation.tokens);
+    }
 }
 
+/// Pre-admission model-visible input estimate and output reservation.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct TokenEstimate {
-    input: u64,
-    output: u64,
+pub(crate) struct TokenEstimate {
+    /// Raw input estimate before per-model calibration.
+    pub(crate) input: u64,
+    /// Caller-selected or documented default output capacity.
+    pub(crate) output: u64,
 }
 
 /// Bounded per-model ratio between raw estimates and reported input usage.
@@ -365,8 +540,11 @@ async fn reserve(
     queue: Arc<TokenQueue>,
     estimate: TokenEstimate,
     limits: TokenLimits,
+    configured_input_limit: Option<u64>,
+    mode: RateLimitMode,
+    active: bool,
     window: Duration,
-) -> (Duration, ThrottleReservation, u64, f64) {
+) -> Result<ThrottleAcquisition, OversizedInput> {
     let started = Instant::now();
     let _admission = queue.admission.lock().await;
     let output_tokens = limits
@@ -380,12 +558,20 @@ async fn reserve(
             let mut state = queue.state.lock().await;
             let estimate_factor = state.calibration.factor();
             let adjusted_input = state.calibration.apply(estimate.input);
-            let input_tokens = limits
-                .input
-                .map(|limit| adjusted_input.min(limit))
-                .unwrap_or_default();
             state.input.prune(now, window);
             state.output.prune(now, window);
+            let input_window_used_before = state.input.reserved_tokens;
+            if let Some(input_limit) = limits.input {
+                if adjusted_input > input_limit {
+                    return Err(OversizedInput {
+                        estimated_input_tokens: adjusted_input,
+                        input_limit,
+                        input_window_used_before,
+                        mode,
+                    });
+                }
+            }
+            let input_tokens = limits.input.map(|_| adjusted_input).unwrap_or_default();
             let delay = [
                 limits
                     .input
@@ -406,16 +592,24 @@ async fn reserve(
                 if limits.output.is_some() {
                     state.output.reserve(id, now, output_tokens);
                 }
-                return (
-                    started.elapsed(),
-                    ThrottleReservation {
+                return Ok(ThrottleAcquisition {
+                    wait: started.elapsed(),
+                    estimated_input_tokens: adjusted_input,
+                    raw_estimated_input_tokens: estimate.input,
+                    estimate_factor,
+                    reserved_output_tokens: estimate.output,
+                    estimated_tokens: adjusted_input.saturating_add(estimate.output),
+                    mode,
+                    active,
+                    input_limit: configured_input_limit,
+                    reserved_input_tokens: input_tokens,
+                    input_window_used_before,
+                    reservation: Some(ThrottleReservation {
                         queue: Arc::clone(&queue),
                         id,
                         raw_estimated_input: estimate.input,
-                    },
-                    adjusted_input,
-                    estimate_factor,
-                );
+                    }),
+                });
             }
             delay
         };
@@ -476,6 +670,13 @@ fn opaque_field(field: &str) -> bool {
             | "audio_data"
             | "screenshot"
     )
+}
+
+/// Match the Databricks workspace input-token rejection independently of case.
+pub(crate) fn is_input_limit_message(message: &str) -> bool {
+    message
+        .to_ascii_lowercase()
+        .contains("exceeded workspace input tokens")
 }
 
 fn requested_output_tokens(model: &str, request: &Value) -> u64 {
@@ -621,7 +822,7 @@ mod tests {
     #[tokio::test]
     async fn reported_usage_reconciles_input_and_output_reservations() {
         let queue = Arc::new(TokenQueue::default());
-        let (_, reservation, _, _) = reserve(
+        let acquisition = reserve(
             Arc::clone(&queue),
             TokenEstimate {
                 input: 80,
@@ -631,18 +832,13 @@ mod tests {
                 input: Some(100),
                 output: Some(100),
             },
+            Some(100),
+            RateLimitMode::On,
+            true,
             WINDOW,
         )
-        .await;
-        let acquisition = ThrottleAcquisition {
-            wait: Duration::ZERO,
-            estimated_input_tokens: 80,
-            raw_estimated_input_tokens: 80,
-            estimate_factor: 1.0,
-            reserved_output_tokens: 70,
-            estimated_tokens: 150,
-            reservation: Some(reservation),
-        };
+        .await
+        .unwrap();
 
         acquisition
             .reconcile(ResponseTokenUsage {
@@ -665,16 +861,20 @@ mod tests {
             input: Some(100),
             output: None,
         };
-        let (_, reservation, _, _) = reserve(
+        let acquisition = reserve(
             Arc::clone(&queue),
             TokenEstimate {
                 input: 100,
                 output: 0,
             },
             limits,
+            limits.input,
+            RateLimitMode::On,
+            true,
             Duration::from_secs(1),
         )
-        .await;
+        .await
+        .unwrap();
         let waiting_queue = Arc::clone(&queue);
         let mut waiting = tokio::spawn(async move {
             reserve(
@@ -684,25 +884,19 @@ mod tests {
                     output: 0,
                 },
                 limits,
+                limits.input,
+                RateLimitMode::On,
+                true,
                 Duration::from_secs(1),
             )
             .await
+            .unwrap()
         });
         assert!(
             tokio::time::timeout(Duration::from_millis(10), &mut waiting)
                 .await
                 .is_err()
         );
-        let acquisition = ThrottleAcquisition {
-            wait: Duration::ZERO,
-            estimated_input_tokens: 100,
-            raw_estimated_input_tokens: 100,
-            estimate_factor: 1.0,
-            reserved_output_tokens: 0,
-            estimated_tokens: 100,
-            reservation: Some(reservation),
-        };
-
         acquisition
             .reconcile(ResponseTokenUsage {
                 reported: true,
@@ -719,22 +913,114 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn admission_is_fifo_for_each_workspace_model_queue() {
+    async fn oversized_input_is_rejected_without_a_clamped_reservation() {
+        let queue = Arc::new(TokenQueue::default());
+        let error = reserve(
+            Arc::clone(&queue),
+            TokenEstimate {
+                input: 101,
+                output: 0,
+            },
+            TokenLimits {
+                input: Some(100),
+                output: None,
+            },
+            Some(100),
+            RateLimitMode::On,
+            true,
+            WINDOW,
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.estimated_input_tokens, 101);
+        assert_eq!(error.input_limit, 100);
+        assert_eq!(queue.state.lock().await.input.reserved_tokens, 0);
+    }
+
+    #[tokio::test]
+    async fn cancelled_waiter_releases_fifo_admission() {
         let queue = Arc::new(TokenQueue::default());
         let limits = TokenLimits {
             input: Some(100),
             output: None,
         };
-        let (_, reservation, _, _) = reserve(
+        let first = reserve(
             Arc::clone(&queue),
             TokenEstimate {
                 input: 100,
                 output: 0,
             },
             limits,
+            limits.input,
+            RateLimitMode::On,
+            true,
             Duration::from_secs(1),
         )
-        .await;
+        .await
+        .unwrap();
+        let waiting_queue = Arc::clone(&queue);
+        let waiting = tokio::spawn(async move {
+            reserve(
+                waiting_queue,
+                TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                limits,
+                limits.input,
+                RateLimitMode::On,
+                true,
+                Duration::from_secs(1),
+            )
+            .await
+        });
+        tokio::task::yield_now().await;
+        waiting.abort();
+        assert!(waiting.await.unwrap_err().is_cancelled());
+        first.release().await;
+
+        tokio::time::timeout(
+            Duration::from_millis(100),
+            reserve(
+                queue,
+                TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                limits,
+                limits.input,
+                RateLimitMode::On,
+                true,
+                Duration::from_secs(1),
+            ),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn admission_is_fifo_for_each_workspace_model_queue() {
+        let queue = Arc::new(TokenQueue::default());
+        let limits = TokenLimits {
+            input: Some(100),
+            output: None,
+        };
+        let acquisition = reserve(
+            Arc::clone(&queue),
+            TokenEstimate {
+                input: 100,
+                output: 0,
+            },
+            limits,
+            limits.input,
+            RateLimitMode::On,
+            true,
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
         let (completed, mut order) = tokio::sync::mpsc::unbounded_channel();
         let first_queue = Arc::clone(&queue);
         let first_completed = completed.clone();
@@ -746,9 +1032,13 @@ mod tests {
                     output: 0,
                 },
                 limits,
+                limits.input,
+                RateLimitMode::On,
+                true,
                 Duration::from_secs(1),
             )
-            .await;
+            .await
+            .unwrap();
             first_completed.send(1).unwrap();
         });
         tokio::task::yield_now().await;
@@ -761,22 +1051,16 @@ mod tests {
                     output: 0,
                 },
                 limits,
+                limits.input,
+                RateLimitMode::On,
+                true,
                 Duration::from_secs(1),
             )
-            .await;
+            .await
+            .unwrap();
             completed.send(2).unwrap();
         });
         tokio::task::yield_now().await;
-        let acquisition = ThrottleAcquisition {
-            wait: Duration::ZERO,
-            estimated_input_tokens: 100,
-            raw_estimated_input_tokens: 100,
-            estimate_factor: 1.0,
-            reserved_output_tokens: 0,
-            estimated_tokens: 100,
-            reservation: Some(reservation),
-        };
-
         acquisition
             .reconcile(ResponseTokenUsage {
                 reported: true,
