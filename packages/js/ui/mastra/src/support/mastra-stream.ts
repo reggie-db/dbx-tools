@@ -1,11 +1,7 @@
 import { json } from "@dbx-tools/shared-core";
+import { MastraStreamChunkSchema, type MastraStreamChunk } from "@dbx-tools/shared-mastra";
 
-/** One chunk from a Mastra agent SSE stream (`data: { type, payload, ... }`). */
-export interface MastraStreamChunk {
-  type: string;
-  payload?: unknown;
-  runId?: string;
-}
+export type { MastraStreamChunk } from "@dbx-tools/shared-mastra";
 
 /** Response from agent streaming endpoints with {@link processMastraStream}. */
 export type MastraStreamResponse = Response & {
@@ -42,8 +38,8 @@ export async function processMastraStream(options: {
         if (!line.startsWith("data: ")) continue;
         const data = line.slice(6);
         if (data === "[DONE]") return;
-        const chunk = json.parse<MastraStreamChunk>(data);
-        if (chunk) await options.onChunk(chunk);
+        const chunk = MastraStreamChunkSchema.parse(json.parse(data));
+        await options.onChunk(chunk);
       }
     }
   } finally {
