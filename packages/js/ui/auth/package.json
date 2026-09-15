@@ -21,7 +21,13 @@
     "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",
@@ -29,9 +35,7 @@
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/ui-appkit": "workspace:*",
     "@dbx-tools/ui-branding": "workspace:*",
-    "better-auth": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:"
+    "better-auth": "catalog:"
   },
   "license": "UNLICENSED",
   "publishConfig": {

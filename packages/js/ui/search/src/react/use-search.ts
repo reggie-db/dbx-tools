@@ -50,6 +50,11 @@ export interface UseSearchState {
 
 const UNIVERSAL_SEARCH_PATH = "/api/search/universal";
 
+/** Validate one universal-search response with the owning shared schema. */
+export function parseUniversalSearchResult(value: unknown): SearchResult {
+  return sharedSearch.searchResultSchema.parse(value);
+}
+
 function toHits(
   results: Array<{ score: number; data: Record<string, unknown> }>,
   index: string | null,
@@ -117,8 +122,8 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         if (!response.ok) {
           throw new Error(`search failed (${response.status})`);
         }
-        const result = (await response.json()) as SearchResult;
-        setHits(result.hits ?? []);
+        const result = parseUniversalSearchResult(await response.json());
+        setHits(result.hits);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
         setUniversalError((err as Error).message);

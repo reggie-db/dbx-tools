@@ -21,12 +21,16 @@
     "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "^5.9.3"
   },
-  "dependencies": {
-    "@dbx-tools/shared-core": "workspace:*",
+  "peerDependencies": {
     "react": "catalog:",
     "react-dom": "catalog:"
+  },
+  "dependencies": {
+    "@dbx-tools/shared-core": "workspace:*"
   },
   "license": "UNLICENSED",
   "publishConfig": {

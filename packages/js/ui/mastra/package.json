@@ -21,7 +21,13 @@
     "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
@@ -37,8 +43,6 @@
     "echarts-for-react": "catalog:",
     "lucide-react": "catalog:",
     "marked": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
     "shiki": "catalog:",
     "sql-formatter": "catalog:",
     "streamdown": "catalog:"

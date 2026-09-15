@@ -33,6 +33,7 @@
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
+    "@types/express": "catalog:",
     "http-proxy-3": "catalog:"
   },
   "main": "index.ts",

@@ -21,8 +21,28 @@
       "type": "build"
     },
     {
+      "name": "react-dom",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
+      "name": "react",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "type": "build"
+    },
+    {
+      "name": "react-dom",
+      "version": "catalog:",
+      "type": "peer"
+    },
+    {
+      "name": "react",
+      "version": "catalog:",
+      "type": "peer"
     },
     {
       "name": "@dbx-tools/shared-core",
@@ -51,16 +71,6 @@
     },
     {
       "name": "lucide-react",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "react-dom",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "react",
       "version": "catalog:",
       "type": "runtime"
     }

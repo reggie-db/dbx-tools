@@ -21,16 +21,20 @@
     "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "dependencies": {
     "@databricks/appkit-ui": "catalog:",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-search": "workspace:*",
     "@dbx-tools/ui-appkit": "workspace:*",
-    "lucide-react": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:"
+    "lucide-react": "catalog:"
   },
   "license": "UNLICENSED",
   "publishConfig": {

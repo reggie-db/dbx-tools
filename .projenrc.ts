@@ -634,6 +634,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-auth@workspace:*",
     "@databricks/appkit@catalog:",
+    "@types/express@catalog:",
     "http-proxy-3@catalog:",
   );
   // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
