@@ -67,7 +67,7 @@ longer matches the public product surface.
 | ------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ARCH-01 | Architectural decay       | `packages/js/ui/mastra/src/react/mastra-chat.tsx:219`                                                                                     | High     | L      | Completed 2026-09-15. `useMastraChat` previously spanned roughly 1,269 lines and owned client resolution, persisted model selection, thread/session state, history paging, streaming, approvals, steering, feedback, suggestions, and embed fetch state.                                                       | The public hook remains the facade. Session storage, history paging, stream processing, approval resumption, and feedback submission now live in focused internal hooks with explicit inputs and outputs.           |
 | ARCH-02 | Architectural decay       | `packages/js/ui/mastra/src/react/chat-view.tsx:13`                                                                                        | High     | L      | Completed 2026-09-15. `ChatView` previously occupied roughly 897 lines and combined transcript rendering, scrolling, side panels, model selection, composer behavior, queue management, exports, approvals, feedback, and responsive layout.                                                                   | `ChatViewProps` remains the compatibility contract. The 119-line facade now delegates responsive thread navigation, transcript scrolling/rendering, and composer/queue ownership to three focused internal modules. |
-| ARCH-03 | Architectural decay       | `packages/js/node/appkit-mastra/src/plugin.ts:457`                                                                                        | High     | M      | `MastraPlugin.injectRoutes` is a 317-line route registrar containing MCP rewriting, models, history, threads, suggestions, feedback, chart and statement fetches, agent dispatch, authorization gates, and error mapping. Route ordering is implicit in one method.                                            | Extract ordered feature registrars such as `registerMcpRoutes`, `registerThreadRoutes`, and `registerAgentRoutes`; keep the catch-all registration visibly last.                                                    |
+| ARCH-03 | Architectural decay       | `packages/js/node/appkit-mastra/src/plugin.ts:457`                                                                                        | High     | M      | Completed 2026-09-15. `MastraPlugin.injectRoutes` previously contained roughly 317 lines of MCP rewriting, models, suggestions, feedback, embed fetches, agent dispatch, authorization gates, and error mapping.                                                                                               | `injectRoutes` is now a seven-line ordered composition of focused MCP, model, embed, suggestion, feedback, and agent registrars. The gated Mastra catch-all is mechanically last.                                   |
 | ARCH-04 | Architectural decay       | `projen/src/project-rs.ts:543`                                                                                                            | High     | L      | The Rust workspace constructor is approximately 311 lines and performs crate discovery, package construction, binding inference, binary mapping, facade creation, task registration, dependency graph work, and workspace-file synthesis. This file is also a high-churn hotspot.                              | Normalize options first, then delegate discovery, binding mapping, facade generation, and task wiring to pure builders that return typed plans.                                                                     |
 | ARCH-05 | Architectural decay       | `projen/src/project-rs.ts:855`                                                                                                            | High     | L      | `addReleaseWorkflow` is approximately 396 lines and encodes release matrices, artifact naming, Rust builds, Node and Python bindings, registry publication, facades, and smoke commands in one workflow-construction method.                                                                                   | Build typed job fragments per artifact family and compose them in `addReleaseWorkflow`; centralize repeated environment and asset conventions.                                                                      |
 | DEP-01  | Dependency debt           | `.projenrc.ts:202`                                                                                                                        | Medium   | S      | A blanket rule adds `@dbx-tools/shared-core` to every JavaScript package. A source-import scan found nine published packages with the generated dependency but no direct import: core-rs, databricks-zerobus, google-rs, shared-auth, shared-email, shared-mastra, shared-search, shared-teams, and ui-search. | Remove the blanket rule and add the dependency through package tags or explicit package rules only where source imports require it.                                                                                 |
@@ -119,6 +119,9 @@ longer matches the public product surface.
       dependency its declarations require, and universal-search JSON is parsed with
       its owning schema. Focused validation passed: Projen, Search, and Tunnel
       compiles plus 27 targeted tests.
+- [x] `ARCH-03` completed on 2026-09-15. Mastra route registration now composes
+      six focused registrars in reviewable order, with the gated catch-all last.
+      Focused validation passed: package compilation and all 89 AppKit-Mastra tests.
 - [ ] Continue the remaining High findings before beginning any Medium item.
       Low findings remain intentionally deferred for maintainer review.
 
@@ -145,13 +148,13 @@ This reduces the blast radius of changes while preserving package consumers.
 
 Refactor outline:
 
-1. Introduce an internal route-registration context containing router, base
-   path, client policy, and error helpers.
-2. Extract MCP alias, model, history/thread, suggestion/feedback, statement/chart,
-   and agent-dispatch registrars.
+1. [x] Introduce focused internal route registrars around the shared plugin state,
+       path, client policy, and error helpers.
+2. [x] Extract MCP alias, model, suggestion/feedback, statement/chart,
+       and agent-dispatch registrars.
 3. Reuse one agent/request-context resolver across history and thread routes.
-4. Compose registrars in `injectRoutes`, with the catch-all dispatch visibly and
-   mechanically last.
+4. [x] Compose registrars in `injectRoutes`, with the catch-all dispatch visibly and
+       mechanically last.
 
 The goal is not a new framework; it is making ordering and authorization review
 possible one feature at a time.

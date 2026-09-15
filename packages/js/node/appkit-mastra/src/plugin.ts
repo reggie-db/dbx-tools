@@ -455,6 +455,16 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   }
 
   override injectRoutes(router: IAppRouter): void {
+    this.registerMcpRoutes(router);
+    this.registerModelRoutes(router);
+    this.registerEmbedRoutes(router);
+    this.registerSuggestionRoutes(router);
+    this.registerFeedbackRoutes(router);
+    this.registerAgentRoutes(router);
+  }
+
+  /** Register URL aliases for Mastra's MCP transports. */
+  private registerMcpRoutes(router: IAppRouter): void {
     // Expose the MCP transport at the clean `/mcp` (plus the legacy
     // `/sse` + `/messages`) under the plugin mount. `@mastra/express`
     // mounts MCP under `/mcp/<serverId>/<transport>`, and the serverId
@@ -475,7 +485,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       }
       next();
     });
+  }
 
+  /** Register model catalogue and per-agent default-model routes. */
+  private registerModelRoutes(router: IAppRouter): void {
     // `GET /models` exposes the cached endpoint list so clients can
     // populate model pickers, validate `?model=` choices, etc. Must
     // be registered before the catch-all that forwards everything to
@@ -537,7 +550,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       path: `${routes.MASTRA_ROUTES.defaultModel}/:agentId`,
       handler: handleDefaultModel,
     });
+  }
 
+  /** Register the generic chart and statement embed resolver. */
+  private registerEmbedRoutes(router: IAppRouter): void {
     // `GET /embed/:type/:id` is the single resolver for every embed
     // marker the agent emits in prose (`[chart:<id>]`,
     // `[data:<id>]`, ...). `:type` selects a resolver from the
@@ -647,7 +663,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         res.json(result.data);
       },
     });
+  }
 
+  /** Register default and agent-qualified suggestion routes. */
+  private registerSuggestionRoutes(router: IAppRouter): void {
     // `GET /suggestions` (and `/suggestions/:agentId`) returns the
     // curated starter questions for the agent's Genie space(s) - the
     // author-configured `sample_questions`, surfaced as one-tap
@@ -691,7 +710,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       path: `${routes.MASTRA_ROUTES.suggestions}/:agentId`,
       handler: handleSuggestions,
     });
+  }
 
+  /** Register MLflow feedback submission when configured. */
+  private registerFeedbackRoutes(router: IAppRouter): void {
     // `POST /route/feedback` logs a thumbs / comment assessment against
     // a turn's MLflow trace (the `traceId` the client captured from the
     // stream response's trace-id header). Registered on the AppKit
@@ -735,7 +757,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         });
       },
     });
+  }
 
+  /** Register the gated Mastra catch-all after every explicit route. */
+  private registerAgentRoutes(router: IAppRouter): void {
     // Middleware rather than `this.route`: this is the catch-all that hands
     // every remaining method / path pair to the Mastra sub-app, so it has no
     // single method or path to register under.
