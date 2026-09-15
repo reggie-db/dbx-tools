@@ -3,10 +3,14 @@
 use std::{
     collections::{HashMap, VecDeque},
     num::NonZeroU64,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
+use clap::ValueEnum;
 use dbx_tools_model::{ModelClass, ModelRateLimitCatalogue};
 use serde_json::Value;
 use tokenx_rs::estimate_token_count;
@@ -23,12 +27,25 @@ const CALIBRATION_DEADBAND: f64 = 0.05;
 const CALIBRATION_MIN_FACTOR: f64 = 0.25;
 const CALIBRATION_MAX_FACTOR: f64 = 4.0;
 
+/// Activation policy for process-local pay-per-token admission control.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub(crate) enum RateLimitMode {
+    /// Activate a workspace/model key after its first input-token 429.
+    #[default]
+    Auto,
+    /// Apply documented or configured TPM budgets immediately.
+    On,
+    /// Disable process-local TPM admission.
+    Off,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct RequestThrottle {
     workspace: Arc<str>,
     input_tokens_per_minute: Option<NonZeroU64>,
     output_tokens_per_minute: Option<NonZeroU64>,
     provisioned_throughput: bool,
+    mode: RateLimitMode,
     documented_limits: ModelRateLimitCatalogue,
     queues: Arc<Mutex<HashMap<ThrottleKey, Arc<TokenQueue>>>>,
 }
@@ -42,6 +59,8 @@ pub(crate) struct ThrottleConfig {
     pub(crate) output_tokens_per_minute: Option<NonZeroU64>,
     /// Whether the selected endpoints use provisioned throughput.
     pub(crate) provisioned_throughput: bool,
+    /// Process-local token-rate activation policy.
+    pub(crate) mode: RateLimitMode,
     /// Cached Databricks pay-per-token limits.
     pub(crate) documented_limits: ModelRateLimitCatalogue,
 }
@@ -103,6 +122,7 @@ impl RequestThrottle {
             input_tokens_per_minute: config.input_tokens_per_minute,
             output_tokens_per_minute: config.output_tokens_per_minute,
             provisioned_throughput: config.provisioned_throughput,
+            mode: config.mode,
             documented_limits: config.documented_limits,
             queues: Arc::default(),
         }
@@ -115,14 +135,11 @@ impl RequestThrottle {
         request: &Value,
     ) -> ThrottleAcquisition {
         let estimate = token_estimate(model, request);
-        let limits = self.limits(model, model_class);
-        let key = ThrottleKey {
-            workspace: self.workspace.clone(),
-            model: Arc::from(model),
-        };
-        let queue = {
-            let mut queues = self.queues.lock().await;
-            queues.entry(key).or_default().clone()
+        let queue = self.queue(model).await;
+        let limits = if self.enabled(&queue) {
+            self.limits(model, model_class)
+        } else {
+            TokenLimits::default()
         };
         let (wait, reservation, adjusted_input, estimate_factor) =
             reserve(queue, estimate, limits, WINDOW).await;
@@ -134,6 +151,41 @@ impl RequestThrottle {
             reserved_output_tokens: estimate.output,
             estimated_tokens: adjusted_input.saturating_add(estimate.output),
             reservation: Some(reservation),
+        }
+    }
+
+    /// Activate automatic TPM admission after a matching Databricks 429.
+    pub(crate) async fn activate_from_message(&self, model: &str, message: Option<&str>) -> bool {
+        if self.provisioned_throughput
+            || self.mode != RateLimitMode::Auto
+            || !message.is_some_and(|message| {
+                message
+                    .to_ascii_lowercase()
+                    .contains("exceeded workspace input tokens")
+            })
+        {
+            return false;
+        }
+        !self.queue(model).await.active.swap(true, Ordering::AcqRel)
+    }
+
+    async fn queue(&self, model: &str) -> Arc<TokenQueue> {
+        let key = ThrottleKey {
+            workspace: self.workspace.clone(),
+            model: Arc::from(model),
+        };
+        let mut queues = self.queues.lock().await;
+        queues.entry(key).or_default().clone()
+    }
+
+    fn enabled(&self, queue: &TokenQueue) -> bool {
+        if self.provisioned_throughput {
+            return false;
+        }
+        match self.mode {
+            RateLimitMode::Auto => queue.active.load(Ordering::Acquire),
+            RateLimitMode::On => true,
+            RateLimitMode::Off => false,
         }
     }
 
@@ -169,6 +221,7 @@ struct ThrottleKey {
 struct TokenQueue {
     /// Tokio mutex acquisition order provides FIFO admission for this key.
     admission: Mutex<()>,
+    active: AtomicBool,
     state: Mutex<WindowState>,
     notify: Notify,
 }
@@ -747,6 +800,7 @@ mod tests {
                 input_tokens_per_minute: None,
                 output_tokens_per_minute: None,
                 provisioned_throughput: false,
+                mode: RateLimitMode::On,
                 documented_limits: documented_catalogue(),
             },
         );
@@ -788,6 +842,7 @@ mod tests {
                 input_tokens_per_minute: NonZeroU64::new(1),
                 output_tokens_per_minute: NonZeroU64::new(1),
                 provisioned_throughput: true,
+                mode: RateLimitMode::On,
                 documented_limits: documented_catalogue(),
             },
         );
@@ -796,6 +851,49 @@ mod tests {
             throttle.limits("databricks-gpt-5-6-sol", Some(ModelClass::ChatBalanced)),
             TokenLimits::default()
         );
+    }
+
+    #[tokio::test]
+    async fn auto_mode_activates_only_after_matching_input_token_429() {
+        let throttle = RequestThrottle::new(
+            "workspace",
+            ThrottleConfig {
+                input_tokens_per_minute: None,
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: RateLimitMode::Auto,
+                documented_limits: documented_catalogue(),
+            },
+        );
+        let queue = throttle.queue("databricks-gpt-5-6-sol").await;
+        assert!(!throttle.enabled(&queue));
+        assert!(
+            !throttle
+                .activate_from_message(
+                    "databricks-gpt-5-6-sol",
+                    Some("Exceeded workspace output tokens per minute")
+                )
+                .await
+        );
+        assert!(
+            throttle
+                .activate_from_message(
+                    "databricks-gpt-5-6-sol",
+                    Some("REQUEST_LIMIT_EXCEEDED: EXCEEDED WORKSPACE INPUT TOKENS per minute")
+                )
+                .await
+        );
+        assert!(throttle.enabled(&queue));
+        assert!(
+            !throttle
+                .activate_from_message(
+                    "databricks-gpt-5-6-sol",
+                    Some("Exceeded workspace input tokens")
+                )
+                .await
+        );
+        let other = throttle.queue("databricks-gpt-6-astra").await;
+        assert!(!throttle.enabled(&other));
     }
 
     #[test]
