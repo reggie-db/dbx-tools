@@ -408,6 +408,14 @@ thread's reusable Genie conversation while overlapping invocations use isolated
 conversations, preventing concurrent messages from colliding in one Genie
 conversation. Sequential calls continue to reuse conversation context.
 
+`ask_genie` uses the Genie Agent Mode SSE API by default, projecting reasoning,
+SQL function calls, query output, and the synthesized answer into the existing
+writer events and terminal `GenieMessage`. Set `genieAgentMode: false` on
+`mastra(...)` to force the legacy Conversation API polling flow. A pre-stream
+`FEATURE_DISABLED` or preview-toggle error falls back to polling automatically.
+Agent Mode carries query results inline as Markdown; use polling when a workflow
+specifically requires legacy `statement_id`-backed chart or data embeds.
+
 ```ts
 const agent = agents.createAgent({
   instructions: `${baseInstructions}\n\n${genie.GENIE_INSTRUCTIONS}`,
@@ -452,6 +460,8 @@ const resolved = await chart.fetchChart(chartId, { userKey });
 Agents can return `[chart:<id>]` and `[data:<statement_id>]` markers in prose.
 The embed route resolves them later, which avoids forcing the language model to
 inline large tables or wait for chart planning before continuing its answer.
+Genie supplies those statement ids through the legacy polling transport; Agent
+Mode returns inline Markdown and structured table metadata instead.
 
 ### Chart Types And Hand-Written Charts
 
@@ -760,6 +770,9 @@ requiring callers to assemble a Mastra server by hand.
   suggestions, and chart/data workflows. An alias present with no space id is a
   wiring contradiction and fails at construction rather than silently
   registering no Genie tools.
+- `genieAgentMode` defaults to `true` for the streaming Agent Mode API. Set it
+  to `false` to force legacy polling. Pre-stream feature-disabled or
+  preview-toggle responses fall back automatically.
 - `defaultModel`, `modelOverride`, and `modelFuzzyMatch` control how loose model
   names are resolved through Databricks Model Serving.
 - `feedback` controls whether MLflow feedback routes are exposed. The automatic

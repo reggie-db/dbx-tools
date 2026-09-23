@@ -11,6 +11,9 @@ Key features:
 
 - Runtime schemas for Genie messages, responses, spaces, attachments, and
   statuses, including fields observed on the live wire.
+- Forward-compatible Agent Mode SSE schemas plus a pure reducer that projects
+  reasoning, SQL, Markdown output, structured table metadata, and terminal
+  status into `GenieMessage`.
 - A flat `GenieChatEvent` vocabulary for thinking, SQL, rows, result, status,
   and error rendering.
 - Snapshot diff helpers that emit only newly observed semantic events.
@@ -77,9 +80,10 @@ for (const evt of event.eventsFromMessage(current, previous, spaceId)) {
 ```
 
 Use `eventsFromMessage()` when replaying persisted Genie messages, testing UI
-event handling, or building a custom polling loop. Individual detectors are also
-exported for targeted checks: `detectStatus`, `detectThinking`, `detectQuery`,
-`detectRows`, and the other event-specific helpers.
+event handling, diffing Agent Mode or polling `GenieMessage` snapshots into the
+shared vocabulary, or building a custom polling loop. Individual detectors are
+also exported for targeted checks: `detectStatus`, `detectThinking`,
+`detectQuery`, `detectRows`, and the other event-specific helpers.
 
 ## Work With Status And Attachments
 
@@ -128,6 +132,8 @@ The SDK itself is a dev dependency, so importing this package pulls in zod only.
 
 ## Modules
 
+- `agentMode` - forward-compatible zod schemas plus the pure Agent Mode event
+  reducer and `GenieMessage` projector, including inline table metadata.
 - `genieModel` - Genie schemas, status helpers, attachment helpers, and event
   union schemas/types.
 - `event` - event detector factory, individual detectors, and

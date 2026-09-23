@@ -387,6 +387,13 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   genieSpaces?: GenieSpacesConfig;
   /**
+   * Use the streaming Genie Agent Mode API for `ask_genie`. Defaults to `true`.
+   * Set `false` to force the legacy Conversation API polling driver. A
+   * pre-stream feature-disabled or preview-toggle response falls back
+   * automatically.
+   */
+  genieAgentMode?: boolean;
+  /**
    * TTL for the in-memory Genie space metadata cache, in
    * milliseconds. Defaults to 5 minutes. The Genie agent calls
    * `client.genie.getSpace(...)` on every cold-start to get the
@@ -664,6 +671,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       additionalProperties: { type: ["string", "object"] },
       description:
         "Genie spaces the agents can delegate to, keyed by alias (the tool-name suffix). Each value is a space id or `{ spaceId, hint }`. Falls back to the `genie` plugin's own `spaces` config, then DATABRICKS_GENIE_SPACE_ID under the `default` alias.",
+    },
+    genieAgentMode: {
+      type: "boolean",
+      description:
+        "Use the streaming Genie Agent Mode API for ask_genie. Defaults to true; false forces legacy polling. Feature-disabled or preview-toggle responses fall back automatically before streaming.",
     },
     genieSpaceCacheTtlMs: {
       type: "number",

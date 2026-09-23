@@ -13,9 +13,14 @@ Pure Genie schemas and event detector helpers live in
 
 Key features:
 
+- Streams the Genie Agent Mode API by default, including reasoning, SQL calls,
+  query output, and the synthesized answer.
 - Starts new Genie conversations or continues an existing `conversationId`.
-- Polls Databricks Genie until terminal status while filtering unchanged
-  snapshots.
+- Projects Agent Mode response items onto the existing `GenieMessage` snapshot
+  and semantic-event contracts.
+- Retains the Conversation API polling driver behind `agentMode: false` and as
+  an automatic pre-stream fallback for `FEATURE_DISABLED` or preview-toggle
+  errors.
 - Converts raw Genie messages into semantic events for thinking text, generated
   SQL, row counts, final results, and errors.
 - Preserves AppKit OBO auth when called during an AppKit request, but also works
@@ -82,10 +87,13 @@ for await (const message of chat.genieChat(spaceId, "Top stores by revenue?")) {
 }
 ```
 
-`chat.genieChat()` starts a conversation or appends to an existing one, polls
-`client.genie.getMessage`, filters identical consecutive payloads, and stops
-after a terminal status. Use it when you want to run your own diffing or persist
-the raw Genie wire shape.
+`chat.genieChat()` starts an Agent Mode response or continues an existing
+conversation, projects SSE output into `GenieMessage` snapshots, filters
+identical consecutive payloads, and stops after a terminal response. Set
+`agentMode: false` to force the legacy start/create/get-message polling flow.
+Use it when you want to run your own diffing or persist the normalized wire
+shape. Agent Mode returns query output inline as Markdown; use polling when a
+consumer specifically requires the legacy `statement_id`.
 
 ## Continue A Conversation
 
@@ -126,8 +134,8 @@ Client resolution order:
 2. AppKit execution-context client, when present;
 3. `createWorkspaceClient()` using AppKit's normal Databricks auth chain.
 
-Pass `options.context` as an `AbortSignal` or SDK context to cancel SDK calls and
-the polling sleep.
+Pass `options.context` as an `AbortSignal` or SDK context to cancel the Agent
+Mode stream, SDK calls, and any polling fallback sleep.
 
 ## Read Space Metadata And Starter Questions
 
@@ -155,14 +163,18 @@ thrown.
 `chat.GenieChatOptions` is shared by both drivers:
 
 - `conversationId` - append to an existing Genie conversation.
+- `agentMode` - use Agent Mode SSE, default `true`; `false` forces polling.
+- `enableVisualization` - request Agent Mode visualization generation.
 - `workspaceClient` - explicit Databricks SDK client.
-- `pollIntervalMs` - polling cadence, default `500`.
+- `pollIntervalMs` - legacy fallback polling cadence, default `500`.
 - `context` - SDK `Context` or `AbortSignal` for cancellation.
 
 ## Modules
 
 - `chat` - `genieChat()` raw snapshot stream and `genieEventChat()` typed event
   stream.
+- `agentMode` - `genieAgentModeChat()`, availability classification, and Agent
+  Mode transport options.
 - `space` - `getGenieSpace()` and `genieSampleQuestions()`.
 
 The AppKit-Mastra package builds its Genie tools on top of this driver; see

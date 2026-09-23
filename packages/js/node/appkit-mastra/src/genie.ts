@@ -375,8 +375,13 @@ function stripSuggestedQuestions(message: GenieMessage): GenieMessage {
   return { ...message, attachments: filtered };
 }
 
-function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string }) {
-  const { spaceId, alias, hint } = opts;
+function buildAskGenieTool(opts: {
+  spaceId: string;
+  alias: string;
+  hint?: string;
+  agentMode?: boolean;
+}) {
+  const { spaceId, alias, hint, agentMode } = opts;
   const toolId = `ask_genie${aliasSuffix(alias)}`;
   const hintLine = hint ? ` (${hint})` : "";
   return createTool({
@@ -395,16 +400,17 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
       Do NOT try to cram a multi-part question into a single
       call; decompose first, then ask each piece.
 
-      Returns the final \`GenieMessage\`. Rows are NOT included -
-      the Genie wire response carries the \`statement_id\` for any
-      SQL that ran (at \`message.query_result.statement_id\` or the
-      first attachment's \`query.statement_id\`); call
+      Returns the final \`GenieMessage\`. Agent Mode includes the
+      synthesized answer and can include SQL result values as a
+      Markdown text attachment. A legacy polling result instead
+      carries a \`statement_id\` (at
+      \`message.query_result.statement_id\` or the first
+      attachment's \`query.statement_id\`); call
       \`get_statement\` with that id only when you need to read
-      the underlying values to reason about them. If you just
-      want to display the rows to the user, embed a
-      \`[data:<statement_id>]\` marker in your prose instead -
-      the host UI fetches and renders the rows on its own. Wire
-      events (status, thinking, sql) stream to the user
+      the underlying values to reason about them. If you just want
+      to display a legacy result, embed a
+      \`[data:<statement_id>]\` marker in prose. Wire events
+      (status, reasoning, SQL, query output, answer text) stream
       automatically while the call is in flight.
     `),
     inputSchema: z.object({
@@ -475,6 +481,7 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
           let finalMessage: GenieMessage | undefined;
           for await (const event of chat.genieEventChat(spaceId, question, {
             workspaceClient: client,
+            ...(agentMode !== undefined ? { agentMode } : {}),
             ...(seedConversationId ? { conversationId: seedConversationId } : {}),
             ...(signal ? { context: signal } : {}),
           })) {
@@ -815,8 +822,10 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
       `,
       `
         Each \`ask_genie\` call returns the terminal \`GenieMessage\`.
-        When the turn ran SQL the result has a \`statement_id\` - read
-        it from \`message.query_result.statement_id\` (or the first
+        Read Agent Mode's synthesized answer and Markdown query output
+        directly from its text attachments. A legacy polling result may
+        instead expose a \`statement_id\` at
+        \`message.query_result.statement_id\` (or the first
         attachment's \`query.statement_id\`).
       `,
       [
@@ -1021,6 +1030,9 @@ export function buildGenieTools(opts: {
     const askTool = buildAskGenieTool({
       spaceId: space.spaceId,
       alias,
+      ...(opts.config.genieAgentMode !== undefined
+        ? { agentMode: opts.config.genieAgentMode }
+        : {}),
       ...(space.hint ? { hint: space.hint } : {}),
     });
     const descTool = buildSpaceDescriptionTool({ spaceId: space.spaceId, alias });

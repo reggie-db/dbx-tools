@@ -10,6 +10,41 @@ Scope: repository-wide DRY, architecture, code quality, documentation, and
 source-code documentation. Full CI and test-suite execution is intentionally
 excluded because it is run frequently by the maintainer.
 
+## Follow-up: Genie Agent Mode, 2026-09-23
+
+- Reviewed the Agent Mode SSE transport, polling fallback, Mastra configuration,
+  conversation reuse, event projection, cancellation, tests, and public docs.
+- Focused `jscpd` analysis scanned 1,907 lines across the affected Genie
+  sources. It found one 10-line clone (0.52 percent) between the description and
+  serialized-space tools at
+  `packages/js/node/appkit-mastra/src/genie.ts:563-573` and `:599-608`.
+  This is a pre-existing two-site tool-boundary pattern, below the repository's
+  three-site extraction threshold; the distinct return contracts make local
+  clarity preferable to another wrapper.
+- Root, Node Genie, shared Genie, and AppKit-Mastra READMEs now state that Agent
+  Mode SSE is the default, `genieAgentMode: false` forces polling, and preview
+  unavailability falls back before streaming.
+- Deterministic validation passed: Projen synthesis, all workspace TypeScript
+  compiles and tests, complete Genie and AppKit-Mastra package tests, the
+  documentation source ratchet, README-site generation, ESLint, and focused
+  TypeScript diagnostics.
+- Knip reported its known monorepo false positives for generated task entries,
+  tests, source-first exports, and tag-supplied dependencies. It identified no
+  new unused production dependency or export in the changed Genie packages.
+- Independent DRY, runtime, and documentation reviewers found cancellation,
+  premature-EOF, cancelled-status, fallback-classification, projection-ownership,
+  and wording issues. The implementation now calls the Agent Mode cancel
+  endpoint, requires a terminal SSE response, maps `cancelled`, matches
+  structured `FEATURE_DISABLED` errors without treating generic not-found as
+  preview failure, and validates/projects wire data in shared Genie.
+- Final re-review reported no unresolved blocking or Medium DRY, runtime, type
+  boundary, cancellation, or documentation finding. The public low-level
+  `agentMode` transport remains intentional; direct callers own its controller,
+  while `genieChat` supplies the existing turn context without a duplicate
+  lifecycle owner.
+- `bun audit` was unavailable because the configured local registry returns
+  HTTP 404 for the audit endpoint. This is not a passing vulnerability result.
+
 ## Executive Summary
 
 - All High findings were completed on 2026-09-15. The high-risk Mastra UI,
@@ -295,6 +330,10 @@ contract, not parallel handwritten descriptions.
 - Missing CI execution is not treated as debt in this report. The maintainer runs
   tests frequently locally, and this pass focuses on source structure and public
   contracts.
+- Agent Mode query output contains a Markdown result rather than the legacy
+  Conversation API `statement_id`. Keeping that output as a text attachment,
+  while retaining `genieAgentMode: false` for statement-id/chart workflows, is
+  an intentional protocol distinction rather than a duplicated data-fetch path.
 
 ## Open Questions
 
