@@ -85,7 +85,7 @@ describe("Genie Mastra tools", () => {
 
     const askGenie = buildGenieTools({
       spaces: { default: SPACE_ID },
-      config: {},
+      config: { genieAgentMode: false },
     }).ask_genie as unknown as {
       execute(
         input: { question: string },

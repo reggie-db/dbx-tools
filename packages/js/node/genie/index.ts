@@ -3,8 +3,10 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/genie";
-export const PACKAGE_VERSION = "0.6.212";
+export const PACKAGE_VERSION = "0.6.213";
+export * as agentMode from "./src/agent-mode.ts";
 export * as chat from "./src/chat.ts";
 export * as space from "./src/space.ts";
+export type { GenieAgentModeOptions } from "./src/agent-mode.ts";
 export type { GenieChatOptions } from "./src/chat.ts";
 export type { GetGenieSpaceOptions } from "./src/space.ts";

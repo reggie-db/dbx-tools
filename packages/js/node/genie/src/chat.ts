@@ -6,11 +6,15 @@
  * returned on each `GenieMessage` back into the next turn's
  * `options.conversationId`).
  *
+ * Agent Mode SSE is the default transport. Its Responses-style reasoning, SQL,
+ * query output, and final answer items are projected into `GenieMessage`
+ * snapshots; `agentMode: false` retains the Conversation API polling path.
+ *
  * Two layers serve two kinds of consumer. The low-level layer yields every
- * poll-observed `GenieMessage` (validated against `GenieMessageSchema`,
- * falling back to the raw snapshot on a schema miss) and owns the messy parts
- * - cancellation, conversation seeding, distinct-filtering, and SDK quirks
- * (Waiter stripping); reach for it when you want the raw stream. The
+ * observed `GenieMessage` (validated against `GenieMessageSchema`, falling back
+ * to the raw snapshot on a schema miss) and owns cancellation, conversation
+ * seeding, distinct-filtering, and SDK quirks; reach for it when you want the
+ * raw stream. The
  * high-level layer wraps it and emits semantic, deduplicated `{ type, payload }`
  * events (see {@link GenieChatEvent}), always closing a successful turn with a
  * terminal `result` event carrying the final `GenieMessage`; errors propagate
@@ -27,8 +31,10 @@ import {
   type WorkspaceClient,
 } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
-import { async, log, type PollContext } from "@dbx-tools/shared-core";
+import { async, error, log, type PollContext } from "@dbx-tools/shared-core";
 import { event, genieModel, type GenieChatEvent, type GenieMessage } from "@dbx-tools/shared-genie";
+
+import { genieAgentModeChat, isAgentModeUnavailable } from "./agent-mode.ts";
 
 const logger = log.logger("genie/chat");
 
@@ -55,11 +61,16 @@ function validateMessage(raw: GenieMessage): GenieMessage {
 /** Options accepted by both {@link genieChat} and {@link genieEventChat}. */
 export interface GenieChatOptions {
   /**
-   * Seed conversation id. When set, this turn appends to the existing
-   * conversation (via `createMessage`) instead of opening a new one. Use it to
-   * thread a multi-turn conversation: read `conversation_id` off the prior
-   * turn's terminal `GenieMessage` (or the `result` event's
-   * `payload.conversation_id`) and pass it into the next call.
+   * Use the streaming Genie Agent Mode API. Defaults to `true`; set `false` to
+   * force the legacy start/create/get-message polling flow.
+   */
+  agentMode?: boolean;
+  /** Ask Agent Mode to generate visualizations when appropriate. */
+  enableVisualization?: boolean;
+  /**
+   * Continue an existing conversation. Agent Mode sends it as
+   * `conversation_id`; legacy polling passes it to `createMessage`. Read the id
+   * from the prior turn's terminal `GenieMessage` or `result` event.
    */
   conversationId?: string;
   /**
@@ -69,12 +80,12 @@ export interface GenieChatOptions {
    * otherwise.
    */
   workspaceClient?: WorkspaceClient;
-  /** Poll cadence in milliseconds between successive `getMessage` calls (default 500). */
+  /** Legacy fallback cadence between successive `getMessage` calls (default 500ms). */
   pollIntervalMs?: number;
   /**
    * External cancellation. Accepts a WHATWG `AbortSignal` or a fully-built SDK
    * `Context` (see `databricks.ContextLike`). Aborting it cancels every in-flight
-   * SDK call and the next inter-poll sleep.
+   * Agent Mode stream, SDK call, and the next inter-poll sleep.
    */
   context?: databricks.ContextLike;
 }
@@ -87,21 +98,19 @@ export interface GenieChatOptions {
  *
  * Turn lifecycle:
  *
- *   - No `options.conversationId`: open a new conversation via
- *     `client.genie.startConversation`. The opened conversation id surfaces on
- *     every yielded `GenieMessage` (`.conversation_id`) so the caller can
- *     thread it into a follow-up call.
- *   - With `options.conversationId`: append to that conversation via
- *     `client.genie.createMessage`.
- *   - In both cases, after the create/start the driver polls
- *     `client.genie.getMessage` every `options.pollIntervalMs` (default 500ms)
- *     until the message reaches a terminal status, then yields the terminal
- *     snapshot and returns.
+ *   - Agent Mode (default): POST one Responses-style message to
+ *     `/api/2.0/genie/agents/{id}/responses` and yield projected snapshots from
+ *     its SSE events.
+ *   - Legacy polling (`agentMode: false`): start/create a Conversation API
+ *     message and poll `getMessage` until terminal.
+ *   - A pre-stream `FEATURE_DISABLED` or preview-toggle response falls back to
+ *     legacy polling automatically.
  *
  * Cancellation: a single internal `AbortController` covers the whole turn.
  * `options.context` is tied into that controller so an external abort tears
- * down every in-flight SDK call AND the inter-poll sleep. Breaking out of the
- * `for await` does the same via the `try / finally`.
+ * down the Agent Mode SSE connection, SDK calls, and any inter-poll sleep.
+ * Breaking out of the `for await` also invokes the Agent Mode server-side
+ * cancel endpoint before the generator closes.
  *
  * @example
  * // Single turn.
@@ -132,6 +141,26 @@ export async function* genieChat(
     // (via `databricks.toContext` -> `async.tieAbortSignal`), eventually tripping
     // Node's `MaxListenersExceededWarning`.
     const ctx = databricks.toContext(controller, options?.context);
+    if (options?.agentMode !== false) {
+      let yielded = false;
+      try {
+        for await (const message of genieAgentModeChat(client, space_id, content, {
+          ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
+          ...(options?.enableVisualization ? { enableVisualization: true } : {}),
+          context: ctx,
+        })) {
+          yielded = true;
+          yield validateMessage(message);
+        }
+        return;
+      } catch (err) {
+        if (yielded || !isAgentModeUnavailable(err)) throw err;
+        logger.warn("agent-mode:unavailable, falling back to polling", {
+          space_id,
+          error: error.errorMessage(err),
+        });
+      }
+    }
     let conversationId = options?.conversationId;
     let messageId: string | undefined;
 

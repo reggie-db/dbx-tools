@@ -90,9 +90,18 @@ Primary package areas:
   and the matching React chat UI.
 - `packages/js/node/genie` and `packages/js/shared/genie` — low-level Genie
   drivers, typed async events, snapshot diffing, and browser-safe Genie
-  contracts. `shared/genie` also owns the codegen'd `src/dashboards.ts` (zod
-  schemas from the upstream SDK `.d.ts`) that its Genie schemas widen; that used
-  to be a separate `shared-sdk-model` package with exactly one consumer.
+  contracts. Turns use the Genie Agent Mode SSE API by default and project its
+  Responses-style reasoning, SQL, query output, and final messages onto the
+  existing `GenieMessage` event vocabulary. `agentMode: false` forces the
+  Conversation API polling driver; a pre-stream `FEATURE_DISABLED`/preview
+  error falls back automatically. The SSE boundary validates shared Genie
+  schemas, requires a terminal event, and invokes the Agent Mode cancel endpoint
+  when a consumer disconnects. Agent Mode carries query output inline as
+  Markdown rather than a legacy `statement_id`; use the polling opt-out when a
+  workflow requires statement-backed chart/data embeds. `shared/genie` also owns the codegen'd
+  `src/dashboards.ts` (zod schemas from the upstream SDK `.d.ts`) that its Genie
+  schemas widen; that used to be a separate `shared-sdk-model` package with
+  exactly one consumer.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
 - `packages/rs/core` owns Databricks authentication and shared Rust runtime
@@ -805,9 +814,9 @@ why to use this package anyway:
   or `auto` choosing from the chat's own measured width). Native AppKit UI is
   enough for general components or native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
-  custom backend and you need async iterators, snapshot diffing, typed events,
-  custom SSE/logging/tests, or chart/data planning. Native AppKit Genie is the
-  right choice for a standalone Genie chat plugin/UI.
+  custom backend and you need Agent Mode SSE projected into async iterators,
+  snapshot diffing, typed events, custom logging/tests, or chart/data planning.
+  Native AppKit Genie is the right choice for a standalone Genie chat plugin/UI.
 - `@dbx-tools/shared-genie`: use for browser-safe Genie schemas/event vocabulary
   independent of AppKit transport.
 - `@dbx-tools/model`: use when endpoint choice is the problem: fuzzy human

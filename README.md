@@ -31,8 +31,8 @@ app:
   Lakebase env discovery or layered config resolution;
 - you want Mastra's agent runtime, storage, tools, MCP, and broader ecosystem
   while still running inside AppKit with OBO auth and Databricks plugin tools;
-- you want Genie output as typed async events that an agent or custom UI can
-  consume, enrich, and turn into chart/data embeds;
+- you want Genie Agent Mode SSE projected as typed async events that an agent or
+  custom UI can consume, enrich, and turn into chart/data embeds;
 - you want model selection by intent (`"sonnet"`, `"chat-fast"`) rather than
   wiring every app to one serving endpoint alias;
 - you need a managed Graphiti memory sidecar with Lakebase recovery, per-user
@@ -58,9 +58,10 @@ app:
 - **Mastra inside AppKit** — register one or more Mastra agents as an AppKit
   plugin with OBO auth, Lakebase-backed storage/memory, workspace skills, model
   selection, history, threads, feedback, and scoped route exposure.
-- **Genie as agent tools** — stream Genie thinking, SQL, rows, and final results
-  as typed events; expose Genie space metadata and starter questions; let agents
-  answer with delayed chart and data embeds.
+- **Genie as agent tools** — use Genie Agent Mode SSE by default to stream
+  reasoning, SQL, query output, and synthesized answers as typed events; expose
+  Genie metadata and starter questions. The polling opt-out retains legacy
+  statement-backed chart and data embeds when an app needs them.
 - **Model Serving ergonomics** — turn loose model names such as `"sonnet"` or
   `"chat-fast"` into concrete Databricks serving endpoints using workspace
   catalogues, fuzzy matching, class ceilings, cache, and fallbacks.

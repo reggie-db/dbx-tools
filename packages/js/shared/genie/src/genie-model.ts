@@ -160,9 +160,13 @@ export type GenieQueryAttachment = z.infer<typeof GenieQueryAttachmentSchema>;
 export type GenieTextAttachmentPurpose =
   "FOLLOW_UP_QUESTION" | "TEXT_ATTACHMENT_PURPOSE_ANSWER" | (string & {});
 
-/** Text attachment schema widened for forward-compatible purpose values. */
+/**
+ * Text attachment widened for forward-compatible purpose values and optional
+ * Agent Mode table metadata.
+ */
 export const GenieTextAttachmentSchema = dashboards.textAttachmentSchema.extend({
   purpose: z.custom<GenieTextAttachmentPurpose>((value) => typeof value === "string").optional(),
+  metadata: z.unknown().optional(),
 });
 /** Narrative text attachment, including its optional semantic purpose. */
 export type GenieTextAttachment = z.infer<typeof GenieTextAttachmentSchema>;
