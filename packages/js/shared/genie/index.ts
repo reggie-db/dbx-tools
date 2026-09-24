@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-genie";
-export const PACKAGE_VERSION = "0.6.214";
+export const PACKAGE_VERSION = "0.6.215";
 export * as agentMode from "./src/agent-mode.ts";
 export * as dashboards from "./src/dashboards.ts";
 export * as event from "./src/event.ts";
