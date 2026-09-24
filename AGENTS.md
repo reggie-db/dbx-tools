@@ -97,8 +97,9 @@ Primary package areas:
   error falls back automatically. The SSE boundary validates shared Genie
   schemas, requires a terminal event, and invokes the Agent Mode cancel endpoint
   when a consumer disconnects. Agent Mode carries query output inline as
-  Markdown rather than a legacy `statement_id`; use the polling opt-out when a
-  workflow requires statement-backed chart/data embeds. `shared/genie` also owns the codegen'd
+  Markdown rather than a legacy `statement_id`; chart those inline rows through
+  `render_data`. Use the polling opt-out when a workflow specifically requires
+  statement-backed chart/data embeds. `shared/genie` also owns the codegen'd
   `src/dashboards.ts` (zod schemas from the upstream SDK `.d.ts`) that its Genie
   schemas widen; that used to be a separate `shared-sdk-model` package with
   exactly one consumer.

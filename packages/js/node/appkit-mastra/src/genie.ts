@@ -402,8 +402,9 @@ function buildAskGenieTool(opts: {
 
       Returns the final \`GenieMessage\`. Agent Mode includes the
       synthesized answer and can include SQL result values as a
-      Markdown text attachment. A legacy polling result instead
-      carries a \`statement_id\` (at
+      Markdown text attachment. Agent Mode has no \`statement_id\`;
+      use \`render_data\` with its inline rows when a chart is needed.
+      A legacy polling result instead carries a \`statement_id\` (at
       \`message.query_result.statement_id\` or the first
       attachment's \`query.statement_id\`); call
       \`get_statement\` with that id only when you need to read
@@ -823,10 +824,17 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
       `
         Each \`ask_genie\` call returns the terminal \`GenieMessage\`.
         Read Agent Mode's synthesized answer and Markdown query output
-        directly from its text attachments. A legacy polling result may
-        instead expose a \`statement_id\` at
+        directly from its text attachments. Agent Mode does NOT expose a
+        \`statement_id\`. To chart its result, call \`render_data\` with
+        rows copied from the Markdown table or structured table metadata,
+        then copy the returned marker. Never pass an Agent Mode response id,
+        conversation id, function-call id, or any other identifier to
+        \`prepare_chart\`.
+
+        A legacy polling result may instead expose a \`statement_id\` at
         \`message.query_result.statement_id\` (or the first
-        attachment's \`query.statement_id\`).
+        attachment's \`query.statement_id\`). Only that real statement id
+        belongs in \`prepare_chart\` or a \`[data:<statement_id>]\` marker.
       `,
       [
         `
@@ -837,34 +845,35 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
         {
           bullets: [
             `
-              \`[data:<statement_id>]\` - render the rows as a table.
+              \`[data:<statement_id>]\` - render legacy polling rows as a table.
               Use this when there's no clear visual story (long lists,
               reference data, single-row results, or the user just
-              wants to see the data). Embed the marker directly; no
-              tool call needed.
+              wants to see the data). Embed the marker directly when
+              \`ask_genie\` returned a real \`statement_id\`; Agent Mode
+              already carries its query output inline.
             `,
             `
               \`[chart:<chartId>]\` - render the rows as a chart. To
-              get one, call \`prepare_chart\` with the
-              statement's id (and an optional \`title\` / one-line
-              \`description\` of the insight to surface). The tool
-              returns the complete \`marker\` synchronously and
-              prepares the chart spec in the background; copy that
-              marker VERBATIM onto its own line wherever the chart
-              should appear. Use a chart when the data has a
-              story a visual conveys better than a table (trends,
-              rankings, distributions, parts-of-a-whole).
+              get one from Agent Mode, call \`render_data\` with the
+              inline rows. To get one from legacy polling, call
+              \`prepare_chart\` with the real statement id. Both tools
+              accept an optional \`title\` / one-line \`description\`
+              of the insight to surface, return the complete \`marker\`
+              synchronously, and prepare the chart spec in the
+              background. Copy that marker VERBATIM onto its own line
+              wherever the chart should appear. Use a chart when the
+              data has a story a visual conveys better than a table
+              (trends, rankings, distributions, parts-of-a-whole).
 
               NEVER invent or hand-build a marker. A valid marker is
-              the complete opaque string a \`prepare_chart\` call
-              returned to you in THIS turn - nothing else. Its id is
-              NOT a \`statement_id\`, and it is NOT a
+              the complete opaque string a \`render_data\` or
+              \`prepare_chart\` call returned to you in THIS turn -
+              nothing else. Its id is NOT a \`statement_id\`, and it is NOT a
               \`statement_id\` prefix with a label appended (e.g.
               \`01f1...-region-fill\`). If you have not called
-              \`prepare_chart\` and received an id back, do not write
-              a \`[chart:...]\` marker at all - use \`[data:...]\`
-              instead. A fabricated chart id renders nothing and
-              wastes a request.
+              one of those chart tools and received an id back, do not
+              write a \`[chart:...]\` marker at all. A fabricated chart
+              id renders nothing and wastes a request.
             `,
           ],
         },
@@ -872,10 +881,10 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
           The host UI resolves both markers on its own once it sees
           them - you do NOT need to call \`get_statement\` just to
           display data, and you do NOT need to wait on
-          \`prepare_chart\` (it returns the id immediately and the
-          host UI fetches the cached chart later). Pick at most one
-          marker per statement; don't chart AND table the same result
-          side by side.
+          \`render_data\` or \`prepare_chart\` (they return the id
+          immediately and the host UI fetches the cached chart later).
+          Pick at most one marker per result; don't chart AND table the
+          same result side by side.
         `,
       ],
       `

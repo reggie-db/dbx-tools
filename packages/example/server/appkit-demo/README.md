@@ -17,8 +17,9 @@ handle the topic bus, static delivery, deployment staging, and shared types.
   threads, and scoped routes.
 - `genie()` + `buildGenieTools()` - the default `support` agent uses Genie Agent
   Mode SSE, while `support-polling` forces Conversation API polling for
-  statement-backed comparison. Both drive the same space through `ask_genie`,
-  `get_statement`, and `prepare_chart`. The space binding grants `CAN_EDIT`
+  statement-backed comparison. Both drive the same space through `ask_genie`;
+  Agent Mode charts inline rows with `render_data`, while polling can use
+  `get_statement` and `prepare_chart`. The space binding grants `CAN_EDIT`
   because Databricks gates the serialized-space API behind it; the suggestions
   route reads the current `config.sample_questions` dynamically and the app
   hard-codes none of their text.
