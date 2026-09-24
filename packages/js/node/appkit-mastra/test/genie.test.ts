@@ -5,7 +5,7 @@ import type { GenieMessage } from "@dbx-tools/shared-genie";
 import { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY } from "../src/config.ts";
-import { buildGenieTools } from "../src/genie.ts";
+import { buildGenieTools, GENIE_INSTRUCTIONS } from "../src/genie.ts";
 
 const SPACE_ID = "space-1";
 const CONTEXT_KEY = `mastra__genie_conversation__${SPACE_ID}`;
@@ -25,6 +25,15 @@ function completedMessage(
 }
 
 describe("Genie Mastra tools", () => {
+  it("routes Agent Mode inline rows to render_data instead of prepare_chart", () => {
+    assert.match(GENIE_INSTRUCTIONS, /Agent Mode does NOT expose a\s+`statement_id`/);
+    assert.match(GENIE_INSTRUCTIONS, /call `render_data` with/);
+    assert.match(
+      GENIE_INSTRUCTIONS,
+      /Only that real statement id\s+belongs in `prepare_chart`/,
+    );
+  });
+
   it("isolates parallel calls while preserving sequential conversation reuse", async () => {
     let releaseReusableCall!: () => void;
     let reusableCallStarted!: () => void;

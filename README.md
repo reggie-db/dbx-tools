@@ -60,8 +60,9 @@ app:
   selection, history, threads, feedback, and scoped route exposure.
 - **Genie as agent tools** — use Genie Agent Mode SSE by default to stream
   reasoning, SQL, query output, and synthesized answers as typed events; expose
-  Genie metadata and starter questions. The polling opt-out retains legacy
-  statement-backed chart and data embeds when an app needs them.
+  Genie metadata and starter questions. Agent Mode charts its inline rows
+  through `render_data`; the polling opt-out retains legacy statement-backed
+  chart and data embeds when an app needs them.
 - **Model Serving ergonomics** — turn loose model names such as `"sonnet"` or
   `"chat-fast"` into concrete Databricks serving endpoints using workspace
   catalogues, fuzzy matching, class ceilings, cache, and fallbacks.

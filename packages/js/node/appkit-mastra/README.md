@@ -414,7 +414,10 @@ writer events and terminal `GenieMessage`. Set `genieAgentMode: false` on
 `mastra(...)` to force the legacy Conversation API polling flow. A pre-stream
 `FEATURE_DISABLED` or preview-toggle error falls back to polling automatically.
 Agent Mode carries query results inline as Markdown; use polling when a workflow
-specifically requires legacy `statement_id`-backed chart or data embeds.
+specifically requires legacy `statement_id`-backed chart or data embeds. For
+Agent Mode charts, pass the inline Markdown or structured metadata rows to the
+auto-wired `render_data` tool; never pass response, conversation, or function
+call ids to `prepare_chart`.
 
 ```ts
 const agent = agents.createAgent({
@@ -461,7 +464,10 @@ Agents can return `[chart:<id>]` and `[data:<statement_id>]` markers in prose.
 The embed route resolves them later, which avoids forcing the language model to
 inline large tables or wait for chart planning before continuing its answer.
 Genie supplies those statement ids through the legacy polling transport; Agent
-Mode returns inline Markdown and structured table metadata instead.
+Mode returns inline Markdown and structured table metadata instead. The
+`GENIE_INSTRUCTIONS` prompt directs Agent Mode turns to call `render_data` with
+those inline rows, while polling turns call `prepare_chart` only with a real
+statement id.
 
 ### Chart Types And Hand-Written Charts
 
