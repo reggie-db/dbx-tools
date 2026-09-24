@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { rewriteServingResponseBody } from "../src/serving-sanitize.ts";
+import {
+  rewriteServingResponseBody,
+  rewriteServingResponseStream,
+} from "../src/serving-sanitize.ts";
 
 /**
  * Trimmed copy of a real Databricks-hosted Gemini reply: `content` is the
@@ -67,6 +70,14 @@ describe("serving response sanitize", () => {
     assert.equal(result.choices[0].finish_reason, "stop");
   });
 
+  it("flattens a single content part like a one-item array", () => {
+    const body = JSON.stringify({
+      choices: [{ message: { content: { type: "text", text: "KPI summary" } } }],
+    });
+    const result = JSON.parse(rewriteServingResponseBody(body));
+    assert.equal(result.choices[0].message.content, "KPI summary");
+  });
+
   it("returns a compliant OpenAI response byte-identical", () => {
     const body = JSON.stringify({
       choices: [{ message: { role: "assistant", content: "already a string" } }],
@@ -94,5 +105,49 @@ describe("serving response sanitize", () => {
       result.choices.map((c: { message: { content: string } }) => c.message.content),
       ["first", "second"],
     );
+  });
+
+  it("flattens Claude reasoning and text arrays across split SSE chunks", async () => {
+    const sse = [
+      `data: ${JSON.stringify({
+        choices: [
+          {
+            delta: {
+              role: "assistant",
+              content: [
+                {
+                  type: "reasoning",
+                  summary: [{ type: "summary_text", text: "", signature: "" }],
+                },
+              ],
+            },
+          },
+        ],
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        choices: [{ delta: { content: { type: "text", text: "KPI summary" } } }],
+      })}\n\n`,
+      "data: [DONE]\n\n",
+    ].join("");
+    const bytes = new TextEncoder().encode(sse);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 17));
+        controller.enqueue(bytes.slice(17, 73));
+        controller.enqueue(bytes.slice(73));
+        controller.close();
+      },
+    });
+
+    const rewritten = await new Response(rewriteServingResponseStream(body)).text();
+    const data = rewritten
+      .split("\n")
+      .filter((line) => line.startsWith("data: {"))
+      .map((line) => JSON.parse(line.slice(6)));
+
+    assert.equal(data[0].choices[0].delta.content, "");
+    assert.equal(data[0].choices[0].delta.role, "assistant");
+    assert.equal(data[1].choices[0].delta.content, "KPI summary");
+    assert.ok(rewritten.endsWith("data: [DONE]\n\n"));
   });
 });

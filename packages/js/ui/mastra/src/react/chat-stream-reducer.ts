@@ -1,3 +1,4 @@
+import { error as sharedError } from "@dbx-tools/shared-core";
 import { GenieWriterEventSchema, type MastraStreamChunk } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import type { PendingApproval, ToolEvent } from "./types.ts";
@@ -228,8 +229,9 @@ export function reduceChatStreamChunk(
       const detail = chunk.payload?.error ?? chunk.payload?.message;
       return reduction(state, {
         runIdChanged: run.changed,
-        error:
-          typeof detail === "string" && detail ? detail : "The assistant stream reported an error.",
+        error: detail
+          ? sharedError.errorMessage(detail)
+          : "The assistant stream reported an error.",
       });
     }
 

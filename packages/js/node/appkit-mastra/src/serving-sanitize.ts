@@ -7,8 +7,9 @@
  * Databricks-hosted Claude rejects replayed extended-thinking blocks and reads
  * a trailing assistant message as a prefill request.
  *
- * Inbound ({@link rewriteServingResponseBody}), because Databricks-hosted
- * Gemini answers with its native content-parts array where the OpenAI contract
+ * Inbound ({@link rewriteServingResponseBody} and
+ * {@link rewriteServingResponseStream}), because Databricks-hosted Gemini and
+ * Claude can answer with native content-parts arrays where the OpenAI contract
  * (and therefore the AI SDK's response schema) requires a plain string.
  *
  * Every repair here is a provider quirk rather than a schema violation, so all
@@ -97,8 +98,9 @@ export function stripReasoningFromServingMessages(messages: ServingChatMessage[]
       delete msg.reasoning_content;
       changed = true;
     }
-    if (!Array.isArray(msg.content)) continue;
-    const filtered = msg.content.filter((part) => {
+    const parts = openaiChat.chatContentParts(msg.content);
+    if (!parts) continue;
+    const filtered = parts.filter((part) => {
       const type = part?.type;
       if (typeof type === "string" && REASONING_PART_TYPES.has(type)) {
         changed = true;
@@ -106,7 +108,7 @@ export function stripReasoningFromServingMessages(messages: ServingChatMessage[]
       }
       return true;
     });
-    if (filtered.length !== msg.content.length) {
+    if (filtered.length !== parts.length) {
       msg.content = filtered;
     }
     const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0;
@@ -184,8 +186,9 @@ function textFromServingContent(content: ServingChatMessage["content"]): string 
 function isEmptyServingContent(content: ServingChatMessage["content"]): boolean {
   if (content === undefined) return true;
   if (typeof content === "string") return content.trim().length === 0;
-  if (!Array.isArray(content)) return true;
-  return content.every((part) => {
+  const parts = openaiChat.chatContentParts(content);
+  if (!parts) return true;
+  return parts.every((part) => {
     if (part?.type === "text") {
       return typeof part.text !== "string" || part.text.trim().length === 0;
     }
@@ -206,6 +209,51 @@ export function rewriteServingResponseBody(body: string): string {
 }
 
 /**
+ * Repair array-valued `choices[].delta.content` inside an OpenAI SSE stream
+ * without buffering the response. The decoder retains partial lines across
+ * arbitrary network chunk boundaries; each complete `data:` line is parsed and
+ * re-encoded only when its content needs normalization.
+ */
+export function rewriteServingResponseStream(
+  body: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buffer += decoder.decode(chunk, { stream: true });
+        let newline = buffer.indexOf("\n");
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline + 1);
+          buffer = buffer.slice(newline + 1);
+          controller.enqueue(encoder.encode(rewriteServingResponseStreamLine(line)));
+          newline = buffer.indexOf("\n");
+        }
+      },
+      flush(controller) {
+        buffer += decoder.decode();
+        if (buffer) controller.enqueue(encoder.encode(rewriteServingResponseStreamLine(buffer)));
+      },
+    }),
+  );
+}
+
+/** Normalize one SSE line while preserving its `data:` spacing and line ending. */
+function rewriteServingResponseStreamLine(line: string): string {
+  const lineEnding = line.endsWith("\r\n") ? "\r\n" : line.endsWith("\n") ? "\n" : "";
+  const content = lineEnding ? line.slice(0, -lineEnding.length) : line;
+  const match = /^(data:\s*)(.*)$/.exec(content);
+  if (!match || match[2] === "[DONE]") return line;
+
+  const parsed = json.parseRecord(match[2]);
+  if (!parsed || !flattenChoiceDeltaContent(parsed)) return line;
+  return `${match[1]}${JSON.stringify(parsed)}${lineEnding}`;
+}
+
+/**
  * Collapse a structured `choices[].message.content` array to the plain string
  * the OpenAI Chat Completions contract specifies.
  *
@@ -223,24 +271,41 @@ export function rewriteServingResponseBody(body: string): string {
  * uses `doGenerate` for its side calls, so the visible symptom is
  * `Error generating title` - every thread keeps its placeholder name.
  *
- * Flattening on the wire keeps the repair in one place: the streaming path is
- * unaffected (deltas already carry string content), and neither the agent's
+ * Flattening on the wire keeps the repair in one place: neither the agent's
  * stored transcript nor the UI has to know the provider emitted parts. Any
- * non-text part (a `thoughtSignature`-only entry, an inline image) contributes
- * nothing, matching {@link openaiChat.chatContentToText}, and an all-parts-empty
- * message flattens to `""` rather than being dropped, so `finish_reason` and
- * `usage` still round-trip.
+ * non-text part (a reasoning block, `thoughtSignature`-only entry, or inline
+ * image) contributes nothing, matching {@link openaiChat.chatContentToText},
+ * and an all-parts-empty message flattens to `""` rather than being dropped, so
+ * `finish_reason` and `usage` still round-trip.
  */
 export function flattenChoiceMessageContent(payload: Record<string, unknown>): boolean {
+  return flattenChoiceContent(payload, "message");
+}
+
+/**
+ * Collapse structured streaming `choices[].delta.content` arrays to strings.
+ * Claude reasoning-only chunks become an empty content delta while text parts
+ * are concatenated in order.
+ */
+export function flattenChoiceDeltaContent(payload: Record<string, unknown>): boolean {
+  return flattenChoiceContent(payload, "delta");
+}
+
+/** Shared choice walker for buffered `message` and streaming `delta` payloads. */
+function flattenChoiceContent(
+  payload: Record<string, unknown>,
+  field: "message" | "delta",
+): boolean {
   if (!Array.isArray(payload.choices)) return false;
   let changed = false;
   for (const choice of payload.choices) {
     if (!choice || typeof choice !== "object") continue;
-    const message = (choice as { message?: unknown }).message;
-    if (!message || typeof message !== "object") continue;
-    const target = message as { content?: unknown };
-    if (!Array.isArray(target.content)) continue;
-    target.content = openaiChat.chatContentToText(target.content, { types: ["text"] });
+    const container = (choice as Record<string, unknown>)[field];
+    if (!container || typeof container !== "object") continue;
+    const target = container as { content?: unknown };
+    const parts = openaiChat.chatContentParts(target.content);
+    if (!parts) continue;
+    target.content = openaiChat.chatContentToText(parts, { types: ["text"] });
     changed = true;
   }
   return changed;

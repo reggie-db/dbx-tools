@@ -243,10 +243,18 @@ fn codex_originators_receive_the_codex_model_envelope() {
     assert_eq!(payload["models"][0]["shell_type"], "unified_exec");
     assert_eq!(
         payload["models"][0]["supported_reasoning_levels"],
-        json!(["none", "low", "medium", "high", "xhigh", "max"])
+        json!([
+            {"effort": "none", "description": "Disable explicit reasoning"},
+            {"effort": "low", "description": "Use a low reasoning budget"},
+            {"effort": "medium", "description": "Use a medium reasoning budget"},
+            {"effort": "high", "description": "Use a high reasoning budget"},
+            {"effort": "xhigh", "description": "Use an extra-high reasoning budget"},
+            {"effort": "max", "description": "Use the largest available reasoning budget"},
+        ])
     );
     assert!(payload["models"][0]["apply_patch_tool_type"].is_null());
-    assert!(payload["models"][0]["web_search_tool_type"].is_null());
+    assert_eq!(payload["models"][0]["web_search_tool_type"], "text");
+    assert_eq!(payload["models"][0]["supports_search_tool"], false);
     assert_eq!(payload["models"][0]["input_modalities"], json!(["text"]));
     assert_eq!(payload["models"].as_array().unwrap().len(), 1);
 }
@@ -339,11 +347,16 @@ fn codex_capabilities_follow_discovered_databricks_documentation() {
     assert_eq!(future["input_modalities"], json!(["text", "image"]));
     assert_eq!(future["apply_patch_tool_type"], "freeform");
     assert_eq!(future["web_search_tool_type"], "text");
+    assert_eq!(future["supports_search_tool"], true);
     assert_eq!(sol["input_modalities"], json!(["text", "image"]));
     assert_eq!(sol["apply_patch_tool_type"], "freeform");
-    assert!(sol["web_search_tool_type"].is_null());
+    assert_eq!(sol["web_search_tool_type"], "text");
+    assert_eq!(sol["supports_search_tool"], false);
     assert_eq!(qwen["input_modalities"], json!(["text"]));
     assert!(qwen["apply_patch_tool_type"].is_null());
+    assert_eq!(qwen["supported_reasoning_levels"], json!([]));
+    assert_eq!(qwen["web_search_tool_type"], "text");
+    assert_eq!(qwen["supports_search_tool"], false);
 }
 
 #[test]

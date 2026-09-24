@@ -101,6 +101,8 @@ Useful options:
 
 - `agentId` selects a registered agent; defaults to the plugin default agent.
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
+- `composerActions` places host-owned per-turn controls beside the model
+  selector without replacing the built-in composer.
 - `suggestions` overrides Genie starter questions; omit it to auto-fetch
   `/suggestions`, or pass `[]` to hide suggestions.
 - `threadPlacement` chooses where conversation management renders, or turns it

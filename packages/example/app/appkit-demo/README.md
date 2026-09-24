@@ -10,14 +10,17 @@ branding, email, and Postgres topic-bus UI packages.
   drives the whole conversation (streaming, tool-session pills, approval cards,
   model picker, history pagination, chat export, and the thread switcher) by
   wiring itself from the Mastra plugin's published client config. No transport
-  code lives here.
+  code lives here. The Stream page starts with Genie Agent Mode enabled and
+  places a checkbox beside the model selector that switches to an
+  otherwise-identical polling agent.
 - [`@dbx-tools/ui-search/react`](../../../js/ui/search) — native AppKit AI
   Search and the Lakebase full-text fallback share one search box and result
   surface.
 - [`@dbx-tools/ui-teams/react`](../../../js/ui/teams) — live Adaptive Card
   rendering plus the Teams-shaped synchronous and Bot Framework chat paths.
 - [`@dbx-tools/ui-auth/react`](../../../js/ui/auth) — the passkey-first gate,
-  authentication status, and logout surface used by the public tunnel.
+  authentication status, and right-aligned logout surface used by the public
+  tunnel. Logout is omitted when tunnel authentication is unavailable.
 - [`@dbx-tools/ui-branding/react`](../../../js/ui/branding) and
   [`@dbx-tools/ui-email/react`](../../../js/ui/email) — one active brand context
   drives the shell and outbound-email previews.
@@ -26,7 +29,10 @@ branding, email, and Postgres topic-bus UI packages.
 
 ## Pages
 
-- `src/pages/Stream.tsx` — `<MastraChat showModelPicker enableExport />`.
+- `src/pages/Stream.tsx` - a default-on Agent Mode checkbox in
+  `<MastraChat composerActions>`, beside the model selector. It selects
+  `support` for Agent Mode SSE or `support-polling` for Conversation API
+  polling.
 - `src/pages/Conversations.tsx` — the same component with its thread sidebar,
   showing multi-conversation storage.
 - `src/pages/Brand.tsx` — a live `BrandPicker` that updates the whole site plus

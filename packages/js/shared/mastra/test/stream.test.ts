@@ -16,6 +16,28 @@ describe("MastraStreamChunkSchema", () => {
     });
   });
 
+  it("preserves object-valued stream errors", () => {
+    expect(
+      MastraStreamChunkSchema.parse({
+        type: "error",
+        payload: {
+          error: {
+            message: "Genie turn failed",
+            code: "GENIE_ERROR",
+          },
+        },
+      }),
+    ).toEqual({
+      type: "error",
+      payload: {
+        error: {
+          message: "Genie turn failed",
+          code: "GENIE_ERROR",
+        },
+      },
+    });
+  });
+
   it("rejects malformed payloads for known event names", () => {
     expect(() =>
       MastraStreamChunkSchema.parse({

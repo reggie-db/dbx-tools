@@ -31,7 +31,11 @@ import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
-import { rewriteServingBody, rewriteServingResponseBody } from "./serving-sanitize.ts";
+import {
+  rewriteServingBody,
+  rewriteServingResponseBody,
+  rewriteServingResponseStream,
+} from "./serving-sanitize.ts";
 import { MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving.ts";
 
 type ModelClass = model.ModelClass;
@@ -140,10 +144,9 @@ const SERVING_ENDPOINTS_PATH_PREFIX = "/serving-endpoints/";
  *   2. At `LOG_LEVEL=debug`, dumps the (post-sanitize) JSON body so
  *      4xx debugging doesn't have to fight AI SDK's `[Array]`
  *      formatter.
- *   3. Repairs the non-streaming JSON response, where Databricks-hosted
- *      Gemini returns `choices[].message.content` as a parts array that
- *      the AI SDK's OpenAI schema rejects (see
- *      {@link rewriteServingResponseBody}).
+ *   3. Repairs buffered and streaming responses where a provider returns
+ *      `choices[].message.content` or `choices[].delta.content` as a parts
+ *      array that the AI SDK's OpenAI schema rejects.
  *
  * Safe to call from any hot path: {@link functionModule.memoize} ensures
  * the wrapper is installed at most once per process, so subsequent
@@ -179,30 +182,38 @@ const setupFetchInterceptor = functionModule.memoize((): void => {
 });
 
 /**
- * Rewrite a non-streaming serving response whose body needs repair, leaving
- * everything else byte-identical.
+ * Rewrite a serving response whose body needs repair, leaving unsupported
+ * content types byte-identical.
  *
- * Streaming turns are passed straight through: an SSE body must stay a live
- * stream (buffering it to a string would defeat streaming and break
- * `text/event-stream` parsing), and the delta frames already carry string
- * content, so they never hit the array-shaped `content` bug. Likewise a
- * non-JSON or error body is returned untouched, so the caller still sees the
- * original status and headers.
+ * SSE remains a live stream: a TransformStream repairs complete `data:` lines
+ * as bytes arrive and preserves partial lines across network chunks. JSON is
+ * buffered through the existing response-body repair. A non-JSON/non-SSE body
+ * is returned untouched so the caller still sees the original response.
  */
 async function repairServingResponse(response: Response): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream") && response.body) {
+    return rebuildServingResponse(response, rewriteServingResponseStream(response.body));
+  }
   if (!contentType.includes("application/json")) return response;
 
   const body = await response.clone().text();
   const rewritten = rewriteServingResponseBody(body);
   if (rewritten === body) return response;
+  return rebuildServingResponse(response, rewritten);
+}
 
+/** Rebuild a transformed response without stale byte-length/encoding headers. */
+function rebuildServingResponse(
+  response: Response,
+  body: string | ReadableStream<Uint8Array>,
+): Response {
   // `content-length` / `content-encoding` describe the ORIGINAL bytes, so they
   // are dropped: the rewritten body is a different length and already decoded.
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   headers.delete("content-encoding");
-  return new Response(rewritten, {
+  return new Response(body, {
     status: response.status,
     statusText: response.statusText,
     headers,

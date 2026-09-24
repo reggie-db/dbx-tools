@@ -20,7 +20,7 @@ variables:
   lakebase_endpoint:
     default: projects/${var.lakebase_project_id}/branches/production/endpoints/primary
   genie_identity:
-    default: auto
+    default: service-principal
   mlflow_tracking_uri:
     default: databricks
   otel_propagators:
@@ -77,7 +77,8 @@ resources:
   #   - serving.serving-endpoints -> `@dbx-tools/model` lists serving
   #     endpoints to resolve an intent (e.g. `chat-balanced`) to a real
   #     endpoint id, so the agent stream 500s without it.
-  #   - dashboards.genie          -> the Genie tool queries the Fuel Mart space.
+  #   - genie                     -> Genie Agent Mode responses.
+  #   - dashboards.genie          -> Conversation API polling and space metadata.
   #   - sql                       -> warehouse queries behind the Genie/SQL tools.
   apps:
     demo_app:
@@ -142,11 +143,11 @@ resources:
             value_from: genie-space
           - name: LAKEBASE_ENDPOINT
             value: ${var.lakebase_endpoint}
-          # The demo is served through the OTP tunnel, where callers authenticate
-          # by email and no OBO token exists to forward - `user` would fail every
-          # turn with AppKit's AuthenticationError. `auto` keeps OBO for
-          # front-door (workspace UI) traffic and falls back to the app service
-          # principal per-request for tunnel callers.
+          # Use the app service principal for Genie and model calls at both
+          # entrances. The public OTP tunnel has no OBO token, and existing
+          # front-door sessions can retain a token minted before a newly added
+          # scope until that token expires. Memory, cache, and traces remain
+          # partitioned by the forwarded user identity.
           - name: MASTRA_GENIE_IDENTITY
             value: ${var.genie_identity}
           - name: MLFLOW_EXPERIMENT_ID
@@ -191,6 +192,7 @@ resources:
           # out again.
       user_api_scopes:
         - sql
+        - genie
         - dashboards.genie
         - serving.serving-endpoints
       resources:
@@ -198,7 +200,10 @@ resources:
           genie_space:
             name: Fuel Mart Store Intelligence
             space_id: ${var.genie_space_id}
-            permission: CAN_RUN
+            # Dynamic starter suggestions live in `serialized_space`, whose
+            # API requires CAN_EDIT even though asking questions needs only
+            # CAN_RUN. No question text is copied into the app.
+            permission: CAN_EDIT
         - name: sql-warehouse
           sql_warehouse:
             id: ${var.warehouse_id}
