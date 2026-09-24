@@ -28,6 +28,7 @@ export const ChatView = ({
   model,
   onModelChange,
   defaultModelName,
+  composerActions,
   onLoadMore,
   isLoadingMore = false,
   hasMore = false,
@@ -108,6 +109,7 @@ export const ChatView = ({
         model={model}
         onModelChange={onModelChange}
         defaultModelName={defaultModelName}
+        composerActions={composerActions}
         isLoadingHistory={isLoadingHistory}
         onClear={onClear}
         onExportConversation={onExportConversation}

@@ -47,7 +47,12 @@
 
 import { string } from "@dbx-tools/shared-core";
 
-import { type ChatMessage, type ChatToolCall, chatContentToText } from "./openai-chat.ts";
+import {
+  type ChatMessage,
+  type ChatToolCall,
+  chatContentParts,
+  chatContentToText,
+} from "./openai-chat.ts";
 
 /**
  * Lower a Responses request body to a chat-completions body. Returns the chat
@@ -489,16 +494,18 @@ export function createResponsesStreamTranslator(
     const choice = (choices[0] ?? {}) as Record<string, unknown>;
     const delta = (choice.delta ?? {}) as Record<string, unknown>;
 
-    // Assistant text deltas.
-    if (typeof delta.content === "string" && delta.content.length > 0) {
+    // Assistant text deltas. Compatibility layers may emit one content part,
+    // a parts array, or the OpenAI string form.
+    const deltaText = chatContentToText(delta.content, { types: ["text", "output_text"] });
+    if (deltaText.length > 0) {
       if (!textOpen) out += openText();
-      textBuffer += delta.content;
+      textBuffer += deltaText;
       out += sse("response.output_text.delta", {
         type: "response.output_text.delta",
         item_id: textItemId,
         output_index: outputIndex,
         content_index: 0,
-        delta: delta.content,
+        delta: deltaText,
       });
     }
 
@@ -614,8 +621,9 @@ export function readResponsesOutput(payload: Record<string, unknown>): Responses
   for (const rawItem of output) {
     if (!rawItem || typeof rawItem !== "object") continue;
     const content = (rawItem as Record<string, unknown>).content;
-    if (!Array.isArray(content)) continue;
-    for (const rawPart of content) {
+    const parts = chatContentParts(content);
+    if (!parts) continue;
+    for (const rawPart of parts) {
       if (!rawPart || typeof rawPart !== "object") continue;
       const part = rawPart as Record<string, unknown>;
       const text = string.trimToEmpty(part.text);
@@ -720,14 +728,15 @@ export function sanitizeOpenResponsesInput(body: Record<string, unknown>): Recor
       continue;
     }
 
-    if (!Array.isArray(item.content)) {
+    const parts = chatContentParts(item.content);
+    if (!parts) {
       input.push(raw);
       continue;
     }
 
-    let partChanged = false;
+    let partChanged = !Array.isArray(item.content);
     const content: unknown[] = [];
-    for (const part of item.content) {
+    for (const part of parts) {
       if (!part || typeof part !== "object") {
         content.push(part);
         continue;

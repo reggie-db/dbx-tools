@@ -1,7 +1,8 @@
 # @dbx-tools/demo-appkit-server
 
 The AppKit server half of the demo Databricks App. One `createApp` call mounts
-the plugins, and one `createAgent` defines the analyst agent. Supporting modules
+the plugins, and one shared definition factory creates the Agent Mode and polling
+analyst agents. Supporting modules
 handle the topic bus, static delivery, deployment staging, and shared types.
 
 ## What it wires
@@ -11,11 +12,16 @@ handle the topic bus, static delivery, deployment staging, and shared types.
   plugins run, then delegates to AppKit's `createApp`.
 - `mastra(...)` from
   [`@dbx-tools/appkit-mastra`](../../../js/node/appkit-mastra) — the
-  Mastra agent as an AppKit plugin: OBO auth, Lakebase-backed storage/memory,
-  workspace skills, model selection, history, threads, and scoped routes.
-- `genie()` + `plugins.genie?.toolkit()` — the agent drives the Genie space
-  (`ask_genie`, `get_statement`, `prepare_chart`, …) for SQL-backed answers with
-  streaming progress and inline charts.
+  Mastra agent as an AppKit plugin: request-attributed service-principal auth,
+  Lakebase-backed storage/memory, workspace skills, model selection, history,
+  threads, and scoped routes.
+- `genie()` + `buildGenieTools()` - the default `support` agent uses Genie Agent
+  Mode SSE, while `support-polling` forces Conversation API polling for
+  statement-backed comparison. Both drive the same space through `ask_genie`,
+  `get_statement`, and `prepare_chart`. The space binding grants `CAN_EDIT`
+  because Databricks gates the serialized-space API behind it; the suggestions
+  route reads the current `config.sample_questions` dynamically and the app
+  hard-codes none of their text.
 - `email()` + `emailTool()` from
   [`@dbx-tools/email`](../../../js/node/email) — an approval-gated
   `send_email` tool: the model can call it, but the send suspends until the user
@@ -34,7 +40,9 @@ handle the topic bus, static delivery, deployment staging, and shared types.
 
 ## Files
 
-- `src/server.ts` — the plugin list and agent definition.
+- `src/server.ts` - the plugin list plus the shared definition factory for the
+  Agent Mode and polling agents. `mastra({ genieAgentMode: true })` makes Agent
+  Mode explicit for the default `support` route.
 - `src/launch.ts` — the deployed process wrapper that strips emojis from logs.
 - `src/bus-demo.ts` — the topic-bus plugin behind the Bus page.
 - `app.yaml` — Databricks App runtime env wiring (`genie-space`, `postgres`).

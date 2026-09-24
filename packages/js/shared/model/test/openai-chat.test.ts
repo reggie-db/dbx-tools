@@ -12,6 +12,10 @@ describe("OpenAI chat helpers", () => {
       assert.equal(chatContentToText("hello"), "hello");
     });
 
+    it("normalizes a single structured part like a one-item array", () => {
+      assert.equal(chatContentToText({ type: "text", text: "hello" }), "hello");
+    });
+
     it("flattens supported structured parts with a separator", () => {
       assert.equal(
         chatContentToText(

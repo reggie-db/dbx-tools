@@ -1,5 +1,6 @@
 import type { GenieWriterEvent } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
+import type { ReactNode } from "react";
 import type { ExportFormat } from "../support/export.ts";
 
 export type { ExportFormat } from "../support/export.ts";
@@ -170,6 +171,12 @@ export type ChatViewProps = {
    * a neutral "Default". Never a raw endpoint id.
    */
   defaultModelName?: string;
+  /**
+   * Host-owned controls rendered in the composer toolbar immediately after the
+   * model selector. Use this for per-turn options that belong beside model
+   * routing without forking the chat surface.
+   */
+  composerActions?: ReactNode;
   /**
    * Optional infinite-scroll-up handler. Fired when the user scrolls
    * within `TOP_LOAD_MORE_THRESHOLD_PX` of the top of the

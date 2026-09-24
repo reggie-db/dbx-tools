@@ -183,7 +183,7 @@ one-by-one (`openaiResponses.responsesToChat`) already can't leak them. Pass
   and capability flags.
 - `display` - human-readable endpoint labels.
 - `openaiChat` - Chat Completions message / tool-call types,
-  `chatContentToText`, and `stripUnsupportedChatFields`.
+  `chatContentParts`, `chatContentToText`, and `stripUnsupportedChatFields`.
 - `openaiResponses` - Responses API translation in both directions, plus
   `sanitizeOpenResponsesRequest` and the shared `REASONING_TYPES` constant.
 

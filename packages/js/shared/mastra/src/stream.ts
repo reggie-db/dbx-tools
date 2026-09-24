@@ -91,12 +91,14 @@ const ToolOutputStreamChunkSchema = z
   })
   .passthrough();
 
+const StreamErrorDetailSchema = z.union([z.string(), z.record(z.string(), z.unknown())]);
+
 const ErrorStreamChunkSchema = z
   .object({
     type: z.literal("error"),
     payload: z
       .object({
-        error: z.string().optional(),
+        error: StreamErrorDetailSchema.optional(),
         message: z.string().optional(),
       })
       .passthrough()

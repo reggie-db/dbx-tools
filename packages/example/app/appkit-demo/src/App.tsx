@@ -87,12 +87,12 @@ const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
   }, [loggingOut, logoutEnabled]);
 
   return (
-    <nav className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto px-4 py-2 md:px-6">
+    <nav className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2 md:px-6">
       <Link to="/brand" className="mr-1 flex shrink-0 items-center gap-2 text-sm font-semibold">
         <BrandIcon className="size-6" />
         <span>{context.shortName}</span>
       </Link>
-      <div className="flex items-center gap-1">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {routes.map((route) => (
           <Button
             key={route.path}
@@ -106,17 +106,19 @@ const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
           </Button>
         ))}
       </div>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="ml-auto shrink-0"
-        disabled={!logoutEnabled || loggingOut}
-        title={logoutEnabled ? "End the tunnel session" : "Available through tunnel login"}
-        onClick={logout}
-      >
-        Log out
-      </Button>
+      {logoutEnabled ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="ml-auto shrink-0"
+          aria-busy={loggingOut}
+          title="End the tunnel session"
+          onClick={logout}
+        >
+          {loggingOut ? "Logging out..." : "Log out"}
+        </Button>
+      ) : null}
     </nav>
   );
 };

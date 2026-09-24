@@ -11,6 +11,7 @@ use crate::{
     models::{
         parse_model_name, ModelClass, ModelFamily, ModelQuery, RankedModel, ServingEndpointSummary,
     },
+    reasoning::ReasoningEffort,
     resolve::compare_model_preference,
 };
 
@@ -228,6 +229,24 @@ fn codex_model(
     let image_input = capabilities.is_some_and(|value| value.supports_image_input(endpoint));
     let apply_patch = capabilities.is_some_and(|value| value.supports_apply_patch(endpoint));
     let web_search = capabilities.is_some_and(|value| value.supports_web_search(endpoint));
+    let reasoning_levels = endpoint
+        .reasoning_efforts
+        .iter()
+        .map(|effort| {
+            json!({
+                "effort": effort,
+                "description": match effort {
+                    ReasoningEffort::None => "Disable explicit reasoning",
+                    ReasoningEffort::Minimal => "Use the smallest available reasoning budget",
+                    ReasoningEffort::Low => "Use a low reasoning budget",
+                    ReasoningEffort::Medium => "Use a medium reasoning budget",
+                    ReasoningEffort::High => "Use a high reasoning budget",
+                    ReasoningEffort::Xhigh => "Use an extra-high reasoning budget",
+                    ReasoningEffort::Max => "Use the largest available reasoning budget",
+                },
+            })
+        })
+        .collect::<Vec<_>>();
     let mut entry = Map::from_iter([
         ("slug".to_owned(), json!(codex_model)),
         (
@@ -247,7 +266,7 @@ fn codex_model(
         ),
         (
             "supported_reasoning_levels".to_owned(),
-            json!(endpoint.reasoning_efforts),
+            json!(reasoning_levels),
         ),
         ("shell_type".to_owned(), json!("unified_exec")),
         ("visibility".to_owned(), json!("list")),
@@ -278,14 +297,8 @@ fn codex_model(
                 json!(["text"])
             },
         ),
-        (
-            "web_search_tool_type".to_owned(),
-            if web_search {
-                json!("text")
-            } else {
-                Value::Null
-            },
-        ),
+        ("web_search_tool_type".to_owned(), json!("text")),
+        ("supports_search_tool".to_owned(), json!(web_search)),
         ("supports_image_detail_original".to_owned(), json!(false)),
     ]);
     if extended {

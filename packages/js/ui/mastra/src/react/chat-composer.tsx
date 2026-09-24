@@ -249,6 +249,7 @@ type ChatComposerProps = {
   model: ChatViewProps["model"];
   onModelChange: ChatViewProps["onModelChange"];
   defaultModelName: ChatViewProps["defaultModelName"];
+  composerActions: ChatViewProps["composerActions"];
   isLoadingHistory: NonNullable<ChatViewProps["isLoadingHistory"]>;
   onClear: ChatViewProps["onClear"];
   onExportConversation: ChatViewProps["onExportConversation"];
@@ -270,6 +271,7 @@ export const ChatComposer = ({
   model,
   onModelChange,
   defaultModelName,
+  composerActions,
   isLoadingHistory,
   onClear,
   onExportConversation,
@@ -305,7 +307,11 @@ export const ChatComposer = ({
       sensitivity: "base",
     }),
   );
-  const showToolbar = showModelDisplay || Boolean(onExportConversation) || Boolean(onClear);
+  const showToolbar =
+    showModelDisplay ||
+    Boolean(composerActions) ||
+    Boolean(onExportConversation) ||
+    Boolean(onClear);
 
   return (
     <>
@@ -401,6 +407,7 @@ export const ChatComposer = ({
                   {currentModelLabel}
                 </span>
               ))}
+            {composerActions}
             {onExportConversation && (
               <ExportMenu
                 onExport={(format) => void onExportConversation(format)}

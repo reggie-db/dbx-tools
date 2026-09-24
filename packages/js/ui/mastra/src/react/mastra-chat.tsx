@@ -2,7 +2,7 @@ import { error as sharedError, hash, log } from "@dbx-tools/shared-core";
 import type { MastraThread } from "@dbx-tools/shared-mastra";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChatApprovals } from "./chat-approvals.ts";
 import { ChatView } from "./chat-view.tsx";
 import { useChatFeedback } from "./chat-feedback.ts";
@@ -985,6 +985,8 @@ export const useMastraChat = (
 export interface MastraChatProps extends UseMastraChatOptions {
   /** Extra classes merged onto the chat's root layout container. */
   className?: string;
+  /** Host controls placed beside the model picker in the composer toolbar. */
+  composerActions?: ReactNode;
 }
 
 /**
@@ -1000,7 +1002,7 @@ export interface MastraChatProps extends UseMastraChatOptions {
  * `threadPlacement` (`auto` docks it left and falls back to a tab strip on a
  * narrow chat) and turned off with `threadPlacement: "disabled"`.
  */
-export const MastraChat = ({ className, ...options }: MastraChatProps) => {
+export const MastraChat = ({ className, composerActions, ...options }: MastraChatProps) => {
   const chat = useMastraChat(options);
-  return <ChatView {...chat} className={className} />;
+  return <ChatView {...chat} className={className} composerActions={composerActions} />;
 };

@@ -56,7 +56,7 @@ export interface ChatToolCall {
 export interface ChatMessage {
   /** See {@link ChatRole} for the standard values; widened for provider extensions. */
   role: string;
-  content?: string | ChatContentPart[] | null;
+  content?: string | ChatContentPart | ChatContentPart[] | null;
   tool_calls?: ChatToolCall[];
   /** Set on a `tool` turn, keying it back to the call it answers. */
   tool_call_id?: string;
@@ -129,23 +129,40 @@ export interface ChatContentToTextOptions {
 }
 
 /**
+ * Normalize structured chat content to an array. Providers usually emit a
+ * parts array, but some compatibility layers collapse a one-part array to the
+ * object itself. Returns `undefined` for strings, nulls, and other scalar
+ * values so callers can distinguish structured content from plain text.
+ */
+export function chatContentParts(content: unknown): ChatContentPart[] | undefined {
+  const values = Array.isArray(content)
+    ? content
+    : content && typeof content === "object"
+      ? [content]
+      : undefined;
+  if (!values) return undefined;
+  return values.filter((part): part is ChatContentPart =>
+    Boolean(part && typeof part === "object"),
+  );
+}
+
+/**
  * Flatten a message `content` value to plain text. Accepts the string form and
- * the structured-parts form ({@link ChatContentPart}), and yields `""` for
- * anything else (null, a lone image part, a malformed payload). Typed as
- * `unknown` because most callers are reading a just-parsed JSON body, and the
- * point of this helper is that they do not have to pre-check it.
+ * structured content as either one {@link ChatContentPart} or an array, and
+ * yields `""` for anything else (null, a lone image part, a malformed payload).
+ * Typed as `unknown` because most callers are reading a just-parsed JSON body,
+ * and the point of this helper is that they do not have to pre-check it.
  */
 export function chatContentToText(
   content: unknown,
   options: ChatContentToTextOptions = {},
 ): string {
   if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
+  const normalized = chatContentParts(content);
+  if (!normalized) return "";
   const { separator = "", types } = options;
   const parts: string[] = [];
-  for (const raw of content) {
-    if (!raw || typeof raw !== "object") continue;
-    const part = raw as ChatContentPart;
+  for (const part of normalized) {
     if (types && (typeof part.type !== "string" || !types.includes(part.type))) continue;
     if (typeof part.text === "string") parts.push(part.text);
   }

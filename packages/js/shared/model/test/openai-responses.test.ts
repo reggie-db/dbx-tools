@@ -161,6 +161,31 @@ describe("createResponsesStreamTranslator", () => {
     assert.equal(eventData(done)[0]?.text, "hello");
   });
 
+  it("normalizes single and array-valued structured deltas", () => {
+    const translator = createResponsesStreamTranslator("m", "resp-1");
+    const single = translator.feed({
+      choices: [{ delta: { content: { type: "text", text: "one" } } }],
+    });
+    const array = translator.feed({
+      choices: [
+        {
+          delta: {
+            content: [
+              { type: "reasoning", text: "hidden" },
+              { type: "text", text: "two" },
+            ],
+          },
+        },
+      ],
+    });
+
+    assert.equal(
+      eventData(single).find((event) => event.type === "response.output_text.delta")?.delta,
+      "one",
+    );
+    assert.equal(eventData(array)[0]?.delta, "two");
+  });
+
   it("assembles argument fragments into one function_call item", () => {
     const translator = createResponsesStreamTranslator("m", "resp-1");
     translator.feed({
@@ -215,6 +240,13 @@ describe("readResponsesOutput", () => {
     assert.equal(text, "one\ntwo");
   });
 
+  it("reads a single output content part like a one-item array", () => {
+    const { text } = readResponsesOutput({
+      output: [{ content: { type: "output_text", text: "one" } }],
+    });
+    assert.equal(text, "one");
+  });
+
   it("collects url_citation annotations, deduplicated by url", () => {
     const { citations } = readResponsesOutput({
       output: [
@@ -261,6 +293,28 @@ describe("sanitizeOpenResponsesRequest", () => {
         role: "assistant",
         content: [{ type: "input_text", text: "hi" }],
       },
+    ]);
+  });
+
+  it("normalizes a single content part to an array", () => {
+    const user = { type: "message", role: "user", content: "next" };
+    const out = sanitizeOpenResponsesRequest({
+      input: [
+        {
+          type: "message",
+          role: "assistant",
+          content: { type: "output_text", text: "hi" },
+        },
+        user,
+      ],
+    });
+    assert.deepEqual(out.input, [
+      {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "input_text", text: "hi" }],
+      },
+      user,
     ]);
   });
 

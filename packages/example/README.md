@@ -1,8 +1,8 @@
 # dbx-tools demo — a Databricks App in a few lines
 
-A runnable Databricks App that stands up a **streaming Genie chat agent** — with
+A runnable Databricks App that stands up a **streaming Genie chat agent** with
 tool-calling, approval-gated email, conversation memory, a model picker, history,
-and threads — on top of the `@dbx-tools/*` packages.
+and threads on top of the `@dbx-tools/*` packages.
 
 The point of this folder is to show **how little you write**. It is a real,
 standalone downstream consumer: its own project, its own pnpm workspace, pulling
@@ -29,28 +29,57 @@ await createApp({
     lakebase(),
     email(), // approval-gated send_email tool transport
     teams(), // create_teams_card tool + /api/teams/card route
-    mastra({ storage: true, memory: true, agents: support }),
+    mastra({
+      storage: true,
+      memory: true,
+      agents: { support, "support-polling": supportPolling },
+      defaultAgent: "support",
+      genieAgentMode: true,
+    }),
   ],
   cache: { enabled: true },
 });
 ```
 
-The agent is one `createAgent({...})` that spreads the Genie toolkit
-(`...plugins.genie?.toolkit()`) and adds `send_email: emailTool()` and
-`create_teams_card: teamsCardTool()`.
+The two agent definitions share one factory and differ only in Genie transport.
+`support` uses Agent Mode SSE by default; `support-polling` forces the
+Conversation API for statement-backed comparison.
 
 ## The whole client page
 
 ```tsx
 // app/appkit-demo/src/pages/Stream.tsx
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
+import { useState } from "react";
 
-const Stream = () => <MastraChat showModelPicker enableExport />;
+const Stream = () => {
+  const [agentMode, setAgentMode] = useState(true);
+  const agentId = agentMode ? "support" : "support-polling";
+  return (
+    <MastraChat
+      key={agentId}
+      agentId={agentId}
+      showModelPicker
+      enableExport
+      composerActions={
+        <label>
+          <input
+            type="checkbox"
+            checked={agentMode}
+            onChange={(event) => setAgentMode(event.target.checked)}
+          />
+          Agent Mode
+        </label>
+      }
+    />
+  );
+};
 export default Stream;
 ```
 
-`MastraChat` wires itself from the Mastra plugin's published client config — no
-transport code, no streaming plumbing.
+The checkbox starts enabled beside the model selector. It selects the default
+Agent Mode agent or the otherwise-identical polling agent without adding
+transport code to the browser.
 
 The **Cards** page (`app/appkit-demo/src/pages/Cards.tsx`) has two tabs over the
 `teams()` plugin. **Chat** is a Teams conversation: `<TeamsChat/>` posts a Bot

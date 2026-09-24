@@ -106,4 +106,18 @@ describe("chat stream reducer", () => {
     expect(unknown.state).toEqual(initial());
     expect(failure.error).toBe("upstream failed");
   });
+
+  it("surfaces messages from object-valued stream errors", () => {
+    const failure = reduceChatStreamChunk(initial(), {
+      type: "error",
+      payload: {
+        error: {
+          message: "Genie turn failed",
+          code: "GENIE_ERROR",
+        },
+      },
+    });
+
+    expect(failure.error).toBe("Genie turn failed");
+  });
 });

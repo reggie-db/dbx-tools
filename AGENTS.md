@@ -206,6 +206,11 @@ Primary package areas:
   families; custom and unrecognized endpoints sort by name at the end. Codex
   priorities follow that order. The serving endpoint name remains the
   OpenAI-facing id.
+  Codex catalogue reasoning levels use `{ effort, description }` objects, not
+  bare effort strings. `web_search_tool_type` is always a non-null enum value;
+  `supports_search_tool` independently reports whether native search is available.
+  Invalid metadata makes Codex reject the whole remote catalogue and retain its
+  bundled models.
   Retirement status refreshes the Databricks Foundation Model retirement page
   through a daily `FileCache` and falls back to the generated
   `assets/retired-models.json` snapshot. Model capabilities and published

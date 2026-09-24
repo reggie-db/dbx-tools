@@ -8,6 +8,7 @@ import {
   genie as appkitMastraGenie,
   plugin as appkitMastraPlugin,
   type MastraAgentDefinition,
+  type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
 import {
@@ -67,7 +68,7 @@ const { email } = emailPlugin;
 const { defaultEmailBrand } = emailBrand;
 const { emailTool } = emailToolApi;
 const { createAgent, tool } = agents;
-const { GENIE_INSTRUCTIONS } = appkitMastraGenie;
+const { buildGenieTools, GENIE_INSTRUCTIONS } = appkitMastraGenie;
 const { mastra } = appkitMastraPlugin;
 const { webSearch } = appkitWebSearchPlugin;
 const { graphiti } = graphitiPlugin;
@@ -157,89 +158,104 @@ const clientDist =
 // Per-request overrides via `X-Mastra-Model` header, `?model=` query,
 // or body `model` field can re-target the same agent without redeploy.
 // `GET /api/mastra/models` lists the cached catalogue.
-const supportDefinition: MastraAgentDefinition = {
-  name: "support",
-  instructions: [
-    "You are a data analyst helping customers explore a Databricks",
-    "Genie space. Default to driving the Genie tools (`ask_genie`,",
-    "`get_statement`, `prepare_chart`, `get_space_description`,",
-    "`get_space_serialized`) below - they are the only way to see",
-    "the real data, so use them whenever the user's question is",
-    "about the data the space covers. Reserve direct (no-tool)",
-    "answers for pure meta-questions about your own behaviour or",
-    "the conversation itself.",
-    "Graphiti MCP memory tools are also available. Use them when the user",
-    "asks to save, retrieve, or manage durable knowledge and preferences.",
-    "",
-    GENIE_INSTRUCTIONS,
-  ].join("\n"),
-  tools(plugins): MastraTools {
-    // Materialize the dynamic toolkit before adding the demo tools. Building
-    // one contextually-typed object makes TypeScript recursively expand every
-    // source-linked Mastra tool schema together and exceeds its instantiation
-    // depth; Object.assign preserves the same flat runtime record without
-    // forcing that useless cross-tool type expansion.
-    const agentTools = Object.assign({}, plugins.genie?.toolkit()) as MastraTools;
-    Object.assign(agentTools, plugins.graphiti?.toolkit());
-    Object.assign(agentTools, {
-      // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
-      // is `undefined` when the plugin isn't registered, so the `?.`
-      // guard keeps this safe to copy into other apps. Include the
-      // built-in Genie toolkit so the agent can ask the Genie space
-      // (`DATABRICKS_GENIE_SPACE_ID`) for SQL-backed answers.
-      // Spread other toolkits once registered (uncomment alongside
-      // adding `analytics()` / `files()` to the plugin list below):
-      // ...plugins.analytics.toolkit(),
-      // ...plugins.files.toolkit({ only: ["uploads.read"] }),
-      get_weather: tool({
-        description: "Weather",
-        schema: z.object({ city: z.string() }),
-        execute: async ({ city }) => `Sunny in ${city}`,
-      }),
-      // Approval-gated email tool from `@dbx-tools/email`. The
-      // model can call this freely; execution pauses until the user
-      // clicks Approve in the chat UI, then the message is sent for
-      // real over SMTP. The sender is derived from the on-behalf-of
-      // user's email on the configured `EMAIL_DOMAIN` (system mail, like
-      // the tunnel's sign-in code, uses `no-reply@` there instead); SMTP host /
-      // credentials come from the `email()` plugin config / env.
-      send_email: emailTool(),
-      // Web search + fetch from `@dbx-tools/appkit-web-search`.
-      // `web_search` runs the Databricks Model Serving native web-search
-      // tool, resolving its OWN web-search-capable model (Gemini/GPT) via
-      // the `webSearch()` plugin config - independent of this agent's chat
-      // model, which may not support web search. `web_fetch` reads a page
-      // via got-scraping. Both honor the plugin's optional URL allow-list.
-      web_search: webSearchTool(),
-      web_fetch: webFetchTool(),
-      // Build a Microsoft Teams Adaptive Card from a short structured
-      // description. Pure transform (no side effects), so it is not
-      // approval-gated; the returned card is previewed on the Cards page and
-      // can be posted to a Teams webhook via the `teams()` plugin.
-      create_teams_card: teamsCardTool(),
-      // Databricks AI Search (Vector Search) from `@dbx-tools/search`.
-      // `search` looks up the most relevant rows in the app's configured
-      // index (hybrid semantic + keyword) under the caller's identity;
-      // `universal_search` fans a query across every configured index and
-      // merges the hits. Autocomplete is just a small-`limit` `search`.
-      search: searchTool(),
-      universal_search: universalSearchTool(),
-      // Write surface (enabled below via `search({ allowWrite: true })`):
-      // `add_documents` works with either provider. `create_index` and
-      // `sync_index` are added only for native Vector Search, where they
-      // provision or refresh workspace infrastructure.
-      add_documents: addDocumentsTool(),
-      ...(USE_VECTOR_SEARCH
-        ? {
-            create_index: createIndexTool(),
-            sync_index: syncIndexTool(),
-          }
-        : {}),
-    });
-    return agentTools;
-  },
-};
-const support = createAgent(supportDefinition);
+function demoGenieTools(plugins: MastraPlugins, agentMode: boolean): MastraTools {
+  if (agentMode) return plugins.genie?.toolkit() ?? {};
+
+  const spaceId = process.env.DATABRICKS_GENIE_SPACE_ID;
+  if (!spaceId) {
+    throw new Error("DATABRICKS_GENIE_SPACE_ID is required for the polling demo agent");
+  }
+
+  return buildGenieTools({
+    spaces: { default: spaceId },
+    config: { brand: defaultBrandContext, genieAgentMode: false },
+  });
+}
+
+function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition {
+  return {
+    name: agentMode ? "Support" : "Support (polling)",
+    instructions: [
+      "You are a data analyst helping customers explore a Databricks",
+      "Genie space. Default to driving the Genie tools (`ask_genie`,",
+      "`get_statement`, `prepare_chart`, `get_space_description`,",
+      "`get_space_serialized`) below - they are the only way to see",
+      "the real data, so use them whenever the user's question is",
+      "about the data the space covers. Reserve direct (no-tool)",
+      "answers for pure meta-questions about your own behaviour or",
+      "the conversation itself.",
+      "Graphiti MCP memory tools are also available. Use them when the user",
+      "asks to save, retrieve, or manage durable knowledge and preferences.",
+      "",
+      GENIE_INSTRUCTIONS,
+    ].join("\n"),
+    tools(plugins): MastraTools {
+      // Materialize the selected Genie toolkit before adding the demo tools.
+      // Building one contextually-typed object makes TypeScript recursively
+      // expand every source-linked Mastra tool schema together and exceeds its
+      // instantiation depth; Object.assign preserves the same flat runtime
+      // record without forcing that useless cross-tool type expansion.
+      const agentTools = Object.assign({}, demoGenieTools(plugins, agentMode)) as MastraTools;
+      Object.assign(agentTools, plugins.graphiti?.toolkit());
+      Object.assign(agentTools, {
+        // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
+        // is `undefined` when the plugin isn't registered, so the `?.`
+        // guard keeps this safe to copy into other apps.
+        // Spread other toolkits once registered (uncomment alongside
+        // adding `analytics()` / `files()` to the plugin list below):
+        // ...plugins.analytics.toolkit(),
+        // ...plugins.files.toolkit({ only: ["uploads.read"] }),
+        get_weather: tool({
+          description: "Weather",
+          schema: z.object({ city: z.string() }),
+          execute: async ({ city }) => `Sunny in ${city}`,
+        }),
+        // Approval-gated email tool from `@dbx-tools/email`. The
+        // model can call this freely; execution pauses until the user
+        // clicks Approve in the chat UI, then the message is sent for
+        // real over SMTP. The sender is derived from the on-behalf-of
+        // user's email on the configured `EMAIL_DOMAIN` (system mail, like
+        // the tunnel's sign-in code, uses `no-reply@` there instead); SMTP host /
+        // credentials come from the `email()` plugin config / env.
+        send_email: emailTool(),
+        // Web search + fetch from `@dbx-tools/appkit-web-search`.
+        // `web_search` runs the Databricks Model Serving native web-search
+        // tool, resolving its OWN web-search-capable model (Gemini/GPT) via
+        // the `webSearch()` plugin config - independent of this agent's chat
+        // model, which may not support web search. `web_fetch` reads a page
+        // via got-scraping. Both honor the plugin's optional URL allow-list.
+        web_search: webSearchTool(),
+        web_fetch: webFetchTool(),
+        // Build a Microsoft Teams Adaptive Card from a short structured
+        // description. Pure transform (no side effects), so it is not
+        // approval-gated; the returned card is previewed on the Cards page and
+        // can be posted to a Teams webhook via the `teams()` plugin.
+        create_teams_card: teamsCardTool(),
+        // Databricks AI Search (Vector Search) from `@dbx-tools/search`.
+        // `search` looks up the most relevant rows in the app's configured
+        // index (hybrid semantic + keyword) under the caller's identity;
+        // `universal_search` fans a query across every configured index and
+        // merges the hits. Autocomplete is just a small-`limit` `search`.
+        search: searchTool(),
+        universal_search: universalSearchTool(),
+        // Write surface (enabled below via `search({ allowWrite: true })`):
+        // `add_documents` works with either provider. `create_index` and
+        // `sync_index` are added only for native Vector Search, where they
+        // provision or refresh workspace infrastructure.
+        add_documents: addDocumentsTool(),
+        ...(USE_VECTOR_SEARCH
+          ? {
+              create_index: createIndexTool(),
+              sync_index: syncIndexTool(),
+            }
+          : {}),
+      });
+      return agentTools;
+    },
+  };
+}
+const support = createAgent(buildSupportDefinition(true));
+const supportPolling = createAgent(buildSupportDefinition(false));
 
 const host = process.env.HOST ?? "127.0.0.1";
 
@@ -336,16 +352,17 @@ await appkit.createApp({
     mastra({
       storage: mastraStorage,
       memory: mastraMemory,
-      agents: support,
+      agents: { support, "support-polling": supportPolling },
+      defaultAgent: "support",
+      genieAgentMode: true,
       // Chat runs on-behalf-of the signed-in user by default, so the caller must
       // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
       // genieIdentity: "service-principal" here) to run the agents' Databricks
       // calls as the app service principal instead, so any account user who can
-      // open the app can chat even without workspace membership. The DEPLOYED
-      // demo sets `auto` (see databricks.yml): it is served through the OTP
-      // tunnel, where a caller proves an email but forwards no Databricks
-      // token, so per-request fallback is the only setting that serves the
-      // tunnel and the workspace front door correctly at once.
+      // open the app can chat even without workspace membership. The deployed
+      // demo uses that mode because its OTP entrance forwards no Databricks
+      // token and front-door sessions can temporarily retain an older scope set.
+      // User attribution still partitions memory, cache, and traces.
       // Themes charts from the `render_data` / `prepare_chart` tools with the
       // same brand the client UI (`BrandProvider`) and email layouts use, so a
       // generated chart matches the surrounding AppKit UI instead of falling
