@@ -112,4 +112,70 @@ describe("superviseProcessForever", () => {
       supervisor.stop();
     }
   });
+
+  it("restarts a child after consecutive failed public liveness probes", async () => {
+    const children: FakeChild[] = [];
+    let probes = 0;
+    const supervisor = superviseProcessForever({
+      name: "test-client",
+      logger: log.logger("test:supervisor"),
+      retryDelaysMs: [0],
+      healthCheckGraceMs: 1,
+      healthCheckIntervalMs: 1,
+      healthCheckFailures: 2,
+      isHealthy: () => {
+        probes += 1;
+        return false;
+      },
+      start: () => {
+        const child = new FakeChild();
+        children.push(child);
+        return child as unknown as ChildProcess;
+      },
+    });
+
+    try {
+      await waitFor(() => children.length === 1);
+      await waitFor(() => probes >= 2);
+      await waitFor(() => children[0]!.signals.includes("SIGTERM"));
+      children[0]!.emit("exit", 1, "SIGTERM");
+      await waitFor(() => children.length === 2);
+    } finally {
+      supervisor.stop();
+    }
+  });
+
+  it("does not restart when a single probe fails below the threshold", async () => {
+    const children: FakeChild[] = [];
+    let probes = 0;
+    const supervisor = superviseProcessForever({
+      name: "test-client",
+      logger: log.logger("test:supervisor"),
+      retryDelaysMs: [0],
+      healthCheckGraceMs: 1,
+      healthCheckIntervalMs: 5,
+      healthCheckFailures: 3,
+      isHealthy: () => {
+        probes += 1;
+        // First probe fails; subsequent probes succeed so we never hit threshold.
+        return probes > 1;
+      },
+      start: () => {
+        const child = new FakeChild();
+        children.push(child);
+        return child as unknown as ChildProcess;
+      },
+    });
+
+    try {
+      await waitFor(() => children.length === 1);
+      await waitFor(() => probes >= 2);
+      // Give the supervisor a couple more turns; it must not have killed.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.equal(children[0]!.signals.length, 0);
+      assert.equal(children.length, 1);
+    } finally {
+      supervisor.stop();
+    }
+  });
 });

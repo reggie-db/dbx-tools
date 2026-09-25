@@ -30,4 +30,4 @@ export type { AuthGateConfig, SendCodeOptions, ResolvedAuthGateConfig, AuthGateA
 export type { PortrInstallOptions, PortrConfig } from "./src/portr.ts";
 export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
 export type { SigningKey } from "./src/signing-key.ts";
-export type { ProcessSupervisor } from "./src/supervisor.ts";
+export type { ProcessSupervisor, ProcessSupervisorOptions } from "./src/supervisor.ts";

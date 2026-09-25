@@ -89,6 +89,11 @@ middleware on the app's OWN Express server (no separate proxy process).
 - Supervised teardown - `tunnelInterceptor` binds portr through the `createApp`
   interceptor context, so the app and the tunnel are tied together: if either
   exits, `bindProcess` brings the whole set down and passes signals through.
+- Public liveness probes - while portr is running, the supervisor HEADs the
+  public URL. An `x-portr-error: unregistered-subdomain` (or any other
+  `x-portr-error`) kills the child so the forever-loop restarts it. Process-exit
+  supervision alone is not enough: portr can stay alive after the edge drops the
+  registration, leaving the subdomain dark until a full app bounce.
 - The gate fails fast when email is not configured for SMTP, because a gate that
   cannot send codes locks everyone out. `@dbx-tools/email` is an OPTIONAL peer
   dependency, imported lazily; the app that mounts the gate provides it.
