@@ -176,6 +176,46 @@ capabilities from the embedded snapshot without blocking model listing. This
 avoids embedding a handwritten model/version matrix while still using the
 unified local execution tool shape expected by current Codex clients.
 
+### Codex Catalogue Discovery
+
+Codex discovery is a separate wire contract over the same route:
+
+- a standard `GET /v1/models` receives the OpenAI `data` envelope;
+- a request carrying `originator: codex_cli_rs` receives the Codex `models`
+  envelope used by `codex debug models` and the `/model` picker.
+
+Codex validates the complete remote catalogue before merging it with its bundled
+models. One incompatible record causes it to retain the bundled catalogue.
+Reasoning levels must therefore remain `{ effort, description }` objects,
+`web_search_tool_type` must remain a non-null enum value, and
+`supports_search_tool` carries the independent capability flag.
+
+The Codex envelope deliberately excludes embeddings, Claude, Gemini,
+unrecognized identities, and endpoint names without the required
+`databricks-` prefix. Those models do not become compatible merely because they
+appear in the standard OpenAI envelope; adding a family requires separate
+Responses and tool-replay validation.
+
+Compare remote and bundled discovery without changing provider configuration:
+
+```sh
+codex debug models | jq '.models[] | {slug, visibility}'
+codex debug models --bundled | jq '.models[] | {slug, visibility}'
+```
+
+Run the bounded real-client regression with an installed Codex 0.148.0:
+
+```sh
+RUN_CODEX_DISCOVERY_TESTS=1 RUSTC_WRAPPER= \
+  cargo test -p dbx-tools-model --test model \
+  codex_real_client_discovers_fixture_catalogue --offline -- --nocapture
+```
+
+The test builds the catalogue through `models_payload_with_capabilities`, serves
+it from a loopback-only fixture, uses synthetic authentication and an isolated
+temporary `CODEX_HOME`, verifies the expected HTTP request, and compares
+discovered slugs rather than unstable total counts.
+
 Streaming requests use SSE without buffering the upstream response. Matching
 protocols pass the upstream byte stream through directly, including Chat
 Completions to Chat Completions and Responses to Responses for Codex clients.

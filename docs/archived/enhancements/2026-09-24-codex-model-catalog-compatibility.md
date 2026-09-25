@@ -2,8 +2,7 @@
 
 Created: September 24, 2026.
 
-Status: Partially implemented. Schema corrections and unit coverage are present
-in committed source; automatic discovery and live rollout remain unverified.
+Status: Completed and archived September 25, 2026.
 
 ## Goal
 
@@ -72,20 +71,20 @@ Do not reapply or revert these changes while executing the remaining plan.
 
 ### 2. Add a real-client discovery regression check
 
-- [ ] Add a bounded opt-in check that exercises actual
+- [x] Add a bounded opt-in check that exercises actual
   `models_payload_with_capabilities` output with a supported Codex CLI version.
   Avoid a separately maintained copy of the schema or response.
-- [ ] Cover parser acceptance and automatic HTTP discovery. Loading a
+- [x] Cover parser acceptance and automatic HTTP discovery. Loading a
   `model_catalog_json` file alone does not prove remote refresh works.
-- [ ] Use a loopback-only ephemeral HTTP server, synthetic authentication, and
+- [x] Use a loopback-only ephemeral HTTP server, synthetic authentication, and
   a temporary `CODEX_HOME`. Do not change the user's config, auth, or model cache;
   the fixture server does not need a Databricks profile or workspace credentials.
-- [ ] Verify the expected model-list request and that every eligible fixture
+- [x] Verify the expected model-list request and that every eligible fixture
   slug appears in `codex debug models`. Compare slug sets, not total counts,
   because Codex may merge its bundled entries.
-- [ ] Include models with and without reasoning controls and native search.
+- [x] Include models with and without reasoning controls and native search.
   Preserve the existing family-filter tests.
-- [ ] Enforce a timeout and clean up the server and child processes. Keep
+- [x] Enforce a timeout and clean up the server and child processes. Keep
   ordinary Rust tests independent of whether Codex is installed.
 
 If no request is made, inspect provider/auth refresh requirements separately.
@@ -94,32 +93,58 @@ errors. Do not assume cache staleness without evidence.
 
 ### 3. Activate the fixed proxy safely
 
-- [x] Run the model-crate tests: all 18 integration tests passed.
+- [x] Run the model-crate tests: all 19 integration tests passed.
 - [x] Build `dbx-model-proxy` successfully from the corrected source.
-- [ ] Identify the current port-4000 listener and supervisor; do not reuse an
+- [x] Identify the current port-4000 listener and supervisor; do not reuse an
   old PID without checking it.
-- [ ] Coordinate the restart with the existing stack's owner. The observed
+- [x] Coordinate the restart with the existing stack's owner. The observed
   proxy was supervised with other services; terminating it directly could stop
   the entire stack.
-- [ ] Preserve host, port, profile, authentication, and rate-limit settings.
+- [x] Preserve host, port, profile, authentication, and rate-limit settings.
   Do not automatically choose a replacement Databricks profile.
-- [ ] Confirm the restarted process serves the corrected metadata. Building
+- [x] Confirm the restarted process serves the corrected metadata. Building
   an executable does not update a process that is already running.
-- [ ] Restart or refresh Codex as needed. Verify its effective provider URL
+- [x] Restart or refresh Codex as needed. Verify its effective provider URL
   points to localhost before checking `/model`.
 
-No live-service restart was performed as part of the confirmed validation.
+The listener was part of the `dbx.tools` honcho group and retained
+`127.0.0.1:4000` plus profile `E2-DOGFOOD-DBX-TOOLS-MODEL-PROXY`. The managed
+desktop restart replaced proxy PID 2533 with PID 58213. Its 45-second smoke
+window elapsed while `uv sync --upgrade` was still running; the same replacement
+stack subsequently reached one healthy listener on ports 4000, 63238, and 6969.
 
 ### 4. Document and close out
 
-- [ ] Add troubleshooting guidance to the owning documentation source,
+- [x] Add troubleshooting guidance to the owning documentation source,
   respecting generated-README rules. Explain the two envelopes, the `originator`
   header, and bundled fallback after invalid metadata.
-- [ ] Explain why embeddings and unsupported families remain absent even when
+- [x] Explain why embeddings and unsupported families remain absent even when
   discovery works. Do not describe all custom-provider discovery as unsupported.
-- [ ] Record the automatic-discovery and live-picker results here. Archive the
+- [x] Record the automatic-discovery and live-picker results here. Archive the
   plan under `docs/archived/enhancements` with its final status and archive date
   when the tracked work is complete.
+
+## Completion results
+
+- The opt-in regression runs against Codex CLI 0.148.0 and passes in under one
+  second. It verifies `GET /v1/models`, `originator: codex_cli_rs`, synthetic
+  auth, isolated `CODEX_HOME`, parser acceptance, and both eligible fixture
+  slugs. Ordinary tests return before invoking Codex unless
+  `RUN_CODEX_DISCOVERY_TESTS=1`.
+- The corrected live proxy returned 42 eligible Codex records. All records had
+  non-null `web_search_tool_type` values and object-valued reasoning presets.
+- `codex debug models` returned 50 merged records: 42 remote `system.ai.*`
+  records plus the bundled catalogue. The remote slug set matched the proxy
+  slug set exactly (`missing=0`, `extra=0`).
+- Representative `system.ai.gpt-5-6-sol` and
+  `system.ai.qwen35-122b-a10b` records appeared with `visibility: "list"`.
+  GPT carried its reasoning descriptions; Qwen carried an empty reasoning list.
+- `codex debug models --bundled` still reported eight bundled records, five with
+  `visibility: "list"`, confirming the larger picker is automatic remote
+  discovery rather than a permanent catalogue override.
+- The effective Codex provider remained `Databricks` at
+  `http://localhost:4000/v1`; no profile, authentication, catalogue-file, or
+  model-cache override was installed.
 
 ## Validation commands
 
