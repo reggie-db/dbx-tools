@@ -1,6 +1,6 @@
 # UniFFI Package Boundaries
 
-Status: implemented.
+Status: Implemented and archived September 25, 2026.
 
 ## Package Rule
 

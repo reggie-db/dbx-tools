@@ -33,6 +33,8 @@ export interface TunnelInterceptorOptions {
   publicDomain?: string;
   /** portr subdomain (else derived from {@link publicDomain}). */
   subdomain?: string;
+  /** Portr SSH control endpoint. Env `PORTR_SSH_URL`; defaults to the Portr host on port `4444`. */
+  portrSshUrl?: string;
   /**
    * The PUBLIC port portr forwards to - the port the app itself listens on.
    * Defaults to the Databricks Apps runtime contract `DATABRICKS_APP_PORT`
@@ -143,6 +145,7 @@ export function tunnelInterceptor(
       const portrConfig = resolvePortrConfig({
         publicDomain: options.publicDomain,
         subdomain: options.subdomain,
+        sshUrl: options.portrSshUrl,
         port,
       });
       if (portrConfig) {

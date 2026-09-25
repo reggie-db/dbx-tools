@@ -234,16 +234,17 @@ root.pnpmWorkspace?.allowBuild("@google/genai");
 root.pnpmWorkspace?.addCatalog("marked", "^18.0.5");
 root.pnpmWorkspace?.addCatalog("@react-email/components", "^1.0.12");
 root.pnpmWorkspace?.addCatalog("@react-email/render", "^2.1.0");
-root.pnpmWorkspace?.addCatalog("@mastra/core", "1.47.0");
-root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.6.0");
-root.pnpmWorkspace?.addCatalog("@mastra/express", "1.4.2");
-root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.2.0");
-root.pnpmWorkspace?.addCatalog("@mastra/mcp", "1.12.0");
+root.pnpmWorkspace?.addCatalog("@mastra/core", "1.67.0");
+root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.10.3");
+root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.11");
+root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.3.1");
+root.pnpmWorkspace?.addCatalog("@mastra/mcp", "1.18.0");
 root.pnpmWorkspace?.addCatalog("@modelcontextprotocol/sdk", "^1.29.0");
-root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.21.2");
-root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.15.2");
-root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.4.0");
-root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.14.2");
+root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.30.0");
+root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.17.8");
+root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.8");
+root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.25.0");
+root.pnpmWorkspace?.addCatalog("@pydantic/monty", "0.0.23");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
 // pulls it, but the pin belongs with the other add-on runtime deps.
@@ -262,7 +263,7 @@ root.pnpmWorkspace?.addCatalog("tw-animate-css", "^1.4.0");
 root.pnpmWorkspace?.addCatalog("lucide-react", "^0.554.0");
 root.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
 root.pnpmWorkspace?.addCatalog("streamdown", "^2.5.0");
-root.pnpmWorkspace?.addCatalog("@mastra/client-js", "1.28.0");
+root.pnpmWorkspace?.addCatalog("@mastra/client-js", "1.46.0");
 root.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
 root.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
 root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
@@ -570,6 +571,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@mastra/observability@catalog:",
     "@mastra/otel-bridge@catalog:",
     "@mastra/pg@catalog:",
+    "@pydantic/monty@catalog:",
     "@opentelemetry/api@catalog:",
     "zod@catalog:",
     "pg@^8.22.0",

@@ -155,6 +155,11 @@
       "type": "runtime"
     },
     {
+      "name": "@pydantic/monty",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "express",
       "version": "catalog:",
       "type": "runtime"

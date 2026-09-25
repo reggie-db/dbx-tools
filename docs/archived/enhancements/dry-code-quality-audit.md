@@ -1,5 +1,7 @@
 # DRY And Code Quality Audit
 
+Status: Completed and archived September 25, 2026.
+
 ## Scope
 
 This audit covers the Rust Databricks, model, model proxy, and Lakebase proxy

@@ -22,6 +22,7 @@ type ProcessOutcome = {
   unhealthy?: true;
 };
 
+/** Retry, shutdown, and liveness policy for one supervised child process. */
 export interface ProcessSupervisorOptions {
   name: string;
   logger: Logger;

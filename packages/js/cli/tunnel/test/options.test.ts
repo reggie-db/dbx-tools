@@ -125,6 +125,7 @@ describe("resolveTunnelOptions", () => {
     assert.deepEqual(resolved.portr, {
       subdomain: "demo",
       server: "apps.example.com",
+      sshUrl: "apps.example.com:4444",
       token: "portr_test_token",
       port: 8123,
     });

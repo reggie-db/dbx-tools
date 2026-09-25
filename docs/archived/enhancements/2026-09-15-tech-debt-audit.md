@@ -2,9 +2,9 @@
 
 Date: 2026-09-15
 
-Status: active. Update finding status in this document as work lands. Move this
-file to `docs/archived/enhancements` when the tracked work is complete or
-intentionally closed.
+Status: Completed and archived September 25, 2026. The finding rows record the
+implemented disposition; deferred low-priority metadata remains design history,
+not active enhancement work.
 
 Scope: repository-wide DRY, architecture, code quality, documentation, and
 source-code documentation. Full CI and test-suite execution is intentionally

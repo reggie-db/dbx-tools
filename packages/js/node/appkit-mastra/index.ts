@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.6.216";
+export const PACKAGE_VERSION = "0.6.217";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as config from "./src/config.ts";
@@ -16,12 +16,14 @@ export * as mcp from "./src/mcp.ts";
 export * as memory from "./src/memory.ts";
 export * as mlflow from "./src/mlflow.ts";
 export * as model from "./src/model.ts";
+export * as montySandbox from "./src/monty-sandbox.ts";
 export * as observability from "./src/observability.ts";
 export * as pagination from "./src/pagination.ts";
 export * as plugin from "./src/plugin.ts";
 export * as processors from "./src/processors.ts";
 export * as remoteSkills from "./src/remote-skills.ts";
 export * as rest from "./src/rest.ts";
+export * as sandbox from "./src/sandbox.ts";
 export * as server from "./src/server.ts";
 export * as serving from "./src/serving.ts";
 export * as servingSanitize from "./src/serving-sanitize.ts";
@@ -53,6 +55,8 @@ export type { ResolvedMcp } from "./src/mcp.ts";
 export { MemoryBuilder } from "./src/memory.ts";
 export type { LogFeedbackParams } from "./src/mlflow.ts";
 export type { BuildModelOverrides } from "./src/model.ts";
+export { MontySandbox } from "./src/monty-sandbox.ts";
+export type { MontySandboxOptions } from "./src/monty-sandbox.ts";
 export type { BuildObservabilityOptions } from "./src/observability.ts";
 export type { PerPageBounds } from "./src/pagination.ts";
 export { MastraPlugin, mastra } from "./src/plugin.ts";
@@ -60,11 +64,13 @@ export { stripStaleChartsProcessor, ResultProcessor } from "./src/processors.ts"
 export { AITOOLS_SOURCE } from "./src/remote-skills.ts";
 export type { AiToolsSource, RemoteSkillSourceOptions, RemoteSkillSource, RemoteSkillsOption, ProvisionRemoteSkillsOptions, ProvisionedRemoteSkills, RemoteSkillCacheEntry, RemoteSkillsMetadata } from "./src/remote-skills.ts";
 export type { DatabricksFetchInit } from "./src/rest.ts";
+export { DatabricksSandbox } from "./src/sandbox.ts";
+export type { DatabricksSandboxOptions, DatabricksWorkspaceSandboxOptions } from "./src/sandbox.ts";
 export { MastraServer } from "./src/server.ts";
 export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";
 export { MASTRA_MODEL_OVERRIDE_KEY } from "./src/serving.ts";
 export type { ModelOverrideRequest } from "./src/serving.ts";
-export type { ServingChatMessage } from "./src/serving-sanitize.ts";
+export type { ServingChatMessage, RewrittenServingRequest } from "./src/serving-sanitize.ts";
 export { ASSISTANT_SHARED_SKILLS_PATH } from "./src/skill-paths.ts";
 export { STATEMENT_ROW_CAP } from "./src/statement.ts";
 export { TYPOGRAPHY_RULE } from "./src/style.ts";
@@ -74,4 +80,4 @@ export type { ListThreadsOptions, DeleteThreadOptions, RenameThreadOptions, Thre
 export { TRACE_IO_LIMIT, MLFLOW_SPAN_INPUTS_ATTR, MLFLOW_SPAN_OUTPUTS_ATTR } from "./src/trace-io.ts";
 export type { SchemaIssues } from "./src/validation.ts";
 export { DEFAULT_SKILL_FOLDERS } from "./src/workspaces.ts";
-export type { WorkspaceMountContext, SkillFolderValue, SkillFolderOptions, WorkspaceMountContribution, WorkspaceMountResolver, DefaultSkillFolderName, CreateWorkspaceOptions } from "./src/workspaces.ts";
+export type { WorkspaceMountContext, SkillFolderValue, SkillFolderOptions, WorkspaceMountContribution, WorkspaceMountResolver, DefaultSkillFolderName, WorkspaceSandboxSelection, CreateWorkspaceOptions } from "./src/workspaces.ts";

@@ -54,6 +54,7 @@
     "@mastra/pg": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
     "@opentelemetry/api": "catalog:",
+    "@pydantic/monty": "catalog:",
     "express": "catalog:",
     "pg": "^8.22.0",
     "zod": "catalog:"
@@ -72,7 +73,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.216",
+  "version": "0.6.217",
   "types": "index.ts",
   "type": "module",
   "exports": {

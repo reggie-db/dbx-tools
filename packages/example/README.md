@@ -32,6 +32,7 @@ await createApp({
     mastra({
       storage: true,
       memory: true,
+      sandbox: true,
       agents: { support, "support-polling": supportPolling },
       defaultAgent: "support",
       genieAgentMode: true,

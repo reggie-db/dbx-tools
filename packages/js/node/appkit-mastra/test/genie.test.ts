@@ -28,10 +28,7 @@ describe("Genie Mastra tools", () => {
   it("routes Agent Mode inline rows to render_data instead of prepare_chart", () => {
     assert.match(GENIE_INSTRUCTIONS, /Agent Mode does NOT expose a\s+`statement_id`/);
     assert.match(GENIE_INSTRUCTIONS, /call `render_data` with/);
-    assert.match(
-      GENIE_INSTRUCTIONS,
-      /Only that real statement id\s+belongs in `prepare_chart`/,
-    );
+    assert.match(GENIE_INSTRUCTIONS, /Only that real statement id\s+belongs in `prepare_chart`/);
   });
 
   it("isolates parallel calls while preserving sequential conversation reuse", async () => {

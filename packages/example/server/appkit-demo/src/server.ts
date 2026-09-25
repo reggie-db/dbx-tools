@@ -352,6 +352,9 @@ await appkit.createApp({
     mastra({
       storage: mastraStorage,
       memory: mastraMemory,
+      // Run workspace command tools in the app service principal's stable
+      // Databricks Sandbox. Memory and chart ownership remain per caller.
+      sandbox: true,
       agents: { support, "support-polling": supportPolling },
       defaultAgent: "support",
       genieAgentMode: true,

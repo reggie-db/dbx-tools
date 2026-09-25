@@ -1,7 +1,66 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { normalizePortrOutput, portrAssetName, probePortrPublicUrl } from "../src/portr.ts";
+import {
+  normalizePortrOutput,
+  portrAssetName,
+  probePortrPublicUrl,
+  resolvePortrConfig,
+  writePortrConfig,
+} from "../src/portr.ts";
+
+describe("resolvePortrConfig", () => {
+  it("uses port 4444 by default and accepts a port 443 SSH endpoint", () => {
+    assert.deepEqual(
+      resolvePortrConfig({
+        publicDomain: "demo.apps.dbx.tools",
+        token: "secret",
+        port: 8000,
+      }),
+      {
+        subdomain: "demo",
+        server: "apps.dbx.tools",
+        sshUrl: "apps.dbx.tools:4444",
+        token: "secret",
+        port: 8000,
+      },
+    );
+    assert.equal(
+      resolvePortrConfig({
+        publicDomain: "demo.apps.dbx.tools",
+        sshUrl: "portr-ssh.apps.dbx.tools:443",
+        token: "secret",
+        port: 8000,
+      })?.sshUrl,
+      "portr-ssh.apps.dbx.tools:443",
+    );
+  });
+});
+
+describe("writePortrConfig", () => {
+  it("writes the resolved SSH endpoint", async () => {
+    const homeDir = await mkdtemp(join(os.tmpdir(), "portr-config-"));
+    try {
+      await writePortrConfig(
+        {
+          subdomain: "demo",
+          server: "apps.dbx.tools",
+          sshUrl: "portr-ssh.apps.dbx.tools:443",
+          token: "secret",
+          port: 8000,
+        },
+        { HOME: homeDir },
+      );
+      const rendered = await readFile(join(homeDir, ".portr", "config.yaml"), "utf8");
+      assert.match(rendered, /^ssh_url: portr-ssh\.apps\.dbx\.tools:443$/m);
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("normalizePortrOutput", () => {
   it("removes pictographs from portr lifecycle logs", () => {
@@ -34,7 +93,10 @@ describe("probePortrPublicUrl", () => {
   it("treats an auth challenge as healthy (tunnel is registered)", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () =>
-      new Response(null, { status: 401, headers: { "content-type": "text/html" } })) as typeof fetch;
+      new Response(null, {
+        status: 401,
+        headers: { "content-type": "text/html" },
+      })) as typeof fetch;
     try {
       assert.equal(await probePortrPublicUrl("https://lensiq.apps.dbx.tools"), true);
     } finally {
