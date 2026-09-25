@@ -2,7 +2,9 @@
 
 Date: 2026-08-04
 
-Status: proposed.
+Status: Closed without implementation and archived September 25, 2026. The
+topic bus remains deliberately live-only; this file is proposal history, not
+active enhancement work.
 
 ## Purpose
 

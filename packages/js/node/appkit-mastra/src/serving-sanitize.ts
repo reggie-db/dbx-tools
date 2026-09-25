@@ -5,7 +5,8 @@
  * Outbound ({@link rewriteServingBody}), because the transcript Mastra
  * persists is not always a transcript the provider will accept back:
  * Databricks-hosted Claude rejects replayed extended-thinking blocks and reads
- * a trailing assistant message as a prefill request.
+ * a trailing assistant message as a prefill request, while GPT Astra requires
+ * `reasoning_effort: "none"` when Chat Completions carries function tools.
  *
  * Inbound ({@link rewriteServingResponseBody} and
  * {@link rewriteServingResponseStream}), because Databricks-hosted Gemini and
@@ -56,7 +57,8 @@ export function rewriteServingBody(body: string): string {
 
   // Runs regardless of `messages`: Databricks refuses to parse a body carrying
   // an unknown top-level field, so this failure is not specific to a transcript.
-  let changed = openaiChat.stripUnsupportedChatFields(parsed).length > 0;
+  const astraTools = applyAstraToolCompatibility(parsed);
+  let changed = openaiChat.stripUnsupportedChatFields(parsed).length > 0 || astraTools;
 
   if (Array.isArray(parsed.messages)) {
     const messages = parsed.messages as ServingChatMessage[];
@@ -68,6 +70,52 @@ export function rewriteServingBody(body: string): string {
   }
 
   return changed ? JSON.stringify(parsed) : body;
+}
+
+/** Prepared fetch arguments plus the post-sanitize body used for diagnostics. */
+export interface RewrittenServingRequest {
+  input: Parameters<typeof fetch>[0];
+  init: Parameters<typeof fetch>[1];
+  body: string;
+}
+
+/**
+ * Read and rewrite a serving POST whether its JSON body lives on `init` or on
+ * a `Request`. A changed Request is rebuilt without stale byte headers.
+ */
+export async function rewriteServingRequest(
+  input: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+): Promise<RewrittenServingRequest> {
+  const request = new Request(input, init);
+  const body = await request.clone().text();
+  const rewritten = rewriteServingBody(body);
+  if (rewritten === body) return { input, init, body };
+
+  const headers = new Headers(request.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  return {
+    input: new Request(request, { body: rewritten, headers }),
+    init: undefined,
+    body: rewritten,
+  };
+}
+
+/**
+ * Add the Chat Completions option Databricks-hosted GPT Astra requires when
+ * function tools are present. An explicit caller value always wins.
+ */
+export function applyAstraToolCompatibility(body: Record<string, unknown>): boolean {
+  if ("reasoning_effort" in body || !Array.isArray(body.tools) || body.tools.length === 0) {
+    return false;
+  }
+  const model = string.trimToNull(body.model);
+  if (!model) return false;
+  const tokens = new Set(string.tokenizeWithOptions({ lowerCase: true }, model));
+  if (!tokens.has("gpt") || !tokens.has("astra")) return false;
+  body.reasoning_effort = "none";
+  return true;
 }
 
 /**

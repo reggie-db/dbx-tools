@@ -24,7 +24,7 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { classes, resolve } from "@dbx-tools/model";
+import { classes, invoke, resolve } from "@dbx-tools/model";
 import { functionModule, json, log, net } from "@dbx-tools/shared-core";
 import { model } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
@@ -32,7 +32,7 @@ import type { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
 import {
-  rewriteServingBody,
+  rewriteServingRequest,
   rewriteServingResponseBody,
   rewriteServingResponseStream,
 } from "./serving-sanitize.ts";
@@ -131,16 +131,16 @@ export async function buildModel(
   };
 }
 
-/** Path prefix that identifies a Databricks Model Serving REST call. */
-const SERVING_ENDPOINTS_PATH_PREFIX = "/serving-endpoints/";
+/** Chat Completions route whose provider-specific wire shapes are normalized here. */
+const CHAT_COMPLETIONS_PATH = `/${invoke.CHAT_COMPLETIONS_PATH}`;
 
 /**
- * Install a single shared `globalThis.fetch` wrapper for every POST to
- * `/serving-endpoints/...`. The wrapper does two things:
+ * Install a single shared `globalThis.fetch` wrapper for Chat Completions
+ * requests. The wrapper does three things:
  *
- *   1. Rewrites the outgoing `messages` array to repair Mastra/AI SDK
- *      stream-replay quirks that Databricks-hosted Claude rejects (see
- *      {@link rewriteServingBody} in `./serving-sanitize.js`).
+ *   1. Rewrites outgoing JSON from either `init.body` or a `Request` to repair
+ *      provider-specific request constraints (see {@link rewriteServingRequest}
+ *      in `./serving-sanitize.js`).
  *   2. At `LOG_LEVEL=debug`, dumps the (post-sanitize) JSON body so
  *      4xx debugging doesn't have to fight AI SDK's `[Array]`
  *      formatter.
@@ -154,32 +154,30 @@ const SERVING_ENDPOINTS_PATH_PREFIX = "/serving-endpoints/";
  * step.
  */
 const setupFetchInterceptor = functionModule.memoize((): void => {
+  globalThis.fetch = createServingFetchInterceptor(globalThis.fetch.bind(globalThis));
+});
+
+/** Build the serving fetch wrapper; exported for transport-level regression tests. */
+export function createServingFetchInterceptor(original: typeof fetch): typeof fetch {
   const logger = log.logger("mastra/llm");
-  const original = globalThis.fetch.bind(globalThis);
-  globalThis.fetch = (async (input, init) => {
+  return (async (input, init) => {
     const url = net.urlBuilder(input);
-    if (
-      !url ||
-      !url.pathname.startsWith(SERVING_ENDPOINTS_PATH_PREFIX) ||
-      typeof init?.body !== "string"
-    ) {
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+    if (!url || url.pathname !== CHAT_COMPLETIONS_PATH || method.toUpperCase() !== "POST") {
       return original(input, init);
     }
-    const rewritten = rewriteServingBody(init.body);
-    if (rewritten !== init.body) {
-      init = { ...init, body: rewritten };
-    }
-    const parsed = json.parse<unknown>(rewritten);
+    const rewritten = await rewriteServingRequest(input, init);
+    const parsed = json.parse<unknown>(rewritten.body);
     logger.debug(
       "POST",
       parsed === undefined
         ? { url: url.toString(), bodyType: "non-JSON" }
         : { url: url.toString(), body: parsed },
     );
-    const response = await original(input, init);
+    const response = await original(rewritten.input, rewritten.init);
     return repairServingResponse(response);
   }) as typeof globalThis.fetch;
-});
+}
 
 /**
  * Rewrite a serving response whose body needs repair, leaving unsupported

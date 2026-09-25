@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { createServingFetchInterceptor } from "../src/model.ts";
 import {
+  rewriteServingBody,
+  rewriteServingRequest,
   rewriteServingResponseBody,
   rewriteServingResponseStream,
 } from "../src/serving-sanitize.ts";
@@ -28,6 +31,113 @@ const geminiPartsResponse = {
   usage: { prompt_tokens: 2098, completion_tokens: 5, total_tokens: 2201 },
   object: "chat.completion",
 };
+
+describe("serving request sanitize", () => {
+  it("adds reasoning_effort none for Astra with tools", () => {
+    const result = JSON.parse(
+      rewriteServingBody(
+        JSON.stringify({
+          model: "databricks-gpt-6-astra",
+          messages: [{ role: "user", content: "hello" }],
+          tools: [{ type: "function", function: { name: "lookup" } }],
+        }),
+      ),
+    );
+    assert.equal(result.reasoning_effort, "none");
+  });
+
+  it("leaves other models and Astra without tools unchanged", () => {
+    for (const body of [
+      JSON.stringify({
+        model: "databricks-claude-opus-4-8",
+        tools: [{ type: "function" }],
+      }),
+      JSON.stringify({ model: "databricks-gpt-6-astra", tools: [] }),
+      JSON.stringify({ model: "databricks-gpt-6-astra" }),
+    ]) {
+      assert.equal(rewriteServingBody(body), body);
+    }
+  });
+
+  it("preserves an explicit Astra reasoning effort", () => {
+    const body = JSON.stringify({
+      model: "system.ai.databricks-gpt-6-astra",
+      tools: [{ type: "function" }],
+      reasoning_effort: "high",
+    });
+    assert.equal(rewriteServingBody(body), body);
+  });
+
+  it("rewrites a Request-owned body and drops stale byte headers", async () => {
+    const request = new Request("https://example.com/serving-endpoints/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-length": "1",
+        "content-encoding": "gzip",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "databricks-gpt-6-astra",
+        tools: [{ type: "function" }],
+      }),
+    });
+
+    const rewritten = await rewriteServingRequest(request);
+    assert.ok(rewritten.input instanceof Request);
+    assert.equal(rewritten.init, undefined);
+    assert.equal(rewritten.input.headers.get("content-length"), null);
+    assert.equal(rewritten.input.headers.get("content-encoding"), null);
+    assert.equal(JSON.parse(await rewritten.input.clone().text()).reasoning_effort, "none");
+  });
+
+  it("intercepts Request-owned bodies without an init object", async () => {
+    let received: Request | undefined;
+    const original = (async (input, init) => {
+      received = new Request(input, init);
+      return new Response("{}", {
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const wrapped = createServingFetchInterceptor(original);
+    const request = new Request("https://example.com/serving-endpoints/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "databricks-gpt-6-astra",
+        tools: [{ type: "function" }],
+      }),
+    });
+
+    await wrapped(request);
+
+    assert.ok(received);
+    assert.equal(JSON.parse(await received.clone().text()).reasoning_effort, "none");
+  });
+
+  it("does not apply Chat Completions mutations to Responses requests", async () => {
+    let received: Request | undefined;
+    const original = (async (input, init) => {
+      received = new Request(input, init);
+      return new Response("{}", {
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const wrapped = createServingFetchInterceptor(original);
+    const body = JSON.stringify({
+      model: "databricks-gpt-6-astra",
+      tools: [{ type: "function" }],
+    });
+
+    await wrapped(
+      new Request("https://example.com/serving-endpoints/responses", {
+        method: "POST",
+        body,
+      }),
+    );
+
+    assert.ok(received);
+    assert.equal(await received.text(), body);
+  });
+});
 
 describe("serving response sanitize", () => {
   it("flattens Gemini's content parts to the string the AI SDK expects", () => {

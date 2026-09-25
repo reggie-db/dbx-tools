@@ -25,6 +25,8 @@ Key features:
   when they cannot.
 - Durable conversations: Lakebase-backed Mastra storage provides thread
   history, message persistence, and optional vector memory.
+- Isolated command execution: auto-created workspaces use Databricks Sandbox by
+  default, created lazily per attributed user outside the App container.
 - Rich data answers: Genie tools, statement fetches, chart preparation, and
   embed markers let an agent answer with text plus delayed chart/table payloads.
 - Operational surfaces: model-list routes, feedback routes, MCP exposure,
@@ -94,7 +96,7 @@ Benefits of importing the package:
 
 - `plugin.mastra()` registers a full AppKit plugin named `mastra`.
 - `agents.createAgent()` keeps agent definitions typed and applies the default
-  Databricks workspace/skill mounts.
+  Databricks workspace/skill mounts and Databricks Sandbox command execution.
 - `agents.tool()` lets the same AppKit-shaped tool body work in this Mastra
   plugin.
 - `genie.GENIE_INSTRUCTIONS` and `plugins.genie.toolkit()` give agents a
@@ -261,6 +263,79 @@ which is how `workspace-team-app` drops out when no user email is stamped.
 `skillFolders` given. Production workspace mounts require a forwarded token
 with `workspace`, `workspace.workspace`, or `all-apis` scope. Development mode
 skips that gate for local iteration.
+
+## Databricks Sandbox
+
+Auto-created agent workspaces prefer the Beta
+[Databricks Sandbox](https://docs.databricks.com/aws/en/compute/serverless/sandbox)
+service by default. The provider derives a stable opaque sandbox id from the
+workspace and attributed user, creates the sandbox lazily on the first command,
+starts a stopped sandbox, and waits for runnable state. Commands execute through
+the synchronous Sandbox API and return Mastra's normal stdout, stderr, exit,
+timeout, and truncation fields. When the Beta is definitively unavailable
+(404 or an explicit feature-disabled/preview-unavailable error), it falls back
+to the Node `@pydantic/monty` runtime so deployment and Python code execution
+still work. Permission, authentication, and transient network failures remain
+visible instead of silently changing providers.
+
+Enable Databricks Sandbox in the workspace Previews page before using command
+tools. The default adapter creates its own AppKit client through the normal
+environment/profile chain, so a Databricks App uses its service principal even
+when the agent turn uses OBO. Databricks Apps user authorization does not
+currently expose the Sandbox API scope. Outside Apps, a caller that supplies an
+explicit OBO client must request the Sandbox API's `sandbox` scope. The Sandbox
+filesystem is separate from Databricks Workspace skill mounts; command code must
+copy data explicitly when it needs both.
+
+Monty is intentionally narrower than Databricks Sandbox: it accepts Python
+source directly (or `python3 -c`), runs in crash-isolated subprocess workers,
+and exposes no host shell, filesystem, network, environment variables, or
+third-party packages. Per-command cancellation kills the isolated worker, and
+`maxRetainedBytes` bounds retained stdout/stderr without dropping callback
+chunks. Prefer Python source for commands that must work on both providers.
+
+The default needs no configuration:
+
+```ts
+plugin.mastra({
+  agents: analyst,
+});
+```
+
+Tune the Databricks lifecycle globally for auto-created workspaces:
+
+```ts
+plugin.mastra({
+  agents: analyst,
+  sandbox: {
+    inactivityTimeout: "1800s",
+    startupTimeoutMs: 180_000,
+    commandTimeoutMs: 60_000,
+    fallback: "monty",
+  },
+});
+```
+
+Disable command execution, or explicitly replace Databricks with any Mastra
+sandbox on one agent:
+
+```ts
+plugin.mastra({ agents: analyst, sandbox: false });
+plugin.mastra({ agents: analyst, sandbox: "monty" });
+
+const localAgent = agents.createAgent({
+  instructions: "Run only trusted local commands.",
+  workspace: workspaces.createWorkspace({
+    sandbox: myMastraSandbox,
+  }),
+});
+```
+
+An explicit agent `workspace` always wins over plugin-level `sandbox` config, so
+providers never run in parallel accidentally. `workspaces.createWorkspace()`
+also accepts a custom resolver for per-request provider selection. A per-agent
+workspace resolver returning `undefined` explicitly disables the workspace for
+that agent.
 
 ## Remote Skills
 
@@ -558,6 +633,13 @@ Use `serving.extractModelOverride()` and `serving.resolveServingConfig()` when
 building custom routes that should behave like the plugin's `/models` and stream
 routes.
 
+The serving fetch interceptor repairs provider-specific wire requirements for
+both `fetch(url, { body })` and `fetch(new Request(...))`. In particular,
+Databricks-hosted GPT Astra Chat Completions with function tools receives
+`reasoning_effort: "none"` unless the caller already supplied a value. Claude
+reasoning replay and Gemini/Claude structured response content continue through
+the same sanitizer.
+
 The plugin also serves `GET /default-model` (and `/default-model/:agentId`),
 returning `{ agentId, model, displayName }` - the static serving-endpoint an
 agent falls back to when the client pins no model, plus its humanized label.
@@ -765,6 +847,10 @@ requiring callers to assemble a Mastra server by hand.
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
+- `sandbox` defaults to Databricks Sandbox with Node Monty fallback for
+  auto-created workspaces. `false` disables command execution, `"monty"`
+  selects Monty directly, and `true` or an object selects/configures
+  Databricks.
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`,
@@ -821,8 +907,9 @@ client that talks to these routes.
 - `config` - plugin config types and RequestContext key constants.
 - `model` / `serving` / `servingSanitize` - Mastra model config, request
   overrides, serving-endpoint config, and the on-the-wire request/response
-  cleanup that keeps provider-specific payload quirks (Claude's replayed
-  thinking blocks, Gemini's content-parts responses) from failing a turn.
+  cleanup that keeps provider-specific payload quirks (Astra tool reasoning,
+  Claude's replayed thinking blocks, Gemini/Claude content-parts responses)
+  from failing a turn.
 - `genie` - Genie prompt, space normalization, Genie toolkits, and suggestions.
 - `chart` / `statement` / `writer` - chart cache, statement row fetches, and
   safe writer events.
@@ -834,7 +921,12 @@ client that talks to these routes.
   style block, the summarizer, and the thread titler all append, so a summary or
   a thread title cannot drift from the prose it sits beside.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
-- `workspaces` / `filesystems` - Mastra workspace creation with named
+- `sandbox` - Databricks Sandbox lifecycle, fallback policy, and command-result
+  adapter.
+- `montySandbox` - Python-only Pydantic Monty fallback using Node subprocess
+  workers.
+- `workspaces` / `filesystems` - Mastra workspace creation with a default
+  Databricks sandbox plus named
   `skillFolders` (defaults `workspace-team` / `workspace-team-app`, overridable
   by consumers); `filesystems(fs)` wraps any `@dbx-tools/shared-fs`
   `FileSystem` (including `@dbx-tools/databricks` / `@dbx-tools/fs`) as a

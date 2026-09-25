@@ -69,16 +69,17 @@ catalog:
   marked: ^18.0.5
   "@react-email/components": ^1.0.12
   "@react-email/render": ^2.1.0
-  "@mastra/core": 1.47.0
-  "@mastra/ai-sdk": 1.6.0
-  "@mastra/express": 1.4.2
-  "@mastra/fastembed": 1.2.0
-  "@mastra/mcp": 1.12.0
+  "@mastra/core": 1.67.0
+  "@mastra/ai-sdk": 1.10.3
+  "@mastra/express": 1.5.11
+  "@mastra/fastembed": 1.3.1
+  "@mastra/mcp": 1.18.0
   "@modelcontextprotocol/sdk": ^1.29.0
-  "@mastra/memory": 1.21.2
-  "@mastra/observability": 1.15.2
-  "@mastra/otel-bridge": 1.4.0
-  "@mastra/pg": 1.14.2
+  "@mastra/memory": 1.30.0
+  "@mastra/observability": 1.17.8
+  "@mastra/otel-bridge": 1.5.8
+  "@mastra/pg": 1.25.0
+  "@pydantic/monty": 0.0.23
   "@opentelemetry/api": ^1.9.1
   http-proxy-3: ^1.23.1
   better-auth: 1.7.3
@@ -89,7 +90,7 @@ catalog:
   lucide-react: ^0.554.0
   react-router-dom: ^7.6.2
   streamdown: ^2.5.0
-  "@mastra/client-js": 1.28.0
+  "@mastra/client-js": 1.46.0
   "@tanstack/react-table": ^8.21.3
   ai: ^5.0.0
   echarts: ^6.0.0

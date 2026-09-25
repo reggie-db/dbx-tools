@@ -151,8 +151,9 @@ function deriveToolId(description: string): string {
  * });
  * ```
  *
- * Returns the definition unchanged - the wrapper exists only to anchor
- * type inference and to match the AppKit API surface.
+ * Adds the package's default workspace when the definition omits one. That
+ * workspace carries Databricks skill mounts and Databricks Sandbox command
+ * execution. An explicit workspace remains the caller's complete override.
  */
 export function createAgent<T extends MastraAgentDefinition>(def: T): T {
   if (def.workspace) return { ...def };
@@ -250,7 +251,7 @@ export type MastraPlugins = Record<string, MastraPluginToolkitProvider>;
 /** Function form of {@link MastraAgentDefinition.tools}. */
 export type MastraToolsFn = (plugins: MastraPlugins) => MastraTools | Promise<MastraTools>;
 
-/** Function form of {@link MastraAgentDefinition.workspace}. */
+/** Function form of {@link MastraAgentDefinition.workspace}; `undefined` disables it for this agent. */
 export type MastraAgentWorkspaceResolver = () => Workspace | undefined;
 
 /**
@@ -512,8 +513,15 @@ export async function buildAgents(opts: {
   for (const [id, def] of Object.entries(definitions)) {
     const tools = await resolveTools(def.tools, plugins, ambientTools);
     let workspace = resolveAgentWorkspace(def.workspace);
-    if (extraSkillPaths?.length && isDefaultWorkspace(workspace)) {
-      workspace = createWorkspace({ extraSkillPaths });
+    if (
+      (def.workspace === undefined && !workspace) ||
+      ((extraSkillPaths?.length || config.sandbox !== undefined) && isDefaultWorkspace(workspace))
+    ) {
+      workspace = createWorkspace({
+        extraSkillPaths,
+        sandbox:
+          config.sandbox === undefined || config.sandbox === true ? "databricks" : config.sandbox,
+      });
       markDefaultWorkspace(workspace);
     }
     const gated = approvalGatedToolIds(tools);

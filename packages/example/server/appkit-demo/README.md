@@ -14,7 +14,8 @@ handle the topic bus, static delivery, deployment staging, and shared types.
   [`@dbx-tools/appkit-mastra`](../../../js/node/appkit-mastra) — the
   Mastra agent as an AppKit plugin: request-attributed service-principal auth,
   Lakebase-backed storage/memory, workspace skills, model selection, history,
-  threads, and scoped routes.
+  threads, scoped routes, and lazy Databricks Sandbox command execution with
+  Python-only Monty fallback.
 - `genie()` + `buildGenieTools()` - the default `support` agent uses Genie Agent
   Mode SSE, while `support-polling` forces Conversation API polling for
   statement-backed comparison. Both drive the same space through `ask_genie`;

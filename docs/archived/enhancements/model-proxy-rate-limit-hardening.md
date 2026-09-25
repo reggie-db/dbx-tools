@@ -1,5 +1,7 @@
 # Model proxy rate-limit hardening plan
 
+Status: Completed and archived September 25, 2026.
+
 This plan addresses the workspace input-tokens-per-minute failure observed on
 September 14, 2026:
 

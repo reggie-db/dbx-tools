@@ -22,7 +22,7 @@ function fakeContext(databricksHost?: string): InterceptorContext & {
   };
 }
 
-const PORTR_ENV = ["PORTR_TOKEN", "PORTR_SERVER", "TUNNEL_PUBLIC_DOMAIN"] as const;
+const PORTR_ENV = ["PORTR_TOKEN", "PORTR_SERVER", "PORTR_SSH_URL", "TUNNEL_PUBLIC_DOMAIN"] as const;
 const saved = new Map<string, string | undefined>();
 
 beforeEach(() => {

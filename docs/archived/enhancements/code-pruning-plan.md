@@ -2,6 +2,11 @@
 
 Generated: 2026-09-09
 
+Status: Closed and archived September 25, 2026. This audit remains design
+history. Its unchecked roadmap items are not active work; current package
+boundaries and completed findings are recorded in `AGENTS.md` and the current
+source tree.
+
 This is a plan-only audit. It does not authorize the refactors described below.
 The only other intentional repository change from this audit records the
 requested Bun working preference in AGENTS.md.

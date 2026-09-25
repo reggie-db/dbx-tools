@@ -10,7 +10,7 @@
  * @module
  */
 import { execFile, spawn } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
 import { Transform } from "node:stream";
@@ -59,6 +59,7 @@ export interface PortrInstallOptions {
 export interface PortrConfig {
   subdomain: string;
   server: string;
+  sshUrl: string;
   token: string;
   port: number;
 }
@@ -72,6 +73,7 @@ export interface PortrConfig {
 export function resolvePortrConfig(opts: {
   publicDomain?: string;
   subdomain?: string;
+  sshUrl?: string;
   token?: string;
   port: number;
 }): PortrConfig | undefined {
@@ -87,7 +89,8 @@ export function resolvePortrConfig(opts: {
   }
   server ??= config.text("PORTR_SERVER");
   if (!subdomain || !server || server === domain) return undefined;
-  return { subdomain, server, token, port: opts.port };
+  const sshUrl = config.string(opts.sshUrl, "PORTR_SSH_URL") ?? `${server}:4444`;
+  return { subdomain, server, sshUrl, token, port: opts.port };
 }
 
 /** GitHub release asset name for the current or supplied OS/architecture. */
@@ -136,12 +139,14 @@ export async function writePortrConfig(
   config: PortrConfig,
   childEnv: NodeJS.ProcessEnv,
 ): Promise<void> {
-  const path = join(childEnv.HOME ?? os.homedir(), ".portr", "config.yaml");
+  const directory = join(childEnv.HOME ?? os.homedir(), ".portr");
+  const path = join(directory, "config.yaml");
+  await mkdir(directory, { recursive: true });
   await writeFile(
     path,
     [
       `server_url: ${config.server}`,
-      `ssh_url: ${config.server}:4444`,
+      `ssh_url: ${config.sshUrl}`,
       `secret_key: ${config.token}`,
       "disable_dashboard: true",
       "disable_tui: true",

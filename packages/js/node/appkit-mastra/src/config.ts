@@ -26,6 +26,7 @@ import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
 import type { RemoteSkillsOption } from "./remote-skills.ts";
+import type { DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the
@@ -198,6 +199,13 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * `lakebase` plugin's pool; an object opens a dedicated store.
    */
   memory?: boolean | MastraMemoryConfig;
+  /**
+   * Sandbox for auto-created agent workspaces. Defaults to Databricks Sandbox.
+   * `true` selects Databricks with defaults, an object configures its lifecycle,
+   * and `false` disables workspace command execution. An agent with an explicit
+   * custom `workspace` keeps that workspace and its sandbox.
+   */
+  sandbox?: boolean | "databricks" | "monty" | DatabricksWorkspaceSandboxOptions;
   /**
    * Code-defined agents. Accepts three shapes for convenience:
    *
@@ -629,6 +637,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: ["boolean", "object"],
       description:
         "PgVector store for Mastra semantic recall. `true` reuses the `lakebase` plugin's pool, an object opens a dedicated store. Auto-enabled when the `lakebase` plugin is registered.",
+    },
+    sandbox: {
+      type: ["boolean", "string", "object"],
+      description:
+        'Command sandbox for auto-created agent workspaces. Defaults to Databricks Sandbox with Monty fallback; false disables command execution, "monty" selects Monty directly, and an object configures Databricks lifecycle/fallback settings.',
     },
     defaultAgent: {
       type: "string",

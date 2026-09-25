@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed.
+Closed without implementation and archived September 25, 2026. Retained as
+proposal history, not active enhancement work.
 
 ## Summary
 

@@ -1,11 +1,11 @@
 /**
  * Mastra workspace factory for Databricks Apps.
  *
- * Builds a per-request {@link Workspace} whose filesystem is a
- * {@link CompositeFilesystem} over the NAMED skill folders resolved for that
- * request. A skill folder maps a name to a location plus its readable /
- * writable policy: a Databricks path mounted through the OBO client on
- * {@link MASTRA_USER_KEY}, or any {@link WorkspaceFilesystem} a consuming
+ * Builds a per-request {@link Workspace} with Databricks Sandbox command
+ * execution plus a {@link CompositeFilesystem} over the NAMED skill folders
+ * resolved for that request. A skill folder maps a name to a location plus its
+ * readable / writable policy: a Databricks path mounted through the OBO client
+ * on {@link MASTRA_USER_KEY}, or any {@link WorkspaceFilesystem} a consuming
  * library already owns. {@link DEFAULT_SKILL_FOLDERS} supplies the Assistant
  * trees, and `skillFolders` merges over it - same name overrides, `false`
  * disables, a new name adds. Optional mount resolvers contribute further
@@ -18,9 +18,11 @@
  * @module
  */
 
+import { createHash } from "node:crypto";
+import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
 import { DatabricksFileSystem, workspace as databricksWorkspace } from "@dbx-tools/databricks";
-import { error, log, string, token } from "@dbx-tools/shared-core";
+import { error, log, object, string, token } from "@dbx-tools/shared-core";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
   CompositeFilesystem,
@@ -28,10 +30,14 @@ import {
   type SkillsContext,
   type SkillsResolver,
   type WorkspaceFilesystem,
+  type WorkspaceSandbox,
+  type WorkspaceSandboxResolver,
 } from "@mastra/core/workspace";
 
 import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY, type User } from "./config.ts";
 import { scratchFilesystem, filesystems } from "./filesystems.ts";
+import { MontySandbox } from "./monty-sandbox.ts";
+import { DatabricksSandbox, type DatabricksWorkspaceSandboxOptions } from "./sandbox.ts";
 import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-paths.ts";
 
 /* ------------------------------ constants ------------------------------ */
@@ -97,6 +103,19 @@ export type WorkspaceMountResolver = (
 /** Names carried by {@link DEFAULT_SKILL_FOLDERS}. */
 export type DefaultSkillFolderName = "workspace-team" | "workspace-team-app";
 
+/**
+ * Sandbox selection for {@link createWorkspace}. Databricks is the default;
+ * `false` disables command execution, and a Mastra provider or resolver is an
+ * explicit replacement.
+ */
+export type WorkspaceSandboxSelection =
+  | false
+  | "databricks"
+  | "monty"
+  | DatabricksWorkspaceSandboxOptions
+  | WorkspaceSandbox
+  | WorkspaceSandboxResolver;
+
 /** Options for {@link createWorkspace}. */
 export interface CreateWorkspaceOptions {
   /** Workspace id; derived from `name` or `"workspace"` when omitted. */
@@ -122,6 +141,12 @@ export interface CreateWorkspaceOptions {
   checkSkillFileMtime?: boolean;
   /** Enable BM25 keyword search over indexed workspace content. */
   bm25?: boolean;
+  /**
+   * Command sandbox. Defaults to Databricks Sandbox. Pass `false` to disable
+   * command execution, or an explicit Mastra sandbox/provider resolver to
+   * replace Databricks for this workspace.
+   */
+  sandbox?: WorkspaceSandboxSelection;
   /**
    * Extra LOCAL skill scan paths added to every request's skill discovery.
    * Used by the plugin to surface remote skills provisioned to a local temp
@@ -204,6 +229,7 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
       : undefined);
   const checkSkillFileMtime = options.checkSkillFileMtime ?? folderNames.length > 0;
   const bm25 = options.bm25 !== false;
+  const sandbox = resolveWorkspaceSandbox(options.sandbox, id, name);
   logger.debug("workspace:create", {
     id,
     name,
@@ -214,6 +240,7 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
     checkSkillFileMtime,
     bm25,
     extraSkillPaths: extraSkillPaths.length,
+    sandbox: sandbox ? sandboxName(options.sandbox) : "disabled",
   });
 
   return new Workspace({
@@ -224,6 +251,12 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
       ? {
           skills,
           checkSkillFileMtime,
+        }
+      : {}),
+    ...(sandbox
+      ? {
+          sandbox,
+          instructions: { dynamicSandbox: "resolve" as const },
         }
       : {}),
     bm25,
@@ -252,6 +285,72 @@ export function resolveSkillFolders(
 }
 
 /* ---------------------------- private helpers ---------------------------- */
+
+function resolveWorkspaceSandbox(
+  selection: WorkspaceSandboxSelection | undefined,
+  workspaceId: string,
+  workspaceName: string,
+): WorkspaceSandbox | WorkspaceSandboxResolver | undefined {
+  const configured = selection ?? "databricks";
+  if (configured === false) return undefined;
+  if (configured === "monty") return new MontySandbox();
+  if (typeof configured === "function" || isSandbox(configured)) return configured;
+
+  const options: DatabricksWorkspaceSandboxOptions =
+    configured === "databricks" ? { provider: "databricks" } : configured;
+  return ({ requestContext }) => {
+    const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
+    if (!user) {
+      throw ConfigurationError.resourceNotFound(
+        "Databricks sandbox user context",
+        "Invoke command tools from an agent turn served by the Mastra plugin.",
+      );
+    }
+    const configuredId =
+      typeof options.sandboxId === "function"
+        ? options.sandboxId({ requestContext })
+        : options.sandboxId;
+    const sandboxId = configuredId ?? defaultSandboxId(workspaceId, user.id);
+    const client =
+      typeof options.client === "function"
+        ? options.client({ requestContext })
+        : (options.client ?? createWorkspaceClient());
+    const {
+      provider: _provider,
+      sandboxId: _sandboxId,
+      client: _client,
+      ...sandboxOptions
+    } = options;
+    return new DatabricksSandbox({
+      ...sandboxOptions,
+      client,
+      sandboxId,
+      displayName: options.displayName ?? `Mastra ${workspaceName}`,
+    });
+  };
+}
+
+function defaultSandboxId(workspaceId: string, userId: string): string {
+  const digest = createHash("sha256")
+    .update(object.toStableKey({ workspaceId, userId }))
+    .digest("hex")
+    .slice(0, 32);
+  return `mastra-${digest}`;
+}
+
+function isSandbox(value: unknown): value is WorkspaceSandbox {
+  return Boolean(
+    value && typeof value === "object" && "id" in value && "provider" in value && "status" in value,
+  );
+}
+
+function sandboxName(selection: WorkspaceSandboxSelection | undefined): string {
+  if (selection === undefined || selection === "databricks") return "databricks";
+  if (selection === "monty") return "monty";
+  if (selection === false) return "disabled";
+  if (typeof selection === "function") return "resolver";
+  return isSandbox(selection) ? selection.provider : (selection.provider ?? "databricks");
+}
 
 /**
  * Return whether the request token carries a scope that allows workspace

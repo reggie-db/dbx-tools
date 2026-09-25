@@ -158,6 +158,7 @@ without touching code.
 | `TUNNEL_PUBLIC_DOMAIN`        | - (no tunnel when unset)     |
 | `TUNNEL_FRP_PUBLIC_DOMAIN`    | - (no FRP tunnel when unset) |
 | `DBX_TOOLS_TUNNEL_TRANSPORT`  | `portr`                      |
+| `PORTR_SSH_URL`               | Portr host on port `4444`    |
 | `FRP_SERVER`                  | FRP public domain            |
 | `FRP_SERVER_PORT`             | `443`                        |
 | `FRP_PROTOCOL`                | `wss`                        |

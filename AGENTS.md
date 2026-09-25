@@ -87,7 +87,24 @@ Primary package areas:
   topic bus built on dedicated `LISTEN` connections and `NOTIFY` broadcasts.
 - `packages/js/node/appkit-mastra`, `packages/js/shared/mastra`, and
   `packages/js/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
-  and the matching React chat UI.
+  and the matching React chat UI. Auto-created Mastra workspaces use Databricks
+  Sandbox for command execution by default. The adapter creates a stable
+  per-user sandbox lazily through an AppKit `WorkspaceClient`, waits
+  for runnable state, and maps direct-exec output onto Mastra's command result.
+  `mastra({ sandbox: false })` disables command execution; an explicit agent
+  `workspace` or `workspaces.createWorkspace({ sandbox: provider })` selects
+  another Mastra sandbox without running two providers. Databricks Sandbox is
+  Beta and must be enabled in workspace Previews. The default adapter creates a
+  fresh AppKit client through the normal environment/profile chain, so a
+  Databricks App uses its service principal even when the agent turn itself is
+  OBO. Apps user authorization does not currently expose the Sandbox API scope.
+  A definitive Beta-unavailable response (404 or an explicit feature-disabled
+  or preview-unavailable error) falls back to the Node `@pydantic/monty`
+  runtime. Monty accepts Python source only, bounds retained output, observes
+  command cancellation by terminating its isolated worker, and exposes no host
+  shell, filesystem, network, environment, or third-party packages. Permission,
+  authentication, and transient network failures do not trigger fallback.
+  `sandbox: "monty"` selects it directly.
 - `packages/js/node/genie` and `packages/js/shared/genie` — low-level Genie
   drivers, typed async events, snapshot diffing, and browser-safe Genie
   contracts. Turns use the Genie Agent Mode SSE API by default and project its
@@ -213,7 +230,7 @@ Primary package areas:
   Invalid metadata makes Codex reject the whole remote catalogue and retain its
   bundled models.
   `RUN_CODEX_DISCOVERY_TESTS=1 cargo test -p dbx-tools-model --test model
-  codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
+codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Codex 0.148.0 compatibility check. It serves the real generated payload from a
   loopback fixture under an isolated `CODEX_HOME`, verifies the
   `originator: codex_cli_rs` request, and compares discovered slug sets. Ordinary
@@ -813,8 +830,9 @@ why to use this package anyway:
 - `@dbx-tools/appkit-mastra`: use when the app wants Mastra's larger plugin
   ecosystem, tool model, memory/storage, workflows, MCP support, and
   `@mastra/client-js` stream shape while preserving AppKit OBO auth and AppKit
-  tool-provider plugins. Native AppKit Agents are the simpler choice when the
-  AppKit agent model is enough.
+  tool-provider plugins. Auto-created workspaces also adapt Databricks Sandbox
+  to Mastra's command tools by default. Native AppKit Agents are the simpler
+  choice when the AppKit agent model is enough.
 - `@dbx-tools/ui-mastra`: use when the server is `node-appkit-mastra` and the UI
   needs Mastra stream handling, approvals, thread sidebar, model picker,
   feedback, exports, `[chart:<id>]` / `[data:<id>]` embeds, or the features the
@@ -2473,6 +2491,12 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   ranking/fallback. Update the policy only after testing both the initial
   function call and stateless `function_call_output` replay through the Rust
   model proxy.
+- **GPT Astra Chat Completions with tools requires `reasoning_effort: "none"`.**
+  `appkit-mastra`'s serving sanitizer detects `gpt` + `astra` model tokens,
+  adds that field only for a non-empty tools array, and preserves an explicit
+  caller value. Keep Astra tool-capable. The shared fetch interceptor must read
+  JSON from either `init.body` or a cloned `Request`, then rebuild changed
+  requests without stale content-length/content-encoding headers.
 - **Responses-only endpoint policy is shared across Node and Rust.**
   `@dbx-tools/model` `invoke.isResponsesOnly` and `dbx-tools-model`
   `is_responses_only` classify Codex and GPT 5.4+ as native Responses

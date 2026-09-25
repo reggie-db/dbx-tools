@@ -5,11 +5,17 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { log } from "@dbx-tools/shared-core";
 import { RequestContext } from "@mastra/core/request-context";
+import type { WorkspaceSandbox } from "@mastra/core/workspace";
 
-import { MASTRA_USER_EMAIL_KEY } from "../src/config.ts";
+import { buildAgents } from "../src/agents.ts";
+import { MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY } from "../src/config.ts";
+import { MontySandbox } from "../src/monty-sandbox.ts";
+import { DatabricksSandbox } from "../src/sandbox.ts";
 import { ASSISTANT_SHARED_SKILLS_PATH } from "../src/skill-paths.ts";
 import {
+  createWorkspace,
   DEFAULT_SKILL_FOLDERS,
   resolveSkillFolders,
   type SkillFolderOptions,
@@ -95,5 +101,67 @@ describe("resolveSkillFolders", () => {
       "workspace-team",
       "workspace-team-app",
     ]);
+  });
+});
+
+describe("createWorkspace sandbox", () => {
+  it("uses a per-user Databricks sandbox by default", async () => {
+    const workspace = createWorkspace({ assistantSkills: false, id: "analyst" });
+    const requestContext = new RequestContext();
+    requestContext.set(MASTRA_USER_KEY, {
+      id: "user-1",
+      executionContext: { client: {} },
+    });
+
+    const first = await workspace.resolveSandbox({ requestContext });
+    const second = await workspace.resolveSandbox({ requestContext });
+
+    assert.ok(first instanceof DatabricksSandbox);
+    assert.equal(first.provider, "databricks");
+    assert.match(first.id, /^mastra-[a-f0-9]{32}$/);
+    assert.equal(first, second);
+  });
+
+  it("can disable or replace the Databricks default explicitly", async () => {
+    const disabled = createWorkspace({ assistantSkills: false, sandbox: false });
+    assert.equal(
+      await disabled.resolveSandbox({ requestContext: new RequestContext() }),
+      undefined,
+    );
+
+    const custom: WorkspaceSandbox = {
+      id: "custom",
+      name: "Custom",
+      provider: "custom",
+      status: "running",
+      async snapshot() {},
+    };
+    const replaced = createWorkspace({ assistantSkills: false, sandbox: custom });
+    assert.equal(await replaced.resolveSandbox({ requestContext: new RequestContext() }), custom);
+
+    const monty = createWorkspace({ assistantSkills: false, sandbox: "monty" });
+    assert.ok(
+      (await monty.resolveSandbox({ requestContext: new RequestContext() })) instanceof
+        MontySandbox,
+    );
+  });
+});
+
+describe("agent workspace selection", () => {
+  it("preserves an explicit workspace resolver opt-out", async () => {
+    const built = await buildAgents({
+      config: {
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            workspace: () => undefined,
+          },
+        },
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    assert.equal(await built.agents.analyst?.getWorkspace(), undefined);
   });
 });
