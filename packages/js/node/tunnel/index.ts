@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/tunnel";
-export const PACKAGE_VERSION = "0.6.215";
+export const PACKAGE_VERSION = "0.6.216";
 export * as allowlist from "./src/allowlist.ts";
 export * as codeEmail from "./src/code-email.ts";
 export * as frp from "./src/frp.ts";
@@ -30,4 +30,4 @@ export type { AuthGateConfig, SendCodeOptions, ResolvedAuthGateConfig, AuthGateA
 export type { PortrInstallOptions, PortrConfig } from "./src/portr.ts";
 export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
 export type { SigningKey } from "./src/signing-key.ts";
-export type { ProcessSupervisor } from "./src/supervisor.ts";
+export type { ProcessSupervisor, ProcessSupervisorOptions } from "./src/supervisor.ts";

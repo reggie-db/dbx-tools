@@ -169,13 +169,34 @@ export async function startPortr(
   return child;
 }
 
+/**
+ * Probe the public portr URL. A registered tunnel is healthy even when the app
+ * returns an auth challenge (401/302) - those prove the edge still has the
+ * subdomain. Only an explicit `unregistered-subdomain` (or any other
+ * `x-portr-error`) means the client must be restarted.
+ */
+export async function probePortrPublicUrl(publicUrl: string): Promise<boolean> {
+  const response = await fetch(publicUrl, {
+    method: "HEAD",
+    redirect: "manual",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (response.headers.get("x-portr-error") === "true") return false;
+  return true;
+}
+
 export function supervisePortr(
   config: PortrConfig,
   childEnv: NodeJS.ProcessEnv,
 ): ProcessSupervisor {
+  const publicUrl = `https://${config.subdomain}.${config.server}`;
   return superviseProcessForever({
     name: "portr",
     logger,
     start: () => startPortr(config, childEnv),
+    // Kill + restart when the edge drops the registration while the local
+    // process is still alive. Without this, lensiq.apps.dbx.tools (and any
+    // other in-process tunnel) stays unregistered until a full app bounce.
+    isHealthy: () => probePortrPublicUrl(publicUrl),
   });
 }

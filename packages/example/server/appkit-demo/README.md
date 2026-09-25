@@ -136,11 +136,15 @@ apps stop` + `apps start` is the same trap: `start` re-deploys the last source
   `FAILED`/`Missing script: "start"`. Recover with `bundle deploy` +
   `bundle run demo_app`.
 - **To bounce the app, use `bundle run demo_app`.** It restarts a running app in
-  place with the bundle's command, which is what brings the public portr tunnel
-  back when its edge has dropped (`demo.apps.dbx.tools` serving portr's
-  "Connection Lost" while the platform URL still answers) — the tunnel child is
-  supervised but not re-dialed, so a lost portr session outlives the app process
-  that started it.
+  place with the bundle's command. Prefer this over `databricks apps stop` +
+  `apps start`: `start` re-deploys the last source snapshot with the app.yaml
+  command, so it can take a RUNNING app to `FAILED`/`Missing script: "start"`.
+  Recover with `bundle deploy` + `bundle run demo_app`. A lost portr edge
+  (`demo.apps.dbx.tools` serving `unregistered-subdomain` while the platform
+  URL still answers) is also recovered automatically by `@dbx-tools/tunnel`:
+  the supervisor probes the public URL and restarts portr when the subdomain
+  drops. A bounce is still the fastest manual recovery if you need the tunnel
+  back immediately.
 
 If the app already exists in the workspace but not in this bundle's state,
 `deploy` fails with `ALREADY_EXISTS`; adopt it once with

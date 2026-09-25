@@ -1,5 +1,15 @@
 use std::{collections::BTreeMap, time::Duration};
 
+#[cfg(unix)]
+use std::{
+    env, fs,
+    io::Read,
+    os::unix::fs::PermissionsExt,
+    process::{Command, Output, Stdio},
+    thread,
+    time::Instant,
+};
+
 use dbx_tools_core::{DatabricksAuthOptions, DatabricksClient, FileCache};
 use dbx_tools_model::{
     endpoints_from_response, is_responses_only, lookup_models, model_search_query,
@@ -359,6 +369,139 @@ fn codex_capabilities_follow_discovered_databricks_documentation() {
     assert_eq!(qwen["supports_search_tool"], false);
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn codex_real_client_discovers_fixture_catalogue() {
+    if env::var("RUN_CODEX_DISCOVERY_TESTS").as_deref() != Ok("1") {
+        eprintln!("set RUN_CODEX_DISCOVERY_TESTS=1 to run the real Codex discovery check");
+        return;
+    }
+
+    let codex = env::var_os("CODEX_BIN").unwrap_or_else(|| "codex".into());
+    let version = Command::new(&codex)
+        .arg("--version")
+        .output()
+        .expect("failed to execute Codex CLI");
+    assert!(
+        version.status.success(),
+        "Codex version command failed: {}",
+        String::from_utf8_lossy(&version.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&version.stdout).trim(),
+        "codex-cli 0.148.0",
+        "update the fixture contract before accepting another Codex CLI version"
+    );
+
+    let mut gpt = endpoint("databricks-gpt-5-6-sol", ModelClass::ChatBalanced);
+    gpt.reasoning_efforts = reasoning_efforts_by_family(&gpt.name);
+    let endpoints = [
+        gpt,
+        endpoint("databricks-qwen35-122b-a10b", ModelClass::ChatBalanced),
+        endpoint("databricks-claude-sonnet-4-6", ModelClass::ChatBalanced),
+    ];
+    let capabilities = parse_model_capabilities(
+        r#"
+        <html><body>
+          <h3 id="databricks-hosted-foundation-models">Models</h3>
+          <ul><li><code>databricks-gpt-5-6-sol</code></li></ul>
+          <h2 id="supported-input-types">Supported input types</h2>
+          <p>OpenAI GPT models on Databricks accept text and image inputs.</p>
+          <h2 id="limitations">Limitations</h2>
+          <code>apply_patch</code>
+        </body></html>
+        "#,
+        r#"
+        <html><body>
+          <h3 id="openai-models">OpenAI models</h3>
+          <ul><li><code>databricks-gpt-5-6-sol</code></li></ul>
+        </body></html>
+        "#,
+    )
+    .unwrap();
+    let payload =
+        models_payload_with_capabilities(&endpoints, None, false, true, Some(&capabilities));
+    let expected = payload["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["slug"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        expected,
+        ["system.ai.gpt-5-6-sol", "system.ai.qwen35-122b-a10b"]
+    );
+
+    let fixture = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .and(header("originator", "codex_cli_rs"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(payload))
+        .expect(1)
+        .mount(&fixture)
+        .await;
+    let home = tempfile::tempdir().unwrap();
+    let auth = home.path().join("fixture-auth");
+    fs::write(&auth, "#!/bin/sh\nprintf local\n").unwrap();
+    let mut permissions = fs::metadata(&auth).unwrap().permissions();
+    permissions.set_mode(0o700);
+    fs::set_permissions(&auth, permissions).unwrap();
+    fs::write(
+        home.path().join("config.toml"),
+        format!(
+            r#"
+model_provider = "fixture"
+
+[model_providers.fixture]
+name = "fixture"
+base_url = "{}/v1"
+wire_api = "responses"
+requires_openai_auth = false
+
+[model_providers.fixture.auth]
+command = {}
+args = []
+"#,
+            fixture.uri(),
+            serde_json::to_string(&auth.to_string_lossy()).unwrap(),
+        ),
+    )
+    .unwrap();
+
+    let mut command = Command::new(&codex);
+    command
+        .args(["debug", "models"])
+        .env("CODEX_HOME", home.path())
+        .current_dir(home.path());
+    let output = tokio::task::spawn_blocking(move || {
+        command_output_with_timeout(command, Duration::from_secs(20))
+    })
+    .await
+    .unwrap();
+    fixture.verify().await;
+
+    assert!(
+        output.status.success(),
+        "Codex discovery failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let discovered: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("Codex returned non-JSON model output");
+    let slugs = discovered["models"]
+        .as_array()
+        .expect("Codex output omitted models")
+        .iter()
+        .filter_map(|model| model["slug"].as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    for slug in &expected {
+        assert!(
+            slugs.contains(slug.as_str()),
+            "Codex output omitted discovered fixture model {slug}"
+        );
+    }
+}
+
 #[test]
 fn lookup_can_include_deprecated_models() {
     let mut retired = endpoint("databricks-gemini-2-5-pro", ModelClass::ChatThinking);
@@ -672,5 +815,49 @@ fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {
         model_service_name: None,
         reasoning_efforts: Vec::new(),
         status: ModelStatus::default(),
+    }
+}
+
+#[cfg(unix)]
+fn command_output_with_timeout(mut command: Command, timeout: Duration) -> Output {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to start Codex discovery");
+    let mut stdout = child.stdout.take().unwrap();
+    let mut stderr = child.stderr.take().unwrap();
+    let stdout_worker = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).unwrap();
+        bytes
+    });
+    let stderr_worker = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).unwrap();
+        bytes
+    });
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            child.kill().ok();
+            let status = child.wait().unwrap();
+            let stdout = stdout_worker.join().unwrap();
+            let stderr = stderr_worker.join().unwrap();
+            panic!(
+                "Codex discovery timed out with {status}:\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&stdout),
+                String::from_utf8_lossy(&stderr)
+            );
+        }
+        thread::sleep(Duration::from_millis(20));
+    };
+    Output {
+        status,
+        stdout: stdout_worker.join().unwrap(),
+        stderr: stderr_worker.join().unwrap(),
     }
 }

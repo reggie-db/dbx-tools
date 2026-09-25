@@ -212,6 +212,12 @@ Primary package areas:
   `supports_search_tool` independently reports whether native search is available.
   Invalid metadata makes Codex reject the whole remote catalogue and retain its
   bundled models.
+  `RUN_CODEX_DISCOVERY_TESTS=1 cargo test -p dbx-tools-model --test model
+  codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
+  Codex 0.148.0 compatibility check. It serves the real generated payload from a
+  loopback fixture under an isolated `CODEX_HOME`, verifies the
+  `originator: codex_cli_rs` request, and compares discovered slug sets. Ordinary
+  Rust tests do not require Codex to be installed.
   Retirement status refreshes the Databricks Foundation Model retirement page
   through a daily `FileCache` and falls back to the generated
   `assets/retired-models.json` snapshot. Model capabilities and published

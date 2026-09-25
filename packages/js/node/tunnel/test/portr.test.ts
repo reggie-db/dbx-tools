@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { normalizePortrOutput, portrAssetName } from "../src/portr.ts";
+import { normalizePortrOutput, portrAssetName, probePortrPublicUrl } from "../src/portr.ts";
 
 describe("normalizePortrOutput", () => {
   it("removes pictographs from portr lifecycle logs", () => {
@@ -13,6 +13,33 @@ describe("normalizePortrOutput", () => {
       ),
       "Starting tunnel: demo (localhost:8000)\nShutting down tunnels...\n",
     );
+  });
+});
+
+describe("probePortrPublicUrl", () => {
+  it("treats an unregistered subdomain as unhealthy", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(null, {
+        status: 404,
+        headers: { "x-portr-error": "true", "x-portr-error-reason": "unregistered-subdomain" },
+      })) as typeof fetch;
+    try {
+      assert.equal(await probePortrPublicUrl("https://lensiq.apps.dbx.tools"), false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("treats an auth challenge as healthy (tunnel is registered)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(null, { status: 401, headers: { "content-type": "text/html" } })) as typeof fetch;
+    try {
+      assert.equal(await probePortrPublicUrl("https://lensiq.apps.dbx.tools"), true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
