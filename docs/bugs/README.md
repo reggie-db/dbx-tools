@@ -2,3 +2,5 @@
 
 Keep reproducible, unresolved defect notes here. Move resolved or abandoned
 investigations to `docs/archived/bugs`.
+
+No active bugs are currently tracked.

@@ -10,6 +10,10 @@ completed or reprioritized. When all tracked work is complete or intentionally
 closed, move the document to `docs/archived/enhancements` and record its archive
 date and final status.
 
+## Active plans
+
+No active plans are currently tracked.
+
 ## Cross-repository suggestions
 
 When work in another repository identifies a change for this project, copy a
