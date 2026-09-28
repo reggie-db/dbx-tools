@@ -67,11 +67,13 @@ default AppKit renders untouched.
 </BrandProvider>
 ```
 
-The bridge is **identity-only** (primary/accent/ring/sidebar-primary + fonts). It
-intentionally does not remap neutrals (`--background`/`--foreground`/`--muted`/
-`--border`) because a `BrandContext` carries a single light palette — remapping
-neutrals would disable dark mode. Add new semantic tokens to re-skin in
-`brand-bridge.css`.
+The bridge is **identity-only** (primary/ring/sidebar-primary + fonts). Selected
+menus, rows, and tabs receive a subtle `primaryHover` tint rather than a brand
+accent, so default navigation stays cool blue instead of reading as coral/red or
+success green. It intentionally leaves neutrals (`--background`/`--foreground`/
+`--muted`/`--border`) and status tokens (`--success`/`--warning`/
+`--destructive`) to AppKit because those values must remain theme-aware. Add new
+semantic tokens to re-skin in `brand-bridge.css`.
 
 ## Assets
 

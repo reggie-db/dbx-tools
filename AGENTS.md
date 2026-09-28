@@ -2400,11 +2400,18 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   package via the shared base — `ui-appkit` deps `ui-branding`). It is INERT
   until `applyBrandContext()` (via `BrandProvider applyToDocument`) sets the
   `data-brand` attribute, so default AppKit is never disturbed. It is
-  identity-only (primary/accent/ring/sidebar-primary + fonts); it deliberately
-  does NOT remap neutrals (`--background`/`--foreground`/`--muted`/`--border`)
-  because the brand carries a single light palette — remapping neutrals would
-  break dark mode. To theme a host: wrap in `<BrandProvider applyToDocument>`
-  (pass `context` for a non-default brand). New semantic tokens to re-skin go in
+  identity-only (primary/ring/sidebar-primary + fonts); it deliberately does
+  NOT remap neutrals (`--background`/`--foreground`/`--muted`/`--border`) or
+  status tokens (`--success`/`--warning`/`--destructive`) because the brand
+  carries one light identity palette while AppKit owns theme-aware status
+  semantics. Selected menus, rows, and tabs use a low-strength
+  `primaryHover` tint rather than the identity accent, so default navigation is
+  visually distinct from red/coral brand artwork and green success states.
+  The CSS fallback values in `ui-branding/src/styles.css` must match the
+  canonical defaults in `shared-core/src/brand.ts` and `branding/brand.yaml`;
+  default primary is navy, hover is deep blue, and accent is green. To theme a
+  host: wrap in `<BrandProvider applyToDocument>` (pass `context` for a
+  non-default brand). New semantic tokens to re-skin go in
   `brand-bridge.css`, not per-component.
 - **A chart is branded on the SERVER and themed on the CLIENT, and the split is
   the point.** The `[data-brand]` CSS bridge can't reach an Echarts chart (it
@@ -2582,3 +2589,12 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   Closing the ACTIVE tab must move the selection in the same handler
   (`nextActiveThreadTab`, else `onNewThread`) - the sync always keeps a tab for
   the active thread, so closing without reselecting just reopens it.
+- **The Mastra composer owns textarea height in JavaScript.**
+  `ChatComposer` applies `field-sizing-fixed`, resets height before reading
+  `scrollHeight`, and observes the `InputGroup` width so an assistant mounted
+  inside a collapsed/resizable host remeasures when it opens. The observer
+  ignores zero and unchanged widths because the group height follows the
+  textarea; reacting to height would create a resize loop. Preserve AppKit's
+  `min-h-16`, the `max-h-48` cap, and internal vertical scrolling. Input and
+  history-placeholder changes remain direct measurement triggers for runtimes
+  without `ResizeObserver`.

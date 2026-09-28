@@ -32,6 +32,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { autosizeComposerTextarea, observeComposerWidth } from "./_composer-autosize.ts";
 import { ExportMenu } from "./export-menu.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import type { ChatViewProps } from "./types.ts";
@@ -278,14 +279,22 @@ export const ChatComposer = ({
   onResumeFollow,
 }: ChatComposerProps) => {
   const [input, setInput] = useState("");
+  const inputGroupRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const resizeTextarea = useCallback(() => {
+    autosizeComposerTextarea(inputGroupRef.current, textareaRef.current);
+  }, []);
+
   useLayoutEffect(() => {
-    const element = textareaRef.current;
-    if (!element) return;
-    element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
-  }, [input]);
+    resizeTextarea();
+  }, [input, isLoadingHistory, resizeTextarea]);
+
+  useLayoutEffect(() => {
+    const group = inputGroupRef.current;
+    if (!group) return;
+    return observeComposerWidth(group, resizeTextarea);
+  }, [resizeTextarea]);
 
   const isRunning = status === "submitted" || status === "streaming";
   const submit = () => {
@@ -336,7 +345,10 @@ export const ChatComposer = ({
           onRemoveSteer={onRemoveSteer}
           onReorderSteers={onReorderSteers}
         />
-        <InputGroup className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md">
+        <InputGroup
+          ref={inputGroupRef}
+          className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md"
+        >
           <InputGroupTextarea
             ref={textareaRef}
             value={input}
@@ -350,7 +362,7 @@ export const ChatComposer = ({
             placeholder={isLoadingHistory ? "Loading history..." : "Send a message..."}
             rows={1}
             disabled={isLoadingHistory}
-            className="max-h-48 text-base md:text-sm"
+            className="field-sizing-fixed max-h-48 overflow-y-auto text-base md:text-sm"
           />
           <InputGroupAddon align="inline-end">
             {isRunning && onStop && !input.trim() ? (

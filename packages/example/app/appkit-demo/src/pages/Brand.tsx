@@ -16,7 +16,7 @@ const SITE_PRESETS: readonly BrandPreset[] = [
   {
     id: "dbx-tools",
     label: "dbx tools",
-    description: "Warm red with green accent",
+    description: "Navy with green accent",
     context: brand.defaultBrandContext,
   },
   {
