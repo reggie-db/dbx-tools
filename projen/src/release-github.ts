@@ -23,3 +23,15 @@ export function githubRepositoryIdentity(repositoryUrl: string): GithubRepositor
 export function githubTokenArguments(hostname: string): string[] {
   return ["auth", "token", "--hostname", hostname];
 }
+
+/** GitHub CLI token variable for a public, data-residency, or enterprise host. */
+export function githubTokenEnvironmentName(hostname: string): "GH_TOKEN" | "GH_ENTERPRISE_TOKEN" {
+  return hostname === "github.com" || hostname.endsWith(".ghe.com")
+    ? "GH_TOKEN"
+    : "GH_ENTERPRISE_TOKEN";
+}
+
+/** Host-qualified repository selector consumed by GitHub CLI. */
+export function githubRepositorySpecifier(identity: GithubRepositoryIdentity): string {
+  return `${identity.hostname}/${identity.owner}/${identity.repository}`;
+}

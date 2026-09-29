@@ -412,7 +412,9 @@ export class DBXToolsPythonWorkspace extends Component {
     if (allPublications.length === 0) return;
     const usesRustArtifacts = uniffiPublications.length > 0;
     const workflow = tryReleaseWorkflow(project);
-    if (!workflow) return;
+    if (!workflow) {
+      throw new Error("Python release requires the root dbx-tools release mode");
+    }
     workflow.addJob("build-python", {
       if: usesRustArtifacts
         ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"

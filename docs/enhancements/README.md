@@ -12,9 +12,7 @@ date and final status.
 
 ## Active plans
 
-- [Code cleanup, library reuse, and package architecture](2026-09-29-code-cleanup-and-reuse-plan.md)
-  — repository audit with prioritized fixes, native-library and Projen reuse,
-  package-boundary decisions, and implementation acceptance checks.
+No active plans.
 
 ## Cross-repository suggestions
 

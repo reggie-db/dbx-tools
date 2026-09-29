@@ -30,12 +30,13 @@ import { find } from "@dbx-tools/path";
 import { json, object, string } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 
-/**
- * The repo root: the nearest package/projenrc root, falling back to the current
- * working directory. Detection (npm prefix, git top-level, root markers) lives
- * in `@dbx-tools/core`'s {@link coreProject.root}.
- */
-export const repoRoot = coreProject.root() ?? process.cwd();
+/** Resolve the nearest package/projenrc root at call time. */
+export function resolveRepoRoot(cwd: string = process.cwd()): string {
+  return coreProject.root(cwd) ?? cwd;
+}
+
+/** Current-process repository root for executable task entrypoints. */
+export const repoRoot = resolveRepoRoot();
 
 /**
  * Default package roots. Each is scanned for packages; override via the
@@ -49,7 +50,7 @@ export const DEFAULT_PACKAGE_ROOTS = ["packages"] as const;
  * {@link coreProject.name}, which is also what a consuming repo's own tooling
  * sees, so the engine and its host agree on the name.
  */
-export function projectName(projectRoot: string = repoRoot): string {
+export function projectName(projectRoot: string = resolveRepoRoot()): string {
   return coreProject.name(projectRoot);
 }
 
@@ -168,7 +169,7 @@ export class DiscoveredPackage {
 }
 
 /** Read the raw workspace member globs from `pnpm-workspace.yaml` (source of truth). */
-function readRecordedMembers(projectRoot: string = repoRoot): string[] {
+function readRecordedMembers(projectRoot: string = resolveRepoRoot()): string[] {
   const file = resolve(projectRoot, "pnpm-workspace.yaml");
   if (!existsSync(file)) return [];
   const doc = parse(readFileSync(file, "utf8")) as {
@@ -218,7 +219,7 @@ function collectPackageDirs(rootAbs: string): string[] {
  * recorded set. Sorted by member path.
  */
 export function scanPackages(
-  projectRoot: string = repoRoot,
+  projectRoot: string = resolveRepoRoot(),
   roots: readonly string[] = DEFAULT_PACKAGE_ROOTS,
 ): DiscoveredPackage[] {
   const out: DiscoveredPackage[] = [];
@@ -285,7 +286,7 @@ function readManifestTags(dir: string): string[] | undefined {
  * the root `package.json` `dbxToolsConfig.syncResynthPaths` (set via the
  * {@link DBXToolsProjectOptions.syncResynthPaths} option at synth).
  */
-export function syncResynthPaths(projectRoot: string = repoRoot): string[] {
+export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): string[] {
   const paths = readDbxToolsConfig(projectRoot)?.syncResynthPaths;
   return Array.isArray(paths) ? string.parseList(paths.map((p) => String(p))) : [];
 }
@@ -297,7 +298,7 @@ export function syncResynthPaths(projectRoot: string = repoRoot): string[] {
  * authoritative, so it reflects the resolved tag set.
  * Sorted by path.
  */
-export function recordedPackages(projectRoot: string = repoRoot): RecordedPackage[] {
+export function recordedPackages(projectRoot: string = resolveRepoRoot()): RecordedPackage[] {
   const out: RecordedPackage[] = [];
   for (const member of readRecordedMembers(projectRoot)) {
     const pkg = packageOfMember(projectRoot, member);
@@ -318,7 +319,7 @@ export function recordedPackages(projectRoot: string = repoRoot): RecordedPackag
  * that field fall back to the distinct first segment of every recorded member,
  * unioned with the defaults.
  */
-export function recordedRoots(projectRoot: string = repoRoot): string[] {
+export function recordedRoots(projectRoot: string = resolveRepoRoot()): string[] {
   const configured = readDbxToolsConfig(projectRoot)?.packageRoots;
   if (Array.isArray(configured)) {
     const roots = string.parseList(configured.map((root) => String(root)));

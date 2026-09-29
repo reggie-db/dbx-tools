@@ -18,10 +18,9 @@
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
 import { assertFetchUrlAllowed } from "./_fetch-url.ts";
-import type { ResolvedWebSearchConfig } from "./config.ts";
 import { toCallSettings, webFetchExecuteDefaults } from "./defaults.ts";
 import { decodeHtmlEntities, htmlToText } from "./html-text.ts";
-import { executeRead } from "./runtime.ts";
+import { executeRead, toWebSearchRuntime, type WebSearchRuntimeInput } from "./runtime.ts";
 import type { WebFetchRequest, WebFetchResult } from "./schema.ts";
 
 const logger = log.logger("web-search/fetch");
@@ -57,15 +56,18 @@ function truncate(text: string, max: number): { content: string; truncated: bool
  */
 export async function runWebFetch(
   request: WebFetchRequest,
-  config: ResolvedWebSearchConfig,
+  runtimeOrConfig: WebSearchRuntimeInput,
   signal?: AbortSignal,
 ): Promise<WebFetchResult> {
+  const runtime = toWebSearchRuntime(runtimeOrConfig);
+  const { config } = runtime;
   await assertFetchUrlAllowed(request.url, config.allowList);
   const cap = Math.min(request.maxLength ?? config.fetchMaxLength, config.fetchMaxLength);
 
   // The response is cached before the format reduction, so the same page read
   // as text and as html shares one network round trip.
   const page = await executeRead(
+    runtime,
     "page-fetch",
     toCallSettings(webFetchExecuteDefaults, config.timeoutMs, [
       "web-search",

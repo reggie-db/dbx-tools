@@ -6,10 +6,9 @@
  * card is data the app then decides what to do with (render it in a preview,
  * post it to a Teams incoming webhook, attach it to a bot reply).
  *
- * The build runs through the executor the plugin installs on the shared
- * runtime, so a build from this tool picks up the same telemetry / timeout
- * chain as one from the AppKit tool. In a Mastra app with no AppKit plugin
- * registered the build still runs, just without interceptors.
+ * App-integrated agents should consume `plugins.teams.toolkit()` so calls run
+ * through the owning plugin. This standalone factory captures an explicit
+ * runtime or creates an isolated direct-execution runtime from its config.
  *
  * @module
  */
@@ -17,7 +16,8 @@
 import { log, string } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import { createTool } from "@mastra/core/tools";
-import { buildCard } from "./runtime.ts";
+import type { TeamsPluginConfig } from "./config.ts";
+import { buildCardWithRuntime, createTeamsRuntime, type TeamsRuntime } from "./runtime.ts";
 
 const logger = log.logger("teams/tool/create-card");
 
@@ -47,6 +47,18 @@ export interface TeamsCardToolOptions {
    * client about the new name.
    */
   id?: string;
+  /** Isolated runtime used by this standalone tool. Mutually exclusive with `config`. */
+  runtime?: TeamsRuntime;
+  /** Config used to create an isolated direct-execution runtime. */
+  config?: TeamsPluginConfig;
+}
+
+/** Resolve the isolated runtime captured by one standalone tool factory. */
+function toolRuntime(opts: TeamsCardToolOptions): TeamsRuntime {
+  if (opts.runtime && opts.config) {
+    throw new TypeError("Teams tool options accept either runtime or config, not both");
+  }
+  return opts.runtime ?? createTeamsRuntime(opts.config);
 }
 
 /**
@@ -65,6 +77,7 @@ export interface TeamsCardToolOptions {
  * ```
  */
 export function teamsCardTool(opts: TeamsCardToolOptions = {}) {
+  const runtime = toolRuntime(opts);
   return createTool({
     id: opts.id ?? "create_teams_card",
     description: CREATE_CARD_DESCRIPTION,
@@ -72,7 +85,7 @@ export function teamsCardTool(opts: TeamsCardToolOptions = {}) {
     outputSchema: card.cardResultSchema,
     execute: async (input, context) => {
       const spec = card.cardSpecSchema.parse(input);
-      const result = await buildCard(spec, context?.abortSignal);
+      const result = await buildCardWithRuntime(runtime, spec, context?.abortSignal);
       logger.info("built", {
         title: result.title,
         elements: result.card.body.length,

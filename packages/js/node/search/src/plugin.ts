@@ -34,12 +34,12 @@ import {
 import { plugin as appkitPlugin } from "@dbx-tools/appkit";
 import { error as sharedError, log, string } from "@dbx-tools/shared-core";
 import { search as sharedSearch, type SearchClientConfig } from "@dbx-tools/shared-search";
+import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
 import { SEARCH_CONFIG_SCHEMA, resolveSearchConfig, type SearchPluginConfig } from "./config.ts";
 import { toCreateIndexOptions } from "./index-tools.ts";
 import { nativeAiSearchBackend } from "./native.ts";
 import { toDocumentArray } from "./query.ts";
-import { getSearchRuntime, resetSearchRuntime } from "./runtime.ts";
-import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
+import { createSearchRuntime, setSearchReadBackend, type SearchRuntime } from "./runtime.ts";
 import {
   ADD_DOCUMENTS_TOOL_DESCRIPTION,
   CREATE_INDEX_TOOL_DESCRIPTION,
@@ -110,6 +110,9 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     config: { schema: SEARCH_CONFIG_SCHEMA },
   } satisfies PluginManifest<"search">;
 
+  /** Runtime owned exclusively by this plugin instance. */
+  private readonly runtime: SearchRuntime = createSearchRuntime({ config: this.config });
+
   /** The base path AppKit mounts this plugin's routes under. */
   private get basePath(): string {
     return `/api/${SearchPlugin.manifest.name}`;
@@ -123,7 +126,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
    * granted explicitly.
    */
   private get tools(): ToolRegistry {
-    const { config, readBackend } = getSearchRuntime({ config: this.config });
+    const { config, readBackend } = this.runtime;
     const registry: ToolRegistry = {
       search: defineTool({
         description: SEARCH_TOOL_DESCRIPTION,
@@ -170,16 +173,11 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     return registry;
   }
 
-  /** Prime the shared runtime from config and log the effective policy at boot. */
+  /** Attach the registered provider and log the effective policy at boot. */
   override async setup(): Promise<void> {
     const readBackend = this.resolveProviderBackend();
-    // The runtime may already have been built (config-only) when `tools()` ran
-    // during registration; rebuild it so it carries the chosen backend.
-    resetSearchRuntime();
-    const { config } = getSearchRuntime({
-      config: this.config,
-      readBackend,
-    });
+    setSearchReadBackend(this.runtime, readBackend);
+    const { config } = this.runtime;
     logger.info("ready", {
       backend: readBackend.supportsLifecycle ? "appkit-ai-search" : "lakebase-ai-search",
       defaultIndex: config.defaultIndex ?? "(none - pass per request)",
@@ -211,9 +209,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
    * out-of-request fallback. Failures are logged, never thrown - a search app
    * should still start even if provisioning is slow or a permission is missing.
    */
-  private async runEnsureOnSetup(
-    config: ReturnType<typeof getSearchRuntime>["config"],
-  ): Promise<void> {
+  private async runEnsureOnSetup(config: SearchRuntime["config"]): Promise<void> {
     const spec = config.ensureOnSetup;
     if (!spec) return;
     const index = string.trimToNull(spec.index) ?? config.defaultIndex;
@@ -232,7 +228,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
         : undefined);
     try {
       logger.info("ensure-start", { index });
-      const { client } = getSearchRuntime();
+      const { client } = this.runtime;
       const info = await client.provision(index, {
         ...(spec.endpoint ? { endpoint: spec.endpoint } : {}),
         ...(spec.primaryKey ? { primaryKey: spec.primaryKey } : {}),
@@ -274,14 +270,13 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     return schema;
   }
 
-  /** Drop the shared runtime so a restarted app re-resolves config. */
-  async shutdown(): Promise<void> {
-    resetSearchRuntime();
+  /** Release this plugin's instance-owned runtime. */
+  shutdown(): void {
+    return;
   }
 
   override abortActiveOperations(): void {
     super.abortActiveOperations();
-    void this.shutdown();
   }
 
   /**
@@ -313,7 +308,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       method: "post",
       path: DOCUMENTS_ROUTE,
       handler: async (req, res) => {
-        const { config } = getSearchRuntime();
+        const { config } = this.runtime;
         if (!config.allowWrite) {
           res.status(403).json({ error: "the document write surface is disabled" });
           return;
@@ -328,7 +323,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       method: "post",
       path: INDEX_ROUTE,
       handler: async (req, res) => {
-        const { config, readBackend } = getSearchRuntime();
+        const { config, readBackend } = this.runtime;
         if (!config.allowWrite || !readBackend?.supportsLifecycle) {
           res.status(403).json({ error: "the index write surface is disabled" });
           return;
@@ -343,7 +338,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       method: "post",
       path: INDEX_SYNC_ROUTE,
       handler: async (req, res) => {
-        const { config, readBackend } = getSearchRuntime();
+        const { config, readBackend } = this.runtime;
         if (!config.allowWrite || !readBackend?.supportsLifecycle) {
           res.status(403).json({ error: "the index write surface is disabled" });
           return;
@@ -378,7 +373,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
 
   /** Surface the index catalogue + defaults so a search box needs no round-trip. */
   override clientConfig(): Record<string, unknown> {
-    const { config } = getSearchRuntime({ config: this.config });
+    const { config } = this.runtime;
     const payload: SearchClientConfig = {
       indexes: config.indexes.map((index) => ({
         name: index.name,
@@ -426,19 +421,19 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
 
   private async runSearch(args: unknown, signal?: AbortSignal) {
     const request = sharedSearch.searchRequestSchema.parse(args);
-    const { client } = getSearchRuntime();
+    const { client } = this.runtime;
     return client.search(request.query, toSearchOptions(request, signal));
   }
 
   private async runUniversalSearch(args: unknown, signal?: AbortSignal) {
     const request = sharedSearch.universalSearchRequestSchema.parse(args);
-    const { client } = getSearchRuntime();
+    const { client } = this.runtime;
     return client.universalSearch(request.query, toUniversalSearchOptions(request, signal));
   }
 
   private async runAddDocuments(args: unknown, signal?: AbortSignal) {
     const record = (args ?? {}) as { index?: string; documents: unknown };
-    const { client, config } = getSearchRuntime();
+    const { client, config } = this.runtime;
     const documents = toDocumentArray(record.documents);
     const index = record.index ?? config.defaultIndex ?? "";
     return client.addDocuments(index, documents, signal);
@@ -446,13 +441,13 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
 
   private async runCreateIndex(args: unknown, signal?: AbortSignal) {
     const request = sharedSearch.createIndexRequestSchema.parse(args);
-    const { client } = getSearchRuntime();
+    const { client } = this.runtime;
     return client.createIndex(request.name, toCreateIndexOptions(request, signal));
   }
 
   private async runSyncIndex(args: unknown, signal?: AbortSignal) {
     const request = sharedSearch.syncIndexRequestSchema.parse(args);
-    const { client, config } = getSearchRuntime();
+    const { client, config } = this.runtime;
     const index = request.index ?? config.defaultIndex ?? "";
     await client.syncIndex(index, signal);
     return { index, synced: true };
@@ -465,12 +460,14 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
+ * import { plugin as searchPlugin } from "@dbx-tools/search";
  * import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
  *
  * const support = agents.createAgent({
  *   instructions: "Answer from the docs; use `search` to find them.",
- *   tools: () => ({ search: searchToolApi.searchTool() }),
+ *   async tools(plugins) {
+ *     return { ...(await plugins.search.toolkit()) };
+ *   },
  * });
  *
  * await createApp({

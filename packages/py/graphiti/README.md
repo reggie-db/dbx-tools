@@ -25,7 +25,7 @@ uv add "dbx-tools-graphiti @ git+https://github.com/reggie-db/dbx-tools.git@main
 - supervises Graphiti and the managed model proxy with Honcho so they share one
   lifecycle, receive SIGTERM as process groups, and receive SIGKILL after
   Honcho's bounded shutdown grace if needed;
-- journals successful graph mutations to Postgres and reconstructs an
+- journals attempted graph mutations to Postgres and reconstructs an
   ephemeral graph backend during startup;
 - defaults to `databricks-gpt-5-nano` and the 1024-dimensional
   `databricks-gte-large-en` embedding model;
@@ -128,13 +128,32 @@ is present:
   where the application identity cannot write to `public`.
 
 When persistence is configured, Postgres initialization or replay failure stops
-server startup rather than running without durability. The journal is restart
-recovery for one live graph instance. It does not replicate new writes into
-other concurrently running Graphiti instances. A process crash after the graph
-write-ahead append but before the graph commit can leave an unacknowledged
-mutation in the journal; restart recovery applies journal entries at least once.
-Graphiti's UUID-backed mutation queries are compatible with this replay model,
-but a custom delegate or write predicate must supply replay-safe mutations.
+server startup rather than running without durability. The contract is
+write-ahead attempt recovery with ordered, at-least-once replay:
+
+- a direct write is appended before the delegated mutation;
+- a transaction callback is buffered as one journal append before the delegate
+  commits, so a later commit failure retains that attempted batch;
+- a driver retry invokes the callback again and records another attempt;
+- replay runs entries in sequence after clearing the ephemeral graph and stops
+  on the first invalid entry. Nothing is skipped or marked complete, so a later
+  startup retries the same entry;
+- transaction batch boundaries are atomic in Postgres at append time but are
+  not retained as replay groups. Replay executes each statement in sequence;
+- `clone()` and `with_database()` represent another view of the same logical
+  graph and share the journal without taking storage ownership. Independent
+  graphs require distinct storage namespaces;
+- the journal is append-only and has no checkpoint, retention, or compaction
+  policy. Deleting old entries without an external full snapshot makes replay
+  incomplete.
+
+The journal is restart recovery for one live graph instance. It does not
+replicate new writes into other concurrently running Graphiti instances. A
+process crash after the graph write-ahead append but before the graph commit can
+leave an unacknowledged mutation in the journal. Graphiti's UUID-backed mutation
+queries are compatible with this replay model, but a custom delegate or write
+predicate must supply replay-safe mutations. Non-idempotent writes can be
+applied more than once and are outside this contract.
 If the local Neo4j credential no longer matches its ephemeral data directory,
 the launcher resets that directory only when a Postgres journal is configured,
 then Graphiti rebuilds it from the journal. Without durable storage, an

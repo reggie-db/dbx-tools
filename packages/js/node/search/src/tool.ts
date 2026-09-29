@@ -2,14 +2,15 @@
  * The `search`, `universal_search`, and (opt-in) `add_documents`,
  * `create_index`, and `sync_index` Mastra tools.
  *
- * All three read the shared runtime primed by the plugin, so a tool spread
- * into an agent uses the deployment's default index, columns, page size, and
- * mode without any per-tool wiring. They run under the caller's OBO scope (the
- * client resolves the execution context's workspace client), so search runs as
- * the requesting user and Unity Catalog ACLs apply.
+ * App-integrated agents should consume the plugin's native toolkit so calls
+ * retain that plugin's config and provider backend. These standalone factories
+ * capture an explicit runtime or build an isolated one from config plus a
+ * provider. They run under the caller's OBO scope (the client resolves the
+ * execution context's workspace client), so search runs as the requesting user
+ * and Unity Catalog ACLs apply.
  *
  * The same tools are exposed to AppKit's own agents through the plugin's
- * `ToolProvider` (see `plugin.ts`); this module is the Mastra half.
+ * `ToolProvider` (see `plugin.ts`).
  *
  * @module
  */
@@ -17,10 +18,12 @@
 import { search as sharedSearch, type UpsertResult } from "@dbx-tools/shared-search";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
+import type { SearchReadBackend } from "./client.ts";
+import type { SearchPluginConfig } from "./config.ts";
 import { toCreateIndexOptions } from "./index-tools.ts";
 import { toDocumentArray } from "./query.ts";
-import { getSearchRuntime } from "./runtime.ts";
-import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
+import { createSearchRuntime, type SearchRuntime } from "./runtime.ts";
 import {
   ADD_DOCUMENTS_TOOL_DESCRIPTION,
   CREATE_INDEX_TOOL_DESCRIPTION,
@@ -35,10 +38,30 @@ import {
   universalSearchToolSchema,
 } from "./schema.ts";
 
-/** Common option accepted by every tool factory: override the tool id. */
+/** Options accepted by every standalone tool factory. */
 export interface SearchToolOptions {
   /** Override the tool id (defaults per tool). */
   id?: string;
+  /** Isolated runtime used by this standalone tool. Mutually exclusive with config/backend. */
+  runtime?: SearchRuntime;
+  /** Config used to create an isolated runtime. */
+  config?: SearchPluginConfig;
+  /** Provider used when creating a runtime from config. */
+  readBackend?: SearchReadBackend;
+}
+
+/** Resolve the isolated runtime captured by one standalone tool factory. */
+function toolRuntime(options: SearchToolOptions): SearchRuntime {
+  if (options.runtime && (options.config || options.readBackend)) {
+    throw new TypeError("search tool options accept runtime or config/readBackend, not both");
+  }
+  return (
+    options.runtime ??
+    createSearchRuntime({
+      config: options.config,
+      readBackend: options.readBackend,
+    })
+  );
 }
 
 /**
@@ -57,6 +80,7 @@ export interface SearchToolOptions {
  * ```
  */
 export function searchTool(options: SearchToolOptions = {}) {
+  const runtime = toolRuntime(options);
   return createTool({
     id: options.id ?? "search",
     description: SEARCH_TOOL_DESCRIPTION,
@@ -64,14 +88,14 @@ export function searchTool(options: SearchToolOptions = {}) {
     outputSchema: searchResultSchema,
     execute: async (input, context) => {
       const request = searchToolSchema.parse(input);
-      const { client } = getSearchRuntime();
-      return client.search(request.query, toSearchOptions(request, context?.abortSignal));
+      return runtime.client.search(request.query, toSearchOptions(request, context?.abortSignal));
     },
   });
 }
 
 /** Build the `universal_search` tool (federated search across every index). */
 export function universalSearchTool(options: SearchToolOptions = {}) {
+  const runtime = toolRuntime(options);
   return createTool({
     id: options.id ?? "universal_search",
     description: UNIVERSAL_SEARCH_TOOL_DESCRIPTION,
@@ -79,8 +103,7 @@ export function universalSearchTool(options: SearchToolOptions = {}) {
     outputSchema: searchResultSchema,
     execute: async (input, context) => {
       const request = universalSearchToolSchema.parse(input);
-      const { client } = getSearchRuntime();
-      return client.universalSearch(
+      return runtime.client.universalSearch(
         request.query,
         toUniversalSearchOptions(request, context?.abortSignal),
       );
@@ -93,6 +116,7 @@ export function universalSearchTool(options: SearchToolOptions = {}) {
  * Only install it when the plugin's write surface is enabled.
  */
 export function addDocumentsTool(options: SearchToolOptions = {}) {
+  const runtime = toolRuntime(options);
   const inputSchema = sharedSearch.searchDocumentSchema
     .array()
     .describe("Documents to add or update. Each must include the index primary key.");
@@ -104,7 +128,7 @@ export function addDocumentsTool(options: SearchToolOptions = {}) {
       .extend({ documents: inputSchema }),
     outputSchema: sharedSearch.upsertResultSchema,
     execute: async (input, context): Promise<UpsertResult> => {
-      const { client, config } = getSearchRuntime();
+      const { client, config } = runtime;
       const record = input as { index?: string; documents: unknown };
       const documents = toDocumentArray(record.documents);
       const index = record.index ?? config.defaultIndex ?? "";
@@ -120,6 +144,7 @@ export function addDocumentsTool(options: SearchToolOptions = {}) {
  * key, and columns from the request + plugin config.
  */
 export function createIndexTool(options: SearchToolOptions = {}) {
+  const runtime = toolRuntime(options);
   return createTool({
     id: options.id ?? "create_index",
     description: CREATE_INDEX_TOOL_DESCRIPTION,
@@ -127,8 +152,10 @@ export function createIndexTool(options: SearchToolOptions = {}) {
     outputSchema: indexInfoSchema,
     execute: async (input, context) => {
       const request = createIndexToolSchema.parse(input);
-      const { client } = getSearchRuntime();
-      return client.createIndex(request.name, toCreateIndexOptions(request, context?.abortSignal));
+      return runtime.client.createIndex(
+        request.name,
+        toCreateIndexOptions(request, context?.abortSignal),
+      );
     },
   });
 }
@@ -144,6 +171,7 @@ const syncIndexResultSchema = z.object({
  * source table). Only install it when the plugin's write surface is enabled.
  */
 export function syncIndexTool(options: SearchToolOptions = {}) {
+  const runtime = toolRuntime(options);
   return createTool({
     id: options.id ?? "sync_index",
     description: SYNC_INDEX_TOOL_DESCRIPTION,
@@ -151,7 +179,7 @@ export function syncIndexTool(options: SearchToolOptions = {}) {
     outputSchema: syncIndexResultSchema,
     execute: async (input, context) => {
       const request = syncIndexToolSchema.parse(input);
-      const { client, config } = getSearchRuntime();
+      const { client, config } = runtime;
       const index = request.index ?? config.defaultIndex ?? "";
       await client.syncIndex(index, context?.abortSignal);
       return { index, synced: true };

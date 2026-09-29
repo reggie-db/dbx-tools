@@ -21,10 +21,9 @@
 import { log } from "@dbx-tools/shared-core";
 import { load } from "cheerio";
 import { gotScraping } from "got-scraping";
-import type { ResolvedWebSearchConfig } from "./config.ts";
 import { scrapeSearchExecuteDefaults, toCallSettings } from "./defaults.ts";
 import { htmlFragmentToText } from "./html-text.ts";
-import { executeRead } from "./runtime.ts";
+import { executeRead, toWebSearchRuntime, type WebSearchRuntimeInput } from "./runtime.ts";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema.ts";
 
 const logger = log.logger("web-search/scrape");
@@ -72,10 +71,13 @@ export function parseDdgHtml(html: string): WebSearchCitation[] {
  */
 export async function runScrapeSearch(
   request: WebSearchRequest,
-  config: ResolvedWebSearchConfig,
+  runtimeOrConfig: WebSearchRuntimeInput,
   signal?: AbortSignal,
 ): Promise<WebSearchResult> {
+  const runtime = toWebSearchRuntime(runtimeOrConfig);
+  const { config } = runtime;
   const page = await executeRead(
+    runtime,
     "scrape-search",
     toCallSettings(scrapeSearchExecuteDefaults, config.timeoutMs, [
       "web-search",

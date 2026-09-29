@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
+import { publishLocalRelease } from "./local-publish.ts";
 import {
   releaseArchitectureOption,
   releaseLevelOption,
@@ -21,8 +22,12 @@ import {
   type ReleaseOs,
   type VersionLevel,
 } from "../src/_release-platform.ts";
-import { githubRepositoryIdentity, githubTokenArguments } from "../src/release-github.ts";
-import { publishLocalRelease } from "./local-publish.ts";
+import {
+  githubRepositoryIdentity,
+  githubRepositorySpecifier,
+  githubTokenArguments,
+  githubTokenEnvironmentName,
+} from "../src/release-github.ts";
 import { readWorkspaceVersion, resolveNextVersion } from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
@@ -278,7 +283,8 @@ program
       const githubEnvironment = {
         ...process.env,
         GH_HOST: account.hostname,
-        GH_TOKEN: account.token,
+        GH_REPO: githubRepositorySpecifier(account),
+        [githubTokenEnvironmentName(account.hostname)]: account.token,
       };
       const ensurePullRequest = (): void => {
         if (commandSucceeds(root, "gh", ["pr", "view", releaseBranch], githubEnvironment)) return;

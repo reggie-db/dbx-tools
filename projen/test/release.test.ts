@@ -344,6 +344,37 @@ describe("generated workflow safety", () => {
 });
 
 describe("optional Node release stage", () => {
+  it("rejects inherited native release options at runtime", () => {
+    const nativeOptions = {
+      name: "native-release-fixture",
+      outdir: mkdtempSync(join(tmpdir(), "native-release-option-")),
+      release: true,
+    } as unknown as ConstructorParameters<typeof DBXToolsNodeProject>[0];
+    try {
+      assert.throws(() => new DBXToolsNodeProject(nativeOptions), /native Projen release option/);
+    } finally {
+      rmSync(nativeOptions.outdir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects publication configuration when release mode is disabled", () => {
+    const disabledOutdir = mkdtempSync(join(tmpdir(), "release-conflict-"));
+    try {
+      assert.throws(
+        () =>
+          new DBXToolsNodeProject({
+            name: "release-conflict",
+            outdir: disabledOutdir,
+            releaseMode: "disabled",
+            nodeRelease: false,
+          }),
+        /cannot be combined/,
+      );
+    } finally {
+      rmSync(disabledOutdir, { recursive: true, force: true });
+    }
+  });
+
   it("can be omitted while retaining context verification", () => {
     const disabledOutdir = mkdtempSync(join(tmpdir(), "release-disabled-"));
     try {

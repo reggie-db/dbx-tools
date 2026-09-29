@@ -1,16 +1,17 @@
 /**
  * AppKit plugin (registered name: `teams`) that owns the Teams Adaptive Card
  * runtime - the resolved card version and the optional incoming-webhook URL the
- * {@link teamsCardTool} and the AppKit `teams.createCard` tool read. Registering
- * it resolves and logs the effective config (which card version is in force,
- * whether a webhook is wired up) so a misconfiguration is visible in the boot
- * logs rather than on the first card, and installs the plugin's `execute()` as
- * the runtime's executor so every build / post picks up AppKit's cache / retry /
- * timeout / telemetry chain.
+ * AppKit `teams.createCard` tool and routes read. Registering it resolves and
+ * logs the effective config (which card version is in force, whether a webhook
+ * is wired up) so a misconfiguration is visible in the boot logs rather than
+ * on the first card. The plugin's `execute()` is captured by its own runtime so
+ * every build / post picks up AppKit's cache / retry / timeout / telemetry
+ * chain.
  *
  * The plugin is also a `ToolProvider`, so an AppKit agent can reach a
- * `teams.createCard` tool directly; the {@link teamsCardTool} export is the same
- * capability for a Mastra agent. Both share the runtime primed here.
+ * `teams.createCard` tool directly. App-integrated Mastra agents consume this
+ * provider through `plugins.teams.toolkit()`; the {@link teamsCardTool} factory
+ * is the standalone surface and uses an explicit runtime or isolated config.
  *
  * The plugin mounts four routes under its base path (`/api/teams`):
  *
@@ -62,11 +63,10 @@ import {
 import { TEAMS_BUILD_SETTINGS, TEAMS_POST_SETTINGS, TEAMS_TURN_SETTINGS } from "./defaults.ts";
 import { deliverTurn, resolveServiceUrl } from "./messaging.ts";
 import {
-  buildCard,
-  getTeamsRuntime,
-  postCard,
-  resetTeamsRuntime,
-  setTeamsExecutor,
+  buildCardWithRuntime,
+  createTeamsRuntime,
+  postCardWithRuntime,
+  type TeamsRuntime,
 } from "./runtime.ts";
 import { CREATE_CARD_DESCRIPTION } from "./tool.ts";
 
@@ -95,8 +95,8 @@ const CREATE_TOOL = "createCard";
 const logger = log.logger("teams");
 
 /**
- * AppKit plugin that configures the Adaptive Card builder used by the
- * `create_teams_card` tool, and exposes card building as an AppKit agent tool.
+ * AppKit plugin that configures an instance-owned Adaptive Card runtime and
+ * exposes card building as an AppKit agent tool.
  *
  * @example
  * ```ts
@@ -127,6 +127,11 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
     config: { schema: TEAMS_CONFIG_SCHEMA },
   } satisfies PluginManifest<"teams">;
 
+  /** Runtime owned exclusively by this plugin instance. */
+  private readonly runtime: TeamsRuntime = createTeamsRuntime(this.config, (fn, settings) =>
+    this.execute(fn, settings),
+  );
+
   /**
    * The tool this plugin offers to an AppKit agent.
    *
@@ -144,19 +149,18 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
       schema: card.cardSpecSchema,
       annotations: { effect: "read" },
       autoInheritable: true,
-      execute: async (args, signal) => buildCard(card.cardSpecSchema.parse(args), signal),
+      execute: async (args, signal) =>
+        buildCardWithRuntime(this.runtime, card.cardSpecSchema.parse(args), signal),
     }),
   };
 
   /**
-   * Prime the shared runtime from this plugin's config (over env), route the
-   * tool's builds through this plugin's interceptor chain, and log the
-   * effective config so the resolved card version and whether a webhook is
-   * wired up are obvious at boot.
+   * Log the effective config so the resolved card version and whether a webhook
+   * is wired up are obvious at boot. Runtime construction already resolved
+   * config and captured this plugin's interceptor chain.
    */
   override async setup(): Promise<void> {
-    const { config } = getTeamsRuntime(this.config);
-    setTeamsExecutor((fn, settings) => this.execute(fn, settings));
+    const { config } = this.runtime;
     logger.info("ready", {
       cardVersion: config.cardVersion,
       webhook: config.webhookUrl ? "configured" : "disabled",
@@ -176,9 +180,9 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
     }
   }
 
-  /** Drop the shared runtime. Idempotent. */
-  async shutdown(): Promise<void> {
-    resetTeamsRuntime();
+  /** Release this plugin's instance-owned runtime. */
+  shutdown(): void {
+    return;
   }
 
   /**
@@ -256,13 +260,13 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
        * builds use {@link teamsCardTool} instead.
        */
       buildCard: (spec: card.CardSpec, signal?: AbortSignal): Promise<card.CardResult> =>
-        buildCard(spec, signal),
+        buildCardWithRuntime(this.runtime, spec, signal),
       /**
        * Post a compiled card to the configured Teams incoming webhook. Throws
        * when no webhook is configured.
        */
       postCard: (cardDocument: card.AdaptiveCard, signal?: AbortSignal): Promise<void> =>
-        postCard(cardDocument, signal),
+        postCardWithRuntime(this.runtime, cardDocument, signal),
     };
   }
 
@@ -310,7 +314,7 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
       headersSent?: boolean;
     },
   ): Promise<void> {
-    const { config } = getTeamsRuntime(this.config);
+    const { config } = this.runtime;
 
     // Local development mode: no bot registration, no token, and the reply comes
     // back in the HTTP response rather than through the Connector API (there is
@@ -412,7 +416,10 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
     if (!parsed.success) {
       return { ok: false, status: 400, message: parsed.error.message };
     }
-    return this.execute(async (signal) => buildCard(parsed.data, signal), TEAMS_BUILD_SETTINGS);
+    return this.execute(
+      async (signal) => buildCardWithRuntime(this.runtime, parsed.data, signal),
+      TEAMS_BUILD_SETTINGS,
+    );
   }
 
   /**
@@ -432,7 +439,7 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
       return { ok: false, status: 400, message: parsed.error.message };
     }
     const { activity, agentId } = parsed.data;
-    const { config } = getTeamsRuntime(this.config);
+    const { config } = this.runtime;
     const agent = resolveCardAgent(this.context?.getPlugins(), config.agentPlugin, agentId);
     if (!agent) {
       return agentId
@@ -469,8 +476,8 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
       return { ok: false, status: 400, message: parsed.error.message };
     }
     return this.execute(async (signal) => {
-      const built = await buildCard(parsed.data, signal);
-      await postCard(built.card, signal);
+      const built = await buildCardWithRuntime(this.runtime, parsed.data, signal);
+      await postCardWithRuntime(this.runtime, built.card, signal);
     }, TEAMS_POST_SETTINGS);
   }
 }

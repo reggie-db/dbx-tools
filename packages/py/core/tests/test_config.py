@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from dbx_tools.core import config
+
+
+def test_app_yaml_subset_matches_shared_yaml_1_2_fixtures() -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[3] / "test" / "fixtures" / "config" / "app-yaml.json"
+    )
+    fixtures = json.loads(fixture_path.read_text())
+
+    for fixture in fixtures:
+        parsed = config._parse_app_yaml(fixture["source"])
+        assert config.flatten_app_env(parsed) == fixture["expected"], fixture["name"]
 
 
 def test_environment_keys_normalize_human_names() -> None:

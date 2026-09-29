@@ -63,7 +63,7 @@ import { json, string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, isGenerated, makeReadonly, makeWritable, type HeaderOpts } from "./generated.ts";
 import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports.ts";
-import { isModuleFile, toPosix, recordedPackages, repoRoot } from "./packages.ts";
+import { isModuleFile, toPosix, recordedPackages, resolveRepoRoot } from "./packages.ts";
 
 /**
  * A `src`-relative posix path excluded from the root barrel:
@@ -558,13 +558,11 @@ function writeBarrel(file: string, content: string): void {
 export function generateBarrels(
   opts: { dirs?: string[]; includeRoot?: boolean; projectRoot?: string } = {},
 ): number {
-  const projectRoot = opts.projectRoot ?? repoRoot;
-  const dirs =
-    opts.dirs ??
-    [
-      ...(opts.includeRoot ? [projectRoot] : []),
-      ...recordedPackages(projectRoot).map((p) => p.dir),
-    ];
+  const projectRoot = opts.projectRoot ?? resolveRepoRoot();
+  const dirs = opts.dirs ?? [
+    ...(opts.includeRoot ? [projectRoot] : []),
+    ...recordedPackages(projectRoot).map((p) => p.dir),
+  ];
   let total = 0;
   const failures: { dir: string; err: unknown }[] = [];
   for (const dir of dirs) {

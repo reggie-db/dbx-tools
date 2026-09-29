@@ -355,7 +355,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   agent tools, federated search, Vector Search index lifecycle, reusable search
   UI, and an AppKit-compatible Lakebase full-text provider. Native AppKit owns
   Vector Search query execution, OBO, caching, reranking, pagination, routes,
-  and the React query hook.
+  and the React query hook. Every extension plugin owns its resolved config,
+  client, and provider runtime. Direct Mastra tool factories capture an
+  explicit runtime or build an isolated one from config plus a provider; they
+  never bind to whichever search plugin registered first.
 - `packages/js/node/email`, `packages/js/shared/email-template`,
   `packages/js/shared/email`, and `packages/js/ui/email` — approval-gated email
   tool/runtime, a universal React Email presentation layer, shared payload
@@ -402,7 +405,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   AppKit `web-search` plugin. HTML-to-text conversion and DuckDuckGo result
   extraction are parser-backed through direct `html-to-text`, `entities`, and
   `cheerio` dependencies; do not restore regex tag or selector parsing. Same
-  shape as node-email.
+  shape as node-email. Every plugin instance owns its policy and executor
+  runtime. App-integrated agents consume the plugin's native toolkit. Direct
+  Mastra tool factories capture an explicit runtime or create an isolated one
+  from their own config; they never inherit an arbitrary process plugin.
 - `packages/js/node/appkit-graphiti` — AppKit process plugin for the Python
   `dbx-tools-graphiti` runtime. It inherits the app's Lakebase environment,
   selects separate loopback ports for Graphiti, `dbx-model-proxy`, and Caddy,
@@ -480,7 +486,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   activity schemas, and a React `TeamsChat` / `AdaptiveCardView` /
   `AdaptiveCardGallery` built on the `adaptivecards` JS renderer (which ships no
   markdown parser — `ui-teams` installs `marked` as its `onProcessMarkdown`).
-  Same add-on shape as node-email.
+  Each Teams plugin owns its card config, webhook, and executor runtime.
+  App-integrated agents consume the native plugin toolkit; standalone tool
+  factories use an explicit runtime or isolated config. Same add-on shape as
+  node-email.
 - `packages/js/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
   packages.
 - `packages/js/node/databricks-zerobus` builds Zerobus infrastructure on the
@@ -492,7 +501,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `packages/js/node/core/src/config.ts`: scoped environment lookup, project-root
   `.env` discovery, lazy `databricks bundle validate --output json` fallback,
   Databricks App detection, and the same string/boolean/positive-number/list
-  coercions. Keep this base deliberately small so importing config, a hash,
+  coercions. Its dependency-free App YAML reader intentionally supports only
+  the shapes config consumes: top-level `env`/`resources` record lists,
+  one-level nested resource maps, and YAML 1.2 string scalars. Shared fixtures
+  pin quoted comments, entity-like punctuation, `yes`/`no`/`on`/`off` strings,
+  and rejection of file sources containing non-string scalars. Keep this base
+  deliberately small so importing config, a hash,
   stable key, or identifier formatter does not pull database/runtime
   dependencies with it. Its `bin` module is the dependency-free executable seam:
   resolve an existing executable first, otherwise bootstrap mise under a
@@ -565,7 +579,14 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `GraphDriver` while write-ahead journaling mutations through a supplied
   storage driver before the graph operation commits. The Postgres
   implementation uses `dbx-tools-postgres` and replays the ordered journal into
-  an empty delegated graph during startup. Its default journal table lives in
+  an empty delegated graph during startup. This is attempt recovery with
+  at-least-once replay: commit failures retain the append, driver retries append
+  each attempt, invalid entries fail startup without being skipped, and replay
+  does not retain transaction grouping. Clones share one logical journal;
+  independent graphs need separate namespaces. There is no automatic
+  checkpoint, retention, or compaction, and custom mutations must be
+  replay-safe because non-idempotent writes can run more than once. Its default
+  journal table lives in
   the dedicated `dbx_tools_graphiti` schema, which the journal provisions on
   startup; do not default writes to the commonly locked-down `public` schema.
   Keep the decorator backend-agnostic and keep Postgres connection resolution
@@ -937,7 +958,8 @@ why to use this package anyway:
   calls pause for a human. `web_search` uses the Databricks NATIVE web-search
   tool and resolves its own web-capable model (so an agent on a non-web model
   still searches); `web_fetch` uses got-scraping. Same add-on shape as
-  node-email (Mastra tool pair + AppKit plugin priming a shared runtime).
+  node-email (Mastra tool pair + AppKit plugin), with one isolated runtime per
+  plugin instance.
 - `@dbx-tools/appkit-graphiti`: AppKit has no Graphiti or embedded MCP sidecar
   surface. Use this package to run `dbx-tools-graphiti` beside an AppKit server,
   reuse the app's Lakebase binding for durable journal recovery, and publish
@@ -1197,7 +1219,9 @@ package that imports it.
 - `async` - `sleep`, `tieAbortSignal`, `combineAbortSignals`, `poll`.
   `combineAbortSignals` preserves zero/one-signal shortcuts and delegates
   multiple signals to native `AbortSignal.any`; do not restore a listener-owning
-  combiner. Do not import `node:timers/promises` for a delay.
+  combiner. The supported floor for this surface is Bun 1.3.14, Node 20.3,
+  Chrome 116, Firefox 124, and Safari 17.4. Do not import
+  `node:timers/promises` for a delay.
 - `@dbx-tools/core` `config` - Node configuration through constant data,
   process env, environment-specific `.env` files, the single Databricks bundle
   App's `config.env`, then `app.yaml` / `app.yml` env values. Root bundle

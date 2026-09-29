@@ -38,7 +38,6 @@ export class DBXToolsRootTsconfig extends Component {
     super(scope);
 
     if (scope instanceof typescript.TypeScriptProject) {
-      scope.tsconfigDev.addInclude(".projenrc.ts");
       return;
     }
 

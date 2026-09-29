@@ -50,7 +50,7 @@ import { log, object } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { header, isReadonly, makeReadonly, makeWritable } from "./generated.ts";
-import { readPackageManifest, repoRoot, recordedPackages } from "./packages.ts";
+import { readPackageManifest, recordedPackages, resolveRepoRoot } from "./packages.ts";
 
 const logger = log.logger("projen:codegen");
 
@@ -338,7 +338,7 @@ function generatePackage(
  * their barrels. `ts-to-zod` + `typescript` are lazy-loaded.
  */
 export function generateCodegen(
-  projectRoot: string = repoRoot,
+  projectRoot: string = resolveRepoRoot(),
   options: { includeRoot?: boolean } = {},
 ): string[] {
   const packageDirs = [

@@ -32,7 +32,8 @@ has no equivalent for.
   whose URL matches a pattern, mapped onto Mastra's `requireApproval`.
 - Every outbound call runs through AppKit's `execute()` chain - per-user cache,
   retry with jittered backoff, timeout, telemetry - and unwinds on an
-  `AbortSignal`.
+  `AbortSignal`. Each plugin instance owns its policy and executor, so multiple
+  apps in one process remain isolated.
 - Page and fallback-result HTML use parser-backed text conversion and selectors,
   including complete HTML entity decoding and malformed-markup recovery.
 
@@ -45,21 +46,20 @@ controls which sites are reachable and which calls pause for a human. Crucially,
 the web-search tool resolves its own web-search-capable model, so an agent
 running on any chat model (including one without web search) can still search. It
 is a thin add-on in the same shape as [`@dbx-tools/email`](../email): a Mastra
-tool pair plus an AppKit plugin that primes their shared runtime.
+tool pair plus an AppKit plugin.
 
 ## Register The AppKit Plugin
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
-import { plugin as webSearchPlugin, tool as webTool } from "@dbx-tools/appkit-web-search";
+import { plugin as webSearchPlugin } from "@dbx-tools/appkit-web-search";
 import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 
 const researcher = agents.createAgent({
   instructions: "Research questions using web_search, then read sources with web_fetch.",
-  tools: () => ({
-    web_search: webTool.webSearchTool(),
-    web_fetch: webTool.webFetchTool(),
-  }),
+  async tools(plugins) {
+    return { ...(await plugins["web-search"].toolkit()) };
+  },
 });
 
 await createApp({
@@ -76,10 +76,10 @@ await createApp({
 ```
 
 `plugin.webSearch()` resolves config (over env), compiles the URL policy, and
-primes the shared runtime the tools reuse. `tool.webSearchTool()` /
-`tool.webFetchTool()` build the two Mastra tools. Approval, when enabled,
-requires Mastra storage, so register `lakebase()` or configure storage in the
-Mastra plugin.
+owns the executor used by its tools. App-integrated Mastra agents should consume
+the native plugin toolkit as shown above, which preserves that plugin's policy,
+OBO scope, and AppKit execution chain. Approval, when enabled, requires Mastra
+storage, so register `lakebase()` or configure storage in the Mastra plugin.
 
 The plugin is also an AppKit `ToolProvider`, so an AppKit agent can take the
 same two tools without Mastra in the picture:
@@ -161,11 +161,13 @@ plugin.webSearch({
 ## Search And Fetch Without An Agent
 
 ```ts
-import { search, fetch, runtime } from "@dbx-tools/appkit-web-search";
+import { search, fetch, runtime, tool } from "@dbx-tools/appkit-web-search";
 import { getExecutionContext } from "@databricks/appkit";
 
-// Prime the shared runtime once (or let the plugin do it at setup):
-runtime.getWebSearchRuntime({ model: "gemini", allowedUrls: ["*.databricks.com"] });
+const webRuntime = runtime.createWebSearchRuntime({
+  model: "gemini",
+  allowedUrls: ["*.databricks.com"],
+});
 
 // web_search needs the OBO client + host from the active execution context:
 const ctx = getExecutionContext();
@@ -173,19 +175,33 @@ const host = (await ctx.client.config.getHost()).toString();
 
 const result = await search.runWebSearch(
   { query: "unity catalog lineage best practices" },
-  runtime.getWebSearchRuntime().config,
+  webRuntime,
   { client: ctx.client, host },
 );
 // result.answer, result.citations, result.model
 
-const page = await fetch.runWebFetch(
-  { url: result.citations[0]!.url, format: "text" },
-  runtime.getWebSearchRuntime().config,
-);
+const page = await fetch.runWebFetch({ url: result.citations[0]!.url, format: "text" }, webRuntime);
 ```
 
 Use direct calls for operational lookups, tests, or admin flows where a model is
-not involved. The same resolved runtime is used by the AppKit plugin and tools.
+not involved. Standalone Mastra tool factories likewise accept `runtime` or
+`config`; they never discover or attach to a process-global plugin:
+
+```ts
+const webRuntime = runtime.createWebSearchRuntime({
+  allowedUrls: ["*.databricks.com"],
+});
+
+const tools = {
+  web_search: tool.webSearchTool({ runtime: webRuntime }),
+  web_fetch: tool.webFetchTool({ runtime: webRuntime }),
+};
+```
+
+`getWebSearchRuntime()` remains as a deprecated compatibility constructor and
+returns a new isolated runtime on every call. Process-global
+`setWebSearchExecutor(executor)` registration is no longer supported; pass the
+runtime explicitly or provide the executor to `createWebSearchRuntime`.
 
 ## Restrict Which URLs Are Reachable
 
@@ -251,8 +267,11 @@ tool.webFetchTool({ approval: "*.internal.example.com" });
 // The same thing, with the mode named:
 tool.webFetchTool({ approval: { mode: "urls", patterns: ["*.internal.example.com"] } });
 
-// Plugin-wide default (tools inherit unless they set their own):
+// Plugin toolkit default:
 plugin.webSearch({ approval: ["*.internal.example.com", "*.corp.example.com"] });
+
+// Standalone tool config:
+tool.webFetchTool({ config: { approval: ["*.internal.example.com"] } });
 ```
 
 Every spelling normalizes to one of three modes - `{ mode: "none" }`,
@@ -323,9 +342,9 @@ the [Databricks docs](https://docs.databricks.com/aws/en/machine-learning/model-
 - `fetch` - `runWebFetch()` over got-scraping.
 - `html-text` - `htmlToText()` / `htmlFragmentToText()` / `decodeHtmlEntities()`, shared by
   `fetch` and the DuckDuckGo scrape fallback.
-- `runtime` - shared runtime and the executor outbound calls run through:
-  `getWebSearchRuntime()`, `setWebSearchExecutor()`, `executeRead()`,
-  `resetWebSearchRuntime()`.
+- `runtime` - isolated runtime construction and execution:
+  `createWebSearchRuntime()`, `createResolvedWebSearchRuntime()`,
+  `executeRead()`, plus deprecated global-era compatibility names.
 - `config` - config types, JSON schema, `resolveWebSearchConfig()`, URL policy
   and approval helpers.
 - `allowlist` - URL allow-list parsing/compiling on top of `@dbx-tools/path`.

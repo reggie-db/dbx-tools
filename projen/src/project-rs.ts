@@ -1501,7 +1501,9 @@ export class DBXToolsRustWorkspace {
     if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const plan = planRustRelease(project, options, targets, this.packages, this.bindingMappings);
     const workflow = tryReleaseWorkflow(project);
-    if (!workflow) return;
+    if (!workflow) {
+      throw new Error("Rust release requires the root dbx-tools release mode");
+    }
     configureRustReleaseTask(project, plan);
     if (plan.hasTargetOutputs && plan.targets.length) {
       workflow.addJob("rust-build", rustBuildJob(plan));

@@ -1,16 +1,16 @@
 /**
  * AppKit plugin (registered name: `web-search`) that owns the resolved
  * web-search runtime - the URL policy, result / length caps, timeout, and
- * default approval gate the {@link webSearchTool} / {@link webFetchTool}
- * read. Registering it resolves and logs the effective config (which URL
- * policy is in force, the caps) so a misconfiguration is visible in the boot
- * logs rather than on the first search, and installs the plugin's
- * `execute()` as the runtime's executor so every outbound call picks up
- * AppKit's cache / retry / timeout / telemetry chain.
+ * default approval gate its tools read. Registering it resolves and logs the
+ * effective config (which URL policy is in force, the caps) so a
+ * misconfiguration is visible in the boot logs rather than on the first
+ * search. The plugin's `execute()` is captured by its own runtime so every
+ * outbound call picks up AppKit's cache / retry / timeout / telemetry chain.
  *
  * The plugin also implements AppKit's `ToolProvider`, so an AppKit agent gets
- * `web_search` / `web_fetch` without going through Mastra; the Mastra tools in
- * `tool.ts` are the other half and share the same runtime.
+ * `web_search` / `web_fetch` without going through Mastra. App-integrated
+ * Mastra agents consume this provider through `plugins["web-search"].toolkit()`;
+ * standalone factories in `tool.ts` use their own explicit runtime or config.
  *
  * @module
  */
@@ -38,7 +38,7 @@ import {
   type WebSearchPluginConfig,
 } from "./config.ts";
 import { runWebFetch } from "./fetch.ts";
-import { getWebSearchRuntime, resetWebSearchRuntime, setWebSearchExecutor } from "./runtime.ts";
+import { createWebSearchRuntime, type WebSearchRuntime } from "./runtime.ts";
 import {
   webFetchRequestSchema,
   webSearchRequestSchema,
@@ -120,6 +120,11 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
     config: { schema: WEB_SEARCH_CONFIG_SCHEMA },
   } satisfies PluginManifest<"web-search">;
 
+  /** Runtime owned exclusively by this plugin instance. */
+  private readonly runtime: WebSearchRuntime = createWebSearchRuntime(this.config, (fn, settings) =>
+    this.execute(fn, settings),
+  );
+
   /**
    * Promote the serving endpoint to a required resource once a deployment
    * pins one, through plugin config or either environment name. Left optional
@@ -166,13 +171,12 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
   };
 
   /**
-   * Prime the shared runtime from this plugin's config (over env), route the
-   * tools' outbound calls through this plugin's interceptor chain, and log the
-   * effective policy so an active allow-list / caps are obvious at boot.
+   * Log the effective policy so an active allow-list and caps are obvious at
+   * boot. Runtime construction already resolved config and captured this
+   * plugin's interceptor chain.
    */
   override async setup(): Promise<void> {
-    const { config } = getWebSearchRuntime(this.config);
-    setWebSearchExecutor((fn, settings) => this.execute(fn, settings));
+    const { config } = this.runtime;
     logger.info("ready", {
       model: config.model ?? `fallbacks:[${config.modelFallbacks.join(", ")}]`,
       modelSource: config.modelSource,
@@ -186,24 +190,16 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
   }
 
   /**
-   * Drop the shared runtime so a restarted app re-resolves config and does not
-   * keep calling through a torn-down plugin's `execute()`. Bounded and
-   * idempotent: there is no connection to drain, only the memo to clear.
+   * No runtime resources require draining. The instance-owned config and
+   * executor become unreachable with this plugin.
    */
-  async shutdown(): Promise<void> {
-    resetWebSearchRuntime();
+  shutdown(): void {
+    return;
   }
 
-  /**
-   * Abort in-flight work. AppKit's graceful shutdown only invokes this hook -
-   * it never calls {@link shutdown} - so the runtime memo is dropped from here
-   * to keep a restarted app from calling through a torn-down `execute()`. The
-   * teardown is synchronous and idempotent, so the un-awaited call costs
-   * nothing.
-   */
+  /** Abort in-flight work owned by this plugin instance. */
   override abortActiveOperations(): void {
     super.abortActiveOperations();
-    void this.shutdown();
   }
 
   /** AppKit `ToolProvider`: the tool definitions offered to an agent. */
@@ -224,14 +220,14 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
     return {
       /**
        * Run a web search directly (bypassing the agent tool). Resolves the
-       * OBO client from the active execution context and reads the shared
-       * runtime config primed at setup.
+       * OBO client from the active execution context and reads this plugin's
+       * runtime config.
        */
       search: (request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> =>
         this.search(request, signal),
       /**
        * Fetch one URL directly (bypassing the agent tool). Enforces the
-       * configured URL policy. Reads the shared runtime config.
+       * configured URL policy.
        */
       fetch: (request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> =>
         this.fetch(request, signal),
@@ -239,16 +235,11 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
   }
 
   private async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
-    return runWebSearch(
-      request,
-      getWebSearchRuntime().config,
-      await resolveWebSearchContext(),
-      signal,
-    );
+    return runWebSearch(request, this.runtime, await resolveWebSearchContext(), signal);
   }
 
   private async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> {
-    return runWebFetch(request, getWebSearchRuntime().config, signal);
+    return runWebFetch(request, this.runtime, signal);
   }
 }
 
@@ -258,12 +249,14 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as webSearchPlugin, tool as webTool } from "@dbx-tools/appkit-web-search";
+ * import { plugin as webSearchPlugin } from "@dbx-tools/appkit-web-search";
  * import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
  *
  * const researcher = agents.createAgent({
  *   instructions: "Research questions with web_search, then read sources with web_fetch.",
- *   tools: () => ({ web_search: webTool.webSearchTool(), web_fetch: webTool.webFetchTool() }),
+ *   async tools(plugins) {
+ *     return { ...(await plugins["web-search"].toolkit()) };
+ *   },
  * });
  *
  * await createApp({

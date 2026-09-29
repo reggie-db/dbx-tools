@@ -17,8 +17,9 @@ alternative to a native plugin. The browser-safe card schemas live in
 
 - AppKit plugin registration that resolves config, logs the effective card
   version and webhook state at boot, and mounts card-build / card-post routes.
-- Two agent surfaces over one runtime: a Mastra `create_teams_card` tool and an
-  AppKit `teams.createCard` tool, both taking the small `CardSpec` vocabulary.
+- Two agent surfaces: an AppKit `teams.createCard` tool and a standalone Mastra
+  `create_teams_card` factory, both taking the small `CardSpec` vocabulary.
+  Every plugin owns its card config, webhook, and executor runtime.
 - A deterministic builder that compiles a `CardSpec` (title, subtitle, text,
   key/value facts, link actions) into a valid Adaptive Card 1.5 document, so a
   card is well-formed by construction rather than by hoping the model produced
@@ -43,12 +44,14 @@ alternative to a native plugin. The browser-safe card schemas live in
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
-import { plugin as teamsPlugin, tool as teamsTool } from "@dbx-tools/teams";
+import { plugin as teamsPlugin } from "@dbx-tools/teams";
 import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Summarize results as Teams cards when asked.",
-  tools: () => ({ create_teams_card: teamsTool.teamsCardTool() }),
+  async tools(plugins) {
+    return { ...(await plugins.teams.toolkit()) };
+  },
 });
 
 await createApp({
@@ -60,12 +63,12 @@ await createApp({
 });
 ```
 
-`plugin.teams()` resolves config, primes the shared runtime, logs the effective
-card version and whether a webhook is wired up, and mounts the build / post
-routes under `/api/teams`. `tool.teamsCardTool()` creates the Mastra
-`create_teams_card` tool; the AppKit `teams.createCard` tool is the same
-capability for an AppKit agent and is auto-inheritable because building a card
-has no side effects.
+`plugin.teams()` resolves config into an instance-owned runtime, logs the
+effective card version and whether a webhook is wired up, and mounts the build /
+post routes under `/api/teams`. App-integrated agents should consume its native
+toolkit as shown above, preserving the owning plugin's AppKit execution chain.
+The `teams.createCard` tool is auto-inheritable because building a card has no
+side effects.
 
 ## Converse In Cards
 
@@ -148,6 +151,21 @@ const { card } = builder.buildCardResult({
 // `card` is a full Adaptive Card document; render it with @dbx-tools/ui-teams
 // or post it with the plugin's `postCard` export.
 ```
+
+For a standalone Mastra tool, provide config directly or share an explicit
+runtime across factories:
+
+```ts
+import { runtime, tool } from "@dbx-tools/teams";
+
+const teamsRuntime = runtime.createTeamsRuntime({ cardVersion: "1.5" });
+const createTeamsCard = tool.teamsCardTool({ runtime: teamsRuntime });
+```
+
+`getTeamsRuntime()` remains as a deprecated compatibility constructor and
+returns a new isolated runtime on every call. Process-global
+`setTeamsExecutor(executor)` registration is no longer supported; pass the
+runtime explicitly or provide the executor to `createTeamsRuntime`.
 
 ## Why Use This Over Native AppKit
 
@@ -252,8 +270,9 @@ Mounted under the plugin base path `/api/teams`:
   calls a reply is delivered through.
 - `messaging` - `deliverTurn` (acknowledge-then-deliver turn) and
   `resolveServiceUrl`.
-- `runtime` - `getTeamsRuntime`, `setTeamsExecutor`, `buildCard`, `postCard`,
-  and the `TeamsExecutor` / `TeamsRuntime` types.
+- `runtime` - `createTeamsRuntime`, `buildCardWithRuntime`,
+  `postCardWithRuntime`, standalone `buildCard` / `postCard`, and deprecated
+  global-era compatibility names.
 - `config` - `resolveTeamsConfig`, `TEAMS_CONFIG_SCHEMA`, the env-name
   constants, and the `TeamsPluginConfig` / `ResolvedTeamsConfig` types.
 - `defaults` - the interceptor execution settings and named caps.

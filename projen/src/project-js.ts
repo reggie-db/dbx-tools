@@ -16,6 +16,7 @@ import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescrip
 import { BuildWorkflow } from "projen/lib/build";
 import { AutoMerge } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
+import type { ReleaseProjectOptions } from "projen/lib/release";
 import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
 import {
@@ -512,6 +513,43 @@ function defaultTypeScriptProjectOptions(options: DBXToolsTypeScriptProjectOptio
 // Pinned to match the subproject defaults so bun resolves one TypeScript and
 // one runtime-compatible set of Bun globals across the workspace.
 const DEV_DEPS_ROOT: string[] = ["typescript@^5.9.3", `@types/bun@${BUN_VERSION}`];
+const NATIVE_RELEASE_OPTIONS = [
+  "jsiiReleaseVersion",
+  "majorVersion",
+  "minMajorVersion",
+  "npmDistTag",
+  "prerelease",
+  "publishDryRun",
+  "publishTasks",
+  "releasableCommits",
+  "release",
+  "releaseBranches",
+  "releaseEnvironment",
+  "releaseEveryCommit",
+  "releaseFailureIssue",
+  "releaseFailureIssueLabel",
+  "releaseToNpm",
+  "releaseTrigger",
+  "releaseWorkflowName",
+  "releaseWorkflowSetupSteps",
+  "versionrcOptions",
+] as const;
+
+function validateReleaseOptions(options: DBXToolsJavaScriptProjectOptions): void {
+  for (const key of NATIVE_RELEASE_OPTIONS) {
+    if ((options as Record<string, unknown>)[key] !== undefined) {
+      throw new Error(
+        `${key} is a native Projen release option; use dbx-tools release options instead`,
+      );
+    }
+  }
+  if (
+    options.releaseMode === "disabled" &&
+    (options.releaseDocs !== undefined || options.nodeRelease !== undefined)
+  ) {
+    throw new Error("releaseMode disabled cannot be combined with releaseDocs or nodeRelease");
+  }
+}
 
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export type DBXToolsReleaseMode = "dbx-tools" | "disabled";
@@ -524,8 +562,16 @@ export interface PullRequestTitlePolicyOptions {
   readonly requireScope?: boolean;
 }
 
+type SupportedWorkflowOptions = Pick<
+  ReleaseProjectOptions,
+  "postBuildSteps" | "workflowContainerImage" | "workflowRunsOn" | "workflowRunsOnGroup"
+>;
+
 export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
-  Partial<Omit<javascript.NodeProjectOptions, "release" | "releaseTrigger">> &
+  Partial<
+    Omit<javascript.NodeProjectOptions, keyof ReleaseProjectOptions | "release" | "releaseToNpm">
+  > &
+  Partial<SupportedWorkflowOptions> &
   DBXToolsConfigOptions &
   DBXToolsPNPMWorkspaceOptions & {
     /**
@@ -579,6 +625,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
     readonly releaseMode?: DBXToolsReleaseMode;
+    /** Prefix for generated release tags. Defaults to `v`. */
+    readonly releaseTagPrefix?: string;
     /** Semantic PR title validation policy. Omitted or `false` disables title validation. */
     readonly pullRequestTitlePolicy?: false | PullRequestTitlePolicyOptions;
     /** Repository output paths excluded from generated workflow dependency-cache hashing. */
@@ -602,7 +650,10 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
 
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
 export type DBXToolsTypeScriptProjectOptions = Partial<
-  Omit<typescript.TypeScriptProjectOptions, "release" | "releaseTrigger">
+  Omit<
+    typescript.TypeScriptProjectOptions,
+    keyof ReleaseProjectOptions | "release" | "releaseToNpm"
+  >
 > &
   DBXToolsJavaScriptProjectOptions & {
     /** Emit the projen-owned bun app scaffolding (`bunfig.toml`/`dev.ts`/`build.ts`). */
@@ -630,6 +681,7 @@ export class DBXToolsNodeProject
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
+    validateReleaseOptions(options);
     const { name, scope } = resolveIdentity(options);
     // Holds the workspace state (members/catalog/allowBuilds/overrides). Under
     // bun, projen's base constructor does NOT create the `PnpmWorkspaceYaml`
@@ -742,6 +794,7 @@ export class DBXToolsTypeScriptProject
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
+    validateReleaseOptions(options);
     const { name, scope } = resolveIdentity(options);
     const parent = options?.parent;
     const pnpmWorkspace = parent ? undefined : new PnpmWorkspaceState(options);
@@ -1352,9 +1405,13 @@ function initProject(
     fileExtensions: [".ts", ".tsx"],
     projectService: true,
     prettier: Boolean(project.prettier),
-    tsconfigPath: "./tsconfig.json",
+    tsconfigPath:
+      project instanceof typescript.TypeScriptProject
+        ? (project.tsconfig?.fileName ?? "./tsconfig.json")
+        : "./tsconfig.json",
     commandOptions: { fix: false },
   });
+  eslint.allowDefaultProjectFiles(".projenrc.ts");
   project.addTask("eslint:fix", {
     description: "Fix ESLint issues across the codebase",
     exec: "bun run eslint -- --fix",

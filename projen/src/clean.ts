@@ -25,7 +25,7 @@ import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
 import { isReadonly, makeWritable } from "./generated.ts";
-import { repoRoot, toPosix } from "./packages.ts";
+import { resolveRepoRoot, toPosix } from "./packages.ts";
 
 /**
  * Basenames `clean` never removes even when they are generated/read-only. `.gitignore`
@@ -40,7 +40,7 @@ const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
  * ignores AND every dot-prefixed folder (`.projen`, `.vscode`, `.github`, ...), and
  * {@link CLEAN_SKIP_FILES} entry (`.gitignore`).
  */
-export function listGeneratedFiles(root: string = repoRoot): string[] {
+export function listGeneratedFiles(root: string = resolveRepoRoot()): string[] {
   const rel = (f: string): string => toPosix(relative(root, f));
   return [...find.findFiles("**/*", { cwd: root })]
     .map((f) => join(root, f))
@@ -57,7 +57,7 @@ export function listGeneratedFiles(root: string = repoRoot): string[] {
  * own - removing the top-level dir takes it along. Other vendor/build/VCS dirs are
  * skipped for speed.
  */
-export function listNodeModulesDirs(root: string = repoRoot): string[] {
+export function listNodeModulesDirs(root: string = resolveRepoRoot()): string[] {
   if (!existsSync(root)) return [];
   const rel = (f: string): string => toPosix(relative(root, f));
   return [...find.findFiles("**/node_modules", { cwd: root, ignoreOptions: { dot: false } })]

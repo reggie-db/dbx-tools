@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { installPythonBindings } from "./uniffi-python.js";
 import { makeReadonly, makeWritable, stampGenerated } from "../src/generated.ts";
 import type { RustWorkspaceMapping } from "../src/project-rs.ts";
 import {
@@ -22,7 +23,6 @@ import {
   addTypeScriptExtensionsToBindingImports,
   makeDefaultedInterfaceParametersOptional,
 } from "../src/uniffi.ts";
-import { installPythonBindings } from "./uniffi-python.js";
 
 const { values } = parseArgs({
   options: {

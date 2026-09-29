@@ -34,6 +34,11 @@ pip install "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@mai
   Config-file discovery and parsed results are single-attempt per source key:
   found paths, missing files, empty records, invalid records, and `None` results
   all cache.
+- App YAML parsing stays dependency-free and deliberately bounded to the
+  `env`/`resources` record-list shapes consumed by configuration. String
+  scalars follow YAML 1.2 for `yes`, `no`, `on`, and `off`; quoted values may
+  carry trailing comments. A non-string scalar invalidates that file source
+  rather than being coerced.
 - Deployed Databricks Apps skip local files and bundle validation because the
   platform has already populated real environment variables.
 - `DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` forces Databricks App runtime

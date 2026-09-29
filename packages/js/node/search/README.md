@@ -61,12 +61,14 @@ the Lakebase full-text implementation of the AppKit AI Search contract.
 ```ts
 import { createApp, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
-import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
+import { plugin as searchPlugin } from "@dbx-tools/search";
 import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Answer from the docs; use `search` to find them.",
-  tools: () => ({ search: searchToolApi.searchTool() }),
+  async tools(plugins) {
+    return { ...(await plugins.search.toolkit()) };
+  },
 });
 
 await createApp({
@@ -88,6 +90,25 @@ await createApp({
   ],
 });
 ```
+
+Every `search()` plugin owns its resolved config, client, and provider backend.
+App-integrated agents should consume its native toolkit as shown above, which
+keeps calls attached to that exact plugin. Standalone Mastra factories accept an
+explicit runtime, or config plus a provider:
+
+```ts
+import { runtime, tool } from "@dbx-tools/search";
+
+const searchRuntime = runtime.createSearchRuntime({
+  config: { index: "main.support.docs" },
+  readBackend,
+});
+const search = tool.searchTool({ runtime: searchRuntime });
+```
+
+`getSearchRuntime()` remains as a deprecated compatibility constructor and
+returns a new isolated runtime on every call. It does not discover a registered
+plugin or provider.
 
 Use Lakebase full-text search without changing the AppKit UI hook:
 
@@ -290,7 +311,8 @@ default.
   full-text provider.
 - `lakebase` - `LakebaseSearchBackend`, the provider's `tsvector` runtime.
 - `query` - `toDocumentArray`, shared by write routes and tools.
-- `runtime` - `getSearchRuntime` / `resetSearchRuntime` (the shared client).
+- `runtime` - `createSearchRuntime` / `setSearchReadBackend` for isolated
+  clients, plus deprecated global-era compatibility names.
 - `schema` - the tool descriptions and re-exported request schemas.
 
 Browser-safe schemas live in

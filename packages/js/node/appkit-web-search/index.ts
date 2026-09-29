@@ -24,7 +24,7 @@ export type { WebSearchExecuteConfig, WebSearchExecutionSettings } from "./src/d
 export { WebSearchPlugin, webSearch } from "./src/plugin.ts";
 export { WEB_SEARCH_PROVIDERS } from "./src/provider.ts";
 export type { WebSearchProvider, WebSearchProviderSpec } from "./src/provider.ts";
-export type { WebSearchExecutor, WebSearchRuntime } from "./src/runtime.ts";
+export type { WebSearchExecutor, WebSearchRuntime, WebSearchRuntimeInput } from "./src/runtime.ts";
 export { WEB_SEARCH_TOOL_DESCRIPTION, WEB_FETCH_TOOL_DESCRIPTION, webSearchRequestSchema, webSearchCitationSchema, webSearchResultSchema, webFetchRequestSchema, webFetchResultSchema } from "./src/schema.ts";
 export type { WebSearchRequest, WebSearchCitation, WebSearchResult, WebFetchRequest, WebFetchResult } from "./src/schema.ts";
 export type { WebSearchContext } from "./src/search.ts";
