@@ -1,50 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { QueuedSteer, ToolEvent } from "../src/react/types.ts";
-import {
-  enqueueSteer,
-  removeSteer,
-  reorderSteers,
-  terminateRunningToolEvents,
-} from "../src/support/thread-sessions.ts";
-
-const event = (id: string, status: ToolEvent["status"]): ToolEvent => ({
-  id,
-  toolName: "ask_genie",
-  status,
-});
-
-describe("terminateRunningToolEvents", () => {
-  it("settles running pills to done", () => {
-    const next = terminateRunningToolEvents({
-      msg1: [event("a", "running"), event("b", "done")],
-      msg2: [event("c", "running")],
-    });
-    assert.deepEqual(
-      next.msg1!.map((e) => e.status),
-      ["done", "done"],
-    );
-    assert.deepEqual(
-      next.msg2!.map((e) => e.status),
-      ["done"],
-    );
-  });
-
-  it("leaves already-terminal pills untouched and returns the same ref when nothing ran", () => {
-    const input = {
-      msg1: [event("a", "done"), event("b", "error")],
-    };
-    const next = terminateRunningToolEvents(input);
-    // No running pills, so the map is returned unchanged (identity) to let
-    // callers skip a needless state update.
-    assert.equal(next, input);
-  });
-
-  it("handles an empty map", () => {
-    const input = {};
-    assert.equal(terminateRunningToolEvents(input), input);
-  });
-});
+import type { QueuedSteer } from "../src/react/types.ts";
+import { enqueueSteer, removeSteer, reorderSteers } from "../src/support/thread-sessions.ts";
 
 describe("steer queue", () => {
   const steer = (id: string, text: string): QueuedSteer => ({ id, text });
@@ -97,5 +54,14 @@ describe("steer queue", () => {
       reorderSteers(q, ["a", "a", "b"]).map((s) => s.id),
       ["a", "b"],
     );
+  });
+
+  it("preserves each steer's captured request context through reordering", () => {
+    const q = [
+      { ...steer("a", "1"), requestContext: { storeId: "store-a" } },
+      { ...steer("b", "2"), requestContext: { storeId: "store-b" } },
+    ];
+
+    assert.deepEqual(reorderSteers(q, ["b", "a"]), [q[1], q[0]]);
   });
 });

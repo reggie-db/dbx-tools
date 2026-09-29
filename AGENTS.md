@@ -352,7 +352,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   tool/runtime, a universal React Email presentation layer, shared payload
   schemas, and matching React approval/compose surfaces. Outbound HTML and
   browser previews share the same React Email components, with the repository
-  brand applied unless a consumer supplies its own `EmailBrand`.
+  brand applied unless a consumer supplies its own `EmailBrand`. `emailTool`
+  defaults to `requireApproval: true` but accepts Mastra's native conditional
+  approval function for classifier-backed or durable prior-decision policy.
+  Fail closed. Regular Agent approval memory is not an Agent Controller
+  permission store, so never emulate remembered approval in browser state.
 - `packages/js/node/auth-gate`, `packages/js/shared/auth`, and
   `packages/js/ui/auth` - Better Auth passwordless runtime, browser-safe status
   contracts, and passkey-first React UI. Better Auth owns users, email OTP
@@ -841,8 +845,16 @@ why to use this package anyway:
   QUEUE (submit while running to enqueue; queue drains oldest-first, or send any
   item now to interrupt), and a PLACEABLE conversation surface
   (`threadPlacement`: `left`/`right` dock, `top` editor-style tabs, `disabled`,
-  or `auto` choosing from the chat's own measured width). Native AppKit UI is
-  enough for general components or native Genie/Serving hooks.
+  or `auto` choosing from the chat's own measured width). `MastraAssistant`
+  adds the persistent outer shell the feature apps otherwise repeat: controlled
+  floating launcher, route-stable chat state, dock or overlay placement on any
+  edge, optional resizing, mobile fallback, and an external `open(context)`
+  controller. Its optional header owns New, History, and Close controls with
+  replaceable icons while conversation pills remain on the second row; without
+  the header those controls stay inline with the pills. Mount it inside the
+  app's existing auth gate and above the route outlet; the component does not
+  own authentication. Native AppKit UI is enough for general components or
+  native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need Agent Mode SSE projected into async iterators,
   snapshot diffing, typed events, custom logging/tests, or chart/data planning.
@@ -2528,7 +2540,7 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
 - **Default-model endpoint.** The picker labels its default option (the model
   used when the client pins none) from `GET /default-model` (and
   `/default-model/:agentId` - agent-scoped by the same `/:agentId` path-suffix
-  convention as `/history`/`/threads`/`/suggestions`, NOT a query param), which
+  convention as `/suggestions`, NOT a query param), which
   returns `{ agentId, model, displayName }` with the server-humanized name so
   the label never flashes a raw id or waits on `/models`. `model`/`displayName`
   are null for a dynamic (call-time) model. Route: `MASTRA_ROUTES.defaultModel`
@@ -2555,7 +2567,13 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   request carries its own thread + model as PER-CALL headers (`streamAgent` in
   `mastra-client.ts`) with its own `AbortSignal` — there is NO shared mutable
   client routing (the old `setThreadId`/`setModelOverride` header mutation was
-  removed) so concurrent runs never collide. Cancel is thread-addressed
+  removed) so concurrent runs never collide. Normal turns and approval
+  continuations use `@mastra/ai-sdk`'s official server-side `chatRoute`;
+  browser code consumes it with the AI SDK's `DefaultChatTransport` and
+  `readUIMessageStream`. Keep `toAISdkStream` on the server because its package
+  imports Node's `stream/web`; importing it into `ui-mastra` breaks browser
+  builds. Do not restore a handwritten text/reasoning/tool reducer. Cancel is
+  thread-addressed
   (`stop(threadId?)`), exposed to the drawer as `onCancelThread`. Mid-turn
   steering is a QUEUE, not a single action: `sendMessage` on a running thread
   pushes a `QueuedSteer` onto `session.queuedSteers` (no interrupt); the queue
@@ -2568,8 +2586,17 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   `removeSteer` / `reorderSteers`) are pure + unit-tested in thread-sessions.ts. True mid-run message delivery
   (Mastra's experimental `queue-message` / `deliver`) was NOT used — the agent
   didn't fold queued messages into the live turn, so enqueue + interrupt-restart
-  is the reliable model. Cancelling / superseding a run settles stuck `running`
-  tool pills via `terminateRunningToolEvents` (thread-sessions.ts).
+  is the reliable model.
+- **Mastra memory owns conversation history.** The rendered transcript remains
+  client-side UI state, but each turn sends only its new user `UIMessage`;
+  Mastra loads prior messages from memory. Sending the rendered transcript
+  would duplicate remembered turns and grow the prompt on every request.
+  History, thread list/update/delete, message deletion, and suspended-run
+  discovery use `@mastra/client-js`'s native resource-scoped memory and agent
+  APIs. The scoped AppKit gate allowlists only those exact native paths.
+  Regeneration first deletes the persisted user/assistant pair, then replays the
+  user message. Persisted suspended runs restore actionable approval cards after
+  reloads and server restarts.
 - **Thread placement is ONE option with THREE surfaces, all the same list.**
   `threadPlacement` (`disabled` | `auto` | `left` | `right` | `top`) picks
   where conversation management renders; `enableThreads: false` collapses into
@@ -2595,6 +2622,27 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   inside a collapsed/resizable host remeasures when it opens. The observer
   ignores zero and unchanged widths because the group height follows the
   textarea; reacting to height would create a resize loop. Preserve AppKit's
-  `min-h-16`, the `max-h-48` cap, and internal vertical scrolling. Input and
-  history-placeholder changes remain direct measurement triggers for runtimes
-  without `ResizeObserver`.
+  AppKit's `min-h-16`, the configured maximum, and internal vertical scrolling.
+  Input and history-placeholder changes remain direct measurement triggers for
+  runtimes without `ResizeObserver`.
+- **The composer follows a top-input, fixed-footer layout.** The textarea grows
+  from AppKit's `min-h-16` baseline to its configured cap and then scrolls;
+  the footer never moves with that scroll. Host leading actions stay left,
+  while per-turn controls, the inline model selector, and Send/Stop stay
+  right. Enter sends and Shift+Enter inserts a newline. Do not put model or
+  conversation actions in a detached toolbar below the composer.
+- **Application request context is Mastra-native and per run.** Browser callers
+  pass a typed plain record or `RequestContext<T>` through `useMastraChat` /
+  `MastraAssistant`; the driver snapshots it when a turn or queued steer is
+  submitted and reuses that snapshot for approval resume and regeneration.
+  The client sends Mastra's standard `requestContext` body field, and agents
+  declare the owning `requestContextSchema` so instructions/tools receive typed,
+  runtime-validated values. Client context is application metadata only:
+  AppKit-Mastra always overwrites trusted user, resource, thread, auth, scope,
+  model, and trace keys so a browser cannot change conversation ownership.
+- **Tool call pills preserve complete request and response payloads.**
+  Use Mastra's native stream and persisted UI tool parts without an output
+  processor. Genie progress uses `ToolStream.custom()` with a
+  `data-genie-progress` part associated to its native tool call. Each tool row
+  exposes default-closed Request and Response viewers with scrolling rather
+  than slicing or coercive truncation.

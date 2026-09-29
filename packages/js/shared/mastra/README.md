@@ -9,9 +9,10 @@ selection fields, and Mastra response schemas used by
 
 Key features:
 
-- Route constants for the AppKit-Mastra client surface, including history,
-  threads, suggestions, model lists, the per-agent default-model lookup,
-  embeds, and feedback.
+- Route constants for the official AI SDK chat mount and AppKit-Mastra
+  additions, including suggestions, model lists, the per-agent default-model
+  lookup, embeds, and feedback. History and threads use Mastra's native client
+  API.
 - Header/query/body constants for thread selection and model override requests.
 - Embed-marker parsing for delayed chart and statement-data payloads in
   streaming assistant text.
@@ -37,13 +38,12 @@ bootstrap a UI without hard-coding server paths.
 ```ts
 import { routes } from "@dbx-tools/shared-mastra";
 
-const historyUrl = `${basePath}${routes.MASTRA_ROUTES.history}`;
-const threadsUrl = `${basePath}${routes.MASTRA_ROUTES.threads}`;
+const suggestionsUrl = `${basePath}${routes.MASTRA_ROUTES.suggestions}`;
+const chatUrl = `${basePath}${routes.MASTRA_ROUTES.chat}/${agentId}`;
 ```
 
 `routes.MASTRA_ROUTES` keeps client fetch calls aligned with plugin route names
-for history, threads, models, the default-model lookup, suggestions, feedback,
-and embeds.
+for chat, models, the default-model lookup, suggestions, feedback, and embeds.
 
 ## Select Threads And Models
 
@@ -95,19 +95,18 @@ The schemas validate thumbs/comment payloads before they are sent to the plugin.
 ## Validate Plugin Responses
 
 ```ts
-const threads = wire.MastraThreadsResponseSchema.parse(await res.json());
 const chart = wire.ChartSchema.parse(await chartRes.json());
 const event = wire.GenieWriterEventSchema.parse(writerPayload);
 ```
 
-The `wire` module contains response schemas for history, threads, suggestions,
-model lists, charts, statement data, and Genie writer events. It also defines the
-chart/data result shapes consumed by embed renderers.
+The `wire` module contains response schemas for suggestions, model lists,
+charts, statement data, and Genie writer events. It also defines the chart/data
+result shapes consumed by embed renderers.
 
 ## Modules
 
-- `wire` - zod schemas and types for client config, history, threads, model
-  lists, suggestions, charts, statement data, and writer events.
+- `wire` - zod schemas and types for client config, model lists, suggestions,
+  charts, statement data, and writer events.
 - `routes` - plugin route segment constants.
 - `marker` - embed-marker parsing and incomplete-tail stripping.
 - `feedback` - MLflow feedback headers, assessment names, request/response

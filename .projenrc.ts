@@ -234,16 +234,16 @@ root.pnpmWorkspace?.allowBuild("@google/genai");
 root.pnpmWorkspace?.addCatalog("marked", "^18.0.5");
 root.pnpmWorkspace?.addCatalog("@react-email/components", "^1.0.12");
 root.pnpmWorkspace?.addCatalog("@react-email/render", "^2.1.0");
-root.pnpmWorkspace?.addCatalog("@mastra/core", "1.67.0");
-root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.10.3");
-root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.11");
-root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.3.1");
-root.pnpmWorkspace?.addCatalog("@mastra/mcp", "1.18.0");
+root.pnpmWorkspace?.addCatalog("@mastra/core", "1.71.0");
+root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.10.5");
+root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.14");
+root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.3.2");
+root.pnpmWorkspace?.addCatalog("@mastra/mcp", "2.1.0");
 root.pnpmWorkspace?.addCatalog("@modelcontextprotocol/sdk", "^1.29.0");
-root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.30.0");
-root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.17.8");
-root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.8");
-root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.25.0");
+root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.32.1");
+root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.18.0");
+root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.10");
+root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.27.1");
 root.pnpmWorkspace?.addCatalog("@pydantic/monty", "0.0.23");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
@@ -263,7 +263,7 @@ root.pnpmWorkspace?.addCatalog("tw-animate-css", "^1.4.0");
 root.pnpmWorkspace?.addCatalog("lucide-react", "^0.554.0");
 root.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
 root.pnpmWorkspace?.addCatalog("streamdown", "^2.5.0");
-root.pnpmWorkspace?.addCatalog("@mastra/client-js", "1.46.0");
+root.pnpmWorkspace?.addCatalog("@mastra/client-js", "1.50.0");
 root.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
 root.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
 root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
@@ -876,7 +876,7 @@ project.applyToProjects(root, { identifierName: "ui-search", tags: "ui" }, (p) =
 
 // ui-mastra: the full Mastra chat UI - the self-contained `MastraChat`
 // drop-in and its `useMastraChat` driver, the controlled `ChatView` shell, the
-// `MastraPluginClient` + hooks (model catalogue, history paging, suggestions,
+// `MastraPluginClient` + hooks (model catalogue, native memory paging, suggestions,
 // inline chart/statement embeds), markdown + data-grid + chart rendering, and
 // conversation-thread management. Consumes the browser-safe wire contracts
 // (shared-mastra/genie/model) and renders through ui-appkit's UI kit. `ui`-tagged.

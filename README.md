@@ -96,7 +96,8 @@ app:
   process with a portr tunnel and an email one-time-code gate, for the case that
   is not an AppKit app at all.
 - **Reusable React surfaces** — provide AppKit/Tailwind/Bun foundations, a
-  Mastra chat UI plus React Email approval, preview, compose, and delivery components.
+  Mastra chat UI with a persistent dock/overlay assistant host, plus React Email
+  approval, preview, compose, and delivery components.
 - **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned
   with zod schemas for Mastra routes, Genie events, model lookup, email payloads,
   and selected Databricks SDK shapes.
@@ -160,6 +161,11 @@ export function App() {
   return <MastraChat agentId="analyst" threadPlacement="auto" showModelPicker />;
 }
 ```
+
+For an app-wide assistant that survives route navigation, use
+`MastraAssistant` above the route outlet. It provides a configurable floating
+launcher, dock/overlay panel, resize behavior, external `open(context)` control,
+and typed per-turn Mastra request context without owning authentication.
 
 ## Feature Packages
 

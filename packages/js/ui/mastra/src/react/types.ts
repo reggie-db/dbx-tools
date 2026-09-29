@@ -22,6 +22,10 @@ export type ToolEvent = {
   id: string;
   toolName: string;
   status: "running" | "done" | "error";
+  /** Complete tool-call arguments as emitted by Mastra. */
+  input?: unknown;
+  /** Complete tool result/error as emitted by Mastra. */
+  output?: unknown;
   progress?: ToolProgress[];
 };
 
@@ -172,11 +176,16 @@ export type ChatViewProps = {
    */
   defaultModelName?: string;
   /**
-   * Host-owned controls rendered in the composer toolbar immediately after the
+   * Host-owned controls rendered in the composer footer immediately before the
    * model selector. Use this for per-turn options that belong beside model
    * routing without forking the chat surface.
    */
   composerActions?: ReactNode;
+  /**
+   * Host-owned actions rendered on the left side of the composer's fixed
+   * footer, before Export and Clear.
+   */
+  composerLeadingActions?: ReactNode;
   /**
    * Optional infinite-scroll-up handler. Fired when the user scrolls
    * within `TOP_LOAD_MORE_THRESHOLD_PX` of the top of the
@@ -202,23 +211,16 @@ export type ChatViewProps = {
    * stream Response and pipe it through the same chunk handler
    * (this is exactly what `useMastraChat` does).
    *
-   * It requires the `runId` Mastra emitted with the approval
-   * chunk - the field is always populated when the card was rendered
-   * from a live `data-tool-call-approval` part or an out-of-band
-   * `pendingApprovalsByMessage` entry. It will be missing only for
-   * approvals reconstructed from history (where the original runId
-   * is lost), in which case the handler should surface a "this
-   * approval is stale, please re-ask the model" message rather than
-   * trying to resume a workflow that no longer exists.
+   * It requires the `runId` Mastra emitted with the approval chunk.
+   * `useMastraChat` also restores run ids from native suspended-run
+   * storage when history is reloaded.
    */
   onResolveToolApproval?: (args: ApprovalDecision) => void | Promise<void>;
   /**
-   * Out-of-band approval requests keyed by assistant message id, for
-   * transports that don't surface approvals as `UIMessage` parts.
-   * The `/stream` page populates this from Mastra's
-   * `tool-call-approval` chunk so the same `ToolApprovalCard`
-   * UI works without injecting synthetic data parts. Each entry is
-   * merged with any approvals already discovered in `message.parts`.
+   * Approval requests keyed by assistant message id. This restores
+   * persisted suspended runs after a reload and also supports transports
+   * that do not surface approvals as `UIMessage` parts. Entries merge with
+   * approvals discovered in `message.parts`.
    */
   pendingApprovalsByMessage?: Record<string, PendingApproval[]>;
   /**
@@ -246,6 +248,17 @@ export type ChatViewProps = {
    * is too narrow for one. See {@link ThreadPlacement}.
    */
   threadPlacement?: ThreadPlacement;
+  /**
+   * Host-owned controls appended after the top tab strip's New and History
+   * actions. The persistent assistant uses this for its panel Close button.
+   */
+  threadBarActions?: ReactNode;
+  /** Whether the top tab row renders its built-in New/History controls. */
+  showThreadBarActions?: boolean;
+  /** Replacement icon for the top tab row's New action. */
+  threadNewIcon?: ReactNode;
+  /** Replacement icon for the top tab row's History action. */
+  threadHistoryIcon?: ReactNode;
   /** Id of the currently-active thread, highlighted in the sidebar. */
   activeThreadId?: string;
   /**
@@ -340,9 +353,8 @@ export type ApprovalDecision =
       toolName: string;
       toolCallId: string;
       /**
-       * Mastra run id from the approval chunk. Required to resume
-       * the suspended workflow; absent only when the card was
-       * reconstructed from history (no live runId available).
+       * Mastra run id required to resume the suspended workflow. Native
+       * suspended-run discovery restores it for persisted approvals.
        */
       runId?: string;
       input: unknown;
@@ -359,10 +371,8 @@ export type ApprovalDecision =
 /**
  * One approval-gated tool call paused mid-turn. `runId` is the
  * Mastra workflow id needed to resume; it's always present when the
- * card was constructed from a live source (the stream's
- * `data-tool-call-approval` part or `pendingApprovalsByMessage`),
- * and absent only for approvals reconstructed from a history load
- * where the original runId is lost.
+ * card came from a live approval part or native suspended-run storage.
+ * It remains optional for controlled transports that cannot provide it.
  */
 export type PendingApproval = {
   toolName: string;

@@ -1,20 +1,19 @@
 import type { UIMessage } from "ai";
-import type {
-  ChatStatus,
-  MessageFeedback,
-  PendingApproval,
-  QueuedSteer,
-  ToolEvent,
-} from "../react/types.ts";
+import type { MastraRequestContextSnapshot } from "./request-context.ts";
+import type { ChatStatus, MessageFeedback, PendingApproval, QueuedSteer } from "../react/types.ts";
 
 export type { QueuedSteer } from "../react/types.ts";
+
+/** A queued steer plus the application context captured when it was submitted. */
+export type SessionQueuedSteer = QueuedSteer & {
+  requestContext?: MastraRequestContextSnapshot;
+};
 
 /** Session-scoped transcript + stream state for one conversation thread. */
 export type ThreadSession = {
   messages: UIMessage[];
   status: ChatStatus;
   error: Error | null;
-  toolEventsByMessage: Record<string, ToolEvent[]>;
   pendingApprovalsByMessage: Record<string, PendingApproval[]>;
   feedbackByMessage: Record<string, MessageFeedback>;
   abortController: AbortController | null;
@@ -24,9 +23,12 @@ export type ThreadSession = {
   historyLoaded: boolean;
   hasMoreHistory: boolean;
   historyPage: number;
-  lastUserText: string | null;
+  /** Context snapshot for the active run and approval continuation. */
+  runRequestContext?: MastraRequestContextSnapshot;
+  /** Context snapshot reused when regenerating the last turn. */
+  lastRequestContext?: MastraRequestContextSnapshot;
   /** Steers submitted mid-turn, waiting to run (oldest first). */
-  queuedSteers: QueuedSteer[];
+  queuedSteers: SessionQueuedSteer[];
 };
 
 /** Map key for the classic single-thread chat (no explicit thread id). */
@@ -37,7 +39,6 @@ export function createThreadSession(): ThreadSession {
     messages: [],
     status: "ready",
     error: null,
-    toolEventsByMessage: {},
     pendingApprovalsByMessage: {},
     feedbackByMessage: {},
     abortController: null,
@@ -47,7 +48,6 @@ export function createThreadSession(): ThreadSession {
     historyLoaded: false,
     hasMoreHistory: false,
     historyPage: 0,
-    lastUserText: null,
     queuedSteers: [],
   };
 }
@@ -57,12 +57,12 @@ export function isSessionRunning(session: ThreadSession): boolean {
 }
 
 /** Append a steer to the queue (oldest first). Returns a new array. */
-export function enqueueSteer(queue: QueuedSteer[], steer: QueuedSteer): QueuedSteer[] {
+export function enqueueSteer<T extends QueuedSteer>(queue: T[], steer: T): T[] {
   return [...queue, steer];
 }
 
 /** Remove the steer with `id` from the queue. Returns a new array. */
-export function removeSteer(queue: QueuedSteer[], id: string): QueuedSteer[] {
+export function removeSteer<T extends QueuedSteer>(queue: T[], id: string): T[] {
   return queue.filter((steer) => steer.id !== id);
 }
 
@@ -72,10 +72,10 @@ export function removeSteer(queue: QueuedSteer[], id: string): QueuedSteer[] {
  * order can't duplicate or resurrect an item; any current steer missing from
  * `orderedIds` is appended in its existing relative order as a safety net.
  */
-export function reorderSteers(queue: QueuedSteer[], orderedIds: string[]): QueuedSteer[] {
+export function reorderSteers<T extends QueuedSteer>(queue: T[], orderedIds: string[]): T[] {
   const byId = new Map(queue.map((steer) => [steer.id, steer]));
   const seen = new Set<string>();
-  const next: QueuedSteer[] = [];
+  const next: T[] = [];
   for (const id of orderedIds) {
     const steer = byId.get(id);
     if (steer && !seen.has(id)) {
@@ -87,28 +87,6 @@ export function reorderSteers(queue: QueuedSteer[], orderedIds: string[]): Queue
     if (!seen.has(steer.id)) next.push(steer);
   }
   return next;
-}
-
-/**
- * Settle any tool-progress pills still marked `running` to `done`. A cancelled
- * or interrupted turn stops delivering the `tool-result` / `tool-error` chunks
- * that would otherwise close them, so without this a Genie / chart pill would
- * spin forever after the user hits stop. Returns the same map when nothing was
- * running so callers can skip a needless state update.
- */
-export function terminateRunningToolEvents(
-  toolEventsByMessage: Record<string, ToolEvent[]>,
-): Record<string, ToolEvent[]> {
-  let changed = false;
-  const next: Record<string, ToolEvent[]> = {};
-  for (const [messageId, events] of Object.entries(toolEventsByMessage)) {
-    next[messageId] = events.map((event) => {
-      if (event.status !== "running") return event;
-      changed = true;
-      return { ...event, status: "done" as const };
-    });
-  }
-  return changed ? next : toolEventsByMessage;
 }
 
 export function sessionKey(activeThreadId: string | undefined): string {

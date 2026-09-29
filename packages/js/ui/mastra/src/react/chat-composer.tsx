@@ -31,7 +31,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { autosizeComposerTextarea, observeComposerWidth } from "./_composer-autosize.ts";
 import { ExportMenu } from "./export-menu.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
@@ -251,6 +251,7 @@ type ChatComposerProps = {
   onModelChange: ChatViewProps["onModelChange"];
   defaultModelName: ChatViewProps["defaultModelName"];
   composerActions: ChatViewProps["composerActions"];
+  composerLeadingActions: ChatViewProps["composerLeadingActions"];
   isLoadingHistory: NonNullable<ChatViewProps["isLoadingHistory"]>;
   onClear: ChatViewProps["onClear"];
   onExportConversation: ChatViewProps["onExportConversation"];
@@ -273,12 +274,14 @@ export const ChatComposer = ({
   onModelChange,
   defaultModelName,
   composerActions,
+  composerLeadingActions,
   isLoadingHistory,
   onClear,
   onExportConversation,
   onResumeFollow,
 }: ChatComposerProps) => {
   const [input, setInput] = useState("");
+  const inputId = useId();
   const inputGroupRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -316,12 +319,6 @@ export const ChatComposer = ({
       sensitivity: "base",
     }),
   );
-  const showToolbar =
-    showModelDisplay ||
-    Boolean(composerActions) ||
-    Boolean(onExportConversation) ||
-    Boolean(onClear);
-
   return (
     <>
       {isEmpty && (
@@ -350,6 +347,8 @@ export const ChatComposer = ({
           className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md"
         >
           <InputGroupTextarea
+            id={`${inputId}-message`}
+            name="message"
             ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -362,76 +361,84 @@ export const ChatComposer = ({
             placeholder={isLoadingHistory ? "Loading history..." : "Send a message..."}
             rows={1}
             disabled={isLoadingHistory}
-            className="field-sizing-fixed max-h-48 overflow-y-auto text-base md:text-sm"
+            className="field-sizing-fixed max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-base md:text-sm"
           />
-          <InputGroupAddon align="inline-end">
-            {isRunning && onStop && !input.trim() ? (
-              <InputGroupButton
-                type="button"
-                size="icon-sm"
-                variant="default"
-                onClick={() => onStop()}
-                aria-label="Stop response"
-              >
-                <SquareIcon className="size-3 fill-current" />
-              </InputGroupButton>
-            ) : (
-              <InputGroupButton
-                type="submit"
-                size="icon-sm"
-                variant="default"
-                disabled={!input.trim() || isLoadingHistory}
-                aria-label={isRunning ? "Send now (interrupts)" : "Send message"}
-              >
-                <SendIcon className="size-3" />
-              </InputGroupButton>
-            )}
+          <InputGroupAddon
+            align="block-end"
+            className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-0"
+          >
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+              {composerLeadingActions}
+              {onExportConversation && (
+                <ExportMenu
+                  onExport={(format) => void onExportConversation(format)}
+                  tooltip="Export conversation"
+                  disabled={isLoadingHistory}
+                />
+              )}
+              {onClear && (
+                <ClearConversationAction onClear={onClear} isLoadingHistory={isLoadingHistory} />
+              )}
+            </div>
+            <div className="ml-auto flex min-w-0 max-w-full items-center gap-1.5">
+              {composerActions}
+              {showModelDisplay &&
+                (modelChangeable ? (
+                  <Select
+                    name="mastra-model"
+                    value={model ? model : DEFAULT_MODEL_VALUE}
+                    onValueChange={(value) =>
+                      onModelChange?.(value === DEFAULT_MODEL_VALUE ? "" : value)
+                    }
+                    disabled={isLoadingHistory}
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      aria-label="Model"
+                      className="h-7 w-auto max-w-[180px] gap-1 truncate border-0 bg-transparent px-2 text-xs shadow-none hover:bg-accent [&_svg]:size-3"
+                    >
+                      <SelectValue placeholder={defaultOptionLabel} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_MODEL_VALUE}>{defaultOptionLabel}</SelectItem>
+                      {sortedModels.map((option) => (
+                        <SelectItem key={option.name} value={option.name}>
+                          {option.displayName || option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="max-w-[180px] truncate px-2 text-xs text-muted-foreground">
+                    {currentModelLabel}
+                  </span>
+                ))}
+              {isRunning && onStop && !input.trim() ? (
+                <InputGroupButton
+                  type="button"
+                  size="icon-sm"
+                  variant="default"
+                  onClick={() => onStop()}
+                  aria-label="Stop response"
+                  className="shrink-0 rounded-full"
+                >
+                  <SquareIcon className="size-3 fill-current" />
+                </InputGroupButton>
+              ) : (
+                <InputGroupButton
+                  type="submit"
+                  size="icon-sm"
+                  variant="default"
+                  disabled={!input.trim() || isLoadingHistory}
+                  aria-label={isRunning ? "Send now (interrupts)" : "Send message"}
+                  className="shrink-0 rounded-full"
+                >
+                  <SendIcon className="size-3" />
+                </InputGroupButton>
+              )}
+            </div>
           </InputGroupAddon>
         </InputGroup>
-        {showToolbar && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-            {showModelDisplay &&
-              (modelChangeable ? (
-                <Select
-                  value={model ? model : DEFAULT_MODEL_VALUE}
-                  onValueChange={(value) =>
-                    onModelChange?.(value === DEFAULT_MODEL_VALUE ? "" : value)
-                  }
-                  disabled={isLoadingHistory}
-                >
-                  <SelectTrigger
-                    size="sm"
-                    className="h-7 w-auto max-w-[200px] gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
-                  >
-                    <SelectValue placeholder={defaultOptionLabel} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={DEFAULT_MODEL_VALUE}>{defaultOptionLabel}</SelectItem>
-                    {sortedModels.map((option) => (
-                      <SelectItem key={option.name} value={option.name}>
-                        {option.displayName || option.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <span className="max-w-[200px] truncate px-2.5 text-xs text-muted-foreground">
-                  {currentModelLabel}
-                </span>
-              ))}
-            {composerActions}
-            {onExportConversation && (
-              <ExportMenu
-                onExport={(format) => void onExportConversation(format)}
-                tooltip="Export conversation"
-                disabled={isLoadingHistory}
-              />
-            )}
-            {onClear && (
-              <ClearConversationAction onClear={onClear} isLoadingHistory={isLoadingHistory} />
-            )}
-          </div>
-        )}
       </form>
     </>
   );

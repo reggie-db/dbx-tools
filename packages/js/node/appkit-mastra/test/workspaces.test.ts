@@ -164,4 +164,23 @@ describe("agent workspace selection", () => {
 
     assert.equal(await built.agents.analyst?.getWorkspace(), undefined);
   });
+
+  it("forwards Mastra's native conditional approval gate", async () => {
+    const requireToolApproval = async () => false;
+    const built = await buildAgents({
+      config: {
+        agents: {
+          analyst: {
+            instructions: "Answer directly.",
+            requireToolApproval,
+          },
+        },
+      },
+      context: undefined,
+      log: log.logger("test/agents"),
+    });
+
+    const options = await built.agents.analyst?.getDefaultOptions();
+    assert.equal(options?.requireToolApproval, requireToolApproval);
+  });
 });

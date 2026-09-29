@@ -1,10 +1,9 @@
 import { log } from "@dbx-tools/shared-core";
 import { useCallback } from "react";
-import type { MastraPluginClient } from "../support/mastra-client.ts";
-import type { MastraStreamResponse } from "../support/mastra-stream.ts";
-import { DEFAULT_THREAD_SESSION_KEY } from "../support/thread-sessions.ts";
 import type { ThreadSessionReader, ThreadSessionUpdater } from "./chat-sessions.ts";
 import type { ApprovalDecision } from "./types.ts";
+import type { MastraPluginClient, MastraStreamResponse } from "../support/mastra-client.ts";
+import { DEFAULT_THREAD_SESSION_KEY } from "../support/thread-sessions.ts";
 
 const logger = log.logger("ui-mastra/chat");
 
@@ -36,7 +35,10 @@ export function useChatApprovals({
     async (decision: ApprovalDecision) => {
       const { runId: decisionRunId, toolCallId, toolName } = decision;
       const session = getSession(activeKey);
-      const assistantId = session.assistantId;
+      const assistantId =
+        Object.entries(session.pendingApprovalsByMessage).find(([, approvals]) =>
+          approvals.some((approval) => approval.toolCallId === toolCallId),
+        )?.[0] ?? session.assistantId;
       const runId = decisionRunId ?? session.runId;
       if (!runId || !assistantId) {
         logger.warn("approval missing runId or assistantId, cannot resume", {
@@ -77,12 +79,15 @@ export function useChatApprovals({
               runId,
               toolCallId,
               threadId: streamThreadId,
+              requestContext: session.runRequestContext,
               signal,
             })
           : mastraClient.declineToolCallStream(agentId, {
               runId,
               toolCallId,
               threadId: streamThreadId,
+              reason: decision.reason,
+              requestContext: session.runRequestContext,
               signal,
             }),
       );

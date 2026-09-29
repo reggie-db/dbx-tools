@@ -48,10 +48,10 @@ import { plugin } from "@dbx-tools/appkit";
 import { chat, space as genieSpace } from "@dbx-tools/genie";
 import { error, log, string } from "@dbx-tools/shared-core";
 import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
-import type { MastraWriter, StartedEvent } from "@dbx-tools/shared-mastra";
+import type { StartedEvent } from "@dbx-tools/shared-mastra";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
-import { createTool } from "@mastra/core/tools";
+import { createTool, type ToolExecutionContext } from "@mastra/core/tools";
 import { z } from "zod";
 
 import type { MastraTools } from "./agents.ts";
@@ -59,7 +59,7 @@ import { chartPlannerRequestSchema, chartToolOutputSchema, prepareChart } from "
 import { MASTRA_USER_KEY, resolveUserKey } from "./config.ts";
 import type { MastraPluginConfig, User } from "./config.ts";
 import { fetchStatementData } from "./statement.ts";
-import { safeWrite } from "./writer.ts";
+import { safeWriteProgress } from "./writer.ts";
 
 const logger = log.logger("mastra/genie");
 
@@ -96,12 +96,7 @@ export type GenieSpacesConfig = Record<string, GenieSpaceConfig | string>;
  * `abortSignal` (for per-call cancellation).
  */
 type ToolExecuteCtx =
-  | {
-      requestContext?: RequestContext;
-      writer?: MastraWriter;
-      abortSignal?: AbortSignal;
-    }
-  | undefined;
+  Pick<ToolExecutionContext, "requestContext" | "writer" | "abortSignal" | "agent"> | undefined;
 
 /**
  * Pull the per-request {@link WorkspaceClient} off the active
@@ -435,6 +430,7 @@ function buildAskGenieTool(opts: {
       const ctx = ctxRaw as ToolExecuteCtx;
       const { client, requestContext } = requireClient(ctx, toolId);
       const writer = ctx?.writer;
+      const toolCallId = ctx?.agent?.toolCallId;
       const signal = ctx?.abortSignal;
       const threadId = requestContext.get(MASTRA_THREAD_ID_KEY) as string | undefined;
 
@@ -475,7 +471,7 @@ function buildAskGenieTool(opts: {
           spaceId,
           content: question,
         };
-        await safeWrite(logger, writer, startedEvent);
+        await safeWriteProgress(logger, writer, toolCallId, startedEvent);
 
         const runTurn = async (): Promise<GenieMessage> => {
           const seedConversationId = conversationId;
@@ -487,7 +483,7 @@ function buildAskGenieTool(opts: {
             ...(signal ? { context: signal } : {}),
           })) {
             if (event.type !== "message") {
-              await safeWrite(logger, writer, event);
+              await safeWriteProgress(logger, writer, toolCallId, event);
             }
             const eventConversationId = event.conversation_id;
             if (eventConversationId) {

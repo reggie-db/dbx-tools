@@ -137,6 +137,50 @@ const approveRefund = agents.createTool({
 });
 ```
 
+## Typed Application Request Context
+
+Use Mastra's native `requestContextSchema` for UI selections that should shape a
+turn, such as a store, workflow, route, or selected entity:
+
+```ts
+const StoreContextSchema = z.object({
+  storeId: z.string(),
+  route: z.string(),
+});
+type StoreContext = z.infer<typeof StoreContextSchema>;
+
+const analyst = agents.createAgent<StoreContext>({
+  name: "analyst",
+  requestContextSchema: StoreContextSchema,
+  instructions: ({ requestContext }) =>
+    `Help with store ${requestContext.get("storeId")} on ${requestContext.get("route")}.`,
+  tools: {
+    inspect_store: agents.createTool({
+      id: "inspect_store",
+      description: "Inspect the selected store.",
+      inputSchema: z.object({}),
+      requestContextSchema: StoreContextSchema,
+      execute: async (_input, context) => ({
+        storeId: context.requestContext?.get("storeId"),
+      }),
+    }),
+  },
+});
+```
+
+The paired UI sends this through Mastra's standard `requestContext` body field.
+The agent schema validates it before model execution. AppKit-Mastra removes and
+re-stamps trusted identity, resource, thread, auth, scope, model, and trace keys,
+so application context cannot change conversation ownership or credentials.
+
+`createAgent({ requireToolApproval })` forwards Mastra's native request-level
+approval gate. It may be an async Classifier-backed function that returns `true`
+for calls still needing human review. A tool's own `requireApproval` remains
+authoritative; configure that native function on the tool when policy should
+allow some calls. Regular agents do not include Agent Controller's durable
+allow/ask/deny permission store, so remembered decisions remain a caller-owned,
+server-side durable policy rather than browser state.
+
 ## AppKit Toolkits
 
 The `tools(plugins)` callback receives a dynamic index of registered AppKit
@@ -803,23 +847,24 @@ logic that need the same allowlist.
 ## Routes
 
 Mounted under the plugin base path, which is `/api/mastra` unless you override
-`name`. Every route below is registered through AppKit's `route()` helper, so it
-appears in the plugin's endpoint map and forwards handler errors to AppKit.
+`name`. Product-specific routes use AppKit's `route()` helper; chat and memory
+use Mastra's native route surfaces behind the same scoped request-context gate.
 
-| Method                     | Path                        | Purpose                                                                                     |
-| -------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `GET`                      | `/models`                   | Serving-endpoint catalogue for a model picker.                                              |
-| `GET`                      | `/default-model[/:agentId]` | Static default model an agent falls back to, with its humanized label. `404` on unknown id. |
-| `GET`                      | `/suggestions[/:agentId]`   | Starter questions from the configured Genie spaces. Degrades to `[]`.                       |
-| `GET`                      | `/embed/chart/:id`          | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.            |
-| `GET`                      | `/embed/data/:id`           | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                |
-| `GET` / `DELETE`           | `/route/history[/:agentId]` | Load or clear the caller's thread messages.                                                 |
-| `GET` / `DELETE` / `PATCH` | `/route/threads[/:agentId]` | List, delete, or rename the caller's conversations.                                         |
-| `POST`                     | `/route/feedback`           | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.   |
-| `POST` / `GET`             | `/mcp`, `/sse`, `/messages` | MCP transports, when `mcp` is enabled.                                                      |
+| Method                     | Path                              | Purpose                                                                                     |
+| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------- |
+| `GET`                      | `/models`                         | Serving-endpoint catalogue for a model picker.                                              |
+| `GET`                      | `/default-model[/:agentId]`       | Static default model an agent falls back to, with its humanized label. `404` on unknown id. |
+| `GET`                      | `/suggestions[/:agentId]`         | Starter questions from the configured Genie spaces. Degrades to `[]`.                       |
+| `GET`                      | `/embed/chart/:id`                | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.            |
+| `GET`                      | `/embed/data/:id`                 | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                |
+| `POST`                     | `/chat/:agentId`                  | Official Mastra AI SDK UI stream, including native `resumeData` continuations.              |
+| `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`            | Native Mastra resource-scoped conversation history and thread management.                   |
+| `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                |
+| `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                              |
+| `POST`                     | `/route/feedback`                 | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.   |
+| `POST` / `GET`             | `/mcp`, `/sse`, `/messages`       | MCP transports, when `mcp` is enabled.                                                      |
 
-Agent inference itself rides the stock Mastra routes (`/agents/:id/stream`), so
-`@mastra/client-js` and `@dbx-tools/ui-mastra` work without a bespoke protocol.
+The UI consumes `/chat/:agentId` with the AI SDK's `DefaultChatTransport`.
 
 ## Environment Variables
 
@@ -942,7 +987,7 @@ client that talks to these routes.
 - `observability` / `mlflow` / `traceIo` - tracing, feedback, and stamping chat
   turn I/O onto the HTTP root span for MLflow's UC `*_trace_unified` view.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,
-  stream/result processors.
+  and stale chart-id input cleanup.
 
 Browser-facing wire types are in
 [`@dbx-tools/shared-mastra`](../../shared/mastra). Genie event contracts are in

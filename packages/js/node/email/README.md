@@ -65,6 +65,26 @@ the first approved send; outbox mode skips the check and logs loudly instead.
 requires Mastra storage, so register `lakebase()` or configure storage explicitly
 in the Mastra plugin.
 
+`emailTool({ requireApproval })` also accepts Mastra's native conditional
+approval function. Use it with a Mastra `Classifier` or a durable, user-scoped
+fingerprint policy when previously reviewed calls should reduce future prompts:
+
+```ts
+const sendEmail = emailTool({
+  requireApproval: async (input, { requestContext } = {}) =>
+    approvalPolicy.requiresReview({
+      input,
+      userId: requestContext?.["mastra__resourceId"],
+    }),
+});
+```
+
+The callback returns `true` when human review is still required and `false`
+when Mastra may execute. Fail closed in the policy. Regular Mastra agents do not
+provide a built-in durable "remember this approval" store; Agent Controller
+permission rules are a separate runtime, so this package does not emulate them
+client-side.
+
 The plugin does not decide how approval is presented. It emits a Mastra tool
 suspension and expects the host UI to resume that tool call with an approval or
 denial result. [`@dbx-tools/ui-email`](../../ui/email) provides the matching

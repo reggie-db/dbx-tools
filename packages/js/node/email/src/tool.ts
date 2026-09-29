@@ -1,9 +1,9 @@
 /**
- * The `send_email` Mastra tool: approval-gated so a model can draft a
- * message freely but nothing leaves the building until a human clicks
- * Approve in the chat UI. On approval the sender is resolved (explicit
- * `from` config, else derived from the on-behalf-of user's email) and
- * the message is dispatched through the shared SMTP transport.
+ * The `send_email` Mastra tool: human approval is required by default, with an
+ * optional Mastra-native conditional approval function for caller-owned policy.
+ * Once allowed, the sender is resolved (explicit `from` config, else derived
+ * from the on-behalf-of user's email) and the message is dispatched through
+ * the shared SMTP transport.
  *
  * The sender derivation runs inside the AppKit user scope, so
  * `getExecutionContext()` returns the OBO user whose local-part seeds
@@ -20,7 +20,7 @@
 import { getExecutionContext } from "@databricks/appkit";
 import { log, string } from "@dbx-tools/shared-core";
 import { email } from "@dbx-tools/shared-email";
-import { createTool } from "@mastra/core/tools";
+import { createTool, type ToolAction } from "@mastra/core/tools";
 import { resolveSenderAddress } from "./sender.ts";
 import { getEmailRuntime, sendEmail } from "./transport.ts";
 
@@ -34,8 +34,8 @@ const logger = log.logger("email/tool/send-email");
 export const SEND_EMAIL_DESCRIPTION = string.toDescription(`
   Send an email on the user's behalf. Pass one or more recipient
   addresses (with optional cc / bcc and file attachments), a subject,
-  and a body; the user is prompted to approve the send before it goes
-  out (this tool is approval-gated). Use it only when the user
+  and a body; the configured approval policy runs before it goes out.
+  Use it only when the user
   explicitly asks to send / forward / share something via email -
   never autonomously. Compose whatever subject and body best fulfill
   the user's request; the configured React Email template handles the
@@ -50,6 +50,12 @@ export interface EmailToolOptions {
    * the client about the new name.
    */
   id?: string;
+  /**
+   * Mastra-native static or per-call approval predicate. Defaults to `true`.
+   * Use a function or Classifier-backed policy to allow low-risk calls while
+   * retaining human review for uncertain ones.
+   */
+  requireApproval?: ToolAction<email.EmailMessage, email.EmailResult>["requireApproval"];
 }
 
 /**
@@ -74,7 +80,7 @@ export function emailTool(opts: EmailToolOptions = {}) {
     description: SEND_EMAIL_DESCRIPTION,
     inputSchema: email.emailMessageSchema,
     outputSchema: email.emailResultSchema,
-    requireApproval: true,
+    requireApproval: opts.requireApproval ?? true,
     execute: async (input, context) => {
       const message = email.emailMessageSchema.parse(input);
       const { config } = getEmailRuntime();

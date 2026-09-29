@@ -37,6 +37,10 @@ type ChatThreadLayoutProps = {
   className: ChatViewProps["className"];
   threads: ChatViewProps["threads"];
   threadPlacement: NonNullable<ChatViewProps["threadPlacement"]>;
+  threadBarActions: ChatViewProps["threadBarActions"];
+  showThreadBarActions: NonNullable<ChatViewProps["showThreadBarActions"]>;
+  threadNewIcon: ChatViewProps["threadNewIcon"];
+  threadHistoryIcon: ChatViewProps["threadHistoryIcon"];
   activeThreadId: ChatViewProps["activeThreadId"];
   streamingThreadIds: NonNullable<ChatViewProps["streamingThreadIds"]>;
   isLoadingThreads: NonNullable<ChatViewProps["isLoadingThreads"]>;
@@ -87,6 +91,10 @@ export const ChatThreadLayout = ({
   className,
   threads,
   threadPlacement,
+  threadBarActions,
+  showThreadBarActions,
+  threadNewIcon,
+  threadHistoryIcon,
   activeThreadId,
   streamingThreadIds,
   isLoadingThreads,
@@ -179,7 +187,15 @@ export const ChatThreadLayout = ({
               ))}
         <div className="flex h-full min-w-0 flex-1 flex-col">
           {tabbedThreads && (
-            <ThreadTabs {...threadListProps} openThreadIds={openTabIds} onCloseTab={closeTab} />
+            <ThreadTabs
+              {...threadListProps}
+              openThreadIds={openTabIds}
+              onCloseTab={closeTab}
+              actions={threadBarActions}
+              showActions={showThreadBarActions}
+              newIcon={threadNewIcon}
+              historyIcon={threadHistoryIcon}
+            />
           )}
           {showSidebarToggle && (
             <div

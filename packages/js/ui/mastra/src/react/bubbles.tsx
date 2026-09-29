@@ -41,6 +41,7 @@ import type {
   ToolEvent,
 } from "./types.ts";
 import { copyText } from "../support/clipboard.ts";
+import { mergeToolEvents, toolEventsFromParts } from "../support/tool-events.ts";
 
 // User / assistant message bubbles plus the inline approval card and
 // the helpers that surface approval-gated tool calls out of a message's
@@ -374,6 +375,7 @@ export const AssistantBubble = ({
     collectPendingApprovals(message.parts),
     externalApprovals,
   );
+  const toolEvents = mergeToolEvents(toolEventsFromParts(message.parts), events);
 
   return (
     <Item className="items-start gap-3 border-none bg-transparent p-0">
@@ -394,7 +396,7 @@ export const AssistantBubble = ({
          * pill above the text parts guarantees the "what the agent did"
          * summary always sits before its resulting charts and answer.
          */}
-        {events && events.length > 0 && <ToolSessionPill events={events} />}
+        {toolEvents.length > 0 && <ToolSessionPill events={toolEvents} />}
         {reasoning && (
           <Collapsible defaultOpen={isReasoningStreaming}>
             <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
@@ -444,6 +446,7 @@ export const AssistantBubble = ({
                     variant="ghost"
                     className="size-7"
                     onClick={() => regenerate()}
+                    aria-label="Retry response"
                   >
                     <RefreshCcwIcon className="size-3" />
                   </Button>
