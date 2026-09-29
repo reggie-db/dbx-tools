@@ -5,11 +5,10 @@
  * `@dbx-tools/ui-mastra`) so a relayout - or a rename of a
  * sub-path - is a one-line change here and the two can never drift.
  *
- * The agent-scoped segments (`history`, `threads`, `suggestions`,
- * `defaultModel`) take an optional `/:agentId` suffix; the default agent
- * uses the bare segment. Conversation streaming itself rides the standard Mastra
- * agent routes (`@mastra/client-js`'s `getAgent(id).stream()`), so
- * there's no chat segment here.
+ * The agent-scoped segments (`suggestions`, `defaultModel`) take an optional
+ * `/:agentId` suffix; the default agent uses the bare segment. Conversation
+ * streaming, memory history, and thread management ride the standard Mastra
+ * client routes, so there are no parallel chat or memory segments here.
  *
  * `feedback` is the plugin-owned POST endpoint the chat UI calls to
  * log a thumbs / comment assessment against a turn's MLflow trace (see
@@ -19,8 +18,6 @@
  * @module
  */
 export const MASTRA_ROUTES = {
-  history: "/route/history",
-  threads: "/route/threads",
   feedback: "/route/feedback",
   suggestions: "/suggestions",
   models: "/models",

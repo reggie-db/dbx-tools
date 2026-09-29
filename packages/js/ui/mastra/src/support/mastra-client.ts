@@ -6,20 +6,17 @@ import {
   thread,
   wire,
   type Chart,
-  type MastraClearHistoryResponse,
   type MastraClientConfig,
-  type MastraDeleteThreadResponse,
   type MastraFeedbackRequest,
   type MastraFeedbackResponse,
-  type MastraHistoryResponse,
-  type MastraThread,
-  type MastraThreadsResponse,
-  type MastraUpdateThreadResponse,
   type StatementData,
 } from "@dbx-tools/shared-mastra";
 import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
-import { MastraClient, RequestContext } from "@mastra/client-js";
+import {
+  MastraClient,
+  type ListMemoryThreadsResponse,
+} from "@mastra/client-js";
 import type { MessageListInput } from "@mastra/core/agent/message-list";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { asApprovalStreamResponse } from "./_approval-stream.ts";
@@ -27,6 +24,7 @@ import type { MastraRequestContextSnapshot } from "./request-context.ts";
 
 type NativeAgentClient = ReturnType<MastraClient["getAgent"]>;
 export type MastraStreamResponse = Awaited<ReturnType<NativeAgentClient["stream"]>>;
+export type MastraMemoryThread = ListMemoryThreadsResponse["threads"][number];
 
 /**
  * `@mastra/client-js` `MastraClient` extended with the Mastra plugin's
@@ -34,8 +32,7 @@ export type MastraStreamResponse = Awaited<ReturnType<NativeAgentClient["stream"
  *
  *   - Conversation streaming through native `@mastra/client-js` agent methods
  *     on a per-call client carrying isolated routing and cancellation.
- *   - Thread history (`history` / `clearHistory`), the conversation
- *     list (`threads` / `removeThread` / `renameThread`), the model
+ *   - Native Mastra memory history and thread management, plus the model
  *     catalogue (`models`),
  *     Genie starter prompts (`suggestions`), MLflow feedback logging
  *     (`feedback`), and inline embed resolution (`chart` / `statement`)
@@ -103,22 +100,25 @@ export class MastraPluginClient extends MastraClient {
     return headers;
   }
 
-  #requestAgent(
-    agentId: string,
+  #requestClient(
     routing: { threadId?: string; model?: string },
     signal?: AbortSignal,
-  ): NativeAgentClient {
+  ): MastraClient {
     return new MastraClient({
       baseUrl: typeof window !== "undefined" ? window.location.origin : "http://localhost",
       apiPrefix: this.basePath,
       credentials: "include",
       headers: this.#routingHeaders(routing),
       ...(signal ? { abortSignal: signal } : {}),
-    }).getAgent(agentId);
+    });
   }
 
-  #requestContext(snapshot: MastraRequestContextSnapshot | undefined): RequestContext | undefined {
-    return snapshot ? new RequestContext(Object.entries(snapshot)) : undefined;
+  #requestAgent(
+    agentId: string,
+    routing: { threadId?: string; model?: string },
+    signal?: AbortSignal,
+  ): NativeAgentClient {
+    return this.#requestClient(routing, signal).getAgent(agentId);
   }
 
   /**
@@ -138,9 +138,7 @@ export class MastraPluginClient extends MastraClient {
   }): Promise<MastraStreamResponse> {
     return this.#requestAgent(params.agentId, params, params.signal).stream(params.messages, {
       runId: params.runId,
-      ...(params.requestContext
-        ? { requestContext: this.#requestContext(params.requestContext) }
-        : {}),
+      ...(params.requestContext ? { requestContext: params.requestContext } : {}),
     });
   }
 
@@ -172,6 +170,7 @@ export class MastraPluginClient extends MastraClient {
       runId: string;
       toolCallId: string;
       threadId?: string;
+      reason?: string;
       requestContext?: MastraRequestContextSnapshot;
       signal?: AbortSignal;
     },
@@ -186,6 +185,7 @@ export class MastraPluginClient extends MastraClient {
       runId: string;
       toolCallId: string;
       threadId?: string;
+      reason?: string;
       requestContext?: MastraRequestContextSnapshot;
       signal?: AbortSignal;
     },
@@ -201,6 +201,7 @@ export class MastraPluginClient extends MastraClient {
       body: JSON.stringify({
         runId: params.runId,
         toolCallId: params.toolCallId,
+        ...(!approved && params.reason ? { reason: params.reason } : {}),
         ...(params.requestContext ? { requestContext: params.requestContext } : {}),
       }),
     };
@@ -261,65 +262,39 @@ export class MastraPluginClient extends MastraClient {
     return payload.questions;
   }
 
-  /**
-   * Fetch one page of thread history from `GET ${basePath}/route/history`.
-   * Messages come back oldest -> newest so the caller can prepend them
-   * to a live transcript. `threadId` targets a specific conversation
-   * (sent as the `?threadId=` query so it doesn't depend on shared client
-   * state); omit it to read the per-session cookie thread.
-   */
+  /** Fetch one page from Mastra's native resource-scoped memory route. */
   async history(
     options: {
       agentId?: string;
-      threadId?: string;
+      threadId: string;
       page?: number;
       perPage?: number;
       signal?: AbortSignal;
-    } = {},
-  ): Promise<MastraHistoryResponse> {
-    const params = new URLSearchParams();
-    if (options.page !== undefined) params.set("page", String(options.page));
-    if (options.perPage !== undefined) params.set("perPage", String(options.perPage));
-    if (options.threadId) params.set(thread.THREAD_ID_QUERY, options.threadId);
-    const qs = params.toString();
-    const base = this.#agentScoped(routes.MASTRA_ROUTES.history, options.agentId);
-    return this.#getJson(
-      qs ? `${base}?${qs}` : base,
-      wire.MastraHistoryResponseSchema,
-      options.signal,
-    );
+    },
+  ) {
+    return this.#requestClient({ threadId: options.threadId }, options.signal)
+      .getMemoryThread({
+        threadId: options.threadId,
+        agentId: options.agentId ?? this.defaultAgent,
+      })
+      .listMessages({
+        page: options.page ?? 0,
+        perPage: options.perPage ?? 20,
+        orderBy: { field: "createdAt", direction: "DESC" },
+      });
   }
 
-  /**
-   * Wipe a thread's history (`DELETE ${basePath}/route/history`). `threadId`
-   * targets a specific conversation via the thread-selection header (so it
-   * doesn't depend on shared client state); omit it to clear the per-session
-   * cookie thread. The session cookie that anchors the thread id is
-   * preserved - only the messages go away. Idempotent: a fresh thread reports
-   * `cleared: 0` without erroring.
-   */
-  async clearHistory(
-    options: { agentId?: string; threadId?: string; signal?: AbortSignal } = {},
-  ): Promise<MastraClearHistoryResponse> {
-    return this.#mutateJson(
-      this.#agentScoped(routes.MASTRA_ROUTES.history, options.agentId),
-      "DELETE",
-      wire.MastraClearHistoryResponseSchema,
-      {
-        ...(options.threadId ? { headers: { [thread.THREAD_ID_HEADER]: options.threadId } } : {}),
-        ...(options.signal ? { signal: options.signal } : {}),
-      },
-    );
+  /** Delete one native memory thread so the same id can start cleanly. */
+  async clearHistory(options: { agentId?: string; threadId: string; signal?: AbortSignal }) {
+    return this.#requestClient({ threadId: options.threadId }, options.signal)
+      .getMemoryThread({
+        threadId: options.threadId,
+        agentId: options.agentId ?? this.defaultAgent,
+      })
+      .delete();
   }
 
-  /**
-   * Fetch one page of the caller's conversation threads from
-   * `GET ${basePath}/threads`, newest first. Used to render the
-   * conversation list / sidebar so the user can switch between the
-   * threads they own for this resource. Scoped server-side to the
-   * caller's resource id, so it only ever returns the user's own
-   * conversations.
-   */
+  /** List the caller's conversations through Mastra's native memory API. */
   async threads(
     options: {
       agentId?: string;
@@ -327,68 +302,56 @@ export class MastraPluginClient extends MastraClient {
       perPage?: number;
       signal?: AbortSignal;
     } = {},
-  ): Promise<MastraThreadsResponse> {
-    const params = new URLSearchParams();
-    if (options.page !== undefined) params.set("page", String(options.page));
-    if (options.perPage !== undefined) params.set("perPage", String(options.perPage));
-    const qs = params.toString();
-    const base = this.#agentScoped(routes.MASTRA_ROUTES.threads, options.agentId);
-    return this.#getJson(
-      qs ? `${base}?${qs}` : base,
-      wire.MastraThreadsResponseSchema,
-      options.signal,
-    );
+  ): Promise<ListMemoryThreadsResponse> {
+    return this.#requestClient({}, options.signal).listMemoryThreads({
+      agentId: options.agentId ?? this.defaultAgent,
+      page: options.page ?? 0,
+      perPage: options.perPage ?? 30,
+      orderBy: { field: "updatedAt", direction: "DESC" },
+    });
   }
 
-  /**
-   * Delete a single conversation thread by id via the plugin's own
-   * `DELETE ${basePath}/threads` route (named `removeThread` to avoid
-   * clashing with the inherited `MastraClient.deleteThread`, which hits
-   * Mastra's stock thread route rather than our OBO-scoped, custom
-   * mount). The id is sent as the thread-selection header for this one
-   * call, so the sidebar can remove any thread while the user stays on
-   * another (routing is per call, never shared). Idempotent: deleting an unknown /
-   * already-removed thread reports `deleted: false` without erroring.
-   */
+  /** Delete one native memory thread owned by the active resource. */
   async removeThread(
     threadId: string,
     options: { agentId?: string; signal?: AbortSignal } = {},
-  ): Promise<MastraDeleteThreadResponse> {
-    return this.#mutateJson(
-      this.#agentScoped(routes.MASTRA_ROUTES.threads, options.agentId),
-      "DELETE",
-      wire.MastraDeleteThreadResponseSchema,
-      {
-        headers: { [thread.THREAD_ID_HEADER]: threadId },
-        ...(options.signal ? { signal: options.signal } : {}),
-      },
-    );
+  ) {
+    return this.#requestClient({ threadId }, options.signal)
+      .getMemoryThread({ threadId, agentId: options.agentId ?? this.defaultAgent })
+      .delete();
   }
 
-  /**
-   * Rename a single conversation thread via the plugin's own
-   * `PATCH ${basePath}/threads` route. The id travels as the
-   * thread-selection header for this one call (mirroring
-   * {@link removeThread}, so the sidebar can rename any thread; routing is
-   * per call, never shared) and the new `title` rides in the JSON body. The server enforces ownership and
-   * echoes back the updated thread, so the caller can reflect the new
-   * title immediately. Throws on an unknown / unowned thread (HTTP 404).
-   */
+  /** Rename one native memory thread owned by the active resource. */
   async renameThread(
     threadId: string,
     title: string,
     options: { agentId?: string; signal?: AbortSignal } = {},
-  ): Promise<MastraUpdateThreadResponse> {
-    return this.#mutateJson(
-      this.#agentScoped(routes.MASTRA_ROUTES.threads, options.agentId),
-      "PATCH",
-      wire.MastraUpdateThreadResponseSchema,
-      {
-        body: { title },
-        headers: { [thread.THREAD_ID_HEADER]: threadId },
-        ...(options.signal ? { signal: options.signal } : {}),
-      },
-    );
+  ) {
+    return this.#requestClient({ threadId }, options.signal)
+      .getMemoryThread({ threadId, agentId: options.agentId ?? this.defaultAgent })
+      .update({ title });
+  }
+
+  /** Delete selected persisted messages before regenerating a turn. */
+  async deleteMessages(
+    threadId: string,
+    messageIds: string[],
+    options: { agentId?: string; signal?: AbortSignal } = {},
+  ) {
+    return this.#requestClient({ threadId }, options.signal)
+      .getMemoryThread({ threadId, agentId: options.agentId ?? this.defaultAgent })
+      .deleteMessages(messageIds);
+  }
+
+  /** Discover approval-gated runs persisted for a conversation. */
+  async suspendedRuns(
+    agentId: string,
+    threadId: string,
+    signal?: AbortSignal,
+  ) {
+    return this.#requestAgent(agentId, { threadId }, signal).listSuspendedRuns({
+      threadId,
+    });
   }
 
   /**
@@ -721,13 +684,13 @@ export const useMastraThreads = (
   agentId?: string,
   enabled = true,
 ): {
-  threads: MastraThread[];
+  threads: MastraMemoryThread[];
   loading: boolean;
   error: Error | null;
   refresh: () => void;
 } => {
   const client = useMastraClient();
-  const [threads, setThreads] = useState<MastraThread[]>([]);
+  const [threads, setThreads] = useState<MastraMemoryThread[]>([]);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<Error | null>(null);
   // Bumped by `refresh()` to force a re-fetch without changing any of

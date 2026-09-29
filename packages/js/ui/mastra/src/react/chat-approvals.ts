@@ -83,6 +83,7 @@ export function useChatApprovals({
               runId,
               toolCallId,
               threadId: streamThreadId,
+              reason: decision.reason,
               requestContext: session.runRequestContext,
               signal,
             }),

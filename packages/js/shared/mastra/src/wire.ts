@@ -112,189 +112,6 @@ export const ServingEndpointsResponseSchema = z.object({
 /** Available Databricks serving endpoints returned by the Mastra model route. */
 export type ServingEndpointsResponse = z.infer<typeof ServingEndpointsResponseSchema>;
 
-/* ----------------------------- chat history ----------------------------- */
-
-/**
- * Structural shape for an AI SDK V5 `UIMessage`. Defined locally
- * so the shared types package stays dependency-free (no `ai`
- * import). The runtime values returned by the `/route/history` endpoint
- * are produced by `toAISdkV5Messages` and are 1:1 compatible with
- * `UIMessage` from the `ai` package; clients can safely cast when
- * needed.
- */
-export const MastraHistoryUIMessageSchema = z.object({
-  id: z.string(),
-  role: z.enum(["system", "user", "assistant"]),
-  parts: z.array(z.unknown()).readonly(),
-  metadata: z.unknown().optional(),
-});
-/** Persisted chat message normalized into the browser UI message contract. */
-export type MastraHistoryUIMessage = z.infer<typeof MastraHistoryUIMessageSchema>;
-
-/**
- * JSON payload returned by `GET ${basePath}/route/history`.
- *
- * Fields:
- *   - `uiMessages`: page of UI-formatted messages, oldest -> newest.
- *     Always chronological regardless of the underlying pagination
- *     order so the client can prepend the array to the live
- *     transcript without sorting.
- *   - `page`: zero-indexed page that produced this response.
- *   - `perPage`: number of items requested per page.
- *   - `total`: total number of messages in the thread.
- *   - `hasMore`: true when at least one older page is still
- *     available.
- */
-export const MastraHistoryResponseSchema = z.object({
-  uiMessages: z.array(MastraHistoryUIMessageSchema),
-  page: z.number(),
-  perPage: z.number(),
-  total: z.number(),
-  hasMore: z.boolean(),
-});
-/** One cursor page of normalized messages for a Mastra thread. */
-export type MastraHistoryResponse = z.infer<typeof MastraHistoryResponseSchema>;
-
-/**
- * JSON payload returned by `DELETE ${basePath}/route/history`. Deletes
- * every persisted message + workflow snapshot tied to the caller's
- * thread, so the next chat turn starts from a clean slate. The
- * session cookie that anchors the thread id is preserved so the
- * caller doesn't lose its identity - only the contents go away.
- *
- * `ok` is always `true` on success; the response object is kept
- * as a struct (vs a bare 204) so future fields (e.g. `deletedAt`,
- * `messages`) can be added without bumping the contract.
- *
- * Fields:
- *   - `ok`: literal `true` on success.
- *   - `agentId`: agent whose history was cleared.
- *   - `threadId`: thread id that was wiped.
- *   - `cleared`: number of messages the thread held before
- *     deletion. Useful for client-side "cleared 12 messages"
- *     toasts; `0` is reported when the thread was already empty
- *     (call is idempotent).
- */
-export const MastraClearHistoryResponseSchema = z.object({
-  ok: z.literal(true),
-  agentId: z.string(),
-  threadId: z.string(),
-  cleared: z.number(),
-});
-/** Result of clearing the messages owned by one Mastra thread. */
-export type MastraClearHistoryResponse = z.infer<typeof MastraClearHistoryResponseSchema>;
-
-/* -------------------------------- threads -------------------------------- */
-
-/**
- * A single conversation thread the resource (authenticated user) owns,
- * as returned by `GET ${basePath}/threads`. Mirrors Mastra's
- * `StorageThreadType` but with JSON-safe ISO-8601 timestamps (the wire
- * can't carry `Date`).
- *
- * Fields:
- *   - `id`: thread id. Pass it back as the thread-selection header
- *     (`THREAD_ID_HEADER`) on a stream / history / delete call to act
- *     on this conversation.
- *   - `title`: human-readable title. Present once the agent's memory
- *     has auto-generated one (after the first turn); absent on a
- *     brand-new thread, so the UI falls back to a placeholder.
- *   - `resourceId`: owning resource (the user id). Always the caller's
- *     own resource - the list route filters by it server-side.
- *   - `createdAt` / `updatedAt`: ISO-8601 timestamps. `updatedAt` is
- *     the natural sort key for "most recent conversations first".
- *   - `metadata`: opaque thread metadata, passed through untouched.
- */
-export const MastraThreadSchema = z.object({
-  id: z.string(),
-  title: z.string().optional(),
-  resourceId: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  metadata: z.unknown().optional(),
-});
-/** User-visible thread metadata, separate from the thread's message history. */
-export type MastraThread = z.infer<typeof MastraThreadSchema>;
-
-/**
- * JSON payload returned by `GET ${basePath}/threads`. One page of the
- * caller's conversation threads, newest (`updatedAt` DESC) first.
- *
- * Fields:
- *   - `threads`: page of threads for the caller's resource.
- *   - `page`: zero-indexed page that produced this response.
- *   - `perPage`: number of items requested per page.
- *   - `total`: total number of threads the resource owns.
- *   - `hasMore`: true when at least one more page is available.
- */
-export const MastraThreadsResponseSchema = z.object({
-  threads: z.array(MastraThreadSchema),
-  page: z.number(),
-  perPage: z.number(),
-  total: z.number(),
-  hasMore: z.boolean(),
-});
-/** One cursor page of Mastra threads owned by the active resource. */
-export type MastraThreadsResponse = z.infer<typeof MastraThreadsResponseSchema>;
-
-/**
- * JSON payload returned by `DELETE ${basePath}/threads` (thread id
- * supplied via the thread-selection header / `threadId` query). Wipes
- * the named thread and every message on it.
- *
- * Fields:
- *   - `ok`: literal `true` on success.
- *   - `agentId`: agent whose thread was deleted.
- *   - `threadId`: thread id that was removed.
- *   - `deleted`: `true` when a thread row existed and was removed,
- *     `false` when it was already gone (call is idempotent).
- */
-export const MastraDeleteThreadResponseSchema = z.object({
-  ok: z.literal(true),
-  agentId: z.string(),
-  threadId: z.string(),
-  deleted: z.boolean(),
-});
-/** Result of deleting one thread and its associated memory records. */
-export type MastraDeleteThreadResponse = z.infer<typeof MastraDeleteThreadResponseSchema>;
-
-/** Longest thread title the rename route accepts (trimmed server-side). */
-export const MASTRA_THREAD_TITLE_MAX = 200;
-
-/**
- * JSON body for `PATCH ${basePath}/threads` (thread id supplied via the
- * thread-selection header / `threadId` query). Renames a single
- * conversation.
- *
- * Fields:
- *   - `title`: the new human-readable title. Trimmed and capped at
- *     {@link MASTRA_THREAD_TITLE_MAX} characters server-side; must be
- *     non-empty after trimming.
- */
-export const MastraUpdateThreadRequestSchema = z.object({
-  title: z.string().trim().min(1).max(MASTRA_THREAD_TITLE_MAX),
-});
-/** Validated mutable fields accepted when renaming a Mastra thread. */
-export type MastraUpdateThreadRequest = z.infer<typeof MastraUpdateThreadRequestSchema>;
-
-/**
- * JSON payload returned by `PATCH ${basePath}/threads`. Echoes the
- * renamed thread in its post-update wire shape so the client can reflect
- * the new title without a re-fetch.
- *
- * Fields:
- *   - `ok`: literal `true` on success.
- *   - `agentId`: agent whose thread was renamed.
- *   - `thread`: the updated thread (carries the new `title`).
- */
-export const MastraUpdateThreadResponseSchema = z.object({
-  ok: z.literal(true),
-  agentId: z.string(),
-  thread: MastraThreadSchema,
-});
-/** Updated thread returned after a successful rename. */
-export type MastraUpdateThreadResponse = z.infer<typeof MastraUpdateThreadResponseSchema>;
-
 /* ------------------------------ suggestions ------------------------------ */
 
 /**
@@ -470,25 +287,6 @@ export const StatementDataSchema = z.object({
 /** Tabular statement payload resolved from a `[data:<statement_id>]` embed marker. */
 export type StatementData = z.infer<typeof StatementDataSchema>;
 
-/* ----------------------------- writer surface ---------------------------- */
-
-/**
- * The `ToolStream`-shaped writer the Mastra Genie agent and chart
- * helpers publish events through. Defined here (vs imported from
- * `@mastra/core`) so helpers in `@dbx-tools/appkit-mastra` can
- * accept any object with a `.write` method without dragging
- * Mastra's full `ToolStream` (and its agent / tool typings) into
- * call sites. The actual Mastra `ctx.writer` is assignable to
- * this shape so callers pass it straight through.
- *
- * Kept as a plain TypeScript interface (vs a zod schema) because
- * the contract is a method - zod can only validate the shape via
- * `z.custom`, which adds noise without buying any runtime check.
- */
-export interface MastraWriter {
-  write: (chunk: unknown) => unknown;
-}
-
 /* ---------------- mastra-only genie-agent events ---------------- */
 
 /**
@@ -634,6 +432,20 @@ export type GenieWriterEvent = z.infer<typeof GenieWriterEventSchema>;
 
 /** Discriminator type for {@link GenieWriterEvent}. */
 export type GenieWriterEventType = GenieWriterEvent["type"];
+
+/** Native AI SDK custom data-part type carrying one Genie progress event. */
+export const GENIE_PROGRESS_PART_TYPE = "data-genie-progress" as const;
+
+/**
+ * Data attached to {@link GENIE_PROGRESS_PART_TYPE}. `toolCallId` associates
+ * progress with the native tool part that owns the request and result.
+ */
+export const GenieProgressPartDataSchema = z.object({
+  toolCallId: z.string(),
+  event: GenieWriterEventSchema,
+});
+/** Validated payload carried by a native Genie progress data part. */
+export type GenieProgressPartData = z.infer<typeof GenieProgressPartDataSchema>;
 
 /* ------------------------- summary + dataset ------------------------ */
 
