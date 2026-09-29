@@ -97,8 +97,11 @@ reasoning/compaction state, signatures, and embedded image, file, audio, and
 screenshot payloads. Buffered responses also report upstream input, output, and
 total usage. Streams log connection and completion separately; completion
 includes response bytes, total duration, cancellation/failure state, and usage
-from both translated and pass-through Chat or Responses events. Reported usage
-reconciles process-local reservations across Chat Completions, Responses, Codex,
+from both translated and pass-through Chat or Responses events. Pass-through
+usage comes from complete parsed SSE events while the original chunks are
+forwarded unchanged. Observation is capped at 1 MB per event; a malformed or
+larger event safely retains the estimate. Reported usage reconciles process-local
+reservations across Chat Completions, Responses, Codex,
 Anthropic translations, and embeddings. Unused output reservations are
 credited immediately, and actual output is recorded when no maximum was
 specified. Each workspace/model queue admits requests FIFO and wakes its head

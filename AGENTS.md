@@ -264,7 +264,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   includes response bytes, duration, cancellation/failure state, and translated
   or pass-through usage when available. Buffered and streamed Chat Completions,
   Responses, Codex Responses, Anthropic translations, and embeddings reconcile
-  process-local input/output reservations with reported actual usage. A smaller
+  process-local input/output reservations with reported actual usage. Native
+  pass-through streams observe complete parsed SSE events while forwarding the
+  original bytes unchanged; observation state is capped at 1 MB per event, so
+  malformed or oversized events fall back to estimates without buffering an
+  unbounded response. A smaller
   actual output credits the unused reservation immediately, while output usage
   without a requested maximum is added to the current window. Each
   workspace/model queue admits requests FIFO and wakes its head when

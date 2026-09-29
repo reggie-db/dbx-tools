@@ -1,7 +1,10 @@
 //! Streaming protocol translation and SSE response encoding.
 
 use std::{
+    convert::Infallible,
     io,
+    pin::Pin,
+    task::{Context, Poll},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -16,18 +19,19 @@ use axum::{
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use eventsource_stream::Eventsource;
-use futures_util::StreamExt;
+use eventsource_stream::{EventStream, Eventsource};
+use futures_util::{FutureExt, Stream, StreamExt};
 use serde_json::{json, Value};
+use tokio::sync::mpsc;
 
 use crate::{
     error::ProxyError,
     protocol::{ClientWire, TargetWire},
     request_log::RequestLogContext,
-    throttle::{token_usage_value, ResponseTokenUsage},
+    throttle::{response_token_usage, ResponseTokenUsage},
 };
 
-const USAGE_TAIL_BYTES: usize = 128 * 1024;
+const MAX_OBSERVED_SSE_EVENT_BYTES: usize = 1024 * 1024;
 
 /// Request metadata emitted when an SSE body completes or is dropped.
 #[derive(Debug)]
@@ -40,36 +44,147 @@ pub(crate) struct StreamLogContext {
     pub(crate) request: RequestLogContext,
 }
 
-#[derive(Debug, Default)]
+/// Bounded input for observing native SSE frames without changing their wire bytes.
+struct NativeUsageInput {
+    receiver: mpsc::Receiver<Bytes>,
+}
+
+impl Stream for NativeUsageInput {
+    type Item = Result<Bytes, Infallible>;
+
+    fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.receiver.poll_recv(context) {
+            Poll::Ready(Some(chunk)) => Poll::Ready(Some(Ok(chunk))),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Observes usage from complete native SSE events while retaining only parser state.
 struct NativeUsageObserver {
-    tail: Vec<u8>,
+    sender: Option<mpsc::Sender<Bytes>>,
+    events: EventStream<NativeUsageInput>,
+    event_size: SseEventSize,
+    usage: ResponseTokenUsage,
+    observing: bool,
+}
+
+#[derive(Default)]
+struct SseEventSize {
+    bytes: usize,
+    line_has_data: bool,
+    previous_was_cr: bool,
+}
+
+impl SseEventSize {
+    fn accepts(&mut self, chunk: &[u8]) -> bool {
+        for &byte in chunk {
+            self.bytes = self.bytes.saturating_add(1);
+            if self.bytes > MAX_OBSERVED_SSE_EVENT_BYTES {
+                return false;
+            }
+            match byte {
+                b'\r' => {
+                    if !self.line_has_data {
+                        self.bytes = 0;
+                    }
+                    self.line_has_data = false;
+                    self.previous_was_cr = true;
+                }
+                b'\n' if self.previous_was_cr => {
+                    self.previous_was_cr = false;
+                }
+                b'\n' => {
+                    if !self.line_has_data {
+                        self.bytes = 0;
+                    }
+                    self.line_has_data = false;
+                }
+                _ => {
+                    self.line_has_data = true;
+                    self.previous_was_cr = false;
+                }
+            }
+        }
+        true
+    }
+}
+
+impl Default for NativeUsageObserver {
+    fn default() -> Self {
+        let (sender, receiver) = mpsc::channel(1);
+        Self {
+            sender: Some(sender),
+            events: EventStream::new(NativeUsageInput { receiver }),
+            event_size: SseEventSize::default(),
+            usage: ResponseTokenUsage::default(),
+            observing: true,
+        }
+    }
 }
 
 impl NativeUsageObserver {
-    fn push(&mut self, chunk: &[u8]) {
-        self.tail.extend_from_slice(chunk);
-        if self.tail.len() > USAGE_TAIL_BYTES {
-            self.tail.drain(..self.tail.len() - USAGE_TAIL_BYTES);
+    /// Observe one upstream chunk and return the exact bytes supplied by the caller.
+    async fn observe_chunk(&mut self, chunk: Bytes) -> Bytes {
+        if !self.observing {
+            return chunk;
+        }
+        if !self.event_size.accepts(&chunk) {
+            self.stop();
+            return chunk;
+        }
+        let Some(sender) = self.sender.as_ref() else {
+            return chunk;
+        };
+        if sender.send(chunk.clone()).await.is_err() {
+            self.stop();
+            return chunk;
+        }
+        self.drain_ready();
+        chunk
+    }
+
+    /// Close the framed input and consume every complete event still buffered by the parser.
+    async fn finish(mut self) -> ResponseTokenUsage {
+        self.sender.take();
+        if self.observing {
+            while let Some(event) = self.events.next().await {
+                match event {
+                    Ok(event) => self.observe(&event.data),
+                    Err(_) => break,
+                }
+            }
+        }
+        self.usage
+    }
+
+    fn drain_ready(&mut self) {
+        loop {
+            match self.events.next().now_or_never() {
+                Some(Some(Ok(event))) => self.observe(&event.data),
+                Some(Some(Err(_))) | Some(None) => {
+                    self.stop();
+                    break;
+                }
+                None => break,
+            }
         }
     }
 
-    fn usage(&self) -> ResponseTokenUsage {
-        let marker = br#""usage":"#;
-        let Some(index) = self
-            .tail
-            .windows(marker.len())
-            .rposition(|window| window == marker)
-        else {
-            return ResponseTokenUsage::default();
+    fn observe(&mut self, data: &str) {
+        let Ok(payload) = serde_json::from_str::<Value>(data) else {
+            return;
         };
-        let source = &self.tail[index + marker.len()..];
-        let Some(Ok(usage)) = serde_json::Deserializer::from_slice(source)
-            .into_iter::<Value>()
-            .next()
-        else {
-            return ResponseTokenUsage::default();
-        };
-        token_usage_value(&usage)
+        let usage = response_token_usage(&payload);
+        if usage.reported {
+            self.usage = usage;
+        }
+    }
+
+    fn stop(&mut self) {
+        self.observing = false;
+        self.sender.take();
     }
 }
 
@@ -154,7 +269,7 @@ pub(crate) fn stream_response(
             while let Some(chunk) = upstream.next().await {
                 match chunk {
                     Ok(chunk) => {
-                        usage.push(&chunk);
+                        let chunk = usage.observe_chunk(chunk).await;
                         completion.record_bytes(chunk.len());
                         yield Ok::<Bytes, io::Error>(chunk);
                     }
@@ -165,7 +280,7 @@ pub(crate) fn stream_response(
                     }
                 }
             }
-            completion.usage = usage.usage();
+            completion.usage = usage.finish().await;
             completion.reconcile().await;
             completion.finish(false);
         };
@@ -385,27 +500,46 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn native_usage_observer_reads_split_responses_and_chat_events() {
-        let mut responses = NativeUsageObserver::default();
-        responses.push(br#"data: {"type":"response.completed","response":{"usage":{"input_"#);
-        responses.push(br#"tokens":12,"output_tokens":3,"total_tokens":15}}}"#);
-        assert_eq!(
-            responses.usage(),
-            ResponseTokenUsage {
-                reported: true,
-                input: 12,
-                output: 3,
-                total: 15,
-            }
-        );
+    async fn observed_usage(chunks: impl IntoIterator<Item = Bytes>) -> ResponseTokenUsage {
+        let mut observer = NativeUsageObserver::default();
+        for chunk in chunks {
+            observer.observe_chunk(chunk).await;
+        }
+        observer.finish().await
+    }
 
-        let mut chat = NativeUsageObserver::default();
-        chat.push(
-            br#"data: {"usage":{"prompt_tokens":8,"completion_tokens":2,"total_tokens":10}}"#,
+    #[tokio::test]
+    async fn native_usage_observer_returns_upstream_chunks_unchanged() {
+        let chunks = vec![
+            Bytes::from_static(b"event: completion\r\n"),
+            Bytes::from_static(b"data: {\"usage\": null}\r\n\r\n"),
+        ];
+        let mut observer = NativeUsageObserver::default();
+        let mut forwarded = Vec::new();
+        for chunk in chunks.iter().cloned() {
+            forwarded.push(observer.observe_chunk(chunk).await);
+        }
+        assert_eq!(forwarded, chunks);
+    }
+
+    #[tokio::test]
+    async fn native_usage_observer_handles_arbitrary_boundaries_crlf_and_json_whitespace() {
+        let event = concat!(
+            "event: completion\r\n",
+            "data: { \"usage\" : { \"prompt_tokens\" : 8, \"completion_tokens\" : 2, ",
+            "\"total_tokens\" : 10 } }\r\n",
+            "\r\n"
         );
+        let usage = observed_usage(
+            event
+                .as_bytes()
+                .chunks(1)
+                .map(Bytes::copy_from_slice)
+                .collect::<Vec<_>>(),
+        )
+        .await;
         assert_eq!(
-            chat.usage(),
+            usage,
             ResponseTokenUsage {
                 reported: true,
                 input: 8,
@@ -413,6 +547,124 @@ mod tests {
                 total: 10,
             }
         );
+    }
+
+    #[tokio::test]
+    async fn native_usage_observer_reads_multiline_responses_event() {
+        let event = concat!(
+            "event: response.completed\r\n",
+            "data: {\"type\":\"response.completed\",\"response\":\r\n",
+            "data: {\"usage\" : {\"input_tokens\":12,\"output_tokens\":3,\"total_tokens\":15}}}\r\n",
+            "\r\n"
+        );
+        let responses = observed_usage(
+            event
+                .as_bytes()
+                .chunks(7)
+                .map(Bytes::copy_from_slice)
+                .collect::<Vec<_>>(),
+        )
+        .await;
+        assert_eq!(
+            responses,
+            ResponseTokenUsage {
+                reported: true,
+                input: 12,
+                output: 3,
+                total: 15,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn native_usage_observer_ignores_null_and_nested_unrelated_usage() {
+        let ignored = observed_usage([Bytes::from_static(
+            br#"data: {"usage":null,"metadata":{"usage":{"prompt_tokens":90,"completion_tokens":9}}}
+
+"#,
+        )])
+        .await;
+        assert_eq!(ignored, ResponseTokenUsage::default());
+
+        let retained = observed_usage([Bytes::from_static(
+            br#"data: {"usage":{"prompt_tokens":8,"completion_tokens":2,"total_tokens":10}}
+
+data: {"usage":null,"metadata":{"usage":{"prompt_tokens":90,"completion_tokens":9}}}
+
+"#,
+        )])
+        .await;
+        assert_eq!(
+            retained,
+            ResponseTokenUsage {
+                reported: true,
+                input: 8,
+                output: 2,
+                total: 10,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn native_usage_observer_reads_usage_from_event_larger_than_old_tail() {
+        let event = format!(
+            "data: {{\"usage\":{{\"prompt_tokens\":21,\"completion_tokens\":5}},\"padding\":\"{}\"}}\n\n",
+            "x".repeat(256 * 1024)
+        );
+        let usage = observed_usage(
+            event
+                .as_bytes()
+                .chunks(4093)
+                .map(Bytes::copy_from_slice)
+                .collect::<Vec<_>>(),
+        )
+        .await;
+        assert_eq!(
+            usage,
+            ResponseTokenUsage {
+                reported: true,
+                input: 21,
+                output: 5,
+                total: 26,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn native_usage_observer_bounds_oversized_event_state() {
+        let event = format!(
+            "data: {{\"usage\":{{\"prompt_tokens\":21,\"completion_tokens\":5}},\"padding\":\"{}\"}}\n\n",
+            "x".repeat(MAX_OBSERVED_SSE_EVENT_BYTES)
+        );
+        let usage = observed_usage(
+            event
+                .as_bytes()
+                .chunks(4093)
+                .map(Bytes::copy_from_slice)
+                .collect::<Vec<_>>(),
+        )
+        .await;
+        assert_eq!(usage, ResponseTokenUsage::default());
+    }
+
+    #[tokio::test]
+    async fn native_usage_observer_ignores_truncated_and_malformed_streams() {
+        let truncated = observed_usage([Bytes::from_static(
+            br#"data: {"usage":{"prompt_tokens":8,"completion_tokens":2}}"#,
+        )])
+        .await;
+        assert_eq!(truncated, ResponseTokenUsage::default());
+
+        let malformed = observed_usage([
+            Bytes::from_static(b"data: \xff\n\n"),
+            Bytes::from_static(
+                br#"data: {"usage":{"prompt_tokens":8,"completion_tokens":2}}
+
+"#,
+            ),
+        ])
+        .await;
+        assert_eq!(malformed, ResponseTokenUsage::default());
     }
 
     #[test]
