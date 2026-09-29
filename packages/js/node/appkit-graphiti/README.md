@@ -5,8 +5,8 @@ AppKit process plugin for the Python `dbx-tools-graphiti` MCP runtime.
 ## Key features
 
 - starts Graphiti as a supervised AppKit sidecar;
-- installs the version-matched `dbx-model-proxy` release through the generated
-  `@dbx-tools/cli` Rust command registry;
+- installs the version-matched `dbx-model-proxy` release through the narrow
+  `@dbx-tools/rust-binary` registry/runtime;
 - enables the Python Postgres write journal when the app supplies Lakebase or
   PostgreSQL connection environment;
 - starts an internal loopback Caddy proxy in front of upstream Graphiti, then

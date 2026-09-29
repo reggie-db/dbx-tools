@@ -26,7 +26,28 @@ before(() => {
     releaseDocs: {
       siteUrl: "https://docs.example.com",
       base: "/fixture/",
+      prepareSteps: [
+        {
+          name: "Setup Python",
+          uses: "actions/setup-python@v6",
+          with: { "python-version": "3.11" },
+        },
+        { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+        { name: "Validate public source documentation", run: "bun tools/check-docs.ts" },
+        { name: "Generate docs from READMEs", run: "bun tools/sync-docs.ts" },
+      ],
+      buildSteps: [
+        { name: "Generate API docs", run: "bun tools/api-docs.ts" },
+        { name: "Check generated titles", run: "bun tools/check-titles.ts" },
+      ],
+      artifactPath: "custom-site/dist",
     },
+    releasePythonRoot: "python/packages",
+    pullRequestTitlePolicy: {
+      types: ["feature", "maintenance"],
+      requireScope: true,
+    },
+    workflowCacheIgnorePaths: ["custom-site"],
   });
   project.synth();
   release = readWorkflow(outdir, "release");
@@ -145,6 +166,9 @@ describe("unified release workflow", () => {
     );
     assert.ok(stepNames.indexOf("Generate API docs") < stepNames.indexOf("Check generated titles"));
     assert.equal(step(build, "Upload Pages artifact").uses, "actions/upload-pages-artifact@v4");
+    assert.deepEqual(step(build, "Upload Pages artifact").with, {
+      path: "custom-site/dist",
+    });
 
     const deploy = release.jobs["deploy-docs"]!;
     assert.equal(
@@ -202,7 +226,7 @@ describe("release task contracts", () => {
     assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
     assert.match(
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
-      /tasks\/release-pr\.ts --prefix v --base main/,
+      /tasks\/release-pr\.ts --prefix v --base main --python-root "python\/packages"/,
     );
   });
 
@@ -304,12 +328,18 @@ describe("generated workflow safety", () => {
       step(build.jobs["pr-title"]!, "Validate semantic title").uses,
       "amannn/action-semantic-pull-request@v6",
     );
+    assert.deepEqual(step(build.jobs["pr-title"]!, "Validate semantic title").with, {
+      types: "feature\nmaintenance",
+      requireScope: true,
+    });
   });
 
   it("uses a dependency-only Bun cache key", () => {
     const cacheKey = readFileSync(join(outdir, ".projen", "bun-cache-key.mjs"), "utf8");
     assert.ok(cacheKey.includes("const dependencyFields ="));
     assert.equal(cacheKey.includes('"version"'), false);
+    assert.ok(cacheKey.includes('"custom-site"'));
+    assert.equal(cacheKey.includes('".docs-build"'), false);
   });
 });
 
@@ -327,6 +357,25 @@ describe("optional Node release stage", () => {
       const workflow = readWorkflow(disabledOutdir, "release");
       assert.ok(workflow.jobs["verify-context"]);
       assert.equal(workflow.jobs["publish-node"], undefined);
+      assert.equal(workflow.jobs["build-docs"], undefined);
+    } finally {
+      rmSync(disabledOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits repository title policy when disabled", () => {
+    const disabledOutdir = mkdtempSync(join(tmpdir(), "title-policy-disabled-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "disabled-title-policy",
+        outdir: disabledOutdir,
+        github: true,
+        buildWorkflow: true,
+        pullRequestTitlePolicy: false,
+      });
+      project.synth();
+      const workflow = readWorkflow(disabledOutdir, "build");
+      assert.equal(workflow.jobs["pr-title"], undefined);
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
     }

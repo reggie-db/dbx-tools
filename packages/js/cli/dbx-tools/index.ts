@@ -11,4 +11,3 @@ export * as root from "./src/root.ts";
 export * as rustBinary from "./src/rust-binary.ts";
 export { resolveBunArgv } from "./src/bun.ts";
 export { workspaceRoot } from "./src/root.ts";
-export type { RustReleaseBinaryAsset, RustReleaseBinaryCommand, RustReleaseBinaryOptions } from "./src/rust-binary.ts";

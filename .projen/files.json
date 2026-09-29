@@ -25,7 +25,7 @@
     "bunfig.toml",
     "Cargo.toml",
     "LICENSE",
-    "packages/js/cli/dbx-tools/src/_rust-release-binaries.ts",
+    "packages/js/node/rust-binary/src/_rust-release-binaries.ts",
     "pyproject.toml",
     "tsconfig.base.json",
     "tsconfig.json",

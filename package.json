@@ -106,6 +106,7 @@
     "packages/js/node/model-rs",
     "packages/js/node/path",
     "packages/js/node/postgres",
+    "packages/js/node/rust-binary",
     "packages/js/node/search",
     "packages/js/node/teams",
     "packages/js/node/tunnel",

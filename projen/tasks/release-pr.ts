@@ -136,7 +136,7 @@ program
   .addOption(releaseArchitectureOption())
   .option("--local-registry <value>", "local npm registry: auto, false, or an explicit URL", "auto")
   .option("--local-pypi <value>", "local PyPI index: auto, false, or an explicit URL", "auto")
-  .option("--python-root <path>", "Python workspace package root", "packages/py")
+  .option("--python-root <path>", "Python workspace package root")
   .option("--no-local-cargo", "skip local Cargo publication")
   .option("--approve", "merge the release branch directly into the release base")
   .action(
@@ -149,7 +149,7 @@ program
       arch: ReleaseArch[];
       localRegistry: string;
       localPypi: string;
-      pythonRoot: string;
+      pythonRoot?: string;
       localCargo: boolean;
       approve: boolean;
     }) => {

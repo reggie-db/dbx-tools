@@ -67,6 +67,8 @@ export interface DBXToolsJavaScriptProject extends DBXToolsProject, javascript.N
   rootTsconfig?: DBXToolsRootTsconfig;
   /** Root `.vscode/*` - only a tree ROOT has one. */
   vsCode?: DBXToolsVsCode;
+  /** Repository outputs excluded from generated workflow dependency-cache hashing. */
+  readonly workflowCacheIgnorePaths: readonly string[];
 }
 
 /** Parsed npm package identifier: optional scope plus the unscoped package name. */
@@ -514,6 +516,14 @@ const DEV_DEPS_ROOT: string[] = ["typescript@^5.9.3", `@types/bun@${BUN_VERSION}
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export type DBXToolsReleaseMode = "dbx-tools" | "disabled";
 
+/** Optional semantic pull request title policy for the generated build workflow. */
+export interface PullRequestTitlePolicyOptions {
+  /** Allowed semantic title types. */
+  readonly types: readonly string[];
+  /** Require a semantic title scope. Defaults to `false`. */
+  readonly requireScope?: boolean;
+}
+
 export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
   Partial<Omit<javascript.NodeProjectOptions, "release" | "releaseTrigger">> &
   DBXToolsConfigOptions &
@@ -563,10 +573,16 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly syncResynthPaths?: readonly string[];
     /** GitHub Pages documentation included in the unified release workflow. */
     readonly releaseDocs?: ReleaseDocsOptions;
+    /** Python package root passed to local release preparation when configured. */
+    readonly releasePythonRoot?: string;
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
     readonly releaseMode?: DBXToolsReleaseMode;
+    /** Semantic PR title validation policy. Omitted or `false` disables title validation. */
+    readonly pullRequestTitlePolicy?: false | PullRequestTitlePolicyOptions;
+    /** Repository output paths excluded from generated workflow dependency-cache hashing. */
+    readonly workflowCacheIgnorePaths?: readonly string[];
     /**
      * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
      * config ALONGSIDE the discovered `packageRoots` members - for a package that
@@ -610,6 +626,7 @@ export class DBXToolsNodeProject
   vsCode?: DBXToolsVsCode;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
+  readonly workflowCacheIgnorePaths: readonly string[];
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
@@ -641,6 +658,7 @@ export class DBXToolsNodeProject
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
+    this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
     this.rootInstallOnly = options.rootInstallOnly !== false;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     configureBuildWorkflow(this, options);
@@ -651,7 +669,9 @@ export class DBXToolsNodeProject
     const steps = super.renderWorkflowSetup(options);
     if (this.parent) return steps;
     return steps.flatMap((step) => {
-      if (step.uses === "oven-sh/setup-bun@v2") return [...bunCacheRestoreSteps(this)];
+      if (step.uses === "oven-sh/setup-bun@v2") {
+        return [...bunCacheRestoreSteps(this, { ignorePaths: this.workflowCacheIgnorePaths })];
+      }
       if (step.run === "bun install") {
         return [
           step,
@@ -718,6 +738,7 @@ export class DBXToolsTypeScriptProject
   vsCode?: DBXToolsVsCode;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
+  readonly workflowCacheIgnorePaths: readonly string[];
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
@@ -757,6 +778,7 @@ export class DBXToolsTypeScriptProject
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
+    this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
     this.rootInstallOnly = options.rootInstallOnly !== false;
     // Pairs with `jsx` in SHARED_COMPILER_OPTIONS: projen's default `include` is
     // `src/**/*.ts` only, which silently omits a `.tsx` file from the program
@@ -943,10 +965,17 @@ class WorkspaceValidationTasks extends Component {
  * off) do not gain new files.
  */
 class WorkflowDefaults extends Component {
+  constructor(
+    project: javascript.NodeProject,
+    private readonly pullRequestTitlePolicy: false | PullRequestTitlePolicyOptions | undefined,
+  ) {
+    super(project);
+  }
+
   public override preSynthesize(): void {
     const project = this.project as javascript.NodeProject;
     const workflow = project.buildWorkflow?.workflow;
-    if (workflow) {
+    if (workflow && this.pullRequestTitlePolicy) {
       workflow.addJob("pr-title", {
         name: "Validate PR title",
         runsOn: ["ubuntu-latest"],
@@ -958,8 +987,8 @@ class WorkflowDefaults extends Component {
             uses: "amannn/action-semantic-pull-request@v6",
             env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" },
             with: {
-              types: ["feat", "fix", "chore"].join("\n"),
-              requireScope: false,
+              types: this.pullRequestTitlePolicy.types.join("\n"),
+              requireScope: this.pullRequestTitlePolicy.requireScope ?? false,
             },
           },
         ],
@@ -1319,7 +1348,7 @@ function initProject(
   // repairs the worktree it is meant to validate; `eslint:fix` is the explicit
   // local mutation path.
   const eslint = new javascript.Eslint(project, {
-    dirs: [...roots, "projen"],
+    dirs: [...roots, ...project.extraWorkspaceMembers],
     fileExtensions: [".ts", ".tsx"],
     projectService: true,
     prettier: Boolean(project.prettier),
@@ -1338,7 +1367,9 @@ function initProject(
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
   eslint.addIgnorePattern("**/src/generated/**");
-  eslint.addIgnorePattern("projen/index.ts");
+  for (const member of project.extraWorkspaceMembers) {
+    eslint.addIgnorePattern(`${member}/index.ts`);
+  }
   // The generated bun app scripts + unmanaged overrides live at the package root,
   // outside any `src/**` tsconfig include, so the type-aware parser cannot resolve
   // them to a project. ESLint still cannot parse them.
@@ -1440,7 +1471,7 @@ function initProject(
   }
 
   new WorkspaceValidationTasks(project);
-  new WorkflowDefaults(project);
+  new WorkflowDefaults(project, options.pullRequestTitlePolicy);
   new PrettierIgnoreGenerated(project);
 
   new GeneratedSource(project);
@@ -1451,6 +1482,7 @@ function initProject(
       tagPrefix: options.releaseTagPrefix,
       nodeRelease: options.nodeRelease,
       docs: options.releaseDocs,
+      pythonRoot: options.releasePythonRoot,
     });
   }
 }

@@ -428,6 +428,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   supports plain `getAgentTools()` providers, and passes the turn's resource id
   as the optional fourth `executeAgentTool` argument so service-principal
   execution does not collapse users onto one graph.
+- `packages/js/node/rust-binary` owns the generated Rust release-command
+  registry, GitHub release URL selection, exact-version installation through
+  `@dbx-tools/core`, and signal-preserving process execution. Runtime packages
+  that need a native release binary depend on `@dbx-tools/rust-binary`, not the
+  full CLI graph. `@dbx-tools/cli/rust-binary` remains a compatibility re-export;
+  command registration and argument forwarding stay in `@dbx-tools/cli`.
 - `packages/js/node/teams`, `packages/js/shared/teams`, and `packages/js/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
@@ -583,10 +589,13 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   upload there. UniFFI crates cannot use exclusions because every configured
   target must produce their artifacts. A release binary with `cli: true`
   appears in the generated registry at `cliRegistryPath`; the registry includes
-  only assets produced by the selected target matrix. `@dbx-tools/cli`
-  consumes that registry through its `rust-binary` module and delegates atomic
-  installation to the existing `@dbx-tools/core` `bin.ensure`. Do not put the
-  product registry or release URL policy in core. Every UniFFI crate gets
+  only assets produced by the selected target matrix.
+  `@dbx-tools/rust-binary` owns the registry, release URL policy, exact-version
+  installation through `@dbx-tools/core` `bin.ensure`, and process forwarding.
+  `@dbx-tools/cli/rust-binary` remains a compatibility re-export. Server
+  plugins import the narrow package directly; do not put product registry or
+  release URL policy in core or restore a dependency on the umbrella CLI. Every
+  UniFFI crate gets
   dedicated binding packages and never merges generated bindings into a
   handwritten package. A Rust directory `<name>` generates Node folder
   `packages/js/node/<name>-rs` with package `@<scope>/<name>-rs`, plus Python
@@ -1527,6 +1536,15 @@ whether the sentence is about the code as it stands or about the act of changing
   projen OWNS that package's `package.json`/`tsconfig.json`/tasks/`README.md`/
   `.projen/`; baseline projen features are off to match the root (`SUBPROJECT_
 DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
+- **Repository policy is explicit in the root authoring input.** Reusable Projen
+  defaults do not name this repository's docs scripts, docs output directory,
+  Python package root, PR title convention, or `projen/` tooling member.
+  `.projenrc.ts` supplies release docs preparation/build steps and artifact path,
+  the release Python root, the PR title policy, workflow cache output ignores,
+  and `extraWorkspaceMembers: ["projen"]`. Generic consumers can replace or
+  omit each surface. ESLint and generated-entrypoint handling derive extra
+  tooling paths from `extraWorkspaceMembers`; never add another literal
+  `projen/` path to the reusable engine.
 - **Tags are ONE map of mixins.** `tags.ts` — `PACKAGE_TAG_MIXINS`
   (`Record<PackageTag, IMixin>`, keyed by tag name). Each entry is a
   `tagMixin(name, fn)` that, for every package carrying the tag, adds the tag's
@@ -1983,8 +2001,8 @@ names the real invocation.
 
 Release-enabled Rust commands are generated separately from the sibling
 Commander packages. `dbx model-proxy` and `dbx lakebase-proxy` look up the
-current platform in the synthesized Rust registry, use `bin.ensure` to install
-the asset matching the generated CLI `PACKAGE_VERSION` at
+current platform through `@dbx-tools/rust-binary`, use `bin.ensure` to install
+the asset matching the shared package `PACKAGE_VERSION` at
 `~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`, then forward argv, stdio,
 signals, and exit status to the native process. Root help registers names
 without downloading assets. Add another native command through the Rust

@@ -40,6 +40,9 @@ and the operating system, then installs it as
 `~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`. Later invocations reuse
 that versioned executable. Root help never downloads a binary, and all command
 arguments are forwarded directly to the Rust CLI.
+The registry and installer live in
+[`@dbx-tools/rust-binary`](../../node/rust-binary) so server packages can use a
+native release binary without installing this CLI's command graph.
 
 ## Bootstrap A Workspace
 
@@ -138,6 +141,7 @@ should run the `dbx` bin.
 - `bootstrap` - empty-workspace bootstrap, toolchain seeding, and the initial synth.
 - `root` - workspace-root detection and bootstrap/install checks.
 - `bun` - bun discovery, workspace install, registry forcing, and projen delegation.
+- `rust-binary` - compatibility re-export of `@dbx-tools/rust-binary`.
 
 The reusable project classes and generators live in
 [`@dbx-tools/projen`](../../../../projen).

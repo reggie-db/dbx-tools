@@ -50,6 +50,21 @@ The inherited Projen `release` and `releaseTrigger` options are intentionally
 not part of this engine's public options because they create a competing release
 workflow.
 
+Repository policy stays in the consuming `.projenrc.ts`:
+
+- `releaseDocs` supplies repository-defined preparation and build steps plus
+  the Pages artifact path. The engine adds release checkout, Bun caching,
+  artifact upload, and deployment without naming a docs script or output tree.
+- `releasePythonRoot` passes the actual Python package root to local release
+  preparation. Omit it when the workspace has no standard Python packages.
+- `pullRequestTitlePolicy` configures semantic title types and scope policy.
+  Omit it or pass `false` to disable the title job.
+- `workflowCacheIgnorePaths` excludes generated output trees that may contain
+  package manifests from the dependency-only Bun cache key.
+- `extraWorkspaceMembers` declares self-synthesizing tooling packages outside
+  `packageRoots`. Their version, generated entrypoint, formatting, linting, and
+  workspace membership are derived from that declaration.
+
 Dependency installation runs once from this root. The default-on
 `ROOT_INSTALL_ONLY_MIXIN` clears child `install` / `install:ci` task steps during
 root pre-synthesis, including packages attached after root construction. Set

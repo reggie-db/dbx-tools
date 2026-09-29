@@ -40,6 +40,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/rust-binary",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
       "type": "runtime"

@@ -84,7 +84,8 @@ describe("workspace validation tasks", () => {
     const fixCommand = tasks.root.tasks["eslint:fix"].steps?.[0]?.exec ?? "";
     assert.doesNotMatch(lintCommand, /--fix/);
     assert.match(lintCommand, /\bpackages\b/);
-    assert.match(lintCommand, /\bprojen$/);
+    assert.match(lintCommand, /\btooling$/);
+    assert.doesNotMatch(lintCommand, /\bprojen\b/);
     assert.equal(fixCommand, "bun run eslint -- --fix");
   });
 

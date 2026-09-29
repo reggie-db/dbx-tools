@@ -424,7 +424,9 @@ export class DBXToolsPythonWorkspace extends Component {
       env: { BUN_VERSION },
       steps: [
         ...releaseSourceSteps(),
-        ...bunCacheRestoreSteps(project),
+        ...bunCacheRestoreSteps(project, {
+          ignorePaths: project.workflowCacheIgnorePaths,
+        }),
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
         { name: "Install release helpers", run: "bun install" },
         bunCacheSaveStep(),

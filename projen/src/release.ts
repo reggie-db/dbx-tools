@@ -20,6 +20,12 @@ export type ReleaseStage = "all" | "node" | "python" | "docs";
 export interface ReleaseDocsOptions {
   readonly siteUrl: string;
   readonly base?: string;
+  /** Repository-defined setup and generation steps run before saving the Bun cache. */
+  readonly prepareSteps: readonly JobStep[];
+  /** Repository-defined documentation build and validation steps. */
+  readonly buildSteps: readonly JobStep[];
+  /** Directory uploaded as the GitHub Pages artifact. */
+  readonly artifactPath: string;
 }
 
 /** Options for {@link DBXToolsRelease}. */
@@ -30,6 +36,8 @@ export interface DBXToolsReleaseOptions {
   readonly nodeRelease?: boolean;
   /** Build and deploy generated documentation through GitHub Pages. */
   readonly docs?: ReleaseDocsOptions;
+  /** Python package root passed to local release preparation. */
+  readonly pythonRoot?: string;
 }
 
 /** Locate the unified workflow so attached language workspaces can add jobs. */
@@ -103,7 +111,7 @@ export function releaseArtifactSteps(options: {
 export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): readonly JobStep[] {
   return [
     ...releaseSourceSteps(),
-    ...bunCacheRestoreSteps(project),
+    ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
     {
       name: "Setup Node.js",
       uses: "actions/setup-node@v6",
@@ -275,44 +283,14 @@ function addDocsJobs(
     },
     steps: [
       ...releaseSourceSteps(),
-      ...bunCacheRestoreSteps(project),
-      {
-        name: "Setup Node.js",
-        uses: "actions/setup-node@v6",
-        with: { "node-version": "22" },
-      },
-      {
-        name: "Setup Python",
-        uses: "actions/setup-python@v6",
-        with: { "python-version": "3.11" },
-      },
-      { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
-      { name: "Configure Pages", uses: "actions/configure-pages@v5" },
-      { name: "Install dependencies", run: "bun install" },
-      {
-        name: "Validate public source documentation",
-        run: "bun docs/scripts/check-source-docs.mjs",
-      },
-      { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
-      { name: "Install docs dependencies", run: "bun install --cwd .docs-build/site" },
+      ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
+      ...options.prepareSteps,
       bunCacheSaveStep(),
-      {
-        name: "Generate API docs",
-        run: "bun docs/scripts/generate-api-docs.mjs",
-      },
-      {
-        name: "Check generated titles",
-        run: "bun docs/scripts/check-generated-titles.mjs",
-      },
-      { name: "Build docs", run: "bun run --cwd .docs-build/site build" },
-      {
-        name: "Check generated links",
-        run: "bun run --cwd .docs-build/site check-links",
-      },
+      ...options.buildSteps,
       {
         name: "Upload Pages artifact",
         uses: "actions/upload-pages-artifact@v4",
-        with: { path: ".docs-build/dist" },
+        with: { path: options.artifactPath },
       },
     ],
   });
@@ -360,7 +338,13 @@ export class DBXToolsRelease extends Component {
               exec: taskScript(
                 project,
                 "release-pr.ts",
-                `--prefix ${tagPrefix} --base ${releaseBranch}`,
+                [
+                  `--prefix ${tagPrefix}`,
+                  `--base ${releaseBranch}`,
+                  ...(options.pythonRoot
+                    ? [`--python-root ${JSON.stringify(options.pythonRoot)}`]
+                    : []),
+                ].join(" "),
               ),
               receiveArgs: true,
               description: "Prepare, validate, locally publish, and open a reviewed release PR",

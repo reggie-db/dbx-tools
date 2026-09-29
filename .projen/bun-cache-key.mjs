@@ -1,25 +1,17 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 const root = process.cwd();
-const ignored = new Set([
-  ".git",
-  ".docs-build",
-  ".venv",
-  ".worktrees",
-  "coverage",
-  "dist",
-  "lib",
-  "node_modules",
-  "target",
-]);
+const ignoredNames = new Set([".git",".venv",".worktrees","coverage","dist","lib","node_modules","target"]);
+const ignoredPaths = new Set([".docs-build"]);
 const manifests = [];
 const walk = (directory) => {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (ignored.has(entry.name)) continue;
     const path = join(directory, entry.name);
+    const relativePath = path.slice(root.length + 1).split(sep).join("/");
+    if (ignoredNames.has(entry.name) || ignoredPaths.has(relativePath)) continue;
     if (entry.isDirectory()) walk(path);
     else if (entry.name === "package.json") manifests.push(path);
   }

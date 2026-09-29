@@ -30,8 +30,8 @@ import {
   identity as appkitIdentity,
   plugin as appkitPlugin,
 } from "@dbx-tools/appkit";
-import { ensureRustReleaseBinary, rustReleaseBinaryCommand } from "@dbx-tools/cli/rust-binary";
 import { config as coreConfig } from "@dbx-tools/core";
+import { ensureRustReleaseBinary, rustReleaseBinaryCommand } from "@dbx-tools/rust-binary";
 import { async as asyncModule, log, object } from "@dbx-tools/shared-core";
 import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";

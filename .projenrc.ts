@@ -21,6 +21,8 @@ import { project, project as projenProject, projectJs } from "@dbx-tools/projen"
 import { Component, DependencyType } from "projen";
 
 const SCOPE = "dbx-tools";
+const DOCS_BUILD_ROOT = ".docs-build";
+const PYTHON_ROOT = "packages/py";
 
 const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "packages/js/cli/appkit-env":
@@ -56,6 +58,8 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
   "packages/js/node/postgres":
     "Connection-correct PostgreSQL advisory locks and LISTEN/NOTIFY topic bus for Node.js",
+  "packages/js/node/rust-binary":
+    "Generated Rust release registry, exact-version binary installation, and process execution",
   "packages/js/node/search":
     "Agent tools, federated search, index lifecycle, and Lakebase full-text extensions for AppKit AI Search",
   "packages/js/node/teams":
@@ -164,7 +168,53 @@ const root = new projenProject.DBXToolsNodeProject({
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",
+    prepareSteps: [
+      {
+        name: "Setup Node.js",
+        uses: "actions/setup-node@v6",
+        with: { "node-version": "22" },
+      },
+      {
+        name: "Setup Python",
+        uses: "actions/setup-python@v6",
+        with: { "python-version": "3.11" },
+      },
+      { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+      { name: "Configure Pages", uses: "actions/configure-pages@v5" },
+      { name: "Install dependencies", run: "bun install" },
+      {
+        name: "Validate public source documentation",
+        run: "bun docs/scripts/check-source-docs.mjs",
+      },
+      { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
+      {
+        name: "Install docs dependencies",
+        run: `bun install --cwd ${DOCS_BUILD_ROOT}/site`,
+      },
+    ],
+    buildSteps: [
+      {
+        name: "Generate API docs",
+        run: "bun docs/scripts/generate-api-docs.mjs",
+      },
+      {
+        name: "Check generated titles",
+        run: "bun docs/scripts/check-generated-titles.mjs",
+      },
+      { name: "Build docs", run: `bun run --cwd ${DOCS_BUILD_ROOT}/site build` },
+      {
+        name: "Check generated links",
+        run: `bun run --cwd ${DOCS_BUILD_ROOT}/site check-links`,
+      },
+    ],
+    artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
+  releasePythonRoot: PYTHON_ROOT,
+  pullRequestTitlePolicy: {
+    types: ["feat", "fix", "chore"],
+    requireScope: false,
+  },
+  workflowCacheIgnorePaths: [DOCS_BUILD_ROOT],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:*` sibling deps from local source.
@@ -488,13 +538,20 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   p.addDeps(
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/cli@workspace:*",
     "@dbx-tools/core@workspace:*",
+    "@dbx-tools/rust-binary@workspace:*",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
     "concurrently@catalog:",
   );
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
+});
+
+// node-rust-binary: narrow runtime owner for generated Rust release metadata,
+// atomic installation, and process/signal forwarding.
+project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (p) => {
+  p.addDeps("@dbx-tools/core@workspace:*");
+  projectJs.addPackageFiles(p, "exports.ts");
 });
 
 // node-postgres: connection-correct Postgres utilities shared by packages.
@@ -715,6 +772,7 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
     "@dbx-tools/cli-appkit-env@workspace:*",
     "@dbx-tools/cli-auth@workspace:*",
     "@dbx-tools/cli-tunnel@workspace:*",
+    "@dbx-tools/rust-binary@workspace:*",
   );
 });
 
@@ -998,7 +1056,8 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // ---------------------------------------------------------------------------
 const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   rustVersion: "1.89",
-  cliRegistryPath: "packages/js/cli/dbx-tools/src/_rust-release-binaries.ts",
+  cliRegistryPath: "packages/js/node/rust-binary/src/_rust-release-binaries.ts",
+  pythonRoot: PYTHON_ROOT,
   workspaceDependencies: {
     "async-trait": "0.1",
     backon: { version: "=1.6.0", defaultFeatures: false, features: ["tokio-sleep"] },
@@ -1231,6 +1290,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
 ];
 
 new projenProject.DBXToolsPythonWorkspace(root, {
+  root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
   // Graphiti supports Python 3.11 through the current Python 3 release line.

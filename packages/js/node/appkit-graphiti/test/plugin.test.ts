@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import type { IAppRouter } from "@databricks/appkit";
 import { GraphitiPlugin, ensureGraphitiModelProxy, ensureGraphitiPython } from "../src/plugin.ts";
@@ -46,6 +47,17 @@ function fixtureTool(name: string) {
 }
 
 describe("GraphitiPlugin routes", () => {
+  it("depends on the narrow Rust binary runtime instead of the umbrella CLI", () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ) as {
+      dependencies?: Record<string, string>;
+    };
+
+    assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], "workspace:*");
+    assert.equal(manifest.dependencies?.["@dbx-tools/cli"], undefined);
+  });
+
   it("does not block AppKit setup while sidecars warm", async () => {
     const plugin = new GraphitiPlugin({});
     let release!: () => void;

@@ -33,6 +33,7 @@
     "@dbx-tools/cli-auth": "workspace:*",
     "@dbx-tools/cli-tunnel": "workspace:*",
     "@dbx-tools/core": "workspace:*",
+    "@dbx-tools/rust-binary": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:"
   },

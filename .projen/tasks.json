@@ -317,7 +317,7 @@
       "description": "Prepare, validate, locally publish, and open a reviewed release PR",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\"",
           "receiveArgs": true
         }
       ]

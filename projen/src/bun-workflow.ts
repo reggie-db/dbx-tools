@@ -3,15 +3,8 @@ import { TextFile, javascript } from "projen";
 
 export const BUN_VERSION = "1.3.14";
 
-const cacheKeyScript = `#!/usr/bin/env node
-import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-
-const root = process.cwd();
-const ignored = new Set([
+const DEFAULT_CACHE_IGNORE_PATHS = [
   ".git",
-  ".docs-build",
   ".venv",
   ".worktrees",
   "coverage",
@@ -19,12 +12,24 @@ const ignored = new Set([
   "lib",
   "node_modules",
   "target",
-]);
+] as const;
+
+function cacheKeyScript(extraIgnorePaths: readonly string[]): string {
+  const ignorePaths = [...new Set(extraIgnorePaths)].sort();
+  return `#!/usr/bin/env node
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, sep } from "node:path";
+
+const root = process.cwd();
+const ignoredNames = new Set(${JSON.stringify(DEFAULT_CACHE_IGNORE_PATHS)});
+const ignoredPaths = new Set(${JSON.stringify(ignorePaths)});
 const manifests = [];
 const walk = (directory) => {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (ignored.has(entry.name)) continue;
     const path = join(directory, entry.name);
+    const relativePath = path.slice(root.length + 1).split(sep).join("/");
+    if (ignoredNames.has(entry.name) || ignoredPaths.has(relativePath)) continue;
     if (entry.isDirectory()) walk(path);
     else if (entry.name === "package.json") manifests.push(path);
   }
@@ -66,15 +71,27 @@ const dependencies = manifests
   });
 process.stdout.write(createHash("sha256").update(JSON.stringify(dependencies)).digest("hex"));
 `;
+}
 
-const configured = new WeakSet<javascript.NodeProject>();
+const configured = new WeakMap<javascript.NodeProject, string>();
 
-function ensureCacheKeyScript(project: javascript.NodeProject): void {
-  if (configured.has(project)) return;
-  new TextFile(project.root, ".projen/bun-cache-key.mjs", {
-    lines: cacheKeyScript.trimEnd().split("\n"),
+function ensureCacheKeyScript(
+  project: javascript.NodeProject,
+  ignorePaths: readonly string[],
+): void {
+  const root = project.root as javascript.NodeProject;
+  const key = JSON.stringify([...new Set(ignorePaths)].sort());
+  const existing = configured.get(root);
+  if (existing !== undefined) {
+    if (existing !== key) {
+      throw new Error("Bun workflow cache ignore paths must be consistent across one project");
+    }
+    return;
+  }
+  new TextFile(root, ".projen/bun-cache-key.mjs", {
+    lines: cacheKeyScript(ignorePaths).trimEnd().split("\n"),
   });
-  configured.add(project);
+  configured.set(root, key);
 }
 
 function stepCondition(condition: string | undefined, cacheMiss = false): string | undefined {
@@ -88,6 +105,8 @@ function stepCondition(condition: string | undefined, cacheMiss = false): string
 export interface BunWorkflowCacheOptions {
   readonly setupCondition?: string;
   readonly condition?: string;
+  /** Repository-relative output paths excluded from dependency manifest hashing. */
+  readonly ignorePaths?: readonly string[];
 }
 
 /** Set up Bun and restore its global package cache. */
@@ -95,7 +114,7 @@ export function bunCacheRestoreSteps(
   project: javascript.NodeProject,
   options: BunWorkflowCacheOptions = {},
 ): readonly Record<string, unknown>[] {
-  ensureCacheKeyScript(project);
+  ensureCacheKeyScript(project, options.ignorePaths ?? []);
   const condition = stepCondition(options.condition);
   const setupCondition = stepCondition(options.setupCondition);
   return [
