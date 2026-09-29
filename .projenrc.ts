@@ -876,7 +876,7 @@ project.applyToProjects(root, { identifierName: "ui-search", tags: "ui" }, (p) =
 
 // ui-mastra: the full Mastra chat UI - the self-contained `MastraChat`
 // drop-in and its `useMastraChat` driver, the controlled `ChatView` shell, the
-// `MastraPluginClient` + hooks (model catalogue, history paging, suggestions,
+// `MastraPluginClient` + hooks (model catalogue, native memory paging, suggestions,
 // inline chart/statement embeds), markdown + data-grid + chart rendering, and
 // conversation-thread management. Consumes the browser-safe wire contracts
 // (shared-mastra/genie/model) and renders through ui-appkit's UI kit. `ui`-tagged.

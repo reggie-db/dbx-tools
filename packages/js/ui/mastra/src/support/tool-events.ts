@@ -1,13 +1,10 @@
-import {
-  GENIE_PROGRESS_PART_TYPE,
-  GenieProgressPartDataSchema,
-} from "@dbx-tools/shared-mastra";
+import { GENIE_PROGRESS_PART_TYPE, GenieProgressPartDataSchema } from "@dbx-tools/shared-mastra";
 import { getToolOrDynamicToolName, isToolOrDynamicToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 
 /** Project native AI SDK tool parts from persisted messages onto pill state. */
 export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
-  const events = parts.filter(isToolOrDynamicToolUIPart).map((part) => {
+  const events = parts.filter(isToolOrDynamicToolUIPart).map<ToolEvent>((part) => {
     const error = part.state === "output-error";
     const done = part.state === "output-available";
     return {

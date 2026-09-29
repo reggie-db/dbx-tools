@@ -1,8 +1,6 @@
 /**
  * Express-layer plumbing for the Mastra plugin: a `MastraServer` that
- * stamps the per-request `RequestContext`, and a route-patch middleware
- * that lets the plugin's custom API routes (e.g. `historyRoute`) work
- * behind an Express mount point.
+ * stamps the per-request `RequestContext` and a scoped native API gate.
  *
  * @module
  */
@@ -286,7 +284,7 @@ export class MastraServer extends ExpressMastraServer {
   /**
    * Resolve the thread id this request targets and pin it on
    * `RequestContext` (consumed by the agent stream for persistence and
-   * by the history / threads routes). Resolution order:
+   * by native memory routes). Resolution order:
    *
    *   1. A client-supplied thread id (the thread-selection header /
    *      `?threadId=` query). This is how the chat UI references a
@@ -383,26 +381,34 @@ export interface MastraApiGateOptions {
  * prefix their `-generate` non-streaming variants), the `-network-` variants,
  * and `resume-stream` (covers `resume-stream-until-idle`). Without these an
  * approval-gated tool (e.g. `send_email`) can be requested but never approved
- * from the browser - the resume `POST` 403s under scoped mode. These are the
- * only *writes* the browser client is allowed to make against stock Mastra.
+ * from the browser - the resume `POST` 403s under scoped mode. Together with
+ * the resource-scoped memory mutations below, these are the only stock Mastra
+ * writes the browser client can make.
  */
 const AGENT_INFERENCE =
   /^\/agents\/[^/]+\/(stream|generate|network|resume-stream|approve-tool-call|decline-tool-call|approve-network-tool-call|decline-network-tool-call)/i;
 
 /** Mount-relative read-only agent metadata (`/agents`, `/agents/:id`). */
 const AGENT_METADATA = /^\/agents(\/[^/]+)?$/;
+/** Persisted approval discovery for one agent. */
+const AGENT_SUSPENDED_RUNS = /^\/agents\/[^/]+\/suspended-runs$/i;
+/** Official AI SDK UI stream route, including `resumeData` continuations. */
+const AGENT_CHAT = /^\/chat\/[^/]+$/i;
+/** Native resource-scoped memory reads used by history and the thread list. */
+const MEMORY_READ = /^\/memory\/threads(?:\/[^/]+(?:\/messages)?)?$/i;
+/** Native thread rename/delete routes. */
+const MEMORY_THREAD_MUTATION = /^\/memory\/threads\/[^/]+$/i;
 
 /**
  * Whether a request to the stock `@mastra/express` sub-app should be
  * dispatched, given the configured {@link MastraApiGateOptions.access}.
  *
  * `path` is mount-relative (what the plugin's catch-all sees, e.g.
- * `/agents/x/stream`, `/route/history/x`, `/mcp/...`). In `"scoped"`
+ * `/chat/x`, `/memory/threads`, `/mcp/...`). In `"scoped"`
  * mode the allowlist is deliberately tight - the chat client only ever
- * needs agent inference, read-only agent metadata, this plugin's own
- * OBO/resource-scoped `/route/*` routes, and (when enabled) MCP - so the
- * whole admin / mutating / bulk-export surface Mastra also exposes is
- * denied by default rather than enumerated.
+ * needs agent inference, read-only agent metadata, resource-scoped memory,
+ * this plugin's own `/route/*` routes, and (when enabled) MCP. The remaining
+ * admin, mutating, and bulk-export surface stays denied by default.
  */
 export function isMastraRequestAllowed(
   method: string,
@@ -411,33 +417,31 @@ export function isMastraRequestAllowed(
 ): boolean {
   if (opts.access === "full") return true;
   const p = path.startsWith("/") ? path : `/${path}`;
-  // This plugin's own custom routes are individually OBO- and
-  // resource-scoped (see history.ts / threads.ts), so every method is safe.
+  // The plugin's `/route/*` additions validate their own inputs and trusted
+  // AppKit request context before reaching product behavior.
   if (p === "/route" || p.startsWith("/route/")) return true;
   if (opts.mcpEnabled && (p === "/mcp" || p.startsWith("/mcp/"))) return true;
   const m = method.toUpperCase();
+  if (m === "POST" && AGENT_CHAT.test(p)) return true;
   if (m === "POST" && AGENT_INFERENCE.test(p)) return true;
-  if (m === "GET" && AGENT_METADATA.test(p)) return true;
+  if (m === "GET" && (AGENT_METADATA.test(p) || AGENT_SUSPENDED_RUNS.test(p))) return true;
+  if (m === "GET" && MEMORY_READ.test(p)) return true;
+  if ((m === "PATCH" || m === "DELETE") && MEMORY_THREAD_MUTATION.test(p)) return true;
+  if (m === "POST" && p === "/memory/messages/delete") return true;
   return false;
 }
 
 /**
- * Patches around `@mastra/express`'s custom-route dispatcher so the
- * plugin's custom API routes (e.g. `historyRoute`) work when
- * `MastraServer` is hosted on an Express subapp mounted under a parent
- * path (e.g. `/api/mastra`).
- *
- * The adapter's `registerCustomApiRoutes` matches against `req.path`
- * (mount-relative, correct) but dispatches to its internal Hono
- * mini-app using `req.originalUrl`, which still contains the parent
- * mount prefix. The Hono app registers the literal route paths
- * (for example `/route/history`), so the absolute URL never matches
- * until we overwrite `originalUrl` for `/route` and `/route/*` to the
- * mount-relative path.
+ * Keep Mastra custom API routes mount-relative when the Express subapp is
+ * hosted under AppKit's `/api/<plugin>` path.
  */
 export function attachRoutePatchMiddleware(app: express.Express): void {
   app.use((req, _res, next) => {
-    const isCustomRoute = req.path === "/route" || req.path.startsWith("/route/");
+    const isCustomRoute =
+      req.path === "/chat" ||
+      req.path.startsWith("/chat/") ||
+      req.path === "/route" ||
+      req.path.startsWith("/route/");
     if (!isCustomRoute) return next();
     req.originalUrl = req.path;
     next();

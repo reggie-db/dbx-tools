@@ -34,7 +34,7 @@ const Chat = () => {
       showModelPicker
       enableExport
       composerActions={agentModeControl}
-      className="h-full"
+      className="min-h-0 flex-1"
     />
   );
 };

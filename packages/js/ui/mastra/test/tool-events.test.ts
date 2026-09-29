@@ -30,6 +30,45 @@ describe("native persisted tool events", () => {
     ]);
   });
 
+  it("attaches native Genie progress data parts to their tool call", () => {
+    const parts = [
+      {
+        type: "dynamic-tool",
+        toolCallId: "tool-1",
+        toolName: "ask_genie",
+        state: "input-available",
+        input: { question: "How many orders?" },
+      },
+      {
+        type: "data-genie-progress",
+        data: {
+          toolCallId: "tool-1",
+          event: {
+            type: "started",
+            spaceId: "space-1",
+            content: "How many orders?",
+          },
+        },
+      },
+    ] as unknown as UIMessage["parts"];
+
+    assert.deepEqual(toolEventsFromParts(parts), [
+      {
+        id: "tool-1",
+        toolName: "ask_genie",
+        status: "running",
+        input: { question: "How many orders?" },
+        progress: [
+          {
+            type: "started",
+            spaceId: "space-1",
+            content: "How many orders?",
+          },
+        ],
+      },
+    ]);
+  });
+
   it("merges live progress over the persisted native event", () => {
     const persisted = [
       {

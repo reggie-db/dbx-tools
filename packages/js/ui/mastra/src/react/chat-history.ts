@@ -1,4 +1,5 @@
 import { error as sharedError, log } from "@dbx-tools/shared-core";
+import type { ListMemoryThreadMessagesResponse } from "@mastra/client-js";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -6,6 +7,7 @@ import type {
   ThreadSessionReader,
   ThreadSessionUpdater,
 } from "./chat-sessions.ts";
+import type { PendingApproval } from "./types.ts";
 import type { MastraPluginClient } from "../support/mastra-client.ts";
 
 const HISTORY_PAGE_SIZE = 20;
@@ -13,12 +15,53 @@ const logger = log.logger("ui-mastra/chat");
 
 interface UseChatHistoryOptions {
   activeKey: string;
-  activeThreadId: string | undefined;
+  activeThreadId: string;
   agentId: string;
   getSession: ThreadSessionReader;
+  availability: "loading" | "present" | "missing";
   mastraClient: MastraPluginClient;
   updateSession: ThreadSessionUpdater;
   writeMessages: ThreadMessageWriter;
+}
+
+type SuspendedRuns = Awaited<ReturnType<MastraPluginClient["suspendedRuns"]>>["runs"];
+
+/** Read a newest-first native memory page as chronological UI messages. */
+function toChronologicalUiMessages(response: ListMemoryThreadMessagesResponse): UIMessage[] {
+  return [...(response.uiMessages ?? [])].reverse() as UIMessage[];
+}
+
+/** Recover actionable approval cards from Mastra's persisted suspended runs. */
+function pendingApprovals(
+  messages: UIMessage[],
+  runs: SuspendedRuns,
+): Record<string, PendingApproval[]> {
+  const approvals: Record<string, PendingApproval[]> = {};
+  const assistantMessages = messages.filter((message) => message.role === "assistant");
+  for (const run of runs) {
+    for (const toolCall of run.toolCalls) {
+      if (!toolCall.requiresApproval || !toolCall.toolCallId || !toolCall.toolName) continue;
+      const owner =
+        [...assistantMessages]
+          .reverse()
+          .find((message) =>
+            message.parts.some(
+              (part) => (part as { toolCallId?: unknown }).toolCallId === toolCall.toolCallId,
+            ),
+          ) ?? assistantMessages.at(-1);
+      if (!owner) continue;
+      approvals[owner.id] = [
+        ...(approvals[owner.id] ?? []),
+        {
+          runId: run.runId,
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          input: toolCall.args,
+        },
+      ];
+    }
+  }
+  return approvals;
 }
 
 /** Hydrate and page the active thread while other thread sessions keep running. */
@@ -27,6 +70,7 @@ export function useChatHistory({
   activeThreadId,
   agentId,
   getSession,
+  availability,
   mastraClient,
   updateSession,
   writeMessages,
@@ -44,6 +88,19 @@ export function useChatHistory({
       setIsLoadingHistory(false);
       return;
     }
+    if (availability === "loading") {
+      setIsLoadingHistory(true);
+      return;
+    }
+    if (availability === "missing") {
+      updateSession(threadId, (current) => ({
+        ...current,
+        historyLoaded: true,
+        hasMoreHistory: false,
+      }));
+      setIsLoadingHistory(false);
+      return;
+    }
 
     let cancelled = false;
     const controller = new AbortController();
@@ -57,16 +114,28 @@ export function useChatHistory({
         perPage: HISTORY_PAGE_SIZE,
         signal: controller.signal,
       })
-      .then((response) => {
+      .then(async (response) => {
+        const suspended = await mastraClient
+          .suspendedRuns(agentId, activeThreadId, controller.signal)
+          .catch((error: unknown) => {
+            if ((error as { name?: string }).name === "AbortError") throw error;
+            logger.warn("suspended-run discovery error", {
+              error: sharedError.errorMessage(error),
+            });
+            return { runs: [], total: 0 };
+          });
+        return [response, suspended] as const;
+      })
+      .then(([response, suspended]) => {
         if (cancelled) return;
+        const messages = toChronologicalUiMessages(response);
         updateSession(threadId, (current) => ({
           ...current,
-          messages: response.uiMessages as unknown as UIMessage[],
+          messages,
           historyLoaded: true,
-          hasMoreHistory: response.hasMore,
+          hasMoreHistory: response.hasMore ?? false,
           historyPage: 1,
-          toolEventsByMessage: {},
-          pendingApprovalsByMessage: {},
+          pendingApprovalsByMessage: pendingApprovals(messages, suspended.runs),
           feedbackByMessage: {},
         }));
       })
@@ -89,7 +158,7 @@ export function useChatHistory({
       cancelled = true;
       controller.abort();
     };
-  }, [activeKey, activeThreadId, agentId, getSession, mastraClient, updateSession]);
+  }, [activeKey, activeThreadId, agentId, availability, getSession, mastraClient, updateSession]);
 
   const loadOlderHistory = useCallback(() => {
     const threadId = activeKey;
@@ -102,13 +171,13 @@ export function useChatHistory({
     mastraClient
       .history({ agentId, threadId: activeThreadId, page, perPage: HISTORY_PAGE_SIZE })
       .then((response) => {
-        const uiMessages = response.uiMessages as unknown as UIMessage[];
+        const uiMessages = toChronologicalUiMessages(response);
         if (uiMessages.length > 0) {
           writeMessages(threadId, [...uiMessages, ...getSession(threadId).messages]);
         }
         updateSession(threadId, (current) => ({
           ...current,
-          hasMoreHistory: response.hasMore,
+          hasMoreHistory: response.hasMore ?? false,
         }));
       })
       .catch((error: unknown) => {

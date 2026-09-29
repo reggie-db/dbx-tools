@@ -96,8 +96,7 @@ export type GenieSpacesConfig = Record<string, GenieSpaceConfig | string>;
  * `abortSignal` (for per-call cancellation).
  */
 type ToolExecuteCtx =
-  | Pick<ToolExecutionContext, "requestContext" | "writer" | "abortSignal" | "agent">
-  | undefined;
+  Pick<ToolExecutionContext, "requestContext" | "writer" | "abortSignal" | "agent"> | undefined;
 
 /**
  * Pull the per-request {@link WorkspaceClient} off the active

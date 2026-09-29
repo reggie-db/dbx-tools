@@ -12,7 +12,7 @@ import {
   MASTRA_USER_EMAIL_KEY,
   MASTRA_USER_KEY,
 } from "../src/config.ts";
-import { clearTrustedRequestContext } from "../src/server.ts";
+import { clearTrustedRequestContext, isMastraRequestAllowed } from "../src/server.ts";
 
 describe("application request context boundary", () => {
   it("keeps application values and removes client-spoofable trusted fields", () => {
@@ -37,6 +37,36 @@ describe("application request context boundary", () => {
       MASTRA_SCOPES_KEY,
     ]) {
       assert.equal(context.hasRaw(key), false);
+    }
+  });
+});
+
+describe("scoped Mastra API gate", () => {
+  const options = { access: "scoped", mcpEnabled: false } as const;
+
+  it("allows resource-scoped native chat and memory operations", () => {
+    for (const [method, path] of [
+      ["POST", "/agents/support/stream"],
+      ["POST", "/chat/support"],
+      ["GET", "/agents/support/suspended-runs"],
+      ["GET", "/memory/threads"],
+      ["GET", "/memory/threads/thread-1/messages"],
+      ["PATCH", "/memory/threads/thread-1"],
+      ["DELETE", "/memory/threads/thread-1"],
+      ["POST", "/memory/messages/delete"],
+    ]) {
+      assert.equal(isMastraRequestAllowed(method, path, options), true, `${method} ${path}`);
+    }
+  });
+
+  it("keeps unrelated native administration routes closed", () => {
+    for (const [method, path] of [
+      ["POST", "/memory/threads"],
+      ["POST", "/chat/support/tool-approval"],
+      ["GET", "/memory/status"],
+      ["DELETE", "/agents/support"],
+    ]) {
+      assert.equal(isMastraRequestAllowed(method, path, options), false, `${method} ${path}`);
     }
   });
 });

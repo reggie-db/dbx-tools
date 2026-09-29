@@ -76,6 +76,7 @@ import type { Pool } from "pg";
 
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
 import { fetchChart } from "./chart.ts";
+import { agentChatRoutes } from "./chat.ts";
 import { attributedUserId, MASTRA_CONFIG_SCHEMA, type MastraPluginConfig } from "./config.ts";
 import {
   chartFetchDefaults,
@@ -85,7 +86,6 @@ import {
   statementDataDefaults,
 } from "./defaults.ts";
 import { collectSpaceSuggestions, resolveGenieSpaces } from "./genie.ts";
-import { historyRoute } from "./history.ts";
 import {
   requestUserId,
   resolveIdentityMode,
@@ -105,7 +105,6 @@ import {
 } from "./server.ts";
 import { resolveServingConfig } from "./serving.ts";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
-import { threadsRoute } from "./threads.ts";
 import { attachChatTurnTraceIo } from "./trace-io.ts";
 import { invalidFields } from "./validation.ts";
 
@@ -1122,34 +1121,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       app: this.mastraApp,
       mastra: this.mastra,
       prefix: "",
-      customApiRoutes: [
-        // `historyRoute` registers both GET (load) and DELETE
-        // (clear) on the same path, so it returns an array we
-        // splice in.
-        ...historyRoute({
-          path: routes.MASTRA_ROUTES.history,
-          agent: this.built.defaultAgentId,
-        }),
-        // Assert the `:agentId` template type: the per-package build's
-        // NodeNext resolution widens the imported `routes.MASTRA_ROUTES.history`
-        // to `string` (the source/bundler typecheck keeps it a literal),
-        // which would otherwise drop this out of the dynamic-agent
-        // overload and demand a fixed `agent`.
-        ...historyRoute({
-          path: `${routes.MASTRA_ROUTES.history}/:agentId` as `${string}:agentId`,
-        }),
-        // `threadsRoute` registers GET (list the caller's conversation
-        // threads) and DELETE (remove the targeted thread) on the same
-        // path; both the default-agent and dynamic-agent mounts are
-        // spliced in, mirroring the history routes above.
-        ...threadsRoute({
-          path: routes.MASTRA_ROUTES.threads,
-          agent: this.built.defaultAgentId,
-        }),
-        ...threadsRoute({
-          path: `${routes.MASTRA_ROUTES.threads}/:agentId` as `${string}:agentId`,
-        }),
-      ],
+      customApiRoutes: agentChatRoutes(),
     });
     await this.mastraServer.init();
     this.logger.info("ready", {

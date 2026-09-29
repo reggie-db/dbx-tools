@@ -35,7 +35,10 @@ export function useChatApprovals({
     async (decision: ApprovalDecision) => {
       const { runId: decisionRunId, toolCallId, toolName } = decision;
       const session = getSession(activeKey);
-      const assistantId = session.assistantId;
+      const assistantId =
+        Object.entries(session.pendingApprovalsByMessage).find(([, approvals]) =>
+          approvals.some((approval) => approval.toolCallId === toolCallId),
+        )?.[0] ?? session.assistantId;
       const runId = decisionRunId ?? session.runId;
       if (!runId || !assistantId) {
         logger.warn("approval missing runId or assistantId, cannot resume", {

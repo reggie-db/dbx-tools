@@ -487,7 +487,6 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
     ) : null;
 
   const content = <div className={cn("min-h-0 min-w-0 flex-1", contentClassName)}>{children}</div>;
-  const docked = effectiveMode === "dock" && isOpen;
   const rootDirection = vertical ? "flex-col" : "flex-row";
   const panelFirst = side === "top" || side === "left";
 
@@ -497,12 +496,7 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
     >
       <div
         ref={rootRef}
-        className={cn(
-          "relative h-full min-h-0 w-full min-w-0",
-          docked && "flex",
-          rootDirection,
-          className,
-        )}
+        className={cn("relative flex h-full min-h-0 w-full min-w-0", rootDirection, className)}
         {...rootProps}
       >
         {panelFirst ? panel : null}

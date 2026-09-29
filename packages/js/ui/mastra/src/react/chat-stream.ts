@@ -1,7 +1,4 @@
 import { feedback } from "@dbx-tools/shared-mastra";
-import { toAISdkStream } from "@mastra/ai-sdk";
-import type { MastraModelOutput } from "@mastra/core/stream";
-import type { ChunkType } from "@mastra/core/stream";
 import { readUIMessageStream, type UIMessage } from "ai";
 import { useCallback } from "react";
 import type {
@@ -18,30 +15,6 @@ const readMlflowTraceId = (stream: unknown): string | undefined => {
 };
 
 class StreamAborted extends Error {}
-
-/** Adapt client-js callback delivery to Mastra's native chunk stream. */
-function toChunkStream(
-  response: MastraStreamResponse,
-  signal: AbortSignal,
-  onChunk: (chunk: ChunkType) => void,
-): ReadableStream<ChunkType> {
-  return new ReadableStream<ChunkType>({
-    start(controller) {
-      void response
-        .processDataStream({
-          onChunk: (chunk) => {
-            if (signal.aborted) throw new StreamAborted();
-            onChunk(chunk);
-            controller.enqueue(chunk);
-          },
-        })
-        .then(
-          () => controller.close(),
-          (error) => controller.error(error),
-        );
-    },
-  });
-}
 
 /** Replace or append one assistant message without disturbing the transcript. */
 function upsertAssistant(messages: UIMessage[], assistant: UIMessage): UIMessage[] {
@@ -87,29 +60,17 @@ export function useChatStream({ getSession, updateSession, writeMessages }: UseC
       }
 
       try {
-        const chunks = toChunkStream(stream, signal, (chunk) => {
-          if (chunk.runId) runIdRef.current = chunk.runId;
-        });
-        const uiChunks = toAISdkStream(chunks as unknown as MastraModelOutput, {
-          from: "agent",
-          lastMessageId: assistantId,
-          sendReasoning: true,
-          sendSources: true,
-        });
         const existing = getSession(threadId).messages.find(
           (message) => message.id === assistantId,
         );
         for await (const message of readUIMessageStream({
           ...(existing ? { message: existing } : {}),
-          stream: uiChunks,
+          stream: stream.stream,
           terminateOnError: true,
         })) {
           if (signal.aborted) throw new StreamAborted();
           const assistant = message.id === assistantId ? message : { ...message, id: assistantId };
-          writeMessages(
-            threadId,
-            upsertAssistant(getSession(threadId).messages, assistant),
-          );
+          writeMessages(threadId, upsertAssistant(getSession(threadId).messages, assistant));
           updateSession(threadId, (current) => ({
             ...current,
             runId: runIdRef.current,
