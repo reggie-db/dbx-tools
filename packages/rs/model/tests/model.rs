@@ -12,13 +12,13 @@ use std::{
 
 use dbx_tools_core::{DatabricksAuthOptions, DatabricksClient, FileCache};
 use dbx_tools_model::{
-    endpoints_from_response, is_responses_only, lookup_models, model_search_query,
-    model_service_names, models_payload, models_payload_with_capabilities,
-    parse_model_capabilities, parse_model_name, parse_model_rate_limits, parse_retired_models,
-    rank_model_id, reasoning_efforts_by_family, status_from_names, version_tuple,
-    ModelCapabilitiesResolver, ModelClass, ModelClient, ModelFamily, ModelQuery,
-    ModelRateLimitsResolver, ModelStatus, ModelStatusResolver, ParsedModelName, ReasoningEffort,
-    ServingEndpointSummary,
+    chat_tool_reasoning_effort, endpoints_from_response, is_responses_only, lookup_models,
+    model_search_query, model_service_names, model_serving_api, models_payload,
+    models_payload_with_capabilities, parse_model_capabilities, parse_model_name,
+    parse_model_rate_limits, parse_retired_models, rank_model_id, reasoning_efforts_by_family,
+    status_from_names, version_tuple, ModelCapabilitiesResolver, ModelClass, ModelClient,
+    ModelFamily, ModelQuery, ModelRateLimitsResolver, ModelServingApi, ModelStatus,
+    ModelStatusResolver, ParsedModelName, ReasoningEffort, ServingEndpointSummary,
 };
 use serde_json::json;
 use wiremock::{
@@ -214,6 +214,19 @@ fn responses_and_reasoning_policy_follow_model_identity() {
     assert!(is_responses_only("databricks-gpt-6"));
     assert!(!is_responses_only("databricks-gpt-oss-120b"));
     assert!(is_responses_only("databricks-gpt-5-3-codex"));
+    assert_eq!(
+        model_serving_api("databricks-gpt-6-astra"),
+        ModelServingApi::Responses
+    );
+    assert_eq!(
+        model_serving_api("databricks-gpt-oss-120b"),
+        ModelServingApi::Chat
+    );
+    assert_eq!(
+        chat_tool_reasoning_effort("databricks-gpt-5-6-sol"),
+        Some(ReasoningEffort::None)
+    );
+    assert_eq!(chat_tool_reasoning_effort("databricks-gpt-5-5-pro"), None);
     assert_eq!(
         reasoning_efforts_by_family("databricks-gpt-5-6-sol"),
         vec![

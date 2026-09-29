@@ -102,6 +102,7 @@ packages/py/core-rs/src/dbx_tools/core_rs/*dbx_tools_core.*
 packages/js/node/google-rs/src/*dbx_tools_google.*
 packages/py/google-rs/src/dbx_tools/google_rs/bindings.py
 packages/py/google-rs/src/dbx_tools/google_rs/*dbx_tools_google.*
+packages/js/node/model-rs/src/*dbx_tools_model.*
 !/Cargo.toml
 !/.cargo/config.toml
 !/.projen/uniffi-release.mjs

@@ -15,33 +15,23 @@
       "type": "build"
     },
     {
-      "name": "@databricks/appkit",
-      "version": "catalog:",
-      "type": "runtime"
+      "name": "uniffi-bindgen-react-native",
+      "version": "0.31.0-5",
+      "type": "build"
     },
     {
-      "name": "@dbx-tools/appkit",
+      "name": "@dbx-tools/core-rs",
       "version": "workspace:*",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/model-rs",
-      "version": "workspace:*",
+      "name": "@ubjs/core",
+      "version": "0.31.0-5",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/shared-model",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "fuse.js",
-      "version": "^7.4.2",
+      "name": "@ubjs/node",
+      "version": "0.31.0-5",
       "type": "runtime"
     }
   ],

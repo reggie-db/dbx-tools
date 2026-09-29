@@ -12,6 +12,7 @@ pub const CHAT_TASK: &str = "llm/v1/chat";
 pub const EMBEDDING_TASK: &str = "llm/v1/embeddings";
 
 /// Infer whether a model family supports a complete tool-calling round trip.
+#[uniffi::export]
 pub fn supports_tools_by_family(name: &str) -> bool {
     let Some(parsed) = parse_model_name(name) else {
         return false;

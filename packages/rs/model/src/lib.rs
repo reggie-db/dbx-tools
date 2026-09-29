@@ -34,11 +34,17 @@ pub use model_status::{
     ModelStatusResolver, RETIRED_MODELS_TTL, RETIRED_MODELS_URL,
 };
 pub use models::{
-    is_responses_only, model_search_query, model_service_names, parse_model_name, version_tuple,
-    ModelClass, ModelFamily, ModelProfile, ModelQuery, ModelStatus, ParsedModelName, RankedModel,
-    ResolvedModel, ServingEndpointSummary,
+    is_responses_only, model_search_query, model_service_names, model_serving_api,
+    parse_model_name, version_tuple, ModelClass, ModelFamily, ModelProfile, ModelQuery,
+    ModelServingApi, ModelStatus, ParsedModelName, RankedModel, ResolvedModel,
+    ServingEndpointSummary,
 };
-pub use reasoning::{reasoning_efforts_by_family, reasoning_efforts_for_names, ReasoningEffort};
+pub use reasoning::{
+    chat_tool_reasoning_effort, reasoning_efforts_by_family, reasoning_efforts_for_names,
+    ReasoningEffort,
+};
 pub use resolve::{
     lookup_models, rank_model_id, search_serving_endpoints, DEFAULT_FUZZY_THRESHOLD,
 };
+
+uniffi::setup_scaffolding!();

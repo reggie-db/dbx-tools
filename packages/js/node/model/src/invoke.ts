@@ -18,6 +18,8 @@
  * @module
  */
 
+import { isResponsesOnly as isResponsesOnlyRs } from "@dbx-tools/model-rs";
+
 /**
  * Path segment appended to a serving endpoint for OpenAI-compatible chat
  * requests. Databricks routes `/serving-endpoints/<name>/invocations` to the
@@ -81,13 +83,7 @@ export function chatCompletionsUrl(host: string): string {
  * those to {@link responsesUrl} instead of {@link invocationsUrl}.
  */
 export function isResponsesOnly(endpoint: string): boolean {
-  if (/codex/i.test(endpoint)) return true;
-  if (/gpt[-_. ]?oss/i.test(endpoint)) return false;
-  const version = endpoint.match(/gpt[^0-9]*(\d+)(?:[._-](\d+))?/i);
-  if (!version) return false;
-  const major = Number(version[1]);
-  const minor = Number(version[2] ?? 0);
-  return major > 5 || (major === 5 && minor >= 4);
+  return isResponsesOnlyRs(endpoint);
 }
 
 /**

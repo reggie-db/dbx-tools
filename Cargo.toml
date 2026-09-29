@@ -1,6 +1,6 @@
 [workspace]
 members = ["packages/rs/core", "packages/rs/google", "packages/rs/lakebase-proxy", "packages/rs/model", "packages/rs/model-proxy"]
-default-members = ["packages/rs/lakebase-proxy", "packages/rs/model", "packages/rs/model-proxy"]
+default-members = ["packages/rs/lakebase-proxy", "packages/rs/model-proxy"]
 resolver = "2"
 
 [workspace.package]

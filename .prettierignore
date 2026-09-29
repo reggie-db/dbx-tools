@@ -41,6 +41,8 @@ packages/js/node/core-rs/src/bindings.ts
 packages/js/node/core-rs/src/_bindings*.ts
 packages/js/node/google-rs/src/bindings.ts
 packages/js/node/google-rs/src/_bindings*.ts
+packages/js/node/model-rs/src/bindings.ts
+packages/js/node/model-rs/src/_bindings*.ts
 packages/py/core-rs/pyproject.toml
 packages/py/google-rs/pyproject.toml
 packages/py/core/pyproject.toml
@@ -100,6 +102,7 @@ packages/js/node/fs/index.ts
 packages/js/node/genie/index.ts
 packages/js/node/google-rs/index.ts
 packages/js/node/model/index.ts
+packages/js/node/model-rs/index.ts
 packages/js/node/path/index.ts
 packages/js/node/postgres/index.ts
 packages/js/node/search/index.ts

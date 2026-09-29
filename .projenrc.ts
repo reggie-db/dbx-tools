@@ -390,6 +390,7 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
 project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/model-rs@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@databricks/appkit@catalog:",
     "fuse.js@^7.4.2",
@@ -549,6 +550,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@dbx-tools/fs@workspace:*",
     "@dbx-tools/genie@workspace:*",
     "@dbx-tools/model@workspace:*",
+    "@dbx-tools/model-rs@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/path@workspace:*",
@@ -1082,6 +1084,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     },
     model: {
       description: "Databricks model discovery, caching, classification, and fuzzy resolution",
+      bindings: ["node"],
       dependencies: {
         [`${root.scope}-core`]: { path: "../core" },
         "difflib-fast": { workspace: true },
@@ -1095,6 +1098,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         thiserror: { workspace: true },
         tokio: { workspace: true },
         tracing: { workspace: true },
+        uniffi: { workspace: true },
       },
       devDependencies: {
         wiremock: { workspace: true },

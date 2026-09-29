@@ -33,24 +33,35 @@ const geminiPartsResponse = {
 };
 
 describe("serving request sanitize", () => {
-  it("adds reasoning_effort none for Astra with tools", () => {
-    const result = JSON.parse(
-      rewriteServingBody(
-        JSON.stringify({
-          model: "databricks-gpt-6-astra",
-          messages: [{ role: "user", content: "hello" }],
-          tools: [{ type: "function", function: { name: "lookup" } }],
-        }),
-      ),
-    );
-    assert.equal(result.reasoning_effort, "none");
+  it("forces reasoning_effort none for GPT 5.6 with tools", () => {
+    for (const reasoningEffort of [undefined, "high"]) {
+      const result = JSON.parse(
+        rewriteServingBody(
+          JSON.stringify({
+            model: "databricks-gpt-5-6-sol",
+            tools: [{ type: "function" }],
+            ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+          }),
+        ),
+      );
+      assert.equal(result.reasoning_effort, "none");
+    }
   });
 
-  it("leaves other models and Astra without tools unchanged", () => {
+  it("leaves other models and compatible Astra requests unchanged", () => {
     for (const body of [
       JSON.stringify({
         model: "databricks-claude-opus-4-8",
         tools: [{ type: "function" }],
+      }),
+      JSON.stringify({
+        model: "databricks-gpt-6-astra",
+        tools: [{ type: "function" }],
+      }),
+      JSON.stringify({
+        model: "databricks-gpt-5-5-pro",
+        tools: [{ type: "function" }],
+        reasoning_effort: "high",
       }),
       JSON.stringify({ model: "databricks-gpt-6-astra", tools: [] }),
       JSON.stringify({ model: "databricks-gpt-6-astra" }),
@@ -77,8 +88,9 @@ describe("serving request sanitize", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "databricks-gpt-6-astra",
+        model: "databricks-gpt-5-6-sol",
         tools: [{ type: "function" }],
+        reasoning_effort: "high",
       }),
     });
 
@@ -102,7 +114,7 @@ describe("serving request sanitize", () => {
     const request = new Request("https://example.com/serving-endpoints/chat/completions", {
       method: "POST",
       body: JSON.stringify({
-        model: "databricks-gpt-6-astra",
+        model: "databricks-gpt-5-6-sol",
         tools: [{ type: "function" }],
       }),
     });

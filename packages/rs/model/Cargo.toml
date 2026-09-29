@@ -10,6 +10,11 @@ repository = { workspace = true }
 [lib]
 name = "dbx_tools_model"
 path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "dbx-tools-model-uniffi-bindgen"
+path = "uniffi-bindgen.rs"
 
 [dependencies]
 dbx-tools-core = { version = "0.6.219", path = "../core" }
@@ -24,6 +29,7 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+uniffi = { workspace = true }
 
 [dev-dependencies]
 wiremock = { workspace = true }
