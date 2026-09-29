@@ -15,7 +15,8 @@ handle the topic bus, static delivery, deployment staging, and shared types.
   Mastra agent as an AppKit plugin: request-attributed service-principal auth,
   Lakebase-backed storage/memory, workspace skills, model selection, history,
   threads, scoped routes, and lazy Databricks Sandbox command execution with
-  Python-only Monty fallback.
+  Python-only Monty fallback. The demo agent also validates typed route/entity
+  request context and exposes `get_ui_context` to prove tools receive it.
 - `genie()` + `buildGenieTools()` - the default `support` agent uses Genie Agent
   Mode SSE, while `support-polling` forces Conversation API polling for
   statement-backed comparison. Both drive the same space through `ask_genie`;
@@ -81,6 +82,17 @@ demo runner reads the endpoint from this package's bundle defaults and uses
 Lakebase environment to every child. The emitter is not included in the
 Databricks App deployment. See the repository root README and `AGENTS.md` for
 workspace setup and environment behavior.
+
+For focused assistant UI work, optional integrations can be skipped and email
+can use the local file outbox:
+
+```bash
+GRAPHITI_ENABLED=0 BUS_ENABLED=0 REMOTE_SKILLS_ENABLED=0 \
+SMTP_HOST= SMTP_USER= SMTP_PASSWORD= EMAIL_OUTBOX_MODE=1 bun run demo
+```
+
+The feature flags default to enabled, so normal demo and deployment behavior is
+unchanged.
 
 On shutdown, AppKit closes the per-user MCP servers and internal client.
 `concurrently` terminates Graphiti and Caddy, Honcho forwards termination to

@@ -45,7 +45,14 @@ export const ExportMenu = ({
   disabled?: boolean;
 }) => {
   const trigger = iconOnly ? (
-    <Button type="button" size="icon" variant="ghost" className="size-7" disabled={disabled}>
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      className="size-7"
+      disabled={disabled}
+      aria-label={tooltip}
+    >
       <DownloadIcon className="size-3" />
     </Button>
   ) : (

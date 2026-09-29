@@ -2,6 +2,8 @@
 //
 // - `MastraChat` / `useMastraChat`: the self-contained drop-in (and its
 //   headless driver) that wire themselves from the Mastra plugin config.
+// - `MastraAssistant` / `useMastraAssistant`: the persistent app shell and
+//   controller for docked/overlay chat launched from anywhere below it.
 // - `ChatView`: the controlled, presentational shell for callers that
 //   own message state and transport themselves.
 // - The Mastra plugin client + hooks (model catalogue, history paging,
@@ -27,13 +29,27 @@ export {
 export type { ByIdFetchState } from "../support/mastra-client.ts";
 export { ChatView } from "./chat-view.tsx";
 export { ExportMenu } from "./export-menu.tsx";
+export { MastraAssistant, useMastraAssistant } from "./mastra-assistant.tsx";
+export type {
+  MastraAssistantController,
+  MastraAssistantLauncherOptions,
+  MastraAssistantLauncherPosition,
+  MastraAssistantMode,
+  MastraAssistantProps,
+  MastraAssistantResizeOptions,
+  MastraAssistantSide,
+} from "./mastra-assistant.tsx";
+export type {
+  MastraRequestContextInput,
+  MastraRequestContextSource,
+} from "../support/request-context.ts";
 export { dedupeSuggestions } from "./suggestions.ts";
 export { MastraChat, useMastraChat } from "./mastra-chat.tsx";
 export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat.tsx";
 export { ThreadSidebar } from "./thread-sidebar.tsx";
 export type { ThreadSidebarProps } from "./thread-sidebar.tsx";
-export { ThreadTabs } from "./thread-tabs.tsx";
-export type { ThreadTabsProps } from "./thread-tabs.tsx";
+export { ThreadActions, ThreadTabs } from "./thread-tabs.tsx";
+export type { ThreadActionsProps, ThreadTabsProps } from "./thread-tabs.tsx";
 export type {
   ApprovalDecision,
   ChatModelOption,

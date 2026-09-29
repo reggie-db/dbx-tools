@@ -4,11 +4,11 @@ import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChatApprovals } from "./chat-approvals.ts";
-import { ChatView } from "./chat-view.tsx";
 import { useChatFeedback } from "./chat-feedback.ts";
 import { useChatHistory } from "./chat-history.ts";
 import { useChatSessions } from "./chat-sessions.ts";
 import { useChatStream } from "./chat-stream.ts";
+import { ChatView } from "./chat-view.tsx";
 import { dedupeSuggestions } from "./suggestions.ts";
 import type { ChatViewProps, ThreadPlacement, ThreadSummary } from "./types.ts";
 import type { EmbedResolver, ExportFormat } from "../support/export.ts";
@@ -18,13 +18,18 @@ import {
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
+  type MastraStreamResponse,
 } from "../support/mastra-client.ts";
-import type { MastraStreamResponse } from "../support/mastra-stream.ts";
 import {
   modelStorageKey,
   readStoredModel,
   storeSelectedModel,
 } from "../support/model-selection.ts";
+import {
+  snapshotRequestContext,
+  type MastraRequestContextSnapshot,
+  type MastraRequestContextSource,
+} from "../support/request-context.ts";
 import {
   DEFAULT_THREAD_SESSION_KEY,
   enqueueSteer,
@@ -48,9 +53,8 @@ const _loadChatExport = () => import("../support/export.ts");
 // `{ runId, payload: { toolCallId, toolName, args } }`. We surface that
 // as an out-of-band entry in `pendingApprovalsByMessage` and wire
 // `onResolveToolApproval` to {@link MastraPluginClient.approveToolCallStream}
-// / `declineToolCallStream` - both of which read SSE directly (avoiding a
-// stock `@mastra/client-js` bug on resumed approval streams) and return a
-// fresh stream Response we run through the same chunk handler.
+// / `declineToolCallStream`. Both use the native per-request Mastra client and
+// return a fresh native stream Response we run through the same chunk handler.
 //
 // On mount the transcript hydrates with the most recent page of thread
 // history from the Mastra plugin's `/route/history` endpoint; scrolling near
@@ -142,7 +146,9 @@ const storeStoredSidebarOpen = (key: string, open: boolean): void => {
 };
 
 /** Options for {@link useMastraChat}. */
-export interface UseMastraChatOptions {
+export interface UseMastraChatOptions<
+  TValues extends Record<string, unknown> = Record<string, unknown>,
+> {
   /**
    * Agent to converse with. Defaults to the Mastra plugin's registered
    * default agent (`clientConfig().defaultAgent`).
@@ -206,6 +212,11 @@ export interface UseMastraChatOptions {
    * without MLflow tracing is a safe no-op.
    */
   enableFeedback?: boolean;
+  /**
+   * Typed application metadata forwarded through Mastra's native
+   * `requestContext` field. A resolver is read when each turn is submitted.
+   */
+  requestContext?: MastraRequestContextSource<TValues>;
 }
 
 /**
@@ -216,8 +227,8 @@ export interface UseMastraChatOptions {
  * consumes. Use this when you want the drop-in behaviour but need to
  * render the view yourself; otherwise reach for {@link MastraChat}.
  */
-export const useMastraChat = (
-  options: UseMastraChatOptions = {},
+export const useMastraChat = <TValues extends Record<string, unknown> = Record<string, unknown>>(
+  options: UseMastraChatOptions<TValues> = {},
 ): Omit<ChatViewProps, "className"> => {
   // One client drives both the agent stream and the plugin's custom
   // routes (history / threads / models / suggestions / feedback /
@@ -247,6 +258,8 @@ export const useMastraChat = (
   // `model` to its dependency list.
   const modelRef = useRef(model);
   modelRef.current = model;
+  const requestContextRef = useRef(options.requestContext);
+  requestContextRef.current = options.requestContext;
   // Built-in conversation management. When on, the chat always drives an
   // explicit client thread id (rather than leaning on the per-session
   // cookie) so it can reference, persist, and switch between the
@@ -454,13 +467,15 @@ export const useMastraChat = (
   );
 
   const runStream = useCallback(
-    (threadId: string, history: UIMessage[]) => {
+    (threadId: string, history: UIMessage[], requestContext?: MastraRequestContextSnapshot) => {
       const assistantId = hash.id();
       const runId = hash.id();
       updateSession(threadId, (session) => ({
         ...session,
         assistantId,
         runId,
+        runRequestContext: requestContext,
+        lastRequestContext: requestContext,
       }));
       // Capture this run's thread + model at send time and pass them per
       // call, so a run keeps its own routing even if the user switches
@@ -468,17 +483,13 @@ export const useMastraChat = (
       const streamThreadId = threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
       const model = modelRef.current || undefined;
       return driveStream(threadId, assistantId, (signal) => {
-        const messages = history.flatMap((m) =>
-          m.parts
-            .filter((p): p is { type: "text"; text: string } => p.type === "text")
-            .map((p) => ({ role: m.role, content: p.text })),
-        );
         return mastraClient.streamAgent({
           agentId,
-          messages,
+          messages: history,
           runId,
           threadId: streamThreadId,
           model,
+          requestContext,
           signal,
         });
       });
@@ -499,7 +510,7 @@ export const useMastraChat = (
       queuedSteers: removeSteerFromQueue(session.queuedSteers, head.id),
     }));
     const { next } = appendUserMessage(threadId, head.text);
-    void runStream(threadId, next);
+    void runStream(threadId, next, head.requestContext);
   };
 
   // Cancel a thread's in-flight run. Defaults to the active thread (the
@@ -572,15 +583,20 @@ export const useMastraChat = (
       const text = message.text ?? "";
       if (!text) return;
       const threadId = activeKey;
+      const requestContext = snapshotRequestContext(requestContextRef.current);
       if (isSessionRunning(getSession(threadId))) {
         updateSession(threadId, (session) => ({
           ...session,
-          queuedSteers: enqueueSteer(session.queuedSteers, { id: hash.id(), text }),
+          queuedSteers: enqueueSteer(session.queuedSteers, {
+            id: hash.id(),
+            text,
+            ...(requestContext ? { requestContext } : {}),
+          }),
         }));
         return;
       }
       const { next } = appendUserMessage(threadId, text);
-      void runStream(threadId, next);
+      void runStream(threadId, next, requestContext);
     },
     [appendUserMessage, runStream, activeKey, getSession, updateSession],
   );
@@ -600,7 +616,7 @@ export const useMastraChat = (
       }));
       logger.info("steer:send-now", { threadId });
       const { next } = appendUserMessage(threadId, steer.text);
-      void runStream(threadId, next);
+      void runStream(threadId, next, steer.requestContext);
     },
     [activeKey, appendUserMessage, getSession, runStream, updateSession],
   );
@@ -764,7 +780,7 @@ export const useMastraChat = (
       });
     }
     writeMessages(threadId, trimmed);
-    void runStream(threadId, trimmed);
+    void runStream(threadId, trimmed, getSession(threadId).lastRequestContext);
   }, [activeKey, getSession, runStream, updateSession, writeMessages]);
 
   // Chat export (opt-in). Resolves `[chart:<id>]` / `[data:<id>]` embeds
@@ -982,11 +998,15 @@ export const useMastraChat = (
 };
 
 /** Props for {@link MastraChat}. */
-export interface MastraChatProps extends UseMastraChatOptions {
+export interface MastraChatProps<
+  TValues extends Record<string, unknown> = Record<string, unknown>,
+> extends UseMastraChatOptions<TValues> {
   /** Extra classes merged onto the chat's root layout container. */
   className?: string;
-  /** Host controls placed beside the model picker in the composer toolbar. */
+  /** Host controls placed beside the model picker in the composer footer. */
   composerActions?: ReactNode;
+  /** Host controls placed on the left side of the composer footer. */
+  composerLeadingActions?: ReactNode;
 }
 
 /**
@@ -1002,7 +1022,19 @@ export interface MastraChatProps extends UseMastraChatOptions {
  * `threadPlacement` (`auto` docks it left and falls back to a tab strip on a
  * narrow chat) and turned off with `threadPlacement: "disabled"`.
  */
-export const MastraChat = ({ className, composerActions, ...options }: MastraChatProps) => {
+export const MastraChat = <TValues extends Record<string, unknown> = Record<string, unknown>>({
+  className,
+  composerActions,
+  composerLeadingActions,
+  ...options
+}: MastraChatProps<TValues>) => {
   const chat = useMastraChat(options);
-  return <ChatView {...chat} className={className} composerActions={composerActions} />;
+  return (
+    <ChatView
+      {...chat}
+      className={className}
+      composerActions={composerActions}
+      composerLeadingActions={composerLeadingActions}
+    />
+  );
 };

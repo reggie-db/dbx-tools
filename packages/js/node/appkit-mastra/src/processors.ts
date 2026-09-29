@@ -1,21 +1,15 @@
 /**
  * Mastra stream processors wired onto the plugin's agents.
  *
- * Two complementary processors live here:
- *
- * - An **input** processor ({@link stripStaleChartsProcessor}) that
- *   scrubs turn-scoped `chartId` fields out of prior tool results
- *   replayed from Memory, so the model can't copy a stale id into the
- *   new turn's `[chart:<id>]` markers.
- * - An **output** processor ({@link ResultProcessor}) that trims the
- *   bulky, redundant payload fields off targeted outbound stream frames
- *   before they're serialized to the SSE client.
+ * The input processor ({@link stripStaleChartsProcessor}) scrubs turn-scoped
+ * `chartId` fields out of prior tool results replayed from Memory, so the model
+ * cannot copy a stale id into the new turn's `[chart:<id>]` markers.
  *
  * @module
  */
 
 import { log } from "@dbx-tools/shared-core";
-import type { InputProcessor, ProcessInputArgs, Processor } from "@mastra/core/processors";
+import type { InputProcessor, ProcessInputArgs } from "@mastra/core/processors";
 
 const logger = log.logger("mastra/processors");
 
@@ -112,59 +106,3 @@ export const stripStaleChartsProcessor: InputProcessor = {
     return args.messages;
   },
 };
-
-/**
- * Mastra output processor that trims the bulky, redundant payload
- * fields off targeted outbound stream frames.
- *
- * Mastra emits step / finish / tool-result frames whose payloads
- * echo the full tool `output` / `result` / assistant `messages` /
- * `response` - data the chat client already received inline and
- * doesn't need re-sent. This processor empties those keys on the
- * targeted frame types so the outbound SSE stream stays lean;
- * every other frame passes through untouched.
- */
-export class ResultProcessor implements Processor {
-  id = "result-processor";
-
-  // Tell Mastra to also route tool/data parts to this processor method
-  processDataParts = true;
-
-  async processOutputStream({ part }: { part: any }): Promise<any | null> {
-    // 1. Guard clause: Ensure the chunk is a valid object
-    if (!part || typeof part !== "object") {
-      return part;
-    }
-
-    // 2. Filter for the targeted frame types
-    const targetedTypes = ["step-finish", "finish", "tool-result", "data-tool-agent"];
-    if (!targetedTypes.includes(part.type)) {
-      return part; // Return unchanged to pass-through
-    }
-
-    // 3. Check for the presence of a payload object
-    const payload = part.payload;
-    if (!payload || typeof payload !== "object") {
-      return part;
-    }
-
-    // 4. Safely delete the unwanted keys from the payload reference
-    const keysToDelete = ["output", "messages", "response", "result"];
-    for (const key of keysToDelete) {
-      if (key in payload) {
-        const value = payload[key];
-        if (typeof value === "object") {
-          payload[key] = {};
-        } else if (Array.isArray(value)) {
-          payload[key] = [];
-        } else {
-          delete payload[key];
-        }
-      }
-    }
-
-    // 5. Return the modified part object. Mastra handles re-serialization
-    // for the outbound SSE client stream automatically.
-    return part;
-  }
-}

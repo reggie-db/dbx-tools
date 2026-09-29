@@ -1,6 +1,5 @@
 import { feedback } from "@dbx-tools/shared-mastra";
 import { useCallback } from "react";
-import type { MastraStreamResponse } from "../support/mastra-stream.ts";
 import type {
   ThreadMessageWriter,
   ThreadSessionReader,
@@ -11,6 +10,7 @@ import {
   createChatStreamState,
   reduceChatStreamChunk,
 } from "./chat-stream-reducer.ts";
+import type { MastraStreamResponse } from "../support/mastra-client.ts";
 
 /** Read the MLflow trace id captured by the server on a stream response. */
 const readMlflowTraceId = (stream: unknown): string | undefined => {

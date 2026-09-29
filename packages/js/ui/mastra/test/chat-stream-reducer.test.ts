@@ -36,9 +36,11 @@ describe("chat stream reducer", () => {
   });
 
   it("tracks tool lifecycle and ignores invalid progress events", () => {
+    const input = { query: "all stores", filters: { active: true } };
+    const output = { rows: Array.from({ length: 500 }, (_, index) => ({ index })) };
     const call = reduceChatStreamChunk(initial(), {
       type: "tool-call",
-      payload: { toolCallId: "tool-1", toolName: "ask_genie", args: {} },
+      payload: { toolCallId: "tool-1", toolName: "ask_genie", args: input },
     });
     const invalidProgress = reduceChatStreamChunk(call.state, {
       type: "tool-output",
@@ -46,11 +48,11 @@ describe("chat stream reducer", () => {
     });
     const result = reduceChatStreamChunk(invalidProgress.state, {
       type: "tool-result",
-      payload: { toolCallId: "tool-1" },
+      payload: { toolCallId: "tool-1", toolName: "ask_genie", args: input, result: output },
     });
 
     expect(result.state.toolEvents).toEqual([
-      { id: "tool-1", toolName: "ask_genie", status: "done" },
+      { id: "tool-1", toolName: "ask_genie", status: "done", input, output },
     ]);
   });
 
@@ -92,18 +94,12 @@ describe("chat stream reducer", () => {
     ]);
   });
 
-  it("ignores unknown events and surfaces stream errors", () => {
-    const unknown = reduceChatStreamChunk(initial(), {
-      type: "unknown",
-      eventType: "step-finish",
-      payload: {},
-    });
-    const failure = reduceChatStreamChunk(unknown.state, {
+  it("surfaces stream errors", () => {
+    const failure = reduceChatStreamChunk(initial(), {
       type: "error",
       payload: { message: "upstream failed" },
     });
 
-    expect(unknown.state).toEqual(initial());
     expect(failure.error).toBe("upstream failed");
   });
 

@@ -1,5 +1,6 @@
 import { error as sharedError } from "@dbx-tools/shared-core";
-import { GenieWriterEventSchema, type MastraStreamChunk } from "@dbx-tools/shared-mastra";
+import { GenieWriterEventSchema } from "@dbx-tools/shared-mastra";
+import type { ChunkType } from "@mastra/core/stream";
 import type { UIMessage } from "ai";
 import type { PendingApproval, ToolEvent } from "./types.ts";
 
@@ -68,7 +69,7 @@ export function chatStreamAssistantMessage(assistantId: string, state: ChatStrea
 
 const withRunId = (
   state: ChatStreamState,
-  chunk: MastraStreamChunk,
+  chunk: ChunkType,
 ): { state: ChatStreamState; changed: boolean } => {
   if (!chunk.runId || state.runId) return { state, changed: false };
   return { state: { ...state, runId: chunk.runId }, changed: true };
@@ -99,14 +100,13 @@ const reduction = (
 /** Reduce one validated chunk into immutable assistant and session state. */
 export function reduceChatStreamChunk(
   previous: ChatStreamState,
-  chunk: MastraStreamChunk,
+  chunk: ChunkType,
 ): ChatStreamReduction {
   const run = withRunId(previous, chunk);
   const state = run.state;
   const markStreaming = !state.streaming;
 
   switch (chunk.type) {
-    case "unknown":
     case "text-start":
     case "text-end":
       return reduction(state, { runIdChanged: run.changed });
@@ -149,6 +149,7 @@ export function reduceChatStreamChunk(
               id: chunk.payload.toolCallId,
               toolName: chunk.payload.toolName,
               status: "running",
+              input: chunk.payload.args,
             },
           ],
         },
@@ -161,7 +162,7 @@ export function reduceChatStreamChunk(
       );
 
     case "tool-call-approval": {
-      const approvalRunId = chunk.runId ?? chunk.payload.runId ?? state.runId;
+      const approvalRunId = chunk.runId ?? state.runId;
       if (!approvalRunId) {
         return reduction(state, { runIdChanged: run.changed });
       }
@@ -190,13 +191,21 @@ export function reduceChatStreamChunk(
     }
 
     case "tool-result":
-    case "tool-error":
+    case "tool-error": {
+      const args = chunk.payload.args;
+      const output = chunk.type === "tool-result" ? chunk.payload.result : chunk.payload.error;
+      const failed = chunk.type === "tool-error" ? true : Boolean(chunk.payload.isError);
       return reduction(
         {
           ...state,
           toolEvents: state.toolEvents.map((event) =>
             event.id === chunk.payload.toolCallId
-              ? { ...event, status: chunk.type === "tool-result" ? "done" : "error" }
+              ? {
+                  ...event,
+                  status: failed ? "error" : "done",
+                  ...(!("input" in event) ? { input: args } : {}),
+                  output,
+                }
               : event,
           ),
         },
@@ -205,6 +214,7 @@ export function reduceChatStreamChunk(
           toolEventsChanged: true,
         },
       );
+    }
 
     case "tool-output": {
       const progress = GenieWriterEventSchema.safeParse(chunk.payload.output);
@@ -236,8 +246,7 @@ export function reduceChatStreamChunk(
     }
 
     default: {
-      const exhaustive: never = chunk;
-      return exhaustive;
+      return reduction(state, { runIdChanged: run.changed });
     }
   }
 }

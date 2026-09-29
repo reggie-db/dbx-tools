@@ -14,15 +14,22 @@ Key features:
   wires itself to the default agent.
 - Headless `useMastraChat()` driver for apps that want the same transport logic
   with custom layout.
+- Persistent `MastraAssistant` application shell with a floating launcher,
+  dock/overlay modes, every edge, optional resizing, external controls, and
+  route-stable chat state.
 - Controlled `ChatView` for hosts that own messages, streaming, model state, and
   route calls themselves.
 - `MastraPluginClient` wrapper around `@mastra/client-js` with AppKit-Mastra
   routes for history, threads, model lists, suggestions, feedback, charts, and
   statement data.
 - Tool-approval support for suspended Mastra `requireApproval` calls, including
-  direct resumed-stream handling. An email-shaped input (the `send_email` tool)
+  resumed-stream handling. An email-shaped input (the `send_email` tool)
   renders as a formatted To / Cc / Subject / Markdown-body preview rather than
   raw JSON.
+- Complete native tool input/results retained behind expandable Request and
+  Response rows in each tool pill.
+- Typed per-turn application context through Mastra's native `RequestContext`
+  and server-side `requestContextSchema`.
 - Inline embed rendering for `[chart:<id>]` and `[data:<id>]` markers produced by
   the server plugin.
 - Conversation sidebar with new, select, rename, delete, active-thread, and
@@ -73,6 +80,49 @@ The stylesheet imports the shared `@dbx-tools/ui-appkit` foundation and register
 this package's React files with Tailwind. It does not define design tokens; the
 chat UI uses AppKit semantic tokens from the host app.
 
+## Add A Persistent Assistant
+
+Mount `MastraAssistant` inside the app's existing authentication gate and above
+the route outlet. Closing the panel hides its presentation without unmounting
+the chat driver, so drafts, threads, and active streams survive page navigation.
+
+```tsx
+import { MastraAssistant, useMastraAssistant } from "@dbx-tools/ui-mastra/react";
+
+const AskAboutStore = ({ storeId }: { storeId: string }) => {
+  const assistant = useMastraAssistant<{ storeId: string; route: string }>();
+  return (
+    <button onClick={() => assistant.open({ storeId, route: window.location.pathname })}>
+      Ask assistant
+    </button>
+  );
+};
+
+export function App() {
+  return (
+    <MastraAssistant
+      mode="overlay"
+      side="right"
+      resizable={{ defaultSize: 480, minSize: 360, storageKey: "assistant-size" }}
+      title="Workflow assistant"
+      launcher={{ position: "bottom-right", label: "Open assistant" }}
+      chat={{ showModelPicker: true, enableExport: true, threadPlacement: "top" }}
+    >
+      <RouterAndAuthenticatedApplication />
+    </MastraAssistant>
+  );
+}
+```
+
+`mode="dock"` reflows the child application; `mode="overlay"` overlaps it.
+`side` accepts `top`, `right`, `bottom`, or `left`. Set `resizable={false}` to
+lock size, `launcher={false}` when every launch comes from
+`useMastraAssistant()`, `header={false}` to place New, History, and Close beside
+the conversation pills. With the header enabled those controls move into it and
+the conversation pills remain on their own second row. Replace `icon`, `closeIcon`,
+`newConversationIcon`, `historyIcon`, and `launcher.icon`. Below
+`mobileBreakpoint` the panel becomes a full overlay.
+
 ## Render A Drop-In Chat
 
 ```tsx
@@ -103,6 +153,9 @@ Useful options:
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
 - `composerActions` places host-owned per-turn controls beside the model
   selector without replacing the built-in composer.
+- `composerLeadingActions` places attachment or app actions on the left side of
+  the fixed composer footer. The textarea grows above it to a cap, then scrolls;
+  model and Send/Stop stay pinned bottom-right.
 - `suggestions` overrides Genie starter questions; omit it to auto-fetch
   `/suggestions`, or pass `[]` to hide suggestions.
 - `threadPlacement` chooses where conversation management renders, or turns it
@@ -167,6 +220,28 @@ Use `useMastraChat()` when the stock behavior is right but the surrounding layou
 belongs to your app. The hook owns streaming, aborts, history paging, thread
 selection, model overrides, suggestions, exports, approvals, and feedback state.
 
+## Pass Typed Application Context
+
+`requestContext` accepts a typed plain record, Mastra `RequestContext<T>`, or a
+per-turn resolver. The driver snapshots it when a message is submitted and
+keeps that snapshot with queued steers, regeneration, and approval continuation.
+
+```tsx
+type StoreContext = { storeId: string; route: string };
+
+const chat = useMastraChat<StoreContext>({
+  requestContext: () => ({
+    storeId: selectedStore.id,
+    route: location.pathname,
+  }),
+});
+```
+
+On the server, declare the same contract with Mastra's native
+`requestContextSchema` on `createAgent<StoreContext>()`. Application context
+cannot override the authenticated memory resource, thread, user, scopes, model,
+or trace fields stamped by AppKit-Mastra.
+
 ## Build A Controlled Chat Surface
 
 ```tsx
@@ -227,6 +302,9 @@ The UI understands the extra events produced by
 
 - `tool-call-approval` chunks become inline approval cards and call
   `approve-tool-call` / `decline-tool-call` when the user decides.
+- Native tool-call and tool-result payloads remain complete. Expanding a tool
+  row reveals default-closed Request and Response viewers; large values scroll
+  without string or collection truncation.
 - Genie writer events render as tool progress, including thinking text, SQL, row
   counts, result summaries, and chart/data markers.
 - `[chart:<id>]` markers long-poll the chart cache and render ECharts inline.
@@ -303,6 +381,8 @@ touching `navigator.clipboard` or `URL.createObjectURL` again.
 ## Modules
 
 - `MastraChat` - self-contained drop-in chat component.
+- `MastraAssistant` / `useMastraAssistant` - persistent application shell and
+  external open/close/context controller.
 - `useMastraChat` - headless driver that returns `ChatView` props.
 - `ChatView` - controlled presentational chat shell.
 - `MastraPluginClient` - `@mastra/client-js` plus AppKit-Mastra custom routes.
@@ -311,8 +391,8 @@ touching `navigator.clipboard` or `URL.createObjectURL` again.
   `useChartFetch`, `useStatementFetch` - route/config hooks for controlled
   clients.
 - `ThreadSidebar` - controlled conversation list, dockable to either edge.
-- `ThreadTabs` - conversation tab strip plus history menu for the `top`
-  placement; reuses `ThreadSidebar` for the menu itself.
+- `ThreadTabs` / `ThreadActions` - conversation pills plus reusable New/History
+  controls for the top strip or persistent assistant header.
 - `ExportMenu` - shared export format menu.
 - `src/support/thread-tabs.ts` - pure open-tab bookkeeping (`syncThreadTabs`,
   `closeThreadTab`, `nextActiveThreadTab`) so the strip's state is testable
@@ -320,6 +400,10 @@ touching `navigator.clipboard` or `URL.createObjectURL` again.
 - `src/support/thread-labels.ts` - `threadTitle` / `relativeTime`, shared by
   the sidebar and the tab strip so a row and a tab never disagree about how an
   untitled or freshly-updated conversation reads.
+- `src/support/request-context.ts` - immutable per-run snapshots around Mastra's
+  native typed `RequestContext`.
+- `src/support/tool-events.ts` - projection of native AI SDK persisted tool
+  parts onto the live pill view model.
 - `src/support/chart-theme.ts` - `ChartChrome`, `LIGHT_CHART_CHROME`,
   `resolveChartChrome`, and the `useChartChrome` hook that keeps an inline
   chart's colors in step with the active theme.
@@ -328,8 +412,9 @@ touching `navigator.clipboard` or `URL.createObjectURL` again.
   an optional `ChartChrome` into a planner spec, shared by the inline chart and
   the PDF export so both read the same.
 - Types - `ChatViewProps`, `MastraChatProps`, `UseMastraChatOptions`,
-  `ThreadPlacement`, `ThreadSummary`, `ToolEvent`, `ToolProgress`,
-  `PendingApproval`, `FeedbackSubmission`, and related UI contract types.
+  `MastraAssistantProps`, `MastraRequestContextInput`, `ThreadPlacement`,
+  `ThreadSummary`, `ToolEvent`, `ToolProgress`, `PendingApproval`,
+  `FeedbackSubmission`, and related UI contract types.
 
 Server-side routes and event production live in
 [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra). Browser-safe route,

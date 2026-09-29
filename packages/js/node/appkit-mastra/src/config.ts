@@ -22,7 +22,7 @@ import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
-import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
+import type { AnyMastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
 import type { RemoteSkillsOption } from "./remote-skills.ts";
@@ -252,7 +252,10 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * });
    * ```
    */
-  agents?: Record<string, MastraAgentDefinition> | MastraAgentDefinition | MastraAgentDefinition[];
+  agents?:
+    | Record<string, AnyMastraAgentDefinition>
+    | AnyMastraAgentDefinition
+    | AnyMastraAgentDefinition[];
   /**
    * Ambient tools spread into every registered agent's tools record;
    * per-agent tools win on key collision. Use for a small shared

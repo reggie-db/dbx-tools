@@ -98,4 +98,13 @@ describe("steer queue", () => {
       ["a", "b"],
     );
   });
+
+  it("preserves each steer's captured request context through reordering", () => {
+    const q = [
+      { ...steer("a", "1"), requestContext: { storeId: "store-a" } },
+      { ...steer("b", "2"), requestContext: { storeId: "store-b" } },
+    ];
+
+    assert.deepEqual(reorderSteers(q, ["b", "a"]), [q[1], q[0]]);
+  });
 });

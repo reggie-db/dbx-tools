@@ -16,7 +16,7 @@ import { AdaptiveCardGallery, TeamsChat } from "@dbx-tools/ui-teams/react";
 
 const Cards = () => {
   // Starter prompts come from the agent's Genie space via the Mastra plugin's
-  // `/suggestions` route - the same source `MastraChat` uses on the Stream page,
+  // `/suggestions` route - the same source `MastraChat` uses on the Chat page,
   // run through the same dedupe + cap. That is what lets both pages open with
   // the same questions and answer them with the same numbers; only the
   // presentation (a card instead of streamed markdown) differs. Empty while the

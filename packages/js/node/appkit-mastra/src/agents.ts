@@ -19,7 +19,12 @@ import { ConfigurationError } from "@databricks/appkit";
 import { plugin } from "@dbx-tools/appkit";
 import { fallback } from "@dbx-tools/model";
 import { log, object, string } from "@dbx-tools/shared-core";
-import type { AgentConfig, ToolsInput } from "@mastra/core/agent";
+import type {
+  AgentConfig,
+  AgentExecutionOptions,
+  AgentInstructions,
+  ToolsInput,
+} from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
 import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
 import type { Tool } from "@mastra/core/tools";
@@ -32,7 +37,7 @@ import type { MastraPluginConfig } from "./config.ts";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import type { MemoryBuilder } from "./memory.ts";
 import { buildModel } from "./model.ts";
-import { ResultProcessor, stripStaleChartsProcessor } from "./processors.ts";
+import { stripStaleChartsProcessor } from "./processors.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
 import { createWorkspace } from "./workspaces.ts";
@@ -155,7 +160,11 @@ function deriveToolId(description: string): string {
  * workspace carries Databricks skill mounts and Databricks Sandbox command
  * execution. An explicit workspace remains the caller's complete override.
  */
-export function createAgent<T extends MastraAgentDefinition>(def: T): T {
+export function createAgent<
+  TRequestContext extends Record<string, unknown> | unknown = unknown,
+  TDefinition extends MastraAgentDefinition<TRequestContext> =
+    MastraAgentDefinition<TRequestContext>,
+>(def: TDefinition): TDefinition {
   if (def.workspace) return { ...def };
   const workspace = createWorkspace();
   markDefaultWorkspace(workspace);
@@ -260,13 +269,27 @@ export type MastraAgentWorkspaceResolver = () => Workspace | undefined;
  * `config.agents` is the `agentId` the client streams against; `name`
  * is purely informational (defaults to the key).
  */
-export interface MastraAgentDefinition {
+export interface MastraAgentDefinition<
+  TRequestContext extends Record<string, unknown> | unknown = unknown,
+> {
   /** Display name used as `Agent.name`. Defaults to the registry key. */
   name?: string;
   /** Optional long-form description; surfaced as `Agent.description`. */
   description?: string;
-  /** System prompt body. */
-  instructions: string;
+  /** Static or request-context-aware system instructions. */
+  instructions: AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"];
+  /** Native Mastra schema that validates and types application request context. */
+  requestContextSchema?: AgentConfig<
+    string,
+    ToolsInput,
+    undefined,
+    TRequestContext
+  >["requestContextSchema"];
+  /**
+   * Mastra-native per-call approval gate for this agent's tools. Supports an
+   * async Classifier-backed function; tool-level approval remains authoritative.
+   */
+  requireToolApproval?: AgentExecutionOptions["requireToolApproval"];
   /**
    * Per-agent model override.
    *
@@ -279,7 +302,7 @@ export interface MastraAgentDefinition {
    *   straight through to `Agent.model`. Use this when you need full
    *   control over auth or providerId.
    */
-  model?: AgentConfig["model"] | string;
+  model?: AgentConfig<string, ToolsInput, undefined, TRequestContext>["model"] | string;
   /**
    * Per-agent tool record. Either a plain map or a callback that
    * receives the typed {@link MastraPlugins} sibling-plugin index and
@@ -322,6 +345,9 @@ export interface MastraAgentDefinition {
    */
   workspace?: Workspace | MastraAgentWorkspaceResolver;
 }
+
+/** Type-erased registry member; each definition retains typing at `createAgent`. */
+export type AnyMastraAgentDefinition = MastraAgentDefinition<any>;
 
 /**
  * Distributive `Omit` so unions in `PostgresStoreConfig` /
@@ -433,13 +459,47 @@ function resolveStyleInstructions(config: MastraPluginConfig): string | null {
   return DEFAULT_STYLE_INSTRUCTIONS;
 }
 
+/** Append the style block without narrowing Mastra's native instruction shapes. */
+function appendStyleInstructions(
+  instructions: AgentInstructions,
+  style: string | null,
+): AgentInstructions {
+  if (!style) return instructions;
+  if (typeof instructions === "string") {
+    return `${instructions.trimEnd()}\n\n${style}`;
+  }
+  if (Array.isArray(instructions)) {
+    if (instructions.every((instruction) => typeof instruction === "string")) {
+      return [...instructions, style] as AgentInstructions;
+    }
+    return [...instructions, { role: "system", content: style }] as AgentInstructions;
+  }
+  return [instructions, { role: "system", content: style }] as AgentInstructions;
+}
+
 /**
- * Join an agent's bespoke instructions with the resolved style block.
- * Returns the bespoke text unchanged when the style block is disabled.
+ * Compose static or request-context-aware instructions with the shared style
+ * policy while preserving Mastra's native generic inference.
  */
-function composeInstructions(agentInstructions: string, style: string | null): string {
-  if (!style) return agentInstructions;
-  return `${agentInstructions.trimEnd()}\n\n${style}`;
+function composeInstructions<TRequestContext extends Record<string, unknown> | unknown>(
+  agentInstructions: AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"],
+  style: string | null,
+): AgentConfig<string, ToolsInput, undefined, TRequestContext>["instructions"] {
+  if (typeof agentInstructions !== "function") {
+    return appendStyleInstructions(agentInstructions, style) as AgentConfig<
+      string,
+      ToolsInput,
+      undefined,
+      TRequestContext
+    >["instructions"];
+  }
+  return (async (args) =>
+    appendStyleInstructions(await agentInstructions(args), style)) as AgentConfig<
+    string,
+    ToolsInput,
+    undefined,
+    TRequestContext
+  >["instructions"];
 }
 
 /**
@@ -502,7 +562,6 @@ export async function buildAgents(opts: {
   // chartIds from prior assistant tool results into the new
   // turn's `[chart:<id>]` markers. Opt out per-plugin via
   // `config.stripStaleCharts: false`.
-  const outputProcessors = [new ResultProcessor()];
   const inputProcessors = [
     ...(config.stripStaleCharts === false ? [] : [stripStaleChartsProcessor]),
   ];
@@ -536,15 +595,18 @@ export async function buildAgents(opts: {
       // omits it.
       description: def.description?.trim() || defaultAgentDescription(def.name ?? id),
       instructions: composeInstructions(def.instructions, style),
+      ...(def.requestContextSchema ? { requestContextSchema: def.requestContextSchema } : {}),
       model: resolveModel(config, def.model),
       defaultOptions: {
         maxSteps: config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS,
+        ...(def.requireToolApproval !== undefined
+          ? { requireToolApproval: def.requireToolApproval }
+          : {}),
       },
       tools,
       ...(memory ? { memory } : {}),
       ...(workspace ? { workspace } : {}),
       inputProcessors,
-      outputProcessors,
     });
     // Surface the effective default model per agent so operators can
     // see at a glance which endpoint each agent points at without
@@ -642,7 +704,10 @@ function assertApprovalGatedToolsHaveStorage(
  * overrides (`X-Mastra-Model` etc.) and the workspace-catalogue
  * fuzzy match are still applied at runtime.
  */
-function describeAgentDefaultModel(config: MastraPluginConfig, def: MastraAgentDefinition): string {
+function describeAgentDefaultModel(
+  config: MastraPluginConfig,
+  def: AnyMastraAgentDefinition,
+): string {
   const effective = def.model ?? config.defaultModel;
   if (typeof effective === "string") return effective;
   if (effective !== undefined) return "<dynamic>";
@@ -667,13 +732,13 @@ function describeAgentDefaultModel(config: MastraPluginConfig, def: MastraAgentD
  * Omitted or empty inputs fall back to a single built-in analyst so
  * the bare `mastra()` call still mounts a working chat route.
  */
-function resolveDefinitions(config: MastraPluginConfig): Record<string, MastraAgentDefinition> {
+function resolveDefinitions(config: MastraPluginConfig): Record<string, AnyMastraAgentDefinition> {
   const input = config.agents;
   if (!input) return fallbackDefinitions();
 
   if (Array.isArray(input)) {
     if (input.length === 0) return fallbackDefinitions();
-    const out: Record<string, MastraAgentDefinition> = {};
+    const out: Record<string, AnyMastraAgentDefinition> = {};
     input.forEach((def, i) => {
       const key = deriveAgentKey(def, i);
       if (out[key]) {
@@ -687,21 +752,21 @@ function resolveDefinitions(config: MastraPluginConfig): Record<string, MastraAg
     return out;
   }
 
-  // Single-definition shorthand: an agent always has `instructions: string`,
-  // a record-of-agents never has that field directly.
-  if (typeof (input as MastraAgentDefinition).instructions === "string") {
-    const def = input as MastraAgentDefinition;
+  // Single-definition shorthand: an agent owns the required `instructions`
+  // field (static or dynamic); a record-of-agents never owns it directly.
+  if ("instructions" in input) {
+    const def = input as AnyMastraAgentDefinition;
     const key = deriveAgentKey(def);
     return { [key]: def };
   }
 
-  const record = input as Record<string, MastraAgentDefinition>;
+  const record = input as Record<string, AnyMastraAgentDefinition>;
   if (Object.keys(record).length === 0) return fallbackDefinitions();
   return record;
 }
 
 /** Derive a registry id from a definition's `name`, with a fallback. */
-function deriveAgentKey(def: MastraAgentDefinition, index?: number): string {
+function deriveAgentKey(def: AnyMastraAgentDefinition, index?: number): string {
   if (def.name) {
     const slug = string.toIdentifier(def.name);
     if (slug) return slug;
@@ -710,7 +775,7 @@ function deriveAgentKey(def: MastraAgentDefinition, index?: number): string {
 }
 
 /** Built-in fallback registry used when `agents` is omitted / empty. */
-function fallbackDefinitions(): Record<string, MastraAgentDefinition> {
+function fallbackDefinitions(): Record<string, AnyMastraAgentDefinition> {
   return {
     [FALLBACK_AGENT_ID]: {
       name: "Default Agent",
@@ -738,7 +803,7 @@ function fallbackDefinitions(): Record<string, MastraAgentDefinition> {
  */
 function resolveModel(
   config: MastraPluginConfig,
-  override: MastraAgentDefinition["model"],
+  override: AnyMastraAgentDefinition["model"],
 ): AgentConfig["model"] {
   const effective = override ?? config.defaultModel;
   if (effective === undefined) {
@@ -758,7 +823,7 @@ function resolveModel(
  * survives - the caller already knows which agent was registering.
  */
 async function resolveTools(
-  defTools: MastraAgentDefinition["tools"],
+  defTools: AnyMastraAgentDefinition["tools"],
   plugins: MastraPlugins,
   ambientTools: MastraTools,
 ): Promise<MastraTools> {
@@ -768,7 +833,7 @@ async function resolveTools(
 }
 
 function resolveAgentWorkspace(
-  workspace: MastraAgentDefinition["workspace"],
+  workspace: AnyMastraAgentDefinition["workspace"],
 ): Workspace | undefined {
   if (!workspace) return undefined;
   return typeof workspace === "function" ? workspace() : workspace;

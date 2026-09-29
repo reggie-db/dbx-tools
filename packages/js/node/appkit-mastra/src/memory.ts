@@ -39,7 +39,7 @@ import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
 import { Pool, type PoolConfig } from "pg";
 
-import type { MastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
+import type { AnyMastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
 import type { MastraPluginConfig } from "./config.ts";
 import { agentStorageSchemaName } from "./storage-schema.ts";
 import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
@@ -143,8 +143,8 @@ export async function createServicePrincipalPool(pgConfig: PoolConfig): Promise<
 }
 
 /** Effective per-knob setting after the plugin/agent cascade. */
-type StorageSetting = MastraAgentDefinition["storage"];
-type MemorySetting = MastraAgentDefinition["memory"];
+type StorageSetting = AnyMastraAgentDefinition["storage"];
+type MemorySetting = AnyMastraAgentDefinition["memory"];
 
 /**
  * True when any plugin-level or per-agent setting could need the
@@ -223,7 +223,7 @@ export class MemoryBuilder {
    * vector store enabled - Mastra accepts a missing `memory` field
    * and treats the agent as stateless.
    */
-  forAgent(agentId: string, def: MastraAgentDefinition): Memory | undefined {
+  forAgent(agentId: string, def: AnyMastraAgentDefinition): Memory | undefined {
     const storageSetting = def.storage ?? this.config.storage;
     const memorySetting = def.memory ?? this.config.memory;
 
@@ -368,14 +368,14 @@ function settingNeedsSharedPool(setting: StorageSetting | MemorySetting | undefi
 }
 
 /** Walk the three shapes of `config.agents` into a flat list. */
-function collectAgentDefinitions(config: MastraPluginConfig): MastraAgentDefinition[] {
+function collectAgentDefinitions(config: MastraPluginConfig): AnyMastraAgentDefinition[] {
   const agents = config.agents;
   if (!agents) return [];
   if (Array.isArray(agents)) return agents;
-  if (typeof (agents as MastraAgentDefinition).instructions === "string") {
-    return [agents as MastraAgentDefinition];
+  if ("instructions" in agents) {
+    return [agents as AnyMastraAgentDefinition];
   }
-  return Object.values(agents as Record<string, MastraAgentDefinition>);
+  return Object.values(agents);
 }
 
 /** Fill in a default `id` when the caller didn't supply one. */

@@ -22,6 +22,10 @@ export type ToolEvent = {
   id: string;
   toolName: string;
   status: "running" | "done" | "error";
+  /** Complete tool-call arguments as emitted by Mastra. */
+  input?: unknown;
+  /** Complete tool result/error as emitted by Mastra. */
+  output?: unknown;
   progress?: ToolProgress[];
 };
 
@@ -172,11 +176,16 @@ export type ChatViewProps = {
    */
   defaultModelName?: string;
   /**
-   * Host-owned controls rendered in the composer toolbar immediately after the
+   * Host-owned controls rendered in the composer footer immediately before the
    * model selector. Use this for per-turn options that belong beside model
    * routing without forking the chat surface.
    */
   composerActions?: ReactNode;
+  /**
+   * Host-owned actions rendered on the left side of the composer's fixed
+   * footer, before Export and Clear.
+   */
+  composerLeadingActions?: ReactNode;
   /**
    * Optional infinite-scroll-up handler. Fired when the user scrolls
    * within `TOP_LOAD_MORE_THRESHOLD_PX` of the top of the
@@ -246,6 +255,17 @@ export type ChatViewProps = {
    * is too narrow for one. See {@link ThreadPlacement}.
    */
   threadPlacement?: ThreadPlacement;
+  /**
+   * Host-owned controls appended after the top tab strip's New and History
+   * actions. The persistent assistant uses this for its panel Close button.
+   */
+  threadBarActions?: ReactNode;
+  /** Whether the top tab row renders its built-in New/History controls. */
+  showThreadBarActions?: boolean;
+  /** Replacement icon for the top tab row's New action. */
+  threadNewIcon?: ReactNode;
+  /** Replacement icon for the top tab row's History action. */
+  threadHistoryIcon?: ReactNode;
   /** Id of the currently-active thread, highlighted in the sidebar. */
   activeThreadId?: string;
   /**

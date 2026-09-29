@@ -1,14 +1,10 @@
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import { useState } from "react";
 
-// Drop-in demo: `MastraChat` drives the whole conversation over
-// `@mastra/client-js` (streaming, tool-session pills, approvals, model
-// picker, history pagination, and chat export) by wiring itself from the
-// Mastra plugin's published client config. The compact composer control swaps
-// between two otherwise-identical server agents so each chat demonstrates one
-// Genie transport without adding mutable process-wide configuration.
+// Focused chat surface: streaming, tool-session pills, approvals, model
+// selection, history, threads, export, and Genie transport selection.
 
-const Stream = () => {
+const Chat = () => {
   const [agentMode, setAgentMode] = useState(true);
   const agentId = agentMode ? "support" : "support-polling";
 
@@ -43,4 +39,4 @@ const Stream = () => {
   );
 };
 
-export default Stream;
+export default Chat;

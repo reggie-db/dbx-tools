@@ -29,6 +29,7 @@ export const ChatView = ({
   onModelChange,
   defaultModelName,
   composerActions,
+  composerLeadingActions,
   onLoadMore,
   isLoadingMore = false,
   hasMore = false,
@@ -38,6 +39,10 @@ export const ChatView = ({
   onClear,
   threads,
   threadPlacement = "auto",
+  threadBarActions,
+  showThreadBarActions = true,
+  threadNewIcon,
+  threadHistoryIcon,
   activeThreadId,
   streamingThreadIds = [],
   isLoadingThreads = false,
@@ -67,6 +72,10 @@ export const ChatView = ({
       className={className}
       threads={threads}
       threadPlacement={threadPlacement}
+      threadBarActions={threadBarActions}
+      showThreadBarActions={showThreadBarActions}
+      threadNewIcon={threadNewIcon}
+      threadHistoryIcon={threadHistoryIcon}
       activeThreadId={activeThreadId}
       streamingThreadIds={streamingThreadIds}
       isLoadingThreads={isLoadingThreads}
@@ -110,6 +119,7 @@ export const ChatView = ({
         onModelChange={onModelChange}
         defaultModelName={defaultModelName}
         composerActions={composerActions}
+        composerLeadingActions={composerLeadingActions}
         isLoadingHistory={isLoadingHistory}
         onClear={onClear}
         onExportConversation={onExportConversation}

@@ -67,7 +67,7 @@ const SEARCH_DOCUMENTS = [
 const { email } = emailPlugin;
 const { defaultEmailBrand } = emailBrand;
 const { emailTool } = emailToolApi;
-const { createAgent, tool } = agents;
+const { createAgent, createTool, tool } = agents;
 const { buildGenieTools, GENIE_INSTRUCTIONS } = appkitMastraGenie;
 const { mastra } = appkitMastraPlugin;
 const { webSearch } = appkitWebSearchPlugin;
@@ -81,6 +81,10 @@ const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, sync
 const { defaultBrandContext } = sharedBrand;
 const mastraStorage = config.boolean(undefined, "MASTRA_STORAGE", config.ENV_ONLY) ?? true;
 const mastraMemory = config.boolean(undefined, "MASTRA_MEMORY", config.ENV_ONLY) ?? true;
+const graphitiEnabled = config.boolean(undefined, "GRAPHITI_ENABLED", config.ENV_ONLY) ?? true;
+const busEnabled = config.boolean(undefined, "BUS_ENABLED", config.ENV_ONLY) ?? true;
+const remoteSkillsEnabled =
+  config.boolean(undefined, "REMOTE_SKILLS_ENABLED", config.ENV_ONLY) ?? true;
 const localDevelopment = process.env.NODE_ENV === "development";
 const { tunnelInterceptor } = tunnelInterceptorApi;
 const { authGate } = tunnelPlugin;
@@ -138,8 +142,8 @@ const clientDist =
 //   `default` space when `spaces` is omitted.
 
 // Agents are declared the same way as AppKit's `agents` plugin:
-// build each definition with `createAgent({...})` (a no-op identity
-// helper for inference), then hand it to `mastra({ agents })`.
+// build each definition with `createAgent({...})` (typed request context plus
+// the default workspace), then hand it to `mastra({ agents })`.
 //
 // `agents` accepts three shapes for convenience:
 //   - record:  `{ support: def, helper: def }`
@@ -172,23 +176,41 @@ function demoGenieTools(plugins: MastraPlugins, agentMode: boolean): MastraTools
   });
 }
 
-function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition {
+const DemoRequestContextSchema = z.object({
+  route: z.string().optional(),
+  surface: z.string().optional(),
+  storeId: z.string().optional(),
+  entityType: z.string().optional(),
+  entityId: z.string().optional(),
+});
+type DemoRequestContext = z.infer<typeof DemoRequestContextSchema>;
+
+function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoRequestContext> {
+  const baseInstructions = [
+    "You are a data analyst helping customers explore a Databricks",
+    "Genie space. Default to driving the Genie tools (`ask_genie`,",
+    "`get_statement`, `prepare_chart`, `get_space_description`,",
+    "`get_space_serialized`) below - they are the only way to see",
+    "the real data, so use them whenever the user's question is",
+    "about the data the space covers. Reserve direct (no-tool)",
+    "answers for pure meta-questions about your own behaviour or",
+    "the conversation itself.",
+    "Graphiti MCP memory tools are also available. Use them when the user",
+    "asks to save, retrieve, or manage durable knowledge and preferences.",
+    "",
+    GENIE_INSTRUCTIONS,
+  ].join("\n");
   return {
     name: agentMode ? "Support" : "Support (polling)",
-    instructions: [
-      "You are a data analyst helping customers explore a Databricks",
-      "Genie space. Default to driving the Genie tools (`ask_genie`,",
-      "`get_statement`, `prepare_chart`, `get_space_description`,",
-      "`get_space_serialized`) below - they are the only way to see",
-      "the real data, so use them whenever the user's question is",
-      "about the data the space covers. Reserve direct (no-tool)",
-      "answers for pure meta-questions about your own behaviour or",
-      "the conversation itself.",
-      "Graphiti MCP memory tools are also available. Use them when the user",
-      "asks to save, retrieve, or manage durable knowledge and preferences.",
-      "",
-      GENIE_INSTRUCTIONS,
-    ].join("\n"),
+    requestContextSchema: DemoRequestContextSchema,
+    instructions: ({ requestContext }) => {
+      const applicationContext = requestContext.all;
+      const context =
+        Object.keys(applicationContext).length > 0
+          ? `Current application context:\n${JSON.stringify(applicationContext, null, 2)}`
+          : "No application context was supplied for this turn.";
+      return `${baseInstructions}\n\n${context}`;
+    },
     tools(plugins): MastraTools {
       // Materialize the selected Genie toolkit before adding the demo tools.
       // Building one contextually-typed object makes TypeScript recursively
@@ -209,6 +231,14 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition {
           description: "Weather",
           schema: z.object({ city: z.string() }),
           execute: async ({ city }) => `Sunny in ${city}`,
+        }),
+        get_ui_context: createTool({
+          id: "get_ui_context",
+          description: "Return the route and selected UI entity supplied for this turn.",
+          inputSchema: z.object({}),
+          outputSchema: DemoRequestContextSchema,
+          requestContextSchema: DemoRequestContextSchema,
+          execute: async (_input, context) => context.requestContext?.all ?? {},
         }),
         // Approval-gated email tool from `@dbx-tools/email`. The
         // model can call this freely; execution pauses until the user
@@ -254,8 +284,8 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition {
     },
   };
 }
-const support = createAgent(buildSupportDefinition(true));
-const supportPolling = createAgent(buildSupportDefinition(false));
+const support = createAgent<DemoRequestContext>(buildSupportDefinition(true));
+const supportPolling = createAgent<DemoRequestContext>(buildSupportDefinition(false));
 
 const host = process.env.HOST ?? "127.0.0.1";
 
@@ -291,10 +321,10 @@ await appkit.createApp({
     server({ host, staticPath: clientDist }),
     genie(),
     lakebase(),
-    graphiti(),
+    ...(graphitiEnabled ? [graphiti()] : []),
     // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
     // Lakebase connection and fans topic broadcasts out to its browser viewers.
-    busDemo(),
+    ...(busEnabled ? [busDemo()] : []),
     // Validates SMTP config + verifies connectivity at startup, and
     // primes the transport the approval-gated `send_email` tool reuses.
     // `brand` styles every rendered email (accent, font, header logo)
@@ -374,7 +404,7 @@ await appkit.createApp({
       // Fold Databricks' own AI Tools skills into the agents. Read straight
       // from the public databricks/databricks-agent-skills repo, so this works
       // in a deployed App container where the `databricks` CLI is absent.
-      remoteSkills: "aitools",
+      ...(remoteSkillsEnabled ? { remoteSkills: "aitools" as const } : {}),
     }),
   ],
   onPluginsReady(appkit) {

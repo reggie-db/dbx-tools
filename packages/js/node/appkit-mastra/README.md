@@ -137,6 +137,50 @@ const approveRefund = agents.createTool({
 });
 ```
 
+## Typed Application Request Context
+
+Use Mastra's native `requestContextSchema` for UI selections that should shape a
+turn, such as a store, workflow, route, or selected entity:
+
+```ts
+const StoreContextSchema = z.object({
+  storeId: z.string(),
+  route: z.string(),
+});
+type StoreContext = z.infer<typeof StoreContextSchema>;
+
+const analyst = agents.createAgent<StoreContext>({
+  name: "analyst",
+  requestContextSchema: StoreContextSchema,
+  instructions: ({ requestContext }) =>
+    `Help with store ${requestContext.get("storeId")} on ${requestContext.get("route")}.`,
+  tools: {
+    inspect_store: agents.createTool({
+      id: "inspect_store",
+      description: "Inspect the selected store.",
+      inputSchema: z.object({}),
+      requestContextSchema: StoreContextSchema,
+      execute: async (_input, context) => ({
+        storeId: context.requestContext?.get("storeId"),
+      }),
+    }),
+  },
+});
+```
+
+The paired UI sends this through Mastra's standard `requestContext` body field.
+The agent schema validates it before model execution. AppKit-Mastra removes and
+re-stamps trusted identity, resource, thread, auth, scope, model, and trace keys,
+so application context cannot change conversation ownership or credentials.
+
+`createAgent({ requireToolApproval })` forwards Mastra's native request-level
+approval gate. It may be an async Classifier-backed function that returns `true`
+for calls still needing human review. A tool's own `requireApproval` remains
+authoritative; configure that native function on the tool when policy should
+allow some calls. Regular agents do not include Agent Controller's durable
+allow/ask/deny permission store, so remembered decisions remain a caller-owned,
+server-side durable policy rather than browser state.
+
 ## AppKit Toolkits
 
 The `tools(plugins)` callback receives a dynamic index of registered AppKit
@@ -942,7 +986,7 @@ client that talks to these routes.
 - `observability` / `mlflow` / `traceIo` - tracing, feedback, and stamping chat
   turn I/O onto the HTTP root span for MLflow's UC `*_trace_unified` view.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,
-  stream/result processors.
+  and stale chart-id input cleanup.
 
 Browser-facing wire types are in
 [`@dbx-tools/shared-mastra`](../../shared/mastra). Genie event contracts are in

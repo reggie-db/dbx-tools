@@ -1,7 +1,8 @@
 # dbx-tools demo — a Databricks App in a few lines
 
-A runnable Databricks App that stands up a **streaming Genie chat agent** with
-tool-calling, approval-gated email, conversation memory, a model picker, history,
+A runnable Databricks App that stands up a **streaming Genie chat agent** with a
+persistent floating/slide-out assistant, typed route context, complete tool
+payloads, approval-gated email, conversation memory, a model picker, history,
 and threads on top of the `@dbx-tools/*` packages.
 
 The point of this folder is to show **how little you write**. It is a real,
@@ -12,11 +13,12 @@ packages:
 | Package                                    | Tag      | What you write                               |
 | ------------------------------------------ | -------- | -------------------------------------------- |
 | [`server/appkit-demo`](server/appkit-demo) | `server` | ~30 lines: an AppKit `createApp` plugin list |
-| [`app/appkit-demo`](app/appkit-demo)       | `app`    | one line: `<MastraChat/>`                    |
+| [`app/appkit-demo`](app/appkit-demo)       | `app`    | `MastraAssistant` around the routed app      |
 
-Everything else — streaming, the Genie toolset, the approval card, Lakebase-backed
-memory, model selection, history pagination, and the thread switcher — comes from
-the packages. The demo is wiring, not implementation.
+Everything else - floating launcher, route-stable panel, streaming, typed
+request context, complete tool pills, Genie tools, approval cards,
+Lakebase-backed memory, model selection, history pagination, and the thread
+switcher - comes from the packages. The demo is wiring, not implementation.
 
 ## The whole server
 
@@ -49,11 +51,11 @@ Conversation API for statement-backed comparison.
 ## The whole client page
 
 ```tsx
-// app/appkit-demo/src/pages/Stream.tsx
+// app/appkit-demo/src/pages/Chat.tsx
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 import { useState } from "react";
 
-const Stream = () => {
+const Chat = () => {
   const [agentMode, setAgentMode] = useState(true);
   const agentId = agentMode ? "support" : "support-polling";
   return (
@@ -75,7 +77,7 @@ const Stream = () => {
     />
   );
 };
-export default Stream;
+export default Chat;
 ```
 
 The checkbox starts enabled beside the model selector. It selects the default
@@ -91,7 +93,7 @@ pick a sample), compile it through `/api/teams/card`, and see the document
 render. Both use the `adaptivecards` JavaScript renderer — the same one Teams
 preview tools embed.
 
-The Cards page answers with the SAME content the Stream page does - ask both
+The Cards page answers with the SAME content the Chat page does - ask both
 "what were inside sales PSPW and gross margin this week?" and both call Genie and
 report the same numbers. That is the point of the endpoint: the agent, its tools,
 and its data are identical, and only the presentation changes (a card instead of

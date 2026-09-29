@@ -44,6 +44,23 @@ import {
  * attach feedback to.
  */
 const INVALID_TRACE_ID = "0".repeat(32);
+const TRUSTED_REQUEST_CONTEXT_KEYS = [
+  MASTRA_RESOURCE_ID_KEY,
+  MASTRA_THREAD_ID_KEY,
+  MASTRA_USER_KEY,
+  MASTRA_USER_NAME_KEY,
+  MASTRA_USER_EMAIL_KEY,
+  MASTRA_REQUEST_ID_KEY,
+  MASTRA_SCOPES_KEY,
+  MASTRA_MODEL_OVERRIDE_KEY,
+] as const;
+
+/** Remove browser-supplied values for fields owned by trusted server middleware. */
+export function clearTrustedRequestContext(requestContext: RequestContext): void {
+  for (const key of TRUSTED_REQUEST_CONTEXT_KEYS) {
+    requestContext.deleteRaw(key);
+  }
+}
 
 /**
  * Who a turn is ATTRIBUTED to, independent of which Databricks credential runs
@@ -173,6 +190,7 @@ export class MastraServer extends ExpressMastraServer {
     super.registerAuthMiddleware();
     this.app.use(async (req, res, next) => {
       const requestContext = res.locals.requestContext! as RequestContext;
+      clearTrustedRequestContext(requestContext);
       await this.configureRequestContextUser(req, requestContext);
       this.configureRequestContextThreadId(req, res, requestContext);
       this.configureRequestContextModelOverride(req, requestContext);

@@ -214,59 +214,51 @@ export const ThreadSidebar = ({
               return (
                 <li key={thread.id}>
                   <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onSelect(thread.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onSelect(thread.id);
-                      }
-                    }}
                     className={cn(
-                      "group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                      "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
                       "hover:bg-accent hover:text-accent-foreground",
                       isActive && "bg-accent text-accent-foreground",
                     )}
                   >
-                    <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => onSelect(thread.id)}
+                      aria-current={isActive ? "page" : undefined}
+                      className="min-w-0 flex-1 cursor-pointer text-left"
+                    >
                       <div className="flex items-center gap-1.5 truncate">
-                        {isStreaming &&
-                          (onCancel ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onCancel(thread.id);
-                                  }}
-                                  aria-label="Stop generating"
-                                  className="size-4 shrink-0 text-primary"
-                                >
-                                  {/* Spinner by default; swap to a stop square on hover/focus. */}
-                                  <Loader2Icon className="size-3 animate-spin group-hover:hidden" />
-                                  <SquareIcon className="hidden size-3 fill-current group-hover:block" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Stop generating</TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            <Loader2Icon
-                              aria-label="Streaming"
-                              className="size-3 shrink-0 animate-spin text-primary"
-                            />
-                          ))}
+                        {isStreaming && !onCancel ? (
+                          <Loader2Icon
+                            aria-label="Streaming"
+                            className="size-3 shrink-0 animate-spin text-primary"
+                          />
+                        ) : null}
                         <span className="truncate">{threadTitle(thread)}</span>
                       </div>
                       {thread.updatedAt && (
-                        <div className="truncate text-xs text-muted-foreground">
+                        <div className="truncate text-xs text-foreground/70">
                           {relativeTime(thread.updatedAt)}
                         </div>
                       )}
-                    </div>
+                    </button>
+                    {isStreaming && onCancel ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onCancel(thread.id)}
+                            aria-label="Stop generating"
+                            className="size-6 shrink-0 text-primary"
+                          >
+                            <Loader2Icon className="size-3 animate-spin group-hover:hidden" />
+                            <SquareIcon className="hidden size-3 fill-current group-hover:block" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Stop generating</TooltipContent>
+                      </Tooltip>
+                    ) : null}
                     {onRename && (
                       <Tooltip>
                         <TooltipTrigger asChild>

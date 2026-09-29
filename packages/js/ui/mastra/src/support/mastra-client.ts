@@ -19,16 +19,21 @@ import {
 } from "@dbx-tools/shared-mastra";
 import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
-import { MastraClient } from "@mastra/client-js";
+import { MastraClient, RequestContext } from "@mastra/client-js";
+import type { MessageListInput } from "@mastra/core/agent/message-list";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { asMastraStreamResponse, type MastraStreamResponse } from "./mastra-stream.ts";
+import { asApprovalStreamResponse } from "./_approval-stream.ts";
+import type { MastraRequestContextSnapshot } from "./request-context.ts";
+
+type NativeAgentClient = ReturnType<MastraClient["getAgent"]>;
+export type MastraStreamResponse = Awaited<ReturnType<NativeAgentClient["stream"]>>;
 
 /**
  * `@mastra/client-js` `MastraClient` extended with the Mastra plugin's
  * custom routes. One client drives everything the chat UI needs:
  *
- *   - Conversation streaming via the inherited
- *     `getAgent(id).stream()` (the standard Mastra agent route).
+ *   - Conversation streaming through native `@mastra/client-js` agent methods
+ *     on a per-call client carrying isolated routing and cancellation.
  *   - Thread history (`history` / `clearHistory`), the conversation
  *     list (`threads` / `removeThread` / `renameThread`), the model
  *     catalogue (`models`),
@@ -98,70 +103,94 @@ export class MastraPluginClient extends MastraClient {
     return headers;
   }
 
-  /**
-   * Open an agent stream for one conversation turn, routed and cancelled
-   * PER CALL. Posts to the agent `/stream` route with this run's own thread
-   * id + model as request headers and its own `AbortSignal` on the fetch, so
-   * many threads can stream at once and aborting one leaves the others
-   * untouched. Reads the SSE directly (like the tool-approval streams) rather
-   * than through the inherited `agent.stream()`, whose shared-client headers
-   * and single client-level abort signal can't isolate concurrent runs.
-   */
-  async streamAgent(params: {
-    agentId: string;
-    messages: Array<{ role: string; content: string }>;
-    runId: string;
-    threadId?: string;
-    model?: string;
-    signal?: AbortSignal;
-  }): Promise<MastraStreamResponse> {
-    const url = `${this.basePath}/agents/${encodeURIComponent(params.agentId)}/stream`;
-    const init: RequestInit = {
-      method: "POST",
+  #requestAgent(
+    agentId: string,
+    routing: { threadId?: string; model?: string },
+    signal?: AbortSignal,
+  ): NativeAgentClient {
+    return new MastraClient({
+      baseUrl: typeof window !== "undefined" ? window.location.origin : "http://localhost",
+      apiPrefix: this.basePath,
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...this.#routingHeaders(params),
-      },
-      body: JSON.stringify({ messages: params.messages, runId: params.runId }),
-    };
-    if (params.signal) init.signal = params.signal;
-    const response = await fetch(url, init);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return asMastraStreamResponse(response);
+      headers: this.#routingHeaders(routing),
+      ...(signal ? { abortSignal: signal } : {}),
+    }).getAgent(agentId);
+  }
+
+  #requestContext(snapshot: MastraRequestContextSnapshot | undefined): RequestContext | undefined {
+    return snapshot ? new RequestContext(Object.entries(snapshot)) : undefined;
   }
 
   /**
-   * Resume a suspended `requireApproval` tool via `approve-tool-call`.
-   * Reads SSE directly instead of `agent.approveToolCall()` so the
-   * stock client's internal `processChatResponse_vNext` tee does not
-   * throw when the resume stream emits `tool-result` without a new
-   * `tool-call`.
+   * Open a native Mastra agent stream for one conversation turn, routed and
+   * cancelled per call. A short-lived client carries this run's thread/model
+   * headers and AbortSignal, so concurrent threads never mutate shared client
+   * state or cancel each other.
+   */
+  async streamAgent(params: {
+    agentId: string;
+    messages: MessageListInput;
+    runId: string;
+    threadId?: string;
+    model?: string;
+    requestContext?: MastraRequestContextSnapshot;
+    signal?: AbortSignal;
+  }): Promise<MastraStreamResponse> {
+    return this.#requestAgent(params.agentId, params, params.signal).stream(params.messages, {
+      runId: params.runId,
+      ...(params.requestContext
+        ? { requestContext: this.#requestContext(params.requestContext) }
+        : {}),
+    });
+  }
+
+  /**
+   * Resume a suspended `requireApproval` tool through the native route. The
+   * installed client-js chat-state side channel rejects a continuation whose
+   * first chunk is the pending tool result, so only that reader is bypassed.
    */
   async approveToolCallStream(
     agentId: string,
-    params: { runId: string; toolCallId: string; threadId?: string; signal?: AbortSignal },
+    params: {
+      runId: string;
+      toolCallId: string;
+      threadId?: string;
+      requestContext?: MastraRequestContextSnapshot;
+      signal?: AbortSignal;
+    },
   ): Promise<MastraStreamResponse> {
-    return this.#toolApprovalStream(agentId, "approve-tool-call", params);
+    return this.#toolApprovalStream(agentId, true, params);
   }
 
   /**
    * Deny a suspended `requireApproval` tool via `decline-tool-call`.
-   * Same direct SSE reader as {@link approveToolCallStream}.
+   * Same native route compatibility path as {@link approveToolCallStream}.
    */
   async declineToolCallStream(
     agentId: string,
-    params: { runId: string; toolCallId: string; threadId?: string; signal?: AbortSignal },
+    params: {
+      runId: string;
+      toolCallId: string;
+      threadId?: string;
+      requestContext?: MastraRequestContextSnapshot;
+      signal?: AbortSignal;
+    },
   ): Promise<MastraStreamResponse> {
-    return this.#toolApprovalStream(agentId, "decline-tool-call", params);
+    return this.#toolApprovalStream(agentId, false, params);
   }
 
   async #toolApprovalStream(
     agentId: string,
-    route: "approve-tool-call" | "decline-tool-call",
-    params: { runId: string; toolCallId: string; threadId?: string; signal?: AbortSignal },
+    approved: boolean,
+    params: {
+      runId: string;
+      toolCallId: string;
+      threadId?: string;
+      requestContext?: MastraRequestContextSnapshot;
+      signal?: AbortSignal;
+    },
   ): Promise<MastraStreamResponse> {
-    const url = `${this.basePath}/agents/${encodeURIComponent(agentId)}/${route}`;
+    const route = approved ? "approve-tool-call" : "decline-tool-call";
     const init: RequestInit = {
       method: "POST",
       credentials: "include",
@@ -169,12 +198,20 @@ export class MastraPluginClient extends MastraClient {
         "Content-Type": "application/json",
         ...this.#routingHeaders({ threadId: params.threadId }),
       },
-      body: JSON.stringify({ runId: params.runId, toolCallId: params.toolCallId }),
+      body: JSON.stringify({
+        runId: params.runId,
+        toolCallId: params.toolCallId,
+        ...(params.requestContext ? { requestContext: params.requestContext } : {}),
+      }),
     };
     if (params.signal) init.signal = params.signal;
-    const response = await fetch(url, init);
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const response = await fetch(
+      new URL(`${this.basePath}/agents/${encodeURIComponent(agentId)}/${route}`, origin),
+      init,
+    );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return asMastraStreamResponse(response);
+    return asApprovalStreamResponse(response);
   }
 
   /**
