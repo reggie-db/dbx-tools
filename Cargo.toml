@@ -1,10 +1,10 @@
 [workspace]
 members = ["packages/rs/core", "packages/rs/google", "packages/rs/lakebase-proxy", "packages/rs/model", "packages/rs/model-proxy"]
-default-members = ["packages/rs/lakebase-proxy", "packages/rs/model", "packages/rs/model-proxy"]
+default-members = ["packages/rs/lakebase-proxy", "packages/rs/model-proxy"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.219"
+version = "0.6.220"
 edition = "2021"
 rust-version = "1.89"
 license = "Apache-2.0"

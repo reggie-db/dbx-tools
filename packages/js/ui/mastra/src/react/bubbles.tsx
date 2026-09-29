@@ -135,6 +135,7 @@ const EmailApprovalPreview = ({ email }: { email: EmailApprovalInput }) => {
  * {@link ApprovalDecision} to the parent resume handler.
  */
 const ToolApprovalCard = ({
+  messageId,
   toolName,
   toolCallId,
   runId,
@@ -142,6 +143,7 @@ const ToolApprovalCard = ({
   onResolve,
   disabled,
 }: {
+  messageId: string;
   toolName: string;
   toolCallId: string;
   runId?: string;
@@ -158,9 +160,10 @@ const ToolApprovalCard = ({
     setDecision(approved ? "approved" : "denied");
     Promise.resolve(
       approved
-        ? onResolve({ approved: true, toolName, toolCallId, runId, input })
+        ? onResolve({ approved: true, messageId, toolName, toolCallId, runId, input })
         : onResolve({
             approved: false,
+            messageId,
             toolName,
             toolCallId,
             runId,
@@ -428,6 +431,7 @@ export const AssistantBubble = ({
         {pendingApprovals.map((p) => (
           <ToolApprovalCard
             key={p.toolCallId}
+            messageId={message.id}
             toolName={p.toolName}
             toolCallId={p.toolCallId}
             runId={p.runId}

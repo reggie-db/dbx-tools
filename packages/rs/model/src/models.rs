@@ -86,6 +86,16 @@ pub enum ModelClass {
     Embedding,
 }
 
+/// Databricks inference protocol selected for a model.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, uniffi::Enum)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelServingApi {
+    /// OpenAI-compatible Chat Completions.
+    Chat,
+    /// Native OpenAI Responses.
+    Responses,
+}
+
 impl ModelClass {
     /// Model classes in fallback preference order.
     pub const ORDER: [Self; 4] = [
@@ -261,6 +271,7 @@ pub fn model_search_query(value: &str) -> Option<String> {
 }
 
 /// Return whether a model requires Databricks' native Responses endpoint.
+#[uniffi::export]
 pub fn is_responses_only(value: &str) -> bool {
     if value.to_ascii_lowercase().contains("codex") {
         return true;
@@ -277,6 +288,16 @@ pub fn is_responses_only(value: &str) -> bool {
     let major = parsed.version[0];
     let minor = parsed.version.get(1).copied().unwrap_or(0);
     major > 5 || (major == 5 && minor >= 4)
+}
+
+/// Return the Databricks inference protocol required by a model.
+#[uniffi::export]
+pub fn model_serving_api(value: &str) -> ModelServingApi {
+    if is_responses_only(value) {
+        ModelServingApi::Responses
+    } else {
+        ModelServingApi::Chat
+    }
 }
 
 /// Derive provider-specific model names from a model identity.

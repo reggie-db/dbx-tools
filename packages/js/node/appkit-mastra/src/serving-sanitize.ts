@@ -5,8 +5,8 @@
  * Outbound ({@link rewriteServingBody}), because the transcript Mastra
  * persists is not always a transcript the provider will accept back:
  * Databricks-hosted Claude rejects replayed extended-thinking blocks and reads
- * a trailing assistant message as a prefill request, while GPT Astra requires
- * `reasoning_effort: "none"` when Chat Completions carries function tools.
+ * a trailing assistant message as a prefill request, while GPT tool calls need
+ * model-specific reasoning-effort normalization on Chat Completions.
  *
  * Inbound ({@link rewriteServingResponseBody} and
  * {@link rewriteServingResponseStream}), because Databricks-hosted Gemini and
@@ -22,6 +22,7 @@
  */
 
 import { json, string } from "@dbx-tools/shared-core";
+import { chatToolReasoningEffort, ReasoningEffort } from "@dbx-tools/model-rs";
 import {
   type ChatMessage,
   type ChatRole,
@@ -57,8 +58,8 @@ export function rewriteServingBody(body: string): string {
 
   // Runs regardless of `messages`: Databricks refuses to parse a body carrying
   // an unknown top-level field, so this failure is not specific to a transcript.
-  const astraTools = applyAstraToolCompatibility(parsed);
-  let changed = openaiChat.stripUnsupportedChatFields(parsed).length > 0 || astraTools;
+  const toolReasoning = applyToolReasoningCompatibility(parsed);
+  let changed = openaiChat.stripUnsupportedChatFields(parsed).length > 0 || toolReasoning;
 
   if (Array.isArray(parsed.messages)) {
     const messages = parsed.messages as ServingChatMessage[];
@@ -103,17 +104,20 @@ export async function rewriteServingRequest(
 }
 
 /**
- * Add the Chat Completions option Databricks-hosted GPT Astra requires when
- * function tools are present. An explicit caller value always wins.
+ * Normalize Chat Completions reasoning for GPT models carrying function tools.
+ *
+ * GPT 5.6 requires reasoning disabled for tool calls on this route, so `none`
+ * wins over a caller/default effort. Responses-only models are routed away
+ * from Chat Completions before this sanitizer runs.
  */
-export function applyAstraToolCompatibility(body: Record<string, unknown>): boolean {
-  if ("reasoning_effort" in body || !Array.isArray(body.tools) || body.tools.length === 0) {
+export function applyToolReasoningCompatibility(body: Record<string, unknown>): boolean {
+  if (!Array.isArray(body.tools) || body.tools.length === 0) {
     return false;
   }
   const model = string.trimToNull(body.model);
   if (!model) return false;
-  const tokens = new Set(string.tokenizeWithOptions({ lowerCase: true }, model));
-  if (!tokens.has("gpt") || !tokens.has("astra")) return false;
+  if (chatToolReasoningEffort(model) !== ReasoningEffort.None) return false;
+  if (body.reasoning_effort === "none") return false;
   body.reasoning_effort = "none";
   return true;
 }

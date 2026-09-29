@@ -185,6 +185,9 @@ a property of the model (see `isResponsesOnly()` and `responsesUpstreamUrl()`),
 so a hard-coded string in one package silently diverges when that routing
 changes. `isResponsesOnly()` covers Codex and GPT 5.4+ endpoints, which reject
 tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
+The TypeScript helper delegates this policy to the generated
+[`@dbx-tools/model-rs`](../model-rs) binding, so the Rust proxy, Node packages,
+and Python callers share one version threshold.
 
 ## Use Static Fallbacks
 

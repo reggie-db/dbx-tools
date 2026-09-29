@@ -25,6 +25,7 @@
 
 import { getExecutionContext } from "@databricks/appkit";
 import { classes, invoke, resolve } from "@dbx-tools/model";
+import { ModelServingApi, modelServingApi } from "@dbx-tools/model-rs";
 import { functionModule, json, log, net } from "@dbx-tools/shared-core";
 import { model } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
@@ -41,6 +42,11 @@ import { MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving.ts";
 type ModelClass = model.ModelClass;
 const { parseModelClass } = classes;
 const { selectModel } = resolve;
+
+/** Pick the native Databricks inference surface required by a resolved model. */
+export function servingApi(modelId: string): "chat" | "responses" {
+  return modelServingApi(modelId) === ModelServingApi.Responses ? "responses" : "chat";
+}
 
 /** Optional overrides accepted by {@link buildModel}. */
 export interface BuildModelOverrides {
@@ -128,6 +134,7 @@ export async function buildModel(
     modelId,
     url,
     headers: Object.fromEntries(headers.entries()),
+    api: servingApi(modelId),
   };
 }
 

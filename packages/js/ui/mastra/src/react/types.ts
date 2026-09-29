@@ -352,6 +352,8 @@ export type ApprovalDecision =
       approved: true;
       toolName: string;
       toolCallId: string;
+      /** Assistant UI message that owns the approval card. */
+      messageId?: string;
       /**
        * Mastra run id required to resume the suspended workflow. Native
        * suspended-run discovery restores it for persisted approvals.
@@ -363,6 +365,8 @@ export type ApprovalDecision =
       approved: false;
       toolName: string;
       toolCallId: string;
+      /** Assistant UI message that owns the approval card. */
+      messageId?: string;
       runId?: string;
       input: unknown;
       reason: string;

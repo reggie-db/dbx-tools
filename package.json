@@ -78,7 +78,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.219",
+  "version": "0.6.220",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -102,6 +102,7 @@
     "packages/js/node/genie",
     "packages/js/node/google-rs",
     "packages/js/node/model",
+    "packages/js/node/model-rs",
     "packages/js/node/path",
     "packages/js/node/postgres",
     "packages/js/node/search",
@@ -221,6 +222,15 @@
           "python": "packages/py/google-rs",
           "pythonPackage": "dbx-tools-google-rs",
           "pythonModule": "dbx_tools.google_rs"
+        },
+        {
+          "crate": "dbx-tools-model",
+          "dependencies": [
+            "dbx-tools-core"
+          ],
+          "rust": "packages/rs/model",
+          "node": "packages/js/node/model-rs",
+          "nodePackage": "@dbx-tools/model-rs"
         }
       ],
       "binaries": [

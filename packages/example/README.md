@@ -1,7 +1,7 @@
 # dbx-tools demo — a Databricks App in a few lines
 
 A runnable Databricks App that stands up a **streaming Genie chat agent** with a
-persistent floating/slide-out assistant, typed route context, complete tool
+persistent slide-out assistant, typed route context, complete tool
 payloads, approval-gated email, conversation memory, a model picker, history,
 and threads on top of the `@dbx-tools/*` packages.
 
@@ -15,10 +15,12 @@ packages:
 | [`server/appkit-demo`](server/appkit-demo) | `server` | ~30 lines: an AppKit `createApp` plugin list |
 | [`app/appkit-demo`](app/appkit-demo)       | `app`    | `MastraAssistant` around the routed app      |
 
-Everything else - floating launcher, route-stable panel, streaming, typed
-request context, complete tool pills, Genie tools, approval cards,
+Everything else - route-stable panel, streaming, typed request context,
+complete tool pills, Genie tools, approval cards,
 Lakebase-backed memory, model selection, history pagination, and the thread
 switcher - comes from the packages. The demo is wiring, not implementation.
+The demo disables the optional floating launcher and opens the assistant from
+the navigation bar instead.
 
 ## The whole server
 

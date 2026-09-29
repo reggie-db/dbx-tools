@@ -65,6 +65,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/model-rs",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/model",
       "version": "workspace:*",
       "type": "runtime"

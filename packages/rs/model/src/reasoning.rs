@@ -12,7 +12,7 @@ static O_SERIES: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Reasoning effort accepted by a model endpoint.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, uniffi::Enum)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningEffort {
     /// Disable explicit reasoning.
@@ -66,6 +66,7 @@ const GEMINI: &[ReasoningEffort] = &[
 ];
 
 /// Infer the accepted reasoning efforts from a model or service name.
+#[uniffi::export]
 pub fn reasoning_efforts_by_family(name: &str) -> Vec<ReasoningEffort> {
     let normalized = name.to_ascii_lowercase();
     let parsed = parse_model_name(name);
@@ -106,6 +107,18 @@ pub fn reasoning_efforts_by_family(name: &str) -> Vec<ReasoningEffort> {
         return STANDARD.to_vec();
     }
     Vec::new()
+}
+
+/// Return the Chat Completions effort required when function tools are present.
+#[uniffi::export]
+pub fn chat_tool_reasoning_effort(name: &str) -> Option<ReasoningEffort> {
+    let parsed = parse_model_name(name)?;
+    if parsed.family != ModelFamily::Gpt {
+        return None;
+    }
+    let major = parsed.version.first().copied().unwrap_or(0);
+    let minor = parsed.version.get(1).copied().unwrap_or(0);
+    ((major, minor) == (5, 6)).then_some(ReasoningEffort::None)
 }
 
 /// Return the richest inferred effort list across model identities.

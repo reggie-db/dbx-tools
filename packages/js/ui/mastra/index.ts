@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-mastra";
-export const PACKAGE_VERSION = "0.6.219";
+export const PACKAGE_VERSION = "0.6.220";
 export * as reactBubbles from "./src/react/bubbles.tsx";
 export * as reactChatApprovals from "./src/react/chat-approvals.ts";
 export * as reactChatComposer from "./src/react/chat-composer.tsx";
@@ -73,5 +73,5 @@ export type { MastraStreamResponse, MastraMemoryThread, ByIdFetchState } from ".
 export { modelStorageKey, readStoredModel, storeSelectedModel } from "./src/support/model-selection.ts";
 export type { MastraRequestContextInput, MastraRequestContextSource, MastraRequestContextSnapshot } from "./src/support/request-context.ts";
 export { DEFAULT_THREAD_SESSION_KEY } from "./src/support/thread-sessions.ts";
-export type { SessionQueuedSteer, ThreadSession } from "./src/support/thread-sessions.ts";
+export type { SessionQueuedSteer, SessionRun, ThreadSession } from "./src/support/thread-sessions.ts";
 export { THREAD_TAB_SEED_MAX } from "./src/support/thread-tabs.ts";

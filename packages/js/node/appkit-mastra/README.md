@@ -679,10 +679,12 @@ routes.
 
 The serving fetch interceptor repairs provider-specific wire requirements for
 both `fetch(url, { body })` and `fetch(new Request(...))`. In particular,
-Databricks-hosted GPT Astra Chat Completions with function tools receives
-`reasoning_effort: "none"` unless the caller already supplied a value. Claude
-reasoning replay and Gemini/Claude structured response content continue through
-the same sanitizer.
+Databricks-hosted GPT 5.6 Chat Completions with function tools receives
+`reasoning_effort: "none"` even when a caller default selected another effort.
+Other Chat models receive no synthesized effort, while an explicit supported
+caller value is preserved. Responses-only models such as GPT Astra use the
+native Responses provider. Claude reasoning replay and Gemini/Claude structured
+response content continue through the same sanitizer.
 
 The plugin also serves `GET /default-model` (and `/default-model/:agentId`),
 returning `{ agentId, model, displayName }` - the static serving-endpoint an
@@ -952,9 +954,9 @@ client that talks to these routes.
 - `config` - plugin config types and RequestContext key constants.
 - `model` / `serving` / `servingSanitize` - Mastra model config, request
   overrides, serving-endpoint config, and the on-the-wire request/response
-  cleanup that keeps provider-specific payload quirks (Astra tool reasoning,
-  Claude's replayed thinking blocks, Gemini/Claude content-parts responses)
-  from failing a turn.
+  cleanup that keeps provider-specific payload quirks (GPT 5.6 Chat tool
+  reasoning, Claude's replayed thinking blocks, Gemini/Claude content-parts
+  responses) from failing a turn.
 - `genie` - Genie prompt, space normalization, Genie toolkits, and suggestions.
 - `chart` / `statement` / `writer` - chart cache, statement row fetches, and
   safe writer events.

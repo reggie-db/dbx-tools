@@ -394,9 +394,9 @@ export const ChatComposer = ({
                   >
                     <SelectTrigger
                       size="sm"
-                      aria-label="Model"
                       className="h-7 w-auto max-w-[180px] gap-1 truncate border-0 bg-transparent px-2 text-xs shadow-none hover:bg-accent [&_svg]:size-3"
                     >
+                      <span className="sr-only">Model:</span>
                       <SelectValue placeholder={defaultOptionLabel} />
                     </SelectTrigger>
                     <SelectContent>
@@ -430,7 +430,7 @@ export const ChatComposer = ({
                   size="icon-sm"
                   variant="default"
                   disabled={!input.trim() || isLoadingHistory}
-                  aria-label={isRunning ? "Send now (interrupts)" : "Send message"}
+                  aria-label={isRunning ? "Queue message" : "Send message"}
                   className="shrink-0 rounded-full"
                 >
                   <SendIcon className="size-3" />

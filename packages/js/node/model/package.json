@@ -26,6 +26,7 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
+    "@dbx-tools/model-rs": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
     "fuse.js": "^7.4.2"
@@ -44,7 +45,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.219",
+  "version": "0.6.220",
   "types": "index.ts",
   "type": "module",
   "exports": {

@@ -204,12 +204,17 @@ Primary package areas:
   The package never invokes gcloud, starts Google login, or rewrites ADC. Use
   `gcloud auth application-default login` to configure local credentials and
   scopes. Keep `google-cloud-auth` exact-pinned at the tested 0.18.0 API.
-- `packages/rs/model` owns Rust Databricks endpoint discovery, file-backed
-  catalogue caching, model-name parsing, classification, and fuzzy ranking.
-  It intentionally has no UniFFI scaffolding. `difflib-fast` supplies stable
-  short-string similarity. The model proxy resolves loose names such as `gpt`
-  through this crate before selecting an inference route. Across TypeScript
-  and Rust, a GPT family search sorts by descending version and prefers
+- `packages/rs/model` and `packages/js/node/model-rs` own Databricks endpoint
+  discovery, file-backed catalogue caching, model-name parsing, classification,
+  fuzzy ranking, native inference-protocol selection, and model-specific Chat
+  tool reasoning policy.
+  The generated UniFFI bindings expose the pure routing and capability policy;
+  `@dbx-tools/model` and `@dbx-tools/appkit-mastra` consume those bindings
+  rather than reimplementing version or effort rules in TypeScript.
+  `difflib-fast` supplies stable short-string similarity. The model proxy
+  resolves loose names such as `gpt` through this crate before selecting an
+  inference route. Across TypeScript and Rust, a GPT family search sorts by
+  descending version and prefers
   the `sol` variant over `luna` when both have the same version.
   `ServingEndpointSummary.modelServiceName` prefers
   `served_entities[].foundation_model.name` over the entity alias because the
@@ -853,8 +858,11 @@ why to use this package anyway:
   replaceable icons while conversation pills remain on the second row; without
   the header those controls stay inline with the pills. Mount it inside the
   app's existing auth gate and above the route outlet; the component does not
-  own authentication. Native AppKit UI is enough for general components or
-  native Genie/Serving hooks.
+  own authentication. The narrow overlay is an accessible modal: covered app
+  content is inert, focus stays inside, and Escape closes it. Resize persistence
+  is independent per horizontal/vertical orientation, and body cursor styles are
+  restored to their pre-drag values. Native AppKit UI is enough for general
+  components or native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need Agent Mode SSE projected into async iterators,
   snapshot diffing, typed events, custom logging/tests, or chart/data planning.
@@ -2510,18 +2518,23 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   ranking/fallback. Update the policy only after testing both the initial
   function call and stateless `function_call_output` replay through the Rust
   model proxy.
-- **GPT Astra Chat Completions with tools requires `reasoning_effort: "none"`.**
-  `appkit-mastra`'s serving sanitizer detects `gpt` + `astra` model tokens,
-  adds that field only for a non-empty tools array, and preserves an explicit
-  caller value. Keep Astra tool-capable. The shared fetch interceptor must read
-  JSON from either `init.body` or a cloned `Request`, then rebuild changed
-  requests without stale content-length/content-encoding headers.
-- **Responses-only endpoint policy is shared across Node and Rust.**
-  `@dbx-tools/model` `invoke.isResponsesOnly` and `dbx-tools-model`
-  `is_responses_only` classify Codex and GPT 5.4+ as native Responses
+- **Chat Completions tool reasoning is model-specific.**
+  Databricks GPT 5.6 is the only Chat Completions family whose tool calls force
+  `reasoning_effort: "none"`, even when a caller supplied another effort.
+  Do not synthesize an effort for another Chat model; preserve an explicit
+  supported value. Responses-only models, including GPT Astra, route through
+  the native Responses provider instead of trying to repair an incompatible
+  Chat Completions payload. This matches the capability-first strategy used by
+  the model proxy and LiteLLM: only forward an effort the selected model
+  accepts. The shared fetch interceptor must read JSON from either `init.body`
+  or a cloned `Request`, then rebuild changed requests without stale
+  content-length or content-encoding headers.
+- **Responses-only endpoint policy is Rust-owned.**
+  `dbx-tools-model` classifies Codex and GPT 5.4+ as native Responses
   endpoints, while GPT-OSS remains on Chat Completions. The Rust model proxy
-  calls the model-crate helper; do not introduce a second version threshold in
-  a route module.
+  calls it directly; `@dbx-tools/model` and `@dbx-tools/appkit-mastra` call the
+  generated `@dbx-tools/model-rs` binding. Do not introduce another version
+  threshold in TypeScript or a route module.
 - **Model display names.** `ServingEndpointSummary` carries an optional
   `displayName` alongside `name` (the invoke id). It flows through `/models`
   (wire `ServingEndpointsResponseSchema`) automatically. Derivation lives in the
@@ -2635,6 +2648,9 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   pass a typed plain record or `RequestContext<T>` through `useMastraChat` /
   `MastraAssistant`; the driver snapshots it when a turn or queued steer is
   submitted and reuses that snapshot for approval resume and regeneration.
+  Live approval continuations resolve context by `runId`, never from the latest
+  thread run; a persisted suspended run with no browser snapshot omits browser
+  context and lets Mastra restore its server-side snapshot.
   The client sends Mastra's standard `requestContext` body field, and agents
   declare the owning `requestContextSchema` so instructions/tools receive typed,
   runtime-validated values. Client context is application metadata only:

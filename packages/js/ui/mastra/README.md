@@ -121,7 +121,9 @@ lock size, `launcher={false}` when every launch comes from
 the conversation pills. With the header enabled those controls move into it and
 the conversation pills remain on their own second row. Replace `icon`, `closeIcon`,
 `newConversationIcon`, `historyIcon`, and `launcher.icon`. Below
-`mobileBreakpoint` the panel becomes a full overlay.
+`mobileBreakpoint` the panel becomes a focus-contained modal overlay with Escape
+dismissal while the covered application is inert. A `storageKey` retains
+horizontal and vertical sizes independently.
 
 ## Render A Drop-In Chat
 
