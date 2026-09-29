@@ -9,6 +9,12 @@ export type SessionQueuedSteer = QueuedSteer & {
   requestContext?: MastraRequestContextSnapshot;
 };
 
+/** UI target and immutable application context captured for one Mastra run. */
+export type SessionRun = {
+  assistantId: string;
+  requestContext?: MastraRequestContextSnapshot;
+};
+
 /** Session-scoped transcript + stream state for one conversation thread. */
 export type ThreadSession = {
   messages: UIMessage[];
@@ -20,6 +26,8 @@ export type ThreadSession = {
   runToken: number;
   assistantId: string | null;
   runId: string | null;
+  /** Live runs retained by id so older approval cards resume their own context. */
+  runs: Record<string, SessionRun>;
   historyLoaded: boolean;
   hasMoreHistory: boolean;
   historyPage: number;
@@ -45,6 +53,7 @@ export function createThreadSession(): ThreadSession {
     runToken: 0,
     assistantId: null,
     runId: null,
+    runs: {},
     historyLoaded: false,
     hasMoreHistory: false,
     historyPage: 0,

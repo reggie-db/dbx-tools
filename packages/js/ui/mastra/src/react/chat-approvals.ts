@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import type { ThreadSessionReader, ThreadSessionUpdater } from "./chat-sessions.ts";
 import type { ApprovalDecision } from "./types.ts";
 import type { MastraPluginClient, MastraStreamResponse } from "../support/mastra-client.ts";
-import { DEFAULT_THREAD_SESSION_KEY } from "../support/thread-sessions.ts";
+import { DEFAULT_THREAD_SESSION_KEY, type ThreadSession } from "../support/thread-sessions.ts";
 
 const logger = log.logger("ui-mastra/chat");
 
@@ -22,6 +22,35 @@ interface UseChatApprovalsOptions {
   updateSession: ThreadSessionUpdater;
 }
 
+/** Resolve one approval against the exact run and assistant message that created it. */
+export function resolveApprovalContinuation(
+  session: ThreadSession,
+  decision: ApprovalDecision,
+):
+  | {
+      assistantId: string;
+      runId: string;
+      requestContext: ThreadSession["runRequestContext"];
+    }
+  | undefined {
+  const runId = decision.runId ?? session.runId;
+  if (!runId) return undefined;
+  const run = session.runs[runId];
+  const assistantId =
+    decision.messageId ??
+    run?.assistantId ??
+    Object.entries(session.pendingApprovalsByMessage).find(([, approvals]) =>
+      approvals.some((approval) => approval.toolCallId === decision.toolCallId),
+    )?.[0] ??
+    session.assistantId;
+  if (!assistantId) return undefined;
+  return {
+    assistantId,
+    runId,
+    requestContext: run?.requestContext,
+  };
+}
+
 /** Resume an approval-gated tool call and remove its pending UI state. */
 export function useChatApprovals({
   activeKey,
@@ -33,22 +62,19 @@ export function useChatApprovals({
 }: UseChatApprovalsOptions) {
   return useCallback(
     async (decision: ApprovalDecision) => {
-      const { runId: decisionRunId, toolCallId, toolName } = decision;
+      const { toolCallId, toolName } = decision;
       const session = getSession(activeKey);
-      const assistantId =
-        Object.entries(session.pendingApprovalsByMessage).find(([, approvals]) =>
-          approvals.some((approval) => approval.toolCallId === toolCallId),
-        )?.[0] ?? session.assistantId;
-      const runId = decisionRunId ?? session.runId;
-      if (!runId || !assistantId) {
+      const continuation = resolveApprovalContinuation(session, decision);
+      if (!continuation) {
         logger.warn("approval missing runId or assistantId, cannot resume", {
           tool: toolName,
           toolCallId,
-          hasRunId: Boolean(runId),
-          hasAssistantId: Boolean(assistantId),
+          hasRunId: Boolean(decision.runId ?? session.runId),
+          hasAssistantId: Boolean(decision.messageId ?? session.assistantId),
         });
         return;
       }
+      const { assistantId, runId, requestContext } = continuation;
 
       updateSession(activeKey, (current) => {
         const existing = current.pendingApprovalsByMessage[assistantId];
@@ -79,7 +105,7 @@ export function useChatApprovals({
               runId,
               toolCallId,
               threadId: streamThreadId,
-              requestContext: session.runRequestContext,
+              requestContext,
               signal,
             })
           : mastraClient.declineToolCallStream(agentId, {
@@ -87,7 +113,7 @@ export function useChatApprovals({
               toolCallId,
               threadId: streamThreadId,
               reason: decision.reason,
-              requestContext: session.runRequestContext,
+              requestContext,
               signal,
             }),
       );

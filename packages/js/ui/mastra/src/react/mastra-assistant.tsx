@@ -15,6 +15,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -157,6 +158,15 @@ const panelClosedClasses: Record<MastraAssistantSide, string> = {
   left: "-translate-x-full",
 };
 
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
 const resizeHandleClasses: Record<MastraAssistantSide, string> = {
   top: "-bottom-1 inset-x-0 h-2 cursor-row-resize",
   right: "-left-1 inset-y-0 w-2 cursor-col-resize",
@@ -167,6 +177,8 @@ const resizeHandleClasses: Record<MastraAssistantSide, string> = {
 type ResizeState = {
   pointer: number;
   size: number;
+  bodyCursor: string;
+  bodyUserSelect: string;
 } | null;
 
 /**
@@ -201,21 +213,27 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
   ...rootProps
 }: MastraAssistantProps<TValues>) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
-  const isOpen = available && (openProp ?? internalOpen);
+  const requestedOpen = openProp ?? internalOpen;
+  const isOpen = available && requestedOpen;
   const [launchContext, setLaunchContext] = useState<
     MastraRequestContextInput<TValues> | undefined
   >();
   const requestContext = launchContext ?? requestContextProp;
   const resizeOptions = useMemo(() => (resizable === true ? {} : resizable || {}), [resizable]);
   const vertical = sideIsVertical(side);
+  const sizeStorageKey = resizeOptions.storageKey
+    ? `${resizeOptions.storageKey}:${vertical ? "vertical" : "horizontal"}`
+    : undefined;
   const defaultSize = resizeOptions.defaultSize ?? (vertical ? 360 : 432);
-  const [panelSize, setPanelSize] = useState(
-    () => readStoredSize(resizeOptions.storageKey) ?? defaultSize,
-  );
+  const [panelSize, setPanelSize] = useState(() => readStoredSize(sizeStorageKey) ?? defaultSize);
   const [availableSize, setAvailableSize] = useState(0);
   const [isNarrow, setIsNarrow] = useState(false);
   const resizeState = useRef<ResizeState>(null);
+  const sizeConfigRef = useRef(sizeStorageKey);
+  const skipSizePersistenceRef = useRef(false);
 
   const setOpen = useCallback(
     (next: boolean) => {
@@ -232,7 +250,7 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
     [setOpen],
   );
   const close = useCallback(() => setOpen(false), [setOpen]);
-  const toggle = useCallback(() => setOpen(!isOpen), [isOpen, setOpen]);
+  const toggle = useCallback(() => setOpen(!requestedOpen), [requestedOpen, setOpen]);
 
   const controller = useMemo<MastraAssistantController<TValues>>(
     () => ({
@@ -268,13 +286,76 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
   }, [mobileBreakpoint, vertical]);
 
   useEffect(() => {
-    if (!resizeOptions.storageKey || typeof window === "undefined") return;
+    if (!isNarrow || !isOpen) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => panel.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+        (element) => !element.hidden && element.getClientRects().length > 0,
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusable[0]!;
+      const last = focusable.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      const previous = previousFocusRef.current;
+      previousFocusRef.current = null;
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          if (previous?.isConnected) {
+            previous.focus();
+          } else {
+            rootRef.current
+              ?.querySelector<HTMLElement>("[data-mastra-assistant-launcher]")
+              ?.focus();
+          }
+        });
+      });
+    };
+  }, [close, isNarrow, isOpen]);
+
+  useLayoutEffect(() => {
+    if (sizeConfigRef.current === sizeStorageKey) return;
+    sizeConfigRef.current = sizeStorageKey;
+    skipSizePersistenceRef.current = true;
+    setPanelSize(readStoredSize(sizeStorageKey) ?? defaultSize);
+  }, [defaultSize, sizeStorageKey]);
+
+  useEffect(() => {
+    if (!sizeStorageKey || typeof window === "undefined") return;
+    if (skipSizePersistenceRef.current) {
+      skipSizePersistenceRef.current = false;
+      return;
+    }
     try {
-      window.localStorage.setItem(resizeOptions.storageKey, String(panelSize));
+      window.localStorage.setItem(sizeStorageKey, String(panelSize));
     } catch {
       // Size persistence is best-effort; the panel remains usable without storage.
     }
-  }, [panelSize, resizeOptions.storageKey]);
+  }, [panelSize, sizeStorageKey]);
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -292,17 +373,21 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
       );
     };
     const finish = () => {
+      const current = resizeState.current;
+      if (!current) return;
       resizeState.current = null;
-      document.body.style.removeProperty("user-select");
-      document.body.style.removeProperty("cursor");
+      document.body.style.userSelect = current.bodyUserSelect;
+      document.body.style.cursor = current.bodyCursor;
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", finish);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("blur", finish);
       finish();
     };
   }, [availableSize, resizeOptions, side, vertical]);
@@ -314,6 +399,8 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
     resizeState.current = {
       pointer: vertical ? event.clientY : event.clientX,
       size: panelSize,
+      bodyCursor: document.body.style.cursor,
+      bodyUserSelect: document.body.style.userSelect,
     };
     document.body.style.userSelect = "none";
     document.body.style.cursor = vertical ? "row-resize" : "col-resize";
@@ -414,9 +501,14 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
 
   const panel = (
     <aside
+      key="assistant-panel"
+      ref={panelRef}
+      role={isNarrow ? "dialog" : undefined}
+      aria-modal={isNarrow && isOpen ? true : undefined}
       aria-label={typeof title === "string" ? title : "Assistant"}
       aria-hidden={!isOpen}
       inert={!isOpen ? true : undefined}
+      tabIndex={isNarrow ? -1 : undefined}
       style={panelStyle}
       className={cn(
         "relative z-40 flex min-h-0 min-w-0 flex-col bg-background text-foreground shadow-xl",
@@ -471,6 +563,7 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
   const launchButton =
     available && !isOpen && launcherOptions ? (
       <Button
+        data-mastra-assistant-launcher
         type="button"
         size="icon"
         aria-label={launcherOptions.label ?? "Open assistant"}
@@ -486,7 +579,16 @@ export function MastraAssistant<TValues extends Record<string, unknown> = Record
       </Button>
     ) : null;
 
-  const content = <div className={cn("min-h-0 min-w-0 flex-1", contentClassName)}>{children}</div>;
+  const content = (
+    <div
+      key="assistant-content"
+      aria-hidden={isNarrow && isOpen ? true : undefined}
+      inert={isNarrow && isOpen ? true : undefined}
+      className={cn("min-h-0 min-w-0 flex-1", contentClassName)}
+    >
+      {children}
+    </div>
+  );
   const rootDirection = vertical ? "flex-col" : "flex-row";
   const panelFirst = side === "top" || side === "left";
 

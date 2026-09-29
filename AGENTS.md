@@ -853,8 +853,11 @@ why to use this package anyway:
   replaceable icons while conversation pills remain on the second row; without
   the header those controls stay inline with the pills. Mount it inside the
   app's existing auth gate and above the route outlet; the component does not
-  own authentication. Native AppKit UI is enough for general components or
-  native Genie/Serving hooks.
+  own authentication. The narrow overlay is an accessible modal: covered app
+  content is inert, focus stays inside, and Escape closes it. Resize persistence
+  is independent per horizontal/vertical orientation, and body cursor styles are
+  restored to their pre-drag values. Native AppKit UI is enough for general
+  components or native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need Agent Mode SSE projected into async iterators,
   snapshot diffing, typed events, custom logging/tests, or chart/data planning.
@@ -2635,6 +2638,9 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   pass a typed plain record or `RequestContext<T>` through `useMastraChat` /
   `MastraAssistant`; the driver snapshots it when a turn or queued steer is
   submitted and reuses that snapshot for approval resume and regeneration.
+  Live approval continuations resolve context by `runId`, never from the latest
+  thread run; a persisted suspended run with no browser snapshot omits browser
+  context and lets Mastra restore its server-side snapshot.
   The client sends Mastra's standard `requestContext` body field, and agents
   declare the owning `requestContextSchema` so instructions/tools receive typed,
   runtime-validated values. Client context is application metadata only:

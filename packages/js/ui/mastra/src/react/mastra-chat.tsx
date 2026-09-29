@@ -477,6 +477,13 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         runId,
         runRequestContext: requestContext,
         lastRequestContext: requestContext,
+        runs: {
+          ...session.runs,
+          [runId]: {
+            assistantId,
+            ...(requestContext ? { requestContext } : {}),
+          },
+        },
       }));
       // Capture this run's thread + model at send time and pass them per
       // call, so a run keeps its own routing even if the user switches

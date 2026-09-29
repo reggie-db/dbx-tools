@@ -141,6 +141,47 @@ const AssistantRouteContext = () => {
   return null;
 };
 
+const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
+  return (
+    <MastraAssistant
+      mode="overlay"
+      side="right"
+      resizable={{ defaultSize: 480, minSize: 360, storageKey: "demo-assistant-size" }}
+      title="Workflow assistant"
+      description="Persistent across every demo route"
+      icon={<BrandIcon className="size-4" />}
+      launcher={false}
+      chat={{ showModelPicker: true, enableExport: true, threadPlacement: "top" }}
+      className="h-dvh"
+    >
+      <div className="flex h-full flex-col">
+        <AssistantRouteContext />
+        <header>
+          <Nav routes={routes} />
+          <Separator />
+        </header>
+        <main className="flex min-h-0 flex-1 flex-col">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Loading page...
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/" element={<Navigate to="/chat" replace />} />
+              {routes.map((route) => (
+                <Route key={route.path} path={route.path} element={route.element} />
+              ))}
+              <Route path="*" element={<Navigate to="/chat" replace />} />
+            </Routes>
+          </Suspense>
+        </main>
+      </div>
+    </MastraAssistant>
+  );
+};
+
 const App = () => {
   const [brandContext, setBrandContext] = useState(brand.defaultBrandContext);
   const routes: RouteDef[] = [
@@ -159,46 +200,7 @@ const App = () => {
     // page title + favicon whenever the picker changes the context.
     <BrandProvider context={brandContext} applyToDocument>
       <BrowserRouter>
-        <MastraAssistant
-          mode="overlay"
-          side="right"
-          resizable={{ defaultSize: 480, minSize: 360, storageKey: "demo-assistant-size" }}
-          title="Workflow assistant"
-          description="Persistent across every demo route"
-          icon={<BrandIcon className="size-4" />}
-          launcher={{
-            position: "bottom-right",
-            icon: <BrandIcon className="size-6" />,
-            label: "Open workflow assistant",
-          }}
-          chat={{ showModelPicker: true, enableExport: true, threadPlacement: "top" }}
-          className="h-dvh"
-        >
-          <div className="flex h-full flex-col">
-            <AssistantRouteContext />
-            <header>
-              <Nav routes={routes} />
-              <Separator />
-            </header>
-            <main className="flex min-h-0 flex-1 flex-col">
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    Loading page...
-                  </div>
-                }
-              >
-                <Routes>
-                  <Route path="/" element={<Navigate to="/chat" replace />} />
-                  {routes.map((route) => (
-                    <Route key={route.path} path={route.path} element={route.element} />
-                  ))}
-                  <Route path="*" element={<Navigate to="/chat" replace />} />
-                </Routes>
-              </Suspense>
-            </main>
-          </div>
-        </MastraAssistant>
+        <AppShell routes={routes} />
       </BrowserRouter>
     </BrandProvider>
   );
