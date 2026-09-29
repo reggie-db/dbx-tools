@@ -9,7 +9,11 @@
 
 import { object } from "@dbx-tools/shared-core";
 
-/** Bounds for {@link clampPerPage}. */
+/**
+ * Bounds for {@link clampPerPage}.
+ *
+ * @deprecated Use the native `@mastra/client-js` memory API pagination inputs.
+ */
 export interface PerPageBounds {
   /** Page size used for empty / non-positive / non-numeric inputs. */
   fallback: number;
@@ -17,7 +21,11 @@ export interface PerPageBounds {
   max: number;
 }
 
-/** Coerce / clamp a `perPage` value, falling back to `bounds.fallback`. */
+/**
+ * Coerce / clamp a `perPage` value, falling back to `bounds.fallback`.
+ *
+ * @deprecated Use the native `@mastra/client-js` memory API pagination inputs.
+ */
 export function clampPerPage(value: number | undefined, bounds: PerPageBounds): number {
   if (value === undefined || Number.isNaN(value)) return bounds.fallback;
   const n = Math.trunc(value);
@@ -29,6 +37,8 @@ export function clampPerPage(value: number | undefined, bounds: PerPageBounds): 
  * Coerce a Hono query value into a non-negative integer. Returns
  * `undefined` for empty / non-numeric / negative inputs so the caller
  * can apply its built-in defaults.
+ *
+ * @deprecated Use the native `@mastra/client-js` memory API pagination inputs.
  */
 export function parseIntParam(value: string | undefined): number | undefined {
   const n = object.toNumber(value);

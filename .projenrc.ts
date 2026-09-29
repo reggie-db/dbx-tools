@@ -703,7 +703,7 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // `await import()`ed only when named; see `src/cli.ts`. They are workspace deps
 // here because the installed `dbx` has to be able to reach them.
 // Tsconfig/exports come from the `cli` tag.
-// (shared-core comes from the blanket base-dep mixin above.) No `pnpm` dep: the
+// shared-core is declared by the explicit source-dependent rule above. No `pnpm` dep: the
 // CLI drives `bun` (the ambient runtime) - see `src/bun.ts`.
 project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, (p) => {
   p.package.addField("name", `@${SCOPE}/cli`);

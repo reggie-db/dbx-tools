@@ -1,8 +1,8 @@
 # Active enhancements
 
 Keep plans here while code or documentation changes are still active. Move a
-plan to `docs/archived/enhancements` once it is mostly implemented or no longer
-being worked on.
+plan to `docs/archived/enhancements` once its tracked work is complete or
+explicitly abandoned.
 
 Prefix new audits and plans with their creation date in `YYYY-MM-DD-` form so
 repeated reviews remain distinct. Update the active document as findings are
@@ -21,7 +21,7 @@ date and final status.
 When work in another repository identifies a change for this project, copy a
 self-contained plan into this repository rather than leaving the suggestion
 only in the source project. Track and update the work here, where the code
-lives. When it is mostly implemented or no longer active, move it to
+lives. When its tracked work is complete or explicitly abandoned, move it to
 `docs/archived/enhancements`.
 
 Use the same lifecycle for defects: copy them into `docs/bugs`, handle them in

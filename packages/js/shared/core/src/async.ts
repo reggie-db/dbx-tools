@@ -224,9 +224,7 @@ export function combineAbortSignals(
 ): AbortSignal | undefined {
   const present = signals.filter((signal): signal is AbortSignal => signal !== undefined);
   if (present.length <= 1) return present[0];
-  const combined = new AbortController();
-  for (const signal of present) tieAbortSignal(combined, signal);
-  return combined.signal;
+  return AbortSignal.any(present);
 }
 
 /**

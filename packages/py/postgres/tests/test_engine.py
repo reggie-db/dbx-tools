@@ -17,6 +17,7 @@ from dbx_tools.postgres import (
     resolve_postgres_connection,
     workspace_credential_provider,
 )
+from dbx_tools.postgres.address import NativeSslMode
 from sqlalchemy import create_engine
 
 
@@ -129,6 +130,18 @@ def test_asyncpg_url_uses_driver_ssl_parameter() -> None:
 
     assert resolved.url("postgresql+asyncpg").query == {"ssl": "require"}
     assert resolved.url("postgresql+psycopg").query == {"sslmode": "require"}
+
+
+def test_ssl_mode_uses_generated_enum_until_url_rendering() -> None:
+    resolved = ResolvedPostgresConnection(
+        host="host.example.com",
+        database="analytics",
+        user="user@example.com",
+        ssl_mode=engine_module._parse_ssl_mode("prefer"),
+    )
+
+    assert resolved.ssl_mode is NativeSslMode.PREFER
+    assert resolved.url("postgresql+psycopg").query == {"sslmode": "prefer"}
 
 
 def test_autoscaling_credentials_are_injected_per_physical_connect() -> None:

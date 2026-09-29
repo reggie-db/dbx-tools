@@ -127,7 +127,6 @@ driver mints the Lakebase token once and the UDF closes over it, so the executor
 builds a plain SQLAlchemy engine and installs the token as its provider:
 
 ```python
-from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import create_async_engine
 from dbx_tools.postgres import (
     PostgresTopicBus,
@@ -143,16 +142,7 @@ token = workspace_client.postgres.generate_database_credential(resolved.endpoint
 @udf(returnType=StringType())
 def publish(key: str) -> str:
     async def run() -> str:
-        engine = create_async_engine(
-            URL.create(
-                "postgresql+asyncpg",
-                username=resolved.user,
-                host=resolved.host,
-                port=resolved.port,
-                database=resolved.database,
-                query={"ssl": resolved.ssl_mode},
-            )
-        )
+        engine = create_async_engine(resolved.url("postgresql+asyncpg"))
         install_credential_injection(engine.sync_engine, lambda: token)
         bus = PostgresTopicBus(engine, channel="app-events")
         try:

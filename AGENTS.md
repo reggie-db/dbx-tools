@@ -529,6 +529,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   use typed `WorkspaceClient.postgres` methods so SDK pagination, workspace-id
   headers, and `DatabaseCredential.expire_time` remain SDK-owned. A
   caller-supplied `credential_provider` owns its own caching and refresh policy.
+  PostgreSQL SSL mode identity comes from the generated core-rs `SslMode` enum;
+  resolved connections retain that enum and translate it to the driver's query
+  string only in `ResolvedPostgresConnection.url`. Do not copy its values into a
+  Python `Literal` or tuple.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
   server with a Neo4j 5 backend and a managed `dbx-model-proxy` process.
   It must not use containers: provision Java, uv, Neo4j, and the pinned Graphiti
@@ -1012,8 +1016,9 @@ Splits that ARE earning their keep, so leave them alone:
   importing a `shared-*` contract must not be able to reach Node APIs.
 - `node/path` (isolates chokidar/glob/minimatch), `node/databricks-zerobus`
   (isolates the Zerobus SDK), every `shared-*` consumed by a `ui-*`.
-- `shared-core`, which is a blanket dependency of every package and so must stay
-  light - adding a dependency to it adds it everywhere.
+- `shared-core`, which is used across most runtime packages and must stay light.
+  Dependencies are declared only on packages that import it; do not restore a
+  blanket workspace dependency.
 
 What does NOT justify a package: being a different KIND of thing (generated vs
 hand-written - the barrel generator and codegen both handle mixed packages fine),
@@ -1108,11 +1113,11 @@ polyglot `default.json` module mapping.
 
 ## Shared utilities - check here before writing a helper
 
-`@dbx-tools/shared-core` is the browser-safe base EVERY package
-already depends on (the `.projenrc.ts` blanket rule adds it), so importing from
-it never costs a new dependency. Before adding a small helper to a package,
-check whether one of these already exists; if the helper would be useful to a
-second package, put it in shared-core rather than duplicating it.
+`@dbx-tools/shared-core` is the browser-safe utility base used across the
+workspace. Before adding a small helper to a package, check whether one of these
+already exists; if the helper would be useful to a second package, put it in
+shared-core rather than duplicating it, and declare the dependency on each
+package that imports it.
 
 - `json` - `parse(text, fallback?)` and `parseRecord(text)`. Use these for ANY
   JSON that comes from outside the process (request body, env var, config file,
@@ -1180,8 +1185,10 @@ second package, put it in shared-core rather than duplicating it.
   `globToRegExp` or `/pattern/flags` parser. For a filesystem or URL PATH, where
   `/` is a segment boundary and `**` matters, use `@dbx-tools/path`'s
   `match.toPathMatcher` instead.
-- `async` - `sleep`, `tieAbortSignal`, `poll`. Do not import
-  `node:timers/promises` for a delay.
+- `async` - `sleep`, `tieAbortSignal`, `combineAbortSignals`, `poll`.
+  `combineAbortSignals` preserves zero/one-signal shortcuts and delegates
+  multiple signals to native `AbortSignal.any`; do not restore a listener-owning
+  combiner. Do not import `node:timers/promises` for a delay.
 - `@dbx-tools/core` `config` - Node configuration through constant data,
   process env, environment-specific `.env` files, the single Databricks bundle
   App's `config.env`, then `app.yaml` / `app.yml` env values. Root bundle
@@ -1333,9 +1340,10 @@ task only when reformatting the repo IS the change. Either way, check
 `git status` / `git diff --stat` before finishing and revert files you did not
 mean to touch, so a behavior change is not buried in reflowed whitespace.
 
-Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
-over `packages/js`). It autofixes, so it can reformat too — same timing rule applies:
-run it when finishing up, not between edits.
+Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 9 in `eslintrc` mode,
+run over the configured package roots plus `projen`). The normal task is
+check-only; `bun run eslint:fix` is the explicit mutating path and follows the
+same final-step timing rule as formatting.
 
 ## Comments describe the code, not the changes to it
 
@@ -1822,7 +1830,8 @@ bun run model:metadata       # refresh committed model capability, retirement, a
 bun run bump                 # increment VERSION and synth; no git or publication side effects
 bun run version:check        # verify every committed version surface
 bun run release              # validate locally, publish to loopback registries, and open a release PR
-bun run eslint               # lint (autofix) every package under `packages/js`
+bun run eslint               # check lint across package roots and projen
+bun run eslint:fix           # explicitly apply supported lint fixes
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
 ```
 
@@ -2646,7 +2655,10 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   would duplicate remembered turns and grow the prompt on every request.
   History, thread list/update/delete, message deletion, and suspended-run
   discovery use `@mastra/client-js`'s native resource-scoped memory and agent
-  APIs. The scoped AppKit gate allowlists only those exact native paths.
+  APIs. The scoped AppKit gate allowlists only those exact native paths. Do not
+  restore a private custom-route agent-context helper. The exported `pagination`
+  module remains deprecated compatibility surface only; new code uses native
+  Mastra pagination inputs.
   Regeneration first deletes the persisted user/assistant pair, then replays the
   user message. Persisted suspended runs restore actionable approval cards after
   reloads and server restarts.

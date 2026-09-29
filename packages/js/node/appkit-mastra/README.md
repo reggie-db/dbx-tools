@@ -976,8 +976,9 @@ client that talks to these routes.
 - `genie` - Genie prompt, space normalization, Genie toolkits, and suggestions.
 - `chart` / `statement` / `writer` - chart cache, statement row fetches, and
   safe writer events.
-- `history` / `threads` / `pagination` / `validation` - conversation persistence
-  helpers, route handlers, and request-body validation.
+- `validation` - request-body validation for the plugin's custom routes.
+- `pagination` - deprecated compatibility coercions; use native
+  `@mastra/client-js` memory pagination inputs for new code.
 - `defaults` - cache / retry / timeout settings for the plugin's own outbound
   calls, one constant per call site with its reasoning.
 - `style` - `TYPOGRAPHY_RULE`, the one no-emoji / no-em-dash sentence the agent

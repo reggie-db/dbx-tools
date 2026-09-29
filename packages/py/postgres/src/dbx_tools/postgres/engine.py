@@ -40,7 +40,7 @@ _DEFAULT_CREDENTIAL_LIFETIME = dt.timedelta(minutes=50)
 _MINIMUM_CREDENTIAL_LIFETIME = dt.timedelta(minutes=1)
 _DEFAULT_DATABASE = "databricks_postgres"
 _DEFAULT_PORT = 5432
-_DEFAULT_SSL_MODE: SslMode = "require"
+_DEFAULT_SSL_MODE: SslMode = NativeSslMode.REQUIRE
 
 
 class WorkspaceClientLike(Protocol):
@@ -70,7 +70,7 @@ class PostgresEngineConfig:
     database: str | None = None
     host: str | None = None
     port: int | None = None
-    ssl_mode: SslMode | None = None
+    ssl_mode: SslMode | str | None = None
     user: str | None = None
 
 
@@ -103,7 +103,7 @@ class ResolvedPostgresConnection:
             host=self.host,
             port=self.port,
             database=self.database,
-            query={ssl_parameter: self.ssl_mode},
+            query={ssl_parameter: self.ssl_mode.name.lower()},
         )
 
 
@@ -504,10 +504,14 @@ def _parse_port(value: object) -> int:
 def _parse_ssl_mode(value: object) -> SslMode:
     if value is None or value == "":
         return _DEFAULT_SSL_MODE
-    mode = value.name.lower() if isinstance(value, NativeSslMode) else str(value).strip().lower()
-    if mode not in SSL_MODES:
-        raise ValueError(f"PGSSLMODE must be one of {', '.join(SSL_MODES)}, got {value!r}")
-    return mode  # type: ignore[return-value]
+    if isinstance(value, NativeSslMode):
+        return value
+    normalized = str(value).strip().upper()
+    try:
+        return NativeSslMode[normalized]
+    except KeyError:
+        accepted = ", ".join(SSL_MODES)
+        raise ValueError(f"PGSSLMODE must be one of {accepted}, got {value!r}") from None
 
 
 def _first(*values: Any) -> Any:
