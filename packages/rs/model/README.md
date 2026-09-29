@@ -69,7 +69,6 @@ than editing a snapshot by hand.
 - `limits` parses published pay-per-token ITPM, OTPM, and QPH limits.
 - `listing` builds OpenAI and Codex model-list responses.
 
-Generated bindings are published as
-[`@dbx-tools/model-rs`](../../js/node/model-rs) and
-[`dbx-tools-model-rs`](../../py/model-rs). AppKit-Mastra consumes the Node
+Generated Node bindings are published as
+[`@dbx-tools/model-rs`](../../js/node/model-rs). AppKit-Mastra consumes the
 binding so Responses routing and GPT 5.6 Chat tool effort remain Rust-owned.

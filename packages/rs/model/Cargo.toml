@@ -17,7 +17,7 @@ name = "dbx-tools-model-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
 
 [dependencies]
-dbx-tools-core = { version = "0.6.220", path = "../core" }
+dbx-tools-core = { version = "0.6.221", path = "../core" }
 difflib-fast = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
