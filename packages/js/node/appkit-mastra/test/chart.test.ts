@@ -43,6 +43,13 @@ describe("chart plan JSON schema", () => {
       maxItems: 3,
     });
   });
+
+  it("requires every declared property for strict Responses structured output", () => {
+    const jsonSchema = z.toJSONSchema(chartPlanSchema) as Record<string, any>;
+    assert.deepEqual([...jsonSchema.required].sort(), Object.keys(jsonSchema.properties).sort());
+    const seriesItem = jsonSchema.properties.series.items;
+    assert.deepEqual([...seriesItem.required].sort(), Object.keys(seriesItem.properties).sort());
+  });
 });
 
 describe("chart data point coercion", () => {

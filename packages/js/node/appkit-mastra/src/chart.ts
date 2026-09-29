@@ -149,7 +149,7 @@ const chartDataPointSchema = z
 const seriesMarkTypeSchema = z
   .union([z.literal("bar"), z.literal("line"), z.literal("area")])
   .describe(
-    "Mark type for this series. Required for `combo` (mix bar and line/area); ignored for other chart types.",
+    "Mark type for this series. Required for `combo` (mix bar and line/area); use null for other chart types.",
   );
 
 /**
@@ -166,54 +166,59 @@ export const chartPlanSchema = z.object({
   chartType: wire.ChartTypeSchema,
   title: z
     .string()
-    .optional()
+    .nullable()
+    .default(null)
     .describe(
       string.toDescription(`
-        Short title shown above the chart. Optional; defaults to the
+        Short title shown above the chart. Use null to fall back to the
         \`title\` argument the caller passed in.
       `),
     ),
   xAxisLabel: z
     .string()
-    .optional()
+    .nullable()
+    .default(null)
     .describe(
       string.toDescription(`
         Axis label for the primary (usually bottom / value) axis.
         Used for bar / horizontalBar / line / area / combo / waterfall
-        / scatter / heatmap; ignored for pie / funnel / treemap / radar.
+        / scatter / heatmap; use null for pie / funnel / treemap / radar.
       `),
     ),
   yAxisLabel: z
     .string()
-    .optional()
+    .nullable()
+    .default(null)
     .describe(
       string.toDescription(`
         Axis label for the secondary (usually left) axis. Used for
         bar / horizontalBar / line / area / combo / waterfall /
-        scatter / heatmap; ignored for pie / funnel / treemap / radar.
+        scatter / heatmap; use null for pie / funnel / treemap / radar.
       `),
     ),
   categories: z
     .array(z.string())
-    .optional()
+    .nullable()
+    .default(null)
     .describe(
       string.toDescription(`
         Primary category labels. For \`bar\` / \`horizontalBar\` /
         \`line\` / \`area\` / \`combo\` / \`waterfall\`: one label per
         data point. For \`heatmap\`: x-axis categories. For \`radar\`:
-        indicator names. Omit for \`scatter\` (\`[x, y]\` tuples) and
+        indicator names. Use null for \`scatter\` (\`[x, y]\` tuples) and
         slice charts (\`pie\` / \`funnel\` / \`treemap\`, each slice
         carries its own \`name\`).
       `),
     ),
   yCategories: z
     .array(z.string())
-    .optional()
+    .nullable()
+    .default(null)
     .describe(
       string.toDescription(`
-        Y-axis (row) labels for \`heatmap\`. Optional - when omitted the
+        Y-axis (row) labels for \`heatmap\`. Use null when the
         row labels come from the series names, which is the preferred
-        way to build a heatmap. Omit for every other chart type.
+        way to build a heatmap. Use null for every other chart type.
       `),
     ),
   series: z
@@ -224,12 +229,13 @@ export const chartPlanSchema = z.object({
             Legend name for this series.
           `),
         ),
-        type: seriesMarkTypeSchema.optional(),
+        type: seriesMarkTypeSchema.nullable().default(null),
         yAxisIndex: z
           .union([z.literal(0), z.literal(1)])
-          .optional()
+          .nullable()
+          .default(null)
           .describe(
-            "Which y-axis to bind (0 = left, 1 = right). Use on `combo` when series have different units or scales.",
+            "Which y-axis to bind (0 = left, 1 = right). Use on `combo` when series have different units or scales; use null otherwise.",
           ),
         data: z.array(chartDataPointSchema).describe(
           string.toDescription(`
@@ -259,10 +265,11 @@ export const chartPlanSchema = z.object({
     ),
   option: z
     .string()
-    .optional()
+    .nullable()
+    .default(null)
     .describe(
       string.toDescription(`
-        Required for \`custom\`, ignored for every other chart type. A
+        Required for \`custom\`; use null for every other chart type. A
         COMPLETE Echarts option, as a JSON object encoded in a string:
         \`series\` (each with its own \`type\` and that series' own data
         shape) plus whatever else the chart needs - a coordinate system,
@@ -274,6 +281,7 @@ export const chartPlanSchema = z.object({
 });
 
 type ChartPlan = z.infer<typeof chartPlanSchema>;
+type ChartPlanInput = z.input<typeof chartPlanSchema>;
 
 /**
  * Canonical planner input shape. Tools that source rows from an
@@ -927,10 +935,11 @@ function waterfallSeries(values: number[]): Array<Record<string, unknown>> {
  * Echarts' defaults apply.
  */
 export function planToEchartsOption(
-  plan: ChartPlan,
+  input: ChartPlanInput,
   fallbackTitle: string,
   brand?: BrandContext,
 ): Record<string, unknown> {
+  const plan = chartPlanSchema.parse(input);
   const baseTitle = plan.title ?? fallbackTitle;
   const grid = { left: 48, right: 24, top: 56, bottom: 48, containLabel: true };
   const theme = brand ? brandChartTheme(brand) : undefined;
