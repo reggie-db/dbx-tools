@@ -1,5 +1,4 @@
 import { error as sharedError, hash, log } from "@dbx-tools/shared-core";
-import type { MastraThread } from "@dbx-tools/shared-mastra";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +17,7 @@ import {
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
+  type MastraMemoryThread,
   type MastraStreamResponse,
 } from "../support/mastra-client.ts";
 import {
@@ -37,7 +37,6 @@ import {
   removeSteer as removeSteerFromQueue,
   reorderSteers as reorderSteerQueue,
   terminateRunningToolEvents,
-  type ThreadSession,
 } from "../support/thread-sessions.ts";
 
 const _loadChatExport = () => import("../support/export.ts");
@@ -45,20 +44,20 @@ const _loadChatExport = () => import("../support/export.ts");
 // Self-contained drop-in chat. `useMastraChat` drives the conversation
 // over `@mastra/client-js`: `agent.stream()` returns a Response
 // augmented with `processDataStream()`, which pushes typed Mastra
-// chunks (text-delta, reasoning-delta, tool-*, ...) that we translate
-// into `UIMessage` parts for `ChatView` to render.
+// chunks that `@mastra/ai-sdk` projects into native AI SDK `UIMessage`
+// parts for `ChatView` to render.
 //
 // Approval gates ride the same channel: a paused `requireApproval: true`
 // tool call emits a `tool-call-approval` chunk carrying
-// `{ runId, payload: { toolCallId, toolName, args } }`. We surface that
-// as an out-of-band entry in `pendingApprovalsByMessage` and wire
+// `{ runId, payload: { toolCallId, toolName, args } }`. The native stream
+// converter preserves that data part and wires
 // `onResolveToolApproval` to {@link MastraPluginClient.approveToolCallStream}
 // / `declineToolCallStream`. Both use the native per-request Mastra client and
 // return a fresh native stream Response we run through the same chunk handler.
 //
 // On mount the transcript hydrates with the most recent page of thread
-// history from the Mastra plugin's `/route/history` endpoint; scrolling near
-// the top lazy-loads and prepends the next older page, with `ChatView`
+// history from Mastra's resource-scoped memory endpoint; scrolling near the
+// top lazy-loads and prepends the next older page, with `ChatView`
 // preserving the visual scroll position across the prepend.
 
 const logger = log.logger("ui-mastra/chat");
@@ -69,11 +68,11 @@ const makeUserMessage = (text: string): UIMessage => ({
   parts: [{ type: "text", text }],
 });
 
-/** Project a wire {@link MastraThread} down to the sidebar's view. */
-const toThreadSummary = (thread: MastraThread): ThreadSummary => ({
+/** Project a native Mastra memory thread down to the sidebar's view. */
+const toThreadSummary = (thread: MastraMemoryThread): ThreadSummary => ({
   id: thread.id,
   ...(thread.title ? { title: thread.title } : {}),
-  updatedAt: thread.updatedAt,
+  updatedAt: new Date(thread.updatedAt).toISOString(),
 });
 
 /** Max characters of the first user message used as a provisional thread title. */
@@ -279,8 +278,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const enableFeedback = options.enableFeedback ?? enableExport;
   const feedbackAvailable = enableFeedback && mastraClient.feedbackEnabled;
   const threadKey = threadStorageKey(mastraClient.basePath, agentId);
-  const [activeThreadId, setActiveThreadId] = useState<string | undefined>(() =>
-    enableThreads ? (readStoredThreadId(threadKey) ?? hash.id()) : undefined,
+  const [activeThreadId, setActiveThreadId] = useState<string>(() =>
+    enableThreads ? (readStoredThreadId(threadKey) ?? hash.id()) : hash.id(),
   );
   const {
     threads,
@@ -467,7 +466,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   );
 
   const runStream = useCallback(
-    (threadId: string, history: UIMessage[], requestContext?: MastraRequestContextSnapshot) => {
+    (threadId: string, message: UIMessage, requestContext?: MastraRequestContextSnapshot) => {
       const assistantId = hash.id();
       const runId = hash.id();
       updateSession(threadId, (session) => ({
@@ -485,7 +484,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       return driveStream(threadId, assistantId, (signal) => {
         return mastraClient.streamAgent({
           agentId,
-          messages: history,
+          messages: [message],
           runId,
           threadId: streamThreadId,
           model,
@@ -509,8 +508,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       ...session,
       queuedSteers: removeSteerFromQueue(session.queuedSteers, head.id),
     }));
-    const { next } = appendUserMessage(threadId, head.text);
-    void runStream(threadId, next, head.requestContext);
+    const { message } = appendUserMessage(threadId, head.text);
+    void runStream(threadId, message, head.requestContext);
   };
 
   // Cancel a thread's in-flight run. Defaults to the active thread (the
@@ -553,7 +552,10 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // the pre-append session (so callers can see whether a run was in flight)
   // and the new message list. Shared by send + interrupt.
   const appendUserMessage = useCallback(
-    (threadId: string, text: string): { before: ThreadSession; next: UIMessage[] } => {
+    (
+      threadId: string,
+      text: string,
+    ): { message: UIMessage; next: UIMessage[] } => {
       updateSession(threadId, (session) => ({ ...session, lastUserText: text }));
       if (activeThreadId) {
         noteThreadActivity(activeThreadId);
@@ -566,10 +568,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           }
         }
       }
-      const before = getSession(threadId);
-      const next = [...before.messages, makeUserMessage(text)];
+      const session = getSession(threadId);
+      const message = makeUserMessage(text);
+      const next = [...session.messages, message];
       writeMessages(threadId, next);
-      return { before, next };
+      return { message, next };
     },
     [activeThreadId, getSession, noteThreadActivity, updateSession, writeMessages],
   );
@@ -595,8 +598,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         }));
         return;
       }
-      const { next } = appendUserMessage(threadId, text);
-      void runStream(threadId, next, requestContext);
+      const { message } = appendUserMessage(threadId, text);
+      void runStream(threadId, message, requestContext);
     },
     [appendUserMessage, runStream, activeKey, getSession, updateSession],
   );
@@ -615,8 +618,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         queuedSteers: removeSteerFromQueue(session.queuedSteers, steerId),
       }));
       logger.info("steer:send-now", { threadId });
-      const { next } = appendUserMessage(threadId, steer.text);
-      void runStream(threadId, next, steer.requestContext);
+      const { message } = appendUserMessage(threadId, steer.text);
+      void runStream(threadId, message, steer.requestContext);
     },
     [activeKey, appendUserMessage, getSession, runStream, updateSession],
   );
