@@ -1,9 +1,13 @@
+import {
+  GENIE_PROGRESS_PART_TYPE,
+  GenieProgressPartDataSchema,
+} from "@dbx-tools/shared-mastra";
 import { getToolOrDynamicToolName, isToolOrDynamicToolUIPart, type UIMessage } from "ai";
 import type { ToolEvent } from "../react/types.ts";
 
 /** Project native AI SDK tool parts from persisted messages onto pill state. */
 export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
-  return parts.filter(isToolOrDynamicToolUIPart).map((part) => {
+  const events = parts.filter(isToolOrDynamicToolUIPart).map((part) => {
     const error = part.state === "output-error";
     const done = part.state === "output-available";
     return {
@@ -14,6 +18,16 @@ export function toolEventsFromParts(parts: UIMessage["parts"]): ToolEvent[] {
       ...(done ? { output: part.output } : error ? { output: { error: part.errorText } } : {}),
     };
   });
+  const byId = new Map(events.map((event) => [event.id, event]));
+  for (const part of parts) {
+    if (part.type !== GENIE_PROGRESS_PART_TYPE) continue;
+    const progress = GenieProgressPartDataSchema.safeParse(part.data);
+    if (!progress.success) continue;
+    const event = byId.get(progress.data.toolCallId);
+    if (!event) continue;
+    event.progress = [...(event.progress ?? []), progress.data.event];
+  }
+  return events;
 }
 
 /** Merge persisted native parts with richer live progress by tool-call id. */

@@ -1,8 +1,6 @@
 /**
- * Shared helper for publishing events through Mastra's
- * `ctx.writer`. Centralizes the "the downstream stream may already
- * be closed, don't take the whole tool down" pattern that the
- * Genie agent and chart tool both need.
+ * Shared helper for publishing Genie progress through Mastra's native
+ * `ctx.writer.custom()` data-part surface.
  *
  * Failures are logged at `warn` (a persistently-closed writer is
  * the most likely culprit when events go missing client-side) but
@@ -13,10 +11,15 @@
  */
 
 import { error, log } from "@dbx-tools/shared-core";
-import type { MastraWriter } from "@dbx-tools/shared-mastra";
+import {
+  GENIE_PROGRESS_PART_TYPE,
+  type GenieWriterEvent,
+} from "@dbx-tools/shared-mastra";
+import type { ToolExecutionContext } from "@mastra/core/tools";
 
 /**
- * Best-effort `writer.write`. No-op when `writer` is undefined;
+ * Best-effort native custom progress write. No-op when the writer or owning
+ * tool call id is unavailable;
  * caught errors are logged via `log.warn("writer:error", ...)`
  * along with any caller-supplied `context` fields (e.g. a
  * `chartId` or `messageId`) so the warning is greppable per
@@ -24,18 +27,22 @@ import type { MastraWriter } from "@dbx-tools/shared-mastra";
  *
  * Returns when the write resolves or rejects; never throws.
  */
-export async function safeWrite(
+export async function safeWriteProgress(
   log: log.Logger,
-  writer: MastraWriter | undefined,
-  chunk: unknown,
+  writer: ToolExecutionContext["writer"],
+  toolCallId: string | undefined,
+  event: GenieWriterEvent,
   context: Record<string, unknown> = {},
 ): Promise<void> {
-  if (!writer) {
+  if (!writer || !toolCallId) {
     log.debug("writer:no-writer", context);
     return;
   }
   try {
-    await writer.write(chunk);
+    await writer.custom({
+      type: GENIE_PROGRESS_PART_TYPE,
+      data: { toolCallId, event },
+    });
     log.debug("writer:ok", context);
   } catch (err) {
     log.warn("writer:error", {
