@@ -22,6 +22,16 @@ describe("assistantTextFromSse", () => {
     assert.equal(assistantTextFromSse(body), "Hello world");
   });
 
+  it("reads official AI SDK text-delta frames", () => {
+    const body = [
+      'data: {"type":"text-delta","id":"answer","delta":"Hello"}',
+      'data: {"type":"text-delta","id":"answer","delta":" world"}',
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    assert.equal(assistantTextFromSse(body), "Hello world");
+  });
+
   it("returns empty string when no text-delta frames are present", () => {
     assert.equal(assistantTextFromSse('data: {"type":"finish"}\n'), "");
   });

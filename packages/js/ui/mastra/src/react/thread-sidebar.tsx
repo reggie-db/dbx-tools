@@ -1,4 +1,3 @@
-import { wire } from "@dbx-tools/shared-mastra";
 import {
   Button,
   Input,
@@ -192,7 +191,6 @@ export const ThreadSidebar = ({
                       <Input
                         autoFocus
                         value={draftTitle}
-                        maxLength={wire.MASTRA_THREAD_TITLE_MAX}
                         aria-label="Conversation name"
                         onChange={(e) => setDraftTitle(e.target.value)}
                         onKeyDown={(e) => {

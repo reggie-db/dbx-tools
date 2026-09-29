@@ -15,23 +15,27 @@ import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
 import {
   MastraClient,
+  type ListAgentSuspendedRunsResponse,
+  type ListMemoryThreadMessagesResponse,
   type ListMemoryThreadsResponse,
 } from "@mastra/client-js";
-import type { MessageListInput } from "@mastra/core/agent/message-list";
+import { DefaultChatTransport, type UIMessage, type UIMessageChunk } from "ai";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { asApprovalStreamResponse } from "./_approval-stream.ts";
 import type { MastraRequestContextSnapshot } from "./request-context.ts";
 
 type NativeAgentClient = ReturnType<MastraClient["getAgent"]>;
-export type MastraStreamResponse = Awaited<ReturnType<NativeAgentClient["stream"]>>;
+export interface MastraStreamResponse {
+  headers: Headers;
+  stream: ReadableStream<UIMessageChunk>;
+}
 export type MastraMemoryThread = ListMemoryThreadsResponse["threads"][number];
 
 /**
  * `@mastra/client-js` `MastraClient` extended with the Mastra plugin's
  * custom routes. One client drives everything the chat UI needs:
  *
- *   - Conversation streaming through native `@mastra/client-js` agent methods
- *     on a per-call client carrying isolated routing and cancellation.
+ *   - Conversation streaming through Mastra's official AI SDK `chatRoute`
+ *     and the browser-native AI SDK `DefaultChatTransport`.
  *   - Native Mastra memory history and thread management, plus the model
  *     catalogue (`models`),
  *     Genie starter prompts (`suggestions`), MLflow feedback logging
@@ -100,6 +104,37 @@ export class MastraPluginClient extends MastraClient {
     return headers;
   }
 
+  async #uiStream(options: {
+    path: string;
+    chatId: string;
+    messages: UIMessage[];
+    body?: object;
+    routing: { threadId?: string; model?: string };
+    signal?: AbortSignal;
+  }): Promise<MastraStreamResponse> {
+    let headers = new Headers();
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const transport = new DefaultChatTransport<UIMessage>({
+      api: new URL(options.path, origin).toString(),
+      credentials: "include",
+      headers: this.#routingHeaders(options.routing),
+      fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        headers = new Headers(response.headers);
+        return response;
+      },
+    });
+    const stream = await transport.sendMessages({
+      trigger: "submit-message",
+      chatId: options.chatId,
+      messageId: undefined,
+      messages: options.messages,
+      abortSignal: options.signal,
+      ...(options.body ? { body: options.body } : {}),
+    });
+    return { headers, stream };
+  }
+
   #requestClient(
     routing: { threadId?: string; model?: string },
     signal?: AbortSignal,
@@ -122,30 +157,34 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Open a native Mastra agent stream for one conversation turn, routed and
-   * cancelled per call. A short-lived client carries this run's thread/model
-   * headers and AbortSignal, so concurrent threads never mutate shared client
-   * state or cancel each other.
+   * Open a native AI SDK UI stream for one Mastra conversation turn. Routing
+   * headers and cancellation remain isolated to this call.
    */
   async streamAgent(params: {
     agentId: string;
-    messages: MessageListInput;
+    messages: UIMessage[];
     runId: string;
     threadId?: string;
     model?: string;
     requestContext?: MastraRequestContextSnapshot;
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
-    return this.#requestAgent(params.agentId, params, params.signal).stream(params.messages, {
-      runId: params.runId,
-      ...(params.requestContext ? { requestContext: params.requestContext } : {}),
+    return this.#uiStream({
+      path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(params.agentId)}`,
+      chatId: params.threadId ?? params.runId,
+      messages: params.messages,
+      body: {
+        runId: params.runId,
+        ...(params.requestContext ? { requestContext: params.requestContext } : {}),
+      },
+      routing: params,
+      signal: params.signal,
     });
   }
 
   /**
-   * Resume a suspended `requireApproval` tool through the native route. The
-   * installed client-js chat-state side channel rejects a continuation whose
-   * first chunk is the pending tool result, so only that reader is bypassed.
+   * Resume a suspended `requireApproval` tool through the same official chat
+   * route using Mastra's native `resumeData` contract.
    */
   async approveToolCallStream(
     agentId: string,
@@ -161,8 +200,7 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Deny a suspended `requireApproval` tool via `decline-tool-call`.
-   * Same native route compatibility path as {@link approveToolCallStream}.
+   * Deny a suspended tool through the same native resume contract.
    */
   async declineToolCallStream(
     agentId: string,
@@ -190,29 +228,22 @@ export class MastraPluginClient extends MastraClient {
       signal?: AbortSignal;
     },
   ): Promise<MastraStreamResponse> {
-    const route = approved ? "approve-tool-call" : "decline-tool-call";
-    const init: RequestInit = {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...this.#routingHeaders({ threadId: params.threadId }),
-      },
-      body: JSON.stringify({
+    return this.#uiStream({
+      path: `${this.basePath}${routes.MASTRA_ROUTES.chat}/${encodeURIComponent(agentId)}`,
+      chatId: params.threadId ?? params.runId,
+      messages: [],
+      body: {
+        resumeData: {
+          approved,
+          ...(!approved && params.reason ? { reason: params.reason } : {}),
+        },
         runId: params.runId,
         toolCallId: params.toolCallId,
-        ...(!approved && params.reason ? { reason: params.reason } : {}),
         ...(params.requestContext ? { requestContext: params.requestContext } : {}),
-      }),
-    };
-    if (params.signal) init.signal = params.signal;
-    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
-    const response = await fetch(
-      new URL(`${this.basePath}/agents/${encodeURIComponent(agentId)}/${route}`, origin),
-      init,
-    );
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return asApprovalStreamResponse(response);
+      },
+      routing: { threadId: params.threadId },
+      signal: params.signal,
+    });
   }
 
   /**
@@ -263,15 +294,13 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /** Fetch one page from Mastra's native resource-scoped memory route. */
-  async history(
-    options: {
-      agentId?: string;
-      threadId: string;
-      page?: number;
-      perPage?: number;
-      signal?: AbortSignal;
-    },
-  ) {
+  async history(options: {
+    agentId?: string;
+    threadId: string;
+    page?: number;
+    perPage?: number;
+    signal?: AbortSignal;
+  }): Promise<ListMemoryThreadMessagesResponse> {
     return this.#requestClient({ threadId: options.threadId }, options.signal)
       .getMemoryThread({
         threadId: options.threadId,
@@ -285,8 +314,12 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /** Delete one native memory thread so the same id can start cleanly. */
-  async clearHistory(options: { agentId?: string; threadId: string; signal?: AbortSignal }) {
-    return this.#requestClient({ threadId: options.threadId }, options.signal)
+  async clearHistory(options: {
+    agentId?: string;
+    threadId: string;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    await this.#requestClient({ threadId: options.threadId }, options.signal)
       .getMemoryThread({
         threadId: options.threadId,
         agentId: options.agentId ?? this.defaultAgent,
@@ -315,8 +348,8 @@ export class MastraPluginClient extends MastraClient {
   async removeThread(
     threadId: string,
     options: { agentId?: string; signal?: AbortSignal } = {},
-  ) {
-    return this.#requestClient({ threadId }, options.signal)
+  ): Promise<void> {
+    await this.#requestClient({ threadId }, options.signal)
       .getMemoryThread({ threadId, agentId: options.agentId ?? this.defaultAgent })
       .delete();
   }
@@ -326,8 +359,8 @@ export class MastraPluginClient extends MastraClient {
     threadId: string,
     title: string,
     options: { agentId?: string; signal?: AbortSignal } = {},
-  ) {
-    return this.#requestClient({ threadId }, options.signal)
+  ): Promise<void> {
+    await this.#requestClient({ threadId }, options.signal)
       .getMemoryThread({ threadId, agentId: options.agentId ?? this.defaultAgent })
       .update({ title });
   }
@@ -337,8 +370,8 @@ export class MastraPluginClient extends MastraClient {
     threadId: string,
     messageIds: string[],
     options: { agentId?: string; signal?: AbortSignal } = {},
-  ) {
-    return this.#requestClient({ threadId }, options.signal)
+  ): Promise<void> {
+    await this.#requestClient({ threadId }, options.signal)
       .getMemoryThread({ threadId, agentId: options.agentId ?? this.defaultAgent })
       .deleteMessages(messageIds);
   }
@@ -348,7 +381,7 @@ export class MastraPluginClient extends MastraClient {
     agentId: string,
     threadId: string,
     signal?: AbortSignal,
-  ) {
+  ): Promise<ListAgentSuspendedRunsResponse> {
     return this.#requestAgent(agentId, { threadId }, signal).listSuspendedRuns({
       threadId,
     });
@@ -439,10 +472,9 @@ export class MastraPluginClient extends MastraClient {
 
   /**
    * `POST` / `DELETE` / `PATCH` + JSON-parse + schema-validate for the
-   * mutating routes (`clearHistory` / `removeThread` / `renameThread` /
-   * `feedback`). A JSON body, when present, sets `Content-Type`;
-   * `options.headers` add per-call headers (e.g. the thread-selection
-   * header for a targeted delete / rename) over the client's base headers.
+   * plugin's custom mutating routes. A JSON body, when present, sets
+   * `Content-Type`; `options.headers` add per-call headers over the client's
+   * base headers.
    */
   async #mutateJson<T>(
     url: string,

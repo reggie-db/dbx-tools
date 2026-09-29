@@ -33,7 +33,7 @@ export const TRACE_IO_LIMIT = 8_000;
  * are intentionally excluded: their bodies are tool decisions, not the
  * user prompt, and they rarely produce a fresh answer worth surfacing.
  */
-const AGENT_TURN_ROUTE = /^\/agents\/[^/]+\/(stream|generate)(\/|$)/i;
+const AGENT_TURN_ROUTE = /^(?:\/agents\/[^/]+\/(?:stream|generate)(?:\/|$)|\/chat\/[^/]+$)/i;
 
 /** Attribute keys the MLflow UC `*_trace_unified` view reads from the root span. */
 export const MLFLOW_SPAN_INPUTS_ATTR = "mlflow.spanInputs";
@@ -55,7 +55,12 @@ export function assistantTextFromSse(body: string): string {
     // assistant text, so skipping them is the intended path rather than an error.
     const frame = json.parse(line.slice(5));
     if (!object.isRecord(frame) || frame.type !== "text-delta") continue;
-    const text = object.isRecord(frame.payload) ? frame.payload.text : undefined;
+    const text =
+      typeof frame.delta === "string"
+        ? frame.delta
+        : object.isRecord(frame.payload)
+          ? frame.payload.text
+          : undefined;
     if (typeof text === "string") parts.push(text);
   }
   return parts.join("");

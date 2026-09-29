@@ -211,23 +211,16 @@ export type ChatViewProps = {
    * stream Response and pipe it through the same chunk handler
    * (this is exactly what `useMastraChat` does).
    *
-   * It requires the `runId` Mastra emitted with the approval
-   * chunk - the field is always populated when the card was rendered
-   * from a live `data-tool-call-approval` part or an out-of-band
-   * `pendingApprovalsByMessage` entry. It will be missing only for
-   * approvals reconstructed from history (where the original runId
-   * is lost), in which case the handler should surface a "this
-   * approval is stale, please re-ask the model" message rather than
-   * trying to resume a workflow that no longer exists.
+   * It requires the `runId` Mastra emitted with the approval chunk.
+   * `useMastraChat` also restores run ids from native suspended-run
+   * storage when history is reloaded.
    */
   onResolveToolApproval?: (args: ApprovalDecision) => void | Promise<void>;
   /**
-   * Out-of-band approval requests keyed by assistant message id, for
-   * transports that don't surface approvals as `UIMessage` parts.
-   * The `/stream` page populates this from Mastra's
-   * `tool-call-approval` chunk so the same `ToolApprovalCard`
-   * UI works without injecting synthetic data parts. Each entry is
-   * merged with any approvals already discovered in `message.parts`.
+   * Approval requests keyed by assistant message id. This restores
+   * persisted suspended runs after a reload and also supports transports
+   * that do not surface approvals as `UIMessage` parts. Entries merge with
+   * approvals discovered in `message.parts`.
    */
   pendingApprovalsByMessage?: Record<string, PendingApproval[]>;
   /**
@@ -360,9 +353,8 @@ export type ApprovalDecision =
       toolName: string;
       toolCallId: string;
       /**
-       * Mastra run id from the approval chunk. Required to resume
-       * the suspended workflow; absent only when the card was
-       * reconstructed from history (no live runId available).
+       * Mastra run id required to resume the suspended workflow. Native
+       * suspended-run discovery restores it for persisted approvals.
        */
       runId?: string;
       input: unknown;
@@ -379,10 +371,8 @@ export type ApprovalDecision =
 /**
  * One approval-gated tool call paused mid-turn. `runId` is the
  * Mastra workflow id needed to resume; it's always present when the
- * card was constructed from a live source (the stream's
- * `data-tool-call-approval` part or `pendingApprovalsByMessage`),
- * and absent only for approvals reconstructed from a history load
- * where the original runId is lost.
+ * card came from a live approval part or native suspended-run storage.
+ * It remains optional for controlled transports that cannot provide it.
  */
 export type PendingApproval = {
   toolName: string;

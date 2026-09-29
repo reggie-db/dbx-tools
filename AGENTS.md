@@ -2540,7 +2540,7 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
 - **Default-model endpoint.** The picker labels its default option (the model
   used when the client pins none) from `GET /default-model` (and
   `/default-model/:agentId` - agent-scoped by the same `/:agentId` path-suffix
-  convention as `/history`/`/threads`/`/suggestions`, NOT a query param), which
+  convention as `/suggestions`, NOT a query param), which
   returns `{ agentId, model, displayName }` with the server-humanized name so
   the label never flashes a raw id or waits on `/models`. `model`/`displayName`
   are null for a dynamic (call-time) model. Route: `MASTRA_ROUTES.defaultModel`
@@ -2567,13 +2567,13 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   request carries its own thread + model as PER-CALL headers (`streamAgent` in
   `mastra-client.ts`) with its own `AbortSignal` — there is NO shared mutable
   client routing (the old `setThreadId`/`setModelOverride` header mutation was
-  removed) so concurrent runs never collide. Normal turns use native
-  `@mastra/client-js` stream processing through a short-lived per-call client.
-  Approval continuation alone uses `_approval-stream.ts`: client-js 1.50's
-  internal chat-state reader rejects the valid resumed shape when its first
-  event is `tool-result` ("tool_result must be preceded by a tool_call"). Keep
-  the compatibility reader scoped to approval routes and remove it once the
-  installed native client accepts that shape. Cancel is thread-addressed
+  removed) so concurrent runs never collide. Normal turns and approval
+  continuations use `@mastra/ai-sdk`'s official server-side `chatRoute`;
+  browser code consumes it with the AI SDK's `DefaultChatTransport` and
+  `readUIMessageStream`. Keep `toAISdkStream` on the server because its package
+  imports Node's `stream/web`; importing it into `ui-mastra` breaks browser
+  builds. Do not restore a handwritten text/reasoning/tool reducer. Cancel is
+  thread-addressed
   (`stop(threadId?)`), exposed to the drawer as `onCancelThread`. Mid-turn
   steering is a QUEUE, not a single action: `sendMessage` on a running thread
   pushes a `QueuedSteer` onto `session.queuedSteers` (no interrupt); the queue
@@ -2586,8 +2586,17 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   `removeSteer` / `reorderSteers`) are pure + unit-tested in thread-sessions.ts. True mid-run message delivery
   (Mastra's experimental `queue-message` / `deliver`) was NOT used — the agent
   didn't fold queued messages into the live turn, so enqueue + interrupt-restart
-  is the reliable model. Cancelling / superseding a run settles stuck `running`
-  tool pills via `terminateRunningToolEvents` (thread-sessions.ts).
+  is the reliable model.
+- **Mastra memory owns conversation history.** The rendered transcript remains
+  client-side UI state, but each turn sends only its new user `UIMessage`;
+  Mastra loads prior messages from memory. Sending the rendered transcript
+  would duplicate remembered turns and grow the prompt on every request.
+  History, thread list/update/delete, message deletion, and suspended-run
+  discovery use `@mastra/client-js`'s native resource-scoped memory and agent
+  APIs. The scoped AppKit gate allowlists only those exact native paths.
+  Regeneration first deletes the persisted user/assistant pair, then replays the
+  user message. Persisted suspended runs restore actionable approval cards after
+  reloads and server restarts.
 - **Thread placement is ONE option with THREE surfaces, all the same list.**
   `threadPlacement` (`disabled` | `auto` | `left` | `right` | `top`) picks
   where conversation management renders; `enableThreads: false` collapses into
@@ -2633,6 +2642,7 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   model, and trace keys so a browser cannot change conversation ownership.
 - **Tool call pills preserve complete request and response payloads.**
   Use Mastra's native stream and persisted UI tool parts without an output
-  processor. The UI reducer retains native `args`/`result`, and each tool row
+  processor. Genie progress uses `ToolStream.custom()` with a
+  `data-genie-progress` part associated to its native tool call. Each tool row
   exposes default-closed Request and Response viewers with scrolling rather
   than slicing or coercive truncation.

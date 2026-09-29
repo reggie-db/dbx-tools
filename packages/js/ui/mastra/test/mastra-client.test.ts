@@ -9,8 +9,8 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe("MastraPluginClient native agent transport", () => {
-  it("uses native stream processing with isolated routing and request context", async () => {
+describe("MastraPluginClient AI SDK transport", () => {
+  it("uses the official chat route with isolated routing and request context", async () => {
     let received!: Request;
     globalThis.fetch = (async (input, init) => {
       received = new Request(input, init);
@@ -34,9 +34,9 @@ describe("MastraPluginClient native agent transport", () => {
       model: "model-1",
       requestContext: { storeId: "store-1" },
     });
-    await response.processDataStream({ onChunk: () => assert.fail("unexpected chunk") });
+    await response.stream.cancel();
 
-    assert.equal(received.url, "http://localhost/api/mastra/agents/support/stream");
+    assert.equal(received.url, "http://localhost/api/mastra/chat/support");
     assert.equal(received.headers.get("x-mastra-thread-id"), "thread-1");
     assert.equal(received.headers.get("x-mastra-model"), "model-1");
     const body = await received.json();
@@ -44,23 +44,13 @@ describe("MastraPluginClient native agent transport", () => {
     assert.deepEqual(body.requestContext, { storeId: "store-1" });
   });
 
-  it("reuses the run context for native approval continuation", async () => {
+  it("reuses the run context for approval continuation", async () => {
     let received!: Request;
     globalThis.fetch = (async (input, init) => {
       received = new Request(input, init);
-      return new Response(
-        `data: ${JSON.stringify({
-          type: "tool-result",
-          payload: {
-            toolCallId: "tool-1",
-            toolName: "lookup",
-            result: { ok: true },
-          },
-        })}\n\ndata: [DONE]\n\n`,
-        {
-          headers: { "content-type": "text/event-stream" },
-        },
-      );
+      return new Response("data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      });
     }) as typeof fetch;
     const client = new MastraPluginClient({
       basePath: "/api/mastra",
@@ -76,16 +66,41 @@ describe("MastraPluginClient native agent transport", () => {
       threadId: "thread-1",
       requestContext: { storeId: "store-1" },
     });
-    const chunks: string[] = [];
-    await response.processDataStream({
-      onChunk: (chunk) => {
-        chunks.push(chunk.type);
-      },
+    await response.stream.cancel();
+
+    assert.equal(received.url, "http://localhost/api/mastra/chat/support");
+    assert.equal(received.headers.get("x-mastra-thread-id"), "thread-1");
+    const body = await received.json();
+    assert.deepEqual(body.resumeData, { approved: true });
+    assert.deepEqual(body.requestContext, { storeId: "store-1" });
+  });
+
+  it("forwards a native tool-decline reason", async () => {
+    let received!: Request;
+    globalThis.fetch = (async (input, init) => {
+      received = new Request(input, init);
+      return new Response("data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as typeof fetch;
+    const client = new MastraPluginClient({
+      basePath: "/api/mastra",
+      defaultAgent: "support",
+      agents: ["support"],
+      feedbackEnabled: false,
+      chatAlwaysAvailable: true,
     });
 
-    assert.equal(received.url, "http://localhost/api/mastra/agents/support/approve-tool-call");
-    assert.equal(received.headers.get("x-mastra-thread-id"), "thread-1");
-    assert.deepEqual((await received.json()).requestContext, { storeId: "store-1" });
-    assert.deepEqual(chunks, ["tool-result"]);
+    await client.declineToolCallStream("support", {
+      runId: "run-1",
+      toolCallId: "tool-1",
+      reason: "Not approved for this request.",
+    });
+
+    assert.equal(received.url, "http://localhost/api/mastra/chat/support");
+    assert.deepEqual((await received.json()).resumeData, {
+      approved: false,
+      reason: "Not approved for this request.",
+    });
   });
 });

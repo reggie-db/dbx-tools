@@ -19,9 +19,9 @@ Key features:
   route-stable chat state.
 - Controlled `ChatView` for hosts that own messages, streaming, model state, and
   route calls themselves.
-- `MastraPluginClient` wrapper around `@mastra/client-js` with AppKit-Mastra
-  routes for history, threads, model lists, suggestions, feedback, charts, and
-  statement data.
+- `MastraPluginClient` combines Mastra's official AI SDK chat route, native
+  memory APIs, and AppKit-Mastra model, suggestion, feedback, chart, and
+  statement routes.
 - Tool-approval support for suspended Mastra `requireApproval` calls, including
   resumed-stream handling. An email-shaped input (the `send_email` tool)
   renders as a formatted To / Cc / Subject / Markdown-body preview rather than
@@ -56,9 +56,9 @@ Use this package when the server is
 [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra) and the UI needs to
 understand Mastra-specific behavior:
 
-- `@mastra/client-js` agent streaming plus the plugin's custom history, threads,
-  models, suggestions, feedback, chart, and statement routes.
-- Suspended `requireApproval` tool calls and resumed approve/deny streams.
+- Mastra's official AI SDK chat stream, native resource-scoped memory APIs, and
+  the plugin's model, suggestion, feedback, chart, and statement routes.
+- Suspended `requireApproval` tool calls resumed through native `resumeData`.
 - Genie writer events rendered as inline tool progress, not just a terminal
   answer.
 - `[chart:<id>]` and `[data:<id>]` assistant markers rendered as ECharts charts
@@ -144,8 +144,8 @@ export function App() {
 
 `MastraChat` is the quickest client for the AppKit-Mastra plugin. It reads the
 plugin's published client config, creates a `MastraPluginClient`, streams turns
-through `agent.stream()`, hydrates the latest history page, and renders the
-controlled `ChatView`.
+through Mastra's official AI SDK chat route, hydrates native memory, and renders
+the controlled `ChatView`.
 
 Useful options:
 
@@ -275,7 +275,13 @@ const client = new MastraPluginClient(clientConfig);
 // different threads never share state.
 const stream = await client.streamAgent({
   agentId: client.defaultAgent,
-  messages: [{ role: "user", content: "Hello" }],
+  messages: [
+    {
+      id: "user-1",
+      role: "user",
+      parts: [{ type: "text", text: "Hello" }],
+    },
+  ],
   runId,
   threadId: activeThreadId,
   model: "claude sonnet",
@@ -290,18 +296,19 @@ Each conversation thread runs independently: start a turn on one thread, switch
 to another and start a second, and both stream concurrently. Cancel one via its
 `AbortSignal` (or the driver's `onCancelThread`) without touching the others.
 
-`MastraPluginClient` extends `@mastra/client-js` with the AppKit-Mastra custom
-routes. It uses `credentials: "include"` so session cookies travel with streaming
-and REST calls. The React hooks wrap common route calls for model catalogues,
-suggestions, thread lists, chart fetches, and statement-data fetches.
+`MastraPluginClient` extends `@mastra/client-js` with the official AI SDK
+`chatRoute` transport and AppKit-Mastra additions. It uses
+`credentials: "include"` so session cookies travel with streaming and REST
+calls. The React hooks wrap native memory plus model catalogues, suggestions,
+chart fetches, and statement-data fetches.
 
 ## Approvals, Embeds, And Feedback
 
 The UI understands the extra events produced by
 [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra):
 
-- `tool-call-approval` chunks become inline approval cards and call
-  `approve-tool-call` / `decline-tool-call` when the user decides.
+- Approval chunks become inline approval cards and continue the official chat
+  route with Mastra's native `{ approved, reason? }` resume data.
 - Native tool-call and tool-result payloads remain complete. Expanding a tool
   row reveals default-closed Request and Response viewers; large values scroll
   without string or collection truncation.
@@ -385,7 +392,8 @@ touching `navigator.clipboard` or `URL.createObjectURL` again.
   external open/close/context controller.
 - `useMastraChat` - headless driver that returns `ChatView` props.
 - `ChatView` - controlled presentational chat shell.
-- `MastraPluginClient` - `@mastra/client-js` plus AppKit-Mastra custom routes.
+- `MastraPluginClient` - native `@mastra/client-js` memory/agent APIs plus
+  AppKit-Mastra model, suggestion, feedback, and embed routes.
 - `useMastraClient`, `useMastraConfig`, `useMastraModels`,
   `useMastraDefaultModel`, `useMastraSuggestions`, `useMastraThreads`,
   `useChartFetch`, `useStatementFetch` - route/config hooks for controlled

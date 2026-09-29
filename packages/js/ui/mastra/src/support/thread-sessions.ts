@@ -1,12 +1,6 @@
 import type { UIMessage } from "ai";
 import type { MastraRequestContextSnapshot } from "./request-context.ts";
-import type {
-  ChatStatus,
-  MessageFeedback,
-  PendingApproval,
-  QueuedSteer,
-  ToolEvent,
-} from "../react/types.ts";
+import type { ChatStatus, MessageFeedback, PendingApproval, QueuedSteer } from "../react/types.ts";
 
 export type { QueuedSteer } from "../react/types.ts";
 
@@ -20,7 +14,6 @@ export type ThreadSession = {
   messages: UIMessage[];
   status: ChatStatus;
   error: Error | null;
-  toolEventsByMessage: Record<string, ToolEvent[]>;
   pendingApprovalsByMessage: Record<string, PendingApproval[]>;
   feedbackByMessage: Record<string, MessageFeedback>;
   abortController: AbortController | null;
@@ -30,7 +23,6 @@ export type ThreadSession = {
   historyLoaded: boolean;
   hasMoreHistory: boolean;
   historyPage: number;
-  lastUserText: string | null;
   /** Context snapshot for the active run and approval continuation. */
   runRequestContext?: MastraRequestContextSnapshot;
   /** Context snapshot reused when regenerating the last turn. */
@@ -47,7 +39,6 @@ export function createThreadSession(): ThreadSession {
     messages: [],
     status: "ready",
     error: null,
-    toolEventsByMessage: {},
     pendingApprovalsByMessage: {},
     feedbackByMessage: {},
     abortController: null,
@@ -57,7 +48,6 @@ export function createThreadSession(): ThreadSession {
     historyLoaded: false,
     hasMoreHistory: false,
     historyPage: 0,
-    lastUserText: null,
     queuedSteers: [],
   };
 }
@@ -97,28 +87,6 @@ export function reorderSteers<T extends QueuedSteer>(queue: T[], orderedIds: str
     if (!seen.has(steer.id)) next.push(steer);
   }
   return next;
-}
-
-/**
- * Settle any tool-progress pills still marked `running` to `done`. A cancelled
- * or interrupted turn stops delivering the `tool-result` / `tool-error` chunks
- * that would otherwise close them, so without this a Genie / chart pill would
- * spin forever after the user hits stop. Returns the same map when nothing was
- * running so callers can skip a needless state update.
- */
-export function terminateRunningToolEvents(
-  toolEventsByMessage: Record<string, ToolEvent[]>,
-): Record<string, ToolEvent[]> {
-  let changed = false;
-  const next: Record<string, ToolEvent[]> = {};
-  for (const [messageId, events] of Object.entries(toolEventsByMessage)) {
-    next[messageId] = events.map((event) => {
-      if (event.status !== "running") return event;
-      changed = true;
-      return { ...event, status: "done" as const };
-    });
-  }
-  return changed ? next : toolEventsByMessage;
 }
 
 export function sessionKey(activeThreadId: string | undefined): string {

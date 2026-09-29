@@ -11,10 +11,7 @@
  */
 
 import { error, log } from "@dbx-tools/shared-core";
-import {
-  GENIE_PROGRESS_PART_TYPE,
-  type GenieWriterEvent,
-} from "@dbx-tools/shared-mastra";
+import { GENIE_PROGRESS_PART_TYPE, type GenieWriterEvent } from "@dbx-tools/shared-mastra";
 import type { ToolExecutionContext } from "@mastra/core/tools";
 
 /**

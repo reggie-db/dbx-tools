@@ -36,7 +36,6 @@ import {
   isSessionRunning,
   removeSteer as removeSteerFromQueue,
   reorderSteers as reorderSteerQueue,
-  terminateRunningToolEvents,
 } from "../support/thread-sessions.ts";
 
 const _loadChatExport = () => import("../support/export.ts");
@@ -383,10 +382,16 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     updateSession,
     writeMessages,
   } = useChatSessions(activeThreadId);
+  const historyAvailability = isLoadingThreads
+    ? "loading"
+    : threads.some((thread) => thread.id === activeThreadId) || optimisticThreads[activeThreadId]
+      ? "present"
+      : "missing";
   const { isLoadingHistory, isLoadingMore, loadOlderHistory } = useChatHistory({
     activeKey,
     activeThreadId,
     agentId,
+    availability: historyAvailability,
     getSession,
     mastraClient,
     updateSession,
@@ -424,9 +429,6 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           error: null,
           status: "submitted",
           runToken: token,
-          // Superseding an in-flight run (a steer that interrupts, or a rapid
-          // re-send) stops its stream, so close any pills it left running.
-          toolEventsByMessage: terminateRunningToolEvents(session.toolEventsByMessage),
         };
       });
       const runIdRef = { current: getSession(threadId).runId };
@@ -529,9 +531,6 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           runToken: session.runToken + 1,
           error: null,
           status: "ready",
-          // Cancelling stops the stream, so close any tool pills still marked
-          // running - the closing chunks will never arrive.
-          toolEventsByMessage: terminateRunningToolEvents(session.toolEventsByMessage),
         };
       });
     },
@@ -547,16 +546,10 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     updateSession,
   });
 
-  // Append a user message to a thread's transcript, stamping `lastUserText`,
-  // thread-activity, and a provisional title for a brand-new thread. Returns
-  // the pre-append session (so callers can see whether a run was in flight)
-  // and the new message list. Shared by send + interrupt.
+  // Append a user message to a thread's transcript, update thread activity,
+  // and derive a provisional title for a brand-new thread.
   const appendUserMessage = useCallback(
-    (
-      threadId: string,
-      text: string,
-    ): { message: UIMessage; next: UIMessage[] } => {
-      updateSession(threadId, (session) => ({ ...session, lastUserText: text }));
+    (threadId: string, text: string): { message: UIMessage; next: UIMessage[] } => {
       if (activeThreadId) {
         noteThreadActivity(activeThreadId);
         if (getSession(threadId).messages.length === 0) {
@@ -598,8 +591,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
         }));
         return;
       }
-      const { message } = appendUserMessage(threadId, text);
-      void runStream(threadId, message, requestContext);
+      const { message: userMessage } = appendUserMessage(threadId, text);
+      void runStream(threadId, userMessage, requestContext);
     },
     [appendUserMessage, runStream, activeKey, getSession, updateSession],
   );
@@ -649,17 +642,14 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
 
   /**
    * Wipe the current thread on the server and reset every piece of
-   * client-side state that mirrored it. The session cookie that
-   * anchors the thread id is preserved by the server, so the next
-   * turn opens against the same (now empty) thread - no reload
-   * needed. Suspended approval cards belong to the cleared turns
-   * and would be unresolvable anyway, so we drop them too.
+   * client-side state that mirrored it. The next turn recreates the
+   * same client-owned thread id without a reload.
    */
   const handleClear = useCallback(async () => {
     const threadId = activeKey;
     try {
-      const result = await mastraClient.clearHistory({ agentId, threadId: activeThreadId });
-      logger.info("history cleared", { cleared: result.cleared });
+      await mastraClient.clearHistory({ agentId, threadId: activeThreadId });
+      logger.info("history cleared", { threadId });
     } catch (error) {
       logger.error("history clear error", {
         error: sharedError.errorMessage(error),
@@ -698,8 +688,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const deleteThread = useCallback(
     async (threadId: string) => {
       try {
-        const result = await mastraClient.removeThread(threadId, { agentId });
-        logger.info("thread deleted", { threadId, deleted: result.deleted });
+        await mastraClient.removeThread(threadId, { agentId });
+        logger.info("thread deleted", { threadId });
       } catch (error) {
         logger.error("thread delete error", {
           threadId,
@@ -763,28 +753,52 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
 
   const regenerate = useCallback(() => {
     const threadId = activeKey;
-    const lastUserText = getSession(threadId).lastUserText;
-    if (!lastUserText) return;
     const prev = getSession(threadId).messages;
     const lastAssistant = prev.length > 0 && prev.at(-1)?.role === "assistant" ? prev.at(-1) : null;
     const trimmed = lastAssistant ? prev.slice(0, -1) : prev;
+    const lastUser = [...trimmed].reverse().find((message) => message.role === "user");
+    if (!lastUser) return;
     if (lastAssistant) {
       updateSession(threadId, (session) => {
-        const { [lastAssistant.id]: _events, ...toolEvents } = session.toolEventsByMessage;
         const { [lastAssistant.id]: _approvals, ...pendingApprovals } =
           session.pendingApprovalsByMessage;
         const { [lastAssistant.id]: _feedback, ...feedback } = session.feedbackByMessage;
         return {
           ...session,
-          toolEventsByMessage: toolEvents,
           pendingApprovalsByMessage: pendingApprovals,
           feedbackByMessage: feedback,
         };
       });
     }
-    writeMessages(threadId, trimmed);
-    void runStream(threadId, trimmed, getSession(threadId).lastRequestContext);
-  }, [activeKey, getSession, runStream, updateSession, writeMessages]);
+    void mastraClient
+      .deleteMessages(activeThreadId, [lastUser.id, ...(lastAssistant ? [lastAssistant.id] : [])], {
+        agentId,
+      })
+      .then(() => {
+        writeMessages(threadId, trimmed);
+        void runStream(threadId, lastUser, getSession(threadId).lastRequestContext);
+      })
+      .catch((error: unknown) => {
+        logger.error("regenerate cleanup error", {
+          threadId,
+          error: sharedError.errorMessage(error),
+        });
+        updateSession(threadId, (session) => ({
+          ...session,
+          error: sharedError.toError(error),
+          status: "error",
+        }));
+      });
+  }, [
+    activeKey,
+    activeThreadId,
+    agentId,
+    getSession,
+    mastraClient,
+    runStream,
+    updateSession,
+    writeMessages,
+  ]);
 
   // Chat export (opt-in). Resolves `[chart:<id>]` / `[data:<id>]` embeds
   // straight off the client so the export inlines the same charts /
@@ -941,7 +955,6 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     regenerate,
     onStop: stop,
     suggestions,
-    toolEventsByMessage: activeSession.toolEventsByMessage,
     pendingApprovalsByMessage: activeSession.pendingApprovalsByMessage,
     onResolveToolApproval: handleApproval,
     // Picker is opt-in: only hand ChatView the catalogue + change
