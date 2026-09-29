@@ -33,6 +33,8 @@ has no equivalent for.
 - Every outbound call runs through AppKit's `execute()` chain - per-user cache,
   retry with jittered backoff, timeout, telemetry - and unwinds on an
   `AbortSignal`.
+- Page and fallback-result HTML use parser-backed text conversion and selectors,
+  including complete HTML entity decoding and malformed-markup recovery.
 
 ## Why Use This Over Native AppKit
 
@@ -316,8 +318,8 @@ the [Databricks docs](https://docs.databricks.com/aws/en/machine-learning/model-
   with, and the reasoning behind each.
 - `search` - `runWebSearch()` over the Databricks native web-search tool.
 - `provider` - provider detection + the provider -> tool-spec map.
-- `scrape` - `runScrapeSearch()` DuckDuckGo fallback for workspaces with no
-  native web-search model.
+- `scrape` - `runScrapeSearch()` DuckDuckGo fallback plus parser-backed
+  `parseDdgHtml()` result extraction for workspaces with no native web-search model.
 - `fetch` - `runWebFetch()` over got-scraping.
 - `html-text` - `htmlToText()` / `htmlFragmentToText()` / `decodeHtmlEntities()`, shared by
   `fetch` and the DuckDuckGo scrape fallback.

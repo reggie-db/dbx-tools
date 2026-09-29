@@ -11,6 +11,11 @@
       "type": "build"
     },
     {
+      "name": "@types/html-to-text",
+      "version": "^9",
+      "type": "build"
+    },
+    {
       "name": "@types/json-schema",
       "version": "^7",
       "type": "build"
@@ -60,8 +65,23 @@
       "type": "runtime"
     },
     {
+      "name": "cheerio",
+      "version": "^1.2.0",
+      "type": "runtime"
+    },
+    {
+      "name": "entities",
+      "version": "^4.5.0",
+      "type": "runtime"
+    },
+    {
       "name": "got-scraping",
       "version": "^4.2.1",
+      "type": "runtime"
+    },
+    {
+      "name": "html-to-text",
+      "version": "^9.0.5",
       "type": "runtime"
     },
     {

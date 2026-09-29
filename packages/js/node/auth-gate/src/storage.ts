@@ -13,6 +13,7 @@ import { fileLock } from "@dbx-tools/core";
 import { advisoryLock, type PgPoolLike } from "@dbx-tools/postgres";
 import { log } from "@dbx-tools/shared-core";
 import type { BetterAuthOptions } from "better-auth";
+import { getMigrations } from "better-auth/db/migration";
 import envPaths from "env-paths";
 
 const logger = log.logger("auth:storage");
@@ -38,12 +39,6 @@ export interface AuthStorage {
   path?: string;
   close(): Promise<void>;
 }
-
-type MigrationModule = {
-  getMigrations(options: BetterAuthOptions): Promise<{
-    runMigrations(): Promise<void>;
-  }>;
-};
 
 interface SqliteDatabase {
   exec(sql: string): unknown;
@@ -129,8 +124,7 @@ export async function migrateAuth(options: BetterAuthOptions, storage: AuthStora
   if (storage.kind === "memory") return;
 
   const run = async (): Promise<void> => {
-    const module = (await import(migrationModuleUrl())) as MigrationModule;
-    const migrations = await module.getMigrations(options);
+    const migrations = await getMigrations(options);
     await migrations.runMigrations();
   };
 
@@ -153,9 +147,4 @@ async function openSqlite(path: string): Promise<AuthDatabase & { close(): void 
   const database = new DatabaseSync(path);
   database.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON");
   return database;
-}
-
-function migrationModuleUrl(): string {
-  const entry = import.meta.resolve("better-auth");
-  return new URL("./db/get-migration.mjs", entry).href;
 }

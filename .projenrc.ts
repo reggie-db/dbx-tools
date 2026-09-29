@@ -467,10 +467,17 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
     "@dbx-tools/shared-model@workspace:*",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
+    "cheerio@^1.2.0",
+    "entities@^4.5.0",
     "got-scraping@^4.2.1",
+    "html-to-text@^9.0.5",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
+  p.addDevDeps(
+    "@types/express@catalog:",
+    "@types/html-to-text@^9",
+    "@types/json-schema@^7",
+  );
 });
 
 // node-appkit-graphiti: AppKit lifecycle + Caddy routing for the Python Graphiti

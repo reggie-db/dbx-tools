@@ -369,7 +369,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   authorization policy, delivery, secret, origin, and a Lakebase pool or SQLite
   config. Storage defaults to SQLite in the platform data directory, while a
   native AppKit Lakebase pool provides shared persistence. Programmatic Better
-  Auth migrations run under a Postgres advisory lock or local file lock. Never
+  Auth migrations use the public `better-auth/db/migration` export under a
+  Postgres advisory lock or local file lock. Never
   derive WebAuthn RP ID or expected origin from a request header. Better Auth
   trusts the configured base origin plus explicit `trustedOrigins`; never
   reflect an arbitrary request Origin or Referer into that trust set. A
@@ -394,7 +395,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Responses `{"type":"web_search"}`, Gemini Chat `{"google_search":{}}`), an
   optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
   citations / refusing disallowed fetches, per-tool approval gating, and the
-  AppKit `web-search` plugin. Same shape as node-email.
+  AppKit `web-search` plugin. HTML-to-text conversion and DuckDuckGo result
+  extraction are parser-backed through direct `html-to-text`, `entities`, and
+  `cheerio` dependencies; do not restore regex tag or selector parsing. Same
+  shape as node-email.
 - `packages/js/node/appkit-graphiti` — AppKit process plugin for the Python
   `dbx-tools-graphiti` runtime. It inherits the app's Lakebase environment,
   selects separate loopback ports for Graphiti, `dbx-model-proxy`, and Caddy,
@@ -1272,7 +1276,7 @@ bounds, or other compatibility-sensitive values.
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:
 
-- `node/appkit-web-search` `src/html-text.ts` - `htmlToText` /
+- `node/appkit-web-search` `src/html-text.ts` - parser-backed `htmlToText` /
   `htmlFragmentToText` / `decodeHtmlEntities`, shared by `fetch.ts` and
   `scrape.ts`.
 - `node/appkit-web-search` `search.ts` `resolveWebSearchContext()` - the OBO
