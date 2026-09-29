@@ -17,8 +17,9 @@ AppKit process plugin for the Python `dbx-tools-graphiti` MCP runtime.
   UUID arguments that could reference another user's graph objects;
 - selects separate free loopback ports for Graphiti, the model proxy, and Caddy unless
   they are explicitly configured;
-- exposes the user-scoped tools through `plugins.graphiti?.toolkit()` for
-  `@dbx-tools/appkit-mastra` agents;
+- exposes the user-scoped tools through an async
+  `plugins.graphiti?.toolkit()` for `@dbx-tools/appkit-mastra` agents, using
+  upstream descriptions and JSON input schemas discovered from MCP;
 - runs Graphiti and Caddy under `concurrently`, while the Python launcher runs
   Graphiti and `dbx-model-proxy` under Honcho;
 - propagates termination signals through both supervisors, which escalate
@@ -56,8 +57,8 @@ PostgreSQL connection environment to enable the journal.
 Add the MCP tools to a Mastra agent with:
 
 ```ts
-tools(plugins) {
-  return { ...plugins.graphiti?.toolkit() };
+async tools(plugins) {
+  return { ...(await plugins.graphiti?.toolkit()) };
 }
 ```
 
@@ -66,6 +67,10 @@ invoked as an agent tool. Direct MCP requests use the forwarded AppKit user id,
 falling back to AppKit's service identity in local development. The plugin
 hashes that identity before using it as a Graphiti group id. Model or MCP input
 cannot choose `group_id` or `group_ids`.
+
+Agent registration waits up to 60 seconds for the supervised sidecars and MCP
+tool discovery. A startup failure, incomplete scoped tool set, or missing
+description/schema fails registration instead of exposing placeholder tools.
 
 The scoped surface includes memory ingestion, node/fact search, episode listing,
 saga summaries, community building, triplet insertion, and status. UUID-only

@@ -9,8 +9,8 @@ Key features:
   passkey credentials;
 - session-required passkey enrollment and discoverable passkey login;
 - POST and browser-redirect logout routes with a same-origin destination;
-- caller-provided `authorizeIdentity`, email sender, secret, origin, and
-  database;
+- caller-provided `authorizeIdentity`, email sender, secret, base origin,
+  additional trusted origins, and database;
 - native AppKit Lakebase pool or local SQLite storage;
 - programmatic Better Auth migrations under advisory or file locks.
 
@@ -29,6 +29,7 @@ const database = await storage.createAuthStorage({ storage: "sqlite" });
 const runtime = await auth.createPasswordlessAuth({
   storage: database,
   baseURL: "http://localhost:8000",
+  trustedOrigins: ["https://overlay.example.com"],
   appName: "My app",
   secret: process.env.AUTH_SECRET!,
   logoutRedirectPath: "/",
@@ -42,7 +43,11 @@ const runtime = await auth.createPasswordlessAuth({
 
 `POST <basePath>/logout` returns `{ ok, redirectTo }`; `GET` clears the same
 session and redirects with status `303`. The redirect defaults to `/` and is
-restricted to a same-origin path.
+restricted to a same-origin path. Better Auth accepts only `baseURL` and
+`trustedOrigins`; an arbitrary request Origin or Referer is rejected. Inside a
+Databricks App, HTTPS `*.databricksapps.com` origins are accepted automatically
+for the platform front door. WebAuthn still uses the configured `baseURL` host
+for its RP ID and expected origin.
 
 ## Modules
 

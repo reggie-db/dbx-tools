@@ -769,8 +769,8 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
  * ```ts
  * createAgent({
  *   instructions: `${myAgentInstructions}\n\n${GENIE_INSTRUCTIONS}`,
- *   tools(plugins) {
- *     return { ...plugins.genie?.toolkit() };
+ *   async tools(plugins) {
+ *     return { ...(await plugins.genie?.toolkit()) };
  *   },
  * });
  * ```

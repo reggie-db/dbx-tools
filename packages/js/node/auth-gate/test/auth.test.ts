@@ -119,6 +119,18 @@ describe("Better Auth runtime", () => {
     const passkeys = await runtime.handler(authRequest("/passkey/list-user-passkeys", { cookie }));
     assert.equal(passkeys.status, 200);
 
+    const foreignLogout = await runtime.handler(
+      authRequest("/logout", { cookie, origin: "https://untrusted.example" }, "POST"),
+    );
+    assert.equal(foreignLogout.status, 403);
+    const foreignRefererLogout = await runtime.handler(
+      new Request("http://localhost/api/email/auth/logout", {
+        method: "POST",
+        headers: { cookie, referer: "https://untrusted.example/account" },
+      }),
+    );
+    assert.equal(foreignRefererLogout.status, 403);
+
     const logout = await runtime.handler(authRequest("/logout", { cookie }, "POST"));
     assert.deepEqual(await logout.json(), { ok: true, redirectTo: "/login" });
     const loggedOutStatus = await runtime.handler(authRequest("/status", { cookie }));
@@ -163,7 +175,7 @@ describe("Better Auth runtime", () => {
     await runtime.close();
   });
 
-  it("accepts a send from a foreign origin (the tunnel binds arbitrary hosts)", async () => {
+  it("accepts configured overlay origins and rejects arbitrary origins", async () => {
     let sends = 0;
     const runtime = await createPasswordlessAuth({
       storage: await createAuthStorage({
@@ -171,6 +183,7 @@ describe("Better Auth runtime", () => {
         sqlitePath: join(directory, "origin.sqlite"),
       }),
       baseURL: "http://localhost",
+      trustedOrigins: ["http://172.30.212.215:6969"],
       basePath: "/api/email/auth",
       appName: "Test app",
       secret: "test-secret-at-least-thirty-two-characters",
@@ -183,9 +196,6 @@ describe("Better Auth runtime", () => {
       },
     });
 
-    // A browser on the overlay sends Origin: http://<overlay-ip>:6969, which is
-    // not the configured baseURL. Before trusting the request's own origin this
-    // was rejected with 403 INVALID_ORIGIN and no code was ever sent.
     const response = await runtime.handler(
       jsonRequest(
         "/email-otp/send-verification-otp",
@@ -195,7 +205,63 @@ describe("Better Auth runtime", () => {
     );
     assert.equal(response.status, 200);
     assert.equal(sends, 1);
+    const untrusted = await runtime.handler(
+      jsonRequest(
+        "/email-otp/send-verification-otp",
+        { email: "user@example.com", type: "sign-in" },
+        "https://untrusted.example",
+      ),
+    );
+    assert.equal(untrusted.status, 403);
+    assert.equal(sends, 1);
     await runtime.close();
+  });
+
+  it("automatically accepts Databricks Apps origins only inside an App", async () => {
+    const previous = process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
+    process.env.DBX_TOOLS_DATABRICKS_APP_ENV = "true";
+    let sends = 0;
+    const runtime = await createPasswordlessAuth({
+      storage: await createAuthStorage({
+        storage: "sqlite",
+        sqlitePath: join(directory, "databricks-app-origin.sqlite"),
+      }),
+      baseURL: "https://demo.apps.dbx.tools",
+      basePath: "/api/email/auth",
+      appName: "Test app",
+      secret: "test-secret-at-least-thirty-two-characters",
+      sessionTtlSeconds: 3600,
+      codeTtlSeconds: 600,
+      maxAttempts: 5,
+      authorizeIdentity: () => true,
+      sendCode: async () => {
+        sends++;
+      },
+    });
+    try {
+      const platform = await runtime.handler(
+        jsonRequest(
+          "/email-otp/send-verification-otp",
+          { email: "user@example.com", type: "sign-in" },
+          "https://dbx-tools-demo-123.aws.databricksapps.com",
+        ),
+      );
+      assert.equal(platform.status, 200);
+      assert.equal(sends, 1);
+      const arbitrary = await runtime.handler(
+        jsonRequest(
+          "/email-otp/send-verification-otp",
+          { email: "user@example.com", type: "sign-in" },
+          "https://untrusted.example",
+        ),
+      );
+      assert.equal(arbitrary.status, 403);
+      assert.equal(sends, 1);
+    } finally {
+      await runtime.close();
+      if (previous === undefined) delete process.env.DBX_TOOLS_DATABRICKS_APP_ENV;
+      else process.env.DBX_TOOLS_DATABRICKS_APP_ENV = previous;
+    }
   });
 
   it("serializes concurrent startup migrations for one SQLite file", async () => {

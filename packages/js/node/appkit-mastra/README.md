@@ -65,10 +65,14 @@ const analyst = agents.createAgent({
   instructions: ["You answer questions about workspace data.", genie.GENIE_INSTRUCTIONS].join(
     "\n\n",
   ),
-  tools(plugins) {
+  async tools(plugins) {
+    const [analyticsTools, genieTools] = await Promise.all([
+      plugins.analytics.toolkit(),
+      plugins.genie?.toolkit(),
+    ]);
     return {
-      ...plugins.analytics.toolkit(),
-      ...plugins.genie?.toolkit(),
+      ...analyticsTools,
+      ...genieTools,
       get_weather: agents.tool({
         description: "Get a simple weather report.",
         schema: z.object({ city: z.string() }),
@@ -184,16 +188,23 @@ server-side durable policy rather than browser state.
 ## AppKit Toolkits
 
 The `tools(plugins)` callback receives a dynamic index of registered AppKit
-tool-provider plugins. Each entry exposes `.toolkit(opts)` with AppKit-compatible
-`prefix`, `only`, `except`, and `rename` options.
+tool-provider plugins. Each entry exposes `.toolkit(opts)` with AppKit's public
+`prefix`, `only`, `except`, and `rename` contract. Await toolkit resolution so
+providers backed by asynchronous discovery can finish registration. Providers
+that expose only AppKit's native `getAgentTools()` and `executeAgentTool()` are
+adapted too.
 
 ```ts
 const agent = agents.createAgent({
   instructions: "Use the narrowest tool that answers the question.",
-  tools(plugins) {
+  async tools(plugins) {
+    const [analyticsTools, fileTools] = await Promise.all([
+      plugins.analytics.toolkit({ only: ["query"] }),
+      plugins.files?.toolkit({ prefix: "files.", except: ["delete"] }),
+    ]);
     return {
-      ...plugins.analytics.toolkit({ only: ["query"] }),
-      ...plugins.files?.toolkit({ prefix: "files.", except: ["delete"] }),
+      ...analyticsTools,
+      ...fileTools,
     };
   },
 });
@@ -541,8 +552,8 @@ call ids to `prepare_chart`.
 ```ts
 const agent = agents.createAgent({
   instructions: `${baseInstructions}\n\n${genie.GENIE_INSTRUCTIONS}`,
-  tools(plugins) {
-    return { ...plugins.genie?.toolkit({ prefix: "" }) };
+  async tools(plugins) {
+    return { ...(await plugins.genie?.toolkit({ prefix: "" })) };
   },
 });
 ```

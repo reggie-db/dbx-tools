@@ -162,8 +162,8 @@ const clientDist =
 // Per-request overrides via `X-Mastra-Model` header, `?model=` query,
 // or body `model` field can re-target the same agent without redeploy.
 // `GET /api/mastra/models` lists the cached catalogue.
-function demoGenieTools(plugins: MastraPlugins, agentMode: boolean): MastraTools {
-  if (agentMode) return plugins.genie?.toolkit() ?? {};
+async function demoGenieTools(plugins: MastraPlugins, agentMode: boolean): Promise<MastraTools> {
+  if (agentMode) return (await plugins.genie?.toolkit()) ?? {};
 
   const spaceId = process.env.DATABRICKS_GENIE_SPACE_ID;
   if (!spaceId) {
@@ -211,14 +211,14 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
           : "No application context was supplied for this turn.";
       return `${baseInstructions}\n\n${context}`;
     },
-    tools(plugins): MastraTools {
+    async tools(plugins): Promise<MastraTools> {
       // Materialize the selected Genie toolkit before adding the demo tools.
       // Building one contextually-typed object makes TypeScript recursively
       // expand every source-linked Mastra tool schema together and exceeds its
       // instantiation depth; Object.assign preserves the same flat runtime
       // record without forcing that useless cross-tool type expansion.
-      const agentTools = Object.assign({}, demoGenieTools(plugins, agentMode)) as MastraTools;
-      Object.assign(agentTools, plugins.graphiti?.toolkit());
+      const agentTools = Object.assign({}, await demoGenieTools(plugins, agentMode)) as MastraTools;
+      Object.assign(agentTools, await plugins.graphiti?.toolkit());
       Object.assign(agentTools, {
         // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
         // is `undefined` when the plugin isn't registered, so the `?.`

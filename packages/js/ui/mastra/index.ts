@@ -52,7 +52,7 @@ export type { DataRow } from "./src/react/data-grid.tsx";
 export { MarkdownWithEmbeds } from "./src/react/embed-slots.tsx";
 export { ExportMenu } from "./src/react/export-menu.tsx";
 export { FeedbackControls } from "./src/react/feedback-controls.tsx";
-export { AssistantMarkdown, ToolMarkdown, SqlBlock } from "./src/react/markdown.tsx";
+export { AssistantMarkdown, ToolMarkdown, SqlBlock, JsonBlock } from "./src/react/markdown.tsx";
 export type { MastraAssistantMode, MastraAssistantSide, MastraAssistantLauncherPosition, MastraAssistantResizeOptions, MastraAssistantLauncherOptions, MastraAssistantController, MastraAssistantProps } from "./src/react/mastra-assistant.tsx";
 export { useMastraChat, MastraChat } from "./src/react/mastra-chat.tsx";
 export type { UseMastraChatOptions, MastraChatProps } from "./src/react/mastra-chat.tsx";

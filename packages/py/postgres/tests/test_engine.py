@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import dbx_tools.postgres.engine as engine_module
+import pytest
+from databricks.sdk.service.postgres import PostgresAPI
 from dbx_tools.postgres import (
     PostgresEngineConfig,
     ResolvedPostgresConnection,
@@ -19,13 +21,16 @@ from sqlalchemy import create_engine
 
 
 class FakeApiClient:
-    def __init__(self, responses: dict[str, dict[str, Any]]) -> None:
+    def __init__(self, responses: dict[object, dict[str, Any]]) -> None:
         self.responses = responses
         self.requests: list[tuple[str, str, dict[str, Any]]] = []
+        self._cfg = SimpleNamespace(workspace_id="workspace-1")
 
     def do(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         self.requests.append((method, path, kwargs))
-        return self.responses[path]
+        page_token = (kwargs.get("query") or {}).get("page_token")
+        page = self.responses.get((path, page_token))
+        return page if page is not None else self.responses[path]
 
 
 class FakeDatabase:
@@ -46,12 +51,14 @@ class FakeDatabase:
         )
 
 
-def workspace(responses: dict[str, dict[str, Any]] | None = None) -> Any:
+def workspace(responses: dict[object, dict[str, Any]] | None = None) -> Any:
+    api_client = FakeApiClient(responses or {})
     return SimpleNamespace(
-        api_client=FakeApiClient(responses or {}),
+        api_client=api_client,
         config=SimpleNamespace(client_id=None),
         current_user=SimpleNamespace(me=lambda: SimpleNamespace(user_name="user@example.com")),
         database=FakeDatabase(),
+        postgres=PostgresAPI(api_client),
     )
 
 
@@ -144,11 +151,71 @@ def test_autoscaling_credentials_are_injected_per_physical_connect() -> None:
                 "headers": {
                     "Accept": "application/json",
                     "Content-Type": "application/json",
+                    "X-Databricks-Workspace-Id": "workspace-1",
                 },
                 "body": {"endpoint": endpoint},
             },
         )
     ]
+
+
+def test_autoscaling_credential_refresh_uses_sdk_expire_time(monkeypatch: Any) -> None:
+    now = dt.datetime(2026, 8, 7, tzinfo=dt.UTC)
+    clock = [now]
+
+    class RotatingApiClient(FakeApiClient):
+        def __init__(self) -> None:
+            super().__init__({})
+            self.count = 0
+
+        def do(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+            self.requests.append((method, path, kwargs))
+            self.count += 1
+            return {
+                "token": f"autoscaling-{self.count}",
+                "expire_time": (now + dt.timedelta(minutes=10 + self.count)).isoformat(),
+            }
+
+    api_client = RotatingApiClient()
+    client = workspace()
+    client.api_client = api_client
+    client.postgres = PostgresAPI(api_client)
+    monkeypatch.setattr(engine_module, "_utcnow", lambda: clock[0])
+    provider = autoscaling_credential_provider(
+        client,
+        "projects/demo/branches/main/endpoints/primary",
+    )
+
+    assert provider() == "autoscaling-1"
+    clock[0] = now + dt.timedelta(minutes=7)
+    assert provider() == "autoscaling-2"
+
+
+def test_autoscaling_discovery_consumes_all_sdk_pages() -> None:
+    path = "/api/2.0/postgres/projects"
+    client = workspace(
+        {
+            (path, None): {
+                "projects": [{"name": "projects/first"}],
+                "next_page_token": "next",
+            },
+            (path, "next"): {
+                "projects": [{"name": "projects/second"}],
+            },
+        }
+    )
+
+    with pytest.raises(ValueError, match="Expected one Lakebase project, found: first, second"):
+        resolve_postgres_connection(
+            client,
+            PostgresEngineConfig(user="user@example.com"),
+            environ={},
+        )
+    assert client.api_client.requests[1][2]["query"]["page_token"] == "next"
+    assert all(
+        request[2]["headers"]["X-Databricks-Workspace-Id"] == "workspace-1"
+        for request in client.api_client.requests
+    )
 
 
 def test_workspace_credential_refresh_uses_expiration_metadata(
@@ -205,9 +272,9 @@ def test_autoscaling_credential_refresh_is_serialized() -> None:
             return super().do(method, path, **kwargs)
 
     client = workspace()
-    client.api_client = SlowApiClient(
-        {"/api/2.0/postgres/credentials": {"token": "autoscaling-token"}}
-    )
+    api_client = SlowApiClient({"/api/2.0/postgres/credentials": {"token": "autoscaling-token"}})
+    client.api_client = api_client
+    client.postgres = PostgresAPI(api_client)
     provider = autoscaling_credential_provider(client, endpoint)
 
     assert _concurrent_credentials(provider, started, release) == (

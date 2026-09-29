@@ -21,7 +21,7 @@ import { createShikiPlugin, highlightToHtml } from "../support/shiki-plugin.ts";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the
-// standalone syntax-highlighted SQL block and a compact copy button.
+// standalone syntax-highlighted SQL/JSON blocks and a compact copy button.
 
 /**
  * Minimal hast node shape we walk to lift a GFM markdown table out of
@@ -180,6 +180,27 @@ const TOOL_MARKDOWN_COMPONENTS = {
  * plaintext. One instance keeps a single lazily-loaded highlighter.
  */
 const SHIKI_PLUGIN = { code: createShikiPlugin() };
+
+/** Resolve syntax-highlighted HTML while preserving plaintext during lazy load. */
+function useHighlightedHtml(source: string, language: string): string | null {
+  const [highlighted, setHighlighted] = useState<{
+    source: string;
+    language: string;
+    html: string;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    void highlightToHtml(source, language).then((result) => {
+      if (active) setHighlighted({ source, language, html: result });
+    });
+    return () => {
+      active = false;
+    };
+  }, [language, source]);
+  return highlighted?.source === source && highlighted.language === language
+    ? highlighted.html
+    : null;
+}
 
 /**
  * Per-word fade-in applied while a reply is still streaming. Streamdown
@@ -346,17 +367,12 @@ const CopyButton = ({ value, className }: { value: string; className?: string })
  */
 export const SqlBlock = ({ sql }: { sql: string }) => {
   const [formatted, setFormatted] = useState(sql);
-  const [html, setHtml] = useState<string | null>(null);
+  const html = useHighlightedHtml(formatted, "sql");
   useEffect(() => {
     let active = true;
     setFormatted(sql);
-    setHtml(null);
     void _prettySql(sql).then((source) => {
-      if (!active) return;
-      setFormatted(source);
-      void highlightToHtml(source, "sql").then((result) => {
-        if (active) setHtml(result);
-      });
+      if (active) setFormatted(source);
     });
     return () => {
       active = false;
@@ -376,5 +392,23 @@ export const SqlBlock = ({ sql }: { sql: string }) => {
         )}
       </pre>
     </div>
+  );
+};
+
+/**
+ * Render formatted JSON with the same lazily loaded Shiki runtime used by
+ * SQL and fenced Markdown code blocks.
+ */
+export const JsonBlock = ({ json, className }: { json: string; className?: string }) => {
+  const html = useHighlightedHtml(json, "json");
+  return (
+    <pre
+      className={cn(
+        "max-w-full overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed",
+        className,
+      )}
+    >
+      {html === null ? <code>{json}</code> : <code dangerouslySetInnerHTML={{ __html: html }} />}
+    </pre>
   );
 };

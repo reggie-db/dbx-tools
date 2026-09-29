@@ -9,6 +9,7 @@
  */
 
 import { passkey } from "@better-auth/passkey";
+import { config as coreConfig } from "@dbx-tools/core";
 import { type AuthStatus, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
 import { log } from "@dbx-tools/shared-core";
 import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
@@ -31,6 +32,8 @@ export interface AuthEmailOptions {
 export interface PasswordlessAuthOptions {
   storage: AuthStorage;
   baseURL: string;
+  /** Additional configured browser origins accepted by Better Auth. */
+  trustedOrigins?: readonly string[];
   basePath?: string;
   appName: string;
   secret: string;
@@ -60,6 +63,10 @@ export async function createPasswordlessAuth(
   config: PasswordlessAuthOptions,
 ): Promise<PasswordlessAuthRuntime> {
   const origin = new URL(config.baseURL).origin;
+  const trustedOrigins = [
+    ...new Set([origin, ...(config.trustedOrigins ?? []).map((value) => new URL(value).origin)]),
+  ];
+  const allowDatabricksAppOrigins = coreConfig.isDatabricksAppEnv();
   const rpID = new URL(origin).hostname;
   const basePath = config.basePath ?? "/api/auth";
   const logoutRedirectPath = normalizeLogoutRedirectPath(config.logoutRedirectPath);
@@ -76,16 +83,13 @@ export async function createPasswordlessAuth(
     basePath,
     database: config.storage.database,
     secret: config.secret,
-    // The gate fronts the app on whatever interface address the tunnel binds
-    // (an overlay/LAN IP, localhost, or a public domain) — not just `baseURL`.
-    // Better Auth's origin check would reject every other host with
-    // INVALID_ORIGIN and block sign-in. Trust the request's own origin here:
-    // this endpoint sits behind the OTP gate and the tunnel preserves the
-    // browser's Host, so the fixed-origin CSRF check adds nothing while breaking
-    // legitimate access. Same-origin requests (no Origin header) are allowed too.
     trustedOrigins: (request?: Request) => {
       const requestOrigin = request?.headers.get("origin");
-      return requestOrigin ? [requestOrigin, origin] : [origin];
+      return request &&
+        requestOrigin &&
+        hasTrustedRequestOrigin(request, trustedOrigins, allowDatabricksAppOrigins)
+        ? [...trustedOrigins, new URL(requestOrigin).origin]
+        : trustedOrigins;
     },
     session: {
       expiresIn: config.sessionTtlSeconds,
@@ -200,6 +204,12 @@ export async function createPasswordlessAuth(
     // (`/email-otp/send-verification-otp`, `/sign-in/email-otp`); there is no
     // compatibility wrapper for them. Failures there are logged by the plugin's
     // sendVerificationOTP hook, not swallowed behind an always-ok response.
+    if (
+      path === `${basePath}/logout` &&
+      !hasTrustedRequestOrigin(request, trustedOrigins, allowDatabricksAppOrigins)
+    ) {
+      return jsonResponse({ code: "INVALID_ORIGIN", message: "Invalid origin" }, 403);
+    }
     if (path === `${basePath}/logout` && request.method === "POST") {
       const response = await auth.api.signOut({
         headers: request.headers,
@@ -220,7 +230,12 @@ export async function createPasswordlessAuth(
   return {
     basePath,
     passkeysEnabled: true,
-    handler: async (request) => (await handleCompatibilityRoute(request)) ?? auth.handler(request),
+    handler: async (request) => {
+      if (!hasTrustedRequestOrigin(request, trustedOrigins, allowDatabricksAppOrigins)) {
+        return jsonResponse({ code: "INVALID_ORIGIN", message: "Invalid origin" }, 403);
+      }
+      return (await handleCompatibilityRoute(request)) ?? auth.handler(request);
+    },
     session,
     status: async (headers) => {
       const email = await session(headers);
@@ -243,6 +258,26 @@ export function normalizeLogoutRedirectPath(value: string | undefined): string {
 
 function normalizeEmail(email: string | undefined): string {
   return email?.trim().toLowerCase() ?? "";
+}
+
+function hasTrustedRequestOrigin(
+  request: Request,
+  trustedOrigins: readonly string[],
+  allowDatabricksAppOrigins: boolean,
+): boolean {
+  const candidate = request.headers.get("origin") ?? request.headers.get("referer");
+  if (!candidate) return true;
+  try {
+    const url = new URL(candidate);
+    return (
+      trustedOrigins.includes(url.origin) ||
+      (allowDatabricksAppOrigins &&
+        url.protocol === "https:" &&
+        url.hostname.endsWith(".databricksapps.com"))
+    );
+  } catch {
+    return false;
+  }
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

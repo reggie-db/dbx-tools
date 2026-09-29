@@ -149,8 +149,8 @@ const STATEMENT_CACHE_NAMESPACE = "mastra:statement";
  *       agents: createAgent({
  *         name: "analyst",
  *         instructions: "You answer questions about revenue and returns.",
- *         tools(plugins) {
- *           return { ...plugins.genie?.toolkit() };
+ *         async tools(plugins) {
+ *           return { ...(await plugins.genie?.toolkit()) };
  *         },
  *       }),
  *     }),
@@ -1210,8 +1210,8 @@ function parseStatementLimit(raw: unknown): number | undefined {
  *       agents: {
  *         analyst: createAgent({
  *           instructions: "You answer questions about sales.",
- *           tools(plugins) {
- *             return { ...plugins.genie?.toolkit() };
+ *           async tools(plugins) {
+ *             return { ...(await plugins.genie?.toolkit()) };
  *           },
  *         }),
  *         helper: createAgent({ instructions: "You explain the analyst's answers." }),

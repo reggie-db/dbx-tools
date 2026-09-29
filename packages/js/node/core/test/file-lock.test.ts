@@ -1,12 +1,32 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { withFileLock, type FileLockBackend } from "../src/file-lock.ts";
 
+const require = createRequire(import.meta.url);
+
 describe("withFileLock", () => {
+  it("uses the portable file protocol by default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dbx-file-lock-"));
+    try {
+      let backend: FileLockBackend | undefined;
+      await withFileLock("default", () => undefined, {
+        dir,
+        onAcquire: ({ backend: acquired }) => {
+          backend = acquired;
+        },
+      });
+      assert.equal(backend, "file");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("runs the callback and releases", async () => {
     const dir = await mkdtemp(join(tmpdir(), "dbx-file-lock-"));
     try {
@@ -87,6 +107,115 @@ describe("withFileLock", () => {
         }),
         "acquired",
       );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("coordinates the default protocol with a plain Node process", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dbx-file-lock-"));
+    const script = join(dir, "holder.cjs");
+    try {
+      await writeFile(
+        script,
+        `
+const lockfile = require(process.argv[3]);
+const target = process.argv[2];
+const mode = process.argv[4];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const acquire = async () => {
+  for (;;) {
+    try {
+      return await lockfile.lock(target, {
+        realpath: false,
+        stale: 10000,
+        update: 5000,
+        retries: 0,
+      });
+    } catch (error) {
+      if (error?.code !== "ELOCKED") throw error;
+      await sleep(25);
+    }
+  }
+};
+void (async () => {
+  const release = await acquire();
+  process.stdout.write("locked\\n");
+  if (mode === "hold") {
+    process.stdin.once("data", async () => {
+      await release();
+      process.exit(0);
+    });
+  } else {
+    await release();
+  }
+})();
+`,
+      );
+
+      let releaseParent!: () => void;
+      let target = "";
+      const parent = withFileLock(
+        "cross-runtime",
+        async () => {
+          const [entry] = (await readdir(dir)).filter((name) => name.endsWith(".lock"));
+          assert.ok(entry);
+          target = join(dir, entry.slice(0, -".lock".length));
+          await new Promise<void>((resolve) => {
+            releaseParent = resolve;
+          });
+        },
+        { dir },
+      );
+      while (!releaseParent) await new Promise((resolve) => setTimeout(resolve, 1));
+
+      const modulePath = require.resolve("proper-lockfile");
+      const waiter = spawn("node", [script, target, modulePath, "once"], {
+        stdio: ["ignore", "pipe", "inherit"],
+      });
+      let waiterOutput = "";
+      waiter.stdout.setEncoding("utf8");
+      waiter.stdout.on("data", (chunk) => {
+        waiterOutput += chunk;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.equal(waiterOutput, "");
+      releaseParent();
+      await parent;
+      await new Promise<void>((resolve, reject) => {
+        waiter.once("error", reject);
+        waiter.once("exit", (code) =>
+          code === 0 ? resolve() : reject(new Error(`Node waiter exited ${code}`)),
+        );
+      });
+      assert.equal(waiterOutput, "locked\n");
+
+      const holder = spawn("node", [script, target, modulePath, "hold"], {
+        stdio: ["pipe", "pipe", "inherit"],
+      });
+      holder.stdout.setEncoding("utf8");
+      await new Promise<void>((resolve, reject) => {
+        holder.once("error", reject);
+        holder.stdout.once("data", (chunk) => {
+          assert.equal(chunk, "locked\n");
+          resolve();
+        });
+      });
+      await assert.rejects(
+        withFileLock("cross-runtime", () => undefined, {
+          dir,
+          timeoutMs: 50,
+        }),
+        /Timed out waiting for file lock/,
+      );
+      holder.stdin.write("release\n");
+      await new Promise<void>((resolve, reject) => {
+        holder.once("error", reject);
+        holder.once("exit", (code) =>
+          code === 0 ? resolve() : reject(new Error(`Node holder exited ${code}`)),
+        );
+      });
+      assert.equal(await withFileLock("cross-runtime", () => "ok", { dir }), "ok");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

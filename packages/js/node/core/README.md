@@ -22,8 +22,8 @@ Key features:
   Databricks bundle's App `config.env`.
 - YAML/JSON brand-context discovery and loading with shared Zod validation.
 - Idempotent executable downloads with zip/tar extraction and atomic installs.
-- Cross-process file locks with a Bun `flock(2)` fast path and a portable,
-  stale-reclaiming lock-directory fallback.
+- Cross-process file locks with one portable, stale-reclaiming lock-directory
+  protocol shared by Bun and Node.
 - Keyed mutual exclusion across the main thread and its worker threads.
 
 ## Install A Binary
@@ -285,12 +285,16 @@ await fileLock.withFileLock(["cache", name], async () => {
 ```
 
 `withFileLock()` serializes processes on the same machine or shared filesystem.
-Under Bun on Unix it prefers a kernel `flock(2)` lock, which the OS releases if
-the process dies. Plain Node, Windows, and systems without the FFI path use
-atomic lock-directory creation with a heartbeat and stale-lock reclamation.
-Callers can select the lock directory, restrict the backend cascade, observe the
-chosen backend, or set a wait timeout. Lock keys use the same stable structured
-identity as process and Postgres advisory locks.
+Bun and Node both use `proper-lockfile` atomic lock-directory creation,
+heartbeats, stale-lock reclamation, and ownership-safe release. Callers can
+select the lock directory, explicitly request the legacy Bun `flock` backend,
+observe the chosen backend, or set a wait timeout. Lock keys use the same stable
+structured identity as process and Postgres advisory locks.
+
+Drain long-running processes that still use the legacy default before starting
+an upgraded process against the same shared state. The explicit `flock` backend
+remains available for compatibility, but it does not coordinate with the
+portable directory protocol.
 
 Use `processLock.withProcessLock()` when only threads in one process compete,
 `fileLock.withFileLock()` when local processes compete, and Postgres advisory
@@ -328,8 +332,8 @@ cached too.
 - `config` - scoped environment, dotenv, and validated Databricks bundle lookup,
   including runtime detection and typed coercion helpers.
 - `file` - best-effort filesystem stat.
-- `fileLock` - cascading cross-process locks using `flock` or portable lock
-  directories.
+- `fileLock` - portable cross-process lock directories shared by Bun and Node,
+  with an explicit legacy `flock` option.
 - `processLock` - keyed mutual exclusion across the main thread and its workers,
   with worker wiring (`processLockWorkerOptions`, `attachProcessLock`,
   `processLockAttached`).

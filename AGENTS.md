@@ -370,7 +370,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   config. Storage defaults to SQLite in the platform data directory, while a
   native AppKit Lakebase pool provides shared persistence. Programmatic Better
   Auth migrations run under a Postgres advisory lock or local file lock. Never
-  derive WebAuthn RP ID or expected origin from a request header.
+  derive WebAuthn RP ID or expected origin from a request header. Better Auth
+  trusts the configured base origin plus explicit `trustedOrigins`; never
+  reflect an arbitrary request Origin or Referer into that trust set. A
+  detected Databricks App additionally accepts HTTPS
+  `*.databricksapps.com` front-door origins; WebAuthn still uses the configured
+  base origin.
 - `packages/js/node/tunnel` and `packages/js/cli/tunnel` - tunnel Host
   detection, protected-header stripping, branded email delivery, identity
   injection, and AppKit/CLI transport adapters over `@dbx-tools/auth-gate`. Both
@@ -406,12 +411,15 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `MCPClient` and republishes the group-scoped subset through a Mastra
   `MCPServer`. Every call derives its Graphiti group from the AppKit user or
   Mastra memory resource id; caller-supplied groups are overwritten, and tools
-  that cannot enforce a group constraint are omitted. The structural toolkit
-  consumed by `@dbx-tools/appkit-mastra` means
-  `plugins.graphiti?.toolkit()` registers the same scoped tools on Mastra
-  agents. The generic AppKit-to-Mastra toolkit adapter passes the turn's
-  resource id as the optional fourth `executeAgentTool` argument so
-  service-principal execution does not collapse users onto one graph.
+  that cannot enforce a group constraint are omitted. The async structural
+  toolkit consumed by `@dbx-tools/appkit-mastra` waits for bounded MCP discovery
+  and derives descriptions and JSON input schemas from the same permitted
+  registry used by the public MCP server. Await
+  `plugins.graphiti?.toolkit()` while registering Mastra agents. The generic
+  AppKit-to-Mastra toolkit adapter imports AppKit's public beta contracts,
+  supports plain `getAgentTools()` providers, and passes the turn's resource id
+  as the optional fourth `executeAgentTool` argument so service-principal
+  execution does not collapse users onto one graph.
 - `packages/js/node/teams`, `packages/js/shared/teams`, and `packages/js/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
@@ -509,8 +517,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   invocation is short-lived and the connection is not. The built-in
   provisioned and Autoscaling credential providers cache until the credential's
   renewal time and use process-local check-lock-check refresh, so a SQLAlchemy
-  pool connect storm mints once. A caller-supplied `credential_provider` owns
-  its own caching and refresh policy.
+  pool connect storm mints once. Autoscaling discovery and credential minting
+  use typed `WorkspaceClient.postgres` methods so SDK pagination, workspace-id
+  headers, and `DatabaseCredential.expire_time` remain SDK-owned. A
+  caller-supplied `credential_provider` owns its own caching and refresh policy.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
   server with a Neo4j 5 backend and a managed `dbx-model-proxy` process.
   It must not use containers: provision Java, uv, Neo4j, and the pinned Graphiti
@@ -1202,6 +1212,8 @@ Node-only equivalents live in `@dbx-tools/core` (`bin.ensure` for idempotent
 executable downloads, archive selection, version validation, and atomic install;
 `exec.spawn`/`spawnSync`;
 `project.root`/`name`/`repositoryUrl`/`npmRegistry`;
+`fileLock.withFileLock` for cross-process locking through one
+`proper-lockfile` directory protocol shared by Bun and Node;
 `processLock.withProcessLock` for keyed mutual exclusion across the main thread
 and its workers - a module-level promise chain only serializes ONE thread, and
 reach for `@dbx-tools/postgres`'s `withAdvisoryLock` when the scope is a

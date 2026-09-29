@@ -337,7 +337,14 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // belongs here because `config.ts` owns both
 // bundle and app.yaml config-source parsing.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
-  p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml", "zod@catalog:");
+  p.addDeps(
+    "extract-zip@^2.0.1",
+    "proper-lockfile@^4.1.2",
+    "tar@^7.5.22",
+    "yaml",
+    "zod@catalog:",
+  );
+  p.addDevDeps("@types/proper-lockfile@^4.1.4");
 });
 
 // node-appkit: the base for Node-side AppKit helpers and the legacy SDK
@@ -1194,7 +1201,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     internalDependencies: ["core", "core-rs"],
     dependencies: [
       "asyncpg>=0.30",
-      "databricks-sdk>=0.63.0",
+      "databricks-sdk>=0.123.0",
       "greenlet>=3.2",
       "psycopg[binary]>=3.2.9",
       "sqlalchemy>=2.0.41",

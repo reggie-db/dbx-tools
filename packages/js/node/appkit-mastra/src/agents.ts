@@ -16,6 +16,13 @@
  */
 
 import { ConfigurationError } from "@databricks/appkit";
+import type {
+  AgentToolDefinition,
+  PluginToolkitProvider,
+  ToolkitEntry,
+  ToolkitOptions as AppKitToolkitOptions,
+  ToolProvider,
+} from "@databricks/appkit/beta";
 import { plugin } from "@dbx-tools/appkit";
 import { fallback } from "@dbx-tools/model";
 import { log, object, string } from "@dbx-tools/shared-core";
@@ -190,23 +197,9 @@ function isDefaultWorkspace(workspace: Workspace | undefined): boolean {
 
 /**
  * Filter / rename options accepted by every plugin's `.toolkit()`
- * method. Mirrors AppKit's `ToolkitOptions` verbatim so options pass
- * through unchanged - the underlying AppKit plugin does the filtering
- * and we just adapt the resulting entries into Mastra tools.
+ * method, directly sourced from AppKit's public beta contract.
  */
-export interface ToolkitOptions {
-  /**
-   * Key prefix prepended to every tool name. AppKit's default is
-   * `${pluginName}.` when omitted; pass an explicit `""` to drop it.
-   */
-  prefix?: string;
-  /** Allowlist of local tool names. */
-  only?: string[];
-  /** Denylist of local tool names. */
-  except?: string[];
-  /** Remap specific local names to different keys. */
-  rename?: Record<string, string>;
-}
+export type ToolkitOptions = AppKitToolkitOptions;
 
 /**
  * Toolkit provider shape every entry in the {@link MastraPlugins} map
@@ -221,7 +214,7 @@ export interface MastraPluginToolkitProvider {
    * agent tools. Each tool dispatches back through the plugin's
    * `executeAgentTool` so OBO auth and telemetry spans stay intact.
    */
-  toolkit(opts?: ToolkitOptions): MastraTools;
+  toolkit(opts?: ToolkitOptions): MastraTools | Promise<MastraTools>;
 }
 
 /**
@@ -241,10 +234,10 @@ export interface MastraPluginToolkitProvider {
  * ```ts
  * createAgent({
  *   instructions: "...",
- *   tools(plugins) {
+ *   async tools(plugins) {
  *     return {
- *       ...plugins.analytics.toolkit(),
- *       ...plugins.files.toolkit({ only: ["uploads.read"] }),
+ *       ...(await plugins.analytics.toolkit()),
+ *       ...(await plugins.files.toolkit({ only: ["uploads.read"] })),
  *       get_weather: tool({
  *         description: "Weather",
  *         schema: z.object({ city: z.string() }),
@@ -908,62 +901,105 @@ function resolveProvider(
     }) as MastraPluginToolkitProvider;
   }
   const plugin = context?.getPlugins().get(propName);
-  return adaptPluginToolkit(plugin);
+  return adaptPluginToolkit(plugin, propName);
 }
 
-/**
- * AppKit `ToolProvider` shape we duck-type against any registered
- * plugin. Defined structurally to avoid coupling to AppKit's internal
- * type module layout.
- */
-interface AppKitToolkitProvider {
-  toolkit?: (opts?: ToolkitOptions) => Record<string, AppKitToolkitEntry>;
+type ContextualToolProvider = Partial<Pick<ToolProvider, "getAgentTools">> & {
+  toolkit?: (
+    opts?: ToolkitOptions,
+  ) =>
+    | ReturnType<PluginToolkitProvider["toolkit"]>
+    | Promise<ReturnType<PluginToolkitProvider["toolkit"]>>;
   executeAgentTool?: (
     name: string,
     args: unknown,
     signal?: AbortSignal,
     context?: { resourceId?: string },
   ) => Promise<unknown>;
-}
-
-/** Single entry returned by an AppKit plugin's `.toolkit(opts)` call. */
-interface AppKitToolkitEntry {
-  readonly __toolkitRef?: true;
-  pluginName: string;
-  localName: string;
-  def: {
-    name: string;
-    description: string;
-    parameters: unknown;
-  };
-  annotations?: {
-    effect?: "read" | "write" | "update" | "destructive";
-    requiresUserContext?: boolean;
-  };
-}
+};
 
 /**
  * Adapt an AppKit `ToolProvider` plugin instance into a
  * {@link MastraPluginToolkitProvider}. Returns `null` for any plugin
- * that doesn't implement both `toolkit` and `executeAgentTool` (e.g.
- * `server`, `lakebase` when used only as a Postgres pool, etc.).
+ * that doesn't implement `executeAgentTool` plus either AppKit's native
+ * `toolkit` or `getAgentTools` surface.
  */
-function adaptPluginToolkit(plugin: unknown): MastraPluginToolkitProvider | null {
+function adaptPluginToolkit(
+  plugin: unknown,
+  pluginName: string,
+): MastraPluginToolkitProvider | null {
   if (!plugin || typeof plugin !== "object") return null;
-  const p = plugin as AppKitToolkitProvider;
-  if (typeof p.toolkit !== "function" || typeof p.executeAgentTool !== "function") {
+  const p = plugin as ContextualToolProvider;
+  if (
+    typeof p.executeAgentTool !== "function" ||
+    (typeof p.toolkit !== "function" && typeof p.getAgentTools !== "function")
+  ) {
     return null;
   }
   return {
-    toolkit(opts?: ToolkitOptions): MastraTools {
-      const entries = p.toolkit!(opts);
-      const tools: MastraTools = {};
-      for (const [key, entry] of Object.entries(entries)) {
-        tools[key] = toolkitEntryToMastraTool(entry, p);
+    toolkit(opts?: ToolkitOptions): MastraTools | Promise<MastraTools> {
+      const entries =
+        typeof p.toolkit === "function"
+          ? p.toolkit(opts)
+          : toolkitEntriesFromDefinitions(pluginName, p.getAgentTools!(), opts);
+      if (isPromiseLike(entries)) {
+        return entries.then((resolved) => toolkitEntriesToMastraTools(resolved, p));
       }
-      return tools;
+      return toolkitEntriesToMastraTools(entries, p);
     },
   };
+}
+
+function toolkitEntriesFromDefinitions(
+  pluginName: string,
+  definitions: AgentToolDefinition[],
+  options: ToolkitOptions = {},
+): Record<string, ToolkitEntry> {
+  return Object.fromEntries(
+    definitions.flatMap((definition) => {
+      const key = toolkitName(definition.name, pluginName, options);
+      if (key === null) return [];
+      return [
+        [
+          key,
+          {
+            __toolkitRef: true as const,
+            pluginName,
+            localName: definition.name,
+            def: { ...definition, name: key },
+            annotations: definition.annotations,
+          } satisfies ToolkitEntry,
+        ],
+      ];
+    }),
+  );
+}
+
+function toolkitName(
+  localName: string,
+  pluginName: string,
+  options: ToolkitOptions,
+): string | null {
+  if (options.only && !options.only.includes(localName)) return null;
+  if (options.except?.includes(localName)) return null;
+  const renamed = options.rename?.[localName];
+  if (renamed) return renamed;
+  return `${options.prefix ?? `${pluginName}.`}${localName}`;
+}
+
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as { then?: unknown })?.then === "function";
+}
+
+function toolkitEntriesToMastraTools(
+  entries: Record<string, ToolkitEntry>,
+  plugin: ContextualToolProvider,
+): MastraTools {
+  const tools: MastraTools = {};
+  for (const [key, entry] of Object.entries(entries)) {
+    tools[key] = toolkitEntryToMastraTool(entry, plugin);
+  }
+  return tools;
 }
 
 /**
@@ -973,11 +1009,25 @@ function adaptPluginToolkit(plugin: unknown): MastraPluginToolkitProvider | null
  * id stay intact. JSON Schema parameters pass through unchanged - Mastra's
  * `PublicSchema` accepts `JSONSchema7` directly via `@mastra/schema-compat`.
  */
-function toolkitEntryToMastraTool(entry: AppKitToolkitEntry, plugin: AppKitToolkitProvider): Tool {
+function toolkitEntryToMastraTool(entry: ToolkitEntry, plugin: ContextualToolProvider): Tool {
+  const annotations = entry.annotations ?? entry.def.annotations;
+  const effect = annotations?.effect;
   return createTool({
     id: `${entry.pluginName}__${entry.localName}`,
     description: entry.def.description,
     ...(entry.def.parameters ? { inputSchema: entry.def.parameters as never } : {}),
+    ...(effect && effect !== "read" ? { requireApproval: true } : {}),
+    ...(annotations
+      ? {
+          mcp: {
+            annotations: {
+              readOnlyHint: effect === "read" || annotations.readOnly === true,
+              destructiveHint: effect === "destructive" || annotations.destructive === true,
+              idempotentHint: annotations.idempotent,
+            },
+          },
+        }
+      : {}),
     execute: async (input: unknown, context: unknown) => {
       const execution = context as
         | {

@@ -22,12 +22,13 @@ Key features:
 - accepts the same Postgres URI, Lakebase resource path, hostname, and project-id
   address shapes as `@dbx-tools/appkit` through the native Rust parser;
 - resolves missing autoscaling endpoint fields through
-  `WorkspaceClient.api_client`;
+  `WorkspaceClient.postgres`, including SDK-owned pagination and workspace-id
+  headers;
 - resolves provisioned Lakebase instance DNS through
   `WorkspaceClient.database`;
 - injects a cached database credential on SQLAlchemy's `do_connect` event rather
   than storing an expiring password in the engine URL, using the SDK's
-  provisioned-instance API or the Autoscaling `/postgres/credentials` endpoint;
+  provisioned-instance or typed Autoscaling credential API;
 - refreshes built-in credential providers ahead of expiry with a process-local
   check-lock-check load, so concurrent pool connections share one mint;
 - supports sync psycopg and asyncpg SQLAlchemy engines;
@@ -136,11 +137,7 @@ from dbx_tools.postgres import (
 
 # driver: resolve once, capture in the closure
 resolved = resolve_postgres_connection(workspace_client, config)
-token = workspace_client.api_client.do(
-    "POST",
-    "/api/2.0/postgres/credentials",
-    body={"endpoint": resolved.endpoint},
-)["token"]
+token = workspace_client.postgres.generate_database_credential(resolved.endpoint).token
 
 
 @udf(returnType=StringType())
