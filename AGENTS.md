@@ -2534,7 +2534,10 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   endpoints, while GPT-OSS remains on Chat Completions. The Rust model proxy
   calls it directly; `@dbx-tools/model` and `@dbx-tools/appkit-mastra` call the
   generated `@dbx-tools/model-rs` binding. Do not introduce another version
-  threshold in TypeScript or a route module.
+  threshold in TypeScript or a route module. AppKit-Mastra runs Responses with
+  `store: false`; the OpenAI provider then includes encrypted reasoning state
+  inline for stateless tool continuations. Databricks does not store Responses,
+  so allowing the provider to emit `item_reference` inputs fails with HTTP 400.
 - **Model display names.** `ServingEndpointSummary` carries an optional
   `displayName` alongside `name` (the invoke id). It flows through `/models`
   (wire `ServingEndpointsResponseSchema`) automatically. Derivation lives in the

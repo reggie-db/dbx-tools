@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.6.221";
+export const PACKAGE_VERSION = "0.6.222";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -52,6 +52,7 @@ export type { MastraIdentityMode } from "./src/identity.ts";
 export type { ResolvedMcp } from "./src/mcp.ts";
 export { MemoryBuilder } from "./src/memory.ts";
 export type { LogFeedbackParams } from "./src/mlflow.ts";
+export { RESPONSES_PROVIDER_OPTIONS } from "./src/model.ts";
 export type { BuildModelOverrides } from "./src/model.ts";
 export { MontySandbox } from "./src/monty-sandbox.ts";
 export type { MontySandboxOptions } from "./src/monty-sandbox.ts";

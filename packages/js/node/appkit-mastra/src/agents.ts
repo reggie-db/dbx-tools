@@ -36,7 +36,7 @@ import { buildRenderDataTool } from "./chart.ts";
 import type { MastraPluginConfig } from "./config.ts";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import type { MemoryBuilder } from "./memory.ts";
-import { buildModel } from "./model.ts";
+import { buildModel, RESPONSES_PROVIDER_OPTIONS } from "./model.ts";
 import { stripStaleChartsProcessor } from "./processors.ts";
 import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
@@ -599,6 +599,7 @@ export async function buildAgents(opts: {
       model: resolveModel(config, def.model),
       defaultOptions: {
         maxSteps: config.agentMaxSteps ?? DEFAULT_AGENT_MAX_STEPS,
+        providerOptions: RESPONSES_PROVIDER_OPTIONS,
         ...(def.requireToolApproval !== undefined
           ? { requireToolApproval: def.requireToolApproval }
           : {}),

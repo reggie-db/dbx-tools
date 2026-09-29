@@ -686,6 +686,11 @@ caller value is preserved. Responses-only models such as GPT Astra use the
 native Responses provider. Claude reasoning replay and Gemini/Claude structured
 response content continue through the same sanitizer.
 
+Responses turns set `store: false`. The OpenAI provider automatically includes
+encrypted reasoning state so a tool continuation sends the complete stateless
+conversation. Databricks does not store Responses and rejects
+`item_reference` inputs.
+
 The plugin also serves `GET /default-model` (and `/default-model/:agentId`),
 returning `{ agentId, model, displayName }` - the static serving-endpoint an
 agent falls back to when the client pins no model, plus its humanized label.

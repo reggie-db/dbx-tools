@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { servingApi } from "../src/model.ts";
+import { RESPONSES_PROVIDER_OPTIONS, servingApi } from "../src/model.ts";
 
 describe("Mastra serving API selection", () => {
   it("routes Responses-only models through the native Responses provider", () => {
@@ -24,5 +24,13 @@ describe("Mastra serving API selection", () => {
     ]) {
       assert.equal(servingApi(modelId), "chat", modelId);
     }
+  });
+
+  it("keeps Responses tool continuations stateless", () => {
+    assert.deepEqual(RESPONSES_PROVIDER_OPTIONS, {
+      openai: {
+        store: false,
+      },
+    });
   });
 });

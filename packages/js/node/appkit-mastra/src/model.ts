@@ -43,6 +43,13 @@ type ModelClass = model.ModelClass;
 const { parseModelClass } = classes;
 const { selectModel } = resolve;
 
+/** Keep Responses turns stateless so tool continuations replay encrypted reasoning inline. */
+export const RESPONSES_PROVIDER_OPTIONS = {
+  openai: {
+    store: false,
+  },
+} as const;
+
 /** Pick the native Databricks inference surface required by a resolved model. */
 export function servingApi(modelId: string): "chat" | "responses" {
   return modelServingApi(modelId) === ModelServingApi.Responses ? "responses" : "chat";
