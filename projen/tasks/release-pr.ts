@@ -21,6 +21,7 @@ import {
   type ReleaseOs,
   type VersionLevel,
 } from "../src/_release-platform.ts";
+import { githubRepositoryIdentity, githubTokenArguments } from "../src/release-github.ts";
 import { publishLocalRelease } from "./local-publish.ts";
 import { readWorkspaceVersion, resolveNextVersion } from "../src/workspace-version.ts";
 
@@ -100,13 +101,17 @@ function runIgnoringStdout(root: string, command: string, args: string[]): void 
   });
 }
 
-function githubAccount(root: string): { owner: string; repository: string; token: string } {
+function githubAccount(root: string): {
+  hostname: string;
+  owner: string;
+  repository: string;
+  token: string;
+} {
   const repository = project.repositoryUrl(root);
   if (!repository) throw new Error("Release preparation requires a GitHub repository");
-  const [owner, name] = new URL(repository).pathname.split("/").filter(Boolean);
-  if (!owner || !name) throw new Error(`Cannot determine GitHub identity from ${repository}`);
+  const identity = githubRepositoryIdentity(repository);
   const token = exec
-    .spawnSync("gh", ["auth", "token", "--user", owner], {
+    .spawnSync("gh", githubTokenArguments(identity.hostname), {
       cwd: root,
       stdout: "capture",
       stderr: "ignore",
@@ -114,8 +119,10 @@ function githubAccount(root: string): { owner: string; repository: string; token
       check: true,
     })
     .stdout?.trim();
-  if (!token) throw new Error(`No GitHub CLI authentication found for ${owner}`);
-  return { owner, repository: name.replace(/\.git$/, ""), token };
+  if (!token) {
+    throw new Error(`No GitHub CLI authentication found for ${identity.hostname}`);
+  }
+  return { ...identity, token };
 }
 
 const program = new Command();
@@ -268,7 +275,11 @@ program
         "",
         "Merging this PR updates VERSION on main and starts the public release workflow.",
       ].join("\n");
-      const githubEnvironment = { ...process.env, GH_TOKEN: account.token };
+      const githubEnvironment = {
+        ...process.env,
+        GH_HOST: account.hostname,
+        GH_TOKEN: account.token,
+      };
       const ensurePullRequest = (): void => {
         if (commandSucceeds(root, "gh", ["pr", "view", releaseBranch], githubEnvironment)) return;
         run(

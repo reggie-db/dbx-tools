@@ -14,7 +14,7 @@ import {
   releaseArtifactSteps,
   releasePublishCondition,
   releaseStageCondition,
-  releaseWorkflow,
+  tryReleaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -433,7 +433,8 @@ export class DBXToolsPythonWorkspace extends Component {
     const allPublications = [...publications, ...uniffiPublications];
     if (allPublications.length === 0) return;
     const usesRustArtifacts = uniffiPublications.length > 0;
-    const workflow = releaseWorkflow(project);
+    const workflow = tryReleaseWorkflow(project);
+    if (!workflow) return;
     workflow.addJob("build-python", {
       if: usesRustArtifacts
         ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"

@@ -212,6 +212,8 @@ describe("release task contracts", () => {
       driver.indexOf("compiling ${compiled.length}") <
         driver.indexOf("applyPublishConfig(manifestPath)"),
     );
+    assert.match(driver, /import \{ delimiter,/);
+    assert.doesNotMatch(driver, /split\(":"\)/);
   });
 
   it("keeps bump pure and lets release preparation own git and local publication", () => {
@@ -321,6 +323,31 @@ describe("optional Node release stage", () => {
       const workflow = readWorkflow(disabledOutdir, "release");
       assert.ok(workflow.jobs["verify-context"]);
       assert.equal(workflow.jobs["publish-node"], undefined);
+    } finally {
+      rmSync(disabledOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("can disable the unified release surface entirely", () => {
+    const disabledOutdir = mkdtempSync(join(tmpdir(), "release-mode-disabled-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "disabled-release-surface",
+        outdir: disabledOutdir,
+        github: true,
+        releaseMode: "disabled",
+      });
+      project.synth();
+      const tasks = JSON.parse(
+        readFileSync(join(disabledOutdir, ".projen/tasks.json"), "utf8"),
+      ) as {
+        tasks: Record<string, unknown>;
+      };
+
+      assert.equal(tasks.tasks.release, undefined);
+      assert.equal(tasks.tasks.bump, undefined);
+      assert.equal(tasks.tasks["version:check"], undefined);
+      assert.equal(existsSync(join(disabledOutdir, ".github/workflows/release.yml")), false);
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
     }

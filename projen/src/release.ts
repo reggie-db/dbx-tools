@@ -39,6 +39,11 @@ export function releaseWorkflow(project: DBXToolsJavaScriptProject): GithubWorkf
   return workflow;
 }
 
+/** Locate the unified workflow when release generation is enabled. */
+export function tryReleaseWorkflow(project: DBXToolsJavaScriptProject): GithubWorkflow | undefined {
+  return releaseWorkflows.get(project);
+}
+
 /** Whether the unified workflow publishes the normal npm workspace. */
 export function hasNodeRelease(project: DBXToolsJavaScriptProject): boolean {
   return nodeReleaseProjects.has(project);

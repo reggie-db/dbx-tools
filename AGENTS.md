@@ -1400,7 +1400,16 @@ whether the sentence is about the code as it stands or about the act of changing
   `project.pnpmWorkspace` (a `PnpmWorkspaceState`:
   `addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
   Reach those fields directly (`project.dbxToolsConfig.tags.push(...)`), not
-  via delegator methods on the project.
+  via delegator methods on the project. Either class can be the tree root:
+  a standalone `DBXToolsTypeScriptProject` reuses Projen's native compiling
+  tsconfig while receiving the same Bun workspace, root tasks, repository
+  metadata, and release configuration as `DBXToolsNodeProject`. Explicit
+  `outdir` is the workspace identity for discovery, generated sources, project
+  naming, and repository probes; constructors never borrow the engine process's
+  current workspace. `releaseMode` is `"dbx-tools"` by default or `"disabled"`
+  to omit the unified workflow plus bump/version/release tasks. Projen's inherited
+  `release` and `releaseTrigger` options are intentionally excluded because its
+  native release workflow cannot coexist with the unified workflow.
 - **`pnpm-workspace.yaml` is GENERATED and committed but ONLY for the Databricks Apps
   deploy path.** The engine writes it directly (projen skips its native component
   under bun) and it exists so the platform's pnpm build phase reads `packages` +
@@ -1822,10 +1831,9 @@ uses a PR-number concurrency group to cancel running checks, while both jobs
 skip the close-event replacement run.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
-runs them with its own fast runner). The generated task runs `bun test test`
-with a separate `find test -name '*.test.ts' | grep -q .` condition because
-`bun test` exits non-zero when it matches no files. The condition makes a package
-with no tests a no-op without swallowing real test failures. bun does NOT support `describe()` nested inside `test()`
+runs them with its own fast runner). The generated task runs
+`bun test test --pass-with-no-tests`, so a package with no tests is a portable
+no-op without swallowing real test failures. bun does NOT support `describe()` nested inside `test()`
 (bun issue #5090); keep suites flat.
 
 ## Package registries: public npm and PyPI are NOT reachable

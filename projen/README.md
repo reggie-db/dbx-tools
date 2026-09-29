@@ -37,6 +37,19 @@ project.synth();
 Every `src`-bearing folder under the configured roots becomes a
 `DBXToolsTypeScriptProject`. Folder path drives package name and runtime tags.
 
+Use `DBXToolsTypeScriptProject` itself as the root when one package needs the
+same Bun workspace, repository, task, and release defaults without a separate
+non-compiling root. It preserves Projen's native compiling `tsconfig.json`
+instead of creating a second owner. An explicit `outdir` is the workspace root
+for naming, Git metadata, package discovery, codegen, and barrels even when the
+calling process has a different current directory.
+
+The unified dbx-tools release surface is enabled by default. Set
+`releaseMode: "disabled"` to omit its workflow and bump/version/release tasks.
+The inherited Projen `release` and `releaseTrigger` options are intentionally
+not part of this engine's public options because they create a competing release
+workflow.
+
 Dependency installation runs once from this root. The default-on
 `ROOT_INSTALL_ONLY_MIXIN` clears child `install` / `install:ci` task steps during
 root pre-synthesis, including packages attached after root construction. Set

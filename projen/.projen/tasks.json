@@ -81,15 +81,6 @@
         }
       ]
     },
-    "demo": {
-      "name": "demo",
-      "description": "Run the demo",
-      "steps": [
-        {
-          "exec": "bun tasks/demo.ts"
-        }
-      ]
-    },
     "eject": {
       "name": "eject",
       "description": "Remove projen from the project",
@@ -159,6 +150,15 @@
       "steps": [
         {
           "exec": "bun test test"
+        }
+      ]
+    },
+    "test:external-consumer": {
+      "name": "test:external-consumer",
+      "description": "Pack the engine and validate an isolated consumer lifecycle",
+      "steps": [
+        {
+          "exec": "bun test test/packed-consumer.test.ts"
         }
       ]
     },

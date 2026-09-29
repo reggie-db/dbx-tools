@@ -49,8 +49,8 @@ export const DEFAULT_PACKAGE_ROOTS = ["packages"] as const;
  * {@link coreProject.name}, which is also what a consuming repo's own tooling
  * sees, so the engine and its host agree on the name.
  */
-export function projectName(): string {
-  return coreProject.name(repoRoot);
+export function projectName(projectRoot: string = repoRoot): string {
+  return coreProject.name(projectRoot);
 }
 
 const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);

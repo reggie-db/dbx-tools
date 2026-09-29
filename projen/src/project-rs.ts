@@ -28,7 +28,7 @@ import {
   nodeReleaseSetupSteps,
   releaseArtifactSteps,
   releaseStageCondition,
-  releaseWorkflow,
+  tryReleaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -1476,8 +1476,9 @@ export class DBXToolsRustWorkspace {
   ): void {
     if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const plan = planRustRelease(project, options, targets, this.packages, this.bindingMappings);
+    const workflow = tryReleaseWorkflow(project);
+    if (!workflow) return;
     configureRustReleaseTask(project, plan);
-    const workflow = releaseWorkflow(project);
     if (plan.hasTargetOutputs && plan.targets.length) {
       workflow.addJob("rust-build", rustBuildJob(plan));
     }

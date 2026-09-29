@@ -130,9 +130,9 @@ project.npmignore?.exclude(".projenrc.ts", "projenrc/");
 // declares no ts-node/tsx dep; the exec is reset to a plain `bun` below.
 new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.nodejs() });
 project.defaultTask?.reset("bun .projenrc.ts");
-project.addTask("demo", {
-  exec: `bun tasks/demo.ts`,
-  description: "Run the demo",
+project.addTask("test:external-consumer", {
+  description: "Pack the engine and validate an isolated consumer lifecycle",
+  exec: "bun test test/packed-consumer.test.ts",
 });
 project.testTask.exec("bun test test");
 project.synth();

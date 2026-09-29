@@ -115,7 +115,7 @@ export function codegenModulePaths(inputs: readonly string[]): string[] {
  * package or hoisted to the workspace root. Any other source is treated as
  * repo-root-relative.
  */
-function resolveInputSource(source: string, fromDir: string): string {
+function resolveInputSource(source: string, fromDir: string, projectRoot: string): string {
   if (source.startsWith("node_modules/")) {
     let dir = fromDir;
     for (;;) {
@@ -126,7 +126,7 @@ function resolveInputSource(source: string, fromDir: string): string {
       dir = parent;
     }
   }
-  return resolve(repoRoot, source);
+  return resolve(projectRoot, source);
 }
 
 /**
@@ -276,6 +276,7 @@ function isGeneratedModule(srcDir: string, file: string): boolean {
 function generatePackage(
   tsRuntime: typeof ts,
   generate: typeof import("ts-to-zod").generate,
+  projectRoot: string,
   dir: string,
   inputs: string[],
 ): string {
@@ -296,7 +297,7 @@ function generatePackage(
 
   let warnings = 0;
   for (const input of parsed) {
-    const sourcePath = resolveInputSource(input.source, dir);
+    const sourcePath = resolveInputSource(input.source, dir, projectRoot);
     if (!existsSync(sourcePath)) {
       throw new Error(`codegen input not found: ${input.source}`);
     }
@@ -336,9 +337,16 @@ function generatePackage(
  * `codegen` field. Returns the package dirs it wrote so the caller can rebuild
  * their barrels. `ts-to-zod` + `typescript` are lazy-loaded.
  */
-export function generateCodegen(): string[] {
-  const targets = recordedPackages()
-    .map((p) => ({ dir: p.dir, inputs: codegenInputs(p.dir) }))
+export function generateCodegen(
+  projectRoot: string = repoRoot,
+  options: { includeRoot?: boolean } = {},
+): string[] {
+  const packageDirs = [
+    ...(options.includeRoot ? [projectRoot] : []),
+    ...recordedPackages(projectRoot).map((pkg) => pkg.dir),
+  ];
+  const targets = packageDirs
+    .map((dir) => ({ dir, inputs: codegenInputs(dir) }))
     .filter((t): t is { dir: string; inputs: string[] } => t.inputs !== undefined);
 
   // Nothing to generate is the NORMAL case for a workspace that declares no
@@ -356,7 +364,7 @@ export function generateCodegen(): string[] {
 
   const written: string[] = [];
   for (const target of targets) {
-    written.push(generatePackage(tsRuntime, generate, target.dir, target.inputs));
+    written.push(generatePackage(tsRuntime, generate, projectRoot, target.dir, target.inputs));
   }
   return written;
 }
