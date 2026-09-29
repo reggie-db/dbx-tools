@@ -90,8 +90,7 @@
       "description": "Run tests",
       "steps": [
         {
-          "exec": "bun test test",
-          "condition": "find test -name \"*.test.ts\" 2>/dev/null | grep -q ."
+          "exec": "bun test test --pass-with-no-tests"
         }
       ]
     },
