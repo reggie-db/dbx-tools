@@ -1,56 +1,121 @@
+
 [workspace]
-members = ["packages/rs/core", "packages/rs/google", "packages/rs/lakebase-proxy", "packages/rs/model", "packages/rs/model-proxy"]
-default-members = ["packages/rs/lakebase-proxy", "packages/rs/model-proxy"]
+members = [
+  "packages/rs/core",
+  "packages/rs/google",
+  "packages/rs/lakebase-proxy",
+  "packages/rs/model",
+  "packages/rs/model-proxy"
+]
+default-members = [ "packages/rs/lakebase-proxy", "packages/rs/model-proxy" ]
 resolver = "2"
 
-[workspace.package]
-version = "0.6.223"
-edition = "2021"
-rust-version = "1.89"
-license = "Apache-2.0"
-repository = "https://github.com/reggie-db/dbx-tools"
+  [workspace.package]
+  version = "0.6.223"
+  edition = "2021"
+  rust-version = "1.89"
+  license = "Apache-2.0"
+  repository = "https://github.com/reggie-db/dbx-tools"
 
-[workspace.dependencies]
-async-trait = "0.1"
-backon = { version = "=1.6.0", default-features = false, features = ["tokio-sleep"] }
-base64 = "0.22"
-bytes = "1"
-clap = { version = "4.6", features = ["derive", "env"] }
-configparser = "3"
-directories = "6"
-difflib-fast = "0.3.5"
-fs4 = "0.13"
-futures = "0.3"
-google-cloud-auth = "=0.18.0"
-http = "1"
-httpdate = "1"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
-mini-moka = "0.10"
-oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
-open = "5"
-percent-encoding = "2"
-pgwire = { version = "=0.41.0", default-features = false, features = ["client-api-ring", "server-api-ring"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-reqwest-middleware = { version = "=0.4.2", features = ["json"] }
-regex = "1"
-rcgen = "0.14"
-rustls = "0.23"
-scraper = "0.24"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.10"
-tempfile = "3"
-thiserror = "2"
-time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
-tokenx-rs = "=0.1.0"
-tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
-tokio-postgres = "0.7"
-tokio-util = { version = "0.7", features = ["codec"] }
-tokio-rustls = "0.26"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uniffi = { version = "=0.31", features = ["cli", "tokio"] }
-url = { version = "2", features = ["serde"] }
-uuid = { version = "1", features = ["v4"] }
-webpki-roots = "1"
-wiremock = "0.6"
+  [workspace.dependencies]
+  async-trait = "0.1"
+  base64 = "0.22"
+  bytes = "1"
+  configparser = "3"
+  directories = "6"
+  difflib-fast = "0.3.5"
+  fs4 = "0.13"
+  futures = "0.3"
+  google-cloud-auth = "=0.18.0"
+  http = "1"
+  httpdate = "1"
+  mini-moka = "0.10"
+  open = "5"
+  percent-encoding = "2"
+  regex = "1"
+  rcgen = "0.14"
+  rustls = "0.23"
+  scraper = "0.24"
+  serde_json = "1"
+  sha2 = "0.10"
+  tempfile = "3"
+  thiserror = "2"
+  tokenx-rs = "=0.1.0"
+  tokio-postgres = "0.7"
+  tokio-rustls = "0.26"
+  tracing = "0.1"
+  webpki-roots = "1"
+  wiremock = "0.6"
+
+    [workspace.dependencies.backon]
+    version = "=1.6.0"
+    default-features = false
+    features = [ "tokio-sleep" ]
+
+    [workspace.dependencies.clap]
+    version = "4.6"
+    features = [ "derive", "env" ]
+
+    [workspace.dependencies.image]
+    version = "0.25"
+    default-features = false
+    features = [ "jpeg", "png", "webp" ]
+
+    [workspace.dependencies.oauth2]
+    version = "5"
+    default-features = false
+    features = [ "reqwest", "rustls-tls" ]
+
+    [workspace.dependencies.pgwire]
+    version = "=0.41.0"
+    default-features = false
+    features = [ "client-api-ring", "server-api-ring" ]
+
+    [workspace.dependencies.reqwest]
+    version = "0.12"
+    default-features = false
+    features = [ "json", "rustls-tls" ]
+
+    [workspace.dependencies.reqwest-middleware]
+    version = "=0.4.2"
+    features = [ "json" ]
+
+    [workspace.dependencies.serde]
+    version = "1"
+    features = [ "derive" ]
+
+    [workspace.dependencies.time]
+    version = "0.3"
+    features = [ "serde", "formatting", "parsing" ]
+
+    [workspace.dependencies.tokio]
+    version = "1"
+    features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "sync",
+  "time"
+]
+
+    [workspace.dependencies.tokio-util]
+    version = "0.7"
+    features = [ "codec" ]
+
+    [workspace.dependencies.tracing-subscriber]
+    version = "0.3"
+    features = [ "env-filter" ]
+
+    [workspace.dependencies.uniffi]
+    version = "=0.31"
+    features = [ "cli", "tokio" ]
+
+    [workspace.dependencies.url]
+    version = "2"
+    features = [ "serde" ]
+
+    [workspace.dependencies.uuid]
+    version = "1"
+    features = [ "v4" ]

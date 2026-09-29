@@ -54,10 +54,8 @@ jobs:
         run: bun docs/scripts/check-source-docs.mjs
       - name: Validate README documentation
         run: bun docs/scripts/sync-readmes.mjs
-      - name: Validate generated files and types
-        run: |-
-          bunx projen default
-          bun run compile
+      - name: pr:validate
+        run: bunx projen pr:validate
       - name: Find mutations
         id: self_mutation
         run: |-

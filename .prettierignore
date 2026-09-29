@@ -62,7 +62,10 @@ packages/py/graphiti/pyproject.toml
 .projen/deps.json
 .projen/files.json
 .projen/pypi-trusted-publisher-instructions.mjs
+.projen/smol-toml.cjs
+.projen/smol-toml.LICENSE
 .projen/tasks.json
+.projen/uniffi-python.js
 .projen/uniffi-release.mjs
 .vscode/extensions.json
 .vscode/settings.json

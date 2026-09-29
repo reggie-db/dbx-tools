@@ -13,6 +13,8 @@ import { ignore, match } from "@dbx-tools/path";
 import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
+import { BuildWorkflow } from "projen/lib/build";
+import { AutoMerge } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
@@ -420,7 +422,6 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // to Verdaccio still work without a CI OIDC provider. See
     // {@link DBXToolsRelease}.
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
-    buildWorkflow: false,
     workflowPackageCache: false,
     // The root build validates the whole workspace and must not also pack every
     // member into unused `dist/js` tarballs. Child projects keep projen's package
@@ -456,6 +457,7 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
         }
       : {}),
     ...options,
+    buildWorkflow: false,
     release: false,
     githubOptions: {
       ...options.githubOptions,
@@ -641,6 +643,7 @@ export class DBXToolsNodeProject
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
     this.rootInstallOnly = options.rootInstallOnly !== false;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
+    configureBuildWorkflow(this, options);
     initProject(this, options);
   }
 
@@ -784,6 +787,7 @@ export class DBXToolsTypeScriptProject
       new BunDevServerFile(this);
       new BunBuildFile(this);
     }
+    configureBuildWorkflow(this, options);
     initProject(this, options);
   }
 
@@ -793,6 +797,67 @@ export class DBXToolsTypeScriptProject
     resolveRootWorkspace(this, this.extraWorkspaceMembers);
     preSynthesizeProject(this);
   }
+}
+
+function configureBuildWorkflow(
+  project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
+  options: DBXToolsJavaScriptProjectOptions,
+): void {
+  if (project.parent || !options.buildWorkflow || !project.github) return;
+  const validation = project.addTask("pr:validate", {
+    description: "Validate generated files and TypeScript packages",
+  });
+  validation.exec("bunx projen default");
+  validation.exec("bun run compile");
+  const configured = options.buildWorkflowOptions ?? {};
+  const compatibility = nodeWorkflowCompatibility(project);
+  const configuredRunner = configured.runsOn !== undefined || configured.runsOnGroup !== undefined;
+  const workflow = new BuildWorkflow(project, {
+    buildTask: validation,
+    artifactsDirectory: project.artifactsDirectory,
+    containerImage: options.workflowContainerImage,
+    gitIdentity: options.workflowGitIdentity,
+    permissions: { idToken: compatibility.determineIdTokenPermissions(options) },
+    ...configured,
+    preBuildSteps: [
+      ...project.renderWorkflowSetup({
+        installStepConfiguration: {
+          workingDirectory: compatibility.determineInstallWorkingDirectory(),
+        },
+        mutable: configured.mutableInstall ?? configured.mutableBuild ?? true,
+      }),
+      ...(configured.preBuildSteps ?? []),
+    ],
+    postBuildSteps: [...(options.postBuildSteps ?? [])],
+    runsOn: configuredRunner ? configured.runsOn : options.workflowRunsOn,
+    runsOnGroup: configuredRunner ? configured.runsOnGroup : options.workflowRunsOnGroup,
+  });
+  workflow.addPostBuildSteps(...compatibility.renderUploadCoverageJobStep(options));
+  compatibility.buildWorkflow = workflow;
+
+  if ((options.autoMerge ?? true) && project.github.mergify) {
+    const autoMerge = new AutoMerge(project.github, options.autoMergeOptions);
+    autoMerge.addConditionsLater({
+      render: () => workflow.buildJobIds.map((id) => `status-success=${id}`),
+    });
+    compatibility.autoMerge = autoMerge;
+  }
+}
+
+interface NodeWorkflowCompatibility {
+  autoMerge?: AutoMerge;
+  buildWorkflow?: BuildWorkflow;
+  determineIdTokenPermissions(options: DBXToolsJavaScriptProjectOptions): JobPermission | undefined;
+  determineInstallWorkingDirectory(): string | undefined;
+  renderUploadCoverageJobStep(options: DBXToolsJavaScriptProjectOptions): JobStep[];
+}
+
+/**
+ * Access the narrow NodeProject workflow hooks that have no public equivalent.
+ * BuildWorkflow itself is created exclusively through its public constructor.
+ */
+function nodeWorkflowCompatibility(project: javascript.NodeProject): NodeWorkflowCompatibility {
+  return project as unknown as NodeWorkflowCompatibility;
 }
 
 function prepareRootSynthesis(
@@ -882,25 +947,6 @@ class WorkflowDefaults extends Component {
     const project = this.project as javascript.NodeProject;
     const workflow = project.buildWorkflow?.workflow;
     if (workflow) {
-      const job = workflow.getJob("build");
-      if ("steps" in job) {
-        const mutableJob = job as unknown as { steps: JobStep[] | (() => JobStep[]) };
-        const configuredSteps = mutableJob.steps;
-        const rewrite = (steps: JobStep[]): JobStep[] =>
-          steps.map((step) =>
-            step.name === "build"
-              ? {
-                  ...step,
-                  name: "Validate generated files and types",
-                  run: "bunx projen default\nbun run compile",
-                }
-              : step,
-          );
-        mutableJob.steps =
-          typeof configuredSteps === "function"
-            ? () => rewrite(configuredSteps())
-            : rewrite(configuredSteps);
-      }
       workflow.addJob("pr-title", {
         name: "Validate PR title",
         runsOn: ["ubuntu-latest"],

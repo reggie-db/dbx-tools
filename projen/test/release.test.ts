@@ -286,9 +286,13 @@ describe("generated workflow safety", () => {
       build.jobs.build?.if,
       "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
     );
-    assert.equal(
-      step(build.jobs.build!, "Validate generated files and types").run,
-      "bunx projen default\nbun run compile",
+    assert.equal(step(build.jobs.build!, "pr:validate").run, "bunx projen pr:validate");
+    const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
+      tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
+    };
+    assert.deepEqual(
+      tasks.tasks["pr:validate"]?.steps?.map((taskStep) => taskStep.exec),
+      ["bunx projen default", "bun run compile"],
     );
 
     assert.equal(build.jobs["pr-title"]?.name, "Validate PR title");

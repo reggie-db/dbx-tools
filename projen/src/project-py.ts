@@ -2,9 +2,7 @@
 import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, javascript, python, vscode } from "projen";
-import type { IResolver } from "projen/lib/file";
 import { JobPermission } from "projen/lib/github/workflows-model";
-import { parse, stringify } from "smol-toml";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { DBX_TOOLS_LICENSE, projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
@@ -111,24 +109,6 @@ const DEFAULT_DEV_DEPENDENCIES = [
 
 const quote = (value: string): string => JSON.stringify(value);
 
-interface TomlSynthesizer {
-  synthesizeContent(resolver: IResolver): string | undefined;
-}
-
-function formatPyproject(file: python.PyprojectTomlFile): void {
-  const target = file as unknown as TomlSynthesizer;
-  const synthesize = target.synthesizeContent.bind(file);
-  target.synthesizeContent = (resolver) => {
-    const content = synthesize(resolver);
-    if (!content) return content;
-    const marker = content.startsWith("# ") ? content.slice(0, content.indexOf("\n")) : undefined;
-    const body = stringify(parse(content))
-      .trimEnd()
-      .replace(/ = \[ (.*) \]$/gm, " = [$1]");
-    return `${marker ? `${marker}\n\n` : ""}${body}\n`;
-  };
-}
-
 /** Repository-relative path for a Python package directory. */
 export function pythonPackagePath(repository: PythonRepositoryOptions, directory: string): string {
   return `${repository.root ?? "packages/py"}/${directory}`;
@@ -222,7 +202,6 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.uniffi !== undefined) {
       this.uv.file.addOverride("tool.dbx_tools.config.uniffi", pkg.uniffi);
     }
-    formatPyproject(this.uv.file);
     this.uv.file.readonly = true;
 
     for (const path of [".gitattributes", ".gitignore"]) {
@@ -397,7 +376,6 @@ export class DBXToolsPythonWorkspace extends Component {
       "tool.uv.sources",
       Object.fromEntries(options.packages.map((pkg) => [pkg.name, { workspace: true }])),
     );
-    formatPyproject(file);
     file.readonly = true;
     return file;
   }

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { parse } from "smol-toml";
 import {
   readWorkflow,
   workflowStep,
@@ -104,6 +105,14 @@ describe("DBXToolsRustWorkspace", () => {
         /fixture_auth = "fixture.auth_rs.bindings"/,
       );
       assert.deepEqual(
+        (
+          parse(readFileSync(join(directory, "packages/rs/provider/uniffi.toml"), "utf8")) as {
+            bindings: { python: { external_packages: Record<string, string> } };
+          }
+        ).bindings.python.external_packages,
+        { fixture_auth: "fixture.auth_rs.bindings" },
+      );
+      assert.deepEqual(
         rust.bindingMappings.find((binding) => binding.crate === "fixture-provider")?.dependencies,
         ["fixture-auth"],
       );
@@ -183,6 +192,8 @@ describe("DBXToolsRustWorkspace", () => {
         "Publish GitHub release assets",
       ]);
       assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-release.mjs")), false);
+      assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-python.js")), false);
+      assert.equal(existsSync(join(binaryOutdir, ".projen/smol-toml.cjs")), false);
     } finally {
       rmSync(binaryOutdir, { recursive: true, force: true });
     }
@@ -495,7 +506,11 @@ describe("DBXToolsRustWorkspace", () => {
         { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
       ],
       packages: {
-        "databricks-auth": { dependencies: { uniffi: "0.31" } },
+        "databricks-auth": {
+          dependencies: { uniffi: "0.31" },
+          defaultFeatures: ["native"],
+          features: { native: ["uniffi/tokio"] },
+        },
         tool: {
           release: true,
         },
@@ -536,7 +551,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.deepEqual(project.dbxToolsConfig.rust, rust.workspaceMapping);
     assert.match(
       readFileSync(join(outdir, "packages/rs/databricks-auth/Cargo.toml"), "utf8"),
-      /crate-type = \["lib", "cdylib"\]/,
+      /crate-type = \[\s*"lib", "cdylib"\s*\]/,
     );
     assert.match(readFileSync(join(outdir, "Cargo.toml"), "utf8"), /rust-version = "1\.82"/);
     const cargoConfig = readFileSync(join(outdir, ".cargo/config.toml"), "utf8");
@@ -689,9 +704,36 @@ describe("DBXToolsRustWorkspace", () => {
     assert.ok(packager.includes("repository: sourceManifest.repository"));
     assert.ok(packager.includes("npmPackageBase:"));
     assert.match(packager, /cargoTargetRoot/);
+    assert.match(packager, /installPythonBindings/);
+    assert.match(packager, /stampPythonProject/);
     assert.doesNotMatch(packager, /resolve\(\s*root,\s*"target",\s*cargoTarget/);
     assert.equal(packager.includes('required("ubrn")'), false);
     assert.equal(packager.includes('run("cargo", ["run"'), false);
+    assert.equal(existsSync(join(outdir, ".projen/uniffi-python.js")), true);
+    assert.equal(existsSync(join(outdir, ".projen/smol-toml.cjs")), true);
+    assert.equal(existsSync(join(outdir, ".projen/smol-toml.LICENSE")), true);
+    const cargo = parse(
+      readFileSync(join(outdir, "packages/rs/databricks-auth/Cargo.toml"), "utf8"),
+    ) as {
+      bin: Array<{ name: string; path: string }>;
+      features: Record<string, string[]>;
+      package: Record<string, unknown>;
+    };
+    assert.deepEqual(cargo.bin, [
+      { name: "fixture-databricks-auth-uniffi-bindgen", path: "uniffi-bindgen.rs" },
+    ]);
+    assert.deepEqual(cargo.features, {
+      default: ["native"],
+      native: ["uniffi/tokio"],
+    });
+    assert.deepEqual(cargo.package.version, { workspace: true });
+    const cargoConfiguration = parse(readFileSync(join(outdir, ".cargo/config.toml"), "utf8")) as {
+      target: Record<string, { rustflags: string[] }>;
+    };
+    assert.deepEqual(cargoConfiguration.target["x86_64-pc-windows-msvc"]?.rustflags, [
+      "-C",
+      "target-feature=+crt-static",
+    ]);
     const nodeGenerator = readFileSync(
       join(import.meta.dirname, "..", "tasks", "uniffi.ts"),
       "utf8",

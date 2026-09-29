@@ -16,7 +16,10 @@
 /.projen/deps.json linguist-generated
 /.projen/files.json linguist-generated
 /.projen/pypi-trusted-publisher-instructions.mjs linguist-generated
+/.projen/smol-toml.cjs linguist-generated
+/.projen/smol-toml.LICENSE linguist-generated
 /.projen/tasks.json linguist-generated
+/.projen/uniffi-python.js linguist-generated
 /.projen/uniffi-release.mjs linguist-generated
 /.vscode/extensions.json linguist-generated linguist-language=JSON-with-Comments
 /.vscode/settings.json linguist-generated

@@ -7,14 +7,16 @@ description = "Python bindings for dbx-tools-google"
 readme = "README.md"
 requires-python = ">=3.11,<4"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
-dependencies = ["dbx-tools-core-rs @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core-rs"]
+license-files = [ "LICENSE" ]
+dependencies = [
+  "dbx-tools-core-rs @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core-rs"
+]
 
-[project.urls]
-Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/google-rs"
+  [project.urls]
+  Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/google-rs"
 
 [build-system]
-requires = ["uv_build>=0.11.28,<0.12.0"]
+requires = [ "uv_build>=0.11.28,<0.12.0" ]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

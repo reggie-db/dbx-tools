@@ -664,6 +664,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Packaging must
   execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.
+  Cargo manifests, UniFFI configs, and target configs use Projen `TomlFile`
+  objects with nested sections and array-of-table `bin` entries; do not restore
+  a handwritten TOML renderer. Local and release Python binding placement share
+  the dependency-free `projen/tasks/uniffi-python.js` implementation, including
+  generator arguments, Windows executable naming, generated headers, empty
+  `__init__.py`, and native-library placement.
   Node archive packaging invokes npm's JavaScript CLI through `node.exe` on
   Windows. Current Node security releases reject direct `.cmd` process spawning,
   while enabling a command shell would lose argv boundaries. Process-launch
@@ -1304,10 +1310,10 @@ projen`, then `uv sync --all-packages`. Use `uv run pytest`, `uv run ruff check
 packages/py`, and `uv run ruff format packages/py` for Python validation and
 formatting. `uv.lock` and `bun.lock` are local install artifacts and must remain
 untracked; `.venv/`, Python caches, and built wheels are ignored too.
-`DBXToolsPythonWorkspace` parses and reserializes every generated
-`pyproject.toml` with `smol-toml` during synthesis because projen's underlying
-`@iarna/toml` writer indents nested table headers. Keep this normalization on
-both the root workspace file and every member's `uv.file`.
+Projen's native `PyprojectTomlFile` owns generated `pyproject.toml` formatting.
+Do not override its protected synthesizer for cosmetic table layout. Temporary
+publication stamping parses and serializes TOML with `smol-toml`, restores the
+original bytes afterward, and is tested by parsed semantic equivalence.
 
 `bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
 does not exclude `packages/js/`. Some committed files predate the current
@@ -1836,7 +1842,10 @@ generation stays explicit during UniFFI API development. Child `package` uses
 package `prepack` remains for a standalone `bun publish`.
 One PR workflow owns both title lint and source validation. Its `closed` event
 uses a PR-number concurrency group to cancel running checks, while both jobs
-skip the close-event replacement run.
+skip the close-event replacement run. The workflow is constructed with
+Projen's public `BuildWorkflow` and a dedicated `pr:validate` build task; do not
+rewrite a generated step by matching its display name. File-level overrides
+remain only for workflow properties the public builder does not expose.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
 runs them with its own fast runner). The generated task runs
