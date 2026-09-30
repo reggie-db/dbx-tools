@@ -521,15 +521,18 @@ describe("optional Node release stage", () => {
       assert.match(workflow.jobs["release-please"]?.if ?? "", /inputs\.automatic/);
       const requestWorkflow = readWorkflow(independentOutdir, "release-request");
       assert.match(
-        step(requestWorkflow.jobs.merge!, "Merge source and start release").run ?? "",
-        /gh pr checks "\$PULL_REQUEST".*--watch --fail-fast/,
+        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
+          "",
+        /gh pr create/,
       );
       assert.match(
-        step(requestWorkflow.jobs.merge!, "Merge source and start release").run ?? "",
-        /gh pr merge "\$PULL_REQUEST".*--merge/,
+        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
+          "",
+        /gh pr merge "\$PR" --merge/,
       );
       assert.match(
-        step(requestWorkflow.jobs.merge!, "Merge source and start release").run ?? "",
+        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
+          "",
         /gh workflow run release\.yml.*automatic=true/,
       );
       const tasks = JSON.parse(

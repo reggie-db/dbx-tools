@@ -460,30 +460,15 @@ function configureReleaseRequestWorkflow(
     fileName: "release-request.yml",
     limitConcurrency: true,
     concurrencyOptions: {
-      group: "release-request-${{ inputs.pull_request }}",
+      group: "release-request-${{ github.ref_name }}",
       cancelInProgress: false,
     },
   });
-  workflow.runName = "merge release request #${{ inputs.pull_request }}";
-  workflow.on({
-    workflowDispatch: {
-      inputs: {
-        pull_request: {
-          description: "Source pull request to merge",
-          type: "string",
-          required: true,
-        },
-        base_branch: {
-          description: "Release branch receiving the source pull request",
-          type: "string",
-          default: baseBranch,
-          required: true,
-        },
-      },
-    },
-  });
+  workflow.runName = "release request ${{ github.ref_name }}";
+  workflow.on({ push: {} });
   workflow.file?.addOverride("permissions.contents", "read");
-  workflow.addJob("merge", {
+  workflow.addJob("request", {
+    if: `\${{ github.ref_name != '${baseBranch}' }}`,
     runsOn: ["ubuntu-latest"],
     permissions: {
       actions: JobPermission.WRITE,
@@ -492,16 +477,54 @@ function configureReleaseRequestWorkflow(
     },
     steps: [
       {
-        name: "Merge source and start release",
+        name: "Checkout source branch",
+        uses: "actions/checkout@v6",
+        with: { "fetch-depth": 2 },
+      },
+      {
+        name: "Read release request",
+        id: "request",
+        shell: "bash",
+        run: [
+          'MESSAGE="$(git log -1 --format=%B)"',
+          'if ! grep -q "^Release-Request: true$" <<<"$MESSAGE"; then',
+          '  echo "requested=false" >> "$GITHUB_OUTPUT"',
+          "  exit 0",
+          "fi",
+          `git fetch origin ${JSON.stringify(baseBranch)}`,
+          `if git diff --quiet "origin/${baseBranch}...HEAD"; then`,
+          '  echo "requested=false" >> "$GITHUB_OUTPUT"',
+          "  exit 0",
+          "fi",
+          'echo "requested=true" >> "$GITHUB_OUTPUT"',
+          'echo "branch=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"',
+          'echo "notes_path=$(sed -n \'s/^Release-Notes-Path: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
+          'echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"',
+        ].join("\n"),
+      },
+      {
+        name: "Create, merge, and release source pull request",
+        if: "${{ steps.request.outputs.requested == 'true' }}",
         env: {
           GH_TOKEN: "${{ github.token }}",
-          PULL_REQUEST: "${{ inputs.pull_request }}",
-          BASE_BRANCH: "${{ inputs.base_branch }}",
+          SOURCE_BRANCH: "${{ steps.request.outputs.branch }}",
+          BASE_BRANCH: baseBranch,
+          TITLE: "${{ steps.request.outputs.title }}",
+          NOTES_PATH: "${{ steps.request.outputs.notes_path }}",
         },
         shell: "bash",
         run: [
-          'gh pr checks "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --watch --fail-fast',
-          'gh pr merge "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --merge',
+          'test -f "$NOTES_PATH"',
+          'NOTES="$(cat "$NOTES_PATH")"',
+          'BODY="$(printf \'## Release notes\\n\\n%s\\n\' "$NOTES")"',
+          'PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number // empty\')"',
+          'if [ -n "$PR" ]; then',
+          '  gh pr edit "$PR" --title "$TITLE" --body "$BODY"',
+          "else",
+          '  gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"',
+          '  PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number\')"',
+          "fi",
+          'gh pr merge "$PR" --merge',
           'gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" -f automatic=true',
         ].join("\n"),
       },

@@ -1999,11 +1999,11 @@ What is configured, and why:
 from `main`. Otherwise it commits dirty source, stores custom `--notes` /
 `--notes-file` content or a bounded Cursor, Codex, Claude, then Git fallback in
 `.release-notes/requests/<branch>.md`, adds a request commit, pushes, and creates
-or updates the source PR through the caller's `gh` credentials. Creating the PR
-locally avoids GitHub's `action_required` trust gate for PRs opened by
-`github-actions[bot]`. The task dispatches a focused workflow that merges the
-source PR with `GITHUB_TOKEN` after its checks pass and starts release planning,
-so running the task is the release signal and no UI approval or merge is required.
+or updates the source PR through the generated workflow. The workflow merges the
+PR directly with `GITHUB_TOKEN` and explicitly dispatches release planning, so
+running the task is the release signal and no UI approval or merge is required.
+GitHub may briefly record `action_required` for the bot-authored PR's validation
+run; the release workflow does not require that run and no user action is needed.
 `bun run release:refresh` invokes Release Please directly for operator recovery.
 
 After the source PR merges, Release Please refreshes one combined component
