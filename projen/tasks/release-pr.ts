@@ -14,6 +14,7 @@ import { exec, project } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
+import { generateReleaseSummary } from "./release-summary.ts";
 import {
   releaseArchitectureOption,
   releaseLevelOption,
@@ -259,6 +260,11 @@ program
         localCargo: opts.localCargo,
       });
       run(releaseRoot, process.execPath, [versionCheckScript]);
+      const releaseSummary = generateReleaseSummary({
+        root: releaseRoot,
+        version: next.version,
+        fromRef: `${opts.prefix}${next.base}`,
+      });
 
       git(releaseRoot, ["add", "-A"]);
       const staged = git(releaseRoot, ["diff", "--cached", "--name-only"], { capture: true });
@@ -279,6 +285,7 @@ program
         `Source commit: ${git(releaseRoot, ["rev-parse", `${releaseBranch}^`], { capture: true })}`,
         "",
         "Merging this PR updates VERSION on main and starts the public release workflow.",
+        ...(releaseSummary ? ["", releaseSummary] : []),
       ].join("\n");
       const githubEnvironment = {
         ...process.env,

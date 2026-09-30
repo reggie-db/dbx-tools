@@ -441,7 +441,17 @@ it. `--message` sets the source commit message. The task never merges
 the PR unless `--approve` is passed; that option merges the release branch
 directly through GitHub's merge API so no PR checks are created. A repository
 that blocks direct merges falls back to an immediate admin-merged PR. The task
-then fast-forwards the still-active source branch to the release commit. npm
+then fast-forwards the still-active source branch to the release commit.
+
+After validation, release preparation optionally generates
+`RELEASE_SUMMARY.md`. It tries the installed Cursor agent first, then Codex,
+then Claude, all in non-interactive read-only modes against bounded Git context.
+An unavailable, unauthenticated, failed, or empty provider falls through to the
+next; if none works, release preparation continues without a summary. The
+summary is included in the release PR and prepended to GitHub's generated
+release notes.
+
+npm
 uses `npm config get registry` and publishes to a local Verdaccio automatically.
 Publishable JavaScript members compile once
 from the root in parallel, then upload through a bounded pool without rerunning

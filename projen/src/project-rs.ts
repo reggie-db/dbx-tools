@@ -19,6 +19,7 @@ import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
 import type { DBXToolsProject } from "./project.ts";
 import {
   RELEASE_SHA,
+  RELEASE_SUMMARY_FILE,
   RELEASE_TAG,
   RELEASE_VERSION,
   releaseSourceSteps,
@@ -1359,6 +1360,7 @@ function rustGitHubReleaseJob(): Job {
         uses: "softprops/action-gh-release@v2",
         with: {
           files: "dist/rust-release/*",
+          body_path: RELEASE_SUMMARY_FILE,
           "generate-release-notes": true,
           tag_name: RELEASE_TAG,
           target_commitish: RELEASE_SHA,

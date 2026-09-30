@@ -279,6 +279,10 @@ describe("release task contracts", () => {
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),
     );
+    assert.ok(
+      releasePr.indexOf("generateReleaseSummary({") <
+        releasePr.indexOf('git(releaseRoot, ["add", "-A"])'),
+    );
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('.option("--approve",'));
     assert.match(releasePr, /account\.repository}\/merges/);
