@@ -55,7 +55,22 @@ function writeOutput(name: string, value: unknown): void {
   appendFileSync(output, `${name}=${JSON.stringify(value)}\n`);
 }
 
-function repositoryCoordinates(root: string): { owner: string; repo: string } {
+/** Parse GitHub owner and repository from HTTPS, SSH, or SSH-alias syntax. */
+export function parseGitHubRepository(remote: string): { owner: string; repo: string } {
+  const location = remote
+    .replace(/^git@[^:]+:/, "")
+    .replace(/^ssh:\/\/git@[^/]+\//, "")
+    .replace(/^https?:\/\/[^/]+\//, "")
+    .replace(/\.git$/, "");
+  const [owner, repo, ...extra] = location.split("/");
+  if (!owner || !repo || extra.length > 0) {
+    throw new Error(`Could not resolve GitHub repository from ${remote}`);
+  }
+  return { owner, repo };
+}
+
+/** Resolve GitHub owner and repository from environment or the configured remote. */
+export function repositoryCoordinates(root: string): { owner: string; repo: string } {
   const configured = process.env.GITHUB_REPOSITORY;
   const remote = configured
     ? configured
@@ -68,9 +83,7 @@ function repositoryCoordinates(root: string): { owner: string; repo: string } {
           check: true,
         })
         .stdout?.trim() ?? "");
-  const match = /(?:github\.com[/:])([^/]+)\/([^/]+?)(?:\.git)?$/.exec(remote);
-  if (!match) throw new Error(`Could not resolve GitHub repository from ${remote}`);
-  return { owner: match[1]!, repo: match[2]! };
+  return parseGitHubRepository(remote);
 }
 
 function githubToken(): string {

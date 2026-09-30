@@ -13,6 +13,7 @@ import { Version } from "release-please/build/src/version.js";
 
 import type { ReleaseUnitGraph } from "../src/release-catalog.ts";
 import { ReleaseUnitWorkspacePlugin } from "../src/release-please.ts";
+import { parseGitHubRepository } from "../tasks/release-please.ts";
 
 const REPOSITORY_CONFIG: RepositoryConfig = {
   ".release-units/node-core": {
@@ -75,6 +76,13 @@ function pullRequest(component: string, version: Version) {
 }
 
 describe("ReleaseUnitWorkspacePlugin", () => {
+  it("resolves GitHub SSH aliases without requiring github.com in the remote", () => {
+    assert.deepEqual(parseGitHubRepository("git@github-reggie-db:reggie-db/dbx-tools.git"), {
+      owner: "reggie-db",
+      repo: "dbx-tools",
+    });
+  });
+
   it("keeps direct semantic bumps and gives propagated dependents a patch", async () => {
     const plugin = new ReleaseUnitWorkspacePlugin({} as Scm, "main", REPOSITORY_CONFIG, {
       graph: GRAPH,
