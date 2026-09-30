@@ -221,7 +221,7 @@ const root = new projenProject.DBXToolsNodeProject({
   // so bun links it + its `workspace:^` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
   versioningMode: "independent",
-  releaseBootstrapSha: "cf4a77a2fd484de73b434fbdabbd53f05aad6503",
+  releaseBootstrapSha: "a7d703ac99c9faeba0fd236d535d594c3c70d22c",
   externalReleaseProjects: [
     {
       path: "projen",
