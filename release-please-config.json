@@ -4,7 +4,7 @@
   "separate-pull-requests": false,
   "include-component-in-tag": true,
   "include-v-in-tag": true,
-  "bootstrap-sha": "de3c523ca0e4f48583238258dc8c5f8b7b563251",
+  "bootstrap-sha": "53c306060577061ab672d2cd715d00bb3ecda810",
   "packages": {
     ".release-units/node-appkit": {
       "release-type": "simple",
