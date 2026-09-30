@@ -110,6 +110,21 @@ export function releasePublishCondition(stage: Exclude<ReleaseStage, "all">): st
   return `\${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == '${stage}')) }}`;
 }
 
+/** Enable native auto-merge or merge immediately when the repository disables it. */
+function mergePullRequest(reference: "$PR" | "$BRANCH"): string[] {
+  return [
+    `if ! MERGE_ERROR="$(gh pr merge "${reference}" --auto --merge 2>&1)"; then`,
+    '  if grep -qi "auto merge is not allowed" <<<"$MERGE_ERROR"; then',
+    '    echo "::warning::GitHub auto-merge is disabled; merging immediately"',
+    `    gh pr merge "${reference}" --merge`,
+    "  else",
+    '    echo "$MERGE_ERROR" >&2',
+    "    exit 1",
+    "  fi",
+    "fi",
+  ];
+}
+
 /** Download release artifacts from this run or a verified earlier run. */
 export function releaseArtifactSteps(options: {
   readonly currentName: string;
@@ -441,7 +456,7 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
           '  git commit -m "chore: reconcile release metadata"',
           '  git push origin "HEAD:$BRANCH"',
           "fi",
-          'gh pr merge "$BRANCH" --auto --merge',
+          ...mergePullRequest("$BRANCH"),
         ].join("\n"),
       },
     ],
@@ -520,7 +535,7 @@ function configureReleaseRequestWorkflow(
           '  gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"',
           '  PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number\')"',
           "fi",
-          'gh pr merge "$PR" --auto --merge',
+          ...mergePullRequest("$PR"),
         ].join("\n"),
       },
     ],

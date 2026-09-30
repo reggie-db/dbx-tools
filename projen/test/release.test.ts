@@ -518,6 +518,10 @@ describe("optional Node release stage", () => {
         step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "",
         /gh pr merge "\$BRANCH" --auto --merge/,
       );
+      assert.match(
+        step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "",
+        /GitHub auto-merge is disabled/,
+      );
       const requestWorkflow = readWorkflow(independentOutdir, "release-request");
       const requestJob = requestWorkflow.jobs.request!;
       assert.match(
@@ -527,6 +531,10 @@ describe("optional Node release stage", () => {
       assert.match(
         step(requestJob, "Create or update source pull request").run ?? "",
         /gh pr merge.*--auto --merge/,
+      );
+      assert.match(
+        step(requestJob, "Create or update source pull request").run ?? "",
+        /GitHub auto-merge is disabled/,
       );
       assert.match(
         step(requestJob, "Create or update source pull request").run ?? "",

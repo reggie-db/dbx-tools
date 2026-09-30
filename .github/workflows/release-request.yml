@@ -58,7 +58,15 @@ jobs:
             gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"
             PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number')"
           fi
-          gh pr merge "$PR" --auto --merge
+          if ! MERGE_ERROR="$(gh pr merge "$PR" --auto --merge 2>&1)"; then
+            if grep -qi "auto merge is not allowed" <<<"$MERGE_ERROR"; then
+              echo "::warning::GitHub auto-merge is disabled; merging immediately"
+              gh pr merge "$PR" --merge
+            else
+              echo "$MERGE_ERROR" >&2
+              exit 1
+            fi
+          fi
         shell: bash
 permissions:
   contents: read

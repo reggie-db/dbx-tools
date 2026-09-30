@@ -129,7 +129,15 @@ jobs:
             git commit -m "chore: reconcile release metadata"
             git push origin "HEAD:$BRANCH"
           fi
-          gh pr merge "$BRANCH" --auto --merge
+          if ! MERGE_ERROR="$(gh pr merge "$BRANCH" --auto --merge 2>&1)"; then
+            if grep -qi "auto merge is not allowed" <<<"$MERGE_ERROR"; then
+              echo "::warning::GitHub auto-merge is disabled; merging immediately"
+              gh pr merge "$BRANCH" --merge
+            else
+              echo "$MERGE_ERROR" >&2
+              exit 1
+            fi
+          fi
         shell: bash
     timeout-minutes: 30
   release-plan:

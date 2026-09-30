@@ -2000,8 +2000,9 @@ from `main`. Otherwise it commits dirty source, stores custom `--notes` /
 `--notes-file` content or a bounded Cursor, Codex, Claude, then Git fallback in
 `.release-notes/requests/<branch>.md`, adds a request commit, and pushes. The
 generated workflow creates or updates the source PR and enables auto-merge after
-checks. `bun run release:refresh` invokes Release Please directly for operator
-recovery.
+checks. When the repository does not enable GitHub's auto-merge setting, the
+workflow performs a normal merge instead. `bun run release:refresh` invokes
+Release Please directly for operator recovery.
 
 After the source PR merges, Release Please refreshes one combined component
 release PR from conventional commits and the generated release-unit graph. The
