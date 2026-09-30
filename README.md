@@ -345,21 +345,22 @@ starting anything.
 
 ## Development
 
-This repository uses a small internal workspace generator so package metadata,
-barrels, generated schemas, and examples stay consistent. That tooling is not
-the main product surface of the repo, but it is documented for contributors:
+This branch uses Bazel for package compilation and dependency-aware build caching.
+Explicit package targets share Node, browser-safe, and UI conventions without a
+workspace synthesis step. Publication is disabled during this build experiment.
 
-- [`@dbx-tools/projen`](projen) documents the projen engine,
-  package discovery, generated files, mixins, OpenAPI generation, and codegen.
+- [Bazel development](tools/bazel/README.md) documents targets, toolchains,
+  generated source, dependency locks, and local development.
 - [`dbx-tools`](packages/js/cli/dbx-tools) documents the contributor CLI.
 
 Useful contributor commands:
 
 ```sh
 bun install
-bunx projen
-bun run --filter '*' compile
-bun run --filter '*' test
+bun run bazel build //packages/js/shared/core:pkg
+bun run bazel build //packages/rs/model:lib
+bun run barrels --check
+bun run test:tooling
 bun run format
 uv sync --all-packages
 uv run pytest

@@ -1,0 +1,77 @@
+module(name = "dbx_tools", version = "0.0.0")
+
+bazel_dep(name = "aspect_rules_js", version = "3.5.0")
+bazel_dep(name = "aspect_rules_ts", version = "3.10.1")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_nodejs", version = "6.7.3")
+bazel_dep(name = "rules_python", version = "2.3.4")
+bazel_dep(name = "rules_rust", version = "0.74.0")
+bazel_dep(name = "rules_shell", version = "0.6.1")
+
+node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
+node.toolchain(node_version = "22.22.0")
+
+npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm")
+npm.npm_translate_lock(
+    name = "npm",
+    pnpm_lock = "//:pnpm-lock.yaml",
+    npm_package_target_name = "sources",
+    update_pnpm_lock = False,
+    use_home_npmrc = True,
+    verify_node_modules_ignored = "//:.bazelignore",
+    lifecycle_hooks_exclude = ["bun"],
+)
+use_repo(npm, "npm")
+
+typescript = use_extension("@aspect_rules_ts//ts:extensions.bzl", "typescript")
+typescript.deps(version_from = "//:package.json")
+use_repo(typescript, "npm_typescript")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(edition = "2021", versions = ["1.94.1"])
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+host_bun = use_repo_rule("//tools/bazel:repositories.bzl", "host_bun_repository")
+host_bun(
+    name = "host_bun",
+    workspace_marker = "//:MODULE.bazel",
+)
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+cargo_config = use_repo_rule("//tools/bazel:repositories.bzl", "cargo_config")
+cargo_config(name = "cargo_config")
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = ["//:Cargo.toml"],
+    cargo_config = "@cargo_config//:config.toml",
+    isolated = False,
+)
+use_repo(crate, "crates")
+
+ubrn = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+ubrn.spec(
+    package = "uniffi-bindgen-react-native",
+    git = "https://github.com/jhugman/uniffi-bindgen-react-native.git",
+    rev = "0f7fc67e8dd98ad43af3787d45c3c570d469a145",
+    repositories = ["ubrn"],
+)
+ubrn.annotation(crate = "uniffi-bindgen-react-native", gen_all_binaries = True, repositories = ["ubrn"])
+ubrn.from_specs(
+    name = "ubrn",
+    cargo_config = "@cargo_config//:config.toml",
+    isolated = False,
+)
+use_repo(ubrn, "ubrn")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(python_version = "3.12")
+
+uv_deps = use_repo_rule("//tools/bazel:repositories.bzl", "uv_repository")
+uv_deps(
+    name = "uv_deps",
+    python_version = "3.12",
+    requirements = "//tools/bazel:requirements.txt",
+)

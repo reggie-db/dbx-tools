@@ -91,14 +91,11 @@ const pythonSourceRoots = new Set<string>();
 function configurePython(): string | undefined {
   const executable = resolve(repositoryRoot, ".venv/bin/python");
   if (!existsSync(executable)) return undefined;
-  const source = execFileSync(
-    executable,
-    [
-      "-c",
-      "import json, os, sys, sysconfig; print(json.dumps({'basePrefix': sys.base_prefix, 'library': os.path.join(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')), 'prefix': sys.prefix, 'purelib': sysconfig.get_paths()['purelib']}))",
-    ],
-    { encoding: "utf8" },
-  );
+  const source =
+    process.env.POLYGLOT_PYTHON_CONFIG ??
+    execFileSync(executable, [resolve(repositoryRoot, "tools/bazel/python-config.py")], {
+      encoding: "utf8",
+    });
   const info = JSON.parse(source) as {
     basePrefix: string;
     library: string;

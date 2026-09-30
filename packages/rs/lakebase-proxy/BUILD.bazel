@@ -1,0 +1,18 @@
+load("//tools/bazel:rust.bzl", "dbx_rust_binary", "dbx_rust_library")
+
+dbx_rust_library(
+    crate_name = "dbx_tools_lakebase_proxy",
+    deps = ["//packages/rs/core:lib"],
+    tests = False,
+)
+
+dbx_rust_binary(
+    crate_name = "dbx_lakebase_proxy",
+    deps = [":lib", "//packages/rs/core:lib"],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+)
+
+exports_files(["Cargo.toml"])

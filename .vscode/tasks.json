@@ -2,26 +2,23 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "sync",
-      "detail": "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrels + openapi watchers",
+      "label": "Bazel: build",
       "type": "shell",
-      "command": "bun run sync -- --watch",
-      "isBackground": true,
-      "problemMatcher": [],
-      "runOptions": {
-        "runOn": "folderOpen"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "group": "projen"
-      }
+      "command": "bun run build",
+      "group": "build",
+      "problemMatcher": []
     },
     {
-      "label": "synth",
-      "detail": "projen - synthesize all generated config",
+      "label": "Bazel: test",
       "type": "shell",
-      "command": "bun run default",
+      "command": "bun run test",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Barrels: update",
+      "type": "shell",
+      "command": "bun run barrels",
       "problemMatcher": []
     }
   ]

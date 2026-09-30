@@ -1,0 +1,9 @@
+common --enable_bzlmod
+common --repo_env=DO_NOT_TRACK=1
+build --incompatible_strict_action_env
+build --announce_rc
+build --keep_going
+test --test_output=errors
+common --color=no
+common --curses=no
+try-import %workspace%/.bazelrc.local

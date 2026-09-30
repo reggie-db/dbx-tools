@@ -12,7 +12,7 @@ date and final status.
 
 ## Active plans
 
-No active plans.
+- [Bazel-native development experiment](2026-09-30-bazel-development.md)
 
 ## Cross-repository suggestions
 

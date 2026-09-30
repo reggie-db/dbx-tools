@@ -1,0 +1,3 @@
+load("//tools/bazel:defs.bzl", "dbx_app")
+
+dbx_app()

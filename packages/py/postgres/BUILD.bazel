@@ -1,0 +1,9 @@
+load("//tools/bazel:python.bzl", "dbx_python")
+
+dbx_python(
+    deps = [
+        "//packages/py/core:lib",
+        "//packages/py/core-rs:lib",
+    ],
+    tests = True,
+)

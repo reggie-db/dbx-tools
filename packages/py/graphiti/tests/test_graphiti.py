@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import sysconfig
 from pathlib import Path
@@ -50,7 +51,8 @@ def test_environment_preserves_explicit_neo4j_values(monkeypatch, tmp_path: Path
     assert environment["LLM__PROVIDERS__OPENAI__API_URL"] == "http://127.0.0.1:4000/v1"
     assert environment["EMBEDDER__PROVIDERS__OPENAI__API_KEY"] == "not-required"
     assert environment[UPSTREAM_MCP_PATH_ENV] == str(runtime.paths.graphiti / "mcp_server")
-    assert str(Path(__file__).parents[1] / "src") in environment["PYTHONPATH"]
+    python_paths = {Path(value).resolve() for value in environment["PYTHONPATH"].split(os.pathsep)}
+    assert any(path.name == "src" and path.parent.name == "graphiti" for path in python_paths)
 
 
 def test_child_python_paths_exclude_standard_library() -> None:

@@ -1,0 +1,11 @@
+load("//tools/bazel:rust.bzl", "dbx_rust_library")
+
+dbx_rust_library(
+    crate_name = "dbx_tools_google",
+    deps = ["//packages/rs/core:lib"],
+    uniffi = True,
+    node_package = "@dbx-tools/google-rs",
+    python_module = "dbx_tools.google_rs",
+)
+
+exports_files(["Cargo.toml", "uniffi.toml"])

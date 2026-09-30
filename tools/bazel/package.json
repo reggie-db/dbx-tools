@@ -1,0 +1,13 @@
+{
+  "name": "@dbx-tools/build",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "commander": "catalog:",
+    "is-identifier": "^1.0.4",
+    "oxc-parser": "^0.120.0",
+    "smol-toml": "^1.4.2",
+    "typescript": "5.9.3",
+    "yaml": "^2.8.0"
+  }
+}

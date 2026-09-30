@@ -18,6 +18,7 @@ import { lakebaseAiSearch, plugin as searchPlugin } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import { plugin as teamsPlugin } from "@dbx-tools/teams";
 import { interceptor as tunnelInterceptorApi, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
+import type { Application } from "express";
 import { z } from "zod";
 
 import { configureStaticDelivery } from "./_static-delivery.ts";
@@ -380,7 +381,9 @@ await appkit.createApp({
     }),
   ],
   onPluginsReady(appkit) {
-    appkit.server.extend((application) => configureStaticDelivery(application, clientDist));
+    appkit.server.extend((application: Application) =>
+      configureStaticDelivery(application, clientDist),
+    );
   },
   // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
   // applies the computed DATABRICKS_HOST, launches portr pointed at this app's

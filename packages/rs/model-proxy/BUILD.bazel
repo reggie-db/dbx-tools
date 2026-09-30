@@ -1,0 +1,8 @@
+load("//tools/bazel:rust.bzl", "dbx_rust_binary")
+
+dbx_rust_binary(
+    crate_name = "dbx_model_proxy",
+    deps = ["//packages/rs/core:lib", "//packages/rs/model:lib"],
+)
+
+exports_files(["Cargo.toml"])

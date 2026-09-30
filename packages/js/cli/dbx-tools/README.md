@@ -7,7 +7,7 @@ Available commands:
 
 | Command              | What it does                                                             |
 | -------------------- | ------------------------------------------------------------------------ |
-| `dbx dev`            | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
+| `dbx dev`            | Run the pinned Bazel toolchain in an existing workspace.       |
 | `dbx appkit env`     | Print the environment an AppKit app resolves, as eval-able shell output. |
 | `dbx auth`           | Generate U2M or M2M OAuth tokens with secure credential storage.         |
 | `dbx tunnel`         | Front any command with a public portr tunnel and an email-OTP gate.      |
@@ -44,45 +44,12 @@ The registry and installer live in
 [`@dbx-tools/rust-binary`](../../node/rust-binary) so server packages can use a
 native release binary without installing this CLI's command graph.
 
-## Bootstrap A Workspace
+## Build A Workspace
 
-```sh
-dbx dev sync
-```
-
-In an empty folder this creates the minimum bun/projen structure needed for
-`@dbx-tools/projen`, installs the toolchain, and runs the first synth. In a
-freshly cloned repo it seeds the missing toolchain and synthesizes. This is the
-case projen cannot handle on its own, because there are no tasks to run yet.
-
-The three cases `dbx dev` dispatches on, in order:
-
-| Workspace state                           | What happens                                                                                                                                          |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No `.projenrc.ts`                         | Full bootstrap: scaffold, install, initial synth.                                                                                                     |
-| `.projenrc.ts` but no installed toolchain | Seed the toolchain, run the initial synth, then install. Task args are not forwarded, because the tasks they name do not exist until the first synth. |
-| Established workspace                     | Ensure deps, bring the engine up to this CLI's version, forward the args to projen.                                                                   |
-
-Everything after `dev` is forwarded verbatim, flags included - `dbx dev sync
---watch` runs the `sync` task with `--watch`. `dev` is an explicit subcommand
-rather than the bare root action so a projen task name can never collide with a
-sibling command group.
-
-## After Bootstrap, Use The Projen Tasks
-
-The engine registers its commands as projen tasks on the workspace root, so run
-them directly instead of going through this CLI:
-
-```sh
-bun run sync             # one-shot full synth
-bun run sync -- --watch  # projenrc + barrels + openapi watchers
-bun run barrels          # rebuild every package-root index.ts barrel
-bun run openapi          # generate the openapi packages from tsoa controllers
-bun run clean            # remove generated (read-only) files; -y to skip the picker
-```
-
-`dbx dev <task>` still works and forwards to the same projen task, but the
-`bun run` form is the documented one for an established workspace.
+Run `dbx dev build //...` from an existing Bazel workspace, or select a target
+with `dbx dev build //packages/js/shared/core:pkg`. The CLI finds `MODULE.bazel`
+above the current directory and forwards arguments to Bazelisk. It does not
+create manifests, install a generator engine, or synthesize a project.
 
 ## Resolve AppKit Env
 

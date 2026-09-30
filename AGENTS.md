@@ -1,5 +1,29 @@
 # AGENTS.md
 
+## Bazel development branch
+
+This branch replaces Projen with Bazel. This section supersedes the historical
+generator and release instructions below. Do not restore Projen, its tasks,
+or its generated workflows. Publication is deliberately disabled in this
+experimental branch.
+
+Package manifests own package identity and dependencies. Explicit BUILD files
+own the project graph; reusable `dbx_ui`, `dbx_node`, and `dbx_shared` macros apply
+package-kind defaults. There is no project-discovery daemon or synth phase.
+`bun run barrels` updates checked-in barrels; `bun run barrels --check` verifies
+their freshness without modifying source.
+Keep generated bindings committed in their existing `src` folders. Regeneration
+is explicit; ordinary JavaScript builds do not compile Rust.
+
+Use Bun for repository commands. `bun run deps:lock` is the only dependency
+bootstrap: it invokes pinned pnpm for rules_js's lock format, uv for the Python
+export and wheel cache, and Cargo for locked crate fetching. Those package
+managers own corporate proxy discovery. Bazel must not query public package
+registries directly or commit machine-specific registry URLs.
+Keep detailed build instructions in `tools/bazel/README.md`. Prefer maintained
+language rules and explicit dependency edges over shell commands wrapping whole
+workspace builds. Never run publication or modify the original worktree.
+
 Orientation for AI agents / new contributors. Read this first.
 
 ## Canonical agent instructions

@@ -1,0 +1,7 @@
+load("//tools/bazel:python.bzl", "dbx_python")
+
+dbx_python(
+    deps = ["//packages/py/core-rs:lib"],
+    python_module = "dbx_tools.google_rs",
+    uniffi_bindings = "//packages/rs/google:bindings",
+)

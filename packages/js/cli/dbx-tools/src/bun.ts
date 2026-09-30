@@ -1,5 +1,5 @@
 /**
- * bun discovery, workspace install, and projen forwarding for the `dbx-tools` CLI.
+ * bun discovery, workspace install, and Bazel forwarding for the `dbx-tools` CLI.
  *
  * ## Forcing a custom registry
  *
@@ -20,8 +20,7 @@
  *
  * @module
  */
-import { existsSync } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname } from "node:path";
 import { exec, project } from "@dbx-tools/core";
 import { functionModule, log } from "@dbx-tools/shared-core";
 import { needsInstall } from "./root.ts";
@@ -114,23 +113,13 @@ export function runBun(args: string[], cwd: string): void {
   });
 }
 
-/** Install workspace dependencies when `node_modules` or projen is missing. */
+/** Install workspace dependencies when `node_modules` or Bazel is missing. */
 export function ensureWorkspaceReady(root: string): void {
   if (needsInstall(root)) {
     runBun(["install"], root);
   }
 }
 
-/**
- * Run projen with the given args from `root`. Prefers the installed `projen` bin
- * via `bun run`, so the workspace's own engine + tasks are used.
- */
-export function runProjen(args: string[], root: string): void {
-  const projenBin = join(root, "node_modules", ".bin", "projen");
-  if (existsSync(projenBin)) {
-    runBun([projenBin, ...args], root);
-    return;
-  }
-  // Fallback: resolve projen through bun's package runner.
-  runBun(["x", "projen", ...args], root);
+export function runBazel(args: string[], root: string): void {
+  runBun(["x", "--bun", "@bazel/bazelisk@1.28.1", ...args], root);
 }

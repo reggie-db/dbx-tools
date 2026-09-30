@@ -20,7 +20,7 @@
  */
 
 import { ExecutionError, getExecutionContext } from "@databricks/appkit";
-import { Context } from "@databricks/sdk-experimental";
+import type { Context, WorkspaceClient } from "@databricks/sdk-experimental";
 import { appkit, databricks } from "@dbx-tools/appkit";
 import { invoke, resolve as modelResolve, serving } from "@dbx-tools/model";
 import { async as sharedAsync, json, log, string } from "@dbx-tools/shared-core";
@@ -41,7 +41,7 @@ import {
   type ResolvedSearchConfig,
 } from "./config.ts";
 
-type WorkspaceClientLike = ReturnType<appkit.WorkspaceClientLike["toLegacyWorkspaceClient"]>;
+type WorkspaceClientLike = WorkspaceClient;
 const logger = log.logger("search/client");
 
 /** Query backend used when AppKit owns the Vector Search execution path. */

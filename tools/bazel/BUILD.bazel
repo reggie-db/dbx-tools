@@ -1,0 +1,36 @@
+load("@aspect_rules_js//js:defs.bzl", "js_binary")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_config")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+
+exports_files(
+    glob(["*.bzl", "tsconfig*.json"]) +
+    ["bun-test.sh", "python-config.py", "requirements.txt", "pytest_main.py"],
+)
+
+ts_config(
+    name = "typescript_configs",
+    src = "tsconfig.base.json",
+    deps = ["tsconfig.node.json", "tsconfig.shared.json", "tsconfig.ui.json"],
+    visibility = ["//visibility:public"],
+)
+
+npm_link_all_packages(name = "node_modules")
+
+js_binary(
+    name = "package_manifest",
+    entry_point = "package-manifest.mjs",
+    visibility = ["//visibility:public"],
+)
+
+js_binary(
+    name = "uniffi_generator",
+    entry_point = "uniffi-generator.mjs",
+    data = ["uniffi.ts"],
+    visibility = ["//visibility:public"],
+)
+
+js_binary(
+    name = "stage_python_bindings",
+    entry_point = "stage-python-bindings.mjs",
+    visibility = ["//visibility:public"],
+)
