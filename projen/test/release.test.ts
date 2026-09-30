@@ -514,39 +514,26 @@ describe("optional Node release stage", () => {
       assert.equal("verify-context" in workflow.jobs, false);
       assert.equal("rust-build" in workflow.jobs, false);
       assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");
-      assert.match(
-        step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "",
-        /gh pr merge "\$BRANCH" --auto --merge/,
-      );
-      assert.match(
-        step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "",
-        /GitHub auto-merge is disabled/,
-      );
+      const reconcile =
+        step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "";
+      assert.match(reconcile, /gh pr merge "\$BRANCH" --merge/);
+      assert.match(reconcile, /gh workflow run release\.yml.*automatic=true/);
+      assert.match(workflow.jobs["release-please"]?.if ?? "", /inputs\.automatic/);
       const requestWorkflow = readWorkflow(independentOutdir, "release-request");
-      const requestJob = requestWorkflow.jobs.request!;
       assert.match(
-        step(requestJob, "Create or update source pull request").run ?? "",
+        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
+          "",
         /gh pr create/,
       );
       assert.match(
-        step(requestJob, "Create or update source pull request").run ?? "",
-        /gh pr merge.*--auto --merge/,
+        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
+          "",
+        /gh pr merge "\$PR" --merge/,
       );
       assert.match(
-        step(requestJob, "Create or update source pull request").run ?? "",
-        /GitHub auto-merge is disabled/,
-      );
-      assert.match(
-        step(requestJob, "Create or update source pull request").run ?? "",
-        /NOTES_PATH/,
-      );
-      assert.doesNotMatch(
-        step(requestJob, "Create or update source pull request").run ?? "",
-        /Base64/,
-      );
-      assert.doesNotMatch(
-        step(requestJob, "Create or update source pull request").run ?? "",
-        /APPROVE/,
+        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
+          "",
+        /gh workflow run release\.yml.*automatic=true/,
       );
       const tasks = JSON.parse(
         readFileSync(join(independentOutdir, ".projen/tasks.json"), "utf8"),

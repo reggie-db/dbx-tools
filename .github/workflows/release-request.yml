@@ -11,6 +11,7 @@ jobs:
   request:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     if: ${{ github.ref_name != 'main' }}
@@ -38,8 +39,8 @@ jobs:
           echo "notes_path=$(sed -n 's/^Release-Notes-Path: //p' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"
           echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"
         shell: bash
-      - name: Create or update source pull request
-        id: create_or_update_source_pull_request
+      - name: Create, merge, and release source pull request
+        id: create_merge_and_release_source_pull_request
         if: ${{ steps.request.outputs.requested == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,15 +59,8 @@ jobs:
             gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"
             PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number')"
           fi
-          if ! MERGE_ERROR="$(gh pr merge "$PR" --auto --merge 2>&1)"; then
-            if grep -qi "auto merge is not allowed" <<<"$MERGE_ERROR"; then
-              echo "::warning::GitHub auto-merge is disabled; merging immediately"
-              gh pr merge "$PR" --merge
-            else
-              echo "$MERGE_ERROR" >&2
-              exit 1
-            fi
-          fi
+          gh pr merge "$PR" --merge
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" -f automatic=true
         shell: bash
 permissions:
   contents: read

@@ -110,21 +110,6 @@ export function releasePublishCondition(stage: Exclude<ReleaseStage, "all">): st
   return `\${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == '${stage}')) }}`;
 }
 
-/** Enable native auto-merge or merge immediately when the repository disables it. */
-function mergePullRequest(reference: "$PR" | "$BRANCH"): string[] {
-  return [
-    `if ! MERGE_ERROR="$(gh pr merge "${reference}" --auto --merge 2>&1)"; then`,
-    '  if grep -qi "auto merge is not allowed" <<<"$MERGE_ERROR"; then',
-    '    echo "::warning::GitHub auto-merge is disabled; merging immediately"',
-    `    gh pr merge "${reference}" --merge`,
-    "  else",
-    '    echo "$MERGE_ERROR" >&2',
-    "    exit 1",
-    "  fi",
-    "fi",
-  ];
-}
-
 /** Download release artifacts from this run or a verified earlier run. */
 export function releaseArtifactSteps(options: {
   readonly currentName: string;
@@ -367,9 +352,10 @@ function addDocsJobs(
 
 function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch: string): Job {
   return {
-    if: "${{ github.event_name == 'push' }}",
+    if: "${{ github.event_name == 'push' || inputs.automatic == true }}",
     runsOn: ["ubuntu-latest"],
     permissions: {
+      actions: JobPermission.WRITE,
       contents: JobPermission.WRITE,
       pullRequests: JobPermission.WRITE,
     },
@@ -436,6 +422,7 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
         if: "${{ steps.release.outputs.prs_created == 'true' }}",
         env: {
           GH_TOKEN: "${{ github.token }}",
+          RELEASE_BRANCH: branch,
           RELEASE_PRS: "${{ steps.release.outputs.prs }}",
         },
         shell: "bash",
@@ -456,7 +443,8 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
           '  git commit -m "chore: reconcile release metadata"',
           '  git push origin "HEAD:$BRANCH"',
           "fi",
-          ...mergePullRequest("$BRANCH"),
+          'gh pr merge "$BRANCH" --merge',
+          'gh workflow run release.yml --ref "$RELEASE_BRANCH" -f automatic=true',
         ].join("\n"),
       },
     ],
@@ -483,6 +471,7 @@ function configureReleaseRequestWorkflow(
     if: `\${{ github.ref_name != '${baseBranch}' }}`,
     runsOn: ["ubuntu-latest"],
     permissions: {
+      actions: JobPermission.WRITE,
       contents: JobPermission.WRITE,
       pullRequests: JobPermission.WRITE,
     },
@@ -514,7 +503,7 @@ function configureReleaseRequestWorkflow(
         ].join("\n"),
       },
       {
-        name: "Create or update source pull request",
+        name: "Create, merge, and release source pull request",
         if: "${{ steps.request.outputs.requested == 'true' }}",
         env: {
           GH_TOKEN: "${{ github.token }}",
@@ -535,7 +524,8 @@ function configureReleaseRequestWorkflow(
           '  gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"',
           '  PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number\')"',
           "fi",
-          ...mergePullRequest("$PR"),
+          'gh pr merge "$PR" --merge',
+          'gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" -f automatic=true',
         ].join("\n"),
       },
     ],
@@ -544,7 +534,7 @@ function configureReleaseRequestWorkflow(
 
 function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
   return {
-    if: "${{ always() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.releases_created == 'true' || needs.release-please.outputs.docs_changed == 'true' || needs.release-please.outputs.recovery_requested == 'true') }}",
+    if: "${{ always() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.releases_created == 'true' || (needs.release-please.outputs.docs_changed == 'true' && needs.release-please.outputs.prs_created != 'true') || needs.release-please.outputs.recovery_requested == 'true') }}",
     needs: ["release-please"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
@@ -746,7 +736,7 @@ function addIndependentBranchSyncJob(
 ): void {
   const releaseBranch = projectReleaseBranch(project);
   workflow.addJob("sync-release-branch", {
-    if: "${{ always() && github.event_name == 'push' && needs['publication-complete'].result == 'success' }}",
+    if: "${{ always() && (github.event_name == 'push' || inputs.automatic == true) && needs['publication-complete'].result == 'success' }}",
     needs: ["publication-complete"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
@@ -881,11 +871,18 @@ function configureIndependentRelease(
     concurrencyOptions: { group: "release", cancelInProgress: false },
   });
   workflow.runName =
-    "release units " + "${{ github.event_name == 'push' && github.sha || inputs.component }}";
+    "release units " +
+    "${{ github.event_name == 'push' && github.sha || inputs.automatic && 'automatic' || inputs.component }}";
   workflow.on({
     push: { branches: [branch] },
     workflowDispatch: {
       inputs: {
+        automatic: {
+          description: "Continue an automatically merged Release Please pull request",
+          type: "boolean",
+          default: "false",
+          required: false,
+        },
         component: {
           description: "Component to recover",
           type: "string",
@@ -908,6 +905,7 @@ function configureIndependentRelease(
       },
     },
   });
+  workflow.file?.addOverride("on.workflow_dispatch.inputs.automatic.default", false);
   workflow.file?.addOverride("permissions.contents", "read");
   workflow.addJob("release-please", independentReleasePleaseJob(project, branch));
   workflow.addJob("release-plan", independentReleasePlanJob(project));

@@ -454,19 +454,20 @@ a new package is covered without a re-synth. Work from the root:
 before notes, AI, commits, pushes, or PR creation. It commits dirty source,
 writes custom `--notes` / `--notes-file` content or a bounded Cursor, Codex,
 Claude, then Git fallback to `.release-notes/requests/<branch>.md`, adds one
-request commit, and pushes. The generated request workflow creates or updates
-the source PR and enables auto-merge after checks. If the repository disables
-GitHub auto-merge, the workflow performs a normal merge instead.
+request commit, and pushes. The generated workflow creates or updates the source
+PR, merges it directly with `GITHUB_TOKEN`, and dispatches release planning, so
+no UI approval or merge is required. GitHub may briefly record
+`action_required` for the bot-authored PR validation; it is not a required gate.
 
 After the source PR merges, Release Please retains direct conventional semantic
 increments and applies required dependent patches. Reconciliation copies the
 readable request Markdown into one temporary
 `.release-notes/final/<component>-v<version>.md` per affected component and
-deletes the consumed request file in the release PR, then enables auto-merge
-after checks. A merge with no affected release units creates no release PR or
-publication work. Publication applies each file to its matching GitHub Release,
-then removes the temporary notes tree in a cleanup commit. Request and final
-notes never count as source changes.
+deletes the consumed request file in the release PR, then merges that generated
+PR and explicitly dispatches publication. A source merge with no affected
+release units creates no release PR or publication work. Publication applies
+each file to its matching GitHub Release, then removes the temporary notes tree
+in a cleanup commit. Request and final notes never count as source changes.
 
 The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
 public `BuildWorkflow` `buildTask` option. That task runs synth plus the

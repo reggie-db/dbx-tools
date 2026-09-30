@@ -1998,18 +1998,21 @@ What is configured, and why:
 `bun run release` exits before notes or AI when the current branch has no change
 from `main`. Otherwise it commits dirty source, stores custom `--notes` /
 `--notes-file` content or a bounded Cursor, Codex, Claude, then Git fallback in
-`.release-notes/requests/<branch>.md`, adds a request commit, and pushes. The
-generated workflow creates or updates the source PR and enables auto-merge after
-checks. When the repository does not enable GitHub's auto-merge setting, the
-workflow performs a normal merge instead. `bun run release:refresh` invokes
-Release Please directly for operator recovery.
+`.release-notes/requests/<branch>.md`, adds a request commit, pushes, and creates
+or updates the source PR through the generated workflow. The workflow merges the
+PR directly with `GITHUB_TOKEN` and explicitly dispatches release planning, so
+running the task is the release signal and no UI approval or merge is required.
+GitHub may briefly record `action_required` for the bot-authored PR's validation
+run; the release workflow does not require that run and no user action is needed.
+`bun run release:refresh` invokes Release Please directly for operator recovery.
 
 After the source PR merges, Release Please refreshes one combined component
 release PR from conventional commits and the generated release-unit graph. The
 workflow reconciles Projen-owned manifests, copies readable request notes into
-component-qualified summaries, deletes consumed request Markdown, and enables
-auto-merge after checks. A merge with no affected release units creates no
-release PR or publication work.
+component-qualified summaries, deletes consumed request Markdown, merges that
+generated PR, and explicitly dispatches publication because GitHub suppresses
+push workflows for merges made by `GITHUB_TOKEN`. A source merge with no
+affected release units creates no release PR or publication work.
 
 Public npm, PyPI, Cargo, and GitHub publication consume the same affected plan
 and remain idempotent per component, so recovery does not replay unrelated

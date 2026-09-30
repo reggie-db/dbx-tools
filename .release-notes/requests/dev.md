@@ -1,3 +1,3 @@
 # Release request: dev
 
-Independent releases now merge source and Release Please pull requests automatically. GitHub native auto-merge is used when available, with a normal merge fallback when the repository setting is disabled. Release requests still exit before notes or commits when there are no releasable changes.
+Running bun run release now creates and merges the source pull request with the repository workflow token, then dispatches Release Please publication without UI approval. No-op branches exit before notes, commits, or pull requests.
