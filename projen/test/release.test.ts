@@ -507,6 +507,7 @@ describe("optional Node release stage", () => {
       assert.equal(sync?.needs, "publication-complete");
       const syncScript = step(sync!, "Safely sync dev").run ?? "";
       assert.match(syncScript, /merge-base --is-ancestor/);
+      assert.match(syncScript, /origin\/\$RELEASE_BRANCH/);
       assert.match(syncScript, /git merge --no-ff --no-edit/);
       assert.match(syncScript, /git merge --abort/);
       assert.match(syncScript, /no longer exists/);

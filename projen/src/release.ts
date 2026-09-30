@@ -727,6 +727,7 @@ function addIndependentBranchSyncJob(
   project: DBXToolsJavaScriptProject,
   branch: string,
 ): void {
+  const releaseBranch = projectReleaseBranch(project);
   workflow.addJob("sync-release-branch", {
     if: "${{ always() && github.event_name == 'push' && needs['publication-complete'].result == 'success' }}",
     needs: ["publication-complete"],
@@ -746,22 +747,23 @@ function addIndependentBranchSyncJob(
       {
         name: `Safely sync ${branch}`,
         shell: "bash",
-        env: { SOURCE_BRANCH: branch },
+        env: { SOURCE_BRANCH: branch, RELEASE_BRANCH: releaseBranch },
         run: [
           'if ! git ls-remote --exit-code --heads origin "refs/heads/$SOURCE_BRANCH" >/dev/null 2>&1; then',
           '  echo "source branch $SOURCE_BRANCH no longer exists; nothing to sync"',
           "  exit 0",
           "fi",
           'git fetch origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"',
-          'if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" HEAD; then',
-          '  git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
-          'elif git merge-base --is-ancestor HEAD "origin/$SOURCE_BRANCH"; then',
+          'git fetch origin "refs/heads/$RELEASE_BRANCH:refs/remotes/origin/$RELEASE_BRANCH"',
+          'if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" "origin/$RELEASE_BRANCH"; then',
+          '  git push origin "refs/remotes/origin/$RELEASE_BRANCH:refs/heads/$SOURCE_BRANCH"',
+          'elif git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "origin/$SOURCE_BRANCH"; then',
           '  echo "source branch $SOURCE_BRANCH already contains released main"',
           "else",
           '  git config user.name "github-actions[bot]"',
           '  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
           '  git switch --force-create "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"',
-          '  if git merge --no-ff --no-edit "$GITHUB_SHA"; then',
+          '  if git merge --no-ff --no-edit "origin/$RELEASE_BRANCH"; then',
           '    git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
           "  else",
           '    SAFE_GENERATED="true"',
