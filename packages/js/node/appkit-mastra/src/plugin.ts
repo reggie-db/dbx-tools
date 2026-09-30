@@ -95,6 +95,7 @@ import {
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
+import { resolveDefaultModelId } from "./model.ts";
 import { buildObservability } from "./observability.ts";
 import { provisionRemoteSkills } from "./remote-skills.ts";
 import {
@@ -506,16 +507,11 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       },
     });
 
-    // `GET /default-model` (and `/default-model/:agentId`) reports the static
-    // serving-endpoint an agent falls back to when the client pins no model,
-    // so the picker can label its default option with the model's humanized
-    // name. Agent-scoped via the optional `/:agentId` suffix (URL symmetry
-    // with the history / threads / suggestions routes), defaulting to the
-    // default agent. `model` / `displayName` are null when the agent has no
-    // static default (a dynamic, call-time model); an unknown agent id is a
-    // 404, matching the history / threads routes. Reads only in-memory build
-    // state, so it needs no OBO scoping. Registered before the catch-all,
-    // same as `/models`.
+    // `GET /default-model` (and `/default-model/:agentId`) reports what an
+    // unpinned turn will use. A configured string is returned directly; an
+    // automatic default resolves the highest-ranked currently available model
+    // from the same OBO-scoped live catalogue as `/models`; a custom dynamic
+    // resolver remains null because it is call-time application code.
     const handleDefaultModel = async (
       req: express.Request,
       res: express.Response,
@@ -526,11 +522,20 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         return;
       }
       const agentId = requested ?? this.built?.defaultAgentId ?? FALLBACK_AGENT_ID;
-      const raw = this.built?.defaultModels[agentId];
-      // `"<dynamic>"` (a call-time function) has no fixed id to advertise.
-      const model = raw && raw !== "<dynamic>" ? raw : null;
-      // Return the humanized label too, so the picker shows a friendly name on
-      // load without waiting on the `/models` catalogue (no raw-id flash).
+      const intent = this.built?.defaultModels[agentId];
+      let model: string | null = null;
+      if (intent?.kind === "configured") {
+        model = intent.model;
+      } else if (intent?.kind === "auto") {
+        const result = await this.scopedSelf(req).listModelsResult();
+        if (!result.ok) {
+          this.sendFailure(res, result, "default-model", MODEL_CATALOGUE_FAILED_MESSAGE);
+          return;
+        }
+        if (result.data.length > 0) {
+          model = resolveDefaultModelId(this.config, result.data);
+        }
+      }
       res.json({
         agentId,
         model,

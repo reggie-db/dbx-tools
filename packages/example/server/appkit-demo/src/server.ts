@@ -129,7 +129,8 @@ const clientDist =
 // `/Workspace/.assistant/skills` and `/Users/<email>/.assistant/skills`.
 //
 // Required env vars (see .env.example):
-// - DATABRICKS_SERVING_ENDPOINT_NAME=databricks-claude-sonnet-4-6
+// - DATABRICKS_SERVING_ENDPOINT_NAME - optional override; when absent the
+//   highest-ranked available live endpoint is selected
 // - LAKEBASE_PROJECT (or LAKEBASE_ENDPOINT) - autopg fills in the rest
 // - DATABRICKS_GENIE_SPACE_ID - picked up by `genie()` as the
 //   `default` space when `spaces` is omitted.
@@ -148,10 +149,10 @@ const clientDist =
 // (`analytics`, `files`, `lakebase`, `genie`, ...). Unknown
 // names return `undefined` so it's safe to guard with `?.`.
 //
-// `model` falls back to `DATABRICKS_SERVING_ENDPOINT_NAME` then to a
-// built-in default. Whatever id wins is fuzzy-matched against the
-// workspace's live `/serving-endpoints` list (cached for 5 min), so
-// loose values like `"claude sonnet"` snap to the real endpoint name.
+// `model` falls back to `DATABRICKS_SERVING_ENDPOINT_NAME`, then to the
+// highest-ranked endpoint in the workspace's live `/serving-endpoints` list
+// (cached for 5 min). Loose configured values like `"claude sonnet"` are
+// fuzzy-matched to the real endpoint name.
 // Per-request overrides via `X-Mastra-Model` header, `?model=` query,
 // or body `model` field can re-target the same agent without redeploy.
 // `GET /api/mastra/models` lists the cached catalogue.

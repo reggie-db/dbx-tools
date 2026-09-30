@@ -82,6 +82,12 @@ export interface ResolveModelInput {
    * the auto-classified catalogue.
    */
   fallbacks?: readonly string[];
+  /**
+   * Refuse the static offline floor when the live catalogue has no match.
+   * Use for unpinned defaults that must always name a currently available
+   * endpoint.
+   */
+  liveOnly?: boolean;
 }
 
 /** Outcome of {@link resolveModel}: the chosen id plus how it was reached. */
@@ -343,6 +349,10 @@ export function resolveModel(
   const source = input.modelClass !== undefined ? "class" : "fallback";
   const [top] = lookupModels(endpoints, buildQuery(input, undefined));
   if (top) return { modelId: top.endpoint.name, source };
+
+  if (input.liveOnly) {
+    throw new Error("No matching live Model Serving endpoint is available");
+  }
 
   // Live catalogue yielded nothing in range: walk the static floor.
   const floorSource =

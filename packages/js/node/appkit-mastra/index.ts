@@ -37,7 +37,7 @@ export * as validation from "./src/validation.ts";
 export * as workspaces from "./src/workspaces.ts";
 export * as writer from "./src/writer.ts";
 export { FALLBACK_AGENT_ID, DEFAULT_AGENT_MAX_STEPS, DEFAULT_STYLE_INSTRUCTIONS } from "./src/agents.ts";
-export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolkitProvider, MastraPlugins, MastraToolsFn, MastraAgentWorkspaceResolver, MastraAgentDefinition, AnyMastraAgentDefinition, MastraStorageConfigOverride, MastraMemoryConfigOverride, BuiltAgents } from "./src/agents.ts";
+export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolkitProvider, MastraPlugins, MastraToolsFn, MastraAgentWorkspaceResolver, MastraAgentDefinition, AnyMastraAgentDefinition, MastraStorageConfigOverride, MastraMemoryConfigOverride, AgentDefaultModel, BuiltAgents } from "./src/agents.ts";
 export { chartPlanSchema, chartPlannerRequestSchema, chartToolOutputSchema } from "./src/chart.ts";
 export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";

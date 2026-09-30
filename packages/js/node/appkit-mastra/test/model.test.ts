@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import { RESPONSES_PROVIDER_OPTIONS, servingApi } from "../src/model.ts";
+import { resolveDefaultModelId, RESPONSES_PROVIDER_OPTIONS, servingApi } from "../src/model.ts";
 
 describe("Mastra serving API selection", () => {
   it("routes Responses-only models through the native Responses provider", () => {
@@ -32,5 +33,21 @@ describe("Mastra serving API selection", () => {
         store: false,
       },
     });
+  });
+
+  it("uses the highest-ranked live model when no default is configured", () => {
+    const previous = process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+    delete process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+    const endpoints: ServingEndpointSummary[] = [
+      { name: "databricks-claude-opus-4-7", task: "llm/v1/chat" },
+      { name: "databricks-claude-opus-4-8", task: "llm/v1/chat" },
+      { name: "databricks-gte-large-en", task: "llm/v1/embeddings" },
+    ];
+    try {
+      assert.equal(resolveDefaultModelId({}, endpoints), "databricks-claude-opus-4-8");
+    } finally {
+      if (previous === undefined) delete process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+      else process.env.DATABRICKS_SERVING_ENDPOINT_NAME = previous;
+    }
   });
 });

@@ -69,6 +69,9 @@ console.log(selected.modelId, selected.source);
 `selectModel()` is the high-level helper for agents and CLIs. It reads the live
 catalogue, applies fuzzy matching when an explicit string is present, then
 returns a single `modelId` plus a source label explaining why that endpoint won.
+Set `liveOnly: true` for an unpinned production default that must select the
+highest-ranked currently available endpoint and must not fall through to an
+offline static id when the catalogue has no match.
 
 The `source` label is useful for logs and debug UIs. It distinguishes explicit
 matches from class-based selection, environment defaults, and fallback results,

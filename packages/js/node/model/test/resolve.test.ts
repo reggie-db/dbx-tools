@@ -153,6 +153,17 @@ describe("model resolution", () => {
       });
     });
 
+    it("can require an actually available live endpoint", () => {
+      assert.throws(
+        () => resolveModel([], { liveOnly: true }),
+        /No matching live Model Serving endpoint is available/,
+      );
+      assert.deepEqual(resolveModel([chat(OPUS_8)], { liveOnly: true }), {
+        modelId: OPUS_8,
+        source: "fallback",
+      });
+    });
+
     it("accepts only operator fallbacks present in discovery", () => {
       const discovered = "databricks-approved-custom";
 

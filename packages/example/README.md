@@ -249,7 +249,8 @@ published versions such as `0.6.x`.
 
 See [`.env.example`](.env.example). At minimum:
 
-- `DATABRICKS_HOST`, `DATABRICKS_SERVING_ENDPOINT_NAME`, `DATABRICKS_GENIE_SPACE_ID`
+- `DATABRICKS_HOST`, `DATABRICKS_GENIE_SPACE_ID`
+- optional `DATABRICKS_SERVING_ENDPOINT_NAME` to override live highest-rank selection
 - `LAKEBASE_*` / `PG*` for memory-backing Postgres
 - SMTP (or `EMAIL_OUTBOX_MODE=1`) for the `send_email` tool
 

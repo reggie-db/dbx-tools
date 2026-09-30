@@ -24,7 +24,6 @@ import type {
   ToolProvider,
 } from "@databricks/appkit/beta";
 import { plugin } from "@dbx-tools/appkit";
-import { fallback } from "@dbx-tools/model";
 import { log, object, string } from "@dbx-tools/shared-core";
 import type {
   AgentConfig,
@@ -368,18 +367,21 @@ export type MastraMemoryConfigOverride = DistributiveOmit<PgVectorConfig, "id"> 
   id?: string;
 };
 
+/** How an agent's unpinned model is resolved. */
+export type AgentDefaultModel =
+  { kind: "auto" } | { kind: "configured"; model: string } | { kind: "dynamic" };
+
 /** Output of {@link buildAgents}: resolved agents plus the default id. */
 export interface BuiltAgents {
   agents: Record<string, Agent>;
   defaultAgentId: string;
   /**
-   * Static default serving-endpoint id per agent id, as resolved by
-   * {@link describeAgentDefaultModel}. `"<dynamic>"` when the model is a
-   * function decided at call time. Consumed by the plugin's
-   * `GET /default-model` route handler so the client's model picker can label
-   * its default option with the real endpoint's humanized name.
+   * Default model intent per agent id. An unconfigured agent is `"auto"` and
+   * resolves the highest-ranked live endpoint; a string is `"configured"`; a
+   * custom function is `"dynamic"`. Consumed by the plugin's
+   * `GET /default-model` route.
    */
-  defaultModels: Record<string, string>;
+  defaultModels: Record<string, AgentDefaultModel>;
   /**
    * Ambient tools shared across every agent (the built-in system tools
    * spread with `config.tools`). Surfaced so the optional MCP server
@@ -559,7 +561,7 @@ export async function buildAgents(opts: {
     ...(config.stripStaleCharts === false ? [] : [stripStaleChartsProcessor]),
   ];
   const agents: Record<string, Agent> = {};
-  const defaultModels: Record<string, string> = {};
+  const defaultModels: Record<string, AgentDefaultModel> = {};
   const approvalGatedByAgent: Array<{ agentId: string; toolIds: string[] }> = [];
 
   for (const [id, def] of Object.entries(definitions)) {
@@ -613,7 +615,8 @@ export async function buildAgents(opts: {
     log.info("agent registered", {
       id,
       name: def.name ?? id,
-      defaultModel,
+      defaultModel:
+        defaultModel.kind === "configured" ? defaultModel.model : `<${defaultModel.kind}>`,
       tools: Object.keys(tools),
     });
   }
@@ -682,34 +685,28 @@ function assertApprovalGatedToolsHaveStorage(
 }
 
 /**
- * Best-effort description of the *static* default model an agent will
- * resolve to at call time. Walks the same precedence ladder as
- * {@link resolveModel} / {@link buildModel}:
+ * Describe how an agent resolves its unpinned model:
  *
- *   1. Per-agent `def.model` (string sugar -> the literal id;
- *      function / `DynamicArgument` -> `"<dynamic>"` because the
- *      resolver decides at call time).
+ *   1. Per-agent `def.model` (string sugar is configured; a function is
+ *      dynamic).
  *   2. Plugin-level `config.defaultModel` (same rules).
  *   3. `DATABRICKS_SERVING_ENDPOINT_NAME` env var.
- *   4. First entry of `config.defaultModelFallbacks ?? fallback.FALLBACK_MODEL_IDS`.
+ *   4. Automatic live-catalogue ranking when none is set.
  *
  * Used for the startup `agent registered` log so operators can see
- * which endpoint each agent points at by default. Per-request
- * overrides (`X-Mastra-Model` etc.) and the workspace-catalogue
- * fuzzy match are still applied at runtime.
+ * `defaultModelFallbacks` remains an operator-pinned candidate list inside the
+ * automatic live lookup; it is not advertised as a model until availability is
+ * checked.
  */
 function describeAgentDefaultModel(
   config: MastraPluginConfig,
   def: AnyMastraAgentDefinition,
-): string {
+): AgentDefaultModel {
   const effective = def.model ?? config.defaultModel;
-  if (typeof effective === "string") return effective;
-  if (effective !== undefined) return "<dynamic>";
-  return (
-    process.env.DATABRICKS_SERVING_ENDPOINT_NAME ??
-    config.defaultModelFallbacks?.[0] ??
-    fallback.FALLBACK_MODEL_IDS[0]!
-  );
+  if (typeof effective === "string") return { kind: "configured", model: effective };
+  if (effective !== undefined) return { kind: "dynamic" };
+  const environment = process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+  return environment ? { kind: "configured", model: environment } : { kind: "auto" };
 }
 
 /**

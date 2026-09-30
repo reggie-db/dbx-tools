@@ -327,11 +327,10 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * When unset, resolution is driven by the live Foundation Model API
    * `quality` / `speed` / `cost` scores: endpoints are classified into
    * chat classes (`classifyEndpoints`) and walked best-first
-   * (ChatThinking -> ChatBalanced -> ChatFast), with the small built-in
-   * `FALLBACK_MODEL_IDS` list as the floor when the catalogue can't be
-   * read. Set this to
-   * pin a regulated workspace to an approved subset, or to put custom
-   * endpoints in front of the auto-classified catalogue.
+   * (ChatThinking -> ChatBalanced -> ChatFast). The automatic default is
+   * live-only and fails when no matching endpoint is currently available.
+   * Set this to pin a regulated workspace to an approved subset, or to put
+   * custom endpoints in front of the auto-classified catalogue.
    */
   defaultModelFallbacks?: readonly string[];
   /**
@@ -654,7 +653,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     defaultModel: {
       type: "string",
       description:
-        "Serving endpoint applied to every agent that omits its own model. Falls back to DATABRICKS_SERVING_ENDPOINT_NAME, then the auto-resolved catalogue.",
+        "Serving endpoint applied to every agent that omits its own model. Falls back to DATABRICKS_SERVING_ENDPOINT_NAME, then the highest-ranked currently available catalogue endpoint.",
     },
     defaultModelFallbacks: {
       type: "array",
