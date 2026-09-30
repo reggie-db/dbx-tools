@@ -668,10 +668,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   recovery can name an earlier `release.yml` run whose commit must match the
   verified annotated tag. Dispatch the workflow with that tag as its Git ref so
   the recovery run checks out the immutable release boundary. Manual runs default to
-  dry-run, while clearing `dry_run` permits the selected publication stage. npm recovery compares the
-  staged archive integrity and repository identity before skipping an exact
-  published version. Normal workspace packages are packed with Bun for the same
-  check. PyPI publishers use Twine's hash-aware existing-file check, so matching
+  dry-run, while clearing `dry_run` permits the selected publication stage. npm
+  recovery compares canonical extracted paths, modes, bytes, and repository
+  identity before skipping an exact published version; tar timestamps and gzip
+  metadata do not make equivalent package content conflict. Normal workspace
+  packages are packed with Bun for the same check. PyPI publishers use Twine's
+  hash-aware existing-file check, so matching
   files are skipped and a same-name content mismatch fails.
   The Rust matrix uploads native npm archives, Python wheels, and explicit
   binaries as same-run artifacts. Node publishes native packages first with npm
