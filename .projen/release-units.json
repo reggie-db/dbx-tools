@@ -385,7 +385,7 @@
     {
       "id": "projen-cli",
       "component": "projen-cli",
-      "version": "0.8.1",
+      "version": "0.9.0",
       "projects": [
         "packages/js/cli/dbx-tools",
         "projen"
