@@ -879,6 +879,12 @@ Docs site rules:
   README generation check before TypeScript compilation.
 - `docs/scripts/generate-api-docs.mjs` generates TypeDoc Markdown into the same
   Starlight content tree from package `index.ts` exports.
+  It runs the generated site's installed TypeDoc binary directly with two
+  package-isolated workers, then generates Python package pages with up to five
+  workers. Do not restore one sequential `bun x` resolution per package or
+  unbounded TypeDoc concurrency; the former repeats package and executable
+  resolution 42 times and the latter exceeds the memory budget of standard
+  two-core runners.
 - `.github/workflows/release.yml` builds and deploys GitHub Pages from generated
   README and API content as part of the complete release.
 - Generated files under `.docs-build/` are build artifacts; never commit them.

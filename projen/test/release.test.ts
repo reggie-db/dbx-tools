@@ -492,6 +492,13 @@ describe("optional Node release stage", () => {
         defaultTagMixins: false,
         versioningMode: "independent",
         releaseSyncBranch: "dev",
+        releaseDocs: {
+          siteUrl: "https://docs.example.com",
+          base: "/",
+          prepareSteps: [],
+          buildSteps: [],
+          artifactPath: "site/dist",
+        },
       });
       project.synth();
       const workflow = readWorkflow(independentOutdir);
@@ -503,6 +510,8 @@ describe("optional Node release stage", () => {
       assert.ok(workflow.jobs["release-plan"]);
       assert.ok(workflow.jobs["publish-node"]);
       assert.ok(workflow.jobs["publication-complete"]);
+      assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
+      assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_BASE, "/");
       const sync = workflow.jobs["sync-release-branch"];
       assert.equal(sync?.needs, "publication-complete");
       const syncScript = step(sync!, "Safely sync dev").run ?? "";

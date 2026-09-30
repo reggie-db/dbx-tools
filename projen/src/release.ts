@@ -712,9 +712,8 @@ function addIndependentDocsJobs(
     timeoutMinutes: 30,
     env: {
       BUN_VERSION,
-      GITHUB_PAGES: "true",
-      SITE_URL: options.siteUrl,
-      BASE_PATH: options.base ?? "${{ github.event.repository.name }}",
+      DOCS_SITE_URL: options.siteUrl,
+      DOCS_BASE: options.base ?? "/",
     },
     steps: [
       ...independentReleaseSetupSteps(project),

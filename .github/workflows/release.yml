@@ -1106,9 +1106,8 @@ jobs:
       id-token: write
     env:
       BUN_VERSION: 1.3.14
-      GITHUB_PAGES: "true"
-      SITE_URL: https://docs.dbx.tools
-      BASE_PATH: /
+      DOCS_SITE_URL: https://docs.dbx.tools
+      DOCS_BASE: /
     if: ${{ always() && needs['release-plan'].outputs.docs == 'true' && needs['publication-complete'].result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs') }}
     steps:
       - name: Checkout release source
