@@ -10,6 +10,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { Component, JsonFile, type Project } from "projen";
@@ -775,7 +776,7 @@ function resolveValue<T>(value: T | (() => T)): T {
 }
 
 function hashPaths(root: string, paths: readonly string[]): string {
-  const files = paths.flatMap((path) => releaseFiles(path)).sort();
+  const files = gitReleaseFiles(root, paths) ?? paths.flatMap((path) => releaseFiles(path)).sort();
   const hash = createHash("sha256");
   for (const file of files) {
     hash.update(toPosix(relative(root, file)));
@@ -784,6 +785,25 @@ function hashPaths(root: string, paths: readonly string[]): string {
     hash.update("\0");
   }
   return hash.digest("hex");
+}
+
+function gitReleaseFiles(root: string, paths: readonly string[]): string[] | undefined {
+  const relativePaths = paths.map((path) => toPosix(relative(root, path)));
+  try {
+    const output = execFileSync(
+      "git",
+      ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...relativePaths],
+      { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    );
+    return output
+      .split("\0")
+      .filter(Boolean)
+      .map((path) => resolve(root, path))
+      .filter((path) => existsSync(path))
+      .sort();
+  } catch {
+    return undefined;
+  }
 }
 
 function releaseFiles(path: string): string[] {

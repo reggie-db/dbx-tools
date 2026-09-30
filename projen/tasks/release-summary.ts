@@ -15,6 +15,8 @@ import {
 } from "../src/release-dispatch.ts";
 
 const logger = log.logger("projen:release-summary");
+const PROVIDER_TIMEOUT_MS = 60_000;
+const PROVIDER_KILL_GRACE_MS = 5_000;
 
 export interface ReleaseSummaryProvider {
   readonly name: ReleaseSummaryProviderName;
@@ -132,7 +134,7 @@ async function runProvider(
   if (!capture(root, provider.command, [...provider.probeArgs])) return undefined;
   let summary: string | undefined;
   const textOutput: string[] = [];
-  const process = exec.spawn(provider.command, provider.args(root, prompt), {
+  const child = exec.spawn(provider.command, provider.args(root, prompt), {
     cwd: root,
     stdout: [
       "capture",
@@ -164,7 +166,21 @@ async function runProvider(
     stdin: "ignore",
     check: false,
   });
-  const result = await process;
+  let escalation: ReturnType<typeof setTimeout> | undefined;
+  const timeout = setTimeout(() => {
+    logger.warn("provider-timeout", {
+      provider: provider.name,
+      timeoutMs: PROVIDER_TIMEOUT_MS,
+    });
+    child.kill("SIGTERM");
+    escalation = setTimeout(() => child.kill("SIGKILL"), PROVIDER_KILL_GRACE_MS);
+    escalation.unref();
+  }, PROVIDER_TIMEOUT_MS);
+  timeout.unref();
+  const result = await child.finally(() => {
+    clearTimeout(timeout);
+    if (escalation) clearTimeout(escalation);
+  });
   if (result.exitCode !== 0) {
     logger.warn("provider-failed", { provider: provider.name, exitCode: result.exitCode });
     return undefined;
