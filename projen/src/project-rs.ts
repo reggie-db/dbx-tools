@@ -1346,6 +1346,7 @@ function rustGitHubReleaseJob(): Job {
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
     steps: [
+      ...releaseSourceSteps(),
       {
         name: "Download release binaries",
         uses: "actions/download-artifact@v8",
@@ -1361,7 +1362,7 @@ function rustGitHubReleaseJob(): Job {
         with: {
           files: "dist/rust-release/*",
           body_path: RELEASE_SUMMARY_FILE,
-          "generate-release-notes": true,
+          generate_release_notes: true,
           tag_name: RELEASE_TAG,
           target_commitish: RELEASE_SHA,
         },

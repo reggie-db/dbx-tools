@@ -188,6 +188,8 @@ describe("DBXToolsRustWorkspace", () => {
         false,
       );
       assert.deepEqual(stepNames(release.jobs["publish-github-release"]!), [
+        "Checkout release commit",
+        "Verify release source",
         "Download release binaries",
         "Publish GitHub release assets",
       ]);
@@ -694,8 +696,13 @@ describe("DBXToolsRustWorkspace", () => {
       smoke.if,
       "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",
     );
+    const githubReleaseJob = release.jobs["publish-github-release"]!;
+    assert.equal(
+      workflowStep(githubReleaseJob, "Checkout release commit").uses,
+      "actions/checkout@v6",
+    );
     const githubRelease = workflowStep(
-      release.jobs["publish-github-release"]!,
+      githubReleaseJob,
       "Publish GitHub release assets",
     );
     assert.equal(githubRelease.uses, "softprops/action-gh-release@v2");
@@ -703,7 +710,7 @@ describe("DBXToolsRustWorkspace", () => {
       githubRelease.with?.body_path,
       "docs/releases/v${{ needs.verify-context.outputs.release_version }}.md",
     );
-    assert.equal(githubRelease.with?.["generate-release-notes"], true);
+    assert.equal(githubRelease.with?.generate_release_notes, true);
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
     assert.ok(packager.includes('"node_modules", "npm", "bin", "npm-cli.js"'));
     assert.ok(packager.includes("command: process.execPath, args: [npmCli, ...args]"));

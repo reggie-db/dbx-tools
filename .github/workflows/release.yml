@@ -662,6 +662,23 @@ jobs:
       contents: write
     if: ${{ github.event_name == 'push' }}
     steps:
+      - name: Checkout release commit
+        id: checkout_release_commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify-context.outputs.expected_sha }}
+          fetch-depth: 1
+      - name: Verify release source
+        id: verify_release_source
+        env:
+          RELEASE_TAG: ${{ needs.verify-context.outputs.release_tag }}
+          EXPECTED_SHA: ${{ needs.verify-context.outputs.expected_sha }}
+        run: |-
+          git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git cat-file -t "$RELEASE_TAG")" = "tag"
+          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+        shell: bash
       - name: Download release binaries
         id: download_release_binaries
         uses: actions/download-artifact@v8
@@ -675,7 +692,7 @@ jobs:
         with:
           files: dist/rust-release/*
           body_path: docs/releases/v${{ needs.verify-context.outputs.release_version }}.md
-          generate-release-notes: true
+          generate_release_notes: true
           tag_name: ${{ needs.verify-context.outputs.release_tag }}
           target_commitish: ${{ needs.verify-context.outputs.expected_sha }}
   publish-native-npm:
