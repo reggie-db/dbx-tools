@@ -32,6 +32,7 @@ jobs:
           PULL_REQUEST: ${{ inputs.pull_request }}
           BASE_BRANCH: ${{ inputs.base_branch }}
         run: |-
+          gh pr checks "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --watch --fail-fast
           gh pr merge "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --merge
           gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" -f automatic=true
         shell: bash

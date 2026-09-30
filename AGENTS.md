@@ -2002,8 +2002,8 @@ from `main`. Otherwise it commits dirty source, stores custom `--notes` /
 or updates the source PR through the caller's `gh` credentials. Creating the PR
 locally avoids GitHub's `action_required` trust gate for PRs opened by
 `github-actions[bot]`. The task dispatches a focused workflow that merges the
-source PR with `GITHUB_TOKEN` and starts release planning, so running the task is
-the release signal and no UI approval or merge is required.
+source PR with `GITHUB_TOKEN` after its checks pass and starts release planning,
+so running the task is the release signal and no UI approval or merge is required.
 `bun run release:refresh` invokes Release Please directly for operator recovery.
 
 After the source PR merges, Release Please refreshes one combined component

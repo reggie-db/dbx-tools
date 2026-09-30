@@ -522,6 +522,10 @@ describe("optional Node release stage", () => {
       const requestWorkflow = readWorkflow(independentOutdir, "release-request");
       assert.match(
         step(requestWorkflow.jobs.merge!, "Merge source and start release").run ?? "",
+        /gh pr checks "\$PULL_REQUEST".*--watch --fail-fast/,
+      );
+      assert.match(
+        step(requestWorkflow.jobs.merge!, "Merge source and start release").run ?? "",
         /gh pr merge "\$PULL_REQUEST".*--merge/,
       );
       assert.match(

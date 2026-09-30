@@ -500,6 +500,7 @@ function configureReleaseRequestWorkflow(
         },
         shell: "bash",
         run: [
+          'gh pr checks "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --watch --fail-fast',
           'gh pr merge "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --merge',
           'gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" -f automatic=true',
         ].join("\n"),

@@ -457,8 +457,8 @@ Claude, then Git fallback to `.release-notes/requests/<branch>.md`, adds one
 request commit, pushes, and creates or updates the source PR with the caller's
 `gh` credentials. This keeps the PR workflow under the caller's trusted GitHub
 identity instead of `github-actions[bot]`. The task then dispatches a focused
-workflow that merges the PR and starts release planning, so no UI approval or
-merge is required.
+workflow that waits for the PR checks, merges it, and starts release planning,
+so no UI approval or merge is required.
 
 After the source PR merges, Release Please retains direct conventional semantic
 increments and applies required dependent patches. Reconciliation copies the
