@@ -53,6 +53,8 @@ export interface DBXToolsReleaseOptions {
   readonly docs?: ReleaseDocsOptions;
   /** Python package root passed to local release preparation. */
   readonly pythonRoot?: string;
+  /** Repository task names run in the release worktree before expensive validation and publication. */
+  readonly validationTasks?: readonly string[];
   /**
    * Generate a versioned release summary locally. Defaults to enabled with the
    * standard Cursor, Codex, Claude fallback order.
@@ -371,6 +373,9 @@ export class DBXToolsRelease extends Component {
                   ...(options.pythonRoot
                     ? [`--python-root ${JSON.stringify(options.pythonRoot)}`]
                     : []),
+                  ...(options.validationTasks ?? []).map(
+                    (task) => `--validate-task ${JSON.stringify(task)}`,
+                  ),
                   ...summaryArgs,
                 ].join(" "),
               ),

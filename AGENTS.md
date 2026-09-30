@@ -646,6 +646,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   UBRN or download its build-time dependencies. `bun run release` runs Cargo
   workspace tests, while the main release owns the full cross-platform Rust
   matrix and reusable target caches.
+  Repository-specific release guards belong in `releaseValidationTasks`; they
+  run in the release worktree before expensive tests, local publication, or
+  approval. This repository uses the source-JSDoc ratchet and README generation
+  checks there, so GitHub release jobs are not the first place docs failures
+  appear. Never auto-write a documentation baseline in CI.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
   without a `bindings` namespace. Python keeps an empty `__init__.py`; consumers

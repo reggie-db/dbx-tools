@@ -163,6 +163,12 @@ program
   .option("--local-registry <value>", "local npm registry: auto, false, or an explicit URL", "auto")
   .option("--local-pypi <value>", "local PyPI index: auto, false, or an explicit URL", "auto")
   .option("--python-root <path>", "Python workspace package root")
+  .option(
+    "--validate-task <task>",
+    "repository task to run before release validation; repeatable",
+    (task: string, tasks: string[]) => [...tasks, task],
+    [],
+  )
   .option("--no-release-summary", "skip optional AI release summary generation")
   .option(
     "--release-summary-providers <providers>",
@@ -181,6 +187,7 @@ program
       localRegistry: string;
       localPypi: string;
       pythonRoot?: string;
+      validateTask: string[];
       releaseSummary: boolean;
       releaseSummaryProviders?: string;
       localCargo: boolean;
@@ -270,6 +277,9 @@ program
         runIgnoringStdout(releaseRoot, "cargo", ["metadata", "--format-version", "1"]);
       }
       run(releaseRoot, process.execPath, [versionCheckScript]);
+      for (const task of opts.validateTask) {
+        run(releaseRoot, process.execPath, ["run", task]);
+      }
       if (existsSync(join(releaseRoot, "Cargo.toml"))) {
         run(releaseRoot, "cargo", [
           "test",

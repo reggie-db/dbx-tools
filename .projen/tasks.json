@@ -145,6 +145,15 @@
         }
       ]
     },
+    "docs:check-readmes": {
+      "name": "docs:check-readmes",
+      "description": "Validate and generate documentation from package READMEs",
+      "steps": [
+        {
+          "exec": "bun docs/scripts/sync-readmes.mjs"
+        }
+      ]
+    },
     "docs:check-source": {
       "name": "docs:check-source",
       "description": "Reject new undocumented public TypeScript exports",
@@ -317,7 +326,7 @@
       "description": "Prepare, validate, locally publish, and open a reviewed release PR",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
           "receiveArgs": true
         }
       ]

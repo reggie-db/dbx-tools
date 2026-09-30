@@ -621,6 +621,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releaseDocs?: ReleaseDocsOptions;
     /** Python package root passed to local release preparation when configured. */
     readonly releasePythonRoot?: string;
+    /** Repository task names run during local release preparation before publication. */
+    readonly releaseValidationTasks?: readonly string[];
     /** Optional AI-generated release summary. Defaults to enabled. */
     readonly releaseSummary?: boolean | ReleaseSummaryOptions;
     /** Set to `false` to omit normal npm workspace publication. */
@@ -1542,6 +1544,7 @@ function initProject(
       nodeRelease: options.nodeRelease,
       docs: options.releaseDocs,
       pythonRoot: options.releasePythonRoot,
+      validationTasks: options.releaseValidationTasks,
       summary: options.releaseSummary,
     });
   }
