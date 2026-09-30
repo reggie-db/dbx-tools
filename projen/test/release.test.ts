@@ -517,8 +517,10 @@ describe("optional Node release stage", () => {
       const reconcile =
         step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "";
       assert.match(reconcile, /gh pr merge "\$BRANCH" --merge/);
+      assert.match(reconcile, /attempt \$ATTEMPT\/15/);
       assert.match(reconcile, /gh workflow run release\.yml.*automatic=true/);
       assert.match(workflow.jobs["release-please"]?.if ?? "", /inputs\.automatic/);
+      assert.match(workflow.jobs["release-plan"]?.if ?? "", /inputs\.automatic != true/);
       const requestWorkflow = readWorkflow(independentOutdir, "release-request");
       assert.match(
         step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
