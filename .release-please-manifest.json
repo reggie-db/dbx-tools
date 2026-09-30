@@ -37,7 +37,7 @@
   ".release-units/node-ui-mastra": "0.6.229",
   ".release-units/node-ui-search": "0.6.229",
   ".release-units/node-ui-teams": "0.6.229",
-  ".release-units/projen-cli": "0.7.0",
+  ".release-units/projen-cli": "0.8.0",
   ".release-units/python-core": "0.6.229",
   ".release-units/python-graphiti": "0.6.229",
   ".release-units/python-postgres": "0.6.229",
