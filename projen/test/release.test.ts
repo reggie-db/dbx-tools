@@ -512,6 +512,10 @@ describe("optional Node release stage", () => {
       assert.ok(workflow.jobs["publication-complete"]);
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_BASE, "/");
+      assert.equal(
+        workflow.jobs["deploy-docs"]?.if,
+        "${{ always() && needs['build-docs'].result == 'success' }}",
+      );
       const sync = workflow.jobs["sync-release-branch"];
       assert.equal(sync?.needs, "publication-complete");
       const syncScript = step(sync!, "Safely sync dev").run ?? "";
