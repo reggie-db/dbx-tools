@@ -385,13 +385,13 @@
     {
       "id": "projen-cli",
       "component": "projen-cli",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "projects": [
         "packages/js/cli/dbx-tools",
         "projen"
       ],
       "artifacts": [],
-      "sourceHash": "1948b78b3186393cb5dc2ef0c367198fbf55c5af30591d96ffaf5513afab9211"
+      "sourceHash": "402a680510fcb4c962f70a3a8c19c0810edd3ad1d5bb26b760435548a626b915"
     },
     {
       "id": "python-core",
@@ -1002,7 +1002,7 @@
       "path": "projen",
       "unit": "projen-cli",
       "publish": true,
-      "sourceHash": "d48e06bd44d1dd7d605b599708b6d8489b0ef62243f1de9f6fc5ecff4990f7fa"
+      "sourceHash": "461bfa2c75962a1de206667fc6d67413edb58bbe1a205760de10509a315bd247"
     }
   ],
   "artifacts": [
