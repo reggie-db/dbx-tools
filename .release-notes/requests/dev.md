@@ -1,3 +1,3 @@
 # Release request: dev
 
-Merging the source pull request is now the only human release signal. Release Please merges its generated version pull request and explicitly dispatches publication, while no-op changes create no release work.
+Running `bun run release` is the release signal. It opens the source pull request with the caller's trusted GitHub identity, waits for checks, merges through a focused workflow, and dispatches Release Please publication without UI approval. No-op changes create no release work.
