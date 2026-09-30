@@ -669,9 +669,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   verified annotated tag. Dispatch the workflow with that tag as its Git ref so
   the recovery run checks out the immutable release boundary. Manual runs default to
   dry-run, while clearing `dry_run` permits the selected publication stage. npm
-  recovery compares canonical extracted paths, modes, bytes, and repository
-  identity before skipping an exact published version; tar timestamps and gzip
-  metadata do not make equivalent package content conflict. Normal workspace
+  recovery compares canonical extracted paths, executable bits, bytes, and
+  repository identity before skipping an exact published version; read-only
+  generator modes, tar timestamps, and gzip metadata do not make equivalent
+  package content conflict. Normal workspace
   packages are packed with Bun for the same check. PyPI publishers use Twine's
   hash-aware existing-file check, so matching
   files are skipped and a same-name content mismatch fails.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -68,6 +68,7 @@ describe("npm release recovery", () => {
     const secondArchive = join(outdir, "fixture-second.tgz");
     const future = new Date(Date.now() + 120_000);
     utimesSync(join(packageDir, "package.json"), future, future);
+    chmodSync(join(packageDir, "package.json"), 0o444);
     const packed = spawnSync("tar", ["-czf", secondArchive, "-C", outdir, "package"]);
     assert.equal(packed.status, 0);
     const second = readNpmArchiveIdentity(secondArchive);

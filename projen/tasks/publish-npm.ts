@@ -147,7 +147,7 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
   };
 }
 
-/** Hash extracted paths, modes, symlink targets, and bytes while ignoring tar metadata. */
+/** Hash paths, executable bits, symlink targets, and bytes while ignoring tar metadata. */
 export function npmArchiveContentDigest(path: string): string {
   const temp = mkdtempSync(join(tmpdir(), "dbx-tools-npm-content-"));
   try {
@@ -167,7 +167,7 @@ export function npmArchiveContentDigest(path: string): string {
         const name = relative(temp, entryPath).split("\\").join("/");
         const stat = lstatSync(entryPath);
         hash.update(`${entry.isDirectory() ? "D" : entry.isSymbolicLink() ? "L" : "F"}\0`);
-        hash.update(`${name}\0${stat.mode & 0o777}\0`);
+        hash.update(`${name}\0${stat.mode & 0o111}\0`);
         if (entry.isDirectory()) visit(entryPath);
         else if (entry.isSymbolicLink()) hash.update(readlinkSync(entryPath));
         else hash.update(readFileSync(entryPath));
