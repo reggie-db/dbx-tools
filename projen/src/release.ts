@@ -6,6 +6,7 @@ import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workf
 import { projectReleaseBranch, type DBXToolsJavaScriptProject } from "./project-js.ts";
 import { applyTasks, taskScript } from "./project.ts";
 import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 
 const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
@@ -359,8 +360,10 @@ export class DBXToolsRelease extends Component {
       limitConcurrency: true,
       concurrencyOptions: { group: "release", cancelInProgress: false },
     });
+    const version = readWorkspaceVersion(project.outdir);
     workflow.runName =
-      "release ${{ github.event_name == 'push' && github.sha || inputs.release_tag }}";
+      `release ${version} ` +
+      "${{ github.event_name == 'push' && github.sha || inputs.release_tag }}";
     workflow.on({
       push: { branches: [releaseBranch], paths: ["VERSION"] },
       workflowDispatch: {

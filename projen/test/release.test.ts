@@ -61,6 +61,10 @@ after(() => {
 describe("unified release workflow", () => {
   it("releases the default branch with an annotated tag and supports manual recovery", () => {
     assert.equal(release.name, "release");
+    assert.equal(
+      release["run-name"],
+      "release 0.0.1 ${{ github.event_name == 'push' && github.sha || inputs.release_tag }}",
+    );
     assert.deepEqual(workflowTrigger<{ branches: string[]; paths: string[] }>(release, "push"), {
       branches: ["main"],
       paths: ["VERSION"],

@@ -29,6 +29,7 @@ export interface WorkflowJob {
 
 export interface WorkflowDefinition {
   readonly name: string;
+  readonly "run-name"?: string;
   readonly on: Record<string, unknown>;
   readonly concurrency: Record<string, unknown>;
   readonly permissions: Record<string, string>;
