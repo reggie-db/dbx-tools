@@ -27,7 +27,8 @@
     "stripInternal": true,
     "target": "ES2022",
     "types": [
-      "node"
+      "node",
+      "semver"
     ],
     "moduleResolution": "bundler",
     "skipLibCheck": true,

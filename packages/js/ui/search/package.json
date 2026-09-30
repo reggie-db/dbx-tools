@@ -32,8 +32,8 @@
   },
   "dependencies": {
     "@databricks/appkit-ui": "catalog:",
-    "@dbx-tools/shared-search": "workspace:*",
-    "@dbx-tools/ui-appkit": "workspace:*",
+    "@dbx-tools/shared-search": "workspace:^",
+    "@dbx-tools/ui-appkit": "workspace:^",
     "lucide-react": "catalog:"
   },
   "license": "Apache-2.0",

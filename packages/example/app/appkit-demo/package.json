@@ -28,14 +28,14 @@
   },
   "dependencies": {
     "@databricks/appkit-ui": "catalog:",
-    "@dbx-tools/shared-core": "workspace:*",
-    "@dbx-tools/ui-appkit": "workspace:*",
-    "@dbx-tools/ui-auth": "workspace:*",
-    "@dbx-tools/ui-branding": "workspace:*",
-    "@dbx-tools/ui-email": "workspace:*",
-    "@dbx-tools/ui-mastra": "workspace:*",
-    "@dbx-tools/ui-search": "workspace:*",
-    "@dbx-tools/ui-teams": "workspace:*",
+    "@dbx-tools/shared-core": "workspace:^",
+    "@dbx-tools/ui-appkit": "workspace:^",
+    "@dbx-tools/ui-auth": "workspace:^",
+    "@dbx-tools/ui-branding": "workspace:^",
+    "@dbx-tools/ui-email": "workspace:^",
+    "@dbx-tools/ui-mastra": "workspace:^",
+    "@dbx-tools/ui-search": "workspace:^",
+    "@dbx-tools/ui-teams": "workspace:^",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router-dom": "catalog:",
@@ -56,7 +56,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.229",
+  "version": "0.0.0",
   "types": "index.ts",
   "type": "module",
   "exports": {

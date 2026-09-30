@@ -41,11 +41,18 @@ import {
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
 import { applyCompiledPublish } from "./publish.ts";
+import {
+  DBXToolsReleaseCatalog,
+  type DBXToolsVersioningMode,
+  type ExternalReleaseProjectRegistration,
+  type ReleaseDependencyInput,
+  type ReleaseUnitRule,
+} from "./release-catalog.ts";
 import { DBXToolsRelease, type ReleaseDocsOptions, type ReleaseSummaryOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
-import { readWorkspaceVersion, syncWorkspaceManifestVersion } from "./workspace-version.ts";
+import { syncWorkspaceManifestVersion } from "./workspace-version.ts";
 
 /**
  * The dbx-tools project surface, backed by projen's Node toolchain. A single
@@ -70,6 +77,8 @@ export interface DBXToolsJavaScriptProject extends DBXToolsProject, javascript.N
   vsCode?: DBXToolsVsCode;
   /** Repository outputs excluded from generated workflow dependency-cache hashing. */
   readonly workflowCacheIgnorePaths: readonly string[];
+  /** Cross-language release-unit ownership and version lookup. */
+  readonly releaseCatalog: DBXToolsReleaseCatalog;
 }
 
 /** Parsed npm package identifier: optional scope plus the unscoped package name. */
@@ -629,6 +638,14 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
     readonly releaseMode?: DBXToolsReleaseMode;
+    /** Package version ownership mode. Defaults to `fixed`. */
+    readonly versioningMode?: DBXToolsVersioningMode;
+    /** Explicit stable release-unit grouping rules. */
+    readonly releaseUnits?: readonly ReleaseUnitRule[];
+    /** Commit before the first independent Release Please history. */
+    readonly releaseBootstrapSha?: string;
+    /** Publishable workspace members synthesized outside the attached project tree. */
+    readonly externalReleaseProjects?: readonly ExternalReleaseProjectRegistration[];
     /** Prefix for generated release tags. Defaults to `v`. */
     readonly releaseTagPrefix?: string;
     /** Semantic PR title validation policy. Omitted or `false` disables title validation. */
@@ -682,6 +699,7 @@ export class DBXToolsNodeProject
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
   readonly workflowCacheIgnorePaths: readonly string[];
+  readonly releaseCatalog: DBXToolsReleaseCatalog;
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
@@ -708,9 +726,14 @@ export class DBXToolsNodeProject
     // component, but the file is still required by the Databricks Apps platform
     // (its build phase installs with pnpm and reads catalog + `allowBuilds`).
     pnpmWorkspace.attachWorkspaceFile(this);
-    // Copy the single workspace version onto the root manifest. The `VERSION` file
-    // at the workspace root is the source of truth; synth only reads it.
-    this.package.addField("version", readWorkspaceVersion(this.outdir));
+    this.releaseCatalog = new DBXToolsReleaseCatalog(this, {
+      mode: options.versioningMode,
+      units: options.releaseUnits,
+      externalProjects: options.externalReleaseProjects,
+      bootstrapSha: options.releaseBootstrapSha,
+    });
+    registerJavaScriptReleaseProject(this);
+    this.package.addField("version", () => this.releaseCatalog.versionFor(this));
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
@@ -795,6 +818,7 @@ export class DBXToolsTypeScriptProject
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
   readonly workflowCacheIgnorePaths: readonly string[];
+  readonly releaseCatalog: DBXToolsReleaseCatalog;
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
@@ -837,6 +861,16 @@ export class DBXToolsTypeScriptProject
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
     this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
     this.rootInstallOnly = options.rootInstallOnly !== false;
+    this.releaseCatalog =
+      parent &&
+      (parent instanceof DBXToolsNodeProject || parent instanceof DBXToolsTypeScriptProject)
+        ? parent.releaseCatalog
+        : new DBXToolsReleaseCatalog(this, {
+            mode: options.versioningMode,
+            units: options.releaseUnits,
+            externalProjects: options.externalReleaseProjects,
+            bootstrapSha: options.releaseBootstrapSha,
+          });
     // Pairs with `jsx` in SHARED_COMPILER_OPTIONS: projen's default `include` is
     // `src/**/*.ts` only, which silently omits a `.tsx` file from the program
     // instead of failing, so authoring a React component would otherwise need
@@ -852,10 +886,8 @@ export class DBXToolsTypeScriptProject
       ".": "./index.ts",
       "./package.json": "./package.json",
     });
-    // Every package carries the single workspace version, copied from the root
-    // `VERSION` file (the source of truth). `this.root` is the workspace root for a
-    // discovered member and this project itself for a standalone compiling root.
-    this.package.addField("version", readWorkspaceVersion(this.root.outdir));
+    this.package.addField("version", () => this.releaseCatalog.versionFor(this));
+    registerJavaScriptReleaseProject(this);
     addPackageFiles(this, "index.ts", "src");
     // `bun test` intercepts `node:test` (the suites keep using node:test) and
     // runs it with bun's own fast runner. The native no-tests option is portable
@@ -876,6 +908,27 @@ export class DBXToolsTypeScriptProject
     resolveRootWorkspace(this, this.extraWorkspaceMembers);
     preSynthesizeProject(this);
   }
+}
+
+function registerJavaScriptReleaseProject(project: DBXToolsJavaScriptProject): void {
+  const projectPath = toPosix(relative(project.root.outdir, project.outdir));
+  project.releaseCatalog.registerProject(project, {
+    language: "javascript",
+    identity: () => String(project.package.manifest.name ?? project.name),
+    publish: () => project.package.manifest.private !== true,
+    sourcePaths: ["src", "bin", "tasks"].map((path) =>
+      projectPath ? `${projectPath}/${path}` : path,
+    ),
+    dependencies: () =>
+      project.deps.all.map<ReleaseDependencyInput>((dependency) => ({
+        target: dependency.name,
+        kind:
+          dependency.type === "devenv" || dependency.type === "override"
+            ? "development"
+            : dependency.type,
+        ...(dependency.version ? { requirement: dependency.version } : {}),
+      })),
+  });
 }
 
 function configureBuildWorkflow(
@@ -951,9 +1004,11 @@ function resolveRootWorkspace(
   extraWorkspaceMembers: readonly string[],
 ): void {
   if (project.parent) return;
-  const version = readWorkspaceVersion(project.outdir);
   for (const member of extraWorkspaceMembers) {
-    syncWorkspaceManifestVersion(join(project.outdir, member, "package.json"), version);
+    syncWorkspaceManifestVersion(
+      join(project.outdir, member, "package.json"),
+      project.releaseCatalog.versionForPath(member),
+    );
   }
   project.pnpmWorkspace?.resolveMembers(project, extraWorkspaceMembers);
 }

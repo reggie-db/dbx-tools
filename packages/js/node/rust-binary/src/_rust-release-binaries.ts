@@ -6,6 +6,10 @@ export const RUST_RELEASE_BINARY_COMMANDS = [
     "command": "lakebase-proxy",
     "description": "Loopback PostgreSQL proxy for Databricks Lakebase",
     "binaryName": "dbx-lakebase-proxy",
+    "unit": "rs-lakebase-proxy",
+    "component": "rs-lakebase-proxy",
+    "version": "0.6.229",
+    "tag": "rs-lakebase-proxy-v0.6.229",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
@@ -34,6 +38,10 @@ export const RUST_RELEASE_BINARY_COMMANDS = [
     "command": "model-proxy",
     "description": "Multi-protocol Databricks model proxy",
     "binaryName": "dbx-model-proxy",
+    "unit": "rs-model-proxy",
+    "component": "rs-model-proxy",
+    "version": "0.6.229",
+    "tag": "rs-model-proxy-v0.6.229",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {

@@ -201,6 +201,52 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
+  it("gates independent Rust jobs on the affected release plan", () => {
+    const independentOutdir = mkdtempSync(join(tmpdir(), "project-rs-independent-"));
+    try {
+      mkdirSync(join(independentOutdir, "packages/rs/tool/src"), { recursive: true });
+      writeFileSync(join(independentOutdir, "packages/rs/tool/src/main.rs"), "fn main() {}\n");
+      writeFileSync(
+        join(independentOutdir, ".release-please-manifest.json"),
+        `${JSON.stringify({ ".release-units/rs-fixture-tool": "1.4.0" }, null, 2)}\n`,
+      );
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/root",
+        scope: "fixture",
+        outdir: independentOutdir,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+        github: true,
+        nodeRelease: false,
+        versioningMode: "independent",
+        repository: "https://github.com/example/fixture.git",
+      });
+      new DBXToolsRustWorkspace(project, {
+        cliRegistryPath: "packages/js/node/rust-binary/src/_registry.ts",
+        releasePlatforms: [{ os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 }],
+        packages: {
+          tool: {
+            release: true,
+            cli: true,
+          },
+        },
+      });
+      project.synth();
+
+      const workflow = readWorkflow(independentOutdir);
+      assert.equal(workflow.jobs["rust-build"]?.needs, "release-plan");
+      assert.equal(
+        workflow.jobs["rust-build"]?.if,
+        "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'docs') }}",
+      );
+      assert.ok(workflow.jobs["publish-cargo"]);
+      assert.ok(workflow.jobs["publish-github-release"]);
+      assert.equal("verify-context" in workflow.jobs, false);
+    } finally {
+      rmSync(independentOutdir, { recursive: true, force: true });
+    }
+  });
+
   it("excludes release binaries from incompatible operating systems", () => {
     const platformOutdir = mkdtempSync(join(tmpdir(), "project-rs-platform-"));
     try {
@@ -304,6 +350,10 @@ describe("DBXToolsRustWorkspace", () => {
           command: "tool",
           description: "Run the fixture tool",
           binaryName: "fixture-tool",
+          unit: "rs-fixture-tool",
+          component: "rs-fixture-tool",
+          version: "0.0.1",
+          tag: "rs-fixture-tool-v0.0.1",
           repository: "https://github.com/example/fixture",
           assets: [
             {
@@ -701,10 +751,7 @@ describe("DBXToolsRustWorkspace", () => {
       workflowStep(githubReleaseJob, "Checkout release commit").uses,
       "actions/checkout@v6",
     );
-    const githubRelease = workflowStep(
-      githubReleaseJob,
-      "Publish GitHub release assets",
-    );
+    const githubRelease = workflowStep(githubReleaseJob, "Publish GitHub release assets");
     assert.equal(githubRelease.uses, "softprops/action-gh-release@v2");
     assert.equal(
       githubRelease.with?.body_path,

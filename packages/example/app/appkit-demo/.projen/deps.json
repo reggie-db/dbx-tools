@@ -36,42 +36,42 @@
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-appkit",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-auth",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-branding",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-email",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-mastra",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-search",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-teams",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {

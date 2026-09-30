@@ -2,17 +2,17 @@
   "dependencies": [
     {
       "name": "@dbx-tools/appkit",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "build"
     },
     {
       "name": "@dbx-tools/projen",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "build"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "build"
     },
     {

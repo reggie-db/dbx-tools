@@ -51,12 +51,12 @@
     },
     {
       "name": "@dbx-tools/shared-search",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-appkit",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {

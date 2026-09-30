@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "@dbx-tools/email",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "build"
     },
     {
@@ -21,7 +21,7 @@
     },
     {
       "name": "@dbx-tools/email",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "peer"
     },
     {
@@ -31,27 +31,27 @@
     },
     {
       "name": "@dbx-tools/appkit",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/auth-gate",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-auth",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {

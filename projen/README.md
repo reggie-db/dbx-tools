@@ -173,30 +173,26 @@ a host Rust build. Regenerate bindings through the focused watcher or explicit
 task while changing a UniFFI API. Release preparation runs Cargo workspace tests
 without invoking UBRN.
 
-The workspace generates one `release.yml` workflow for every ecosystem. A push
-to the configured release branch starts it only when `VERSION` changed. The
-context job requires the version to differ from its parent and exceed the latest
-tag, creates the corresponding annotated `v*` tag, and exposes the verified tag,
-commit, and version to every source job. If the tag already exists, it must be
-annotated and reference the same commit. A manual run accepts that same tag and
-commit but requires dry-run mode, so it builds and validates without publishing
-packages or deploying documentation. One non-cancelling `release` concurrency
-group serializes publication.
+The workspace generates one `release.yml` workflow for every ecosystem.
+Independent mode runs Release Please on default-branch pushes. It owns the
+combined release PR, per-component semantic increments, component-qualified
+tags, and GitHub Releases. A Projen reconciliation pass reads the reviewed
+manifest, regenerates every owned version surface, validates a clean second
+synthesis, and commits component-qualified release notes to the release PR.
+One non-cancelling `release` concurrency group serializes publication.
 
 Release generation writes `release.yml` without scanning for or removing other
 workflow files. Consumers explicitly delete exact workflow files they no longer
 want.
 
-Failed-job reruns consume successful Rust artifacts from the same workflow run.
-For a separate recovery run, choose `node`, `python`, or `docs` instead of
-`all`. Node and Python recovery can supply the prior `release.yml` run ID; the
-workflow verifies that run used the commit selected by the annotated release
-tag before downloading its artifacts. Dispatch the workflow with the release
-tag as its Git ref so recovery checks out the immutable release boundary. Manual recovery
-defaults to dry-run and publishes only when `dry_run` is cleared. npm retries skip an exact version only
-after the local archive integrity and repository identity match registry
-metadata. PyPI retries enable Twine's hash-aware existing-file behavior, which
-skips matching files and fails when an existing filename has different content.
+The release-plan job compares the previous and reviewed release-unit graphs and
+selects only changed units, required dependents, packages, native targets,
+assets, and docs. A Node-only release allocates no Rust runner. Manual recovery
+names one component, reviewed version, and publication stage; it reconstructs
+that component's plan without changing any other version. npm retries compare
+archive content and repository identity, PyPI uses hash-aware existing-file
+behavior, Cargo checks existing versions, and GitHub assets upload to the
+component release.
 
 The Rust matrix has one row per target. Each row installs native dependencies,
 builds the Cargo workspace once, then packages every discovered output from
@@ -415,6 +411,8 @@ file contract as the CLI.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
 - `openapi` - tsoa/OpenAPI package generation.
+- `releaseCatalog` / `releasePlan` / `releasePlease` - cross-language ownership,
+  affected planning, and Release Please graph propagation.
 - `bunApp` / `tsconfig` / `vscode` - generated support files/components.
 - `generated` / `clean` / `watch` / `scaffold` - read-only file stamping,
   cleanup, watchers, and synth orchestration.
@@ -433,51 +431,28 @@ Every repo-wide task lives on the root, and the root's `compile` / `test`
 delegate with `bun run --filter '*'` rather than emitting a step per member - so
 a new package is covered without a re-synth. Work from the root:
 
-| Task                    | What it does                                            |
-| ----------------------- | ------------------------------------------------------- |
-| `bun run build`         | synth + workspace compile and tests                     |
-| `bun run compile`       | `tsc --build` in each member, in parallel               |
-| `bun run test`          | `eslint` once, then each member's tests                 |
-| `bun run sync`          | re-synth (`--watch` to keep synthing)                   |
-| `bun run barrels`       | regenerate the read-only `index.ts` barrels             |
-| `bun run bump`          | increment `VERSION` and synchronize generated versions  |
-| `bun run version:check` | verify every version surface matches `VERSION`          |
-| `bun run release`       | run full local preflight and open a reviewed release PR |
+| Task                        | What it does                                          |
+| --------------------------- | ----------------------------------------------------- |
+| `bun run build`             | synth + workspace compile and tests                   |
+| `bun run compile`           | `tsc --build` in each member, in parallel             |
+| `bun run test`              | `eslint` once, then each member's tests               |
+| `bun run sync`              | re-synth (`--watch` to keep synthing)                 |
+| `bun run barrels`           | regenerate the read-only `index.ts` barrels           |
+| `bun run release:bootstrap` | initialize writable Release Please state once         |
+| `bun run release:plan`      | emit the affected component and publication plan      |
+| `bun run version:check`     | verify every package against its owning release unit  |
+| `bun run release`           | refresh Release Please PRs, tags, and GitHub Releases |
 
-`release` commits pending work on the current branch, merges the latest remote
-release branch when needed, and pushes it. It prepares the dedicated
-`release/v<version>` branch inside `.worktrees/<tag>`, leaving the source
-checkout on its current branch throughout validation, local publication, and
-PR creation. Failed preparation can resume from that worktree; success removes
-it. `--message` sets the source commit message. The task never merges
-the PR unless `--approve` is passed; that option merges the release branch
-directly through GitHub's merge API so no PR checks are created. A repository
-that blocks direct merges falls back to an immediate admin-merged PR. The task
-then fast-forwards the still-active source branch to the release commit.
+`release` runs the pinned Release Please library with the generated
+cross-language graph plugin. Direct changes retain their conventional semantic
+increment, while required dependents receive patches. The combined release PR
+is reconciled by Projen before review. Merging it creates component tags and
+GitHub Releases, then the affected plan selects publication jobs.
 
-After validation, release preparation optionally generates an immutable
-`docs/releases/v<version>.md`. It tries the installed Cursor agent first, then
-Codex, then Claude, all in non-interactive read-only modes against bounded Git
-context. An unavailable, unauthenticated, failed, or empty provider falls
-through to the next; if none works, release preparation continues without a
-summary. The same file is included in the release PR and prepended to GitHub's
-generated release notes, so repository and GitHub views share one source.
-
-npm
-uses `npm config get registry` and publishes to a local Verdaccio automatically.
-Publishable JavaScript members compile once
-from the root in parallel, then upload through a bounded pool without rerunning
-their `prepack` tasks. Python prefers uv's default index and only
-treats a loopback `.../+simple/` URL as writable devpi; a read-only cache such as
-proxpi (`.../index/`) is deliberately ignored. The task stamps every Python
-member and its sibling dependencies to the release version, builds the workspace
-with uv, then runs `devpi upload --from-dir` against the derived writable index.
-The npm and Python mirrors run concurrently because they touch disjoint package
-trees. Devpi client authentication remains in its normal `~/.devpi` state.
-
-Use `--local-registry false` or `--local-pypi false` to disable either local
-publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
-auto-detection; `--python-root` defaults to `packages/py`.
+Each changed component receives
+`docs/releases/<component>-v<version>.md`. Summary generation tries Cursor,
+Codex, and Claude in order, logs provider events, and falls back to Git. The
+committed file becomes that component's GitHub Release body.
 
 The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
 public `BuildWorkflow` `buildTask` option. That task runs synth plus the
@@ -486,13 +461,10 @@ preparation has already run Rust tests, workspace type-checking, and local
 package preflight before opening the PR. JavaScript behavior tests remain an
 explicit developer task.
 
-The configured release branch publishes only when a reviewed PR changes
-`VERSION`. Its workflow creates the annotated `v*` public release boundary.
-Available workflow
-stages form the generated chain Rust -> Python -> Node -> docs: Rust builds and
-publishes native artifacts and Cargo crates, Python publishes standard
-distributions, Node publishes standard workspace packages, and docs deploys
-after publication. A stage with no corresponding outputs is omitted.
+The generated workflow runs Release Please on the configured branch. A merged
+release PR produces an affected plan, then selected Rust, Python, Node, GitHub
+asset, and docs jobs run behind a publication barrier. A stage with no selected
+outputs is skipped before runner allocation.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
@@ -519,17 +491,14 @@ from the root instead.
 
 ## Versioning
 
-The whole repo shares ONE version, stored in the root `VERSION` file (a plain
-`x.y.z` string; a fresh tree with no file defaults to `0.0.1`). Synth COPIES that
-value into every generated manifest - the root and `projen/` `package.json`, every
-JS member, every Python `pyproject.toml`, the generated openapi packages, and the
-example apps - so the packages, the engine, and the examples always match.
-`src/workspace-version.ts` owns reading and writing it. Synth only ever reads it;
-it never resets, upgrades, or downgrades a version on its own.
+`DBXToolsReleaseCatalog` is the language-neutral version seam. It generates
+`.projen/release-units.json` from attached projects, explicit external members,
+UniFFI families, and binary assets. Independent mode reads component versions
+from `.release-please-manifest.json`; fixed mode reads `VERSION`.
 
-`bun run bump` is the only command that changes the number: it fetches remote
-tags once, takes the highest `v*` tag as the base, increments by `--level`, writes
-`VERSION`, then synths so every manifest copies it. It has no git or publication
-side effects. `bun run release` invokes it while preparing the reviewed release
-PR. The remote is consulted only on `bump` and on one-time creation of a missing
-`VERSION` file, never on an ordinary synth.
+Every unit has `.release-units/<component>/source.json`, generated from
+release-affecting inputs. Release Please owns the adjacent `version.txt` and
+`CHANGELOG.md`. Real package manifests remain Projen-owned and reproduce the
+reviewed manifest exactly. `versioningMode: "fixed"` remains the default for
+consumers during migration; `versioningMode: "independent"` enables the
+Release Please and affected-workflow surface.

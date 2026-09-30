@@ -21,7 +21,7 @@
     },
     {
       "name": "@dbx-tools/databricks",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     }
   ],

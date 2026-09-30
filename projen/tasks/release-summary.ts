@@ -247,12 +247,14 @@ function gitSummary(version: string, commits: string, changedFiles: string): str
 export async function generateReleaseSummary(options: {
   readonly root: string;
   readonly version: string;
+  readonly component?: string;
+  readonly paths?: readonly string[];
   readonly fromRef?: string;
   readonly toRef?: string;
   readonly providers?: readonly ReleaseSummaryProviderName[];
   readonly runner?: ReleaseSummaryRunner;
 }): Promise<string | undefined> {
-  const relativeOutput = releaseSummaryFile(options.version);
+  const relativeOutput = releaseSummaryFile(options.version, options.component);
   const output = join(options.root, relativeOutput);
   if (existsSync(output)) rmSync(output);
   const target =
@@ -263,13 +265,21 @@ export async function generateReleaseSummary(options: {
     options.fromRef && capture(options.root, "git", ["rev-parse", "--verify", options.fromRef])
       ? `${options.fromRef}..${target}`
       : target;
-  const commits = capture(options.root, "git", ["log", "--no-merges", "--format=%s%n%b", range]);
+  const scopedPaths = options.paths?.length ? [...options.paths] : ["."];
+  const commits = capture(options.root, "git", [
+    "log",
+    "--no-merges",
+    "--format=%s%n%b",
+    range,
+    "--",
+    ...scopedPaths,
+  ]);
   const changedFiles = capture(options.root, "git", [
     "diff",
     "--name-status",
     range,
     "--",
-    ".",
+    ...scopedPaths,
     `:(exclude)${relativeOutput}`,
   ]);
   const diffStat = capture(options.root, "git", [
@@ -277,7 +287,7 @@ export async function generateReleaseSummary(options: {
     "--stat",
     range,
     "--",
-    ".",
+    ...scopedPaths,
     `:(exclude)${relativeOutput}`,
   ]);
   const result = await selectReleaseSummary(
@@ -289,7 +299,7 @@ export async function generateReleaseSummary(options: {
   const summary = result?.summary ?? gitSummary(options.version, commits, changedFiles);
   const provider = result?.provider ?? "git";
   if (!result) logger.info("AI providers unavailable; using Git release summary");
-  const content = `# Release ${options.version}\n\n${summary.trim()}\n`;
+  const content = `# Release ${options.component ? `${options.component} ` : ""}${options.version}\n\n${summary.trim()}\n`;
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, content);
   logger.info("generated", { provider, path: output });

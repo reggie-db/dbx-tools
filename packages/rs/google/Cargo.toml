@@ -1,10 +1,8 @@
 
 [package]
 name = "dbx-tools-google"
+version = "0.6.229"
 description = "Google integrations including Application Default Credentials"
-
-  [package.version]
-  workspace = true
 
   [package.edition]
   workspace = true

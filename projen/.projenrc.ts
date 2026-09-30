@@ -10,23 +10,23 @@
  *
  * The engine imports three `@dbx-tools/*` utility packages at runtime
  * (`shared-core`, `node-core`, `node-path`). As workspace siblings they are
- * declared `workspace:*` and bun links them from local source.
+ * declared `workspace:^` and bun links them from local source.
  */
 import { fileURLToPath } from "node:url";
 import { javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
-import { readWorkspaceVersion } from "./src/workspace-version.ts";
+import { readReleaseUnitVersion } from "./src/release-catalog.ts";
 
-// The engine ships at the SAME number as the packages, so it reads the one
-// workspace `VERSION` file at the repo root (this project lives one directory
-// below it) rather than keeping a second source of truth.
-const PACKAGE_VERSION = readWorkspaceVersion(fileURLToPath(new URL("..", import.meta.url)));
+const PACKAGE_VERSION = readReleaseUnitVersion(
+  fileURLToPath(new URL("..", import.meta.url)),
+  "projen-cli",
+);
 
 const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
   defaultReleaseBranch: "main",
   // A member of the single bun workspace. No nested `pnpm-workspace.yaml` marker is
-  // needed - bun resolves the `workspace:*` sibling deps from the root install.
+  // needed - bun resolves the `workspace:^` sibling deps from the root install.
   packageManager: NodePackageManager.BUN,
   // The projenrc runner is reset to `bun` below (bun runs `.ts` directly). This
   // package is `type: module` and `.projenrc.ts` does a directory import
@@ -63,13 +63,13 @@ const project = new typescript.TypeScriptProject({
   },
   deps: [
     "@clack/prompts@^1.7.0",
-    // `workspace:*` now that `projen/` is a MEMBER of the single bun workspace:
+    // `workspace:^` now that `projen/` is a MEMBER of the single bun workspace:
     // bun links these three from local source and rewrites them to the real
     // published range at publish time (root synthesis supplies that version),
     // so the engine still cannot resolve an older sibling than it was built with.
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/path@workspace:*",
-    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/path@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
     "commander@^15.0.0",
     // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
     // because the repo root happens to depend on it; a consumer install has no
@@ -80,12 +80,15 @@ const project = new typescript.TypeScriptProject({
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
     "projen@^0.101.16",
-    "smol-toml@^1.7.1",
+    "release-please@17.11.2",
+    "semver@^7.7.3",
+    "smol-toml@1.8.0",
     "ts-to-zod@^5.1.0",
     "yaml@^2.9.0",
   ],
   devDeps: [
     "@types/node@^24.6.0",
+    "@types/semver@^7.7.1",
     // Deliberately NOT a runtime dep. The engine only ever loads tsoa lazily, from
     // `generateOpenapi`, which returns before touching it unless some package has
     // tsoa controllers - and a package can only have those if it carries the

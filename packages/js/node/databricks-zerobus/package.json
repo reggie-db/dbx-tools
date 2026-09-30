@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@databricks/zerobus-ingest-sdk": "^1.1.0",
-    "@dbx-tools/databricks": "workspace:*"
+    "@dbx-tools/databricks": "workspace:^"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

@@ -1,11 +1,9 @@
 
 [package]
 name = "dbx-tools-lakebase-proxy"
+version = "0.6.229"
 description = "Loopback PostgreSQL proxy for Databricks Lakebase"
 publish = false
-
-  [package.version]
-  workspace = true
 
   [package.edition]
   workspace = true

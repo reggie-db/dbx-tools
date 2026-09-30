@@ -27,9 +27,9 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
-    "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*",
-    "@dbx-tools/shared-teams": "workspace:*",
+    "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/shared-core": "workspace:^",
+    "@dbx-tools/shared-teams": "workspace:^",
     "@mastra/core": "catalog:",
     "jose": "^6.2.3",
     "zod": "catalog:"

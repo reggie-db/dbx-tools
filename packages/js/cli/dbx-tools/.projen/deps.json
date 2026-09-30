@@ -21,32 +21,32 @@
     },
     {
       "name": "@dbx-tools/cli-appkit-env",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/cli-auth",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/cli-tunnel",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/rust-binary",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {

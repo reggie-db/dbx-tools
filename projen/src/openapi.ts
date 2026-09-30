@@ -48,6 +48,7 @@ import {
   toPosix,
   recordedPackages,
 } from "./packages.ts";
+import type { ReleaseUnitGraph } from "./release-catalog.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 const logger = log.logger("projen:openapi");
@@ -174,9 +175,16 @@ export async function generateOpenapi(): Promise<string[]> {
     skipLibCheck: true,
   };
 
-  const specVersion = readWorkspaceVersion(repoRoot);
+  const releaseGraphPath = join(repoRoot, ".projen/release-units.json");
+  const releaseGraph = existsSync(releaseGraphPath)
+    ? (JSON.parse(readFileSync(releaseGraphPath, "utf8")) as ReleaseUnitGraph)
+    : undefined;
   const written: string[] = [];
   for (const p of pkgs) {
+    const releaseProject = releaseGraph?.projects.find((project) => project.path === p.path);
+    const specVersion =
+      releaseGraph?.units.find((unit) => unit.id === releaseProject?.unit)?.version ??
+      readWorkspaceVersion(repoRoot);
     // The generated package's folder is the source's leaf folder name (`api`), not
     // its npm name - `p.name` is the (possibly-overridden) manifest name.
     const leaf = p.relPath.split("/").pop() ?? p.relPath;

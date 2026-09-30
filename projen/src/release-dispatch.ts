@@ -9,8 +9,9 @@ export const RELEASE_SUMMARY_PROVIDER_NAMES = ["cursor", "codex", "claude"] as c
 export type ReleaseSummaryProviderName = (typeof RELEASE_SUMMARY_PROVIDER_NAMES)[number];
 
 /** Immutable repository path for one version's release summary. */
-export function releaseSummaryFile(version: string): string {
-  return `${RELEASE_SUMMARY_DIRECTORY}/v${version.replace(/^v/, "")}.md`;
+export function releaseSummaryFile(version: string, component?: string): string {
+  const prefix = component ? `${component.replace(/[^a-zA-Z0-9-]+/g, "-")}-` : "";
+  return `${RELEASE_SUMMARY_DIRECTORY}/${prefix}v${version.replace(/^v/, "")}.md`;
 }
 
 export const RELEASE_SUMMARY_FILE = releaseSummaryFile(RELEASE_VERSION);

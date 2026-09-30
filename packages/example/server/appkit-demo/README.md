@@ -104,12 +104,12 @@ when Honcho exits.
 
 This package's `@dbx-tools/*` deps are `workspace:*` and its third-party deps are
 `catalog:`, neither of which resolves when the Databricks Apps platform installs
-the uploaded source. Both example manifests link their version to the root
-workspace release, and staging converts `@dbx-tools/*` to that published version:
+the uploaded source. Staging reads the generated release-unit graph and converts
+each `@dbx-tools/*` dependency to that package's independently published version:
 
 ```bash
 bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves
-bun stage-deploy.ts                                     # reads the root VERSION
+bun stage-deploy.ts                                     # reads release-unit versions
 cd "$(dirname "$(mktemp -u)")/dbx-tools-deploy-app"     # printed by stage-deploy
 databricks bundle validate --profile FEVM-REGGIE-PIERCE-AWS
 databricks bundle deploy --profile FEVM-REGGIE-PIERCE-AWS
@@ -122,9 +122,10 @@ the bundle sets `PYTHON=./.venv/bin/python` so the Graphiti plugin uses that
 Python 3.11 environment. The launcher then pins upstream Graphiti's `uv`
 project to the same interpreter minor. `UV_PYTHON=3.11` remains as an
 explicit override. Caddy installs through mise on first start.
-Staging replaces workspace dependencies with the exact `<workspace-version>` and writes
-`dbx-tools-graphiti==<workspace-version>`. Uncommitted package changes are not
-included unless that version has been published.
+Staging replaces each workspace dependency with its exact release-unit version
+and writes `dbx-tools-graphiti==<python-graphiti-version>`. Uncommitted package
+changes are not included unless the corresponding component version has been
+published.
 
 Two things worth knowing before changing this flow:
 

@@ -6,11 +6,15 @@ export interface TomlCodec {
 export interface PythonPackageMapping {
   readonly directory: string;
   readonly name: string;
+  readonly version: string;
+  readonly uniffi: boolean;
 }
 
 export interface PythonProjectInfo {
   readonly name: string;
+  readonly version: string;
   readonly private: boolean;
+  readonly uniffi: boolean;
 }
 
 /** Read the project identity and publication flag from parsed TOML metadata. */
@@ -22,6 +26,7 @@ export function stampPythonProject(
   options: {
     readonly packages: readonly PythonPackageMapping[];
     readonly rewriteDependencies?: boolean;
+    readonly usePackageVersions?: boolean;
     readonly toml: TomlCodec;
     readonly version: string;
   },

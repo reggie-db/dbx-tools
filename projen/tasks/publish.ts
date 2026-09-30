@@ -73,6 +73,7 @@ import {
   publishedNpmRelease,
   readNpmArchiveIdentity,
 } from "./publish-npm.ts";
+import type { ReleasePlan } from "../src/release-plan.ts";
 
 const logger = log.logger("dbx-tools:publish");
 
@@ -104,22 +105,23 @@ function workspaceMembers(root: string): string[] {
   return (doc?.packages ?? []).map((m) => resolve(root, m));
 }
 
-/** Whether every workspace member already carries the requested release version. */
-function manifestsMatchVersion(members: readonly string[], version: string): boolean {
+/** Whether selected workspace members carry their planned versions. */
+function manifestsMatchVersions(
+  root: string,
+  members: readonly string[],
+  expected: ReadonlyMap<string, string>,
+): boolean {
   return members.every((dir) => {
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
       version?: string;
     };
-    return pkg.version === version;
+    const path = dir.slice(resolve(root).length + 1).replaceAll("\\", "/");
+    return pkg.version === expected.get(path);
   });
 }
 
-/** Whether Bun's workspace lock records the requested version for every member. */
-function lockfileMatchesVersion(
-  root: string,
-  members: readonly string[],
-  version: string,
-): boolean {
+/** Whether Bun's workspace lock records each live workspace manifest version. */
+function lockfileMatchesManifestVersions(root: string, members: readonly string[]): boolean {
   const lockfile = join(root, "bun.lock");
   if (!existsSync(lockfile)) return false;
   try {
@@ -129,11 +131,14 @@ function lockfileMatchesVersion(
       workspaces?: Record<string, { version?: string }>;
     };
     return members.every((dir) => {
+      const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+        version?: string;
+      };
       const relative = dir
         .slice(resolve(root).length + 1)
         .split("\\")
         .join("/");
-      return lock.workspaces?.[relative]?.version === version;
+      return lock.workspaces?.[relative]?.version === manifest.version;
     });
   } catch {
     return false;
@@ -256,10 +261,18 @@ function enrichedPath(root: string): string {
   return current.split(delimiter).includes(binDir) ? current : `${binDir}${delimiter}${current}`;
 }
 
-const [version, ...rest] = process.argv.slice(2);
-if (!version) {
+const argv = process.argv.slice(2);
+const version = argv[0] && !argv[0].startsWith("--") ? argv[0] : undefined;
+const rest = version ? argv.slice(1) : argv;
+const root = process.cwd();
+const planIdx = rest.indexOf("--plan");
+const plan =
+  planIdx >= 0
+    ? (JSON.parse(readFileSync(resolve(root, rest[planIdx + 1]), "utf8")) as ReleasePlan)
+    : undefined;
+if (!version && !plan) {
   logger.error(
-    "usage: bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run]",
+    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run]",
   );
   process.exit(1);
 }
@@ -278,29 +291,40 @@ const excluded = new Set(
   rest.reduce<string[]>((acc, arg, i) => (arg === "--exclude" ? [...acc, rest[i + 1]] : acc), []),
 );
 
-const root = process.cwd();
 const path = enrichedPath(root);
 // Registered BEFORE the first manifest edit so no exit path can skip it: a clean
 // finish and a `bun publish` failure mid-loop both land here, so a publish that
 // dies partway does not leave half the workspace stamped.
 if (restore) process.on("exit", restoreManifests);
-const members = workspaceMembers(root)
+const allMembers = workspaceMembers(root)
   .filter((dir) => existsSync(join(dir, "package.json")))
   .filter((dir) => !excluded.has(resolve(root, dir).replace(`${resolve(root)}/`, "")));
+const expectedVersions = new Map(
+  plan
+    ? plan.nodePackages.map((pkg) => [pkg.path, pkg.version] as const)
+    : allMembers.map((dir) => [
+        dir.slice(resolve(root).length + 1).replaceAll("\\", "/"),
+        version!,
+      ]),
+);
+const members = plan
+  ? allMembers.filter((dir) =>
+      expectedVersions.has(dir.slice(resolve(root).length + 1).replaceAll("\\", "/")),
+    )
+  : allMembers;
 
-// Publication consumes the reviewed version state and never repairs it.
-if (!manifestsMatchVersion(members, version)) {
-  throw new Error(`workspace manifests do not all match release version ${version}; run projen`);
+if (!manifestsMatchVersions(root, members, expectedVersions)) {
+  throw new Error("workspace manifests do not match the reviewed release plan; run projen");
 }
-logger.info(`all ${members.length} member manifests carry ${version}`);
+logger.info(`validated ${members.length} selected member manifests`);
 
 // Ensure the lockfile resolves each `workspace:*` to the release version.
 // `bun publish`/`pm pack` reads workspace versions from the LOCKFILE, not just
 // live manifests. A normal bump's synth/install already makes it current; after
 // fallback stamping, deleting it before install is what forces re-resolution.
 const lockfile = join(root, "bun.lock");
-if (lockfileMatchesVersion(root, members, version)) {
-  logger.info(`workspace lock already resolves members at ${version}`);
+if (lockfileMatchesManifestVersions(root, allMembers)) {
+  logger.info("workspace lock already resolves live member versions");
 } else {
   if (existsSync(lockfile)) rmSync(lockfile);
   logger.info("refreshing lockfile so workspace deps resolve to the release version");
@@ -314,10 +338,16 @@ const publishArgs = [
   ...(registry ? ["--registry", registry] : []),
   ...(dryRun ? ["--dry-run"] : []),
 ];
-const publishable: Array<{ dir: string; name: string; compile: boolean }> = [];
+const publishable: Array<{
+  dir: string;
+  name: string;
+  version: string;
+  compile: boolean;
+}> = [];
 for (const dir of members) {
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
     name?: string;
+    version?: string;
     private?: boolean;
     dbxToolsConfig?: { uniffi?: boolean };
     scripts?: Record<string, string>;
@@ -330,9 +360,11 @@ for (const dir of members) {
     logger.info(`skip UniFFI ${pkg.name ?? dirname(dir)}`);
     continue;
   }
+  if (!pkg.version) throw new Error(`Missing package version for ${pkg.name ?? dirname(dir)}`);
   publishable.push({
     dir,
     name: pkg.name ?? dirname(dir),
+    version: pkg.version,
     compile: Boolean(pkg.scripts && typeof pkg.scripts === "object" && "prepack" in pkg.scripts),
   });
 }
@@ -355,29 +387,27 @@ for (const { dir } of publishable) {
 logger.info(
   `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
-await runConcurrent(publishable, concurrency, async ({ dir, name }) => {
+await runConcurrent(publishable, concurrency, async ({ dir, name, version: packageVersion }) => {
   if (!dryRun) {
     const packed = mkdtempSync(join(tmpdir(), "dbx-tools-npm-release-"));
     try {
       const archive = packNpmPackage(dir, packed, path);
       const local = readNpmArchiveIdentity(archive);
-      if (local.name !== name || local.version !== version) {
+      if (local.name !== name || local.version !== packageVersion) {
         throw new Error(
-          `Packed npm identity ${local.name}@${local.version} does not match ${name}@${version}`,
+          `Packed npm identity ${local.name}@${local.version} does not match ${name}@${packageVersion}`,
         );
       }
       const published = await publishedNpmRelease(local.name, local.version, registry);
       if (npmReleaseMatches(local, published)) {
-        logger.info(`skip published ${name} @ ${version}`);
+        logger.info(`skip published ${name} @ ${packageVersion}`);
         return;
       }
     } finally {
       rmSync(packed, { recursive: true, force: true });
     }
   }
-  logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${version}`);
+  logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
   await runAsync(dir, "bun", ["publish", ...publishArgs], path);
 });
-logger.success(
-  `${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages @ ${version}`,
-);
+logger.success(`${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages`);

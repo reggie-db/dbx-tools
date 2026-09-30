@@ -22,6 +22,10 @@ export interface RustReleaseBinaryCommand {
   readonly command: string;
   readonly description: string;
   readonly binaryName: string;
+  readonly unit: string;
+  readonly component: string;
+  readonly version: string;
+  readonly tag: string;
   readonly repository: string;
   readonly assets: readonly RustReleaseBinaryAsset[];
 }
@@ -55,10 +59,6 @@ function repositoryName(repository: string): string {
   return name;
 }
 
-async function packageVersion(): Promise<string> {
-  return (await import("../index.ts")).PACKAGE_VERSION;
-}
-
 function versionedBinaryName(
   binaryName: string,
   version: string,
@@ -88,19 +88,20 @@ export function rustReleaseBinaryAsset(
 export function rustReleaseBinaryUrl(
   command: RustReleaseBinaryCommand,
   asset: RustReleaseBinaryAsset,
-  version: string,
+  version = command.version,
 ): string {
-  return `https://github.com/${repositoryName(command.repository)}/releases/download/v${version}/${asset.name}`;
+  const tag = version === command.version ? command.tag : `${command.component}-v${version}`;
+  return `https://github.com/${repositoryName(command.repository)}/releases/download/${tag}/${asset.name}`;
 }
 
-/** Install the release binary matching this package version and host platform. */
+/** Install the registered binary release matching the host platform. */
 export async function ensureRustReleaseBinary(
   command: RustReleaseBinaryCommand,
   options: RustReleaseBinaryOptions = {},
 ): Promise<bin.BinContext> {
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
-  const version = options.version ?? (await packageVersion());
+  const version = options.version ?? command.version;
   const asset = rustReleaseBinaryAsset(command, platform, arch);
   const root = join(options.homeDir ?? homedir(), ".dbx-tools");
   const binDir = join(root, "bin");

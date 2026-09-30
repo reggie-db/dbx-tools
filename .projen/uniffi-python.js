@@ -54,16 +54,27 @@ export const pythonProjectInfo = (source, toml) => {
   if (typeof project.name !== "string" || !project.name) {
     throw new Error("Missing Python project name");
   }
+  if (typeof project.version !== "string" || !project.version) {
+    throw new Error("Missing Python project version");
+  }
   const config = document?.tool?.["dbx-tools"];
   return {
     name: project.name,
+    version: project.version,
     private: Boolean(config && typeof config === "object" && config.private === true),
+    uniffi: Boolean(config && typeof config === "object" && config.uniffi === true),
   };
+};
+
+const compatibleRequirement = (version) => {
+  const [major, minor] = version.split(".").map(Number);
+  const upper = major === 0 ? `0.${minor + 1}.0` : `${major + 1}.0.0`;
+  return `>=${version},<${upper}`;
 };
 
 export const stampPythonProject = (
   source,
-  { packages, rewriteDependencies = true, toml, version },
+  { packages, rewriteDependencies = true, usePackageVersions = false, toml, version },
 ) => {
   const marker = source.startsWith("# ") ? source.slice(0, source.indexOf("\n")) : undefined;
   const document = toml.parse(source);
@@ -83,7 +94,15 @@ export const stampPythonProject = (
           throw new Error("Python project dependencies must be strings");
         }
         const sibling = packages.find((candidate) => directSibling(dependency, candidate));
-        return sibling ? `${sibling.name}==${version}` : dependency;
+        return sibling
+          ? `${sibling.name}${
+              usePackageVersions
+                ? sibling.uniffi
+                  ? `==${sibling.version}`
+                  : compatibleRequirement(sibling.version)
+                : `==${version}`
+            }`
+          : dependency;
       });
     }
   }

@@ -46,27 +46,27 @@
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-email-template",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-email",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-appkit",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-branding",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {

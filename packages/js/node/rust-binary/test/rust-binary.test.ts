@@ -18,6 +18,10 @@ const COMMAND: RustReleaseBinaryCommand = {
   command: "fixture",
   description: "Run a fixture",
   binaryName: "fixture-bin",
+  unit: "rs-fixture",
+  component: "rs-fixture",
+  version: PACKAGE_VERSION,
+  tag: `rs-fixture-v${PACKAGE_VERSION}`,
   repository: "https://github.com/example/project",
   assets: [
     {
@@ -89,7 +93,7 @@ describe("Rust release binaries", () => {
     assert.equal(asset.name, "fixture-bin-linux-x64-gnu.tar.gz");
     assert.equal(
       rustReleaseBinaryUrl(COMMAND, asset, "1.2.3"),
-      "https://github.com/example/project/releases/download/v1.2.3/fixture-bin-linux-x64-gnu.tar.gz",
+      "https://github.com/example/project/releases/download/rs-fixture-v1.2.3/fixture-bin-linux-x64-gnu.tar.gz",
     );
     assert.throws(
       () => rustReleaseBinaryAsset(COMMAND, "darwin", "arm64"),

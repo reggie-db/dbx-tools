@@ -16,11 +16,59 @@
 /.projen/deps.json linguist-generated
 /.projen/files.json linguist-generated
 /.projen/pypi-trusted-publisher-instructions.mjs linguist-generated
+/.projen/release-units.json linguist-generated
 /.projen/smol-toml.cjs linguist-generated
 /.projen/smol-toml.LICENSE linguist-generated
 /.projen/tasks.json linguist-generated
 /.projen/uniffi-python.js linguist-generated
 /.projen/uniffi-release.mjs linguist-generated
+/.release-units/node-appkit-graphiti/source.json linguist-generated
+/.release-units/node-appkit-mastra/source.json linguist-generated
+/.release-units/node-appkit-web-search/source.json linguist-generated
+/.release-units/node-appkit/source.json linguist-generated
+/.release-units/node-auth-gate/source.json linguist-generated
+/.release-units/node-cli-appkit-env/source.json linguist-generated
+/.release-units/node-cli-auth/source.json linguist-generated
+/.release-units/node-cli-tunnel/source.json linguist-generated
+/.release-units/node-core/source.json linguist-generated
+/.release-units/node-databricks-zerobus/source.json linguist-generated
+/.release-units/node-databricks/source.json linguist-generated
+/.release-units/node-email/source.json linguist-generated
+/.release-units/node-fs/source.json linguist-generated
+/.release-units/node-genie/source.json linguist-generated
+/.release-units/node-model/source.json linguist-generated
+/.release-units/node-path/source.json linguist-generated
+/.release-units/node-postgres/source.json linguist-generated
+/.release-units/node-rust-binary/source.json linguist-generated
+/.release-units/node-search/source.json linguist-generated
+/.release-units/node-shared-auth/source.json linguist-generated
+/.release-units/node-shared-core/source.json linguist-generated
+/.release-units/node-shared-email-template/source.json linguist-generated
+/.release-units/node-shared-email/source.json linguist-generated
+/.release-units/node-shared-fs/source.json linguist-generated
+/.release-units/node-shared-genie/source.json linguist-generated
+/.release-units/node-shared-mastra/source.json linguist-generated
+/.release-units/node-shared-model/source.json linguist-generated
+/.release-units/node-shared-search/source.json linguist-generated
+/.release-units/node-shared-teams/source.json linguist-generated
+/.release-units/node-teams/source.json linguist-generated
+/.release-units/node-tunnel/source.json linguist-generated
+/.release-units/node-ui-appkit/source.json linguist-generated
+/.release-units/node-ui-auth/source.json linguist-generated
+/.release-units/node-ui-branding/source.json linguist-generated
+/.release-units/node-ui-email/source.json linguist-generated
+/.release-units/node-ui-mastra/source.json linguist-generated
+/.release-units/node-ui-search/source.json linguist-generated
+/.release-units/node-ui-teams/source.json linguist-generated
+/.release-units/projen-cli/source.json linguist-generated
+/.release-units/python-core/source.json linguist-generated
+/.release-units/python-graphiti/source.json linguist-generated
+/.release-units/python-postgres/source.json linguist-generated
+/.release-units/rs-core/source.json linguist-generated
+/.release-units/rs-google/source.json linguist-generated
+/.release-units/rs-lakebase-proxy/source.json linguist-generated
+/.release-units/rs-model-proxy/source.json linguist-generated
+/.release-units/rs-model/source.json linguist-generated
 /.vscode/extensions.json linguist-generated linguist-language=JSON-with-Comments
 /.vscode/settings.json linguist-generated
 /.vscode/tasks.json linguist-generated
@@ -46,6 +94,7 @@
 /pnpm-workspace.yaml linguist-generated
 /projen/index.ts linguist-generated
 /pyproject.toml linguist-generated
+/release-please-config.json linguist-generated
 /tsconfig.base.json linguist-generated linguist-language=JSON-with-Comments
 /tsconfig.json linguist-generated linguist-language=JSON-with-Comments
 /tsconfig.projen.json linguist-generated linguist-language=JSON-with-Comments

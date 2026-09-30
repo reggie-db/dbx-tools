@@ -1750,7 +1750,7 @@ packages/example/
 **bun owns install/run/build/test locally and in CI.** The engine sets
 `packageManager: BUN`, so projen renders `bun install` / `bunx projen` / `bun test`
 and a native `trustedDependencies` field. The single bun workspace has ONE
-`node_modules`, no `.pnpmfile.cjs`, and `workspace:*` sibling deps resolve from
+`node_modules`, no `.pnpmfile.cjs`, and `workspace:^` sibling deps resolve from
 source with no linking hook.
 
 Keep `scripts/install.sh` as a small function-based bootstrap. It uses an
@@ -1862,12 +1862,12 @@ files it stopped emitting).
 
 What you gain and lose:
 
-- **Gained:** one workspace, one `node_modules`, no link hook - `workspace:*`
+- **Gained:** one workspace, one `node_modules`, no link hook - `workspace:^`
   siblings resolve from source. `bun` runs `.ts` directly (no `tsx`), and `app`
   packages use `Bun.serve` (HMR dev) + `Bun.build` (prod).
 - **Lost:** consumer-mode testing (`DBX_TOOLS_LINK=0`, registry-installed
   packages) - intentionally dropped. Everything resolves from source now.
-- **Unchanged:** package deps keep their `@catalog:` / `workspace:*` specifiers -
+- **Unchanged:** package deps keep their `@catalog:` / `workspace:^` specifiers -
   both resolve under bun AND pnpm, so nothing in a package manifest is rewritten
   by the migration. `pnpm-workspace.yaml` stays (Databricks deploy reads it).
 
@@ -1928,9 +1928,10 @@ bun run --filter '*' compile # type-check every package (projen's per-package co
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
 bun run test:installer       # standalone installer tests; RUN_DOCKER_INSTALL_TESTS=1 adds container coverage
 bun run model:metadata       # refresh committed model capability, retirement, and limit snapshots
-bun run bump                 # increment VERSION and synth; no git or publication side effects
-bun run version:check        # verify every committed version surface
-bun run release              # validate locally, publish to loopback registries, and open a release PR
+bun run release:bootstrap    # initialize Release Please state once
+bun run release:plan         # generate the affected component publication plan
+bun run version:check        # verify package versions against release units
+bun run release              # refresh Release Please PRs, tags, and releases
 bun run eslint               # check lint across package roots and projen
 bun run eslint:fix           # explicitly apply supported lint fixes
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
@@ -1993,30 +1994,16 @@ What is configured, and why:
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
   restores the corporate index when it is unavailable.
 
-`bun run release` commits pending work on the current branch, incorporates the
-latest remote release branch with a normal Git merge when needed, pushes the
-source branch, and creates `release/v<version>` in an ignored
-`.worktrees/<tag>` checkout,
-calls the pure `bump` task there, validates the workspace, publishes the exact
-candidate to detected loopback registries, and opens a reviewed PR into the
-configured release branch. The source checkout never changes branches. A failed
-preparation leaves its worktree for the next invocation to resume; success
-removes it. Merging the PR starts the public workflow. `--message` sets the
-source commit message.
-The first push of the generated release branch uses `--no-verify`: pending
-source work was scanned by the source-branch push, and the release-only version
-diff was scanned by the commit hook. A new branch has no remote comparison
-point, so running the managed pre-push hook there would rescan the repository's
-complete history.
-`--approve` asks GitHub's merge API to merge the prepared release branch
-directly into the release base, so no PR checks are created and the main release
-starts directly. If branch policy blocks direct merge, it falls back to opening
-and admin-merging the release PR. After either merge path, the task fast-forwards
-and pushes the still-active source branch to the new release commit.
-`--local-registry auto` publishes npm packages to loopback
-Verdaccio, and `--local-pypi auto` publishes Python packages when uv's default
-index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache is
-read-only and is not treated as a publish target.
+`bun run release` invokes the pinned Release Please runner. It refreshes one
+combined release PR from conventional source commits and the generated
+release-unit graph. `--approve` remains a compatibility alias; Release Please
+creates component tags and GitHub Releases after the reviewed PR merges.
+The GitHub workflow reconciles Projen-generated manifests and release summaries
+onto the Release Please branch before review.
+
+Public npm, PyPI, Cargo, and GitHub publication consume the same affected plan
+and remain idempotent per component, so recovery does not replay unrelated
+units.
 
 A Databricks notebook or job is a different network with its own package index.
 Documentation and notebooks install the published distributions by name
@@ -2026,49 +2013,42 @@ Python package README also documents the Git
 `#subdirectory=` form as an alternative for testing unreleased `main` branch
 changes.
 
-The root `VERSION` file is the single source of truth for the version, and every
-generated `packages/py/*/pyproject.toml` carries exactly that `x.y.z` value,
-copied at synth alongside its JS siblings. There is no per-commit PEP 440 local
-stamp: a commit does not change any version, so the pyproject files stay at the
-committed `VERSION`. Feature PRs do not change it; the release preparation task
-invokes `bump` on its dedicated branch. See "Versioning" below for how the number
-is chosen and propagated.
-
 ## Versioning
 
-There is ONE version for the whole repo, and it lives in the root `VERSION` file
-(a plain `x.y.z` string; a fresh tree with no file defaults to `0.0.1`). Synth
-COPIES that value into every manifest - the root and `projen/` `package.json`,
-every JS member, every `packages/py/*/pyproject.toml`, the generated openapi
-packages, and the example apps - so the TypeScript packages, the Python packages,
-the engine, and the examples always share one number. `projen/src/workspace-version.ts`
-owns reading/writing it.
+Versions are owned by generated release units, not by the repository as a
+whole. `DBXToolsReleaseCatalog` builds one cross-language graph from attached
+Projen projects plus explicitly registered external projects and generated
+artifacts. The committed `.projen/release-units.json` records ownership,
+dependency edges, publication batches, source hashes, and the current version
+of each unit.
 
-Hard rules, because independent version drift and `0.0.0` resets were a recurring
-error source:
+This repository uses `versioningMode: "independent"`. Release Please owns the
+writable `.release-please-manifest.json`, each
+`.release-units/<component>/version.txt`, component changelogs, release PRs,
+component-qualified tags, and GitHub Releases. Projen owns package manifests,
+Cargo dependency versions, generated bindings, runtime registries, workflow
+matrices, and `.release-units/<component>/source.json`.
 
-- **Synth only copies.** An ordinary `bunx projen` / `bun run sync` reads
-  `VERSION` and writes that exact value; it never invents, resets to `0.0.0`,
-  upgrades, or downgrades a version. A `VERSION` file that exists but is not valid
-  `x.y.z` fails loudly rather than being silently rewritten. Extra workspace
-  members that synthesize themselves are synchronized before barrels run, and
-  Rust synthesis refreshes tracked workspace versions in `Cargo.lock`.
-  `bun run version:check` verifies every manifest and generated barrel.
-- **`bump` is a pure version mutator.** `bun run bump` changes the number:
-  `projen/tasks/bump.ts` computes the next version, writes `VERSION`, then synths
-  so every manifest copies it. It does not commit, push, tag, or publish. The
-  reviewed `release/v*` preparation flow is its normal caller. Nothing else
-  moves a package version.
-- **Remote is consulted only on bump and one-time bootstrap.** `bump` runs a
-  single `git fetch --tags` and takes the highest `v*` tag as its base, so a
-  release cut elsewhere wins.
-  When the remote is unreachable or has no matching tag it falls back to the local
-  `VERSION` file. A local file that is ahead does NOT override an existing remote
-  tag. Creating a missing `VERSION` file uses the same remote-or-`0.0.1` rule.
-- **Publish never repairs version drift.** `tasks/publish.ts` requires every
-  manifest to match the reviewed release version, folds in `publishConfig`
-  entry points temporarily, then restores each manifest to its committed
-  content.
+Hard rules:
+
+- `bunx projen` reads reviewed component versions and reproduces every Node,
+  Python, Rust, OpenAPI, binding, binary-registry, and barrel version. It never
+  computes a semantic increment.
+- Generated source hashes exclude version-only and generated release metadata,
+  so reconciling a release PR cannot create another release.
+- Normal internal dependencies use compatible ranges; generated, ABI, bundled,
+  and embedded-runtime edges are exact or propagate a dependent patch.
+- Release Please preserves direct semantic increments and the generated graph
+  adds only required dependent patches. Propagation runs from dependency to
+  dependent and never backward.
+- `release:plan` is the publication contract. npm, PyPI, Cargo, native binding,
+  binary asset, and docs jobs consume selected units and omit unrelated stages.
+- Component recovery names one component and reviewed version. Existing
+  registry content is compared or safely skipped; recovery never bumps another
+  unit.
+- `VERSION`, `workspace-version.ts`, `bump`, and the scalar release path remain
+  only for `versioningMode: "fixed"`, which stays the consumer default during
+  the compatibility period.
 
 ## The `dbx` CLI
 
@@ -2085,7 +2065,7 @@ names the real invocation.
 Release-enabled Rust commands are generated separately from the sibling
 Commander packages. `dbx model-proxy` and `dbx lakebase-proxy` look up the
 current platform through `@dbx-tools/rust-binary`, use `bin.ensure` to install
-the asset matching the shared package `PACKAGE_VERSION` at
+the asset matching the binary component's generated version and tag at
 `~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`, then forward argv, stdio,
 signals, and exit status to the native process. Root help registers names
 without downloading assets. Add another native command through the Rust
@@ -2171,7 +2151,7 @@ The runnable sample lives under `packages/example/` as two ordinary workspace
 members - `packages/example/server/appkit-demo` (`@dbx-tools/demo-appkit-server`,
 `server` tag) and `packages/example/app/appkit-demo` (`@dbx-tools/demo-appkit-app`,
 `app` tag). It is no longer a standalone workspace: both members declare their
-`@dbx-tools/*` deps as `workspace:*`, so bun resolves them from source in the one
+`@dbx-tools/*` deps as `workspace:^`, so bun resolves them from source in the one
 `node_modules`. Editing a package is reflected in the demo immediately - there is
 no link hook, no `DBX_TOOLS_LINK` switch, and no consumer-mode registry install
 (that portability was dropped when the demo merged into the main tree).
@@ -2186,7 +2166,7 @@ bun run --filter @dbx-tools/demo-appkit-app build    # Bun.build production bund
 ```
 
 Deployment stages a standalone package outside the repository. The staging
-script replaces local `workspace:*` references with the exact version from the
+script replaces local `workspace:` references with exact release-unit versions from the
 root `VERSION` file, verifies the generated example manifest carries that same
 version, and resolves `catalog:` entries. This keeps local runs on source while
 deployed Apps install the matching published packages without a lockfile.
@@ -2239,7 +2219,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 - **Publishing leans on NATIVE bun - do not re-hand-roll what bun already does.**
   `tasks/publish.ts` validates that each member already carries the reviewed
   `VERSION`. It does NOT rewrite `workspace:`/`catalog:` deps - `bun publish` STRIPS both protocols
-  in the packed tarball (`workspace:*` -> the sibling's version, `catalog:` -> the
+  in the packed tarball (`workspace:^` -> the sibling's compatible range, `catalog:` -> the
   root catalog range; verified against a packed manifest). It also does NOT pack
   by hand. The workspace publish driver compiles every publishable member once
   from the root with Bun's filtered workspace runner, then uses a bounded pool of
@@ -2252,12 +2232,12 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   files that their dependency has not emitted yet.
   Release preparation's synth/install makes both manifests and the local lock
   current. When the ignored Bun lock is stale or absent, publication deletes it
-  and runs `bun install` before packing. `bun publish` resolves each `workspace:*` from
+  and runs `bun install` before packing. `bun publish` resolves each `workspace:` from
   the LOCKFILE, not the live manifest, and a plain `bun install` (even `--force`)
   does not re-resolve after only a version-field change - so without the lockfile
-  refresh a sibling dep can publish against a stale resolved version. The disk
-  manifests carry the shared `VERSION`; publication fails rather than changing
-  them.
+  refresh a sibling dep can publish against a stale resolved version. Disk
+  manifests carry reviewed release-unit versions; publication fails rather
+  than changing them.
   During local release preparation, the npm/Verdaccio and Python/devpi publishers run in
   parallel because they mutate disjoint JS and Python package trees; each still
   completes its own build before uploading.
@@ -2271,9 +2251,8 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   GitHub binary upload, and Pages deployment remain disabled.
 - **`bootstrap.ts` pins the engine version explicitly.** `bootstrap.ts` asks for
   `@dbx-tools/projen@^<this CLI's own version>` (see `defaultProjenSpecifier`)
-  rather than `@latest`, so the installed engine matches the CLI. That is only sound
-  because the root release publishes both at ONE version - if the two ever diverge,
-  this specifier starts requesting an engine that was never published.
+  rather than `@latest`, so the installed engine matches the CLI. The CLI and
+  engine intentionally share the `projen-cli` release unit.
 - **An established workspace pins its engine forever unless the CLI moves it.**
   Bootstrap installs the engine once; every later `dbx` run took the
   "established workspace" path, which only installed when `node_modules` was
@@ -2285,14 +2264,14 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   gained it yet. `ensureEngineCurrent` (`bootstrap.ts`, called from `cli.ts`) now
   re-adds the engine when the installed one is BEHIND this CLI. It compares
   versions and only moves forward, so an older CLI cannot downgrade a workspace,
-  and an in-repo build (CLI and engine at the same shared `VERSION`) is a no-op.
-- **The engine's `@dbx-tools/*` deps are resolved from workspace in-repo and pinned
-  in the published tarball.** In-repo, `workspace:*` resolves siblings from source.
-  The committed manifest keeps `workspace:*` (baking a `^<version>` for a
-  not-yet-published version would break the release workflow's initial `bun
-install`); native Bun publish resolution pins those sibling dependencies in the
-  packed engine. Do not
-  hand-maintain those ranges.
+  and an in-repo build from the same `projen-cli` unit is a no-op.
+- **The engine's `@dbx-tools/*` deps are resolved from workspace in-repo and use
+  generated compatible ranges in the published tarball.** In-repo,
+  `workspace:^` resolves siblings from source.
+  The committed manifest keeps the workspace protocol so a reviewed but
+  unpublished unit still installs from source. Native Bun publication projects
+  the dependency unit's reviewed version into the packed compatible range. Do
+  not hand-maintain those ranges.
 - **A generator tool the WORKSPACE already provides is a devDep, not a dep.** Every
   engine dependency is installed by every consumer, including ones that never reach
   the code path needing it, so the heavy generator toolchains are loaded lazily
@@ -2402,7 +2381,7 @@ install`); native Bun publish resolution pins those sibling dependencies in the
   `git check-ignore bun.lock uv.lock` matches, and neither appears in
   `git ls-files`). They are local install artifacts regenerated by `bun install`
   and `uv sync`; do not commit them. The release publish task deletes a stale
-  `bun.lock` and reinstalls to re-resolve `workspace:*`. CI installs are plain
+  `bun.lock` and reinstalls to re-resolve `workspace:` dependencies. CI installs are plain
   `bun install` / `uv sync`. The generated git and Prettier ignores force the
   lockfile group on in every environment; registry-based auto detection would
   make local synthesis ignore locks while public-registry CI removes the same
@@ -2532,7 +2511,7 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   honors the `exports` map, so a bare `@dbx-tools/<pkg>` import resolves to that
   package's ROOT `index.ts` barrel — packages type-check against each other with
   no build step. Cross-package imports still need the workspace dep declared
-  (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in an `applyToProjects(...)`) and MUST
+  (`p.addDeps("@dbx-tools/shared-core@workspace:^")` in an `applyToProjects(...)`) and MUST
   use the package name (`@dbx-tools/path`), never a relative path into
   another package's `src/` (e.g. `../../../../node/path/src/find`).
 - Everything runs on portable Node: subprocesses use `execFileSync(process.execPath, …)`;

@@ -79,18 +79,18 @@ it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 
     writeFileSync(
       join(consumer, "server.test.ts"),
       [
-        'import { test, expect } from "bun:test";',
+        'import { test, expect } from "vitest";',
         'import * as appkit from "@databricks/appkit";',
         'import * as beta from "@databricks/appkit/beta";',
         'import * as testing from "@databricks/appkit/testing";',
         'import * as tsdown from "@databricks/appkit/tsdown";',
         'import * as dbxAppkit from "@dbx-tools/appkit";',
         'test("public exports", () => {',
-        "  expect(typeof appkit.createApp).toBe('function');",
-        "  expect(typeof beta.createAgent).toBe('function');",
-        "  expect(typeof testing.createTestPlugin).toBe('function');",
-        "  expect(typeof tsdown.appkitServerConfig).toBe('function');",
-        "  expect(typeof dbxAppkit.appkit.createApp).toBe('function');",
+        '  expect(typeof appkit.createApp).toBe("function");',
+        '  expect(typeof beta.createAgent).toBe("function");',
+        '  expect(typeof testing.createTestPlugin).toBe("function");',
+        '  expect(typeof tsdown.appkitServerConfig).toBe("function");',
+        '  expect(typeof dbxAppkit.appkit.createApp).toBe("function");',
         "});",
         "",
       ].join("\n"),
@@ -128,8 +128,8 @@ it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 
       )}\n`,
     );
 
-    run(bun, ["install"], consumer);
-    run(bun, ["test", "server.test.ts"], consumer);
+    run(bun, ["install", "--force"], consumer);
+    run(bun, ["x", "vitest", "run", "server.test.ts"], consumer);
     run(bun, ["x", "tsc", "--noEmit"], consumer);
     run(bun, ["build", "browser.tsx", "--target", "browser", "--outdir", "dist"], consumer);
     assert.ok(readdirSync(join(consumer, "dist")).some((file) => file.endsWith(".js")));

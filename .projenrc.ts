@@ -18,7 +18,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
-import { Component, DependencyType } from "projen";
+import { Component, DependencyType, TextFile } from "projen";
 
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
@@ -147,7 +147,7 @@ const root = new projenProject.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   // `packages/js` is the JavaScript product tree; `packages/example` holds the
-  // runnable demo app as `workspace:*` source siblings of the packages it uses.
+  // runnable demo app as `workspace:^` source siblings of the packages it uses.
   packageRoots: ["packages/js", "packages/test", "packages/example"],
   packageDescriptions: PACKAGE_DESCRIPTIONS,
   packageTagPaths: { polyglot: ["node"] },
@@ -218,16 +218,32 @@ const root = new projenProject.DBXToolsNodeProject({
   workflowCacheIgnorePaths: [DOCS_BUILD_ROOT],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
-  // so bun links it + its `workspace:*` sibling deps from local source.
+  // so bun links it + its `workspace:^` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
+  versioningMode: "independent",
+  releaseBootstrapSha: "aa91d03d26319c0a0c0cfbcc9a9096a76368f597",
+  externalReleaseProjects: [
+    {
+      path: "projen",
+      language: "javascript",
+      identity: "@dbx-tools/projen",
+    },
+  ],
+  releaseUnits: [
+    {
+      id: "projen-cli",
+      component: "projen-cli",
+      projectPaths: ["projen", "packages/js/cli/dbx-tools"],
+    },
+  ],
   syncResynthPaths: ["branding/brand.yaml", "branding/assets"],
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
-  // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
+  // workspace, so it links from source via `workspace:^`. `.projenrc.ts` imports it
   // by source path either way.
   devDeps: [
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/shared-core@workspace:*",
-    "@dbx-tools/projen@workspace:*",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/projen@workspace:^",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
     "zod@catalog:",
@@ -365,7 +381,7 @@ project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
 for (const identifierName of ["shared-core", "appkit", "postgres"]) {
   project.applyToProjects(root, { identifierName }, (p) => {
     p.deps.addDependency(
-      "@dbx-tools/test-polyglot@workspace:*",
+      "@dbx-tools/test-polyglot@workspace:^",
       DependencyType.TEST,
     );
   });
@@ -375,7 +391,7 @@ for (const identifierName of ["shared-core", "appkit", "postgres"]) {
 // production source imports it declare it. Keep this explicit path list aligned
 // with source imports rather than forcing the dependency onto every package.
 project.applyToProjects(root, { path: [...SHARED_CORE_DEPENDENT_PATHS] }, (p) => {
-  p.addDeps("@dbx-tools/shared-core@workspace:*");
+  p.addDeps("@dbx-tools/shared-core@workspace:^");
 });
 
 // shared-core: the dependency-light, browser-safe base every package builds on.
@@ -413,7 +429,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
 // install it. Generic configuration resolution lives in node-core.
 project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/core@workspace:^",
     "@databricks/sdk-experimental@catalog:",
     "zod@catalog:",
   );
@@ -427,14 +443,14 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
 // cli tag) but ships NO bin: `@dbx-tools/cli` mounts its `buildProgram()` as
 // `dbx appkit`, lazily, so AppKit only loads when that command is named.
 project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" }, (p) => {
-  p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
+  p.addDeps("@dbx-tools/appkit@workspace:^", "@databricks/appkit@catalog:");
 });
 
 // cli-auth: the `dbx auth` OAuth command group. Commander comes from the cli
 // tag, and the native OAuth implementation stays in the generated Databricks binding.
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
   p.package.addField("description", "Commander CLI for Databricks OAuth");
-  p.addDeps("@dbx-tools/core-rs@workspace:*");
+  p.addDeps("@dbx-tools/core-rs@workspace:^");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -442,8 +458,8 @@ project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) =
 // workspace-client facade. AppKit handles request-scoped and default auth.
 project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-genie@workspace:*",
-    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/shared-genie@workspace:^",
+    "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
   );
 });
@@ -454,9 +470,9 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
 // glue. AppKit is a runtime dep here (CacheManager is used directly, not lazy).
 project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-model@workspace:*",
-    "@dbx-tools/model-rs@workspace:*",
-    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/model-rs@workspace:^",
+    "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
     "fuse.js@^7.4.2",
   );
@@ -473,9 +489,9 @@ project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p
     "Databricks workspace, filesystem, cloud, and network utilities",
   );
   p.addDeps(
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/shared-fs@workspace:*",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-fs@workspace:^",
     "@databricks/appkit@catalog:",
   );
 });
@@ -484,7 +500,7 @@ project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p
 // SDK directly (no AppKit); resolves the region-aware endpoint via
 // node-databricks (workspace URL/id + cloud location).
 project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
+  p.addDeps("@dbx-tools/databricks@workspace:^", "@databricks/zerobus-ingest-sdk@^1.1.0");
 });
 
 // node-email: server-side email add-on - SMTP transport (nodemailer) / local
@@ -494,10 +510,10 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
 // Mastra are runtime deps.
 project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/shared-email@workspace:*",
-    "@dbx-tools/shared-email-template@workspace:*",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-email@workspace:^",
+    "@dbx-tools/shared-email-template@workspace:^",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "@react-email/render@catalog:",
@@ -519,10 +535,10 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
 // exposing both Mastra tools. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/path@workspace:*",
-    "@dbx-tools/model@workspace:*",
-    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/path@workspace:^",
+    "@dbx-tools/model@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "cheerio@^1.2.0",
@@ -543,11 +559,20 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
 // Postgres replay; this package owns binary resolution, child supervision, and
 // the single public port.
 project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
+  new TextFile(p, "src/_python-runtime.ts", {
+    lines: [
+      "// GENERATED by projen - DO NOT EDIT.",
+      `export const GRAPHITI_PYTHON_VERSION = ${JSON.stringify(
+        root.releaseCatalog.versionForUnit("python-graphiti"),
+      )};`,
+      "",
+    ],
+  });
   p.addDeps(
     "@databricks/appkit@catalog:",
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/rust-binary@workspace:*",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/rust-binary@workspace:^",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
     "concurrently@catalog:",
@@ -558,7 +583,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
 // node-rust-binary: narrow runtime owner for generated Rust release metadata,
 // atomic installation, and process/signal forwarding.
 project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/core@workspace:*");
+  p.addDeps("@dbx-tools/core@workspace:^");
   projectJs.addPackageFiles(p, "exports.ts");
 });
 
@@ -578,8 +603,8 @@ project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) 
 // AppKit + Mastra are runtime deps. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/shared-teams@workspace:*",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-teams@workspace:^",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     // Validates the Bot Framework JWT on an inbound Teams request against the
@@ -598,11 +623,11 @@ project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => 
 // consumes the browser-safe shared-search extension contract.
 project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/shared-search@workspace:*",
-    "@dbx-tools/shared-model@workspace:*",
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/model@workspace:*",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-search@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/model@workspace:^",
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
@@ -621,18 +646,18 @@ project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) =>
 // (pg, fastembed, mcp, observability, express) can't be gated apart.
 project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-mastra@workspace:*",
-    "@dbx-tools/shared-genie@workspace:*",
-    "@dbx-tools/shared-model@workspace:*",
-    "@dbx-tools/shared-fs@workspace:*",
-    "@dbx-tools/databricks@workspace:*",
-    "@dbx-tools/fs@workspace:*",
-    "@dbx-tools/genie@workspace:*",
-    "@dbx-tools/model@workspace:*",
-    "@dbx-tools/model-rs@workspace:*",
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/path@workspace:*",
+    "@dbx-tools/shared-mastra@workspace:^",
+    "@dbx-tools/shared-genie@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/shared-fs@workspace:^",
+    "@dbx-tools/databricks@workspace:^",
+    "@dbx-tools/fs@workspace:^",
+    "@dbx-tools/genie@workspace:^",
+    "@dbx-tools/model@workspace:^",
+    "@dbx-tools/model-rs@workspace:^",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/path@workspace:^",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "@mastra/ai-sdk@catalog:",
@@ -673,7 +698,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
 // `{ Minimatch }` ESM export the code imports, chokidar@1 predates the v4 API).
 project.applyToProjects(root, { identifierName: "path", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/core@workspace:^",
     "glob@^13.0.6",
     "chokidar@^4.0.3",
     "minimatch@^10.2.5",
@@ -683,7 +708,7 @@ project.applyToProjects(root, { identifierName: "path", tags: "node" }, (p) => {
 // node-fs: local-disk FileSystem implementation of the shared-fs contract.
 // shared-fs stays browser-safe (types only); the Node runtime lives here.
 project.applyToProjects(root, { identifierName: "fs", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/core@workspace:*", "@dbx-tools/shared-fs@workspace:*");
+  p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-fs@workspace:^");
 });
 
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
@@ -732,8 +757,8 @@ project.applyToProjects(root, { identifierName: "shared-search", tags: "shared" 
 project.applyToProjects(root, { identifierName: "shared-mastra", tags: "shared" }, (p) => {
   p.addDeps(
     "zod@catalog:",
-    "@dbx-tools/shared-genie@workspace:*",
-    "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-genie@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
   );
 });
 
@@ -776,11 +801,11 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
   p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbx: "./bin/dbx-tools.ts" });
   p.addDeps(
     "@clack/prompts@catalog:",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/cli-appkit-env@workspace:*",
-    "@dbx-tools/cli-auth@workspace:*",
-    "@dbx-tools/cli-tunnel@workspace:*",
-    "@dbx-tools/rust-binary@workspace:*",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/cli-appkit-env@workspace:^",
+    "@dbx-tools/cli-auth@workspace:^",
+    "@dbx-tools/cli-tunnel@workspace:^",
+    "@dbx-tools/rust-binary@workspace:^",
   );
 });
 
@@ -794,12 +819,12 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
 project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p) => {
   p.addDeps(
     "@databricks/appkit@catalog:",
-    "@dbx-tools/auth-gate@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/email@workspace:*",
-    "@dbx-tools/tunnel@workspace:*",
-    "@dbx-tools/shared-email@workspace:*",
+    "@dbx-tools/auth-gate@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/email@workspace:^",
+    "@dbx-tools/tunnel@workspace:^",
+    "@dbx-tools/shared-email@workspace:^",
     "http-proxy-3@catalog:",
   );
 });
@@ -809,9 +834,9 @@ project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p)
 project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p) => {
   p.addDeps(
     "@better-auth/passkey@catalog:",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/postgres@workspace:*",
-    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/shared-auth@workspace:^",
     "better-auth@catalog:",
     "env-paths@catalog:",
   );
@@ -827,10 +852,10 @@ project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p)
 // handler + gating middleware on the app's OWN Express server.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/auth-gate@workspace:*",
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/auth-gate@workspace:^",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-auth@workspace:^",
     "@databricks/appkit@catalog:",
     "@types/express@catalog:",
     "http-proxy-3@catalog:",
@@ -840,7 +865,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
   // `--insecure` mode) needs no mail transport, so it is an optional peer rather
   // than a hard dep; the app that mounts `authGate` provides it. Kept as a devDep
   // so it resolves for this package's own tests.
-  projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:*");
+  projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:^");
 });
 
 // ui-appkit: the shared React UI base for the feature UI packages. Re-exports
@@ -855,7 +880,7 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
     // (`@import "@dbx-tools/ui-branding/brand-bridge.css"`), so every feature
     // UI package that depends on this base carries the (inert-by-default)
     // bridge. Scoped to `:root[data-brand]`, so it never disturbs AppKit.
-    "@dbx-tools/ui-branding@workspace:*",
+    "@dbx-tools/ui-branding@workspace:^",
     "tailwindcss@catalog:",
     "streamdown@catalog:",
   );
@@ -887,13 +912,13 @@ project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p)
 // shared Markdown/Tailwind styling. `ui`-tagged (React + jsx from the ui tag).
 project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-email@workspace:*",
-    "@dbx-tools/shared-email-template@workspace:*",
-    "@dbx-tools/ui-appkit@workspace:*",
+    "@dbx-tools/shared-email@workspace:^",
+    "@dbx-tools/shared-email-template@workspace:^",
+    "@dbx-tools/ui-appkit@workspace:^",
     // Direct, not via ui-appkit: the sign-in gate renders the host app's mark and
     // name from the brand context, the same way ui-mastra's chat header does.
     // Already in the tree (ui-appkit depends on it), so this adds no install.
-    "@dbx-tools/ui-branding@workspace:*",
+    "@dbx-tools/ui-branding@workspace:^",
     "lucide-react@catalog:",
   );
   // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
@@ -913,9 +938,9 @@ project.applyToProjects(root, { identifierName: "ui-auth", tags: "ui" }, (p) => 
   });
   p.addDeps(
     "@better-auth/passkey@catalog:",
-    "@dbx-tools/shared-auth@workspace:*",
-    "@dbx-tools/ui-appkit@workspace:*",
-    "@dbx-tools/ui-branding@workspace:*",
+    "@dbx-tools/shared-auth@workspace:^",
+    "@dbx-tools/ui-appkit@workspace:^",
+    "@dbx-tools/ui-branding@workspace:^",
     "better-auth@catalog:",
   );
 });
@@ -928,8 +953,8 @@ project.applyToProjects(root, { identifierName: "ui-auth", tags: "ui" }, (p) => 
 // through ui-appkit's UI kit. `ui`-tagged (React + jsx from the ui tag).
 project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-teams@workspace:*",
-    "@dbx-tools/ui-appkit@workspace:*",
+    "@dbx-tools/shared-teams@workspace:^",
+    "@dbx-tools/ui-appkit@workspace:^",
     "adaptivecards@catalog:",
     // The `adaptivecards` renderer ships no markdown parser - a `TextBlock` is
     // markdown per the spec, but the host supplies the implementation - so the
@@ -948,8 +973,8 @@ project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) =>
 project.applyToProjects(root, { identifierName: "ui-search", tags: "ui" }, (p) => {
   p.addDeps(
     "@databricks/appkit-ui@catalog:",
-    "@dbx-tools/shared-search@workspace:*",
-    "@dbx-tools/ui-appkit@workspace:*",
+    "@dbx-tools/shared-search@workspace:^",
+    "@dbx-tools/ui-appkit@workspace:^",
     "lucide-react@catalog:",
   );
   // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
@@ -964,14 +989,14 @@ project.applyToProjects(root, { identifierName: "ui-search", tags: "ui" }, (p) =
 // (shared-mastra/genie/model) and renders through ui-appkit's UI kit. `ui`-tagged.
 project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-mastra@workspace:*",
-    "@dbx-tools/shared-genie@workspace:*",
-    "@dbx-tools/shared-model@workspace:*",
-    "@dbx-tools/ui-appkit@workspace:*",
+    "@dbx-tools/shared-mastra@workspace:^",
+    "@dbx-tools/shared-genie@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
+    "@dbx-tools/ui-appkit@workspace:^",
     // Direct dep: the driver reads the active brand (`useBrand`) to style the
     // chat export document (logo + colors + font). Also transitive via
     // ui-appkit, but the direct import warrants a declared dep.
-    "@dbx-tools/ui-branding@workspace:*",
+    "@dbx-tools/ui-branding@workspace:^",
     "@mastra/client-js@catalog:",
     // Native persisted-message conversion used by browser history hydration.
     "@mastra/core@catalog:",
@@ -994,7 +1019,7 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 // ---------------------------------------------------------------------------
 // The runnable sample: an AppKit server + a bun-bundled React client, both members
 // of the single workspace under `packages/example/`. They consume the
-// `@dbx-tools/*` packages as `workspace:*` source siblings rather than from the
+// `@dbx-tools/*` packages as `workspace:^` source siblings rather than from the
 // registry, so editing a package is reflected immediately.
 
 // packages/example/server/appkit-demo: the AppKit server. `server` tag supplies
@@ -1006,20 +1031,20 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
   p.package.addField("main", "src/server.ts");
   p.package.addField("exports", { "./package.json": "./package.json" });
   p.addDeps(
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/appkit-graphiti@workspace:*",
-    "@dbx-tools/appkit-mastra@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/databricks@workspace:*",
-    "@dbx-tools/postgres@workspace:*",
-    "@dbx-tools/email@workspace:*",
-    "@dbx-tools/appkit-web-search@workspace:*",
-    "@dbx-tools/teams@workspace:*",
-    "@dbx-tools/search@workspace:*",
+    "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/appkit-graphiti@workspace:^",
+    "@dbx-tools/appkit-mastra@workspace:^",
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/databricks@workspace:^",
+    "@dbx-tools/postgres@workspace:^",
+    "@dbx-tools/email@workspace:^",
+    "@dbx-tools/appkit-web-search@workspace:^",
+    "@dbx-tools/teams@workspace:^",
+    "@dbx-tools/search@workspace:^",
     // The tunnel library: the server registers `tunnelInterceptor()` on its own
     // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
     // runs the server directly rather than through a wrapper bin.
-    "@dbx-tools/tunnel@workspace:*",
+    "@dbx-tools/tunnel@workspace:^",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "@mastra/ai-sdk@catalog:",
@@ -1036,7 +1061,12 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     "pg@^8.22.0",
     "fuse.js@^7.4.2",
   );
-  p.addDevDeps("@types/compression@^1.8.1", "@types/pg@^8", "@types/json-schema@^7");
+  p.addDevDeps(
+    "@dbx-tools/projen@workspace:^",
+    "@types/compression@^1.8.1",
+    "@types/pg@^8",
+    "@types/json-schema@^7",
+  );
 });
 
 // packages/example/app/appkit-demo: the React client. `app` tag supplies react +
@@ -1045,14 +1075,14 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
   p.package.addField("name", "@dbx-tools/demo-appkit-app");
   p.package.addField("private", true);
   p.addDeps(
-    "@dbx-tools/ui-appkit@workspace:*",
-    "@dbx-tools/ui-branding@workspace:*",
-    "@dbx-tools/ui-mastra@workspace:*",
-    "@dbx-tools/ui-teams@workspace:*",
-    "@dbx-tools/ui-search@workspace:*",
-    "@dbx-tools/ui-auth@workspace:*",
+    "@dbx-tools/ui-appkit@workspace:^",
+    "@dbx-tools/ui-branding@workspace:^",
+    "@dbx-tools/ui-mastra@workspace:^",
+    "@dbx-tools/ui-teams@workspace:^",
+    "@dbx-tools/ui-search@workspace:^",
+    "@dbx-tools/ui-auth@workspace:^",
     // Email preview remains a separate feature package from authentication.
-    "@dbx-tools/ui-email@workspace:*",
+    "@dbx-tools/ui-email@workspace:^",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.
     "@databricks/appkit-ui@catalog:",
@@ -1256,7 +1286,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
 });
 
 project.applyToProjects(root, { identifierName: "core-rs", tags: "node" }, (p) => {
-  p.addDevDeps("@dbx-tools/core@workspace:*");
+  p.addDevDeps("@dbx-tools/core@workspace:^");
 });
 
 // ---------------------------------------------------------------------------
@@ -1316,6 +1346,20 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   },
   release: true,
 });
+root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
+  target: "dbx-tools-graphiti",
+  kind: "generated",
+  propagation: "always",
+  publishOrder: true,
+});
+for (const binary of ["dbx-tools-model-proxy", "dbx-tools-lakebase-proxy"]) {
+  root.releaseCatalog.addDependency("@dbx-tools/rust-binary", {
+    target: binary,
+    kind: "generated",
+    propagation: "always",
+    publishOrder: true,
+  });
+}
 root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
 new BrandPackageAssets(root);

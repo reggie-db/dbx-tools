@@ -36,12 +36,12 @@
     },
     {
       "name": "@dbx-tools/core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "name": "@dbx-tools/test-polyglot",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "test"
     }
   ],

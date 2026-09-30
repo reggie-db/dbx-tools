@@ -54,7 +54,7 @@ describe("GraphitiPlugin routes", () => {
       dependencies?: Record<string, string>;
     };
 
-    assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], "workspace:*");
+    assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], "workspace:^");
     assert.equal(manifest.dependencies?.["@dbx-tools/cli"], undefined);
   });
 

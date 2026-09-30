@@ -209,7 +209,7 @@ export async function publishNpmArchives(options: {
   readonly directory: string;
   readonly dryRun?: boolean;
   readonly registry?: string;
-  readonly version: string;
+  readonly version?: string;
 }): Promise<void> {
   const directory = resolve(options.directory);
   const archives = readdirSync(directory)
@@ -220,7 +220,7 @@ export async function publishNpmArchives(options: {
 
   for (const archive of archives) {
     const local = readNpmArchiveIdentity(archive);
-    if (local.version !== options.version) {
+    if (options.version && local.version !== options.version) {
       throw new Error(
         `npm archive ${archive} carries ${local.version}, expected ${options.version}`,
       );
@@ -257,11 +257,11 @@ if (import.meta.main) {
   const program = new Command();
   program
     .requiredOption("--directory <path>", "Directory containing npm archives")
-    .requiredOption("--version <version>", "Exact npm release version")
+    .option("--version <version>", "Expected npm release version")
     .option("--registry <url>", "npm registry URL")
     .option("--dry-run", "Validate archives without publishing")
     .action(
-      (options: { directory: string; dryRun?: boolean; registry?: string; version: string }) =>
+      (options: { directory: string; dryRun?: boolean; registry?: string; version?: string }) =>
         publishNpmArchives(options),
     );
   await program.parseAsync();

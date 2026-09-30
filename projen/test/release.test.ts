@@ -327,7 +327,7 @@ describe("release task contracts", () => {
   it("publishes reviewed versions without repairing manifests", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.doesNotMatch(driver, /--stamp-only|pm", "pkg", "set/);
-    assert.ok(driver.includes("workspace manifests do not all match release version"));
+    assert.ok(driver.includes("workspace manifests do not match the reviewed release plan"));
   });
 });
 
@@ -477,6 +477,31 @@ describe("optional Node release stage", () => {
       assert.equal(existsSync(join(disabledOutdir, ".github/workflows/release.yml")), false);
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("generates Release Please planning without allocating Rust jobs for Node-only roots", () => {
+    const independentOutdir = mkdtempSync(join(tmpdir(), "release-independent-"));
+    try {
+      writeFileSync(join(independentOutdir, ".release-please-manifest.json"), "{}\n");
+      const project = new DBXToolsNodeProject({
+        name: "independent-release-fixture",
+        outdir: independentOutdir,
+        github: true,
+        defaultTagMixins: false,
+        versioningMode: "independent",
+      });
+      project.synth();
+      const workflow = readWorkflow(independentOutdir);
+      assert.ok(workflow.jobs["release-please"]);
+      assert.ok(workflow.jobs["release-plan"]);
+      assert.ok(workflow.jobs["publish-node"]);
+      assert.ok(workflow.jobs["publication-complete"]);
+      assert.equal("verify-context" in workflow.jobs, false);
+      assert.equal("rust-build" in workflow.jobs, false);
+      assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");
+    } finally {
+      rmSync(independentOutdir, { recursive: true, force: true });
     }
   });
 });

@@ -222,9 +222,13 @@ const testNodeFacade = ({
 };
 
 /** Resolve workspace and generated catalog protocols for a publishable facade. */
-const facadeDependency = (name, dependency, version, catalog) => {
+const facadeDependency = (name, dependency, catalog, workspaceVersions) => {
   if (typeof dependency !== "string") return dependency;
-  if (dependency.startsWith("workspace:")) return version;
+  if (dependency.startsWith("workspace:")) {
+    const version = workspaceVersions.get(name);
+    if (!version) throw new Error(`Missing workspace version for ${name}`);
+    return dependency === "workspace:*" ? version : `${dependency.slice("workspace:".length)}${version}`;
+  }
   if (!dependency.startsWith("catalog:")) return dependency;
   const resolved = catalog[name];
   if (!resolved) throw new Error(`Missing root catalog entry for ${name}`);
@@ -344,6 +348,7 @@ const packageNodeFacade = ({ output, nodeDirectory, nodePackage, version, native
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   const workspaceManifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const catalog = workspaceManifest.catalog ?? {};
+  const workspaceVersions = localWorkspacePackages();
   manifest.version = version;
   manifest.private = false;
   manifest.license = manifest.license === "UNLICENSED" ? "Apache-2.0" : manifest.license;
@@ -353,7 +358,7 @@ const packageNodeFacade = ({ output, nodeDirectory, nodePackage, version, native
   manifest.dependencies = Object.fromEntries(
     Object.entries(manifest.dependencies ?? {}).map(([name, dependency]) => [
       name,
-      facadeDependency(name, dependency, version, catalog),
+      facadeDependency(name, dependency, catalog, workspaceVersions),
     ]),
   );
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

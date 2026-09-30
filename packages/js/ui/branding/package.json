@@ -31,7 +31,7 @@
     "react-dom": "catalog:"
   },
   "dependencies": {
-    "@dbx-tools/shared-core": "workspace:*"
+    "@dbx-tools/shared-core": "workspace:^"
   },
   "license": "Apache-2.0",
   "publishConfig": {

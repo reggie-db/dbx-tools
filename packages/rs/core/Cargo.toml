@@ -1,10 +1,8 @@
 
 [package]
 name = "dbx-tools-core"
+version = "0.6.229"
 description = "Databricks authentication, flexible API requests, Lakebase parsing, caching, and filesystem primitives"
-
-  [package.version]
-  workspace = true
 
   [package.edition]
   workspace = true

@@ -189,6 +189,7 @@
             "bun",
             "update",
             "@types/node",
+            "@types/semver",
             "constructs",
             "projen",
             "tsoa",
@@ -202,6 +203,8 @@
             "is-identifier",
             "openapi-typescript",
             "oxc-parser",
+            "release-please",
+            "semver",
             "smol-toml",
             "ts-to-zod",
             "yaml"

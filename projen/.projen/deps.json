@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "@types/semver",
+      "version": "^7.7.1",
+      "type": "build"
+    },
+    {
       "name": "constructs",
       "version": "^10.0.0",
       "type": "build"
@@ -31,17 +36,17 @@
     },
     {
       "name": "@dbx-tools/core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/path",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "runtime"
     },
     {
@@ -80,8 +85,18 @@
       "type": "runtime"
     },
     {
+      "name": "release-please",
+      "version": "17.11.2",
+      "type": "runtime"
+    },
+    {
+      "name": "semver",
+      "version": "^7.7.3",
+      "type": "runtime"
+    },
+    {
       "name": "smol-toml",
-      "version": "^1.7.1",
+      "version": "1.8.0",
       "type": "runtime"
     },
     {

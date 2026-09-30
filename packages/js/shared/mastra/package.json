@@ -24,8 +24,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/shared-genie": "workspace:*",
-    "@dbx-tools/shared-model": "workspace:*",
+    "@dbx-tools/shared-genie": "workspace:^",
+    "@dbx-tools/shared-model": "workspace:^",
     "zod": "catalog:"
   },
   "main": "index.ts",

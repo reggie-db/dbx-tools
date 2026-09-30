@@ -12,7 +12,7 @@ date and final status.
 
 ## Active plans
 
-No active plans.
+No active enhancement plans.
 
 ## Cross-repository suggestions
 

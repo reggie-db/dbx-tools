@@ -36,16 +36,6 @@
         }
       ]
     },
-    "bump": {
-      "name": "bump",
-      "description": "Increment VERSION and synchronize generated workspace versions",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v",
-          "receiveArgs": true
-        }
-      ]
-    },
     "clean": {
       "name": "clean",
       "steps": [
@@ -323,10 +313,29 @@
     },
     "release": {
       "name": "release",
-      "description": "Prepare, validate, locally publish, and open a reviewed release PR",
+      "description": "Refresh independent release PRs, tags, and GitHub Releases",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-please.ts --target-branch \"main\"",
+          "receiveArgs": true
+        }
+      ]
+    },
+    "release:bootstrap": {
+      "name": "release:bootstrap",
+      "description": "Bootstrap Release Please state from release units",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-bootstrap.ts"
+        }
+      ]
+    },
+    "release:plan": {
+      "name": "release:plan",
+      "description": "Build the affected release plan",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-plan.ts",
           "receiveArgs": true
         }
       ]
@@ -407,7 +416,7 @@
     },
     "version:check": {
       "name": "version:check",
-      "description": "Verify every package and generated barrel matches VERSION",
+      "description": "Verify every package against its release unit",
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/version-check.ts"

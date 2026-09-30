@@ -29,6 +29,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { releaseCatalog } from "@dbx-tools/projen";
 import { parse, stringify } from "yaml";
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
@@ -39,14 +40,22 @@ const pkg = JSON.parse(readFileSync(join(serverDir, "package.json"), "utf8")) as
   string,
   unknown
 >;
-const version = readFileSync(join(repoRoot, "VERSION"), "utf8").trim();
-if (!/^\d+\.\d+\.\d+$/.test(version) || version === "0.0.0") {
-  throw new Error(`invalid root workspace version: ${version || "<empty>"}`);
+const version = typeof pkg.version === "string" ? pkg.version : "";
+if (!/^\d+\.\d+\.\d+$/.test(version)) {
+  throw new Error(`invalid example package version: ${version || "<empty>"}`);
 }
-if (pkg.version !== version) {
-  throw new Error(
-    `example package version ${String(pkg.version)} does not match root workspace version ${version}`,
+const releaseGraph = JSON.parse(
+  readFileSync(join(repoRoot, ".projen/release-units.json"), "utf8"),
+) as releaseCatalog.ReleaseUnitGraph;
+const releaseVersions = new Map(releaseGraph.units.map((unit) => [unit.id, unit.version]));
+
+function releaseVersion(identity: string): string {
+  const project = releaseGraph.projects.find(
+    (candidate) => candidate.identity === identity && candidate.unit !== undefined,
   );
+  const resolved = project?.unit ? releaseVersions.get(project.unit) : undefined;
+  if (!resolved) throw new Error(`no release unit version for ${identity}`);
+  return resolved;
 }
 
 // The root catalog: `catalog:` specifiers resolve to these concrete versions.
@@ -62,7 +71,9 @@ function resolveDeps(deps: Record<string, string> | undefined): Record<string, s
   const out: Record<string, string> = {};
   for (const [name, spec] of Object.entries(deps ?? {})) {
     if (spec.startsWith("workspace:")) {
-      out[name] = name.startsWith("@dbx-tools/") ? version : spec.replace("workspace:", "");
+      out[name] = name.startsWith("@dbx-tools/")
+        ? releaseVersion(name)
+        : spec.replace("workspace:", "");
     } else if (spec === "catalog:") {
       const resolved = catalog[name];
       if (!resolved) throw new Error(`no catalog entry for ${name}`);
@@ -107,7 +118,10 @@ if (existsSync(join(serverDir, "shared")))
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
 writeFileSync(join(outDir, "package.json"), `${JSON.stringify(deployPkg, null, 2)}\n`);
 writeFileSync(join(outDir, "pnpm-workspace.yaml"), stringify(deployWorkspace));
-writeFileSync(join(outDir, "requirements.txt"), `dbx-tools-graphiti==${version}\n`);
+writeFileSync(
+  join(outDir, "requirements.txt"),
+  `dbx-tools-graphiti==${releaseVersion("dbx-tools-graphiti")}\n`,
+);
 cpSync(join(serverDir, "app.yaml"), join(outDir, "app.yaml"));
 cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 

@@ -21,7 +21,7 @@
     },
     {
       "name": "@dbx-tools/test-polyglot",
-      "version": "workspace:*",
+      "version": "workspace:^",
       "type": "test"
     }
   ],

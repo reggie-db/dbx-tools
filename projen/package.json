@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
+    "@types/semver": "^7.7.1",
     "constructs": "^10.0.0",
     "projen": "^0.101.6",
     "tsoa": "^6.6.0",
@@ -25,9 +26,9 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
-    "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/path": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*",
+    "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/path": "workspace:^",
+    "@dbx-tools/shared-core": "workspace:^",
     "commander": "^15.0.0",
     "concurrently": "^10.0.3",
     "constructs": "^10.6.0",
@@ -35,7 +36,9 @@
     "openapi-typescript": "^7.13.0",
     "oxc-parser": "^0.90.0",
     "projen": "^0.101.16",
-    "smol-toml": "^1.7.1",
+    "release-please": "17.11.2",
+    "semver": "^7.7.3",
+    "smol-toml": "1.8.0",
     "ts-to-zod": "^5.1.0",
     "yaml": "^2.9.0"
   },

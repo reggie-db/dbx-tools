@@ -5,7 +5,6 @@
  */
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { resolve as resolvePath } from "node:path";
 import { promisify } from "node:util";
@@ -38,6 +37,7 @@ import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";
 import concurrently, { type Command, type ConcurrentlyResult } from "concurrently";
 import type express from "express";
+import { GRAPHITI_PYTHON_VERSION } from "./_python-runtime.ts";
 import {
   GRAPHITI_CONFIG_SCHEMA,
   resolveGraphitiConfig,
@@ -47,9 +47,6 @@ import {
 
 const LAKEBASE_MANIFEST = appkitPlugin.data(lakebase).plugin.manifest;
 const MODEL_PROXY_RELEASE_BINARY = rustReleaseBinaryCommand("model-proxy");
-const PACKAGE_VERSION = (
-  createRequire(import.meta.url)("@dbx-tools/appkit-graphiti/package.json") as { version: string }
-).version;
 const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
@@ -401,7 +398,7 @@ export async function ensureGraphitiPython(
   try {
     await run(python, [
       "-c",
-      `import importlib.metadata; assert importlib.metadata.version('dbx-tools-graphiti') == '${PACKAGE_VERSION}'`,
+      `import importlib.metadata; assert importlib.metadata.version('dbx-tools-graphiti') == '${GRAPHITI_PYTHON_VERSION}'`,
     ]);
   } catch {
     try {
@@ -422,7 +419,7 @@ export async function ensureGraphitiPython(
       "--upgrade",
       "--user",
       "--break-system-packages",
-      `dbx-tools-graphiti==${PACKAGE_VERSION}`,
+      `dbx-tools-graphiti==${GRAPHITI_PYTHON_VERSION}`,
     ]);
   }
 }
