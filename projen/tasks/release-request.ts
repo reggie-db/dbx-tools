@@ -153,22 +153,32 @@ function run(root: string, args: string[]): void {
   });
 }
 
+/** Restore option text after Projen forwards task arguments without shell quoting. */
+function optionText(values?: readonly string[]): string | undefined {
+  return values?.join(" ");
+}
+
 if (import.meta.main) {
   await new Command()
     .option("--base <branch>", "release target branch", "main")
-    .option("--message <message>", "commit message for uncommitted source changes")
-    .option("--notes <notes>", "custom release notes")
+    .option("--message <message...>", "commit message for uncommitted source changes")
+    .option("--notes <notes...>", "custom release notes")
     .option("--notes-file <path>", "read custom release notes from a file")
     .action(
-      async (options: { base: string; message?: string; notes?: string; notesFile?: string }) => {
+      async (options: {
+        base: string;
+        message?: string[];
+        notes?: string[];
+        notesFile?: string;
+      }) => {
         if (options.notes && options.notesFile) {
           throw new Error("Use --notes or --notes-file, not both");
         }
         await prepareReleaseRequest({
           root: project.root() ?? process.cwd(),
           baseBranch: options.base,
-          message: options.message,
-          notes: options.notes,
+          message: optionText(options.message),
+          notes: optionText(options.notes),
           notesFile: options.notesFile,
         });
       },
