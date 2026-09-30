@@ -800,10 +800,24 @@ function gitReleaseFiles(root: string, paths: readonly string[]): string[] | und
       .filter(Boolean)
       .map((path) => resolve(root, path))
       .filter((path) => existsSync(path))
+      .filter((path) => paths.some((sourcePath) => trackedReleaseFile(sourcePath, path)))
       .sort();
   } catch {
     return undefined;
   }
+}
+
+function trackedReleaseFile(sourcePath: string, path: string): boolean {
+  const sourceRelative = toPosix(relative(sourcePath, path));
+  if (sourceRelative.startsWith("../") || sourceRelative === "..") return false;
+  const parts = sourceRelative.split("/");
+  const file = parts.pop();
+  if (!file) return false;
+  if (parts.some((part) => IGNORED_DIRECTORIES.has(part))) return false;
+  if (IGNORED_FILES.has(file) || file.endsWith(".lock") || file.startsWith("tsconfig")) {
+    return false;
+  }
+  return sourceRelative !== "index.ts";
 }
 
 function releaseFiles(path: string): string[] {

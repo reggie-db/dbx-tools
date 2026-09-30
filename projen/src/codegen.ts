@@ -67,6 +67,16 @@ interface CodegenInput {
   name: string;
 }
 
+function packageName(dir: string): string {
+  const name = readPackageManifest(dir)?.name;
+  return typeof name === "string" && name.length > 0 ? name : basename(dir);
+}
+
+function sourceLabel(source: string): string {
+  const nodeModulesPrefix = "node_modules/";
+  return source.startsWith(nodeModulesPrefix) ? source.slice(nodeModulesPrefix.length) : source;
+}
+
 /** Read a package's `package.json` `codegen.inputs`, or `undefined` if absent. */
 function codegenInputs(dir: string): string[] | undefined {
   const codegen = readPackageManifest(dir)?.codegen;
@@ -282,6 +292,7 @@ function generatePackage(
 ): string {
   const parsed = inputs.map(parseInputArg);
   const srcDir = resolve(dir, "src");
+  const destinationPackage = packageName(dir);
   mkdirSync(srcDir, { recursive: true });
 
   // Remove prior generated modules (read-only + our header) so a dropped input
@@ -295,12 +306,13 @@ function generatePackage(
     }
   }
 
-  let warnings = 0;
   for (const input of parsed) {
     const sourcePath = resolveInputSource(input.source, dir, projectRoot);
     if (!existsSync(sourcePath)) {
       throw new Error(`codegen input not found: ${input.source}`);
     }
+    const destination = `${destinationPackage}/src/${input.name}.ts`;
+    const source = sourceLabel(input.source);
 
     const sourceText = preprocess(stripImports(tsRuntime, sourcePath));
     const { getZodSchemasFile, getInferredTypes, errors } = generate({
@@ -310,8 +322,7 @@ function generatePackage(
       keepComments: true,
     });
     if (errors.length) {
-      warnings += errors.length;
-      for (const err of errors) logger.warn(`  ! ${err}`);
+      for (const err of errors) logger.warn(`${destination} from ${source}: ${err}`);
     }
 
     // ts-to-zod adds an import line only when the source references external
@@ -324,11 +335,12 @@ function generatePackage(
     makeWritable(outPath);
     writeFileSync(outPath, content);
     makeReadonly(outPath);
+    logger.success(
+      `generated ${destination} from ${source}` +
+        (errors.length ? ` (${errors.length} warning(s))` : ""),
+    );
   }
 
-  logger.success(
-    `${basename(dir)}: ${parsed.length} module(s)` + (warnings ? ` (${warnings} warning(s))` : ""),
-  );
   return dir;
 }
 

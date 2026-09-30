@@ -110,6 +110,21 @@ export function releasePublishCondition(stage: Exclude<ReleaseStage, "all">): st
   return `\${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == '${stage}')) }}`;
 }
 
+/** Enable native auto-merge or merge immediately when the repository disables it. */
+function mergePullRequest(reference: "$PR" | "$BRANCH"): string[] {
+  return [
+    `if ! MERGE_ERROR="$(gh pr merge "${reference}" --auto --merge 2>&1)"; then`,
+    '  if grep -qi "auto merge is not allowed" <<<"$MERGE_ERROR"; then',
+    '    echo "::warning::GitHub auto-merge is disabled; merging immediately"',
+    `    gh pr merge "${reference}" --merge`,
+    "  else",
+    '    echo "$MERGE_ERROR" >&2',
+    "    exit 1",
+    "  fi",
+    "fi",
+  ];
+}
+
 /** Download release artifacts from this run or a verified earlier run. */
 export function releaseArtifactSteps(options: {
   readonly currentName: string;
@@ -419,7 +434,10 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
       {
         name: "Reconcile generated release PR files",
         if: "${{ steps.release.outputs.prs_created == 'true' }}",
-        env: { RELEASE_PRS: "${{ steps.release.outputs.prs }}" },
+        env: {
+          GH_TOKEN: "${{ github.token }}",
+          RELEASE_PRS: "${{ steps.release.outputs.prs }}",
+        },
         shell: "bash",
         run: [
           'BRANCH="$(jq -r \'.[0].headBranchName\' <<<"$RELEASE_PRS")"',
@@ -438,6 +456,7 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
           '  git commit -m "chore: reconcile release metadata"',
           '  git push origin "HEAD:$BRANCH"',
           "fi",
+          ...mergePullRequest("$BRANCH"),
         ].join("\n"),
       },
     ],
@@ -490,7 +509,6 @@ function configureReleaseRequestWorkflow(
           "fi",
           'echo "requested=true" >> "$GITHUB_OUTPUT"',
           'echo "branch=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"',
-          'echo "approve=$(sed -n \'s/^Release-Approve: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
           'echo "notes_path=$(sed -n \'s/^Release-Notes-Path: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
           'echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"',
         ].join("\n"),
@@ -504,7 +522,6 @@ function configureReleaseRequestWorkflow(
           BASE_BRANCH: baseBranch,
           TITLE: "${{ steps.request.outputs.title }}",
           NOTES_PATH: "${{ steps.request.outputs.notes_path }}",
-          APPROVE: "${{ steps.request.outputs.approve }}",
         },
         shell: "bash",
         run: [
@@ -518,7 +535,7 @@ function configureReleaseRequestWorkflow(
           '  gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"',
           '  PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number\')"',
           "fi",
-          'if [ "$APPROVE" = "true" ]; then gh pr merge "$PR" --auto --merge; fi',
+          ...mergePullRequest("$PR"),
         ].join("\n"),
       },
     ],
@@ -727,6 +744,7 @@ function addIndependentBranchSyncJob(
   project: DBXToolsJavaScriptProject,
   branch: string,
 ): void {
+  const releaseBranch = projectReleaseBranch(project);
   workflow.addJob("sync-release-branch", {
     if: "${{ always() && github.event_name == 'push' && needs['publication-complete'].result == 'success' }}",
     needs: ["publication-complete"],
@@ -746,22 +764,23 @@ function addIndependentBranchSyncJob(
       {
         name: `Safely sync ${branch}`,
         shell: "bash",
-        env: { SOURCE_BRANCH: branch },
+        env: { SOURCE_BRANCH: branch, RELEASE_BRANCH: releaseBranch },
         run: [
           'if ! git ls-remote --exit-code --heads origin "refs/heads/$SOURCE_BRANCH" >/dev/null 2>&1; then',
           '  echo "source branch $SOURCE_BRANCH no longer exists; nothing to sync"',
           "  exit 0",
           "fi",
           'git fetch origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"',
-          'if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" HEAD; then',
-          '  git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
-          'elif git merge-base --is-ancestor HEAD "origin/$SOURCE_BRANCH"; then',
+          'git fetch origin "refs/heads/$RELEASE_BRANCH:refs/remotes/origin/$RELEASE_BRANCH"',
+          'if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" "origin/$RELEASE_BRANCH"; then',
+          '  git push origin "refs/remotes/origin/$RELEASE_BRANCH:refs/heads/$SOURCE_BRANCH"',
+          'elif git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "origin/$SOURCE_BRANCH"; then',
           '  echo "source branch $SOURCE_BRANCH already contains released main"',
           "else",
           '  git config user.name "github-actions[bot]"',
           '  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
           '  git switch --force-create "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"',
-          '  if git merge --no-ff --no-edit "$GITHUB_SHA"; then',
+          '  if git merge --no-ff --no-edit "origin/$RELEASE_BRANCH"; then',
           '    git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
           "  else",
           '    SAFE_GENERATED="true"',

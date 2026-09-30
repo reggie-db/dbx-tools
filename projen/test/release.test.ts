@@ -507,12 +507,21 @@ describe("optional Node release stage", () => {
       assert.equal(sync?.needs, "publication-complete");
       const syncScript = step(sync!, "Safely sync dev").run ?? "";
       assert.match(syncScript, /merge-base --is-ancestor/);
+      assert.match(syncScript, /origin\/\$RELEASE_BRANCH/);
       assert.match(syncScript, /git merge --no-ff --no-edit/);
       assert.match(syncScript, /git merge --abort/);
       assert.match(syncScript, /no longer exists/);
       assert.equal("verify-context" in workflow.jobs, false);
       assert.equal("rust-build" in workflow.jobs, false);
       assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");
+      assert.match(
+        step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "",
+        /gh pr merge "\$BRANCH" --auto --merge/,
+      );
+      assert.match(
+        step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "",
+        /GitHub auto-merge is disabled/,
+      );
       const requestWorkflow = readWorkflow(independentOutdir, "release-request");
       const requestJob = requestWorkflow.jobs.request!;
       assert.match(
@@ -525,11 +534,19 @@ describe("optional Node release stage", () => {
       );
       assert.match(
         step(requestJob, "Create or update source pull request").run ?? "",
+        /GitHub auto-merge is disabled/,
+      );
+      assert.match(
+        step(requestJob, "Create or update source pull request").run ?? "",
         /NOTES_PATH/,
       );
       assert.doesNotMatch(
         step(requestJob, "Create or update source pull request").run ?? "",
         /Base64/,
+      );
+      assert.doesNotMatch(
+        step(requestJob, "Create or update source pull request").run ?? "",
+        /APPROVE/,
       );
       const tasks = JSON.parse(
         readFileSync(join(independentOutdir, ".projen/tasks.json"), "utf8"),

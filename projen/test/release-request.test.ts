@@ -66,6 +66,7 @@ describe("release request preparation", () => {
         message,
         /^Release-Notes-Path: \.release-notes\/requests\/feature-logging\.md$/m,
       );
+      assert.doesNotMatch(message, /Release-Approve/);
       assert.doesNotMatch(message, /Base64/);
 
       const repeated = await prepareReleaseRequest({

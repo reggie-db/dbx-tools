@@ -13,7 +13,6 @@ const logger = log.logger("projen:release-request");
 export interface PrepareReleaseRequestOptions {
   readonly root: string;
   readonly baseBranch: string;
-  readonly approve?: boolean;
   readonly message?: string;
   readonly notes?: string;
   readonly notesFile?: string;
@@ -94,12 +93,11 @@ export async function prepareReleaseRequest(
     [
       "Release-Request: true",
       `Release-Source-Branch: ${branch}`,
-      `Release-Approve: ${options.approve === true}`,
       `Release-Notes-Path: ${notesPath}`,
     ].join("\n"),
   ]);
   if (options.push !== false) run(root, ["push", "--set-upstream", "origin", branch]);
-  logger.success("release request pushed", { branch, approve: options.approve === true });
+  logger.success("release request pushed", { branch });
   return true;
 }
 
@@ -155,19 +153,22 @@ function run(root: string, args: string[]): void {
   });
 }
 
+/** Restore option text after Projen forwards task arguments without shell quoting. */
+function optionText(values?: readonly string[]): string | undefined {
+  return values?.join(" ");
+}
+
 if (import.meta.main) {
   await new Command()
     .option("--base <branch>", "release target branch", "main")
-    .option("--approve", "enable merge-queue or auto-merge for the source PR")
-    .option("--message <message>", "commit message for uncommitted source changes")
-    .option("--notes <notes>", "custom release notes")
+    .option("--message <message...>", "commit message for uncommitted source changes")
+    .option("--notes <notes...>", "custom release notes")
     .option("--notes-file <path>", "read custom release notes from a file")
     .action(
       async (options: {
         base: string;
-        approve?: boolean;
-        message?: string;
-        notes?: string;
+        message?: string[];
+        notes?: string[];
         notesFile?: string;
       }) => {
         if (options.notes && options.notesFile) {
@@ -176,9 +177,8 @@ if (import.meta.main) {
         await prepareReleaseRequest({
           root: project.root() ?? process.cwd(),
           baseBranch: options.base,
-          approve: options.approve,
-          message: options.message,
-          notes: options.notes,
+          message: optionText(options.message),
+          notes: optionText(options.notes),
           notesFile: options.notesFile,
         });
       },

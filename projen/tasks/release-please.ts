@@ -112,7 +112,6 @@ if (import.meta.main) {
       "Release Please version manifest",
       ".release-please-manifest.json",
     )
-    .option("--approve", "compatibility alias for the Release Please release pass")
     .action(
       async (options: {
         owner?: string;

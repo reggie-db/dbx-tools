@@ -1999,15 +1999,17 @@ What is configured, and why:
 from `main`. Otherwise it commits dirty source, stores custom `--notes` /
 `--notes-file` content or a bounded Cursor, Codex, Claude, then Git fallback in
 `.release-notes/requests/<branch>.md`, adds a request commit, and pushes. The
-generated workflow creates or updates the source PR; `--approve` enables
-auto-merge after checks. `bun run release:refresh` invokes Release Please
-directly for operator recovery.
+generated workflow creates or updates the source PR and enables auto-merge after
+checks. When the repository does not enable GitHub's auto-merge setting, the
+workflow performs a normal merge instead. `bun run release:refresh` invokes
+Release Please directly for operator recovery.
 
 After the source PR merges, Release Please refreshes one combined component
 release PR from conventional commits and the generated release-unit graph. The
 workflow reconciles Projen-owned manifests, copies readable request notes into
-component-qualified summaries, and deletes consumed request Markdown before
-review.
+component-qualified summaries, deletes consumed request Markdown, and enables
+auto-merge after checks. A merge with no affected release units creates no
+release PR or publication work.
 
 Public npm, PyPI, Cargo, and GitHub publication consume the same affected plan
 and remain idempotent per component, so recovery does not replay unrelated
