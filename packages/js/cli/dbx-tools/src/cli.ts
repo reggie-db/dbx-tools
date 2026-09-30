@@ -1,7 +1,6 @@
 /**
  * Commander entry for `dbx` and its `dbx-tools` alias.
  *
- * `dev` bootstraps or repairs a workspace and forwards to projen.
  * `appkit` provides AppKit environment helpers.
  * `auth` manages Databricks OAuth and access tokens.
  * `tunnel` runs a public portr tunnel with passwordless access gating.
@@ -14,14 +13,6 @@
 import { basename } from "node:path";
 import { Command } from "commander";
 import {
-  bootstrapWorkspace,
-  ensureEngineCurrent,
-  runInitialSynth,
-  seedToolchain,
-} from "./bootstrap.ts";
-import { ensureWorkspaceReady, runBun, runProjen } from "./bun.ts";
-import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root.ts";
-import {
   runRustReleaseBinary,
   rustReleaseBinaryCommands,
   type RustReleaseBinaryCommand,
@@ -29,37 +20,6 @@ import {
 
 /** Commands the bin exposes, and the names help is rendered under. */
 const PROGRAM_NAMES = ["dbx", "dbx-tools"] as const;
-
-/**
- * Prepare the workspace at `root`, then run projen (via bun) with `projenArgs`.
- *
- * Three cases, in order:
- *   - no `.projenrc.ts` at all -> full bootstrap (scaffold + install + synth),
- *     which already runs the initial synth; nothing more to forward.
- *   - a `.projenrc.ts` but the engine/toolchain isn't installed (e.g. a freshly
- *     copied project whose generated files + manifests are gitignored) -> seed
- *     the toolchain, then run the INITIAL synth directly (the projen tasks the
- *     args would name, like `sync`, don't exist until `.projenrc.ts` has run
- *     once), and install. Don't forward `projenArgs` - the synth is the work.
- *   - otherwise (established workspace) -> ensure deps, bring the engine up to
- *     this CLI's version, then forward to projen.
- */
-export async function prepareAndRunProjen(projenArgs: string[], startDir?: string): Promise<void> {
-  const root = await findWorkspaceRoot(startDir);
-  if (needsBootstrap(root)) {
-    bootstrapWorkspace(root);
-    return;
-  }
-  if (needsToolchain(root)) {
-    seedToolchain(root);
-    runInitialSynth(root);
-    runBun(["install"], root);
-    return;
-  }
-  ensureWorkspaceReady(root);
-  ensureEngineCurrent(root);
-  runProjen(projenArgs, root);
-}
 
 /**
  * Mount `name` as a command that captures every following token verbatim and
@@ -104,21 +64,10 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   const program = new Command()
     .name(name)
     .description(
-      "Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and native proxies",
+      "Databricks developer tools: AppKit env, auth, tunnels, and native proxies",
     )
     .showHelpAfterError()
     .helpOption("-h, --help", `Show ${name} help`);
-
-  program
-    .command("dev")
-    .description("Bootstrap or repair a dbx-tools workspace, then forward to projen")
-    .argument("[projenArgs...]", "projen task and arguments (e.g. sync --watch)")
-    .allowUnknownOption()
-    .allowExcessArguments()
-    .helpOption(false)
-    .action(async (projenArgs: string[]) => {
-      await prepareAndRunProjen(projenArgs);
-    });
 
   addForwardedCommand(
     program,

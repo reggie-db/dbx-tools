@@ -1,0 +1,81 @@
+{
+  "bun": "1.3.14",
+  "python": "3.12.13",
+  "uv": "0.11.28",
+  "tools": {
+    "buck2": {
+      "tag": "2026-09-15",
+      "assets": {
+        "buck2-aarch64-apple-darwin.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-aarch64-apple-darwin.zst",
+          "sha256": "aacdf7cabe34b9b5dc74866b8dcf7410cdbae3ad2dccef45b7ee9851cb781528"
+        },
+        "buck2-aarch64-pc-windows-msvc.exe.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-aarch64-pc-windows-msvc.exe.zst",
+          "sha256": "58edb0718e3b89a3f875129cc72640f2f4cb80487ec42057eb88447519dff0cf"
+        },
+        "buck2-aarch64-unknown-linux-gnu.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-aarch64-unknown-linux-gnu.zst",
+          "sha256": "e35027a8e3f702fd9f080074ac64ebc80e2a0fe8d669d46d85afc31b0ec4a463"
+        },
+        "buck2-aarch64-unknown-linux-musl.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-aarch64-unknown-linux-musl.zst",
+          "sha256": "d416933520ffdcd05303c0dd22ec368047fb64e8781b5ad10485f584a6fbc694"
+        },
+        "buck2-riscv64gc-unknown-linux-gnu.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-riscv64gc-unknown-linux-gnu.zst",
+          "sha256": "6572c8ed2631b2c392a96d37206eb2d4ccde78301b25c33f6e7273f2849b559d"
+        },
+        "buck2-x86_64-apple-darwin.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-x86_64-apple-darwin.zst",
+          "sha256": "af1e51f198ecccfc41b9d960a2c79bb16f01e238f7169a86989caed9440fba0d"
+        },
+        "buck2-x86_64-pc-windows-msvc.exe.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-x86_64-pc-windows-msvc.exe.zst",
+          "sha256": "1f0619b285ee3cbdc562a38b70f2636f73e8233b2f5156aef93e9e8a00079e2c"
+        },
+        "buck2-x86_64-unknown-linux-gnu.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-x86_64-unknown-linux-gnu.zst",
+          "sha256": "1268fce33fb61273091dd5dd8c60b65de1521a3caa36b88983813e882b7ffd89"
+        },
+        "buck2-x86_64-unknown-linux-musl.zst": {
+          "url": "https://github.com/facebook/buck2/releases/download/2026-09-15/buck2-x86_64-unknown-linux-musl.zst",
+          "sha256": "631eb84a8925d19146e0f5d594b9f2d0b1f0864e63f24e0d5914a75a6a0a4dea"
+        }
+      }
+    },
+    "reindeer": {
+      "tag": "v2026.09.28.00",
+      "assets": {
+        "reindeer-aarch64-apple-darwin.zst": {
+          "url": "https://github.com/facebookincubator/reindeer/releases/download/v2026.09.28.00/reindeer-aarch64-apple-darwin.zst",
+          "sha256": "0089d12d92d21d7881a555c30405ea09db6cb073da85ad80bb37866db2b828d7"
+        },
+        "reindeer-aarch64-unknown-linux-gnu.zst": {
+          "url": "https://github.com/facebookincubator/reindeer/releases/download/v2026.09.28.00/reindeer-aarch64-unknown-linux-gnu.zst",
+          "sha256": "b8eafb90b430738b7c9120a4e23e4767cc84cb77470a41fe77b7011698e71a85"
+        },
+        "reindeer-aarch64-unknown-linux-musl.zst": {
+          "url": "https://github.com/facebookincubator/reindeer/releases/download/v2026.09.28.00/reindeer-aarch64-unknown-linux-musl.zst",
+          "sha256": "81204e38e2ffd8d1c26ff0dec4bf3efcdb26265b2cbba628bc1d443b9b5ce4ef"
+        },
+        "reindeer-x86_64-apple-darwin.zst": {
+          "url": "https://github.com/facebookincubator/reindeer/releases/download/v2026.09.28.00/reindeer-x86_64-apple-darwin.zst",
+          "sha256": "6f39e7e3eef25a864fee2d90952be02eadd8dfd9cdf1fb6869e33f168c53b0fd"
+        },
+        "reindeer-x86_64-pc-windows-msvc.exe.zst": {
+          "url": "https://github.com/facebookincubator/reindeer/releases/download/v2026.09.28.00/reindeer-x86_64-pc-windows-msvc.exe.zst",
+          "sha256": "ca75e7e2d7b21b2a8a4e61ba3b8632cbb07abb9444c795d69bfa2a6363311f5a"
+        },
+        "reindeer-x86_64-unknown-linux-gnu.zst": {
+          "url": "https://github.com/facebookincubator/reindeer/releases/download/v2026.09.28.00/reindeer-x86_64-unknown-linux-gnu.zst",
+          "sha256": "680d790cca6d69e6040e18ae5cba5da6670915ef2b08d3cf2a79f5ae5d6fcdc2"
+        },
+        "reindeer-x86_64-unknown-linux-musl.zst": {
+          "url": "https://github.com/facebookincubator/reindeer/releases/download/v2026.09.28.00/reindeer-x86_64-unknown-linux-musl.zst",
+          "sha256": "170171d918c407dbeed4126a702045bee8ecabd09253df66759a94fcd1751d18"
+        }
+      }
+    }
+  }
+}

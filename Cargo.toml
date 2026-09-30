@@ -5,7 +5,8 @@ members = [
   "packages/rs/google",
   "packages/rs/lakebase-proxy",
   "packages/rs/model",
-  "packages/rs/model-proxy"
+  "packages/rs/model-proxy",
+  "tools/build/ubrn"
 ]
 default-members = [ "packages/rs/lakebase-proxy", "packages/rs/model-proxy" ]
 resolver = "2"
@@ -34,7 +35,6 @@ resolver = "2"
   percent-encoding = "2"
   regex = "1"
   rcgen = "0.14"
-  rustls = "0.23"
   scraper = "0.24"
   serde_json = "1"
   sha2 = "0.10"
@@ -42,7 +42,6 @@ resolver = "2"
   thiserror = "2"
   tokenx-rs = "=0.1.0"
   tokio-postgres = "0.7"
-  tokio-rustls = "0.26"
   tracing = "0.1"
   webpki-roots = "1"
   wiremock = "0.6"
@@ -80,6 +79,11 @@ resolver = "2"
     version = "=0.4.2"
     features = [ "json" ]
 
+    [workspace.dependencies.rustls]
+    version = "0.23"
+    default-features = false
+    features = [ "ring", "std", "tls12" ]
+
     [workspace.dependencies.serde]
     version = "1"
     features = [ "derive" ]
@@ -99,6 +103,11 @@ resolver = "2"
   "sync",
   "time"
 ]
+
+    [workspace.dependencies.tokio-rustls]
+    version = "0.26"
+    default-features = false
+    features = [ "logging", "ring", "tls12" ]
 
     [workspace.dependencies.tokio-util]
     version = "0.7"

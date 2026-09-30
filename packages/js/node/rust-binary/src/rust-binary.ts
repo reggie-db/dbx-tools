@@ -56,7 +56,7 @@ function repositoryName(repository: string): string {
 }
 
 async function packageVersion(): Promise<string> {
-  return (await import("../index.ts")).PACKAGE_VERSION;
+  return (await import("../api.ts")).PACKAGE_VERSION;
 }
 
 function versionedBinaryName(

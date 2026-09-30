@@ -10,7 +10,7 @@ const ENVIRONMENT_KEYS = [
   "DATABRICKS_HOST",
   "DATABRICKS_APP_PORT",
 ] as const;
-const ENTRYPOINT = new URL("../index.ts", import.meta.url).href;
+const ENTRYPOINT = new URL("../api.ts", import.meta.url).href;
 
 function rustDetection(environment: Record<string, string>): boolean {
   const env = { ...process.env };

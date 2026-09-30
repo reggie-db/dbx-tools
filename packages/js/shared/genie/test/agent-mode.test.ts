@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { agentMode } from "../index.ts";
+import { agentMode } from "../api.ts";
 
 describe("Genie Agent Mode contracts", () => {
   it("projects SQL titles, result output, and cancelled status", () => {

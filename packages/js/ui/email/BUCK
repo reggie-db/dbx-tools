@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_ui")
+
+dbx_ui(
+    name = "package",
+    package = "@dbx-tools/ui-email",
+    version = "0.6.229",
+    exports = {"./react":"./src/react/api.ts","./styles.css":"./src/styles.css"},
+    deps = ["//packages/js/shared/core:package","//packages/js/shared/email:package","//packages/js/shared/email-template:package","//packages/js/ui/appkit:package","//packages/js/ui/branding:package"],
+)

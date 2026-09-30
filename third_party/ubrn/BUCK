@@ -1,0 +1,14 @@
+load("//rules:ubrn.bzl", "ubran_libraries")
+
+_VERSION = "0.31.0-6"
+_SOURCE = "ubrn-%s.src" % _VERSION
+_SOURCE_TARGET = ":" + _SOURCE
+
+http_archive(
+    name = _SOURCE,
+    sha256 = "42cc128bad64420ff47514442568c0b5971b34f2ff1d634adbb9b145453670a7",
+    strip_prefix = "uniffi-bindgen-react-native-3dd1cd1353750dc3bfbbf4bb4d4ccde26b0fbd2e",
+    urls = ["https://codeload.github.com/jhugman/uniffi-bindgen-react-native/tar.gz/3dd1cd1353750dc3bfbbf4bb4d4ccde26b0fbd2e"],
+)
+
+ubran_libraries(source = _SOURCE, source_target = _SOURCE_TARGET, version = _VERSION)

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { exec } from "../index.ts";
+import { exec } from "../api.ts";
 
 const MISSING_COMMAND = `dbx-tools-missing-command-${process.pid}`;
 const QUIET_STDIO = {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
-import { PACKAGE_IDENTIFIER, object } from "../index.ts";
+import { PACKAGE_IDENTIFIER, object } from "../api.ts";
 
 describe("object.sequence", () => {
   it("treats a bare string as one scalar value", () => {
@@ -261,7 +261,7 @@ describe("object.isSerializableValue", () => {
 });
 
 await polygotTest(
-  () => import("../index.ts"),
+  () => import("../api.ts"),
   "object",
   (implementation, language) => {
     describe(`object.toStableKey (${language})`, () => {

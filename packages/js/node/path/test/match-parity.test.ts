@@ -80,20 +80,20 @@ describe("scan/watch matching parity", () => {
   it("keeps the same files with only the default ignore groups", async () => {
     assert.deepEqual(await keptByBoth(undefined), [
       "example/skip.ts",
-      "src/index.ts",
+      "src/api.ts",
       "src/keep.ts",
     ]);
   });
 
   it("keeps the same files ignoring a file pattern", async () => {
-    assert.deepEqual(await keptByBoth("**/index.ts"), ["example/skip.ts", "src/keep.ts"]);
+    assert.deepEqual(await keptByBoth("**/api.ts"), ["example/skip.ts", "src/keep.ts"]);
   });
 
   it("keeps the same files ignoring a directory pattern", async () => {
-    assert.deepEqual(await keptByBoth(["**/example/**"]), ["src/index.ts", "src/keep.ts"]);
+    assert.deepEqual(await keptByBoth(["**/example/**"]), ["src/api.ts", "src/keep.ts"]);
   });
 
   it("keeps the same files ignoring multiple patterns", async () => {
-    assert.deepEqual(await keptByBoth(["**/index.ts", "**/example/**"]), ["src/keep.ts"]);
+    assert.deepEqual(await keptByBoth(["**/api.ts", "**/example/**"]), ["src/keep.ts"]);
   });
 });

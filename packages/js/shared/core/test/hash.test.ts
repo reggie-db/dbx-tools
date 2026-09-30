@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
-import { PACKAGE_IDENTIFIER, hash } from "../index.ts";
+import { PACKAGE_IDENTIFIER, hash } from "../api.ts";
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 

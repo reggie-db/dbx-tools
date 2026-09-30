@@ -1,0 +1,4 @@
+load("//rules:bun_binary.bzl", "bun_binary")
+
+bun_binary(name = "javascript", main = "main.ts", deps = ["//packages/js/shared/core:package"], npm = "//third_party/js:zod")
+python_binary(name = "python", main = "main.py", deps = ["//packages/py/core:package"], base_module = "")

@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
 
-import { bundle } from "../index.ts";
+import { bundle } from "../api.ts";
 
 describe("appResources", () => {
   it("checks ancestors first and lazily streams every App resource", () => {

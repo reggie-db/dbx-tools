@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { cwd } from "node:process";
 import { describe, it } from "node:test";
 
-import { project } from "../index.ts";
+import { project } from "../api.ts";
 
 describe("resolveWorkingDirectory", () => {
   it("normalizes blank and current-directory values to process.cwd", () => {

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
 
 await polygotTest(
-  () => import("../index.ts"),
+  () => import("../api.ts"),
   "pgaddress",
   (implementation, language) => {
     describe(`parseAddress (${language})`, () => {

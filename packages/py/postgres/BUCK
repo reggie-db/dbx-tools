@@ -1,0 +1,3 @@
+load("//rules:python.bzl", "dbx_python")
+
+dbx_python(name = "package", deps = ["//packages/py/core:package","//packages/py/core-rs:package","//third_party/python:runtime"])

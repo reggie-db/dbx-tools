@@ -10,7 +10,7 @@ import {
   createPersistentAuthWithStorage,
   DatabricksAuthOptions,
   Storage,
-} from "../index.ts";
+} from "../api.ts";
 
 it("uses the shared auth adapter across native libraries", async () => {
   const calls: string[] = [];

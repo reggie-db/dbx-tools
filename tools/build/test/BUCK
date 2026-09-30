@@ -1,0 +1,3 @@
+load("//rules:testing.bzl", "bun_test")
+
+bun_test(name = "barrels", srcs = ["barrels.test.ts"])

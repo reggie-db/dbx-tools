@@ -1,4 +1,4 @@
-import { canonicalScopes, credentialKey } from "../index.ts";
+import { canonicalScopes, credentialKey } from "../api.ts";
 
 const scopes = canonicalScopes(process.argv.slice(2));
 console.log(

@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/cli-auth",
+    version = "0.6.229",
+    exports = {".":"./api.ts","./cli":"./src/cli.ts"},
+    deps = ["//packages/js/node/core-rs:package","//packages/js/shared/core:package"],
+)

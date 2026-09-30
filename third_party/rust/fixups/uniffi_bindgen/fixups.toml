@@ -1,0 +1,2 @@
+omit_deps = ["toml"]
+extra_deps = [":toml-0.8"]

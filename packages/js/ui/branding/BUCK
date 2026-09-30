@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_ui")
+
+dbx_ui(
+    name = "package",
+    package = "@dbx-tools/ui-branding",
+    version = "0.6.229",
+    exports = {"./react":"./src/react/api.ts","./styles.css":"./src/styles.css","./browser":"./src/browser.ts","./brand-bridge.css":"./src/brand-bridge.css","./assets":"./src/generated/assets.ts","./assets/icon-light.svg":"./src/generated/icon-light.svg","./assets/icon-dark.svg":"./src/generated/icon-dark.svg","./assets/logo-light.svg":"./src/generated/logo-light.svg","./assets/logo-dark.svg":"./src/generated/logo-dark.svg"},
+    deps = ["//packages/js/shared/core:package"],
+)

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { execution } from "../index.ts";
+import { execution } from "../api.ts";
 
 describe("execution.directExecutor", () => {
   it("returns successful values", async () => {

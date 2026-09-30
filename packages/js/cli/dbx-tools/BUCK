@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/cli",
+    version = "0.6.229",
+    exports = {".":"./api.ts","./cli":"./src/cli.ts","./rust-binary":"./src/rust-binary.ts"},
+    deps = ["//packages/js/cli/appkit-env:package","//packages/js/cli/auth:package","//packages/js/cli/tunnel:package","//packages/js/node/core:package","//packages/js/node/rust-binary:package","//packages/js/shared/core:package"],
+)

@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/cli-tunnel",
+    version = "0.6.229",
+    exports = {".":"./api.ts","./app":"./src/app.ts","./cli":"./src/cli.ts","./options":"./src/options.ts","./proxy":"./src/proxy.ts"},
+    deps = ["//packages/js/node/appkit:package","//packages/js/node/auth-gate:package","//packages/js/node/core:package","//packages/js/node/email:package","//packages/js/shared/core:package","//packages/js/shared/email:package","//packages/js/node/tunnel:package"],
+)

@@ -1,0 +1,7 @@
+python_test(
+    name = "python_core",
+    srcs = ["python_core_test.py"],
+    base_module = "",
+    main_module = "python_core_test",
+    deps = ["//packages/py/core:package", "//third_party/python:packaging"],
+)

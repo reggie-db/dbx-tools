@@ -1,0 +1,10 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/model-rs",
+    version = "0.6.229",
+    exports = {".":"./api.ts"},
+    deps = ["//packages/js/node/core-rs:package"],
+    source_dir = "//packages/rs/model:bindings[typescript]",
+)

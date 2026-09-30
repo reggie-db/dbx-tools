@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/demo-appkit-server",
+    version = "0.6.229",
+    exports = {},
+    deps = ["//packages/js/node/appkit:package","//packages/js/node/appkit-graphiti:package","//packages/js/node/appkit-mastra:package","//packages/js/node/appkit-web-search:package","//packages/js/node/core:package","//packages/js/node/databricks:package","//packages/js/node/email:package","//packages/js/node/postgres:package","//packages/js/node/search:package","//packages/js/shared/core:package","//packages/js/node/teams:package","//packages/js/node/tunnel:package"],
+)

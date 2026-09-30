@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { polygotTest } from "@dbx-tools/test-polyglot/polyglot";
 import type { Notification, QueryResult } from "pg";
 
-import { PACKAGE_IDENTIFIER } from "../index.ts";
+import { PACKAGE_IDENTIFIER } from "../api.ts";
 import { PostgresTopicBus } from "../src/topic-bus.ts";
 import { topicBusConstants } from "./support/topic-bus-source.ts";
 
@@ -38,7 +38,7 @@ function fixture() {
 }
 
 await polygotTest(
-  () => import("../index.ts"),
+  () => import("../api.ts"),
   "topicBus",
   (implementation, language) => {
     describe(`channelName (${language})`, () => {

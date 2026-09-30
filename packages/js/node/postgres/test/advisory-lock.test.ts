@@ -33,7 +33,7 @@ function fakePool(calls: Call[], options: { fail?: string } = {}) {
 }
 
 await polygotTest(
-  () => import("../index.ts"),
+  () => import("../api.ts"),
   "advisoryLock",
   (implementation, language) => {
     describe(`advisoryLockId (${language})`, () => {

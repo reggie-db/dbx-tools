@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
-import { PACKAGE_IDENTIFIER, string } from "../index.ts";
+import { PACKAGE_IDENTIFIER, string } from "../api.ts";
 
 const identifierContract = {
   toIdentifier(...input: unknown[]): string {

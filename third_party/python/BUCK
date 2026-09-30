@@ -1,0 +1,5 @@
+load("//rules:uv_pip.bzl", "uv_package")
+
+uv_package(name = "packaging", requirement = "packaging==25.0", lockfile = "packaging.lock")
+
+uv_package(name = "runtime", requirements = ["asyncpg==0.31.0","cyclopts==4.22.5","databricks-sdk==0.123.0","graphiti-core==0.29.3","greenlet==3.5.4","honcho==2.0.0","psycopg[binary]==3.3.4","sqlalchemy==2.0.51"])

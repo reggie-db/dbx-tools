@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/appkit-mastra",
+    version = "0.6.229",
+    exports = {".":"./api.ts"},
+    deps = ["//packages/js/node/appkit:package","//packages/js/node/core:package","//packages/js/node/databricks:package","//packages/js/node/fs:package","//packages/js/node/genie:package","//packages/js/node/model:package","//packages/js/node/model-rs:package","//packages/js/node/path:package","//packages/js/shared/core:package","//packages/js/shared/fs:package","//packages/js/shared/genie:package","//packages/js/shared/mastra:package","//packages/js/shared/model:package"],
+)

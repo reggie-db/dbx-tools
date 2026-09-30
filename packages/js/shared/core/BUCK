@@ -1,0 +1,12 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    kind = "shared",
+    polyglot = True,
+    runtime = "//third_party/js:zod",
+    package = "@dbx-tools/shared-core",
+    version = "0.6.229",
+    exports = {".":"./api.ts"},
+    deps = [],
+)

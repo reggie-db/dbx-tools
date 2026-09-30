@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/shared-mastra",
+    version = "0.6.229",
+    exports = {".":"./api.ts"},
+    deps = ["//packages/js/shared/genie:package","//packages/js/shared/model:package"],
+)

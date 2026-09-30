@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `dbx-tools` bootstraps uninitialized workspaces, then forwards to projen.
+ * Databricks runtime CLI entry point.
  */
 import { runCli } from "../src/cli.ts";
 

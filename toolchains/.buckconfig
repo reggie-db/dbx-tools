@@ -1,0 +1,5 @@
+[cells]
+  toolchains = .
+  root = ..
+  prelude = ../prelude
+  host_tools = ../.buck2/host-tools

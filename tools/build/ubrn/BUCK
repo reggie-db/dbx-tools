@@ -1,0 +1,12 @@
+rust_binary(
+    name = "binary",
+    crate = "dbx_tools_ubrn",
+    crate_root = "src/main.rs",
+    edition = "2021",
+    srcs = glob(["src/**"]),
+    named_deps = {
+        "clap": "//third_party/rust:clap",
+        "ubrn_cli": "//third_party/ubrn:cli",
+    },
+    visibility = ["PUBLIC"],
+)

@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/cli-appkit-env",
+    version = "0.6.229",
+    exports = {".":"./api.ts","./cli":"./src/cli.ts","./env-export":"./src/env-export.ts"},
+    deps = ["//packages/js/node/appkit:package","//packages/js/shared/core:package"],
+)

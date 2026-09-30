@@ -1,0 +1,22 @@
+[cells]
+  root = .
+  prelude = prelude
+  toolchains = toolchains
+  host_tools = .buck2/host-tools
+  none = none
+
+[cell_aliases]
+  config = prelude
+  ovr_config = prelude
+  fbsource = none
+  fbcode = none
+  buck = none
+
+[external_cells]
+  prelude = bundled
+
+[parser]
+  target_platform_detector_spec = target:root//...->prelude//platforms:default target:prelude//...->prelude//platforms:default target:toolchains//...->prelude//platforms:default target:host_tools//...->prelude//platforms:default
+
+[project]
+  ignore = .git, .buck2/bin, node_modules, target, .venv, .worktrees

@@ -14,7 +14,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { json, object, string } from "@dbx-tools/shared-core";
 import { spawn } from "./exec.ts";
 import { resolveWorkingDirectory } from "./project.ts";
-import { project } from "../index.ts";
+import { project } from "../api.ts";
 
 const BUNDLE_FILE_NAMES = new Set(["databricks.yml", "databricks.yaml"]);
 const IGNORED_DIRECTORIES = [

@@ -1,4 +1,4 @@
-import { createGoogleAuth, GoogleAuthOptions } from "../index.ts";
+import { createGoogleAuth, GoogleAuthOptions } from "../api.ts";
 
 const auth = await createGoogleAuth(GoogleAuthOptions.create({}));
 const status = auth.status();

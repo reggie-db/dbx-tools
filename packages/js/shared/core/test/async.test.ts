@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { async } from "../index.ts";
+import { async } from "../api.ts";
 
 describe("async.boundedRetryDelay", () => {
   it("caps an infinite retry sequence at the last configured delay", () => {

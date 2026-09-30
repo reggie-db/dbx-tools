@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/test-polyglot",
+    version = "0.6.229",
+    exports = {".":"./api.ts","./polyglot":"./src/polygot-test.ts","./python":"./src/python-test.ts"},
+    deps = [],
+)

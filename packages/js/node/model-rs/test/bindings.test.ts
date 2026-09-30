@@ -10,7 +10,7 @@ import {
   ModelServingApi,
   ReasoningEffort,
   reasoningEffortNamesByFamily,
-} from "../index.ts";
+} from "../api.ts";
 
 describe("model Rust bindings", () => {
   it("exposes inference protocol selection", () => {

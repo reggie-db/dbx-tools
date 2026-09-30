@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
 
 import { c as createTar } from "tar";
 
-import { bin } from "../index.ts";
+import { bin } from "../api.ts";
 
 /** Zip containing one executable at `nested/tool`. */
 const EXECUTABLE_ZIP =

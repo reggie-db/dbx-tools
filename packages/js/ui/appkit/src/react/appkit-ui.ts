@@ -3,7 +3,7 @@
 // `@dbx-tools/ui-appkit/react` - and resolve AppKit + React from this package's
 // dependencies rather than each consumer's.
 //
-// This lives in a NAMED module (not the `index.ts` barrel) so package discovery
+// This lives in a NAMED module (not the `api.ts` barrel) so package discovery
 // - which ignores barrels + `.css` - still sees `ui-appkit` as a real package.
 
 export * from "@databricks/appkit-ui/react";

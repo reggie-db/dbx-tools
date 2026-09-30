@@ -1,4 +1,4 @@
-import { createPersistentAuth, DatabricksAuthOptions } from "../index.ts";
+import { createPersistentAuth, DatabricksAuthOptions } from "../api.ts";
 
 const auth = await createPersistentAuth(DatabricksAuthOptions.create({ profile: process.argv[2] }));
 console.log(JSON.stringify(auth.status()));

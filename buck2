@@ -1,0 +1,16 @@
+#!/usr/bin/env bun
+import { spawn } from "node:child_process";
+import { nativeTool, prepareHostTools, root } from "./tools/build/bootstrap.ts";
+
+prepareHostTools();
+const child = spawn(await nativeTool("buck2"), process.argv.slice(2), {
+  cwd: root,
+  stdio: ["inherit", "pipe", "pipe"],
+});
+for (const [input, output] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
+  input.setEncoding("utf8");
+  input.on("data", (text) => output.write(text.replace(/\p{Extended_Pictographic}/gu, "")));
+}
+for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));
+child.on("error", (error) => { console.error(error.message); process.exitCode = 1; });
+child.on("exit", (code, signal) => { process.exitCode = code ?? (signal === "SIGINT" ? 130 : 1); });

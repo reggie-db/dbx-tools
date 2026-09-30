@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { Worker } from "node:worker_threads";
 
-import { exec } from "../index.ts";
+import { exec } from "../api.ts";
 import { processLockWorkerOptions, withProcessLock } from "../src/process-lock.ts";
 
 const PKG_ROOT = new URL("..", import.meta.url).pathname;

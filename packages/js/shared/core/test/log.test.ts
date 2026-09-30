@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
-import { log } from "../index.ts";
+import { log } from "../api.ts";
 
 describe("log", () => {
   it("keeps the shared logger free of optional bare imports", async () => {

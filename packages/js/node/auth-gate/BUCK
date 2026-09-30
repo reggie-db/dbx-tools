@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_typescript")
+
+dbx_typescript(
+    name = "package",
+    package = "@dbx-tools/auth-gate",
+    version = "0.6.229",
+    exports = {".":"./api.ts"},
+    deps = ["//packages/js/node/core:package","//packages/js/node/postgres:package","//packages/js/shared/auth:package","//packages/js/shared/core:package"],
+)

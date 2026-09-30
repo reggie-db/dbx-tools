@@ -1,0 +1,9 @@
+load("//rules:typescript.bzl", "dbx_ui")
+
+dbx_ui(
+    name = "package",
+    package = "@dbx-tools/ui-teams",
+    version = "0.6.229",
+    exports = {"./react":"./src/react/api.ts","./styles.css":"./src/styles.css"},
+    deps = ["//packages/js/shared/core:package","//packages/js/shared/teams:package","//packages/js/ui/appkit:package"],
+)

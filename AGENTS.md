@@ -1,5 +1,27 @@
 # AGENTS.md
 
+## Buck2 experiment: authoritative development instructions
+
+This isolated `dev-buck2` branch replaces Projen with Buck2. These instructions
+override the historical generator, package-manager, and release guidance below.
+Do not modify the original checkout or the independent Bazel worktree.
+
+BUCK targets own package identity, dependencies, and explicit entry points.
+Do not add checked-in `package.json`, `pyproject.toml`, `requirements.txt`, pip
+configuration, or `index.ts` files. npm's own downloaded manifests and temporary
+installer manifests are permitted only inside ignored Buck2 outputs. Bun fetches
+JavaScript dependencies and uv fetches Python dependencies through Buck2 targets.
+Pin tools and dependency resolutions. Network actions are local-only; that is an
+execution restriction, not a network permission or a reproducibility guarantee.
+
+Prefer small explicit package macros to discovery or a second package registry.
+UI macros own Vite and browser TypeScript defaults. Source remains read-only
+during builds. Generate library barrels as named build artifacts, not source
+`index.ts` files. UniFFI has explicit generated-source and native-library targets;
+never duplicate Rust's types in handwritten TypeScript or Python contracts.
+Releases and publication are disabled and out of scope. Development documentation
+lives in `tools/build/README.md`.
+
 Orientation for AI agents / new contributors. Read this first.
 
 ## Canonical agent instructions

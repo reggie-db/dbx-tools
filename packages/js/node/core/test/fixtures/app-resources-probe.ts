@@ -1,4 +1,4 @@
-import { bundle } from "../../index.ts";
+import { bundle } from "../../api.ts";
 
 const [projectBoundary, cwd, limit] = process.argv.slice(2);
 if (!projectBoundary) throw new Error("project boundary is required");

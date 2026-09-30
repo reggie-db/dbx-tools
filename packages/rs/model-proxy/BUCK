@@ -1,0 +1,4 @@
+load(":Cargo.toml", manifest = "value")
+load("//rules:rust.bzl", "dbx_rust")
+
+dbx_rust(manifest = manifest)

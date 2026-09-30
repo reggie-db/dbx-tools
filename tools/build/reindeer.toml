@@ -1,0 +1,13 @@
+manifest_path = "../../Cargo.toml"
+third_party_dir = "../../third_party/rust"
+vendor = false
+cargo_env = true
+
+[buck]
+file_name = "BUCK"
+rust_library = "cargo.rust_library"
+rust_binary = "cargo.rust_binary"
+buckfile_imports = """
+load("//rules:rust_buildscript.bzl", "buildscript_run")
+load("@prelude//rust:cargo_package.bzl", "cargo")
+"""

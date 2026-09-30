@@ -143,7 +143,7 @@ if (import.meta.main) {
   const watcher = watchFiles("**/src/**", {
     cwd,
     ignoreInitial: false,
-    ignore: ["**/index.ts", "**/core/**"],
+    ignore: ["**/api.ts", "**/core/**"],
     ignoreOptions: {
       temp: false,
     },

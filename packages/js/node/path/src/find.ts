@@ -115,7 +115,7 @@ if (import.meta.main) {
   console.log(`Scanning: ${cwd}`);
 
   const files = findFiles("**/*.*", {
-    ignore: ["**/index.ts", "**/example/**", "**/*.md"],
+    ignore: ["**/api.ts", "**/example/**", "**/*.md"],
     ignoreOptions: {
       test: true,
     },

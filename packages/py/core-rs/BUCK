@@ -1,0 +1,6 @@
+prebuilt_python_library(
+    name = "package",
+    source_dir = "//packages/rs/core:bindings[python]",
+    deps = [],
+    visibility = ["PUBLIC"],
+)

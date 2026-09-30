@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { file } from "../index.ts";
+import { file } from "../api.ts";
 
 describe("cachedRecord", () => {
   it("caches parsed records, including empty records", () => {

@@ -1,4 +1,4 @@
-import { project } from "../../index.ts";
+import { project } from "../../api.ts";
 
 const current = process.argv[2]!;
 const other = process.argv[3]!;

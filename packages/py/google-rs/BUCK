@@ -1,0 +1,6 @@
+prebuilt_python_library(
+    name = "package",
+    source_dir = "//packages/rs/google:bindings[python]",
+    deps = ["//packages/py/core-rs:package"],
+    visibility = ["PUBLIC"],
+)

@@ -4,6 +4,8 @@
  * Most tests should use `polygotTest` from `./polygot-test.ts`. `bun_python`
  * embeds CPython through Bun FFI, so the machine must expose a compatible
  * Python shared library; set `BUN_PYTHON_PATH` when automatic discovery fails.
+ * Staged test runners set `POLYGLOT_REPOSITORY_ROOT` so Python source discovery
+ * remains anchored to the checkout rather than the staged package location.
  *
  * A string target is authoritative and may be a dotted module name, file URL,
  * or Python source path. A {@link PolyglotTarget} derives candidates from a
@@ -15,7 +17,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // bun:ffi is a Bun runtime module, not a filesystem-resolvable npm package.
 // eslint-disable-next-line import/no-unresolved
@@ -27,10 +29,15 @@ import type {
 } from "bun_python";
 import type { PolyglotTarget } from "./polygot-test.ts";
 
-const repositoryRoot = resolve(import.meta.dir, "../../../..");
+const repositoryRoot = process.env.POLYGLOT_REPOSITORY_ROOT
+  ? resolve(process.env.POLYGLOT_REPOSITORY_ROOT)
+  : resolve(import.meta.dir, "../../../..");
 const pythonSitePackages = configurePython();
 const { NamedArgument, ProxiedPyObject, python } = await import("bun_python");
 if (pythonSitePackages) python.import("sys").path.insert(0, pythonSitePackages);
+for (const path of (process.env.PYTHONPATH ?? "").split(delimiter).filter(Boolean)) {
+  python.import("sys").path.insert(0, path);
+}
 for (const path of workspacePythonRoots()) python.import("sys").path.insert(0, path);
 const testSupport = python.runModule(`
 import dataclasses
