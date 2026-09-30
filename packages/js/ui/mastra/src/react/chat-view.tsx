@@ -27,7 +27,11 @@ export const ChatView = ({
   models,
   model,
   onModelChange,
+  reasoningEffort,
+  onReasoningEffortChange,
   defaultModelName,
+  defaultModelId,
+  defaultModelLoading = false,
   composerActions,
   modelSelectorActions,
   composerLeadingActions,
@@ -118,7 +122,11 @@ export const ChatView = ({
         models={models}
         model={model}
         onModelChange={onModelChange}
+        reasoningEffort={reasoningEffort}
+        onReasoningEffortChange={onReasoningEffortChange}
         defaultModelName={defaultModelName}
+        defaultModelId={defaultModelId}
+        defaultModelLoading={defaultModelLoading}
         composerActions={composerActions}
         modelSelectorActions={modelSelectorActions}
         composerLeadingActions={composerLeadingActions}

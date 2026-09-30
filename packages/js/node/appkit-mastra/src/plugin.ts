@@ -509,9 +509,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
 
     // `GET /default-model` (and `/default-model/:agentId`) reports what an
     // unpinned turn will use. A configured string is returned directly; an
-    // automatic default resolves the highest-ranked currently available model
-    // from the same OBO-scoped live catalogue as `/models`; a custom dynamic
-    // resolver remains null because it is call-time application code.
+    // automatic default resolves the highest-ranked currently available GPT
+    // (or general chat fallback) from the same OBO-scoped live catalogue as
+    // `/models`; a custom dynamic resolver remains null because it is call-time
+    // application code.
     const handleDefaultModel = async (
       req: express.Request,
       res: express.Response,

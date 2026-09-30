@@ -14,8 +14,10 @@ Databricks.
 - Refreshes the live catalogue once when a search misses.
 - Resolves Codex gateway identities, Responses-only routing, reasoning efforts,
   and complete function-tool support.
-- Publishes the pure protocol, tool, and reasoning policy through generated
-  Node and Python UniFFI bindings.
+- Publishes catalogue ranking plus the pure protocol, tool, and reasoning
+  policy through generated Node UniFFI bindings.
+- Publishes normalized family names and ordered reasoning-effort wire values for
+  browser model pickers without duplicating Rust enums in TypeScript.
 - Refreshes Databricks retirement, model-capability, and pay-per-token limit
   documentation daily.
 - Embeds committed retirement, capability, and rate-limit snapshots for offline
@@ -71,4 +73,5 @@ than editing a snapshot by hand.
 
 Generated Node bindings are published as
 [`@dbx-tools/model-rs`](../../js/node/model-rs). AppKit-Mastra consumes the
-binding so Responses routing and GPT 5.6 Chat tool effort remain Rust-owned.
+binding so fuzzy scoring, version and variant ranking, Responses routing, and
+GPT 5.6 Chat tool effort remain Rust-owned.

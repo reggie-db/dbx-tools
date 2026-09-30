@@ -14,7 +14,8 @@ Browser-safe request/result schemas and endpoint classification types live in
 Key features:
 
 - Lists Databricks Model Serving endpoints through the SDK and normalizes them
-  into a stable summary shape.
+  into a stable summary shape with Rust-derived family and reasoning-effort
+  metadata.
 - Classifies endpoints into chat-thinking, chat-balanced, chat-fast, and
   embedding classes using Foundation Model API scores and family heuristics.
 - Resolves loose user input such as `"sonnet"` or `"chat fast"` to a concrete
@@ -72,6 +73,8 @@ returns a single `modelId` plus a source label explaining why that endpoint won.
 Set `liveOnly: true` for an unpinned production default that must select the
 highest-ranked currently available endpoint and must not fall through to an
 offline static id when the catalogue has no match.
+With no explicit id or class, automatic selection prefers the highest-ranked
+live GPT family member, then falls back to the highest-ranked live chat model.
 
 The `source` label is useful for logs and debug UIs. It distinguishes explicit
 matches from class-based selection, environment defaults, and fallback results,
@@ -92,7 +95,10 @@ const ranked = await resolve.searchModels(client, host, {
 
 Use `searchModels()` for UI pickers and debug routes. It returns ranked models
 with match scores and endpoint summaries, using the same fuzzy threshold and
-class ceiling logic as `selectModel()`.
+class ceiling logic as `selectModel()`. Both delegate catalogue ranking to the
+generated [`@dbx-tools/model-rs`](../model-rs) binding, so Node and the Rust
+model proxy use one fuzzy scorer, family-version order, variant preference, and
+class policy.
 
 ## Work With A Held Catalogue
 
@@ -103,7 +109,7 @@ When you already have endpoint summaries, use the pure resolver functions from
 import { resolve, serving } from "@dbx-tools/model";
 
 const endpoints = await serving.listServingEndpoints(client, host);
-const ranked = resolve.rankModels(endpoints, { search: "sonnet", limit: 3 });
+const ranked = resolve.lookupModels(endpoints, { search: "sonnet", limit: 3 });
 const picked = resolve.resolveModel(endpoints, {
   explicit: "claude sonnet",
   modelClass: "chat-balanced",
@@ -208,13 +214,14 @@ policy decisions; fallbacks are a last resort.
 
 ## Modules
 
-- `resolve` - high-level `selectModel`, ranked search, and catalogue-held
-  resolver functions.
+- `resolve` - high-level `selectModel`, Rust-backed ranked search, and
+  catalogue-held resolver functions.
 - `serving` - Databricks serving-endpoint listing, cache management, fuzzy
   search, and endpoint-id resolution.
 - `invoke` - serving-path constants, URL construction, and per-request auth
   headers for calling an endpoint over raw HTTP.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.
+- `policy` - Rust-backed family and reasoning-effort metadata projection.
 - `fallback` - static fallback model ids per class.
 
 The AppKit-Mastra integration uses this package through

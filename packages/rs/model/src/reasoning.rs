@@ -31,6 +31,21 @@ pub enum ReasoningEffort {
     Max,
 }
 
+impl ReasoningEffort {
+    /// Return the provider wire value for this reasoning effort.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Minimal => "minimal",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Xhigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+}
+
 const STANDARD: &[ReasoningEffort] = &[
     ReasoningEffort::Low,
     ReasoningEffort::Medium,
@@ -107,6 +122,15 @@ pub fn reasoning_efforts_by_family(name: &str) -> Vec<ReasoningEffort> {
         return STANDARD.to_vec();
     }
     Vec::new()
+}
+
+/// Infer provider wire values accepted by a model or service name.
+#[uniffi::export]
+pub fn reasoning_effort_names_by_family(name: &str) -> Vec<String> {
+    reasoning_efforts_by_family(name)
+        .into_iter()
+        .map(|effort| effort.as_str().to_owned())
+        .collect()
 }
 
 /// Return the Chat Completions effort required when function tools are present.

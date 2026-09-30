@@ -965,6 +965,8 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     // ui-appkit, but the direct import warrants a declared dep.
     "@dbx-tools/ui-branding@workspace:*",
     "@mastra/client-js@catalog:",
+    // Native persisted-message conversion used by browser history hydration.
+    "@mastra/core@catalog:",
     "@tanstack/react-table@catalog:",
     "ai@catalog:",
     "echarts@catalog:",

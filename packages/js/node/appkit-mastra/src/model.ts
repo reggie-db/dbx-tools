@@ -98,7 +98,8 @@ function selectionInput(
  * Resolve an agent's unpinned default against an already-loaded live catalogue.
  *
  * With no configured id/class/fallback, the generic model ranker selects the
- * highest-ranked currently available chat endpoint.
+ * highest-ranked currently available GPT, then falls back to the highest-ranked
+ * live chat endpoint when the workspace has no GPT.
  */
 export function resolveDefaultModelId(
   config: MastraPluginConfig,

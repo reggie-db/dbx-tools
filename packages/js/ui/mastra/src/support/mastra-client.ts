@@ -6,12 +6,13 @@ import {
   thread,
   wire,
   type Chart,
+  type DefaultModelResponse,
   type MastraClientConfig,
   type MastraFeedbackRequest,
   type MastraFeedbackResponse,
   type StatementData,
 } from "@dbx-tools/shared-mastra";
-import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
+import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
 import {
   MastraClient,
@@ -166,6 +167,7 @@ export class MastraPluginClient extends MastraClient {
     runId: string;
     threadId?: string;
     model?: string;
+    reasoningEffort?: ReasoningEffort;
     requestContext?: MastraRequestContextSnapshot;
     signal?: AbortSignal;
   }): Promise<MastraStreamResponse> {
@@ -175,6 +177,9 @@ export class MastraPluginClient extends MastraClient {
       messages: params.messages,
       body: {
         runId: params.runId,
+        ...(params.reasoningEffort
+          ? { providerOptions: { openai: { reasoningEffort: params.reasoningEffort } } }
+          : {}),
         ...(params.requestContext ? { requestContext: params.requestContext } : {}),
       },
       routing: params,
@@ -271,12 +276,18 @@ export class MastraPluginClient extends MastraClient {
    * arrives. Defaults to the server's default agent when `agentId` is omitted.
    */
   async defaultModel(agentId?: string, signal?: AbortSignal): Promise<string | null> {
+    const payload = await this.defaultModelDetails(agentId, signal);
+    return payload.displayName ?? payload.model;
+  }
+
+  /** Fetch the complete resolved default-model descriptor for an agent. */
+  async defaultModelDetails(agentId?: string, signal?: AbortSignal): Promise<DefaultModelResponse> {
     const payload = await this.#getJson(
       this.#agentScoped(routes.MASTRA_ROUTES.defaultModel, agentId),
       wire.DefaultModelResponseSchema,
       signal,
     );
-    return payload.displayName ?? payload.model;
+    return payload;
   }
 
   /**
@@ -619,27 +630,34 @@ export const useMastraModels = (
 export const useMastraDefaultModel = (
   agentId?: string,
   enabled = true,
-): { defaultModel: string | null; loading: boolean } => {
+): { defaultModel: string | null; defaultModelId: string | null; loading: boolean } => {
   const client = useMastraClient();
   const [model, setModel] = useState<string | null>(null);
+  const [modelId, setModelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
     if (!enabled) {
       setModel(null);
+      setModelId(null);
       setLoading(false);
       return;
     }
     const controller = new AbortController();
     setLoading(true);
     client
-      .defaultModel(agentId, controller.signal)
-      .then((m) => {
-        if (!controller.signal.aborted) setModel(m);
+      .defaultModelDetails(agentId, controller.signal)
+      .then((details) => {
+        if (controller.signal.aborted) return;
+        setModel(details.displayName ?? details.model);
+        setModelId(details.model);
       })
       .catch(() => {
         // Non-critical: a missing default just yields a plain "Default".
-        if (!controller.signal.aborted) setModel(null);
+        if (!controller.signal.aborted) {
+          setModel(null);
+          setModelId(null);
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -647,7 +665,7 @@ export const useMastraDefaultModel = (
     return () => controller.abort();
   }, [client, agentId, enabled]);
 
-  return { defaultModel: model, loading };
+  return { defaultModel: model, defaultModelId: modelId, loading };
 };
 
 /**

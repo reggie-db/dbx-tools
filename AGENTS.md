@@ -208,7 +208,8 @@ Primary package areas:
   discovery, file-backed catalogue caching, model-name parsing, classification,
   fuzzy ranking, native inference-protocol selection, and model-specific Chat
   tool reasoning policy.
-  The generated UniFFI bindings expose the pure routing and capability policy;
+  The generated UniFFI bindings expose pure catalogue ranking, routing, family parsing,
+  reasoning-effort wire values, and capability policy;
   `@dbx-tools/model` and `@dbx-tools/appkit-mastra` consume those bindings
   rather than reimplementing version or effort rules in TypeScript.
   `difflib-fast` supplies stable short-string similarity. The model proxy
@@ -574,7 +575,14 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   owns fallback and ambient App authentication. A Databricks App with
   `DATABRICKS_HOST` does not require or synthesize a profile. Reuse `uv` from
   `PATH`; ask mise to
-  install its pinned uv only when none is available. Ephemeral graph backends
+  install its pinned uv only when none is available. `uv sync` and `uv run`
+  for the upstream Graphiti project pass `--python` matching the launcher
+  interpreter (or an explicit `UV_PYTHON`) because that child inherits the
+  launcher `PYTHONPATH` and cannot load another minor's native wheels.
+  That `PYTHONPATH` also copies this process's `dbx_tools.postgres` /
+  `core` / `core_rs` roots: editable workspace installs only expose those
+  through `.pth` files, which a child does not apply.
+  Ephemeral graph backends
   can be wrapped with `DelegatingGraphDriver`, which delegates to any upstream
   `GraphDriver` while write-ahead journaling mutations through a supplied
   storage driver before the graph operation commits. The Postgres
@@ -660,6 +668,15 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   so it builds and validates without publishing packages or deploying
   documentation. The workflow uses one non-cancelling `release` concurrency
   group so a later release cannot interrupt an earlier publication.
+  After local validation, release preparation optionally writes
+  `docs/releases/v<version>.md` by trying the installed Cursor agent, Codex, then
+  Claude in that order. Each invocation is non-interactive and read-only. An
+  absent, unauthenticated, failed, or empty provider falls through; when all are
+  unavailable the release continues without the file. Provider JSON/text events
+  are normalized into structured release logs while the final assistant message
+  alone becomes the summary. `releaseSummary: false` disables the feature;
+  `releaseSummary.providers` selects the order/subset. The immutable file is
+  included in the release PR and prepended to GitHub's generated release notes.
   Release workflow generation is non-destructive: it writes `release.yml` and
   never removes other workflow files. Consumers must explicitly delete exact
   workflow files they no longer want.
@@ -911,7 +928,14 @@ why to use this package anyway:
   QUEUE (submit while running to enqueue; queue drains oldest-first, or send any
   item now to interrupt), and a PLACEABLE conversation surface
   (`threadPlacement`: `left`/`right` dock, `top` editor-style tabs, `disabled`,
-  or `auto` choosing from the chat's own measured width). `MastraAssistant`
+  or `auto` choosing from the chat's own measured width). Its compact model
+  popup shows the current model, host model actions, and endpoint-specific
+  reasoning control. Clicking the model opens Rust-derived family submenus, so
+  the catalogue never widens the primary popup. Nested menus omit the active
+  model and repeated family headings, and use the same utility type size as the
+  composer actions. The family view starts with `Default (<resolved model>)`,
+  keeps `Other` last, and renders a one-model family as a direct choice.
+  `MastraAssistant`
   adds the persistent outer shell the feature apps otherwise repeat: controlled
   floating launcher, route-stable chat state, dock or overlay placement on any
   edge, optional resizing, mobile fallback, and an external `open(context)`
@@ -2129,6 +2153,12 @@ bun run --filter @dbx-tools/demo-appkit-app dev      # Bun.serve dev server (HMR
 bun run --filter @dbx-tools/demo-appkit-app build    # Bun.build production bundle via build.ts
 ```
 
+Deployment stages a standalone package outside the repository. The staging
+script replaces local `workspace:*` references with the exact version from the
+root `VERSION` file, verifies the generated example manifest carries that same
+version, and resolves `catalog:` entries. This keeps local runs on source while
+deployed Apps install the matching published packages without a lockfile.
+
 The deployed demo keeps its public OTP shell small: `main.tsx` imports AuthGate
 from the focused `@dbx-tools/ui-auth/react` subpath and lazy-loads the
 application only after the gate admits the visitor, `App.tsx` lazy-loads each
@@ -2649,14 +2679,20 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   `/default-model/:agentId` - agent-scoped by the same `/:agentId` path-suffix
   convention as `/suggestions`, NOT a query param), which
   returns `{ agentId, model, displayName }` with the server-humanized name so
-  the label never flashes a raw id or waits on `/models`. `model`/`displayName`
-  are null for a dynamic (call-time) model. Route: `MASTRA_ROUTES.defaultModel`
+  the label never flashes a raw id. An unconfigured agent queries the live
+  catalogue using the same `gpt` search as the Rust model proxy, selecting the
+  highest-ranked GPT and falling back to the highest-ranked live chat model when
+  no GPT is deployed; it never advertises a static offline fallback as
+  available. A configured string wins, while `model`/`displayName` are null for
+  a custom dynamic model. Route:
+  `MASTRA_ROUTES.defaultModel`
   - `DefaultModelResponseSchema` (shared-mastra), handler + `BuiltAgents.defaultModels`
     (appkit-mastra), client `defaultModel()` + `useMastraDefaultModel` hook
     (ui-mastra). This is deliberately an endpoint, NOT a field on the static
     `clientConfig` (per-agent + can be dynamic; the config sanitizer also redacts
     values matching env vars like `DATABRICKS_SERVING_ENDPOINT_NAME`). The picker
-    shows the humanized name or a neutral "Default" - no "server default" text.
+    shows a loading indicator while resolving, then the humanized name or a
+    neutral "Default" - no "server default" text.
 - **Chat export (`ui-mastra/src/support/export.ts`)** produces `pdf` |
   `markdown`. `pdf` renders one branded, self-contained HTML document and drives
   it through a hidden `<iframe>` + `print()` (Save-as-PDF dialog, no popup tab;
@@ -2700,7 +2736,12 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   would duplicate remembered turns and grow the prompt on every request.
   History, thread list/update/delete, message deletion, and suspended-run
   discovery use `@mastra/client-js`'s native resource-scoped memory and agent
-  APIs. The scoped AppKit gate allowlists only those exact native paths. Do not
+  APIs. A history response can contain persisted `messages` with
+  `uiMessages: null`; hydrate those through Mastra's native
+  `convertMessages(messages).to("AIV5.UI")`, not a handwritten reducer. The
+  initial history request reads the newest 20 messages; upward scrolling fetches
+  and prepends one older native page at a time while preserving scroll position.
+  scoped AppKit gate allowlists only those exact native paths. Do not
   restore a private custom-route agent-context helper. The exported `pagination`
   module remains deprecated compatibility surface only; new code uses native
   Mastra pagination inputs.
@@ -2731,12 +2772,14 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   `scrollHeight`, and observes the `InputGroup` width so an assistant mounted
   inside a collapsed/resizable host remeasures when it opens. The observer
   ignores zero and unchanged widths because the group height follows the
-  textarea; reacting to height would create a resize loop. Preserve AppKit's
-  AppKit's `min-h-16`, the configured maximum, and internal vertical scrolling.
-  Input and history-placeholder changes remain direct measurement triggers for
-  runtimes without `ResizeObserver`.
-- **The composer follows a top-input, fixed-footer layout.** The textarea grows
-  from AppKit's `min-h-16` baseline to its configured cap and then scrolls;
+  textarea; reacting to height would create a resize loop. Override AppKit's
+  two-line minimum with the one-line `min-h-10`, while preserving the configured
+  maximum and internal vertical scrolling.
+  Input changes remain a direct measurement trigger for runtimes without
+  `ResizeObserver`. History hydration never disables or replaces the textarea
+  and model controls; it blocks only sending until the active transcript loads.
+- **The composer follows a top-input, fixed-footer layout.** The textarea starts
+  at one visual line, grows to its configured cap, and then scrolls;
   the footer never moves with that scroll. Host leading actions stay left,
   while per-turn controls, the inline model selector, and Send/Stop stay
   right. Enter sends and Shift+Enter inserts a newline. Do not put model or

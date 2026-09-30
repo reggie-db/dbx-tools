@@ -65,18 +65,9 @@ export const ModelProfileSchema = z.object({
 });
 export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 
-/** Reasoning effort accepted by a Databricks model endpoint. */
-export enum ReasoningEffort {
-  None = "none",
-  Minimal = "minimal",
-  Low = "low",
-  Medium = "medium",
-  High = "high",
-  Xhigh = "xhigh",
-  Max = "max",
-}
-
-export const ReasoningEffortSchema = z.enum(ReasoningEffort);
+/** Provider wire value accepted as a reasoning effort by a discovered model. */
+export const ReasoningEffortSchema = z.string().min(1);
+export type ReasoningEffort = z.infer<typeof ReasoningEffortSchema>;
 
 /** Lifecycle flags associated with one discovered model. */
 export const ModelStatusSchema = z.object({
@@ -100,6 +91,12 @@ export const ServingEndpointSummarySchema = z.object({
     .optional()
     .describe(
       "Human-readable label for the endpoint: a Databricks-provided name when present (a display-name tag or external-model name), else a title-cased rendering of `name` with vendor prefixes stripped. `name` remains the invoke id.",
+    ),
+  family: z
+    .string()
+    .optional()
+    .describe(
+      "Normalized model family parsed by the Rust model policy, such as 'gpt' or 'claude'.",
     ),
   task: z.string().optional().describe("Task hint, e.g. 'llm/v1/chat' or 'llm/v1/embeddings'."),
   state: z.string().optional().describe("Deployment state, e.g. ready, updating, or failed."),

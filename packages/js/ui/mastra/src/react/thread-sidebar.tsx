@@ -184,6 +184,10 @@ export const ThreadSidebar = ({
               const isStreaming = streamingThreadIds.includes(thread.id);
               const isConfirming = confirmDeleteId === thread.id;
               const isEditing = editingId === thread.id;
+              const actionCount =
+                Number(Boolean(isStreaming && onCancel)) +
+                Number(Boolean(onRename)) +
+                Number(Boolean(onDelete));
               if (isEditing) {
                 return (
                   <li key={thread.id}>
@@ -213,8 +217,9 @@ export const ThreadSidebar = ({
                 <li key={thread.id}>
                   <div
                     className={cn(
-                      "group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                      "group relative flex items-center rounded-md px-2 py-1.5 text-sm",
                       "hover:bg-accent hover:text-accent-foreground",
+                      "focus-within:bg-accent focus-within:text-accent-foreground",
                       isActive && "bg-accent text-accent-foreground",
                     )}
                   >
@@ -222,7 +227,15 @@ export const ThreadSidebar = ({
                       type="button"
                       onClick={() => onSelect(thread.id)}
                       aria-current={isActive ? "page" : undefined}
-                      className="min-w-0 flex-1 cursor-pointer text-left"
+                      className={cn(
+                        "min-w-0 flex-1 cursor-pointer text-left transition-[padding] duration-150",
+                        actionCount === 1 && "group-hover:pr-8 group-focus-within:pr-8",
+                        actionCount === 2 && "group-hover:pr-14 group-focus-within:pr-14",
+                        actionCount >= 3 && "group-hover:pr-20 group-focus-within:pr-20",
+                        (isStreaming || isConfirming) && actionCount === 1 && "pr-8",
+                        (isStreaming || isConfirming) && actionCount === 2 && "pr-14",
+                        (isStreaming || isConfirming) && actionCount >= 3 && "pr-20",
+                      )}
                     >
                       <div className="flex items-center gap-1.5 truncate">
                         {isStreaming && !onCancel ? (
@@ -239,73 +252,81 @@ export const ThreadSidebar = ({
                         </div>
                       )}
                     </button>
-                    {isStreaming && onCancel ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onCancel(thread.id)}
-                            aria-label="Stop generating"
-                            className="size-6 shrink-0 text-primary"
-                          >
-                            <Loader2Icon className="size-3 animate-spin group-hover:hidden" />
-                            <SquareIcon className="hidden size-3 fill-current group-hover:block" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Stop generating</TooltipContent>
-                      </Tooltip>
-                    ) : null}
-                    {onRename && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => startEdit(e, thread)}
-                            aria-label="Rename conversation"
-                            className={cn(
-                              "size-6 shrink-0",
-                              "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-                            )}
-                          >
-                            <PencilIcon className="size-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Rename conversation</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {onDelete && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant={isConfirming ? "destructive" : "ghost"}
-                            size="icon"
-                            onClick={(e) => handleDeleteClick(e, thread.id)}
-                            onBlur={() =>
-                              setConfirmDeleteId((id) => (id === thread.id ? null : id))
-                            }
-                            aria-label={
-                              isConfirming ? "Confirm delete conversation" : "Delete conversation"
-                            }
-                            className={cn(
-                              "size-6 shrink-0",
-                              !isConfirming &&
-                                "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-                            )}
-                          >
-                            <Trash2Icon className="size-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {isConfirming
-                            ? "Click again to delete this conversation"
-                            : "Delete conversation"}
-                        </TooltipContent>
-                      </Tooltip>
+                    {actionCount > 0 && (
+                      <div
+                        className={cn(
+                          "pointer-events-none absolute inset-y-0 right-1 flex items-center gap-0.5",
+                          "bg-gradient-to-l from-accent via-accent to-transparent pl-3",
+                          "opacity-0 transition-opacity duration-150",
+                          "group-hover:pointer-events-auto group-hover:opacity-100",
+                          "group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                          (isStreaming || isConfirming) && "pointer-events-auto opacity-100",
+                        )}
+                      >
+                        {isStreaming && onCancel ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onCancel(thread.id)}
+                                aria-label="Stop generating"
+                                className="size-6 text-primary"
+                              >
+                                <Loader2Icon className="size-3 animate-spin group-hover:hidden" />
+                                <SquareIcon className="hidden size-3 fill-current group-hover:block" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Stop generating</TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                        {onRename && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => startEdit(e, thread)}
+                                aria-label="Rename conversation"
+                                className="size-6"
+                              >
+                                <PencilIcon className="size-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Rename conversation</TooltipContent>
+                          </Tooltip>
+                        )}
+                        {onDelete && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant={isConfirming ? "destructive" : "ghost"}
+                                size="icon"
+                                onClick={(e) => handleDeleteClick(e, thread.id)}
+                                onBlur={() =>
+                                  setConfirmDeleteId((id) => (id === thread.id ? null : id))
+                                }
+                                aria-label={
+                                  isConfirming
+                                    ? "Confirm delete conversation"
+                                    : "Delete conversation"
+                                }
+                                className="size-6"
+                              >
+                                <Trash2Icon className="size-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isConfirming
+                                ? "Click again to delete this conversation"
+                                : "Delete conversation"}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     )}
                   </div>
                 </li>

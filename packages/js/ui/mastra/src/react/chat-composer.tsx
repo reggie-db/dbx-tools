@@ -12,11 +12,6 @@ import {
   InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -34,10 +29,9 @@ import {
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { autosizeComposerTextarea, observeComposerWidth } from "./_composer-autosize.ts";
 import { ExportMenu } from "./export-menu.tsx";
+import { ModelSelector } from "./_model-selector.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import type { ChatViewProps } from "./types.ts";
-
-const DEFAULT_MODEL_VALUE = "__default__";
 
 type QueuedSteerListProps = {
   queuedSteers: NonNullable<ChatViewProps["queuedSteers"]>;
@@ -250,6 +244,10 @@ type ChatComposerProps = {
   model: ChatViewProps["model"];
   onModelChange: ChatViewProps["onModelChange"];
   defaultModelName: ChatViewProps["defaultModelName"];
+  defaultModelId: ChatViewProps["defaultModelId"];
+  defaultModelLoading: ChatViewProps["defaultModelLoading"];
+  reasoningEffort: ChatViewProps["reasoningEffort"];
+  onReasoningEffortChange: ChatViewProps["onReasoningEffortChange"];
   composerActions: ChatViewProps["composerActions"];
   modelSelectorActions: ChatViewProps["modelSelectorActions"];
   composerLeadingActions: ChatViewProps["composerLeadingActions"];
@@ -274,6 +272,10 @@ export const ChatComposer = ({
   model,
   onModelChange,
   defaultModelName,
+  defaultModelId,
+  defaultModelLoading,
+  reasoningEffort,
+  onReasoningEffortChange,
   composerActions,
   modelSelectorActions,
   composerLeadingActions,
@@ -310,24 +312,13 @@ export const ChatComposer = ({
     onResumeFollow();
   };
 
-  const showModelDisplay = Boolean(onModelChange);
   const modelChangeable = Boolean(models && models.length > 0);
-  const defaultOptionLabel = defaultModelName || "Default";
-  const currentModelLabel =
-    (model ? models?.find((option) => option.name === model)?.displayName : undefined) ||
-    defaultOptionLabel;
-  const sortedModels = [...(models ?? [])].sort((left, right) =>
-    (left.displayName || left.name).localeCompare(right.displayName || right.name, undefined, {
-      sensitivity: "base",
-    }),
-  );
   return (
     <>
-      {isEmpty && (
+      {isEmpty && !isLoadingHistory && (
         <SuggestionPills
           questions={suggestions}
           onSelect={(text) => sendMessage({ text })}
-          disabled={isLoadingHistory}
           className="mx-auto w-full max-w-4xl px-4 pb-2 md:px-6"
         />
       )}
@@ -360,14 +351,13 @@ export const ChatComposer = ({
                 submit();
               }
             }}
-            placeholder={isLoadingHistory ? "Loading history..." : "Send a message..."}
+            placeholder="Send a message..."
             rows={1}
-            disabled={isLoadingHistory}
-            className="field-sizing-fixed max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-base md:text-sm"
+            className="field-sizing-fixed min-h-10 max-h-64 w-full flex-none overflow-y-auto px-4 pb-2 pt-4 text-xs"
           />
           <InputGroupAddon
             align="block-end"
-            className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-0"
+            className="flex w-full flex-row flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-1"
           >
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
               {composerLeadingActions}
@@ -384,47 +374,29 @@ export const ChatComposer = ({
             </div>
             <div className="ml-auto flex min-w-0 max-w-full items-center gap-1.5">
               {composerActions}
-              {showModelDisplay &&
+              {onModelChange &&
                 (modelChangeable ? (
-                  <Select
-                    name="mastra-model"
-                    value={model ? model : DEFAULT_MODEL_VALUE}
-                    onValueChange={(value) =>
-                      onModelChange?.(value === DEFAULT_MODEL_VALUE ? "" : value)
-                    }
-                    disabled={isLoadingHistory}
-                  >
-                    <SelectTrigger
-                      size="sm"
-                      className="h-7 w-auto max-w-[180px] gap-1 truncate border-0 bg-transparent px-2 text-xs shadow-none hover:bg-accent [&_svg]:size-3"
-                    >
-                      <span className="sr-only">Model:</span>
-                      <SelectValue placeholder={defaultOptionLabel} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={DEFAULT_MODEL_VALUE}>{defaultOptionLabel}</SelectItem>
-                      {sortedModels.map((option) => (
-                        <SelectItem key={option.name} value={option.name}>
-                          {option.displayName || option.name}
-                        </SelectItem>
-                      ))}
-                      {modelSelectorActions && (
-                        <>
-                          <div role="separator" className="my-1 h-px bg-border" />
-                          <div
-                            className="px-1 py-1"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => event.stopPropagation()}
-                          >
-                            {modelSelectorActions}
-                          </div>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <ModelSelector
+                    models={models ?? []}
+                    model={model}
+                    defaultModelName={defaultModelName}
+                    defaultModelId={defaultModelId}
+                    defaultModelLoading={defaultModelLoading}
+                    reasoningEffort={reasoningEffort}
+                    onReasoningEffortChange={onReasoningEffortChange}
+                    onModelChange={onModelChange}
+                    actions={modelSelectorActions}
+                  />
                 ) : (
-                  <span className="max-w-[180px] truncate px-2 text-xs text-muted-foreground">
-                    {currentModelLabel}
+                  <span className="flex max-w-[180px] items-center gap-1.5 truncate px-2 text-xs text-muted-foreground">
+                    {defaultModelLoading ? (
+                      <>
+                        <Spinner className="size-3 shrink-0" />
+                        <span className="sr-only">Loading default model</span>
+                      </>
+                    ) : (
+                      defaultModelName || "Default"
+                    )}
                   </span>
                 ))}
               {isRunning && onStop && !input.trim() ? (

@@ -10,7 +10,7 @@ const Chat = () => {
 
   const agentModeControl = (
     <label
-      className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-sm px-2 text-sm text-foreground hover:bg-accent"
+      className="flex h-7 w-full cursor-pointer items-center gap-2 rounded-sm px-2 text-xs text-foreground hover:bg-accent"
       title={
         agentMode ? "Genie Agent Mode SSE is enabled" : "Genie Conversation API polling is enabled"
       }

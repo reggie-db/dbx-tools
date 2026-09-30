@@ -38,6 +38,7 @@
     "@dbx-tools/ui-appkit": "workspace:*",
     "@dbx-tools/ui-branding": "workspace:*",
     "@mastra/client-js": "catalog:",
+    "@mastra/core": "catalog:",
     "@tanstack/react-table": "catalog:",
     "ai": "catalog:",
     "echarts": "catalog:",

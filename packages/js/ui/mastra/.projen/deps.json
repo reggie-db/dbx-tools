@@ -80,6 +80,11 @@
       "type": "runtime"
     },
     {
+      "name": "@mastra/core",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@tanstack/react-table",
       "version": "catalog:",
       "type": "runtime"

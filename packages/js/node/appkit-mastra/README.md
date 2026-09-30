@@ -673,7 +673,8 @@ Model priority is:
 2. per-agent `model`;
 3. plugin `defaultModel`;
 4. `DATABRICKS_SERVING_ENDPOINT_NAME`;
-5. highest-ranked currently available model in the live workspace catalogue.
+5. highest-ranked currently available GPT from the live workspace catalogue,
+   then the highest-ranked live chat model when no GPT is deployed.
 
 The unconfigured default is live-only and fails clearly when the workspace has
 no usable endpoint. Static fallback ids remain available for explicitly
@@ -873,19 +874,19 @@ Mounted under the plugin base path, which is `/api/mastra` unless you override
 `name`. Product-specific routes use AppKit's `route()` helper; chat and memory
 use Mastra's native route surfaces behind the same scoped request-context gate.
 
-| Method                     | Path                              | Purpose                                                                                                                   |
-| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `GET`                      | `/models`                         | Serving-endpoint catalogue for a model picker.                                                                            |
-| `GET`                      | `/default-model[/:agentId]`       | Configured default, or highest-ranked live endpoint for an unpinned agent, with its humanized label. `404` on unknown id. |
-| `GET`                      | `/suggestions[/:agentId]`         | Starter questions from the configured Genie spaces. Degrades to `[]`.                                                     |
-| `GET`                      | `/embed/chart/:id`                | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.                                          |
-| `GET`                      | `/embed/data/:id`                 | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                                              |
-| `POST`                     | `/chat/:agentId`                  | Official Mastra AI SDK UI stream, including native `resumeData` continuations.                                            |
-| `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`            | Native Mastra resource-scoped conversation history and thread management.                                                 |
-| `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                              |
-| `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                            |
-| `POST`                     | `/route/feedback`                 | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.                                 |
-| `POST` / `GET`             | `/mcp`, `/sse`, `/messages`       | MCP transports, when `mcp` is enabled.                                                                                    |
+| Method                     | Path                              | Purpose                                                                                                                  |
+| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET`                      | `/models`                         | Serving-endpoint catalogue for a model picker.                                                                           |
+| `GET`                      | `/default-model[/:agentId]`       | Configured default, or highest-ranked live GPT with a general chat fallback, for an unpinned agent. `404` on unknown id. |
+| `GET`                      | `/suggestions[/:agentId]`         | Starter questions from the configured Genie spaces. Degrades to `[]`.                                                    |
+| `GET`                      | `/embed/chart/:id`                | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.                                         |
+| `GET`                      | `/embed/data/:id`                 | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                                             |
+| `POST`                     | `/chat/:agentId`                  | Official Mastra AI SDK UI stream, including native `resumeData` continuations.                                           |
+| `GET` / `PATCH` / `DELETE` | `/memory/threads[...]`            | Native Mastra resource-scoped conversation history and thread management.                                                |
+| `POST`                     | `/memory/messages/delete`         | Native message deletion used before regenerating a response.                                                             |
+| `GET`                      | `/agents/:agentId/suspended-runs` | Native persisted approval discovery after a reload or restart.                                                           |
+| `POST`                     | `/route/feedback`                 | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.                                |
+| `POST` / `GET`             | `/mcp`, `/sse`, `/messages`       | MCP transports, when `mcp` is enabled.                                                                                   |
 
 The UI consumes `/chat/:agentId` with the AI SDK's `DefaultChatTransport`.
 

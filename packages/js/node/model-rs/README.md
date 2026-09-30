@@ -1,7 +1,7 @@
 # `@dbx-tools/model-rs`
 
-Generated Node bindings for the pure model-routing and capability policy owned
-by the `dbx-tools-model` Rust crate.
+Generated Node bindings for the catalogue-ranking, model-routing, and
+capability policy owned by the `dbx-tools-model` Rust crate.
 
 ```ts
 import {
@@ -20,6 +20,10 @@ effort === ReasoningEffort.None;
 
 Key exports:
 
+- `rankModels` classifies and ranks a live endpoint catalogue with Rust's fuzzy
+  scoring, class ceilings, version ordering, and model-variant preferences.
+- `modelFamily` and `reasoningEffortNamesByFamily` publish family grouping and
+  ordered provider wire values without a handwritten TypeScript enum.
 - `modelServingApi` / `isResponsesOnly` select Chat Completions or native
   Responses without duplicating version thresholds in TypeScript.
 - `chatToolReasoningEffort` returns the effort required by a tool-bearing Chat
@@ -28,6 +32,7 @@ Key exports:
 - `supportsToolsByFamily` applies the conservative complete-tool-round-trip
   policy shared with the Rust model proxy.
 
-Use [`@dbx-tools/model`](../model) for workspace catalogue I/O, fuzzy endpoint
-selection, and cached discovery. This package is the generated native policy
-surface consumed by `@dbx-tools/model` and `@dbx-tools/appkit-mastra`.
+Use [`@dbx-tools/model`](../model) for workspace catalogue I/O, public endpoint
+contracts, convenient model selection, and cached discovery. This package is
+the generated native policy surface consumed by `@dbx-tools/model` and
+`@dbx-tools/appkit-mastra`.

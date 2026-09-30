@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 #[cfg(unix)]
 use std::{
@@ -13,12 +13,12 @@ use std::{
 use dbx_tools_core::{DatabricksAuthOptions, DatabricksClient, FileCache};
 use dbx_tools_model::{
     chat_tool_reasoning_effort, endpoints_from_response, is_responses_only, lookup_models,
-    model_search_query, model_service_names, model_serving_api, models_payload,
+    model_family, model_search_query, model_service_names, model_serving_api, models_payload,
     models_payload_with_capabilities, parse_model_capabilities, parse_model_name,
-    parse_model_rate_limits, parse_retired_models, rank_model_id, reasoning_efforts_by_family,
-    status_from_names, version_tuple, ModelCapabilitiesResolver, ModelClass, ModelClient,
-    ModelFamily, ModelQuery, ModelRateLimitsResolver, ModelServingApi, ModelStatus,
-    ModelStatusResolver, ParsedModelName, ReasoningEffort, ServingEndpointSummary,
+    parse_model_rate_limits, parse_retired_models, rank_model_id, reasoning_effort_names_by_family,
+    reasoning_efforts_by_family, status_from_names, version_tuple, ModelCapabilitiesResolver,
+    ModelClass, ModelClient, ModelFamily, ModelQuery, ModelRateLimitsResolver, ModelServingApi,
+    ModelStatus, ModelStatusResolver, ParsedModelName, ReasoningEffort, ServingEndpointSummary,
 };
 use serde_json::json;
 use wiremock::{
@@ -87,6 +87,10 @@ fn parses_provider_family_version_and_model() {
 
 #[test]
 fn routed_names_need_no_prefix_registry() {
+    assert_eq!(
+        model_family("databricks-gpt-5-6-sol").as_deref(),
+        Some("gpt")
+    );
     assert_eq!(
         model_search_query("dbx/databricks/responses/databricks-gpt-5-6-sol").as_deref(),
         Some("gpt 5 6 sol")
@@ -245,6 +249,10 @@ fn responses_and_reasoning_policy_follow_model_identity() {
             ReasoningEffort::High,
             ReasoningEffort::Xhigh,
         ]
+    );
+    assert_eq!(
+        reasoning_effort_names_by_family("databricks-gpt-5-5-pro"),
+        ["medium", "high", "xhigh"]
     );
 }
 
@@ -824,7 +832,7 @@ fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {
         supports_tools: None,
         profile: None,
         model_class: Some(model_class),
-        service_names: BTreeMap::new(),
+        service_names: HashMap::new(),
         model_service_name: None,
         reasoning_efforts: Vec::new(),
         status: ModelStatus::default(),

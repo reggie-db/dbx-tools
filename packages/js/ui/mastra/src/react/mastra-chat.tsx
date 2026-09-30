@@ -1,4 +1,5 @@
 import { error as sharedError, hash, log } from "@dbx-tools/shared-core";
+import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -39,6 +40,7 @@ import {
 } from "../support/thread-sessions.ts";
 
 const _loadChatExport = () => import("../support/export.ts");
+const EMPTY_REASONING_EFFORTS: readonly ReasoningEffort[] = [];
 
 // Self-contained drop-in chat. `useMastraChat` drives the conversation
 // over `@mastra/client-js`: `agent.stream()` returns a Response
@@ -239,6 +241,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   const showModelPicker = Boolean(options.showModelPicker);
   const modelKey = modelStorageKey(mastraClient.basePath, agentId);
   const [model, setModel] = useState(() => (showModelPicker ? readStoredModel(modelKey) : ""));
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | undefined>();
   const handleModelChange = useCallback(
     (nextModel: string) => {
       setModel(nextModel);
@@ -256,6 +259,8 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // `model` to its dependency list.
   const modelRef = useRef(model);
   modelRef.current = model;
+  const reasoningEffortRef = useRef(reasoningEffort);
+  reasoningEffortRef.current = reasoningEffort;
   const requestContextRef = useRef(options.requestContext);
   requestContextRef.current = options.requestContext;
   // Built-in conversation management. When on, the chat always drives an
@@ -355,7 +360,19 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
   // The humanized name of the model the active agent falls back to when no
   // model is pinned, so the picker can label its default option. Fetched only
   // when the picker is shown; `null` when the agent's model is dynamic.
-  const { defaultModel: defaultModelName } = useMastraDefaultModel(agentId, showModelPicker);
+  const {
+    defaultModel: defaultModelName,
+    defaultModelId,
+    loading: defaultModelLoading,
+  } = useMastraDefaultModel(agentId, showModelPicker);
+  const activeModel = model || defaultModelId || undefined;
+  const activeModelOption = models.find((option) => option.name === activeModel);
+  const reasoningEfforts = activeModelOption?.reasoningEfforts ?? EMPTY_REASONING_EFFORTS;
+  useEffect(() => {
+    if (reasoningEffort && !reasoningEfforts.includes(reasoningEffort)) {
+      setReasoningEffort(undefined);
+    }
+  }, [reasoningEffort, reasoningEfforts]);
   // Starter suggestions: an explicit `options.suggestions` always
   // wins (including `[]` to force none) and is rendered verbatim;
   // otherwise auto-source the agent's Genie space sample questions.
@@ -490,6 +507,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       // threads or changes the model picker while it streams.
       const streamThreadId = threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
       const model = modelRef.current || undefined;
+      const turnReasoningEffort = reasoningEffortRef.current;
       return driveStream(threadId, assistantId, (signal) => {
         return mastraClient.streamAgent({
           agentId,
@@ -497,6 +515,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
           runId,
           threadId: streamThreadId,
           model,
+          reasoningEffort: turnReasoningEffort,
           requestContext,
           signal,
         });
@@ -970,7 +989,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
     models: showModelPicker ? models : undefined,
     model,
     onModelChange: showModelPicker ? handleModelChange : undefined,
+    reasoningEffort,
+    onReasoningEffortChange: showModelPicker ? setReasoningEffort : undefined,
     defaultModelName: showModelPicker ? (defaultModelName ?? undefined) : undefined,
+    defaultModelId: showModelPicker ? (defaultModelId ?? undefined) : undefined,
+    defaultModelLoading: showModelPicker && defaultModelLoading,
     onLoadMore: loadOlderHistory,
     isLoadingMore,
     hasMore: activeSession.hasMoreHistory,

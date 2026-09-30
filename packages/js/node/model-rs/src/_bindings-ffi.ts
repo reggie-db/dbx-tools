@@ -275,7 +275,22 @@ const DEFINITIONS = {
       ret: FfiType.Int8,
       hasRustCallStatus: true,
     },
+    "uniffi_dbx_tools_model_fn_func_model_family": {
+      args: [FfiType.RustBuffer],
+      ret: FfiType.RustBuffer,
+      hasRustCallStatus: true,
+    },
     "uniffi_dbx_tools_model_fn_func_model_serving_api": {
+      args: [FfiType.RustBuffer],
+      ret: FfiType.RustBuffer,
+      hasRustCallStatus: true,
+    },
+    "uniffi_dbx_tools_model_fn_func_rank_models": {
+      args: [FfiType.RustBuffer, FfiType.RustBuffer],
+      ret: FfiType.RustBuffer,
+      hasRustCallStatus: true,
+    },
+    "uniffi_dbx_tools_model_fn_func_reasoning_effort_names_by_family": {
       args: [FfiType.RustBuffer],
       ret: FfiType.RustBuffer,
       hasRustCallStatus: true,
@@ -305,7 +320,22 @@ const DEFINITIONS = {
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
     },
+    "uniffi_dbx_tools_model_checksum_func_model_family": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
     "uniffi_dbx_tools_model_checksum_func_model_serving_api": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_model_checksum_func_rank_models": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_model_checksum_func_reasoning_effort_names_by_family": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -392,13 +422,19 @@ interface NativeModuleInterface {
     ffi_dbx_tools_model_rust_future_free_void(handle: bigint): void;
     uniffi_dbx_tools_model_fn_func_chat_tool_reasoning_effort(name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_is_responses_only(value: Uint8Array, uniffi_out_err: UniffiRustCallStatus): number;
+    uniffi_dbx_tools_model_fn_func_model_family(value: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_model_serving_api(value: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
+    uniffi_dbx_tools_model_fn_func_rank_models(endpoints: Uint8Array, query: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
+    uniffi_dbx_tools_model_fn_func_reasoning_effort_names_by_family(name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_reasoning_efforts_by_family(name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_supports_tools_by_family(name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): number;
     ffi_dbx_tools_model_uniffi_contract_version(): number;
     uniffi_dbx_tools_model_checksum_func_chat_tool_reasoning_effort(): number;
     uniffi_dbx_tools_model_checksum_func_is_responses_only(): number;
+    uniffi_dbx_tools_model_checksum_func_model_family(): number;
     uniffi_dbx_tools_model_checksum_func_model_serving_api(): number;
+    uniffi_dbx_tools_model_checksum_func_rank_models(): number;
+    uniffi_dbx_tools_model_checksum_func_reasoning_effort_names_by_family(): number;
     uniffi_dbx_tools_model_checksum_func_reasoning_efforts_by_family(): number;
     uniffi_dbx_tools_model_checksum_func_supports_tools_by_family(): number;
     // Codegen call sites use these via `nativeModule().rustbuffer_alloc(...)`

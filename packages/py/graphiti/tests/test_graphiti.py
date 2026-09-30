@@ -19,6 +19,7 @@ from dbx_tools.graphiti.runtime import (
     _ArgvPopen,
     _child_python_paths,
     _link_tool,
+    _uv_python,
 )
 from dbx_tools.graphiti.settings import ModelSettings
 from dbx_tools.graphiti.supervisor import main as supervisor_main
@@ -44,6 +45,8 @@ def test_environment_preserves_explicit_neo4j_values(monkeypatch, tmp_path: Path
 
     assert environment["NEO4J_URI"] == "bolt://example:7687"
     assert environment["NEO4J_PASSWORD"] == "generated"
+    assert environment["UV_PYTHON"] == _uv_python()
+    assert environment["BROWSER"] == "0"
     assert environment["LLM__PROVIDERS__OPENAI__API_URL"] == "http://127.0.0.1:4000/v1"
     assert environment["EMBEDDER__PROVIDERS__OPENAI__API_KEY"] == "not-required"
     assert environment[UPSTREAM_MCP_PATH_ENV] == str(runtime.paths.graphiti / "mcp_server")
@@ -55,6 +58,8 @@ def test_child_python_paths_exclude_standard_library() -> None:
 
     assert str(Path(sysconfig.get_path("purelib")).resolve()) in paths
     assert str(Path(sysconfig.get_path("stdlib")).resolve()) not in paths
+    assert any((Path(entry) / "dbx_tools" / "postgres").exists() for entry in paths)
+    assert any((Path(entry) / "dbx_tools" / "core").exists() for entry in paths)
 
 
 def test_connection_settings_do_not_expose_unrelated_environment(
@@ -277,6 +282,12 @@ def test_status_uses_model_proxy_health(monkeypatch, tmp_path: Path) -> None:
     assert health_urls == ["http://127.0.0.1:4000/healthz"]
 
 
+def test_uv_python_honors_explicit_override(monkeypatch) -> None:
+    monkeypatch.setenv("UV_PYTHON", "3.12")
+
+    assert _uv_python() == "3.12"
+
+
 def test_graphiti_command_does_not_require_config_yaml(tmp_path: Path) -> None:
     runtime = Runtime(RuntimePaths(tmp_path))
     settings = ModelSettings.resolve(environ=_PROFILE_ENV)
@@ -284,6 +295,7 @@ def test_graphiti_command_does_not_require_config_yaml(tmp_path: Path) -> None:
     command = runtime.graphiti_command(settings, [])
 
     assert "--config" not in command
+    assert command[command.index("--python") + 1] == _uv_python()
     assert command[command.index("-m") + 1] == "dbx_tools.graphiti.server"
     assert command[-8:] == [
         "--llm-provider",

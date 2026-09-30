@@ -41,10 +41,16 @@ describe("Mastra serving API selection", () => {
     const endpoints: ServingEndpointSummary[] = [
       { name: "databricks-claude-opus-4-7", task: "llm/v1/chat" },
       { name: "databricks-claude-opus-4-8", task: "llm/v1/chat" },
+      {
+        name: "databricks-gpt-5-4",
+        task: "llm/v1/chat",
+        profile: { quality: 57, speed: 76.9, cost: 5.63 },
+      },
+      { name: "databricks-gpt-6-1-sol", task: "llm/v1/chat" },
       { name: "databricks-gte-large-en", task: "llm/v1/embeddings" },
     ];
     try {
-      assert.equal(resolveDefaultModelId({}, endpoints), "databricks-claude-opus-4-8");
+      assert.equal(resolveDefaultModelId({}, endpoints), "databricks-gpt-6-1-sol");
     } finally {
       if (previous === undefined) delete process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
       else process.env.DATABRICKS_SERVING_ENDPOINT_NAME = previous;

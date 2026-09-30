@@ -11,7 +11,7 @@
  * `bundle deploy` warned "There are no files to sync" and shipped an app with no
  * source. The staged tree holds:
  *
- *   - `@dbx-tools/*` -> the example manifest's root-linked release version;
+ *   - `@dbx-tools/*` -> the exact version from the root `VERSION` file;
  *   - `catalog:`     -> the concrete version from the root `pnpm-workspace.yaml`;
  *   - `bun`          -> added as a dependency so the platform's pnpm install
  *                       fetches the runtime (research: pnpm installs, bun runs);
@@ -39,9 +39,14 @@ const pkg = JSON.parse(readFileSync(join(serverDir, "package.json"), "utf8")) as
   string,
   unknown
 >;
-const version = pkg.version;
-if (typeof version !== "string" || !version || version === "0.0.0") {
-  throw new Error("example package version is not linked to a released workspace version");
+const version = readFileSync(join(repoRoot, "VERSION"), "utf8").trim();
+if (!/^\d+\.\d+\.\d+$/.test(version) || version === "0.0.0") {
+  throw new Error(`invalid root workspace version: ${version || "<empty>"}`);
+}
+if (pkg.version !== version) {
+  throw new Error(
+    `example package version ${String(pkg.version)} does not match root workspace version ${version}`,
+  );
 }
 
 // The root catalog: `catalog:` specifiers resolve to these concrete versions.
@@ -57,7 +62,7 @@ function resolveDeps(deps: Record<string, string> | undefined): Record<string, s
   const out: Record<string, string> = {};
   for (const [name, spec] of Object.entries(deps ?? {})) {
     if (spec.startsWith("workspace:")) {
-      out[name] = name.startsWith("@dbx-tools/") ? `^${version}` : spec.replace("workspace:", "");
+      out[name] = name.startsWith("@dbx-tools/") ? version : spec.replace("workspace:", "");
     } else if (spec === "catalog:") {
       const resolved = catalog[name];
       if (!resolved) throw new Error(`no catalog entry for ${name}`);
@@ -107,6 +112,6 @@ cpSync(join(serverDir, "app.yaml"), join(outDir, "app.yaml"));
 cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 
 console.log(`staged deploy at ${outDir}`);
-console.log(`  @dbx-tools/* -> ^${version}, catalog resolved, bun+pnpm-workspace added`);
+console.log(`  @dbx-tools/* -> ${version}, catalog resolved, bun+pnpm-workspace added`);
 console.log(`  dbx-tools-graphiti==${version} added as the Python sidecar`);
 console.log(`  app.yaml copied unchanged; databricks.yml owns deployed command/env overrides`);
