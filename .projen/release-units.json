@@ -10,7 +10,7 @@
         "packages/js/node/appkit"
       ],
       "artifacts": [],
-      "sourceHash": "726895fd1af555c612ee24643ad246e33131e02d17035c96e0c034bbce9de7e9"
+      "sourceHash": "0439f8b28e1d68fec1bef4b419d459247498de912d56ad60c93f62f10df9daf1"
     },
     {
       "id": "node-appkit-graphiti",
@@ -562,7 +562,7 @@
       "path": "packages/js/node/appkit",
       "unit": "node-appkit",
       "publish": true,
-      "sourceHash": "3d22a1a58fac740f6cc34f98835669a96d7b8215701d66244e80595ba8f93f3d"
+      "sourceHash": "8cd1c2fbecdc12287bc8d44e94bf97472dfddaeaaf1f090d77f95285a3b178c7"
     },
     {
       "id": "packages/js/node/appkit-graphiti",

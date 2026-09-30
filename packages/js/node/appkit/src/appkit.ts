@@ -412,5 +412,7 @@ export async function ensureInitialized(): Promise<void> {
   }
   logger.debug("ensureInitialized: booting bare AppKit app");
   await createApp({ plugins: [], autoConfigure: false });
-  logger.debug("ensureInitialized: bare AppKit app ready");
+  logger.debug("ensureInitialized: bare AppKit initialization complete");
 }
+
+
