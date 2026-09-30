@@ -722,18 +722,27 @@ function addIndependentDocsJobs(
   });
 }
 
-function addIndependentBranchSyncJob(workflow: GithubWorkflow, branch: string): void {
+function addIndependentBranchSyncJob(
+  workflow: GithubWorkflow,
+  project: DBXToolsJavaScriptProject,
+  branch: string,
+): void {
   workflow.addJob("sync-release-branch", {
     if: "${{ always() && github.event_name == 'push' && needs['publication-complete'].result == 'success' }}",
     needs: ["publication-complete"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
+    env: { BUN_VERSION },
     steps: [
       {
         name: "Checkout released main",
         uses: "actions/checkout@v6",
         with: { "fetch-depth": 0 },
       },
+      ...bunCacheRestoreSteps(project, {
+        ignorePaths: project.workflowCacheIgnorePaths,
+      }),
+      { name: "Install dependencies", run: "bun install" },
       {
         name: `Safely sync ${branch}`,
         shell: "bash",
@@ -755,8 +764,23 @@ function addIndependentBranchSyncJob(workflow: GithubWorkflow, branch: string): 
           '  if git merge --no-ff --no-edit "$GITHUB_SHA"; then',
           '    git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
           "  else",
+          '    SAFE_GENERATED="true"',
+          "    while IFS= read -r FILE; do",
+          '      case "$FILE" in',
+          "        .projen/release-units.json|.release-please-manifest.json|.release-units/*/source.json|.release-units/*/version.txt|.release-units/*/CHANGELOG.md|Cargo.lock|*/Cargo.toml|*/package.json|*/pyproject.toml|*/index.ts) ;;",
+          '        *) SAFE_GENERATED="false" ;;',
+          "      esac",
+          "    done < <(git diff --name-only --diff-filter=U)",
+          '    if [ "$SAFE_GENERATED" = "true" ] && bunx projen; then',
+          "      git add -A",
+          '      if [ -z "$(git diff --name-only --diff-filter=U)" ]; then',
+          "        git commit --no-edit",
+          '        git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
+          "        exit 0",
+          "      fi",
+          "    fi",
           "    git merge --abort",
-          '    echo "::warning::source branch $SOURCE_BRANCH has merge conflicts with released main; leaving it untouched"',
+          '    echo "::warning::source branch $SOURCE_BRANCH has handwritten or unresolved conflicts with released main; leaving it untouched"',
           "  fi",
           "fi",
         ].join("\n"),
@@ -795,7 +819,11 @@ class IndependentReleaseFinalizer extends Component {
       addIndependentDocsJobs(this.workflow, this.project as DBXToolsJavaScriptProject, this.docs);
     }
     if (this.syncBranch) {
-      addIndependentBranchSyncJob(this.workflow, this.syncBranch);
+      addIndependentBranchSyncJob(
+        this.workflow,
+        this.project as DBXToolsJavaScriptProject,
+        this.syncBranch,
+      );
     }
   }
 }
