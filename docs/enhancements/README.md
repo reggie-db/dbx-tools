@@ -12,10 +12,7 @@ date and final status.
 
 ## Active plans
 
-- [AppKit 0.81 upgrade and native reuse plan](2026-09-29-latest-appkit-reuse-plan.md)
-  — comparison with the latest published AppKit, bounded code-reuse candidates,
-  package-retention decisions, and phased compatibility checks. Audit complete;
-  implementation proposed.
+No active plans.
 
 ## Cross-repository suggestions
 

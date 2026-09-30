@@ -11,8 +11,9 @@ native client-config and response contract.
 
 **Key features:**
 
-- `SearchBox` - a debounced, cancellable search-as-you-type input with a results
-  dropdown, styled with AppKit tokens. Meilisearch-style instant search.
+- `SearchBox` - a debounced, cancellable search-as-you-type input using AppKit
+  Command keyboard selection while preserving server result order
+  (`shouldFilter={false}`). Meilisearch-style instant search.
 - `SearchResults` - a presentational hit list for a full-page results layout.
 - `useSearch` - a debounced presentation adapter over AppKit
   `useAiSearchQuery`: `{ query, setQuery, hits,

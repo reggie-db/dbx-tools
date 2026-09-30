@@ -1,24 +1,30 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ConfigurationError } from "@databricks/appkit";
-import { data, instance, require as requirePlugin, type PluginContextLike } from "../src/plugin.ts";
+import { ConfigurationError, Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
+import { createTestPlugin, createTestPluginContext } from "@databricks/appkit/testing";
+import { data, instance, require as requirePlugin } from "../src/plugin.ts";
 
-class FakeLakebasePlugin {
-  exports() {
+class FakeLakebasePlugin extends Plugin {
+  static manifest = {
+    name: "lakebase",
+    displayName: "Fake Lakebase",
+    description: "Test fixture",
+    stability: "stable",
+    resources: { required: [], optional: [] },
+  } satisfies PluginManifest<"lakebase">;
+
+  override exports() {
     return { pool: "pool" };
   }
 }
+
+const fakeLakebase = toPlugin(FakeLakebasePlugin);
 
 function fakeFactory(name: string, calls: { count: number }) {
   return () => {
     calls.count += 1;
     return { plugin: FakeLakebasePlugin, name };
   };
-}
-
-function fakeContext(entries: Record<string, unknown>): PluginContextLike {
-  const plugins = new Map(Object.entries(entries));
-  return { getPlugins: () => plugins };
 }
 
 describe("plugin lookup", () => {
@@ -30,24 +36,24 @@ describe("plugin lookup", () => {
     assert.equal(calls.count, 1);
   });
 
-  it("returns the registered instance, or undefined without a context", () => {
-    const factory = fakeFactory("lakebase", { count: 0 });
-    const plugin = new FakeLakebasePlugin();
-    assert.equal(instance(fakeContext({ lakebase: plugin }), factory), plugin);
-    assert.equal(instance(fakeContext({}), factory), undefined);
-    assert.equal(instance(undefined, factory), undefined);
+  it("returns the registered instance, or undefined without a context", async () => {
+    const fixture = createTestPluginContext();
+    const registered = await fixture.attach(createTestPlugin(fakeLakebase));
+    assert.equal(instance(fixture.ctx, fakeLakebase), registered);
+    assert.equal(instance(createTestPluginContext().ctx, fakeLakebase), undefined);
+    assert.equal(instance(undefined, fakeLakebase), undefined);
   });
 
-  it("require returns the instance when registered", () => {
-    const factory = fakeFactory("lakebase", { count: 0 });
-    const plugin = new FakeLakebasePlugin();
-    assert.equal(requirePlugin(fakeContext({ lakebase: plugin }), factory), plugin);
+  it("require returns the instance when registered", async () => {
+    const fixture = createTestPluginContext();
+    const registered = await fixture.attach(createTestPlugin(fakeLakebase));
+    assert.equal(requirePlugin(fixture.ctx, fakeLakebase), registered);
   });
 
   it("require throws a ConfigurationError naming the plugin and the caller", () => {
-    const factory = fakeFactory("lakebase", { count: 0 });
+    const fixture = createTestPluginContext();
     assert.throws(
-      () => requirePlugin(fakeContext({ server: {} }), factory, "mastra"),
+      () => requirePlugin(fixture.ctx, fakeLakebase, "mastra"),
       (err) => {
         assert.ok(err instanceof ConfigurationError);
         assert.match(err.message, /mastra/);
@@ -58,7 +64,6 @@ describe("plugin lookup", () => {
   });
 
   it("require throws without a context at all", () => {
-    const factory = fakeFactory("lakebase", { count: 0 });
-    assert.throws(() => requirePlugin(undefined, factory), ConfigurationError);
+    assert.throws(() => requirePlugin(undefined, fakeLakebase), ConfigurationError);
   });
 });

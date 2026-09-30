@@ -9,8 +9,18 @@
 // with AppKit tokens (see `../styles.css`).
 
 import type { SearchHit } from "@dbx-tools/shared-search";
-import { Badge, Button, Input, ScrollArea, Spinner, cn } from "@dbx-tools/ui-appkit/react";
-import { SearchIcon, XIcon } from "lucide-react";
+import {
+  Badge,
+  Button,
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  Spinner,
+  cn,
+} from "@dbx-tools/ui-appkit/react";
+import { XIcon } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 import { useSearch, type UseSearchOptions } from "./use-search.ts";
 
@@ -73,21 +83,25 @@ export function SearchBox({
   );
 
   return (
-    <div className={cn("dbx-search-box", className)}>
+    <Command
+      shouldFilter={false}
+      className={cn("dbx-search-box h-auto overflow-visible bg-transparent", className)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setOpen(false);
+      }}
+    >
       <div className="dbx-search-box__field">
-        <SearchIcon className="dbx-search-box__icon" aria-hidden />
-        <Input
+        <CommandInput
           value={query}
           placeholder={placeholder}
           aria-label={placeholder}
-          onChange={(event) => {
-            setQuery(event.target.value);
+          onValueChange={(value) => {
+            setQuery(value);
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") submit();
-            if (event.key === "Escape") setOpen(false);
+            if (event.key === "Enter" && hits.length === 0) submit();
           }}
         />
         {loading ? <Spinner className="dbx-search-box__spinner" /> : null}
@@ -96,6 +110,7 @@ export function SearchBox({
             variant="ghost"
             size="icon"
             aria-label="Clear search"
+            className="dbx-search-box__clear"
             onClick={() => {
               clear();
               setOpen(false);
@@ -107,39 +122,31 @@ export function SearchBox({
       </div>
 
       {open && (query.trim() || error) ? (
-        <div className="dbx-search-box__panel" role="listbox">
+        <CommandList className="dbx-search-box__panel dbx-search-box__results">
           {error ? <div className="dbx-search-box__error">{error}</div> : null}
-          {!error && hits.length === 0 && !loading ? (
-            <div className="dbx-search-box__empty">No results</div>
-          ) : null}
-          <ScrollArea className="dbx-search-box__results">
-            {hits.map((hit) => (
-              <button
-                key={`${hit.index ?? ""}:${hit.id}`}
-                type="button"
-                role="option"
-                aria-selected={false}
-                className="dbx-search-box__hit"
-                onClick={() => handleSelect(hit)}
-              >
-                {renderHit ? (
-                  renderHit(hit)
-                ) : (
-                  <div className="dbx-search-box__hit-default">
-                    <span className="dbx-search-box__hit-title">{hitTitle(hit)}</span>
-                    <span className="dbx-search-box__hit-meta">
-                      {showIndex && hit.index ? (
-                        <Badge variant="secondary">{hit.index}</Badge>
-                      ) : null}
-                      <span className="dbx-search-box__hit-id">{hit.id}</span>
-                    </span>
-                  </div>
-                )}
-              </button>
-            ))}
-          </ScrollArea>
-        </div>
+          {!error && !loading ? <CommandEmpty>No results</CommandEmpty> : null}
+          {hits.map((hit) => (
+            <CommandItem
+              key={`${hit.index ?? ""}:${hit.id}`}
+              value={JSON.stringify([hit.index ?? "", hit.id])}
+              className="dbx-search-box__hit"
+              onSelect={() => handleSelect(hit)}
+            >
+              {renderHit ? (
+                renderHit(hit)
+              ) : (
+                <div className="dbx-search-box__hit-default">
+                  <span className="dbx-search-box__hit-title">{hitTitle(hit)}</span>
+                  <span className="dbx-search-box__hit-meta">
+                    {showIndex && hit.index ? <Badge variant="secondary">{hit.index}</Badge> : null}
+                    <span className="dbx-search-box__hit-id">{hit.id}</span>
+                  </span>
+                </div>
+              )}
+            </CommandItem>
+          ))}
+        </CommandList>
       ) : null}
-    </div>
+    </Command>
   );
 }

@@ -29,6 +29,7 @@ import {
   appkit as dbxAppkit,
   identity as appkitIdentity,
   plugin as appkitPlugin,
+  toolkit as appkitToolkit,
 } from "@dbx-tools/appkit";
 import { config as coreConfig } from "@dbx-tools/core";
 import { ensureRustReleaseBinary, rustReleaseBinaryCommand } from "@dbx-tools/rust-binary";
@@ -222,24 +223,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
 
   async toolkit(options?: ToolkitOptions): Promise<Record<string, ToolkitEntry>> {
     await this.ensureMcpTools();
-    return Object.fromEntries(
-      this.getAgentTools().flatMap((definition) => {
-        const name = toolkitName(definition.name, "graphiti", options);
-        if (name === null) return [];
-        return [
-          [
-            name,
-            {
-              __toolkitRef: true as const,
-              pluginName: "graphiti",
-              localName: definition.name,
-              def: { ...definition, name },
-              annotations: definition.annotations,
-            } satisfies ToolkitEntry,
-          ],
-        ];
-      }),
-    );
+    return appkitToolkit.entries("graphiti", this.getAgentTools(), options);
   }
 
   getAgentTools(): AgentToolDefinition[] {
@@ -471,18 +455,6 @@ function scopedArguments(name: string, args: unknown, scope: string): Record<str
   if (field === "group_id") scoped.group_id = scope;
   if (field === "group_ids") scoped.group_ids = [scope];
   return scoped;
-}
-
-function toolkitName(
-  localName: string,
-  pluginName: string,
-  options: ToolkitOptions = {},
-): string | null {
-  if (options.only && !options.only.includes(localName)) return null;
-  if (options.except?.includes(localName)) return null;
-  const renamed = options.rename?.[localName];
-  if (renamed) return renamed;
-  return `${options.prefix ?? `${pluginName}.`}${localName}`;
 }
 
 function toolAnnotations(name: string): ToolAnnotations {

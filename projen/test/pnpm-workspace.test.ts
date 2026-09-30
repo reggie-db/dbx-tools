@@ -66,6 +66,8 @@ describe("pnpm-workspace.yaml", () => {
   it("carries catalog pins added after construction", () => {
     assert.match(yaml, /^ {2}react: \^19\.9\.9$/m);
     assert.match(yaml, /^ {2}"@scoped\/name": \^2\.0\.0$/m);
+    assert.match(yaml, /^ {2}"@databricks\/appkit": 0\.81\.0$/m);
+    assert.match(yaml, /^ {2}"@databricks\/appkit-ui": 0\.81\.0$/m);
   });
 
   it("keeps a DOTTED package name one catalog key", () => {

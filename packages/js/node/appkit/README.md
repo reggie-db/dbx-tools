@@ -66,10 +66,12 @@ await appkit.createApp({
 });
 ```
 
-When `lakebase()` is present, auto-config resolves Lakebase Postgres connection
-settings and fills missing `PG*` / `LAKEBASE_*` variables. That avoids a startup
-race where the Lakebase plugin reads env before another async setup step can
-discover it.
+When native `lakebase()` or beta `database()` is present, auto-config resolves
+Lakebase Postgres connection settings and fills missing `PG*` /
+`LAKEBASE_*` variables. That avoids a startup race where a plugin reads env
+before another async setup step can discover it. A database-only app resolves
+env without implicitly broadening cache-schema grants; AppKit's database plugin
+owns its own pool.
 
 Auto-configuration is conservative: existing env vars win unless a caller passes
 explicit options, and local-only discovery is skipped inside a Databricks App
@@ -114,10 +116,10 @@ reason.
 
 `appkit.createApp()` accepts everything AppKit's `createApp` does, plus:
 
-| Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                 |
-| --------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate the default on a `lakebase` plugin being registered, or set it explicitly to run regardless. |
-| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env, `onLifecycle`, `onTeardown`, `broadcastSignal`, and globally shared `bindProcess` supervision.                                                                       |
+| Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate resolution on native `lakebase` or `database`; implicit database-only resolution does not grant the cache schema. |
+| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env, `onLifecycle`, `onTeardown`, `broadcastSignal`, and globally shared `bindProcess` supervision.                                                                                            |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
 still wants AppKit's PERSISTENT cache. AppKit only chooses Lakebase for
@@ -329,6 +331,7 @@ is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option
 | `databricks`       | Databricks SDK context cancellation adapters.                                                                                                   |
 | `interceptor`      | Lifecycle bridging, teardown callbacks, and process-wide child supervision.                                                                     |
 | `plugin`           | Typed AppKit plugin data, instance, and required-instance lookup.                                                                               |
+| `toolkit`          | Shared AppKit toolkit filtering, naming, and entry construction.                                                                                |
 | `provision`        | Cache schema provisioning helpers.                                                                                                              |
 | `identity`         | OBO-vs-service-principal request identity: modes, resolution, and the forwarded headers.                                                        |
 

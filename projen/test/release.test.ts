@@ -315,6 +315,9 @@ describe("release task contracts", () => {
       releasePr.indexOf("generateReleaseSummary({") <
         releasePr.indexOf('git(releaseRoot, ["add", "-A"])'),
     );
+    assert.ok(
+      releasePr.indexOf("generateReleaseSummary({") < releasePr.indexOf("if (opts.approve)"),
+    );
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('.option("--approve",'));
     assert.match(releasePr, /account\.repository}\/merges/);

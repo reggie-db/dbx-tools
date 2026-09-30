@@ -673,13 +673,13 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   so it builds and validates without publishing packages or deploying
   documentation. The workflow uses one non-cancelling `release` concurrency
   group so a later release cannot interrupt an earlier publication.
-  After local validation, release preparation optionally writes
+  After local validation, release preparation writes
   `docs/releases/v<version>.md` by trying the installed Cursor agent, Codex, then
   Claude in that order. Each invocation is non-interactive and read-only. An
   absent, unauthenticated, failed, or empty provider falls through; when all are
-  unavailable the release continues without the file. Provider JSON/text events
-  are normalized into structured release logs while the final assistant message
-  alone becomes the summary. `releaseSummary: false` disables the feature;
+  unavailable a deterministic Git summary still creates the versioned file.
+  Provider JSON/text events are normalized into structured release logs while
+  the final assistant message alone becomes the summary. `releaseSummary: false` disables the feature;
   `releaseSummary.providers` selects the order/subset. The immutable file is
   included in the release PR and prepended to GitHub's generated release notes.
   Release workflow generation is non-destructive: it writes `release.yml` and
@@ -902,7 +902,7 @@ Jobs, beta AI Search, beta Agents, AppKit UI primitives, and standard plugin
 lifecycle behavior.
 
 AppKit's public `WorkspaceClient` is the SDK migration seam. In the installed
-0.60 surface it still delegates every service to
+0.81 surface it still delegates every service to
 `@databricks/sdk-experimental`; it is not a completed modular-SDK migration.
 Use `WorkspaceClient` / `createWorkspaceClient` and
 `toLegacyWorkspaceClient()` at compatibility handoffs. Direct experimental-SDK
@@ -912,19 +912,36 @@ also the synth-time input for `shared/genie/src/dashboards.ts`.
 Do not add another direct import, and do not replace generated Genie Zod schemas
 with hand-maintained copies unless AppKit publishes browser-safe runtime schemas.
 
+AppKit 0.81's `database()` plugin is a native typed-entity/CRUD option for new
+application data. `@dbx-tools/appkit` recognizes both `lakebase` and `database`
+as environment demand without adding another plugin or pool; implicit
+database-only resolution does not broaden cache-schema grants. It does not
+replace Better Auth, Mastra storage, Graphiti journaling, advisory locks, or
+topic buses. Keep `@databricks/appkit/testing` imports test-only because that
+subpath loads its optional Vitest peer, even when Bun runs the tests.
+Use `@databricks/appkit/tsdown` `appkitServerConfig()` only for conventional
+compiled native code-agent apps under `server/agents`; it does not replace this
+repository's Bun browser builds, source-run demo server, package discovery,
+publication, or deployment staging.
+
 When a `dbx-tools` package overlaps native AppKit, the README must explicitly say
 why to use this package anyway:
 
 - `@dbx-tools/appkit`: use when bootstrapping/config is the pain point:
   Lakebase/Postgres env before plugin setup, layered config lookup, safe
   execution context fallback, typed sibling plugin lookup, SDK cancellation, or
-  cache-schema grants.
+  cache-schema grants. AppKit 0.81 makes test teardown joinable but exposes no
+  production shutdown handle that preserves child-failure status and SIGHUP;
+  retain the bounded child supervisor until that lifecycle parity exists.
 - `@dbx-tools/appkit-mastra`: use when the app wants Mastra's larger plugin
   ecosystem, tool model, memory/storage, workflows, MCP support, and
   `@mastra/client-js` stream shape while preserving AppKit OBO auth and AppKit
   tool-provider plugins. Auto-created workspaces also adapt Databricks Sandbox
   to Mastra's command tools by default. Native AppKit Agents are the simpler
-  choice when the AppKit agent model is enough.
+  choice when exact Chat model IDs, synchronous AppKit toolkits, simple history,
+  and curated service-principal skills are enough. `createMastraEvalDriver`
+  adapts native Mastra `generate()` results to AppKit `runEval`; it does not
+  replace production feedback, tracing, or the AI SDK chat route.
 - `@dbx-tools/ui-mastra`: use when the server is `node-appkit-mastra` and the UI
   needs Mastra stream handling, approvals, thread sidebar, model picker,
   feedback, exports, `[chart:<id>]` / `[data:<id>]` embeds, or the features the
@@ -952,7 +969,10 @@ why to use this package anyway:
   content is inert, focus stays inside, and Escape closes it. Resize persistence
   is independent per horizontal/vertical orientation, and body cursor styles are
   restored to their pre-drag values. Native AppKit UI is enough for general
-  components or native Genie/Serving hooks.
+  components or native Genie/Serving hooks. Keep this mounted shell instead of
+  Sheet/Dialog/Resizable: native overlays unmount chat state and native resizing
+  is percentage-based, while this contract preserves drafts, streams, scroll,
+  nested popovers, and independent pixel sizes.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need Agent Mode SSE projected into async iterators,
   snapshot diffing, typed events, custom logging/tests, or chart/data planning.
@@ -1006,8 +1026,11 @@ why to use this package anyway:
   full-text provider with the same aliases, routes, client config, response
   shape, and `useAiSearchQuery` compatibility. Register native `aiSearch` OR
   `lakebaseAiSearch` as the provider, then register `search` for extension
-  tools. Do not restore a second Vector Search query client in the extension
-  plugin.
+  tools. The Lakebase HTTP route cannot widen configured projection columns and
+  honors each index's SP/OBO auth mode; trusted programmatic calls may override
+  projection. `SearchBox` uses AppKit Command primitives with native keyboard
+  selection while preserving server ranking. Do not restore a second Vector
+  Search query client in the extension plugin.
 - `@dbx-tools/postgres`: use for connection-correct Postgres utilities shared
   across packages. Advisory locks belong to a dedicated connection, so callers
   must not reproduce them with separate `pool.query()` calls. Explicit bigint

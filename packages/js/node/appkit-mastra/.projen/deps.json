@@ -30,6 +30,11 @@
       "type": "build"
     },
     {
+      "name": "vitest",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "skills",
       "version": "^1",
       "type": "peer"

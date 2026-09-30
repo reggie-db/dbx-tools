@@ -60,9 +60,10 @@ Repository policy stays in the consuming `.projenrc.ts`:
 - `releaseValidationTasks` names repository tasks that must pass in the release
   worktree before Cargo tests, compilation, local publication, or approval.
   Use it for repository-specific guards that also run in release CI.
-- `releaseSummary` controls optional AI release notes. It defaults to enabled
-  with Cursor, Codex, Claude fallback order; pass `false` to disable or provide
-  a `providers` array to choose the order/subset.
+- `releaseSummary` controls versioned release notes. It defaults to Cursor,
+  Codex, Claude fallback order and writes a deterministic Git summary when every
+  configured provider is unavailable; pass `false` to disable or provide a
+  `providers` array to choose the order/subset.
 - `pullRequestTitlePolicy` configures semantic title types and scope policy.
   Omit it or pass `false` to disable the title job.
 - `workflowCacheIgnorePaths` excludes generated output trees that may contain
@@ -288,6 +289,11 @@ parameter to `Project`). Drop to `mixin.create(predicate, fn)` +
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 `ui`, and `openapi`. Repo-specific mixins layer package-specific dependencies,
 scripts, and generated files on top.
+
+AppKit 0.81's `appkitServerConfig()` is the preferred tsdown preset for a
+consumer app using conventional compiled `server/agents/*/agent.ts` entries. It
+does not replace this engine's package discovery, Bun browser build, source-run
+server, publication, or Databricks deployment staging.
 
 A tag layers over a shared compiler floor every package gets at construction:
 ES2022 plus the web-platform globals available in every runtime, and deliberately

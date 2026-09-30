@@ -14,6 +14,7 @@ export * as lakebaseResolver from "./src/lakebase-resolver.ts";
 export * as pgaddress from "./src/pgaddress.ts";
 export * as plugin from "./src/plugin.ts";
 export * as provision from "./src/provision.ts";
+export * as toolkit from "./src/toolkit.ts";
 export type { AutoConfigureMode, CreateAppConfig, ExecutionContextLike, WorkspaceClientLike } from "./src/appkit.ts";
 export { bundleAppResourceSchema, flattenAppYamlEnv, flattenAppEnv, getBundlePath } from "./src/bundle.ts";
 export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, ResolveConfigValueOptions } from "./src/bundle.ts";

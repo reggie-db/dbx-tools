@@ -20,6 +20,11 @@
       "type": "build"
     },
     {
+      "name": "vitest",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
       "name": "@databricks/appkit",
       "version": "catalog:",
       "type": "peer"

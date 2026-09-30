@@ -24,6 +24,12 @@ Serving, Jobs, beta AI Search, and beta Agents, plus React UI primitives and
 hooks. `dbx-tools` is not a fork of that platform and should not replace AppKit
 for straightforward cases.
 
+This repository tests AppKit and AppKit UI 0.81 as an exact pair. Prefer native
+`database()` for new typed application entities, native code-agent discovery and
+curated skills for simple agents, `@databricks/appkit/testing` for plugin/app
+harnesses, and native evaluation contracts where they fit. The packages below
+remain for protocols and policy those surfaces do not replace.
+
 Use these packages when the native surface gets repetitive or narrow for a real
 app:
 
