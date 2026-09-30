@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/reggie-db/dbx-tools/compare/projen-cli-v0.8.0...projen-cli-v0.8.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **projen:** regenerate clean merge metadata ([416bb5c](https://github.com/reggie-db/dbx-tools/commit/416bb5c4a7491a4b3c6658983e23fb12d5274b20))
+* **projen:** skip generated release PR checks ([6979470](https://github.com/reggie-db/dbx-tools/commit/697947035e5e309200a97185a3558df82f8e8906))
+
 ## [0.8.0](https://github.com/reggie-db/dbx-tools/compare/projen-cli-v0.7.0...projen-cli-v0.8.0) (2026-09-30)
 
 
