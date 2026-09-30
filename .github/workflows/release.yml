@@ -110,6 +110,7 @@ jobs:
         id: reconcile_generated_release_pr_files
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_PRS: ${{ steps.release.outputs.prs }}
         run: |-
           BRANCH="$(jq -r '.[0].headBranchName' <<<"$RELEASE_PRS")"
@@ -128,6 +129,7 @@ jobs:
             git commit -m "chore: reconcile release metadata"
             git push origin "HEAD:$BRANCH"
           fi
+          gh pr merge "$BRANCH" --auto --merge
         shell: bash
     timeout-minutes: 30
   release-plan:

@@ -419,7 +419,10 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
       {
         name: "Reconcile generated release PR files",
         if: "${{ steps.release.outputs.prs_created == 'true' }}",
-        env: { RELEASE_PRS: "${{ steps.release.outputs.prs }}" },
+        env: {
+          GH_TOKEN: "${{ github.token }}",
+          RELEASE_PRS: "${{ steps.release.outputs.prs }}",
+        },
         shell: "bash",
         run: [
           'BRANCH="$(jq -r \'.[0].headBranchName\' <<<"$RELEASE_PRS")"',
@@ -438,6 +441,7 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
           '  git commit -m "chore: reconcile release metadata"',
           '  git push origin "HEAD:$BRANCH"',
           "fi",
+          'gh pr merge "$BRANCH" --auto --merge',
         ].join("\n"),
       },
     ],
@@ -490,7 +494,6 @@ function configureReleaseRequestWorkflow(
           "fi",
           'echo "requested=true" >> "$GITHUB_OUTPUT"',
           'echo "branch=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"',
-          'echo "approve=$(sed -n \'s/^Release-Approve: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
           'echo "notes_path=$(sed -n \'s/^Release-Notes-Path: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
           'echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"',
         ].join("\n"),
@@ -504,7 +507,6 @@ function configureReleaseRequestWorkflow(
           BASE_BRANCH: baseBranch,
           TITLE: "${{ steps.request.outputs.title }}",
           NOTES_PATH: "${{ steps.request.outputs.notes_path }}",
-          APPROVE: "${{ steps.request.outputs.approve }}",
         },
         shell: "bash",
         run: [
@@ -518,7 +520,7 @@ function configureReleaseRequestWorkflow(
           '  gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"',
           '  PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number\')"',
           "fi",
-          'if [ "$APPROVE" = "true" ]; then gh pr merge "$PR" --auto --merge; fi',
+          'gh pr merge "$PR" --auto --merge',
         ].join("\n"),
       },
     ],
