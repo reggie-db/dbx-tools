@@ -25,7 +25,10 @@ function graphAtRef(root: string, ref: string): ReleaseUnitGraph | undefined {
 
 function writeOutput(name: string, value: unknown): void {
   const output = process.env.GITHUB_OUTPUT;
-  if (output) appendFileSync(output, `${name}=${JSON.stringify(value)}\n`);
+  if (output) {
+    const rendered = typeof value === "string" ? value : JSON.stringify(value);
+    appendFileSync(output, `${name}=${rendered}\n`);
+  }
 }
 
 new Command()
