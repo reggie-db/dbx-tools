@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
@@ -32,6 +32,32 @@ const { base } = docsSiteConfig();
 
 function withBase(sitePath) {
   return withBasePath(base, sitePath);
+}
+
+/** Resolve one executable from the generated documentation site's dependencies. */
+function packageBinary(packageName, binaryName) {
+  const packageRoot = path.join(siteRoot, "node_modules", packageName);
+  const manifest = JSON.parse(read(path.join(packageRoot, "package.json")));
+  const relative = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.[binaryName];
+  if (typeof relative !== "string" || relative.length === 0) {
+    throw new Error(`${packageName} does not declare the ${binaryName} binary`);
+  }
+  return path.resolve(packageRoot, relative);
+}
+
+/** Map values through a bounded number of asynchronous workers while preserving order. */
+async function mapConcurrent(values, limit, callback) {
+  const results = new Array(values.length);
+  let next = 0;
+  async function worker() {
+    while (next < values.length) {
+      const index = next;
+      next += 1;
+      results[index] = await callback(values[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()));
+  return results;
 }
 
 /**
@@ -343,25 +369,14 @@ function pruneEmptyNamespacePages(outDir) {
   write(indexPath, index);
 }
 
-function generatePackageApi(pkg) {
+async function generatePackageApi(pkg, typedocBin) {
   const outDir = path.join(apiRoot, pkg.slug);
   fs.rmSync(outDir, { recursive: true, force: true });
 
-  // `bun x`, not `pnpm exec`: the repo installs with bun and the docs workflow
-  // never puts pnpm on the runner, so spawning it exited with a null status and
-  // no output at all (ENOENT), surfacing only as "TypeDoc failed\nnull\nnull".
-  // Every path below is already relative to `siteRoot`, so the spawn `cwd` is
-  // what points both bun and typedoc at the generated site - `bun x` has no
-  // `--cwd` of its own and reads the flag as a dependency spec.
-  const result = spawnSync(
-    "bun",
+  await checkedSpawn(
+    process.execPath,
     [
-      "x",
-      "--package",
-      "typedoc",
-      "--package",
-      "typedoc-plugin-markdown",
-      "typedoc",
+      typedocBin,
       ...[...new Set(pkg.entries.map((entry) => entry.file))].map((entry) =>
         posix(path.relative(siteRoot, entry)),
       ),
@@ -390,17 +405,11 @@ function generatePackageApi(pkg) {
       "--cleanOutputDir",
       "true",
     ],
+    `TypeDoc generation for ${pkg.name}`,
     {
       cwd: siteRoot,
-      encoding: "utf8",
-      stdio: "pipe",
     },
   );
-
-  if (result.status !== 0) {
-    const output = `${result.stdout}\n${result.stderr}`.trim();
-    throw new Error(`TypeDoc failed for ${pkg.name}\n${output}`);
-  }
 
   const mdFiles = walk(outDir).filter((p) => p.endsWith(".md"));
   for (const file of mdFiles) {
@@ -426,23 +435,41 @@ function generatePackageApi(pkg) {
   return true;
 }
 
-function checkedSpawn(command, args, description, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: root,
-    encoding: "utf8",
-    stdio: "pipe",
-    ...options,
+async function checkedSpawn(command, args, description, options = {}) {
+  await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...options,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      reject(new Error(`${description} failed\n${error.message}`));
+    });
+    child.on("close", (status) => {
+      const output = `${stdout}\n${stderr}`.trim();
+      if (status !== 0) {
+        reject(new Error(`${description} failed${output ? `\n${output}` : ""}`));
+        return;
+      }
+      if (stdout.trim()) process.stdout.write(`${stdout.trim()}\n`);
+      resolve();
+    });
   });
-  if (result.status !== 0) {
-    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
-    throw new Error(`${description} failed${output ? `\n${output}` : ""}`);
-  }
-  if (result.stdout?.trim()) process.stdout.write(`${result.stdout.trim()}\n`);
 }
 
-function generatePythonPackageApi(pkg) {
+async function generatePythonPackageApi(pkg) {
   const output = path.join(apiRoot, pkg.slug, "index.md");
-  checkedSpawn(
+  await checkedSpawn(
     "python3",
     [
       path.join(root, "docs", "scripts", "generate_python_api.py"),
@@ -500,7 +527,7 @@ function rustLandingPage(pkg) {
   ].join("\n");
 }
 
-function generateRustApis(packages) {
+async function generateRustApis(packages) {
   if (packages.length === 0) return [];
   const libraryPackages = packages.filter((pkg) => pkg.hasLibrary);
   const targetRoot = path.join(root, ".docs-build", "rustdoc-target");
@@ -509,7 +536,7 @@ function generateRustApis(packages) {
   fs.rmSync(targetRoot, { force: true, recursive: true });
   fs.rmSync(publishedRoot, { force: true, recursive: true });
   if (libraryPackages.length > 0) {
-    checkedSpawn(
+    await checkedSpawn(
       "cargo",
       [
         "doc",
@@ -539,7 +566,7 @@ function generateRustApis(packages) {
   return generated;
 }
 
-function main() {
+async function main() {
   if (!fs.existsSync(siteRoot)) {
     throw new Error("Missing .docs-build/site. Run docs/scripts/sync-readmes.mjs first.");
   }
@@ -547,17 +574,23 @@ function main() {
   const typescriptPackages = discoverPackages();
   const pythonPackages = discoverPythonPackages(root);
   const rustPackages = discoverRustPackages(root);
+  const typedocBin = packageBinary("typedoc", "typedoc");
   fs.rmSync(apiRoot, { recursive: true, force: true });
   fs.mkdirSync(apiRoot, { recursive: true });
 
-  const generated = [];
-  for (const pkg of typescriptPackages) {
-    if (generatePackageApi(pkg)) generated.push(pkg);
-  }
-  for (const pkg of pythonPackages) {
-    if (generatePythonPackageApi(pkg)) generated.push(pkg);
-  }
-  generated.push(...generateRustApis(rustPackages));
+  const generated = (
+    await mapConcurrent(typescriptPackages, 2, async (pkg) =>
+      (await generatePackageApi(pkg, typedocBin)) ? pkg : undefined,
+    )
+  ).filter(Boolean);
+  generated.push(
+    ...(
+      await mapConcurrent(pythonPackages, 5, async (pkg) =>
+        (await generatePythonPackageApi(pkg)) ? pkg : undefined,
+      )
+    ).filter(Boolean),
+  );
+  generated.push(...(await generateRustApis(rustPackages)));
 
   write(
     path.join(apiRoot, "index.md"),
@@ -573,4 +606,4 @@ function main() {
   );
 }
 
-main();
+await main();
