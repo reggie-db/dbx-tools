@@ -1205,6 +1205,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    if: ${{ always() && needs['build-docs'].result == 'success' }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

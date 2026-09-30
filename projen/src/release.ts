@@ -728,6 +728,7 @@ function addIndependentDocsJobs(
     ],
   });
   workflow.addJob("deploy-docs", {
+    if: "${{ always() && needs['build-docs'].result == 'success' }}",
     needs: ["build-docs"],
     environment: {
       name: "github-pages",
