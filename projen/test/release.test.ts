@@ -500,8 +500,11 @@ describe("optional Node release stage", () => {
       assert.ok(workflow.jobs["publication-complete"]);
       const sync = workflow.jobs["sync-release-branch"];
       assert.equal(sync?.needs, "publication-complete");
-      assert.match(step(sync!, "Safely fast-forward dev").run ?? "", /merge-base --is-ancestor/);
-      assert.match(step(sync!, "Safely fast-forward dev").run ?? "", /no longer exists/);
+      const syncScript = step(sync!, "Safely sync dev").run ?? "";
+      assert.match(syncScript, /merge-base --is-ancestor/);
+      assert.match(syncScript, /git merge --no-ff --no-edit/);
+      assert.match(syncScript, /git merge --abort/);
+      assert.match(syncScript, /no longer exists/);
       assert.equal("verify-context" in workflow.jobs, false);
       assert.equal("rust-build" in workflow.jobs, false);
       assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");

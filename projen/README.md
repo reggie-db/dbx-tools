@@ -195,9 +195,10 @@ behavior, Cargo checks existing versions, and GitHub assets upload to the
 component release.
 
 Set `releaseSyncBranch` when a repository retains a long-lived source branch.
-After publication the workflow fast-forwards that branch only when it exists
-and is an ancestor of released `main`; missing or diverged branches are left
-untouched.
+After publication the workflow fast-forwards a branch that is behind, skips a
+branch that already contains released `main`, and merges `main` into a diverged
+branch when the merge is conflict-free. Missing branches and conflicted merges
+are left untouched.
 
 The Rust matrix has one row per target. Each row installs native dependencies,
 builds the Cargo workspace once, then packages every discovered output from

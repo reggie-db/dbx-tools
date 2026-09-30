@@ -1179,8 +1179,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Safely fast-forward dev
-        id: safely_fast-forward_dev
+      - name: Safely sync dev
+        id: safely_sync_dev
         env:
           SOURCE_BRANCH: dev
         run: |-
@@ -1191,8 +1191,18 @@ jobs:
           git fetch origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"
           if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" HEAD; then
             git push origin "HEAD:refs/heads/$SOURCE_BRANCH"
+          elif git merge-base --is-ancestor HEAD "origin/$SOURCE_BRANCH"; then
+            echo "source branch $SOURCE_BRANCH already contains released main"
           else
-            echo "::warning::source branch $SOURCE_BRANCH diverged from released main; leaving it untouched"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git switch --force-create "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"
+            if git merge --no-ff --no-edit "$GITHUB_SHA"; then
+              git push origin "HEAD:refs/heads/$SOURCE_BRANCH"
+            else
+              git merge --abort
+              echo "::warning::source branch $SOURCE_BRANCH has merge conflicts with released main; leaving it untouched"
+            fi
           fi
         shell: bash
 permissions:

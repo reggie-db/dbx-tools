@@ -2006,9 +2006,10 @@ and remain idempotent per component, so recovery does not replay unrelated
 units.
 
 This repository sets `releaseSyncBranch: "dev"`. After successful publication,
-the workflow fast-forwards `dev` only when that branch still exists and is an
-ancestor of released `main`. A missing, deleted, ahead, or diverged branch is
-left untouched without opening a PR or forcing history.
+the workflow fast-forwards `dev` when it is behind, does nothing when it already
+contains released `main`, and cleanly merges `main` into a diverged `dev`.
+Missing branches and conflicted merges are left untouched without opening a PR
+or forcing history.
 
 A Databricks notebook or job is a different network with its own package index.
 Documentation and notebooks install the published distributions by name
