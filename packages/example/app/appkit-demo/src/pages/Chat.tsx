@@ -10,7 +10,7 @@ const Chat = () => {
 
   const agentModeControl = (
     <label
-      className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border px-2.5 text-xs font-medium text-foreground"
+      className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-sm px-2 text-sm text-foreground hover:bg-accent"
       title={
         agentMode ? "Genie Agent Mode SSE is enabled" : "Genie Conversation API polling is enabled"
       }
@@ -23,7 +23,7 @@ const Chat = () => {
         checked={agentMode}
         onChange={(event) => setAgentMode(event.target.checked)}
       />
-      Agent Mode
+      Genie Agent Mode
     </label>
   );
 
@@ -33,7 +33,7 @@ const Chat = () => {
       agentId={agentId}
       showModelPicker
       enableExport
-      composerActions={agentModeControl}
+      modelSelectorActions={agentModeControl}
       className="min-h-0 flex-1"
     />
   );

@@ -182,6 +182,11 @@ export type ChatViewProps = {
    */
   composerActions?: ReactNode;
   /**
+   * Host-owned controls rendered inside the model selector after the endpoint
+   * choices. Omit when the active agent has no matching model-adjacent option.
+   */
+  modelSelectorActions?: ReactNode;
+  /**
    * Host-owned actions rendered on the left side of the composer's fixed
    * footer, before Export and Clear.
    */

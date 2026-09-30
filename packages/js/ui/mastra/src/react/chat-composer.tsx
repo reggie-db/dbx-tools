@@ -251,6 +251,7 @@ type ChatComposerProps = {
   onModelChange: ChatViewProps["onModelChange"];
   defaultModelName: ChatViewProps["defaultModelName"];
   composerActions: ChatViewProps["composerActions"];
+  modelSelectorActions: ChatViewProps["modelSelectorActions"];
   composerLeadingActions: ChatViewProps["composerLeadingActions"];
   isLoadingHistory: NonNullable<ChatViewProps["isLoadingHistory"]>;
   onClear: ChatViewProps["onClear"];
@@ -274,6 +275,7 @@ export const ChatComposer = ({
   onModelChange,
   defaultModelName,
   composerActions,
+  modelSelectorActions,
   composerLeadingActions,
   isLoadingHistory,
   onClear,
@@ -406,6 +408,18 @@ export const ChatComposer = ({
                           {option.displayName || option.name}
                         </SelectItem>
                       ))}
+                      {modelSelectorActions && (
+                        <>
+                          <div role="separator" className="my-1 h-px bg-border" />
+                          <div
+                            className="px-1 py-1"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                          >
+                            {modelSelectorActions}
+                          </div>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 ) : (

@@ -1028,6 +1028,8 @@ export interface MastraChatProps<
   className?: string;
   /** Host controls placed beside the model picker in the composer footer. */
   composerActions?: ReactNode;
+  /** Host controls shown inside the model selector after its endpoint choices. */
+  modelSelectorActions?: ReactNode;
   /** Host controls placed on the left side of the composer footer. */
   composerLeadingActions?: ReactNode;
 }
@@ -1048,6 +1050,7 @@ export interface MastraChatProps<
 export const MastraChat = <TValues extends Record<string, unknown> = Record<string, unknown>>({
   className,
   composerActions,
+  modelSelectorActions,
   composerLeadingActions,
   ...options
 }: MastraChatProps<TValues>) => {
@@ -1057,6 +1060,7 @@ export const MastraChat = <TValues extends Record<string, unknown> = Record<stri
       {...chat}
       className={className}
       composerActions={composerActions}
+      modelSelectorActions={modelSelectorActions}
       composerLeadingActions={composerLeadingActions}
     />
   );

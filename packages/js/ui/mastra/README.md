@@ -155,6 +155,9 @@ Useful options:
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
 - `composerActions` places host-owned per-turn controls beside the model
   selector without replacing the built-in composer.
+- `modelSelectorActions` places host-owned controls inside the model menu after
+  the endpoint choices. Supply it only when the active agent supports that
+  option, such as a Genie transport toggle.
 - `composerLeadingActions` places attachment or app actions on the left side of
   the fixed composer footer. The textarea grows above it to a cap, then scrolls;
   model and Send/Stop stay pinned bottom-right.
