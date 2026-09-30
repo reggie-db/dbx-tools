@@ -123,7 +123,11 @@ if (import.meta.main) {
           defaultBranch: options.targetBranch,
           token: githubToken(),
           ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
-          ...(process.env.GITHUB_GRAPHQL_URL ? { graphqlUrl: process.env.GITHUB_GRAPHQL_URL } : {}),
+          ...(process.env.GITHUB_GRAPHQL_URL
+            ? {
+                graphqlUrl: process.env.GITHUB_GRAPHQL_URL.replace(/\/graphql\/?$/, ""),
+              }
+            : {}),
         });
         const result = await runReleasePlease({
           github,
