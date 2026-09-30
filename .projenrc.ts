@@ -210,6 +210,7 @@ const root = new projenProject.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
+  releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
   pullRequestTitlePolicy: {
     types: ["feat", "fix", "chore"],
     requireScope: false,
@@ -244,6 +245,11 @@ const sourceDocs = root.addTask("docs:check-source", {
   description: "Reject new undocumented public TypeScript exports",
 });
 sourceDocs.exec("bun docs/scripts/check-source-docs.mjs");
+
+const readmeDocs = root.addTask("docs:check-readmes", {
+  description: "Validate and generate documentation from package READMEs",
+});
+readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
 
 // ---------------------------------------------------------------------------
 // JavaScript and Python lockfiles stay UNTRACKED

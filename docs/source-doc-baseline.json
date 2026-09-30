@@ -474,11 +474,6 @@
     },
     {
       "package": "@dbx-tools/shared-model",
-      "name": "ReasoningEffortSchema",
-      "source": "packages/js/shared/model/src/model.ts"
-    },
-    {
-      "package": "@dbx-tools/shared-model",
       "name": "ServingEndpointSummary",
       "source": "packages/js/shared/model/src/model.ts"
     },

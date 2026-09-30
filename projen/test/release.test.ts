@@ -43,6 +43,7 @@ before(() => {
       artifactPath: "custom-site/dist",
     },
     releasePythonRoot: "python/packages",
+    releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
     pullRequestTitlePolicy: {
       types: ["feature", "maintenance"],
       requireScope: true,
@@ -230,7 +231,7 @@ describe("release task contracts", () => {
     assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
     assert.match(
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
-      /tasks\/release-pr\.ts --prefix v --base main --python-root "python\/packages"/,
+      /tasks\/release-pr\.ts --prefix v --base main --python-root "python\/packages" --validate-task "docs:check-source" --validate-task "docs:check-readmes"/,
     );
   });
 

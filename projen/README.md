@@ -57,6 +57,9 @@ Repository policy stays in the consuming `.projenrc.ts`:
   artifact upload, and deployment without naming a docs script or output tree.
 - `releasePythonRoot` passes the actual Python package root to local release
   preparation. Omit it when the workspace has no standard Python packages.
+- `releaseValidationTasks` names repository tasks that must pass in the release
+  worktree before Cargo tests, compilation, local publication, or approval.
+  Use it for repository-specific guards that also run in release CI.
 - `releaseSummary` controls optional AI release notes. It defaults to enabled
   with Cursor, Codex, Claude fallback order; pass `false` to disable or provide
   a `providers` array to choose the order/subset.

@@ -67,6 +67,7 @@ export type ModelProfile = z.infer<typeof ModelProfileSchema>;
 
 /** Provider wire value accepted as a reasoning effort by a discovered model. */
 export const ReasoningEffortSchema = z.string().min(1);
+/** Reasoning-effort wire value published by the Rust model policy. */
 export type ReasoningEffort = z.infer<typeof ReasoningEffortSchema>;
 
 /** Lifecycle flags associated with one discovered model. */
