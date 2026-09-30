@@ -20,7 +20,8 @@ import { spawnSync } from "node:child_process";
 import { installPythonBindings, stampPythonProject } from "./uniffi-python.js";
 
 const require = createRequire(import.meta.url);
-const toml = require("./smol-toml.cjs");
+const bundledToml = fileURLToPath(new URL("./smol-toml.cjs", import.meta.url));
+const toml = require(existsSync(bundledToml) ? bundledToml : "smol-toml");
 
 const parsed = parseArgs({
   allowPositionals: true,
