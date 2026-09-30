@@ -4,7 +4,14 @@ import type { JobStep } from "projen/lib/github/workflows-model";
 export const RELEASE_TAG = "${{ needs.verify-context.outputs.release_tag }}";
 export const RELEASE_SHA = "${{ needs.verify-context.outputs.expected_sha }}";
 export const RELEASE_VERSION = "${{ needs.verify-context.outputs.release_version }}";
-export const RELEASE_SUMMARY_FILE = "RELEASE_SUMMARY.md";
+export const RELEASE_SUMMARY_DIRECTORY = "docs/releases";
+
+/** Immutable repository path for one version's release summary. */
+export function releaseSummaryFile(version: string): string {
+  return `${RELEASE_SUMMARY_DIRECTORY}/v${version.replace(/^v/, "")}.md`;
+}
+
+export const RELEASE_SUMMARY_FILE = releaseSummaryFile(RELEASE_VERSION);
 
 /** Check out and verify the immutable commit selected by the release tag. */
 export function releaseSourceSteps(): readonly JobStep[] {

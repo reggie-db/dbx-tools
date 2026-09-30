@@ -699,7 +699,10 @@ describe("DBXToolsRustWorkspace", () => {
       "Publish GitHub release assets",
     );
     assert.equal(githubRelease.uses, "softprops/action-gh-release@v2");
-    assert.equal(githubRelease.with?.body_path, "RELEASE_SUMMARY.md");
+    assert.equal(
+      githubRelease.with?.body_path,
+      "docs/releases/v${{ needs.verify-context.outputs.release_version }}.md",
+    );
     assert.equal(githubRelease.with?.["generate-release-notes"], true);
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
     assert.ok(packager.includes('"node_modules", "npm", "bin", "npm-cli.js"'));

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { RELEASE_SUMMARY_FILE } from "../src/release-dispatch.ts";
+import { releaseSummaryFile } from "../src/release-dispatch.ts";
 import {
   generateReleaseSummary,
   RELEASE_SUMMARY_PROVIDERS,
@@ -36,7 +36,7 @@ describe("optional release summary providers", () => {
 
   it("writes a summary and removes stale content when providers are unavailable", () => {
     const root = mkdtempSync(join(tmpdir(), "release-summary-"));
-    const output = join(root, RELEASE_SUMMARY_FILE);
+    const output = join(root, releaseSummaryFile("1.2.3"));
     try {
       const content = generateReleaseSummary({
         root,
@@ -52,7 +52,8 @@ describe("optional release summary providers", () => {
       );
       assert.equal(readFileSync(output, "utf8"), content);
 
-      writeFileSync(output, "stale");
+      const nextOutput = join(root, releaseSummaryFile("1.2.4"));
+      writeFileSync(nextOutput, "stale");
       assert.equal(
         generateReleaseSummary({
           root,
@@ -61,7 +62,8 @@ describe("optional release summary providers", () => {
         }),
         undefined,
       );
-      assert.throws(() => readFileSync(output, "utf8"));
+      assert.throws(() => readFileSync(nextOutput, "utf8"));
+      assert.equal(readFileSync(output, "utf8"), content);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

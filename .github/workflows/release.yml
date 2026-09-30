@@ -674,7 +674,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/rust-release/*
-          body_path: RELEASE_SUMMARY.md
+          body_path: docs/releases/v${{ needs.verify-context.outputs.release_version }}.md
           generate-release-notes: true
           tag_name: ${{ needs.verify-context.outputs.release_tag }}
           target_commitish: ${{ needs.verify-context.outputs.expected_sha }}

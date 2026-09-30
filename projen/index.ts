@@ -56,7 +56,7 @@ export type { CargoDependencyOptions, CargoDependency, RustCliOptions, RustPacka
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
 export { DBXToolsRelease } from "./src/release.ts";
 export type { ReleaseStage, ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
-export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, RELEASE_SUMMARY_FILE } from "./src/release-dispatch.ts";
+export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, RELEASE_SUMMARY_DIRECTORY, RELEASE_SUMMARY_FILE } from "./src/release-dispatch.ts";
 export type { GithubRepositoryIdentity } from "./src/release-github.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";

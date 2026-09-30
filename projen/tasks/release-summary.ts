@@ -4,11 +4,11 @@
  *
  * @module
  */
-import { existsSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
-import { RELEASE_SUMMARY_FILE } from "../src/release-dispatch.ts";
+import { releaseSummaryFile } from "../src/release-dispatch.ts";
 
 const logger = log.logger("projen:release-summary");
 
@@ -126,19 +126,25 @@ function summaryPrompt(
   ].join("\n");
 }
 
-/** Generate `RELEASE_SUMMARY.md`, or remove a stale prior summary when unavailable. */
+/** Generate one immutable versioned summary, or remove a stale retry artifact. */
 export function generateReleaseSummary(options: {
   readonly root: string;
   readonly version: string;
   readonly fromRef?: string;
+  readonly toRef?: string;
   readonly runner?: ReleaseSummaryRunner;
 }): string | undefined {
-  const output = join(options.root, RELEASE_SUMMARY_FILE);
+  const relativeOutput = releaseSummaryFile(options.version);
+  const output = join(options.root, relativeOutput);
   if (existsSync(output)) rmSync(output);
+  const target =
+    options.toRef && capture(options.root, "git", ["rev-parse", "--verify", options.toRef])
+      ? options.toRef
+      : "HEAD";
   const range =
     options.fromRef && capture(options.root, "git", ["rev-parse", "--verify", options.fromRef])
-      ? `${options.fromRef}..HEAD`
-      : "HEAD";
+      ? `${options.fromRef}..${target}`
+      : target;
   const commits = capture(options.root, "git", ["log", "--no-merges", "--format=%s%n%b", range]);
   const changedFiles = capture(options.root, "git", [
     "diff",
@@ -146,7 +152,7 @@ export function generateReleaseSummary(options: {
     range,
     "--",
     ".",
-    `:(exclude)${RELEASE_SUMMARY_FILE}`,
+    `:(exclude)${relativeOutput}`,
   ]);
   const diffStat = capture(options.root, "git", [
     "diff",
@@ -154,7 +160,7 @@ export function generateReleaseSummary(options: {
     range,
     "--",
     ".",
-    `:(exclude)${RELEASE_SUMMARY_FILE}`,
+    `:(exclude)${relativeOutput}`,
   ]);
   const result = selectReleaseSummary(
     options.root,
@@ -166,6 +172,7 @@ export function generateReleaseSummary(options: {
     return undefined;
   }
   const content = `# Release ${options.version}\n\n${result.summary.trim()}\n`;
+  mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, content);
   logger.info("generated", { provider: result.provider, path: output });
   return content;
