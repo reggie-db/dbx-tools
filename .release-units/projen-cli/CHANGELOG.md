@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/reggie-db/dbx-tools/compare/projen-cli-v0.7.0...projen-cli-v0.8.0) (2026-09-30)
+
+
+### Features
+
+* **projen:** add source release request workflow ([b445cc9](https://github.com/reggie-db/dbx-tools/commit/b445cc9d54031097fff0b26863186989cc69a991))
+
+
+### Bug Fixes
+
+* **projen:** merge clean release branch divergence ([936332c](https://github.com/reggie-db/dbx-tools/commit/936332c11c08c44321673e3bbd2e85c2cfff6366))
+
 ## [0.7.0](https://github.com/reggie-db/dbx-tools/compare/projen-cli-v0.6.230...projen-cli-v0.7.0) (2026-09-30)
 
 
