@@ -360,6 +360,9 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
       releases: { stepId: "release", outputName: "releases" },
       prs: { stepId: "release", outputName: "prs" },
       docs_changed: { stepId: "changes", outputName: "docs_changed" },
+      recovery_requested: { stepId: "recovery", outputName: "requested" },
+      recovery_component: { stepId: "recovery", outputName: "component" },
+      recovery_version: { stepId: "recovery", outputName: "version" },
     },
     steps: [
       {
@@ -394,6 +397,20 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
         ].join("\n"),
       },
       {
+        name: "Detect committed recovery request",
+        id: "recovery",
+        shell: "bash",
+        run: [
+          "if [ -f .release-recovery.json ]; then",
+          '  echo "requested=true" >> "$GITHUB_OUTPUT"',
+          '  echo "component=$(jq -r .component .release-recovery.json)" >> "$GITHUB_OUTPUT"',
+          '  echo "version=$(jq -r .version .release-recovery.json)" >> "$GITHUB_OUTPUT"',
+          "else",
+          '  echo "requested=false" >> "$GITHUB_OUTPUT"',
+          "fi",
+        ].join("\n"),
+      },
+      {
         name: "Reconcile generated release PR files",
         if: "${{ steps.release.outputs.prs_created == 'true' }}",
         env: { RELEASE_PRS: "${{ steps.release.outputs.prs }}" },
@@ -423,7 +440,7 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
 
 function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
   return {
-    if: "${{ always() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.releases_created == 'true' || needs.release-please.outputs.docs_changed == 'true') }}",
+    if: "${{ always() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.releases_created == 'true' || needs.release-please.outputs.docs_changed == 'true' || needs.release-please.outputs.recovery_requested == 'true') }}",
     needs: ["release-please"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
@@ -457,8 +474,9 @@ function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
         id: "plan",
         shell: "bash",
         env: {
-          COMPONENT: "${{ inputs.component || '' }}",
-          VERSION: "${{ inputs.version || '' }}",
+          COMPONENT:
+            "${{ inputs.component || needs.release-please.outputs.recovery_component || '' }}",
+          VERSION: "${{ inputs.version || needs.release-please.outputs.recovery_version || '' }}",
           DOCS_CHANGED: "${{ needs.release-please.outputs.docs_changed || 'false' }}",
         },
         run: [
