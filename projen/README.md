@@ -57,6 +57,9 @@ Repository policy stays in the consuming `.projenrc.ts`:
   artifact upload, and deployment without naming a docs script or output tree.
 - `releasePythonRoot` passes the actual Python package root to local release
   preparation. Omit it when the workspace has no standard Python packages.
+- `releaseSummary` controls optional AI release notes. It defaults to enabled
+  with Cursor, Codex, Claude fallback order; pass `false` to disable or provide
+  a `providers` array to choose the order/subset.
 - `pullRequestTitlePolicy` configures semantic title types and scope policy.
   Omit it or pass `false` to disable the title job.
 - `workflowCacheIgnorePaths` excludes generated output trees that may contain

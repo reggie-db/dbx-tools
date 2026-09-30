@@ -5,6 +5,8 @@ export const RELEASE_TAG = "${{ needs.verify-context.outputs.release_tag }}";
 export const RELEASE_SHA = "${{ needs.verify-context.outputs.expected_sha }}";
 export const RELEASE_VERSION = "${{ needs.verify-context.outputs.release_version }}";
 export const RELEASE_SUMMARY_DIRECTORY = "docs/releases";
+export const RELEASE_SUMMARY_PROVIDER_NAMES = ["cursor", "codex", "claude"] as const;
+export type ReleaseSummaryProviderName = (typeof RELEASE_SUMMARY_PROVIDER_NAMES)[number];
 
 /** Immutable repository path for one version's release summary. */
 export function releaseSummaryFile(version: string): string {

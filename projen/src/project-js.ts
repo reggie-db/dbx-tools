@@ -41,7 +41,7 @@ import {
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
 import { applyCompiledPublish } from "./publish.ts";
-import { DBXToolsRelease, type ReleaseDocsOptions } from "./release.ts";
+import { DBXToolsRelease, type ReleaseDocsOptions, type ReleaseSummaryOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
@@ -621,6 +621,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releaseDocs?: ReleaseDocsOptions;
     /** Python package root passed to local release preparation when configured. */
     readonly releasePythonRoot?: string;
+    /** Optional AI-generated release summary. Defaults to enabled. */
+    readonly releaseSummary?: boolean | ReleaseSummaryOptions;
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
@@ -1540,6 +1542,7 @@ function initProject(
       nodeRelease: options.nodeRelease,
       docs: options.releaseDocs,
       pythonRoot: options.releasePythonRoot,
+      summary: options.releaseSummary,
     });
   }
 }

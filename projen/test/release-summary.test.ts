@@ -12,9 +12,9 @@ import {
 } from "../tasks/release-summary.ts";
 
 describe("optional release summary providers", () => {
-  it("tries Cursor, then Codex, then Claude and stops at the first summary", () => {
+  it("tries Cursor, then Codex, then Claude and stops at the first summary", async () => {
     const calls: string[] = [];
-    const selected = selectReleaseSummary("/repo", "prompt", (provider) => {
+    const selected = await selectReleaseSummary("/repo", "prompt", (provider) => {
       calls.push(provider.name);
       return provider.name === "codex" ? "Release summary" : undefined;
     });
@@ -27,18 +27,30 @@ describe("optional release summary providers", () => {
     assert.deepEqual(selected, { provider: "codex", summary: "Release summary" });
   });
 
-  it("skips summary generation when every provider is unavailable", () => {
-    assert.equal(
-      selectReleaseSummary("/repo", "prompt", () => undefined),
-      undefined,
-    );
+  it("skips summary generation when every provider is unavailable", async () => {
+    assert.equal(await selectReleaseSummary("/repo", "prompt", () => undefined), undefined);
   });
 
-  it("writes a summary and removes stale content when providers are unavailable", () => {
+  it("supports a configured provider subset", async () => {
+    const calls: string[] = [];
+    const selected = await selectReleaseSummary(
+      "/repo",
+      "prompt",
+      (provider) => {
+        calls.push(provider.name);
+        return "Summary";
+      },
+      ["claude"],
+    );
+    assert.deepEqual(calls, ["claude"]);
+    assert.equal(selected?.provider, "claude");
+  });
+
+  it("writes a summary and removes stale content when providers are unavailable", async () => {
     const root = mkdtempSync(join(tmpdir(), "release-summary-"));
     const output = join(root, releaseSummaryFile("1.2.3"));
     try {
-      const content = generateReleaseSummary({
+      const content = await generateReleaseSummary({
         root,
         version: "1.2.3",
         runner: (provider) =>
@@ -55,7 +67,7 @@ describe("optional release summary providers", () => {
       const nextOutput = join(root, releaseSummaryFile("1.2.4"));
       writeFileSync(nextOutput, "stale");
       assert.equal(
-        generateReleaseSummary({
+        await generateReleaseSummary({
           root,
           version: "1.2.4",
           runner: () => undefined,
