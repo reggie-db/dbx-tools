@@ -33,6 +33,7 @@
     "@dbx-tools/cli-auth": "workspace:*",
     "@dbx-tools/cli-tunnel": "workspace:*",
     "@dbx-tools/core": "workspace:*",
+    "@dbx-tools/rust-binary": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:"
   },
@@ -74,7 +75,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.223",
+  "version": "0.6.224",
   "types": "index.ts",
   "type": "module",
   "exports": {

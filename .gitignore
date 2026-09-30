@@ -28,13 +28,13 @@ jspm_packages/
 *.tgz
 .yarn-integrity
 .cache
-!/.projen/bun-cache-key.mjs
-!/.github/workflows/build.yml
-!/.mergify.yml
 !/.github/pull_request_template.md
 !/.prettierignore
 !/.prettierrc.json
 !/pnpm-workspace.yaml
+!/.projen/bun-cache-key.mjs
+!/.github/workflows/build.yml
+!/.mergify.yml
 !/tsconfig.projen.json
 !/bunfig.toml
 !/tsconfig.base.json
@@ -93,7 +93,7 @@ jspm_packages/
 .polly/
 .home/
 **/.logs/
-!/packages/js/cli/dbx-tools/src/_rust-release-binaries.ts
+!/packages/js/node/rust-binary/src/_rust-release-binaries.ts
 !/Cargo.lock
 target/
 packages/js/node/core-rs/src/*dbx_tools_core.*
@@ -106,6 +106,9 @@ packages/js/node/model-rs/src/*dbx_tools_model.*
 !/Cargo.toml
 !/.cargo/config.toml
 !/.projen/uniffi-release.mjs
+!/.projen/uniffi-python.js
+!/.projen/smol-toml.cjs
+!/.projen/smol-toml.LICENSE
 !/pyproject.toml
 !/packages/py/core-rs/pyproject.toml
 !/packages/py/google-rs/pyproject.toml

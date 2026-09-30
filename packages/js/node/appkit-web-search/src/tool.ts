@@ -13,10 +13,11 @@
  * list) gates only calls whose URL matches - for `web_fetch` that is evaluated
  * against the target URL, while `web_search` (whose result URLs aren't known
  * before the call) treats a pattern gate as "always gate". `approval` falls
- * back to the plugin's `approval` config when a tool omits its own.
+ * back to the standalone runtime's `approval` config when a tool omits its own.
  *
- * The same two tools are exposed to AppKit's own agents through the plugin's
- * `ToolProvider` (see `plugin.ts`); this module is the Mastra half.
+ * App-integrated agents should consume the plugin's native toolkit so calls
+ * retain that plugin's policy and executor. These factories are the standalone
+ * Mastra surface and capture an explicit runtime or isolated config.
  *
  * @module
  */
@@ -29,9 +30,10 @@ import {
   toApprovalPolicy,
   type ApprovalGate,
   type ApprovalPolicy,
+  type WebSearchPluginConfig,
 } from "./config.ts";
 import { runWebFetch } from "./fetch.ts";
-import { getWebSearchRuntime } from "./runtime.ts";
+import { createWebSearchRuntime, type WebSearchRuntime } from "./runtime.ts";
 import {
   webFetchRequestSchema,
   webFetchResultSchema,
@@ -60,19 +62,29 @@ function parseToolInput<S extends z.ZodType>(schema: S, input: unknown): z.infer
 export interface WebSearchToolOptions {
   /** Override the tool id. */
   id?: string;
+  /** Isolated runtime used by this standalone tool. Mutually exclusive with `config`. */
+  runtime?: WebSearchRuntime;
+  /** Config used to create an isolated direct-execution runtime. */
+  config?: WebSearchPluginConfig;
   /**
-   * Approval gate for this tool, overriding the plugin's `approval`. `true`
+   * Approval gate for this tool, overriding the runtime's `approval`. `true`
    * gates every call; a URL-pattern (or list) gates only matching calls;
    * omit / `false` for no approval. See {@link ApprovalGate}.
    */
   approval?: ApprovalGate | ApprovalPolicy;
 }
 
-/** Resolve the effective gate: explicit tool option, else the plugin default. */
-function effectiveGate(opts: WebSearchToolOptions): ApprovalPolicy {
-  return opts.approval === undefined
-    ? getWebSearchRuntime().config.approval
-    : toApprovalPolicy(opts.approval);
+/** Resolve the isolated runtime captured by one standalone tool factory. */
+function toolRuntime(opts: WebSearchToolOptions): WebSearchRuntime {
+  if (opts.runtime && opts.config) {
+    throw new TypeError("web-search tool options accept either runtime or config, not both");
+  }
+  return opts.runtime ?? createWebSearchRuntime(opts.config);
+}
+
+/** Resolve the effective gate: explicit tool option, else the runtime default. */
+function effectiveGate(opts: WebSearchToolOptions, runtime: WebSearchRuntime): ApprovalPolicy {
+  return opts.approval === undefined ? runtime.config.approval : toApprovalPolicy(opts.approval);
 }
 
 /**
@@ -91,7 +103,8 @@ function effectiveGate(opts: WebSearchToolOptions): ApprovalPolicy {
  * ```
  */
 export function webSearchTool(opts: WebSearchToolOptions = {}) {
-  const gate = effectiveGate(opts);
+  const runtime = toolRuntime(opts);
+  const gate = effectiveGate(opts, runtime);
   return createTool({
     id: opts.id ?? "web_search",
     description: WEB_SEARCH_TOOL_DESCRIPTION,
@@ -101,9 +114,8 @@ export function webSearchTool(opts: WebSearchToolOptions = {}) {
     // is treated as "always gate".
     ...(gate.mode === "none" ? {} : { requireApproval: () => true }),
     execute: async (input) => {
-      const { config } = getWebSearchRuntime();
       const request = parseToolInput(webSearchRequestSchema, input);
-      return runWebSearch(request, config, await resolveWebSearchContext());
+      return runWebSearch(request, runtime, await resolveWebSearchContext());
     },
   });
 }
@@ -120,7 +132,8 @@ export function webSearchTool(opts: WebSearchToolOptions = {}) {
  * ```
  */
 export function webFetchTool(opts: WebSearchToolOptions = {}) {
-  const gate = effectiveGate(opts);
+  const runtime = toolRuntime(opts);
+  const gate = effectiveGate(opts, runtime);
   return createTool({
     id: opts.id ?? "web_fetch",
     description: WEB_FETCH_TOOL_DESCRIPTION,
@@ -136,8 +149,7 @@ export function webFetchTool(opts: WebSearchToolOptions = {}) {
             approvalMatches(gate, [parseToolInput(webFetchRequestSchema, input).url]),
         }),
     execute: async (input) => {
-      const { config } = getWebSearchRuntime();
-      return runWebFetch(parseToolInput(webFetchRequestSchema, input), config);
+      return runWebFetch(parseToolInput(webFetchRequestSchema, input), runtime);
     },
   });
 }

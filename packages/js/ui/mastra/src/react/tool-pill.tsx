@@ -8,7 +8,7 @@ import {
   cn,
 } from "@dbx-tools/ui-appkit/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
-import { SqlBlock, ToolMarkdown } from "./markdown.tsx";
+import { JsonBlock, SqlBlock, ToolMarkdown } from "./markdown.tsx";
 import type { ToolEvent, ToolProgress } from "./types.ts";
 
 // Consolidated tool-session pill and its Genie progress detail view:
@@ -465,9 +465,10 @@ const RawToolPayload = ({ label, value }: { label: "Request" | "Response"; value
       <span>{label}</span>
     </CollapsibleTrigger>
     <CollapsibleContent>
-      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words border-t border-border/50 px-2 py-2 font-mono text-[11px] leading-relaxed text-foreground">
-        {formatRawToolPayload(value)}
-      </pre>
+      <JsonBlock
+        json={formatRawToolPayload(value)}
+        className="max-h-80 border-t border-border/50 px-2 py-2 text-foreground"
+      />
     </CollapsibleContent>
   </Collapsible>
 );

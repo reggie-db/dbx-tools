@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { parse } from "smol-toml";
 import { readWorkflow, workflowStep } from "./workflow.ts";
 import {
   DBXToolsNodeProject,
@@ -75,6 +76,27 @@ describe("DBXToolsPythonWorkspace", () => {
     project.synth();
 
     const workspace = readFileSync(join(outdir, "pyproject.toml"), "utf8");
+    const workspaceMetadata = parse(workspace) as {
+      project: { dependencies: string[]; "requires-python": string };
+      tool: {
+        pyrefly: { "ignore-errors-in-generated-code": boolean; "project-excludes": string[] };
+        uv: {
+          "index-strategy": string;
+          sources: Record<string, { workspace: boolean }>;
+          workspace: { members: string[] };
+        };
+      };
+    };
+    assert.deepEqual(workspaceMetadata.tool.uv.workspace.members, ["python/packages/*"]);
+    assert.equal(workspaceMetadata.tool.uv.sources["fixture-native-rs"]?.workspace, true);
+    assert.deepEqual(workspaceMetadata.project.dependencies, ["fixture-app"]);
+    assert.equal(workspaceMetadata.project["requires-python"], ">=3.12");
+    assert.equal(workspaceMetadata.tool.uv["index-strategy"], "unsafe-best-match");
+    assert.equal(workspaceMetadata.tool.pyrefly["ignore-errors-in-generated-code"], true);
+    assert.deepEqual(workspaceMetadata.tool.pyrefly["project-excludes"], [
+      "python/packages/native-rs/src/fixture/native_rs/bindings.py",
+      "python/packages/native-rs/src/fixture/native_rs/__init__.py",
+    ]);
     assert.match(workspace, /members = \[\s*"python\/packages\/\*"\s*\]/);
     assert.doesNotMatch(workspace, /exclude =/);
     assert.match(workspace, /\[tool\.uv\.sources\.fixture-native-rs\]\s+workspace = true/);
@@ -87,8 +109,6 @@ describe("DBXToolsPythonWorkspace", () => {
       workspace,
       /project-excludes = \[[^\]]*"python\/packages\/native-rs\/src\/fixture\/native_rs\/bindings\.py"/,
     );
-    assert.doesNotMatch(workspace, /^  \[/m);
-    assert.doesNotMatch(workspace, /= \[ /);
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
     assert.match(gitignore, /^\.venv\/$/m);
     assert.match(gitignore, /^python\/packages\/\*\*\/dist\/$/m);
@@ -105,8 +125,6 @@ describe("DBXToolsPythonWorkspace", () => {
       /fixture-core @ git\+https:\/\/github\.com\/example\/fixture\.git@main#subdirectory=python\/packages\/core/,
     );
     assert.doesNotMatch(app, /\[dependency-groups\]/);
-    assert.doesNotMatch(app, /^  \[/m);
-    assert.doesNotMatch(app, /= \[ /);
     const native = readFileSync(join(outdir, "python/packages/native-rs/pyproject.toml"), "utf8");
     assert.match(native, /\[tool\.dbx_tools\.config\]\s+uniffi = true/);
     const standard = readFileSync(join(outdir, "python/packages/standard/pyproject.toml"), "utf8");

@@ -1,6 +1,6 @@
 """Lakebase address types and parsers backed by the Databricks Rust bindings."""
 
-from typing import Literal, TypeAlias
+from typing import TypeAlias
 
 from dbx_tools.core_rs.bindings import (
     ParsedAddress,
@@ -11,11 +11,11 @@ from dbx_tools.core_rs.bindings import (
     SslMode as NativeSslMode,
 )
 
-SslMode = Literal["require", "disable", "prefer"]
-"""Accepted PostgreSQL SSL modes."""
+SslMode: TypeAlias = NativeSslMode
+"""Generated PostgreSQL SSL mode enum."""
 
-SSL_MODES: tuple[SslMode, ...] = ("require", "disable", "prefer")
-"""All accepted values for :class:`SslMode`."""
+SSL_MODES: tuple[str, ...] = tuple(mode.name.lower() for mode in NativeSslMode)
+"""Accepted configuration spellings derived from :class:`SslMode`."""
 
 LakebaseConnectionInputs: TypeAlias = ParsedAddress
 """Resolved address inputs returned by the native parser."""

@@ -13,8 +13,10 @@ import { ignore, match } from "@dbx-tools/path";
 import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
+import { BuildWorkflow } from "projen/lib/build";
+import { AutoMerge } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
-import { ReleaseTrigger } from "projen/lib/release";
+import type { ReleaseProjectOptions } from "projen/lib/release";
 import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
 import {
@@ -33,7 +35,6 @@ import {
   type DiscoveredPackage,
   projectName,
   readPackageManifest,
-  repoRoot,
   scanPackages,
   toPosix,
 } from "./packages.ts";
@@ -67,6 +68,8 @@ export interface DBXToolsJavaScriptProject extends DBXToolsProject, javascript.N
   rootTsconfig?: DBXToolsRootTsconfig;
   /** Root `.vscode/*` - only a tree ROOT has one. */
   vsCode?: DBXToolsVsCode;
+  /** Repository outputs excluded from generated workflow dependency-cache hashing. */
+  readonly workflowCacheIgnorePaths: readonly string[];
 }
 
 /** Parsed npm package identifier: optional scope plus the unscoped package name. */
@@ -146,10 +149,11 @@ function configureRootPackage(project: javascript.NodeProject): void {
  * a normalized git remote), in npm's `git+https://.../repo.git` form.
  */
 function applyRepository(project: javascript.NodeProject, override?: string): void {
-  const url = override && override.length ? override : coreProject.repositoryUrl(repoRoot, "npm");
+  const workspaceRoot = resolve(project.root.outdir);
+  const url =
+    override && override.length ? override : coreProject.repositoryUrl(workspaceRoot, "npm");
   if (!url) return;
-  const root = project.parent ?? project;
-  const directory = toPosix(relative(resolve(root.outdir), resolve(project.outdir)));
+  const directory = toPosix(relative(workspaceRoot, resolve(project.outdir)));
   project.package.addField("repository", {
     type: "git",
     url,
@@ -389,9 +393,7 @@ export const DBX_TOOLS_LICENSE = "Apache-2.0";
  * inherits the root's config rather than emitting its own. `name`/`defaultReleaseBranch`
  * are resolved/applied by the caller.
  */
-function defaultProjectOptions(
-  options: DBXToolsJavaScriptProjectOptions,
-): DBXToolsJavaScriptProjectOptions {
+function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
   const isRoot = options.parent === undefined;
   return {
     // Bun owns install/run/build/test locally and in CI. projen renders
@@ -423,9 +425,7 @@ function defaultProjectOptions(
     // to Verdaccio still work without a CI OIDC provider. See
     // {@link DBXToolsRelease}.
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
-    buildWorkflow: false,
     workflowPackageCache: false,
-    release: false,
     // The root build validates the whole workspace and must not also pack every
     // member into unused `dist/js` tarballs. Child projects keep projen's package
     // task so `bun run build` in ONE package remains a complete compile/test/pack
@@ -460,6 +460,8 @@ function defaultProjectOptions(
         }
       : {}),
     ...options,
+    buildWorkflow: false,
+    release: false,
     githubOptions: {
       ...options.githubOptions,
       pullRequestLint: false,
@@ -493,9 +495,7 @@ function copiedGitIgnoreOptions(
  * same parent-based root/child logic applies; this just layers on typescript +
  * bun types and disables sample code. No `tsx`: bun runs `.ts` directly.
  */
-function defaultTypeScriptProjectOptions(
-  options: DBXToolsTypeScriptProjectOptions,
-): DBXToolsTypeScriptProjectOptions {
+function defaultTypeScriptProjectOptions(options: DBXToolsTypeScriptProjectOptions) {
   const base = defaultProjectOptions(options);
   return {
     ...base,
@@ -513,84 +513,152 @@ function defaultTypeScriptProjectOptions(
 // Pinned to match the subproject defaults so bun resolves one TypeScript and
 // one runtime-compatible set of Bun globals across the workspace.
 const DEV_DEPS_ROOT: string[] = ["typescript@^5.9.3", `@types/bun@${BUN_VERSION}`];
+const NATIVE_RELEASE_OPTIONS = [
+  "jsiiReleaseVersion",
+  "majorVersion",
+  "minMajorVersion",
+  "npmDistTag",
+  "prerelease",
+  "publishDryRun",
+  "publishTasks",
+  "releasableCommits",
+  "release",
+  "releaseBranches",
+  "releaseEnvironment",
+  "releaseEveryCommit",
+  "releaseFailureIssue",
+  "releaseFailureIssueLabel",
+  "releaseToNpm",
+  "releaseTrigger",
+  "releaseWorkflowName",
+  "releaseWorkflowSetupSteps",
+  "versionrcOptions",
+] as const;
+
+function validateReleaseOptions(options: DBXToolsJavaScriptProjectOptions): void {
+  for (const key of NATIVE_RELEASE_OPTIONS) {
+    if ((options as Record<string, unknown>)[key] !== undefined) {
+      throw new Error(
+        `${key} is a native Projen release option; use dbx-tools release options instead`,
+      );
+    }
+  }
+  if (
+    options.releaseMode === "disabled" &&
+    (options.releaseDocs !== undefined || options.nodeRelease !== undefined)
+  ) {
+    throw new Error("releaseMode disabled cannot be combined with releaseDocs or nodeRelease");
+  }
+}
 
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
-export interface DBXToolsJavaScriptProjectOptions
-  extends
-    CommonProjectOptions,
-    Partial<javascript.NodeProjectOptions>,
-    DBXToolsConfigOptions,
-    DBXToolsPNPMWorkspaceOptions {
-  /**
-   * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
-   * the (resolved) project name; a leading `@` is optional.
-   */
-  readonly scope?: string;
-  /**
-   * Roots scanned for packages (each `src`-bearing folder under a root is one).
-   * Only a ROOT scans. Defaults to {@link DEFAULT_PACKAGE_ROOTS}.
-   */
-  readonly packageRoots?: readonly string[];
-  /**
-   * Descriptions for published packages, keyed by repository-relative package
-   * directory. When configured, synthesis rejects every public JavaScript
-   * package whose final manifest has no non-empty description.
-   */
-  readonly packageDescriptions?: Readonly<Record<string, string>>;
-  /**
-   * Leading path segment(s) dropped from a discovered package's relative path
-   * before its npm name is derived, so a tier folder doesn't become a name
-   * prefix. E.g. with the default `"node"`, `packages/node/path` names as
-   * `@<scope>/path` instead of `@<scope>/node-path` (its `node` TAG still
-   * derives from the path). One or many segment names; a segment is only
-   * stripped when it is the FIRST segment of the relative path. Pass `[]` to
-   * disable. Defaults to `"node"`.
-   */
-  readonly omitRelativePrefix?: OneOrMany<string>;
-  /**
-   * Maps a path token / relPath / glob to tag(s), unioned into a package's
-   * path-derived tags. Defaults to an identity map over the known tag names; a
-   * `""`/`"."` key tags the root.
-   */
-  readonly packageTagPaths?: Record<string, string[]>;
-  /**
-   * Which built-in {@link PACKAGE_TAG_MIXINS} to apply and seed
-   * `packageTagPaths` identity entries for. Omitted = all; `false` = none;
-   * a list = only those tags.
-   */
-  readonly defaultTagMixins?: false | PackageTag[];
-  /**
-   * Extra repo-root paths that trigger a full re-synth during `sync --watch`
-   * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
-   */
-  readonly syncResynthPaths?: readonly string[];
-  /** GitHub Pages documentation included in the unified release workflow. */
-  readonly releaseDocs?: ReleaseDocsOptions;
-  /** Set to `false` to omit normal npm workspace publication. */
-  readonly nodeRelease?: boolean;
-  /**
-   * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
-   * config ALONGSIDE the discovered `packageRoots` members - for a package that
-   * is synthesized by its OWN `.projenrc.ts` (so it isn't a root subproject) but
-   * should still resolve as a workspace sibling. The `@dbx-tools/projen` engine in
-   * `projen/` is the case: it synthesizes itself (avoiding a dogfooding cycle) yet
-   * is a member of the single bun workspace, so the root links it from source.
-   */
-  readonly extraWorkspaceMembers?: readonly string[];
-  /**
-   * Install workspace dependencies once from the custom root instead of once
-   * per child project during post-synthesis. Defaults to `true`; set `false` to
-   * preserve projen's native per-project install tasks.
-   */
-  readonly rootInstallOnly?: boolean;
+export type DBXToolsReleaseMode = "dbx-tools" | "disabled";
+
+/** Optional semantic pull request title policy for the generated build workflow. */
+export interface PullRequestTitlePolicyOptions {
+  /** Allowed semantic title types. */
+  readonly types: readonly string[];
+  /** Require a semantic title scope. Defaults to `false`. */
+  readonly requireScope?: boolean;
 }
 
+type SupportedWorkflowOptions = Pick<
+  ReleaseProjectOptions,
+  "postBuildSteps" | "workflowContainerImage" | "workflowRunsOn" | "workflowRunsOnGroup"
+>;
+
+export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
+  Partial<
+    Omit<javascript.NodeProjectOptions, keyof ReleaseProjectOptions | "release" | "releaseToNpm">
+  > &
+  Partial<SupportedWorkflowOptions> &
+  DBXToolsConfigOptions &
+  DBXToolsPNPMWorkspaceOptions & {
+    /**
+     * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
+     * the (resolved) project name; a leading `@` is optional.
+     */
+    readonly scope?: string;
+    /**
+     * Roots scanned for packages (each `src`-bearing folder under a root is one).
+     * Only a ROOT scans. Defaults to {@link DEFAULT_PACKAGE_ROOTS}.
+     */
+    readonly packageRoots?: readonly string[];
+    /**
+     * Descriptions for published packages, keyed by repository-relative package
+     * directory. When configured, synthesis rejects every public JavaScript
+     * package whose final manifest has no non-empty description.
+     */
+    readonly packageDescriptions?: Readonly<Record<string, string>>;
+    /**
+     * Leading path segment(s) dropped from a discovered package's relative path
+     * before its npm name is derived, so a tier folder doesn't become a name
+     * prefix. E.g. with the default `"node"`, `packages/node/path` names as
+     * `@<scope>/path` instead of `@<scope>/node-path` (its `node` TAG still
+     * derives from the path). One or many segment names; a segment is only
+     * stripped when it is the FIRST segment of the relative path. Pass `[]` to
+     * disable. Defaults to `"node"`.
+     */
+    readonly omitRelativePrefix?: OneOrMany<string>;
+    /**
+     * Maps a path token / relPath / glob to tag(s), unioned into a package's
+     * path-derived tags. Defaults to an identity map over the known tag names; a
+     * `""`/`"."` key tags the root.
+     */
+    readonly packageTagPaths?: Record<string, string[]>;
+    /**
+     * Which built-in {@link PACKAGE_TAG_MIXINS} to apply and seed
+     * `packageTagPaths` identity entries for. Omitted = all; `false` = none;
+     * a list = only those tags.
+     */
+    readonly defaultTagMixins?: false | PackageTag[];
+    /**
+     * Extra repo-root paths that trigger a full re-synth during `sync --watch`
+     * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
+     */
+    readonly syncResynthPaths?: readonly string[];
+    /** GitHub Pages documentation included in the unified release workflow. */
+    readonly releaseDocs?: ReleaseDocsOptions;
+    /** Python package root passed to local release preparation when configured. */
+    readonly releasePythonRoot?: string;
+    /** Set to `false` to omit normal npm workspace publication. */
+    readonly nodeRelease?: boolean;
+    /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
+    readonly releaseMode?: DBXToolsReleaseMode;
+    /** Prefix for generated release tags. Defaults to `v`. */
+    readonly releaseTagPrefix?: string;
+    /** Semantic PR title validation policy. Omitted or `false` disables title validation. */
+    readonly pullRequestTitlePolicy?: false | PullRequestTitlePolicyOptions;
+    /** Repository output paths excluded from generated workflow dependency-cache hashing. */
+    readonly workflowCacheIgnorePaths?: readonly string[];
+    /**
+     * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
+     * config ALONGSIDE the discovered `packageRoots` members - for a package that
+     * is synthesized by its OWN `.projenrc.ts` (so it isn't a root subproject) but
+     * should still resolve as a workspace sibling. The `@dbx-tools/projen` engine in
+     * `projen/` is the case: it synthesizes itself (avoiding a dogfooding cycle) yet
+     * is a member of the single bun workspace, so the root links it from source.
+     */
+    readonly extraWorkspaceMembers?: readonly string[];
+    /**
+     * Install workspace dependencies once from the custom root instead of once
+     * per child project during post-synthesis. Defaults to `true`; set `false` to
+     * preserve projen's native per-project install tasks.
+     */
+    readonly rootInstallOnly?: boolean;
+  };
+
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
-export interface DBXToolsTypeScriptProjectOptions
-  extends Partial<typescript.TypeScriptProjectOptions>, DBXToolsJavaScriptProjectOptions {
-  /** Emit the projen-owned bun app scaffolding (`bunfig.toml`/`dev.ts`/`build.ts`). */
-  readonly bunApp?: boolean;
-}
+export type DBXToolsTypeScriptProjectOptions = Partial<
+  Omit<
+    typescript.TypeScriptProjectOptions,
+    keyof ReleaseProjectOptions | "release" | "releaseToNpm"
+  >
+> &
+  DBXToolsJavaScriptProjectOptions & {
+    /** Emit the projen-owned bun app scaffolding (`bunfig.toml`/`dev.ts`/`build.ts`). */
+    readonly bunApp?: boolean;
+  };
 
 /**
  * A monorepo root. Scans `packageRoots` and appends a
@@ -609,14 +677,12 @@ export class DBXToolsNodeProject
   vsCode?: DBXToolsVsCode;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
+  readonly workflowCacheIgnorePaths: readonly string[];
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
+    validateReleaseOptions(options);
     const { name, scope } = resolveIdentity(options);
-    const releaseDefaults =
-      options.release && options.releaseTrigger === undefined
-        ? { releaseTrigger: ReleaseTrigger.tagged({ tags: ["v*"] }) }
-        : {};
     // Holds the workspace state (members/catalog/allowBuilds/overrides). Under
     // bun, projen's base constructor does NOT create the `PnpmWorkspaceYaml`
     // component (its `configurePnpm` call site is gated to pnpm), so this state's
@@ -626,7 +692,6 @@ export class DBXToolsNodeProject
     const pnpmWorkspace = new PnpmWorkspaceState(options);
     super({
       ...defaultProjectOptions(options),
-      ...releaseDefaults,
       pnpmOptions: {
         ...options.pnpmOptions,
         workspaceYamlOptions: pnpmWorkspace.options,
@@ -645,8 +710,10 @@ export class DBXToolsNodeProject
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
+    this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
     this.rootInstallOnly = options.rootInstallOnly !== false;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
+    configureBuildWorkflow(this, options);
     initProject(this, options);
   }
 
@@ -654,7 +721,9 @@ export class DBXToolsNodeProject
     const steps = super.renderWorkflowSetup(options);
     if (this.parent) return steps;
     return steps.flatMap((step) => {
-      if (step.uses === "oven-sh/setup-bun@v2") return [...bunCacheRestoreSteps(this)];
+      if (step.uses === "oven-sh/setup-bun@v2") {
+        return [...bunCacheRestoreSteps(this, { ignorePaths: this.workflowCacheIgnorePaths })];
+      }
       if (step.run === "bun install") {
         return [
           step,
@@ -669,16 +738,9 @@ export class DBXToolsNodeProject
   }
 
   public override preSynthesize(): void {
-    if (this.rootInstallOnly) this.with(ROOT_INSTALL_ONLY_MIXIN);
+    prepareRootSynthesis(this, this.rootInstallOnly);
     super.preSynthesize();
-    const version = readWorkspaceVersion(this.outdir);
-    for (const member of this.extraWorkspaceMembers) {
-      syncWorkspaceManifestVersion(join(this.outdir, member, "package.json"), version);
-    }
-    // Members come from the attached subprojects, which the root's scan appends
-    // after construction - so the list is filled here, not in the constructor.
-    // `extraWorkspaceMembers` adds self-synthesizing siblings (e.g. `projen/`).
-    this.pnpmWorkspace?.resolveMembers(this, this.extraWorkspaceMembers);
+    resolveRootWorkspace(this, this.extraWorkspaceMembers);
     preSynthesizeProject(this);
   }
 }
@@ -726,10 +788,16 @@ export class DBXToolsTypeScriptProject
   pnpmWorkspace?: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
   vsCode?: DBXToolsVsCode;
+  readonly extraWorkspaceMembers: readonly string[];
+  readonly releaseBranch: string;
+  readonly workflowCacheIgnorePaths: readonly string[];
+  private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
+    validateReleaseOptions(options);
     const { name, scope } = resolveIdentity(options);
     const parent = options?.parent;
+    const pnpmWorkspace = parent ? undefined : new PnpmWorkspaceState(options);
     const packageManager =
       options.packageManager ??
       inheritedPackageManager(parent instanceof javascript.NodeProject ? parent : undefined);
@@ -738,6 +806,14 @@ export class DBXToolsTypeScriptProject
       ...defaultTypeScriptProjectOptions(options),
       name: options.name ?? name,
       packageManager,
+      ...(pnpmWorkspace
+        ? {
+            pnpmOptions: {
+              ...options.pnpmOptions,
+              workspaceYamlOptions: pnpmWorkspace.options,
+            },
+          }
+        : {}),
       tsconfig: {
         ...options.tsconfig,
         include: options.tsconfig?.include,
@@ -750,7 +826,13 @@ export class DBXToolsTypeScriptProject
         },
       },
     });
+    this.pnpmWorkspace = pnpmWorkspace;
+    pnpmWorkspace?.attachWorkspaceFile(this);
     this.scope = scope;
+    this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
+    this.releaseBranch = options.defaultReleaseBranch ?? "main";
+    this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
+    this.rootInstallOnly = options.rootInstallOnly !== false;
     // Pairs with `jsx` in SHARED_COMPILER_OPTIONS: projen's default `include` is
     // `src/**/*.ts` only, which silently omits a `.tsx` file from the program
     // instead of failing, so authoring a React component would otherwise need
@@ -772,25 +854,104 @@ export class DBXToolsTypeScriptProject
     this.package.addField("version", readWorkspaceVersion(this.root.outdir));
     addPackageFiles(this, "index.ts", "src");
     // `bun test` intercepts `node:test` (the suites keep using node:test) and
-    // runs it with bun's own fast runner. Args are FILTERS, not globs; a bare
-    // directory auto-discovers `*.test.ts` recursively. But `bun test` EXITS 1
-    // when it matches no files, so guard it: only invoke when a `*.test.ts`
-    // exists, else succeed.
-    this.testTask.exec("bun test test", {
-      condition: 'find test -name "*.test.ts" 2>/dev/null | grep -q .',
-    });
+    // runs it with bun's own fast runner. The native no-tests option is portable
+    // across Windows and Unix and lets packages without tests remain a no-op.
+    this.testTask.exec("bun test test --pass-with-no-tests");
     if (options.bunApp ?? false) {
       new BunfigFile(this);
       new BunDevServerFile(this);
       new BunBuildFile(this);
     }
+    configureBuildWorkflow(this, options);
     initProject(this, options);
   }
 
   public override preSynthesize(): void {
+    prepareRootSynthesis(this, this.rootInstallOnly);
     super.preSynthesize();
+    resolveRootWorkspace(this, this.extraWorkspaceMembers);
     preSynthesizeProject(this);
   }
+}
+
+function configureBuildWorkflow(
+  project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
+  options: DBXToolsJavaScriptProjectOptions,
+): void {
+  if (project.parent || !options.buildWorkflow || !project.github) return;
+  const validation = project.addTask("pr:validate", {
+    description: "Validate generated files and TypeScript packages",
+  });
+  validation.exec("bunx projen default");
+  validation.exec("bun run compile");
+  const configured = options.buildWorkflowOptions ?? {};
+  const compatibility = nodeWorkflowCompatibility(project);
+  const configuredRunner = configured.runsOn !== undefined || configured.runsOnGroup !== undefined;
+  const workflow = new BuildWorkflow(project, {
+    buildTask: validation,
+    artifactsDirectory: project.artifactsDirectory,
+    containerImage: options.workflowContainerImage,
+    gitIdentity: options.workflowGitIdentity,
+    permissions: { idToken: compatibility.determineIdTokenPermissions(options) },
+    ...configured,
+    preBuildSteps: [
+      ...project.renderWorkflowSetup({
+        installStepConfiguration: {
+          workingDirectory: compatibility.determineInstallWorkingDirectory(),
+        },
+        mutable: configured.mutableInstall ?? configured.mutableBuild ?? true,
+      }),
+      ...(configured.preBuildSteps ?? []),
+    ],
+    postBuildSteps: [...(options.postBuildSteps ?? [])],
+    runsOn: configuredRunner ? configured.runsOn : options.workflowRunsOn,
+    runsOnGroup: configuredRunner ? configured.runsOnGroup : options.workflowRunsOnGroup,
+  });
+  workflow.addPostBuildSteps(...compatibility.renderUploadCoverageJobStep(options));
+  compatibility.buildWorkflow = workflow;
+
+  if ((options.autoMerge ?? true) && project.github.mergify) {
+    const autoMerge = new AutoMerge(project.github, options.autoMergeOptions);
+    autoMerge.addConditionsLater({
+      render: () => workflow.buildJobIds.map((id) => `status-success=${id}`),
+    });
+    compatibility.autoMerge = autoMerge;
+  }
+}
+
+interface NodeWorkflowCompatibility {
+  autoMerge?: AutoMerge;
+  buildWorkflow?: BuildWorkflow;
+  determineIdTokenPermissions(options: DBXToolsJavaScriptProjectOptions): JobPermission | undefined;
+  determineInstallWorkingDirectory(): string | undefined;
+  renderUploadCoverageJobStep(options: DBXToolsJavaScriptProjectOptions): JobStep[];
+}
+
+/**
+ * Access the narrow NodeProject workflow hooks that have no public equivalent.
+ * BuildWorkflow itself is created exclusively through its public constructor.
+ */
+function nodeWorkflowCompatibility(project: javascript.NodeProject): NodeWorkflowCompatibility {
+  return project as unknown as NodeWorkflowCompatibility;
+}
+
+function prepareRootSynthesis(
+  project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
+  rootInstallOnly: boolean,
+): void {
+  if (!project.parent && rootInstallOnly) project.with(ROOT_INSTALL_ONLY_MIXIN);
+}
+
+function resolveRootWorkspace(
+  project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
+  extraWorkspaceMembers: readonly string[],
+): void {
+  if (project.parent) return;
+  const version = readWorkspaceVersion(project.outdir);
+  for (const member of extraWorkspaceMembers) {
+    syncWorkspaceManifestVersion(join(project.outdir, member, "package.json"), version);
+  }
+  project.pnpmWorkspace?.resolveMembers(project, extraWorkspaceMembers);
 }
 
 /**
@@ -808,8 +969,10 @@ export class DBXToolsTypeScriptProject
  */
 class GeneratedSource extends Component {
   public override postSynthesize(): void {
-    generateCodegen();
-    generateBarrels();
+    const projectRoot = this.project.outdir;
+    const includeRoot = this.project instanceof DBXToolsTypeScriptProject;
+    generateCodegen(projectRoot, { includeRoot });
+    generateBarrels({ projectRoot, includeRoot });
   }
 }
 
@@ -837,7 +1000,10 @@ class WorkspaceValidationTasks extends Component {
   public override preSynthesize(): void {
     if (this.configured) return;
     this.configured = true;
-    const project = this.project as javascript.NodeProject;
+    const project = this.project as DBXToolsNodeProject | DBXToolsTypeScriptProject;
+    if (project.subprojects.length === 0 && project.extraWorkspaceMembers.length === 0) {
+      return;
+    }
     for (const task of [project.compileTask, project.testTask]) {
       task.exec(`bun run --filter '*' ${task.name}`);
     }
@@ -852,29 +1018,17 @@ class WorkspaceValidationTasks extends Component {
  * off) do not gain new files.
  */
 class WorkflowDefaults extends Component {
+  constructor(
+    project: javascript.NodeProject,
+    private readonly pullRequestTitlePolicy: false | PullRequestTitlePolicyOptions | undefined,
+  ) {
+    super(project);
+  }
+
   public override preSynthesize(): void {
     const project = this.project as javascript.NodeProject;
     const workflow = project.buildWorkflow?.workflow;
-    if (workflow) {
-      const job = workflow.getJob("build");
-      if ("steps" in job) {
-        const mutableJob = job as unknown as { steps: JobStep[] | (() => JobStep[]) };
-        const configuredSteps = mutableJob.steps;
-        const rewrite = (steps: JobStep[]): JobStep[] =>
-          steps.map((step) =>
-            step.name === "build"
-              ? {
-                  ...step,
-                  name: "Validate generated files and types",
-                  run: "bunx projen default\nbun run compile",
-                }
-              : step,
-          );
-        mutableJob.steps =
-          typeof configuredSteps === "function"
-            ? () => rewrite(configuredSteps())
-            : rewrite(configuredSteps);
-      }
+    if (workflow && this.pullRequestTitlePolicy) {
       workflow.addJob("pr-title", {
         name: "Validate PR title",
         runsOn: ["ubuntu-latest"],
@@ -886,8 +1040,8 @@ class WorkflowDefaults extends Component {
             uses: "amannn/action-semantic-pull-request@v6",
             env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" },
             with: {
-              types: ["feat", "fix", "chore"].join("\n"),
-              requireScope: false,
+              types: this.pullRequestTitlePolicy.types.join("\n"),
+              requireScope: this.pullRequestTitlePolicy.requireScope ?? false,
             },
           },
         ],
@@ -995,11 +1149,19 @@ function packageNameFor(scope: string, relPath: string, omitPrefixes: string[]):
  * either way it is parsed through {@link PackageIdentifier} so a scoped value
  * (`@dbx-tools` or a full `@dbx-tools/root` name) yields the bare scope `dbx-tools`.
  */
-function resolveIdentity(options: { name?: string; scope?: string }): {
+function resolveIdentity(options: {
+  name?: string;
+  scope?: string;
+  outdir?: string;
+  parent?: Project;
+}): {
   name: string;
   scope: string;
 } {
-  const name = options.name && options.name.length ? options.name : projectName();
+  const projectRoot = options.parent
+    ? resolve(options.parent.outdir, options.outdir ?? ".")
+    : resolve(options.outdir ?? process.cwd());
+  const name = options.name && options.name.length ? options.name : projectName(projectRoot);
   const rawScope = options.scope && options.scope.length ? options.scope : name;
   const identifier = PackageIdentifier.parse(rawScope);
   return { name, scope: identifier?.scope ?? identifier?.name ?? rawScope };
@@ -1227,9 +1389,7 @@ function initProject(
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);
   }
-  const extraWorkspaceMembers =
-    project instanceof DBXToolsNodeProject ? project.extraWorkspaceMembers : [];
-  for (const member of extraWorkspaceMembers) {
+  for (const member of project.extraWorkspaceMembers) {
     project.annotateGenerated(`/${member}/index.ts`);
   }
 
@@ -1241,13 +1401,17 @@ function initProject(
   // repairs the worktree it is meant to validate; `eslint:fix` is the explicit
   // local mutation path.
   const eslint = new javascript.Eslint(project, {
-    dirs: [...roots, "projen"],
+    dirs: [...roots, ...project.extraWorkspaceMembers],
     fileExtensions: [".ts", ".tsx"],
     projectService: true,
     prettier: Boolean(project.prettier),
-    tsconfigPath: "./tsconfig.json",
+    tsconfigPath:
+      project instanceof typescript.TypeScriptProject
+        ? (project.tsconfig?.fileName ?? "./tsconfig.json")
+        : "./tsconfig.json",
     commandOptions: { fix: false },
   });
+  eslint.allowDefaultProjectFiles(".projenrc.ts");
   project.addTask("eslint:fix", {
     description: "Fix ESLint issues across the codebase",
     exec: "bun run eslint -- --fix",
@@ -1260,7 +1424,9 @@ function initProject(
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
   eslint.addIgnorePattern("**/src/generated/**");
-  eslint.addIgnorePattern("projen/index.ts");
+  for (const member of project.extraWorkspaceMembers) {
+    eslint.addIgnorePattern(`${member}/index.ts`);
+  }
   // The generated bun app scripts + unmanaged overrides live at the package root,
   // outside any `src/**` tsconfig include, so the type-aware parser cannot resolve
   // them to a project. ESLint still cannot parse them.
@@ -1362,17 +1528,20 @@ function initProject(
   }
 
   new WorkspaceValidationTasks(project);
-  new WorkflowDefaults(project);
+  new WorkflowDefaults(project, options.pullRequestTitlePolicy);
   new PrettierIgnoreGenerated(project);
 
   new GeneratedSource(project);
   // Version mutation, reviewed release preparation, and public publication are
   // separate surfaces owned by one release component.
-  new DBXToolsRelease(project as DBXToolsNodeProject, {
-    tagPrefix: options.releaseTagPrefix,
-    nodeRelease: options.nodeRelease,
-    docs: options.releaseDocs,
-  });
+  if (options.releaseMode !== "disabled") {
+    new DBXToolsRelease(project, {
+      tagPrefix: options.releaseTagPrefix,
+      nodeRelease: options.nodeRelease,
+      docs: options.releaseDocs,
+      pythonRoot: options.releasePythonRoot,
+    });
+  }
 }
 
 /**

@@ -2,42 +2,40 @@
  * Turning fetched HTML into the plain text a model can read.
  *
  * Both scraping paths need this: `runWebFetch`'s full-page read and
- * `runScrapeSearch`'s title/snippet extraction. The entity table is shared so
- * the two cannot drift apart.
- *
- * This is deliberately regex-based rather than a DOM parse. The inputs are
- * whole pages fetched for summarization, not documents to be queried, so the
- * cost of a real parser buys nothing - and a malformed page still degrades to
- * readable text instead of throwing.
+ * `runScrapeSearch`'s title/snippet extraction. Parser-backed conversion keeps
+ * malformed markup, quoted `>` characters, and the complete HTML entity table
+ * consistent across both paths.
  *
  * @module
  */
 
-/**
- * The named entities that survive tag-stripping in practice, plus numeric
- * escapes. Not a complete HTML entity table - anything rarer passes through
- * as-is, which reads acceptably in model input.
- */
-const NAMED_ENTITIES: Record<string, string> = {
-  "&nbsp;": " ",
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&quot;": '"',
-  "&#39;": "'",
-  "&#x27;": "'",
-  "&apos;": "'",
+import { decodeHTML } from "entities";
+import { compile, type HtmlToTextOptions } from "html-to-text";
+
+const SHARED_OPTIONS: HtmlToTextOptions = {
+  wordwrap: false,
+  selectors: [
+    { selector: "script", format: "skip" },
+    { selector: "style", format: "skip" },
+    { selector: "noscript", format: "skip" },
+    { selector: "a", options: { ignoreHref: true } },
+    { selector: "img", format: "skip" },
+  ],
 };
 
-const NAMED_ENTITY_REGEXP = new RegExp(Object.keys(NAMED_ENTITIES).join("|"), "g");
-const NUMERIC_ENTITY_REGEXP = /&#(\d+);/g;
-const TAG_REGEXP = /<[^>]+>/g;
+const fragmentToText = compile({
+  ...SHARED_OPTIONS,
+  preserveNewlines: false,
+});
 
-/** Decode the HTML entities that survive tag-stripping. */
+const documentToText = compile({
+  ...SHARED_OPTIONS,
+  preserveNewlines: true,
+});
+
+/** Decode named, decimal, and hexadecimal HTML entities without throwing. */
 export function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(NAMED_ENTITY_REGEXP, (entity) => NAMED_ENTITIES[entity] ?? entity)
-    .replace(NUMERIC_ENTITY_REGEXP, (_, code) => String.fromCodePoint(Number(code)));
+  return decodeHTML(text);
 }
 
 /**
@@ -46,7 +44,7 @@ export function decodeHtmlEntities(text: string): string {
  * summary), where layout carries no meaning.
  */
 export function htmlFragmentToText(html: string): string {
-  return decodeHtmlEntities(html.replace(TAG_REGEXP, "")).replace(/\s+/g, " ").trim();
+  return fragmentToText(html).replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -57,14 +55,7 @@ export function htmlFragmentToText(html: string): string {
  * preserves line structure because paragraph breaks carry meaning in a page.
  */
 export function htmlToText(html: string): string {
-  return decodeHtmlEntities(
-    html
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, "")
-      .replace(/<\/(p|div|section|article|li|tr|h[1-6]|header|footer|br)>/gi, "\n")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(TAG_REGEXP, ""),
-  )
+  return documentToText(html)
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")

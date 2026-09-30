@@ -1,11 +1,22 @@
+
 [package]
 name = "dbx-tools-model-proxy"
-version = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
 description = "Multi-protocol Databricks model proxy"
-license = { workspace = true }
-repository = { workspace = true }
+
+  [package.version]
+  workspace = true
+
+  [package.edition]
+  workspace = true
+
+  [package.rust-version]
+  workspace = true
+
+  [package.license]
+  workspace = true
+
+  [package.repository]
+  workspace = true
 
 [[bin]]
 name = "dbx-model-proxy"
@@ -17,23 +28,56 @@ aigw-core = "=0.6.0"
 aigw-openai = "=0.6.0"
 async-stream = "0.3"
 axum = "0.8"
-backon = { workspace = true }
-base64 = { workspace = true }
-clap = { workspace = true }
-dbx-tools-core = { version = "0.6.223", path = "../core" }
-dbx-tools-model = { version = "0.6.223", path = "../model" }
 eventsource-stream = "0.2"
 futures-util = "0.3"
-image = { workspace = true }
-httpdate = { workspace = true }
-reqwest = { workspace = true, features = ["stream"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-tokenx-rs = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
 
-[dev-dependencies]
-tempfile = { workspace = true }
-wiremock = { workspace = true }
+  [dependencies.backon]
+  workspace = true
+
+  [dependencies.base64]
+  workspace = true
+
+  [dependencies.clap]
+  workspace = true
+
+  [dependencies.dbx-tools-core]
+  version = "0.6.224"
+  path = "../core"
+
+  [dependencies.dbx-tools-model]
+  version = "0.6.224"
+  path = "../model"
+
+  [dependencies.image]
+  workspace = true
+
+  [dependencies.httpdate]
+  workspace = true
+
+  [dependencies.reqwest]
+  workspace = true
+  features = [ "stream" ]
+
+  [dependencies.serde]
+  workspace = true
+
+  [dependencies.serde_json]
+  workspace = true
+
+  [dependencies.thiserror]
+  workspace = true
+
+  [dependencies.tokenx-rs]
+  workspace = true
+
+  [dependencies.tokio]
+  workspace = true
+
+  [dependencies.tracing]
+  workspace = true
+
+[dev-dependencies.tempfile]
+workspace = true
+
+[dev-dependencies.wiremock]
+workspace = true

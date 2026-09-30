@@ -1,7 +1,7 @@
 /**
  * Root `tsconfig.base.json` and `tsconfig.json` for the projenrc program.
  */
-import { Component, JsonFile, type Project, javascript } from "projen";
+import { Component, type Project, javascript, typescript } from "projen";
 
 /**
  * Compiler options for the ROOT program only (`.projenrc.ts` + the engine as
@@ -37,24 +37,24 @@ export class DBXToolsRootTsconfig extends Component {
   constructor(scope: Project) {
     super(scope);
 
-    new JsonFile(scope, "tsconfig.base.json", {
-      marker: true,
-      readonly: true,
-      obj: { compilerOptions: BASE_COMPILER_OPTIONS },
-    });
+    if (scope instanceof typescript.TypeScriptProject) {
+      return;
+    }
 
-    new JsonFile(scope, "tsconfig.json", {
-      marker: true,
-      readonly: true,
-      obj: {
-        extends: "./tsconfig.base.json",
-        compilerOptions: {
-          lib: ["ESNext"],
-          types: ["node"],
-        } satisfies javascript.TypeScriptCompilerOptions,
-        include: [".projenrc.ts"],
-        exclude: ["node_modules", "**/dist", "**/node_modules"],
-      },
+    const base = new javascript.TypescriptConfig(scope, {
+      fileName: "tsconfig.base.json",
+      compilerOptions: BASE_COMPILER_OPTIONS,
     });
+    base.file.readonly = true;
+    const root = new javascript.TypescriptConfig(scope, {
+      extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([base]),
+      compilerOptions: {
+        lib: ["ESNext"],
+        types: ["node"],
+      },
+      include: [".projenrc.ts"],
+      exclude: ["node_modules", "**/dist", "**/node_modules"],
+    });
+    root.file.readonly = true;
   }
 }

@@ -19,11 +19,11 @@
  */
 
 import { log } from "@dbx-tools/shared-core";
+import { load } from "cheerio";
 import { gotScraping } from "got-scraping";
-import type { ResolvedWebSearchConfig } from "./config.ts";
 import { scrapeSearchExecuteDefaults, toCallSettings } from "./defaults.ts";
 import { htmlFragmentToText } from "./html-text.ts";
-import { executeRead } from "./runtime.ts";
+import { executeRead, toWebSearchRuntime, type WebSearchRuntimeInput } from "./runtime.ts";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema.ts";
 
 const logger = log.logger("web-search/scrape");
@@ -47,25 +47,18 @@ function unwrapDdgUrl(href: string): string {
 }
 
 /** Parse DDG HTML result blocks into citations (title, url, snippet). */
-function parseDdgHtml(html: string): WebSearchCitation[] {
+export function parseDdgHtml(html: string): WebSearchCitation[] {
+  const $ = load(html);
   const citations: WebSearchCitation[] = [];
-  // Each result: an anchor with class result__a (title + href) and a snippet
-  // with class result__snippet. Match anchors, then the following snippet.
-  const anchorRe = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-  const snippetRe = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
-  const snippets: string[] = [];
-  let sm: RegExpExecArray | null;
-  while ((sm = snippetRe.exec(html)) !== null) snippets.push(htmlFragmentToText(sm[1] ?? ""));
-  let am: RegExpExecArray | null;
-  let i = 0;
-  while ((am = anchorRe.exec(html)) !== null) {
-    const url = unwrapDdgUrl(am[1] ?? "");
-    const title = htmlFragmentToText(am[2] ?? "");
-    if (!url || !title) continue;
-    const snippet = snippets[i] ?? "";
+  $("a.result__a").each((_index, element) => {
+    const anchor = $(element);
+    const url = unwrapDdgUrl(anchor.attr("href") ?? "");
+    const title = htmlFragmentToText(anchor.html() ?? "");
+    if (!url || !title) return;
+    const snippetElement = anchor.closest(".result").find(".result__snippet").first();
+    const snippet = htmlFragmentToText(snippetElement.html() ?? "");
     citations.push({ url, title, ...(snippet ? { snippet } : {}) });
-    i += 1;
-  }
+  });
   return citations;
 }
 
@@ -78,10 +71,13 @@ function parseDdgHtml(html: string): WebSearchCitation[] {
  */
 export async function runScrapeSearch(
   request: WebSearchRequest,
-  config: ResolvedWebSearchConfig,
+  runtimeOrConfig: WebSearchRuntimeInput,
   signal?: AbortSignal,
 ): Promise<WebSearchResult> {
+  const runtime = toWebSearchRuntime(runtimeOrConfig);
+  const { config } = runtime;
   const page = await executeRead(
+    runtime,
     "scrape-search",
     toCallSettings(scrapeSearchExecuteDefaults, config.timeoutMs, [
       "web-search",

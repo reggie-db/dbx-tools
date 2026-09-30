@@ -4,7 +4,26 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { environmentKeys, port, resolveValue, text } from "../src/config.ts";
+import { parse as parseYaml } from "yaml";
+import { environmentKeys, flattenAppEnv, port, resolveValue, text } from "../src/config.ts";
+
+describe("app YAML subset parity", () => {
+  it("matches shared YAML 1.2 scalar fixtures", () => {
+    const fixturePath = resolve(
+      import.meta.dirname,
+      "../../../../test/fixtures/config/app-yaml.json",
+    );
+    const fixtures = JSON.parse(readFileSync(fixturePath, "utf8")) as Array<{
+      name: string;
+      source: string;
+      expected: Record<string, string>;
+    }>;
+
+    for (const fixture of fixtures) {
+      assert.deepEqual(flattenAppEnv(parseYaml(fixture.source)), fixture.expected, fixture.name);
+    }
+  });
+});
 
 /**
  * Default bundle fallback is Node-only because it shells out to the Databricks

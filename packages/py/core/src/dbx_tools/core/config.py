@@ -510,6 +510,8 @@ def _parse_yaml_record_list(
                 nested_key = None
                 nested_indent = None
                 current[key] = value
+        elif raw_value.strip():
+            return None
         elif not raw_value.strip() and item_indent is not None and indent > item_indent:
             current[key] = {}
             nested_key = key
@@ -520,7 +522,7 @@ def _parse_yaml_record_list(
 
 
 def _parse_yaml_string(raw: str) -> str | None:
-    value = raw.strip()
+    value = _strip_yaml_comment(raw.strip())
     if not value:
         return None
     if value.startswith('"'):
@@ -533,13 +535,36 @@ def _parse_yaml_string(raw: str) -> str | None:
         if len(value) < 2 or not value.endswith("'"):
             return None
         return value[1:-1].replace("''", "'")
-    value = value.split(" #", 1)[0].strip()
     if not value or value[0] in "[{|>" or value[-1] in "]}":
         return None
-    if value.lower() in {"null", "~", "true", "false", "yes", "no", "on", "off"}:
+    if value.lower() in {"null", "~", "true", "false"}:
         return None
     if _YAML_NUMBER_PATTERN.fullmatch(value):
         return None
+    return value
+
+
+def _strip_yaml_comment(value: str) -> str:
+    """Remove a YAML comment marker occurring outside a quoted scalar."""
+
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(value):
+        if escaped:
+            escaped = False
+            continue
+        if quote == '"' and character == "\\":
+            escaped = True
+            continue
+        if quote is not None:
+            if character == quote:
+                quote = None
+            continue
+        if character in {"'", '"'}:
+            quote = character
+            continue
+        if character == "#" and (index == 0 or value[index - 1].isspace()):
+            return value[:index].rstrip()
     return value
 
 

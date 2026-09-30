@@ -62,7 +62,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import ts from "typescript";
@@ -253,7 +253,7 @@ function applyPublishConfig(pkgPath: string): void {
 function enrichedPath(root: string): string {
   const binDir = join(root, "node_modules", ".bin");
   const current = process.env.PATH ?? "";
-  return current.split(":").includes(binDir) ? current : `${binDir}:${current}`;
+  return current.split(delimiter).includes(binDir) ? current : `${binDir}${delimiter}${current}`;
 }
 
 const [version, ...rest] = process.argv.slice(2);

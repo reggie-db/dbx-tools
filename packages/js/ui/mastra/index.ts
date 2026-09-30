@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-mastra";
-export const PACKAGE_VERSION = "0.6.223";
+export const PACKAGE_VERSION = "0.6.224";
 export * as reactBubbles from "./src/react/bubbles.tsx";
 export * as reactChatApprovals from "./src/react/chat-approvals.ts";
 export * as reactChatComposer from "./src/react/chat-composer.tsx";
@@ -52,7 +52,7 @@ export type { DataRow } from "./src/react/data-grid.tsx";
 export { MarkdownWithEmbeds } from "./src/react/embed-slots.tsx";
 export { ExportMenu } from "./src/react/export-menu.tsx";
 export { FeedbackControls } from "./src/react/feedback-controls.tsx";
-export { AssistantMarkdown, ToolMarkdown, SqlBlock } from "./src/react/markdown.tsx";
+export { AssistantMarkdown, ToolMarkdown, SqlBlock, JsonBlock } from "./src/react/markdown.tsx";
 export type { MastraAssistantMode, MastraAssistantSide, MastraAssistantLauncherPosition, MastraAssistantResizeOptions, MastraAssistantLauncherOptions, MastraAssistantController, MastraAssistantProps } from "./src/react/mastra-assistant.tsx";
 export { useMastraChat, MastraChat } from "./src/react/mastra-chat.tsx";
 export type { UseMastraChatOptions, MastraChatProps } from "./src/react/mastra-chat.tsx";

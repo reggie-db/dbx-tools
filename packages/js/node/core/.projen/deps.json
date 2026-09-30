@@ -11,6 +11,11 @@
       "type": "build"
     },
     {
+      "name": "@types/proper-lockfile",
+      "version": "^4.1.4",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "type": "build"
     },
@@ -22,6 +27,11 @@
     {
       "name": "extract-zip",
       "version": "^2.0.1",
+      "type": "runtime"
+    },
+    {
+      "name": "proper-lockfile",
+      "version": "^4.1.2",
       "type": "runtime"
     },
     {

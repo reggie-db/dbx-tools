@@ -1,8 +1,17 @@
 #!/usr/bin/env -S bun
 /** Idempotent npm archive publication for release recovery. */
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import {
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative, resolve } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
@@ -11,6 +20,7 @@ const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const logger = log.logger("dbx-tools:publish-npm");
 
 export interface NpmReleaseIdentity {
+  readonly contentDigest?: string;
   readonly integrity?: string;
   readonly name: string;
   readonly repository?: unknown;
@@ -47,7 +57,18 @@ export function npmReleaseMatches(
   if (localRepository && publishedRepository && localRepository !== publishedRepository) {
     throw new Error(`Published npm repository does not match ${local.name}@${local.version}`);
   }
-  if (local.integrity && published.integrity !== local.integrity) {
+  if (
+    local.contentDigest &&
+    published.contentDigest &&
+    local.contentDigest !== published.contentDigest
+  ) {
+    throw new Error(`Published npm content does not match ${local.name}@${local.version}`);
+  }
+  if (
+    !(local.contentDigest && published.contentDigest) &&
+    local.integrity &&
+    published.integrity !== local.integrity
+  ) {
     throw new Error(`Published npm integrity does not match ${local.name}@${local.version}`);
   }
   return true;
@@ -66,7 +87,7 @@ export async function publishedNpmRelease(
     throw new Error(`npm registry lookup failed for ${name}@${version}: ${response.status}`);
   }
   const metadata = (await response.json()) as {
-    dist?: { integrity?: string };
+    dist?: { integrity?: string; tarball?: string };
     name?: string;
     repository?: unknown;
     version?: string;
@@ -74,7 +95,23 @@ export async function publishedNpmRelease(
   if (!metadata.name || !metadata.version) {
     throw new Error(`npm registry returned an incomplete identity for ${name}@${version}`);
   }
+  let contentDigest: string | undefined;
+  if (metadata.dist?.tarball) {
+    const archive = await fetch(metadata.dist.tarball);
+    if (!archive.ok) {
+      throw new Error(`npm tarball lookup failed for ${name}@${version}: ${archive.status}`);
+    }
+    const temp = mkdtempSync(join(tmpdir(), "dbx-tools-published-npm-"));
+    const path = join(temp, "package.tgz");
+    try {
+      writeFileSync(path, Buffer.from(await archive.arrayBuffer()));
+      contentDigest = npmArchiveContentDigest(path);
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  }
   return {
+    ...(contentDigest ? { contentDigest } : {}),
     integrity: metadata.dist?.integrity,
     name: metadata.name,
     repository: metadata.repository,
@@ -102,11 +139,45 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
     throw new Error(`npm archive has no package name or version: ${path}`);
   }
   return {
+    contentDigest: npmArchiveContentDigest(path),
     integrity: `sha512-${createHash("sha512").update(readFileSync(path)).digest("base64")}`,
     name: manifest.name,
     repository: manifest.repository,
     version: manifest.version,
   };
+}
+
+/** Hash paths, executable bits, symlink targets, and bytes while ignoring tar metadata. */
+export function npmArchiveContentDigest(path: string): string {
+  const temp = mkdtempSync(join(tmpdir(), "dbx-tools-npm-content-"));
+  try {
+    exec.spawnSync("tar", ["-xzf", path, "-C", temp], {
+      cwd: process.cwd(),
+      stdout: "ignore",
+      stderr: "capture",
+      stdin: "ignore",
+      check: true,
+    });
+    const hash = createHash("sha512");
+    const visit = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      )) {
+        const entryPath = join(directory, entry.name);
+        const name = relative(temp, entryPath).split("\\").join("/");
+        const stat = lstatSync(entryPath);
+        hash.update(`${entry.isDirectory() ? "D" : entry.isSymbolicLink() ? "L" : "F"}\0`);
+        hash.update(`${name}\0${stat.mode & 0o111}\0`);
+        if (entry.isDirectory()) visit(entryPath);
+        else if (entry.isSymbolicLink()) hash.update(readlinkSync(entryPath));
+        else hash.update(readFileSync(entryPath));
+      }
+    };
+    visit(temp);
+    return `sha512-${hash.digest("base64")}`;
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
 }
 
 export function packNpmPackage(

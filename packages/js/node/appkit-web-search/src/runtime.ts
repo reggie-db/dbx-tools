@@ -1,20 +1,9 @@
 /**
- * The web-search runtime: a lazily-resolved, process-wide config shared by
- * the plugin and the `web_search` / `web_fetch` tools, so both read one
- * resolved allow-list / cap / timeout set. The first caller (normally the
- * plugin at setup) primes it from the plugin's config; later callers (the
- * tools' `execute`) reuse it.
+ * Web-search runtime construction and execution helpers.
  *
- * The runtime also carries the {@link WebSearchExecutor} every outbound call
- * runs through. The plugin installs its own `execute()` there at setup, which
- * is how the tools - plain functions with no plugin instance in scope - still
- * get AppKit's cache / retry / timeout / telemetry chain. Without a
- * registered plugin (a direct call from a script or a test) the calls still
- * run, just without interceptors.
- *
- * Unlike the email runtime there is no connection to pool - the backend is
- * stateless HTTP per call - so the runtime holds only the resolved config and
- * that executor.
+ * Each plugin instance owns one runtime. Standalone tool factories create their
+ * own runtime, so separate apps and direct consumers cannot overwrite each
+ * other's policy or executor.
  *
  * @module
  */
@@ -40,51 +29,84 @@ export type WebSearchExecutor = <T>(
   settings: WebSearchExecutionSettings,
 ) => Promise<ExecutionResult<T>>;
 
-/** The shared resolved config plus the executor outbound calls run through. */
+/** The resolved config plus the executor outbound calls run through. */
 export interface WebSearchRuntime {
   config: ResolvedWebSearchConfig;
   execute: WebSearchExecutor;
 }
 
+/** Runtime-aware operation input, retaining resolved-config compatibility. */
+export type WebSearchRuntimeInput = WebSearchRuntime | ResolvedWebSearchConfig;
+
 /**
- * Executor used until (or unless) the plugin installs its own: run the call
- * directly, mapping a throw onto the same {@link ExecutionResult} shape so
- * call sites branch on `ok` either way.
+ * Executor used by standalone runtimes: run the call directly, mapping a throw
+ * onto the same {@link ExecutionResult} shape so call sites branch on `ok`
+ * either way.
  */
 const directExecute = execution.directExecutor<WebSearchExecutionSettings>();
 
-let runtime: WebSearchRuntime | undefined;
+/** Build an isolated runtime for one plugin instance or standalone tool set. */
+export function createWebSearchRuntime(
+  overrides?: WebSearchPluginConfig,
+  execute: WebSearchExecutor = directExecute,
+): WebSearchRuntime {
+  return { config: resolveWebSearchConfig(overrides), execute };
+}
+
+/** Build an isolated runtime from config that has already been resolved. */
+export function createResolvedWebSearchRuntime(
+  config: ResolvedWebSearchConfig,
+  execute: WebSearchExecutor = directExecute,
+): WebSearchRuntime {
+  return { config, execute };
+}
+
+/** Normalize an explicit runtime or legacy resolved config for one operation. */
+export function toWebSearchRuntime(input: WebSearchRuntimeInput): WebSearchRuntime {
+  return "execute" in input ? input : createResolvedWebSearchRuntime(input);
+}
 
 /**
- * Return the shared runtime, building it on first use from the supplied
- * config layered over environment defaults. Overrides are only read when the
- * runtime is first created, so prime it from the plugin's config at setup;
- * subsequent calls (the tools' `execute`) pass nothing and get the same
- * instance.
+ * Build an isolated standalone runtime.
+ *
+ * @deprecated Use {@link createWebSearchRuntime}. This compatibility helper
+ * returns a new runtime on every call and never reads or updates plugin state.
  */
 export function getWebSearchRuntime(overrides?: WebSearchPluginConfig): WebSearchRuntime {
-  if (!runtime) {
-    runtime = { config: resolveWebSearchConfig(overrides), execute: directExecute };
-  }
-  return runtime;
+  return createWebSearchRuntime(overrides);
 }
 
+/** Install an executor on an explicit runtime. */
+export function setWebSearchExecutor(runtime: WebSearchRuntime, execute: WebSearchExecutor): void;
 /**
- * Install the executor outbound calls run through. The plugin calls this at
- * setup with its own `execute()`; a second call replaces the previous one, so
- * a re-registered plugin does not leave the tools bound to a dead instance.
+ * @deprecated Process-global executor registration is no longer supported.
+ * Pass a runtime as the first argument or provide the executor to
+ * {@link createWebSearchRuntime}.
  */
-export function setWebSearchExecutor(execute: WebSearchExecutor): void {
-  getWebSearchRuntime().execute = execute;
-}
-
-/** Drop the memoized runtime so the next {@link getWebSearchRuntime} rebuilds it. */
-export function resetWebSearchRuntime(): void {
-  runtime = undefined;
+export function setWebSearchExecutor(execute: WebSearchExecutor): never;
+export function setWebSearchExecutor(
+  runtimeOrExecute: WebSearchRuntime | WebSearchExecutor,
+  execute?: WebSearchExecutor,
+): void {
+  if (typeof runtimeOrExecute === "function") {
+    throw new TypeError(
+      "setWebSearchExecutor requires an explicit runtime; use createWebSearchRuntime(config, executor)",
+    );
+  }
+  if (!execute) throw new TypeError("setWebSearchExecutor requires an executor");
+  runtimeOrExecute.execute = execute;
 }
 
 /**
- * Run one idempotent read through the shared executor and unwrap it.
+ * @deprecated Plugin runtimes are instance-owned and need no global reset.
+ * This compatibility helper is intentionally a no-op.
+ */
+export function resetWebSearchRuntime(): void {
+  return;
+}
+
+/**
+ * Run one idempotent read through the runtime executor and unwrap it.
  *
  * `execute()` never throws, so a failed call arrives as `{ ok: false }` with
  * a status the interceptors already sanitized; it is logged here and re-raised
@@ -94,16 +116,16 @@ export function resetWebSearchRuntime(): void {
  * interceptor supplies so either one unwinds the I/O.
  */
 export async function executeRead<T>(
+  runtime: WebSearchRuntime,
   operation: string,
   settings: WebSearchExecutionSettings,
   fn: (signal?: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  const { execute } = getWebSearchRuntime();
   return execution.run({
     operation,
     settings,
-    execute,
+    execute: runtime.execute,
     fn,
     signal,
     canceled: ExecutionError.canceled,

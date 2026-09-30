@@ -10,6 +10,11 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from databricks.sdk.service.postgres import (
+    Endpoint,
+    EndpointType,
+    PostgresAPI,
+)
 from sqlalchemy import URL, Engine, event
 from sqlalchemy import create_engine as sqlalchemy_create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -30,27 +35,21 @@ CredentialProvider = Callable[[], str]
 CredentialLoader = Callable[[], tuple[str, dt.datetime | None]]
 """Load a database credential and its optional absolute expiration time."""
 
-_API_BASE = "/api/2.0/postgres"
 _CREDENTIAL_REFRESH_LEAD = dt.timedelta(minutes=5)
 _DEFAULT_CREDENTIAL_LIFETIME = dt.timedelta(minutes=50)
 _MINIMUM_CREDENTIAL_LIFETIME = dt.timedelta(minutes=1)
 _DEFAULT_DATABASE = "databricks_postgres"
 _DEFAULT_PORT = 5432
-_DEFAULT_SSL_MODE: SslMode = "require"
-_READ_WRITE_ENDPOINT_TYPE = "ENDPOINT_TYPE_READ_WRITE"
-
-
-class WorkspaceApiClient(Protocol):
-    def do(self, method: str, path: str, **kwargs: Any) -> Any: ...
+_DEFAULT_SSL_MODE: SslMode = NativeSslMode.REQUIRE
 
 
 class WorkspaceClientLike(Protocol):
     """WorkspaceClient surface required for Lakebase discovery and credentials."""
 
-    api_client: WorkspaceApiClient
     config: Any
     current_user: Any
     database: Any
+    postgres: PostgresAPI
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +70,7 @@ class PostgresEngineConfig:
     database: str | None = None
     host: str | None = None
     port: int | None = None
-    ssl_mode: SslMode | None = None
+    ssl_mode: SslMode | str | None = None
     user: str | None = None
 
 
@@ -104,7 +103,7 @@ class ResolvedPostgresConnection:
             host=self.host,
             port=self.port,
             database=self.database,
-            query={ssl_parameter: self.ssl_mode},
+            query={ssl_parameter: self.ssl_mode.name.lower()},
         )
 
 
@@ -163,24 +162,19 @@ def autoscaling_credential_provider(
 ) -> CredentialProvider:
     """Create a cached Autoscaling-Lakebase endpoint credential provider.
 
-    Tokens come from ``POST /api/2.0/postgres/credentials`` and use the same
-    process-local early-refresh and refresh-lock policy as provisioned tokens.
+    Tokens come from the typed Postgres SDK and use the same process-local
+    early-refresh and refresh-lock policy as provisioned tokens.
     """
 
     if not endpoint.strip():
         raise ValueError("endpoint must not be empty")
 
     def load() -> tuple[str, dt.datetime | None]:
-        credential = workspace_client.api_client.do(
-            "POST",
-            f"{_API_BASE}/credentials",
-            headers={"Accept": "application/json", "Content-Type": "application/json"},
-            body={"endpoint": endpoint},
-        )
-        token = credential.get("token") if isinstance(credential, dict) else None
+        credential = workspace_client.postgres.generate_database_credential(endpoint)
+        token = credential.token
         if not isinstance(token, str) or not token:
             raise RuntimeError("WorkspaceClient returned no Lakebase database credential token")
-        return token, _mapping_credential_expiration(credential)
+        return token, _credential_expiration(credential.expire_time)
 
     return _CachedCredentialProvider(load)
 
@@ -295,15 +289,14 @@ def resolve_postgres_connection(
         if endpoint:
             endpoint_parts = parse_address(endpoint)
             if endpoint_parts.project and endpoint_parts.branch and endpoint_parts.endpoint_id:
-                response = _get(
-                    workspace_client,
-                    f"{_API_BASE}/projects/{endpoint_parts.project}/branches/"
-                    f"{endpoint_parts.branch}/endpoints/{endpoint_parts.endpoint_id}",
+                response = workspace_client.postgres.get_endpoint(
+                    f"projects/{endpoint_parts.project}/branches/"
+                    f"{endpoint_parts.branch}/endpoints/{endpoint_parts.endpoint_id}"
                 )
                 host = _endpoint_host(response)
         if not host:
             endpoint_record = _pick_endpoint(workspace_client, project, branch)
-            endpoint = _string(endpoint_record.get("name"))
+            endpoint = _string(endpoint_record.name)
             host = _endpoint_host(endpoint_record)
 
     if not database and project and branch:
@@ -343,6 +336,9 @@ def _credential_renewal(expiration: dt.datetime | None) -> dt.datetime:
 def _credential_expiration(value: object) -> dt.datetime | None:
     if isinstance(value, dt.datetime):
         return value
+    to_datetime = getattr(value, "ToDatetime", None)
+    if callable(to_datetime):
+        return to_datetime(tzinfo=dt.UTC)
     if isinstance(value, (int, float)):
         try:
             return dt.datetime.fromtimestamp(value, tz=dt.UTC)
@@ -355,14 +351,6 @@ def _credential_expiration(value: object) -> dt.datetime | None:
         return dt.datetime.fromisoformat(normalized)
     except ValueError:
         return None
-
-
-def _mapping_credential_expiration(credential: Mapping[str, object]) -> dt.datetime | None:
-    for key in ("expiration_time", "expirationTime", "expires_at", "expiresAt"):
-        expiration = _credential_expiration(credential.get(key))
-        if expiration is not None:
-            return expiration
-    return None
 
 
 def _utcnow() -> dt.datetime:
@@ -391,23 +379,9 @@ def _workspace_user(workspace_client: WorkspaceClientLike) -> str | None:
     )
 
 
-def _get(workspace_client: WorkspaceClientLike, path: str) -> dict[str, Any]:
-    value = workspace_client.api_client.do("GET", path, headers={"Accept": "application/json"})
-    if not isinstance(value, dict):
-        raise TypeError(f"WorkspaceClient returned a non-object response for {path}")
-    return value
-
-
-def _list(workspace_client: WorkspaceClientLike, path: str, key: str) -> list[dict[str, Any]]:
-    values = _get(workspace_client, path).get(key, [])
-    if not isinstance(values, list):
-        raise TypeError(f"WorkspaceClient returned a non-list {key} response for {path}")
-    return [value for value in values if isinstance(value, dict)]
-
-
 def _pick_project(workspace_client: WorkspaceClientLike) -> str:
-    projects = _list(workspace_client, f"{_API_BASE}/projects", "projects")
-    candidates = [_resource_part(project.get("name"), "project") for project in projects]
+    projects = workspace_client.postgres.list_projects()
+    candidates = [_resource_part(project.name, "project") for project in projects]
     candidates = [candidate for candidate in candidates if candidate]
     if len(candidates) != 1:
         raise ValueError(f"Expected one Lakebase project, found: {', '.join(candidates) or 'none'}")
@@ -415,20 +389,16 @@ def _pick_project(workspace_client: WorkspaceClientLike) -> str:
 
 
 def _pick_branch(workspace_client: WorkspaceClientLike, project: str) -> str:
-    branches = _list(
-        workspace_client,
-        f"{_API_BASE}/projects/{project}/branches",
-        "branches",
-    )
+    branches = list(workspace_client.postgres.list_branches(f"projects/{project}"))
     selected = next(
         (
             branch
             for branch in branches
-            if isinstance(branch.get("status"), dict) and branch["status"].get("default") is True
+            if branch.status is not None and branch.status.default is True
         ),
         branches[0] if len(branches) == 1 else None,
     )
-    branch = _resource_part(selected.get("name") if selected else None, "branch")
+    branch = _resource_part(selected.name if selected else None, "branch")
     if not branch:
         raise ValueError(f"Could not choose a Lakebase branch for project {project}")
     return branch
@@ -438,18 +408,16 @@ def _pick_endpoint(
     workspace_client: WorkspaceClientLike,
     project: str,
     branch: str,
-) -> dict[str, Any]:
-    endpoints = _list(
-        workspace_client,
-        f"{_API_BASE}/projects/{project}/branches/{branch}/endpoints",
-        "endpoints",
+) -> Endpoint:
+    endpoints = list(
+        workspace_client.postgres.list_endpoints(f"projects/{project}/branches/{branch}")
     )
     selected = next(
         (
             endpoint
             for endpoint in endpoints
-            if isinstance(endpoint.get("status"), dict)
-            and endpoint["status"].get("endpoint_type") == _READ_WRITE_ENDPOINT_TYPE
+            if endpoint.status is not None
+            and endpoint.status.endpoint_type is EndpointType.ENDPOINT_TYPE_READ_WRITE
         ),
         endpoints[0] if len(endpoints) == 1 else None,
     )
@@ -464,21 +432,19 @@ def _pick_database(
     branch: str,
     resource_id: str | None,
 ) -> str:
-    databases = _list(
-        workspace_client,
-        f"{_API_BASE}/projects/{project}/branches/{branch}/databases",
-        "databases",
+    databases = list(
+        workspace_client.postgres.list_databases(f"projects/{project}/branches/{branch}")
     )
     if resource_id:
         databases = [
             database
             for database in databases
-            if _resource_part(database.get("name"), "database") == resource_id
+            if _resource_part(database.name, "database") == resource_id
         ]
     names = [
-        _string(database.get("status", {}).get("postgres_database"))
+        _string(database.status.postgres_database)
         for database in databases
-        if isinstance(database.get("status"), dict)
+        if database.status is not None
     ]
     names = [name for name in names if name]
     if _DEFAULT_DATABASE in names:
@@ -492,32 +458,25 @@ def _find_endpoint_by_host(
     workspace_client: WorkspaceClientLike,
     host: str,
 ) -> tuple[str, str, str] | None:
-    for project_record in _list(workspace_client, f"{_API_BASE}/projects", "projects"):
-        project = _resource_part(project_record.get("name"), "project")
+    for project_record in workspace_client.postgres.list_projects():
+        project = _resource_part(project_record.name, "project")
         if not project:
             continue
-        for branch_record in _list(
-            workspace_client,
-            f"{_API_BASE}/projects/{project}/branches",
-            "branches",
-        ):
-            branch = _resource_part(branch_record.get("name"), "branch")
+        for branch_record in workspace_client.postgres.list_branches(f"projects/{project}"):
+            branch = _resource_part(branch_record.name, "branch")
             if not branch:
                 continue
-            for endpoint in _list(
-                workspace_client,
-                f"{_API_BASE}/projects/{project}/branches/{branch}/endpoints",
-                "endpoints",
+            for endpoint in workspace_client.postgres.list_endpoints(
+                f"projects/{project}/branches/{branch}"
             ):
-                if _endpoint_host(endpoint) == host and (name := _string(endpoint.get("name"))):
+                if _endpoint_host(endpoint) == host and (name := _string(endpoint.name)):
                     return project, branch, name
     return None
 
 
-def _endpoint_host(endpoint: Mapping[str, Any]) -> str | None:
-    status = endpoint.get("status")
-    hosts = status.get("hosts") if isinstance(status, dict) else None
-    return _string(hosts.get("host")) if isinstance(hosts, dict) else None
+def _endpoint_host(endpoint: Endpoint) -> str | None:
+    hosts = endpoint.status.hosts if endpoint.status is not None else None
+    return _string(hosts.host) if hosts is not None else None
 
 
 def _resource_part(value: object, kind: str) -> str | None:
@@ -545,10 +504,14 @@ def _parse_port(value: object) -> int:
 def _parse_ssl_mode(value: object) -> SslMode:
     if value is None or value == "":
         return _DEFAULT_SSL_MODE
-    mode = value.name.lower() if isinstance(value, NativeSslMode) else str(value).strip().lower()
-    if mode not in SSL_MODES:
-        raise ValueError(f"PGSSLMODE must be one of {', '.join(SSL_MODES)}, got {value!r}")
-    return mode  # type: ignore[return-value]
+    if isinstance(value, NativeSslMode):
+        return value
+    normalized = str(value).strip().upper()
+    try:
+        return NativeSslMode[normalized]
+    except KeyError:
+        accepted = ", ".join(SSL_MODES)
+        raise ValueError(f"PGSSLMODE must be one of {accepted}, got {value!r}") from None
 
 
 def _first(*values: Any) -> Any:

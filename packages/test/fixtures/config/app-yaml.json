@@ -1,0 +1,32 @@
+[
+  {
+    "name": "double quoted comment",
+    "source": "env:\n  - name: SAMPLE\n    value: \"literal\" # trailing comment\n",
+    "expected": { "SAMPLE": "literal" }
+  },
+  {
+    "name": "single quoted comment",
+    "source": "env:\n  - name: SAMPLE\n    value: 'it''s literal' # trailing comment\n",
+    "expected": { "SAMPLE": "it's literal" }
+  },
+  {
+    "name": "yaml 1.2 plain strings",
+    "source": "env:\n  - name: YES_VALUE\n    value: yes\n  - name: NO_VALUE\n    value: no\n  - name: ON_VALUE\n    value: on\n  - name: OFF_VALUE\n    value: off\n",
+    "expected": {
+      "YES_VALUE": "yes",
+      "NO_VALUE": "no",
+      "ON_VALUE": "on",
+      "OFF_VALUE": "off"
+    }
+  },
+  {
+    "name": "quoted delimiters and hash",
+    "source": "env:\n  - name: SAMPLE\n    value: \"a: b # literal\"\n",
+    "expected": { "SAMPLE": "a: b # literal" }
+  },
+  {
+    "name": "non-string scalars omitted",
+    "source": "env:\n  - name: BOOLEAN\n    value: true\n  - name: NUMBER\n    value: 42\n  - name: NULL_VALUE\n    value: null\n  - name: TEXT\n    value: available\n",
+    "expected": {}
+  }
+]

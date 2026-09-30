@@ -34,7 +34,12 @@ import { openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import { MODEL_ENV, SERVING_ENDPOINT_ENV, type ResolvedWebSearchConfig } from "./config.ts";
 import { toCallSettings, webSearchExecuteDefaults } from "./defaults.ts";
 import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider.ts";
-import { executeRead } from "./runtime.ts";
+import {
+  executeRead,
+  toWebSearchRuntime,
+  type WebSearchRuntime,
+  type WebSearchRuntimeInput,
+} from "./runtime.ts";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema.ts";
 import { runScrapeSearch } from "./scrape.ts";
 
@@ -168,11 +173,13 @@ async function postServing(
   ctx: WebSearchContext,
   url: string,
   body: unknown,
-  config: ResolvedWebSearchConfig,
+  runtime: WebSearchRuntime,
   cacheKey: readonly (string | number)[],
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
+  const { config } = runtime;
   const payload = await executeRead(
+    runtime,
     "serving-request",
     toCallSettings(webSearchExecuteDefaults, config.timeoutMs, cacheKey),
     async (executeSignal): Promise<unknown> => {
@@ -262,17 +269,19 @@ function fromChatPayload(payload: Record<string, unknown>): {
  */
 export async function runWebSearch(
   request: WebSearchRequest,
-  config: ResolvedWebSearchConfig,
+  runtimeOrConfig: WebSearchRuntimeInput,
   ctx: WebSearchContext,
   signal?: AbortSignal,
 ): Promise<WebSearchResult> {
+  const runtime = toWebSearchRuntime(runtimeOrConfig);
+  const { config } = runtime;
   const modelId = await resolveWebSearchModel(ctx, config, request.model);
 
   if (modelId === null) {
     // No native web-search model deployed in this workspace.
     if (config.scrapeFallback) {
       logger.info("no-native-model:scrape-fallback", { query: request.query });
-      return runScrapeSearch(request, config, signal);
+      return runScrapeSearch(request, runtime, signal);
     }
     throw ConfigurationError.resourceNotFound(
       "Web-search-capable serving endpoint",
@@ -304,7 +313,7 @@ export async function runWebSearch(
     ctx,
     url,
     body,
-    config,
+    runtime,
     ["web-search", "serving", spec.api, modelId, request.query],
     signal,
   );

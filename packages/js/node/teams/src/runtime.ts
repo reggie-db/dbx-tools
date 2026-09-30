@@ -1,20 +1,9 @@
 /**
- * The Teams runtime: a lazily-resolved, process-wide config shared by the
- * plugin and the `create_teams_card` tool, so both read one resolved card
- * version / webhook set. The first caller (normally the plugin at setup)
- * primes it from the plugin's config; later callers (the tool's `execute`)
- * reuse it.
+ * Teams runtime construction and execution helpers.
  *
- * The runtime also carries the {@link TeamsExecutor} every operation runs
- * through. The plugin installs its own `execute()` there at setup, which is how
- * the tool - a plain function with no plugin instance in scope - still gets
- * AppKit's cache / retry / timeout / telemetry chain. Without a registered
- * plugin (a direct call from a script or a test) the operations still run, just
- * without interceptors.
- *
- * Like the web-search runtime and unlike the email one, there is no connection
- * pool to hold - card building is in-process and a webhook post is a stateless
- * HTTP call - so the runtime holds only the resolved config and that executor.
+ * Each plugin instance owns one runtime. Standalone operations and tool
+ * factories create or receive their own runtime, so separate apps cannot
+ * overwrite each other's card config, webhook, or executor.
  *
  * @module
  */
@@ -42,50 +31,68 @@ export type TeamsExecutor = <T>(
   settings: TeamsExecutionSettings,
 ) => Promise<ExecutionResult<T>>;
 
-/** The shared resolved config plus the executor operations run through. */
+/** The resolved config plus the executor operations run through. */
 export interface TeamsRuntime {
   config: ResolvedTeamsConfig;
   execute: TeamsExecutor;
 }
 
 /**
- * Executor used until (or unless) the plugin installs its own: run the call
- * directly, mapping a throw onto the same {@link ExecutionResult} shape so
- * call sites branch on `ok` either way.
+ * Executor used by standalone runtimes: run the call directly, mapping a throw
+ * onto the same {@link ExecutionResult} shape so call sites branch on `ok`
+ * either way.
  */
 const directExecute = execution.directExecutor<TeamsExecutionSettings>();
 
-let runtime: TeamsRuntime | undefined;
+/** Build an isolated runtime for one plugin instance or standalone tool set. */
+export function createTeamsRuntime(
+  overrides?: TeamsPluginConfig,
+  execute: TeamsExecutor = directExecute,
+): TeamsRuntime {
+  return { config: resolveTeamsConfig(overrides), execute };
+}
 
 /**
- * Return the shared runtime, building it on first use from the supplied config
- * layered over environment defaults. Overrides are only read when the runtime
- * is first created, so prime it from the plugin's config at setup; subsequent
- * calls (the tool's `execute`) pass nothing and get the same instance.
+ * Build an isolated standalone runtime.
+ *
+ * @deprecated Use {@link createTeamsRuntime}. This compatibility helper
+ * returns a new runtime on every call and never reads or updates plugin state.
  */
 export function getTeamsRuntime(overrides?: TeamsPluginConfig): TeamsRuntime {
-  if (!runtime) {
-    runtime = { config: resolveTeamsConfig(overrides), execute: directExecute };
-  }
-  return runtime;
+  return createTeamsRuntime(overrides);
 }
 
+/** Install an executor on an explicit runtime. */
+export function setTeamsExecutor(runtime: TeamsRuntime, execute: TeamsExecutor): void;
 /**
- * Install the executor operations run through. The plugin calls this at setup
- * with its own `execute()`; a second call replaces the previous one, so a
- * re-registered plugin does not leave the tool bound to a dead instance.
+ * @deprecated Process-global executor registration is no longer supported.
+ * Pass a runtime as the first argument or provide the executor to
+ * {@link createTeamsRuntime}.
  */
-export function setTeamsExecutor(execute: TeamsExecutor): void {
-  getTeamsRuntime().execute = execute;
-}
-
-/** Drop the memoized runtime so the next {@link getTeamsRuntime} rebuilds it. */
-export function resetTeamsRuntime(): void {
-  runtime = undefined;
+export function setTeamsExecutor(execute: TeamsExecutor): never;
+export function setTeamsExecutor(
+  runtimeOrExecute: TeamsRuntime | TeamsExecutor,
+  execute?: TeamsExecutor,
+): void {
+  if (typeof runtimeOrExecute === "function") {
+    throw new TypeError(
+      "setTeamsExecutor requires an explicit runtime; use createTeamsRuntime(config, executor)",
+    );
+  }
+  if (!execute) throw new TypeError("setTeamsExecutor requires an executor");
+  runtimeOrExecute.execute = execute;
 }
 
 /**
- * Run one operation through the shared executor and unwrap it.
+ * @deprecated Plugin runtimes are instance-owned and need no global reset.
+ * This compatibility helper is intentionally a no-op.
+ */
+export function resetTeamsRuntime(): void {
+  return;
+}
+
+/**
+ * Run one operation through the runtime executor and unwrap it.
  *
  * `execute()` never throws, so a failed call arrives as `{ ok: false }` with a
  * status the interceptors already sanitized; it is logged here and re-raised as
@@ -93,16 +100,16 @@ export function resetTeamsRuntime(): void {
  * caller's error text.
  */
 async function run<T>(
+  runtime: TeamsRuntime,
   operation: string,
   settings: TeamsExecutionSettings,
   fn: (signal?: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  const { execute } = getTeamsRuntime();
   return execution.run({
     operation,
     settings,
-    execute,
+    execute: runtime.execute,
     fn,
     signal,
     canceled: ExecutionError.canceled,
@@ -120,16 +127,16 @@ async function run<T>(
 }
 
 /**
- * Compile a card spec into an Adaptive Card document, stamped with the runtime's
- * resolved card version. Runs through the shared executor so a build picks up
- * the app's telemetry / timeout chain.
+ * Compile a card through an explicit runtime.
  */
-export async function buildCard(
+export async function buildCardWithRuntime(
+  runtime: TeamsRuntime,
   spec: card.CardSpec,
   signal?: AbortSignal,
 ): Promise<card.CardResult> {
-  const { config } = getTeamsRuntime();
+  const { config } = runtime;
   return run(
+    runtime,
     "build",
     TEAMS_BUILD_SETTINGS,
     async () => {
@@ -142,16 +149,25 @@ export async function buildCard(
 }
 
 /**
+ * Compile a card with isolated environment-derived config and direct
+ * execution. Use {@link buildCardWithRuntime} to reuse an explicit runtime.
+ */
+export function buildCard(spec: card.CardSpec, signal?: AbortSignal): Promise<card.CardResult> {
+  return buildCardWithRuntime(createTeamsRuntime(), spec, signal);
+}
+
+/**
  * POST a compiled Adaptive Card to the configured Teams incoming webhook,
  * wrapped in the `MessageCard` attachment envelope Teams expects. Throws when
  * no webhook is configured, so a caller that reaches here without one gets a
  * clear error rather than a silent no-op.
  */
-export async function postCard(
+export async function postCardWithRuntime(
+  runtime: TeamsRuntime,
   cardDocument: card.AdaptiveCard,
   signal?: AbortSignal,
 ): Promise<void> {
-  const { config } = getTeamsRuntime();
+  const { config } = runtime;
   const webhookUrl = config.webhookUrl;
   if (!webhookUrl) {
     throw new ExecutionError("teams: no webhook configured", {
@@ -159,6 +175,7 @@ export async function postCard(
     });
   }
   await run(
+    runtime,
     "post",
     TEAMS_POST_SETTINGS,
     async (executeSignal) => {
@@ -185,4 +202,12 @@ export async function postCard(
     },
     signal,
   );
+}
+
+/**
+ * Post a card with isolated environment-derived config and direct execution.
+ * Use {@link postCardWithRuntime} to reuse an explicit runtime.
+ */
+export function postCard(cardDocument: card.AdaptiveCard, signal?: AbortSignal): Promise<void> {
+  return postCardWithRuntime(createTeamsRuntime(), cardDocument, signal);
 }

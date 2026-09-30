@@ -1,10 +1,11 @@
 /** Filesystem-discovered Rust workspaces and UniFFI binding package wiring. */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
-import { Component, Project, TextFile, javascript } from "projen";
+import { Component, Project, TextFile, TomlFile, javascript } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import {
@@ -28,7 +29,7 @@ import {
   nodeReleaseSetupSteps,
   releaseArtifactSteps,
   releaseStageCondition,
-  releaseWorkflow,
+  tryReleaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -180,6 +181,7 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
 
 const UBRN_VERSION = "0.31.0-5";
 const RELEASE_PLATFORMS_ENV = "DBX_TOOLS_RELEASE_PLATFORMS";
+const require = createRequire(import.meta.url);
 const RUST_CACHE_ENV = {
   CARGO_INCREMENTAL: "0",
   CARGO_TERM_COLOR: "always",
@@ -262,15 +264,23 @@ function rustCliRegistrySource(binaries: readonly RustReleaseBinaryMapping[]): s
   ].join("\n");
 }
 
-function uniffiReleaseTaskSource(): string {
+function taskSource(name: string): string {
   const sourceDirectory = dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    resolve(sourceDirectory, "../tasks/uniffi-release.mjs"),
-    resolve(sourceDirectory, "../../tasks/uniffi-release.mjs"),
+    resolve(sourceDirectory, `../tasks/${name}`),
+    resolve(sourceDirectory, `../../tasks/${name}`),
   ];
   const source = candidates.find(existsSync);
-  if (!source) throw new Error("Could not locate tasks/uniffi-release.mjs");
+  if (!source) throw new Error(`Could not locate tasks/${name}`);
   return readFileSync(source, "utf8");
+}
+
+function smolTomlSource(name: "dist/index.cjs" | "LICENSE"): string {
+  const entry = require.resolve("smol-toml");
+  return readFileSync(
+    resolve(dirname(entry), name === "LICENSE" ? "../LICENSE" : "index.cjs"),
+    "utf8",
+  );
 }
 
 /** Keep tracked workspace package versions in Cargo.lock aligned with VERSION. */
@@ -390,26 +400,23 @@ function cargoDependency(
   };
 }
 
-function tomlValue(value: unknown): string {
-  if (typeof value === "string") return JSON.stringify(value);
-  if (typeof value === "boolean" || typeof value === "number") return String(value);
-  if (Array.isArray(value)) return `[${value.map(tomlValue).join(", ")}]`;
-  if (value && typeof value === "object") {
-    return `{ ${Object.entries(value)
-      .map(([key, entry]) => `${key} = ${tomlValue(entry)}`)
-      .join(", ")} }`;
+function structuredTomlSections(value: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [section, contents] of Object.entries(value)) {
+    const path = section.split(".");
+    let target = result;
+    for (const part of path.slice(0, -1)) {
+      const current = target[part];
+      if (current === undefined) {
+        target[part] = {};
+      } else if (!current || typeof current !== "object" || Array.isArray(current)) {
+        throw new Error(`Conflicting TOML section ${section}`);
+      }
+      target = target[part] as Record<string, unknown>;
+    }
+    target[path.at(-1)!] = contents;
   }
-  throw new Error(`Unsupported Cargo TOML value: ${String(value)}`);
-}
-
-function renderToml(value: Record<string, unknown>): string {
-  const blocks: string[] = [];
-  for (const [section, entries] of Object.entries(value)) {
-    if (!entries || typeof entries !== "object" || Array.isArray(entries)) continue;
-    const rows = Object.entries(entries).map(([key, entry]) => `${key} = ${tomlValue(entry)}`);
-    blocks.push(`${section === "bin" ? "[[bin]]" : `[${section}]`}\n${rows.join("\n")}`);
-  }
-  return `${blocks.join("\n\n")}\n`;
+  return result;
 }
 
 /** One generated Cargo workspace member. */
@@ -455,9 +462,11 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
         : {}),
       ...(this.uniffi || binary
         ? {
-            bin: this.uniffi
-              ? { name: `${crateName}-uniffi-bindgen`, path: "uniffi-bindgen.rs" }
-              : { name: binaryName, path: "src/main.rs" },
+            bin: [
+              this.uniffi
+                ? { name: `${crateName}-uniffi-bindgen`, path: "uniffi-bindgen.rs" }
+                : { name: binaryName, path: "src/main.rs" },
+            ],
           }
         : {}),
       ...(options.features || options.defaultFeatures
@@ -489,20 +498,19 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
           }
         : {}),
     };
-    new TextFile(this, "Cargo.toml", { lines: renderToml(manifest).trimEnd().split("\n") });
+    new TomlFile(this, "Cargo.toml", { marker: false, obj: manifest });
     if (this.uniffi) {
       new TextFile(this, "uniffi-bindgen.rs", {
         lines: ["fn main() {", "    uniffi::uniffi_bindgen_main();", "}", ""],
       });
-      new TextFile(this, "uniffi.toml", {
-        lines: renderToml(
+      new TomlFile(this, "uniffi.toml", {
+        marker: false,
+        obj: structuredTomlSections(
           options.uniffiConfig ?? {
             "bindings.python": { cdylib_name: crateName.replaceAll("-", "_") },
             "bindings.typescript": { strictTypeChecking: true },
           },
-        )
-          .trimEnd()
-          .split("\n"),
+        ),
       });
     }
   }
@@ -833,8 +841,9 @@ function configureRustBindingFiles(
     const dependencies = bindingDependencies(plan, pkg, "python");
     if (dependencies.length === 0) continue;
     pkg.tryRemoveFile("uniffi.toml");
-    new TextFile(pkg, "uniffi.toml", {
-      lines: renderToml({
+    new TomlFile(pkg, "uniffi.toml", {
+      marker: false,
+      obj: structuredTomlSections({
         "bindings.python": { cdylib_name: pkg.crateName.replaceAll("-", "_") },
         "bindings.typescript": { strictTypeChecking: true },
         ...pkg.packageOptions.uniffiConfig,
@@ -847,9 +856,7 @@ function configureRustBindingFiles(
             )}.bindings`,
           ]),
         ),
-      })
-        .trimEnd()
-        .split("\n"),
+      }),
     });
   }
 }
@@ -936,39 +943,41 @@ function configureRustWorkspaceFiles(
         .filter((pkg) => !pkg.uniffi)
         .map((pkg) => `${resolved.root}/${pkg.packageOptions.directory}`),
       resolver: "2",
+      package: {
+        version: readWorkspaceVersion(project.outdir),
+        edition: options.edition ?? "2021",
+        "rust-version": options.rustVersion ?? "1.82",
+        license: options.license ?? DBX_TOOLS_LICENSE,
+        repository: resolved.repository,
+      },
+      ...(options.workspaceDependencies
+        ? {
+            dependencies: Object.fromEntries(
+              Object.entries(options.workspaceDependencies).map(([name, value]) => [
+                name,
+                cargoDependency(value),
+              ]),
+            ),
+          }
+        : {}),
     },
-    "workspace.package": {
-      version: readWorkspaceVersion(project.outdir),
-      edition: options.edition ?? "2021",
-      "rust-version": options.rustVersion ?? "1.82",
-      license: options.license ?? DBX_TOOLS_LICENSE,
-      repository: resolved.repository,
-    },
-    ...(options.workspaceDependencies
-      ? {
-          "workspace.dependencies": Object.fromEntries(
-            Object.entries(options.workspaceDependencies).map(([name, value]) => [
-              name,
-              cargoDependency(value),
-            ]),
-          ),
-        }
-      : {}),
   };
-  new TextFile(project, "Cargo.toml", {
-    lines: renderToml(manifest).trimEnd().split("\n"),
+  new TomlFile(project, "Cargo.toml", {
+    marker: false,
+    obj: manifest,
   });
-  new TextFile(project, ".cargo/config.toml", {
-    lines: renderToml({
-      "target.x86_64-pc-windows-msvc": {
-        rustflags: ["-C", "target-feature=+crt-static"],
+  new TomlFile(project, ".cargo/config.toml", {
+    marker: false,
+    obj: {
+      target: {
+        "x86_64-pc-windows-msvc": {
+          rustflags: ["-C", "target-feature=+crt-static"],
+        },
+        "aarch64-pc-windows-msvc": {
+          rustflags: ["-C", "target-feature=+crt-static"],
+        },
       },
-      "target.aarch64-pc-windows-msvc": {
-        rustflags: ["-C", "target-feature=+crt-static"],
-      },
-    })
-      .trimEnd()
-      .split("\n"),
+    },
   });
   new RustWorkspaceVersionLock(project);
 }
@@ -1086,12 +1095,27 @@ function planRustRelease(
 }
 
 function configureRustReleaseTask(project: javascript.NodeProject, plan: RustReleasePlan): void {
+  const supportFiles = [
+    plan.releaseTask,
+    ".projen/uniffi-python.js",
+    ".projen/smol-toml.cjs",
+    ".projen/smol-toml.LICENSE",
+  ] as const;
   if (plan.bindings.length) {
     new TextFile(project, plan.releaseTask, {
-      lines: uniffiReleaseTaskSource().trimEnd().split("\n"),
+      lines: taskSource("uniffi-release.mjs").trimEnd().split("\n"),
+    });
+    new TextFile(project, supportFiles[1], {
+      lines: taskSource("uniffi-python.js").trimEnd().split("\n"),
+    });
+    new TextFile(project, supportFiles[2], {
+      lines: smolTomlSource("dist/index.cjs").trimEnd().split("\n"),
+    });
+    new TextFile(project, supportFiles[3], {
+      lines: smolTomlSource("LICENSE").trimEnd().split("\n"),
     });
   } else {
-    project.tryRemoveFile(plan.releaseTask);
+    for (const path of supportFiles) project.tryRemoveFile(path);
   }
 }
 
@@ -1476,8 +1500,11 @@ export class DBXToolsRustWorkspace {
   ): void {
     if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const plan = planRustRelease(project, options, targets, this.packages, this.bindingMappings);
+    const workflow = tryReleaseWorkflow(project);
+    if (!workflow) {
+      throw new Error("Rust release requires the root dbx-tools release mode");
+    }
     configureRustReleaseTask(project, plan);
-    const workflow = releaseWorkflow(project);
     if (plan.hasTargetOutputs && plan.targets.length) {
       workflow.addJob("rust-build", rustBuildJob(plan));
     }

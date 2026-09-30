@@ -16,7 +16,10 @@
 /.projen/deps.json linguist-generated
 /.projen/files.json linguist-generated
 /.projen/pypi-trusted-publisher-instructions.mjs linguist-generated
+/.projen/smol-toml.cjs linguist-generated
+/.projen/smol-toml.LICENSE linguist-generated
 /.projen/tasks.json linguist-generated
+/.projen/uniffi-python.js linguist-generated
 /.projen/uniffi-release.mjs linguist-generated
 /.vscode/extensions.json linguist-generated linguist-language=JSON-with-Comments
 /.vscode/settings.json linguist-generated
@@ -29,7 +32,7 @@
 /packages/example/**/index.ts linguist-generated
 /packages/example/openapi/** linguist-generated
 /packages/js/**/index.ts linguist-generated
-/packages/js/cli/dbx-tools/src/_rust-release-binaries.ts linguist-generated
+/packages/js/node/rust-binary/src/_rust-release-binaries.ts linguist-generated
 /packages/js/openapi/** linguist-generated
 /packages/py/core-rs/pyproject.toml linguist-generated
 /packages/py/core/pyproject.toml linguist-generated
@@ -43,6 +46,6 @@
 /pnpm-workspace.yaml linguist-generated
 /projen/index.ts linguist-generated
 /pyproject.toml linguist-generated
-/tsconfig.base.json linguist-generated
-/tsconfig.json linguist-generated
+/tsconfig.base.json linguist-generated linguist-language=JSON-with-Comments
+/tsconfig.json linguist-generated linguist-language=JSON-with-Comments
 /tsconfig.projen.json linguist-generated linguist-language=JSON-with-Comments

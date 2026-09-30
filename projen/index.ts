@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.6.223";
+export const PACKAGE_VERSION = "0.6.224";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -25,6 +25,7 @@ export * as projectRs from "./src/project-rs.ts";
 export * as publish from "./src/publish.ts";
 export * as release from "./src/release.ts";
 export * as releaseDispatch from "./src/release-dispatch.ts";
+export * as releaseGithub from "./src/release-github.ts";
 export * as scaffold from "./src/scaffold.ts";
 export * as tags from "./src/tags.ts";
 export * as tsconfig from "./src/tsconfig.ts";
@@ -47,7 +48,7 @@ export { PnpmWorkspaceState } from "./src/pnpm-workspace.ts";
 export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace.ts";
 export type { DBXToolsProjectLanguage, DBXToolsProjectOptions, DBXToolsProject, ApplyToProjectsOptions } from "./src/project.ts";
 export { PackageIdentifier, PROJEN_VERSION, DBX_TOOLS_LICENSE, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject } from "./src/project-js.ts";
-export type { DBXToolsJavaScriptProject, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
+export type { DBXToolsJavaScriptProject, DBXToolsReleaseMode, PullRequestTitlePolicyOptions, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
 export { DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";
 export type { PythonRepositoryOptions, PythonPackageOptions, PythonTrustedPublisherOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
 export { RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustProject, DBXToolsRustWorkspace } from "./src/project-rs.ts";
@@ -56,6 +57,7 @@ export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
 export { DBXToolsRelease } from "./src/release.ts";
 export type { ReleaseStage, ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
 export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION } from "./src/release-dispatch.ts";
+export type { GithubRepositoryIdentity } from "./src/release-github.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";

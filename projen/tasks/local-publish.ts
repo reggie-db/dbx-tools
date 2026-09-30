@@ -16,7 +16,7 @@ export interface LocalPublishOptions {
   readonly version: string;
   readonly localRegistry: string;
   readonly localPypi: string;
-  readonly pythonRoot: string;
+  readonly pythonRoot?: string;
   readonly localCargo: boolean;
 }
 
@@ -50,7 +50,7 @@ export async function publishLocalRelease(options: LocalPublishOptions): Promise
   const localRegistry = resolveLocalRegistry(options.localRegistry);
   const activeIndexes = activePythonIndexes();
   const localPypi = resolveLocalPypi(options.localPypi, activeIndexes);
-  const pythonRoot = resolve(options.root, options.pythonRoot);
+  const pythonRoot = options.pythonRoot ? resolve(options.root, options.pythonRoot) : undefined;
   const localPublishes: Promise<unknown>[] = [];
 
   if (
@@ -79,7 +79,7 @@ export async function publishLocalRelease(options: LocalPublishOptions): Promise
     );
   }
 
-  if (localPypi && existsSync(pythonRoot)) {
+  if (localPypi && pythonRoot && existsSync(pythonRoot)) {
     const publishPythonScript = fileURLToPath(new URL("./publish-python.ts", import.meta.url));
     logger.info(`publishing Python ${options.version} to local devpi ${localPypi.publishUrl}`);
     localPublishes.push(

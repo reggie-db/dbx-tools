@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -64,10 +64,28 @@ describe("npm release recovery", () => {
     assert.equal(npmReleaseMatches(identity, undefined), false);
   });
 
+  it("matches equivalent package content despite different tar metadata", () => {
+    const secondArchive = join(outdir, "fixture-second.tgz");
+    const future = new Date(Date.now() + 120_000);
+    utimesSync(join(packageDir, "package.json"), future, future);
+    chmodSync(join(packageDir, "package.json"), 0o444);
+    const packed = spawnSync("tar", ["-czf", secondArchive, "-C", outdir, "package"]);
+    assert.equal(packed.status, 0);
+    const second = readNpmArchiveIdentity(secondArchive);
+
+    assert.equal(second.contentDigest, identity.contentDigest);
+    assert.equal(npmReleaseMatches(second, identity), true);
+  });
+
   it("rejects an existing version with different content", () => {
     assert.throws(
-      () => npmReleaseMatches(identity, { ...identity, integrity: "sha512-different" }),
-      /integrity does not match/,
+      () =>
+        npmReleaseMatches(identity, {
+          ...identity,
+          contentDigest: "sha512-different",
+          integrity: "sha512-different",
+        }),
+      /content does not match/,
     );
   });
 

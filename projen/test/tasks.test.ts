@@ -84,7 +84,8 @@ describe("workspace validation tasks", () => {
     const fixCommand = tasks.root.tasks["eslint:fix"].steps?.[0]?.exec ?? "";
     assert.doesNotMatch(lintCommand, /--fix/);
     assert.match(lintCommand, /\bpackages\b/);
-    assert.match(lintCommand, /\bprojen$/);
+    assert.match(lintCommand, /\btooling$/);
+    assert.doesNotMatch(lintCommand, /\bprojen\b/);
     assert.equal(fixCommand, "bun run eslint -- --fix");
   });
 
@@ -143,8 +144,13 @@ describe("workspace validation tasks", () => {
   it("does not swallow package test failures", () => {
     const command = tasks.child.tasks.test.steps?.find((step) => step.exec)?.exec ?? "";
     const condition = tasks.child.tasks.test.steps?.find((step) => step.exec)?.condition ?? "";
-    assert.equal(command, "bun test test");
-    assert.match(condition, /^find test /);
+    assert.equal(command, "bun test test --pass-with-no-tests");
+    assert.equal(condition, "");
+  });
+
+  it("does not register tasks for missing engine scripts", () => {
+    const engineProjenrc = readFileSync(join(import.meta.dirname, "..", ".projenrc.ts"), "utf8");
+    assert.doesNotMatch(engineProjenrc, /tasks\/demo\.ts/);
   });
 });
 

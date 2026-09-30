@@ -27,6 +27,7 @@ from graphiti_core.driver.query_executor import Transaction
 class MemoryStorage(WriteStorageDriver):
     def __init__(self, writes: Sequence[GraphWrite] = ()) -> None:
         self.writes = list(writes)
+        self.batches: list[list[GraphWrite]] = []
         self.setup_calls = 0
         self.closed = False
 
@@ -34,6 +35,7 @@ class MemoryStorage(WriteStorageDriver):
         self.setup_calls += 1
 
     async def append(self, writes: Sequence[GraphWrite]) -> None:
+        self.batches.append(list(writes))
         self.writes.extend(writes)
 
     async def load(self) -> list[GraphWrite]:
@@ -258,7 +260,7 @@ def test_hydration_clears_and_replays_once(monkeypatch) -> None:
     asyncio.run(run())
 
 
-def test_transaction_journals_only_after_commit() -> None:
+def test_transaction_journals_one_batch_before_commit() -> None:
     async def run() -> None:
         storage = MemoryStorage()
         driver = DelegatingGraphDriver(FakeDriver(), storage)
@@ -270,6 +272,7 @@ def test_transaction_journals_only_after_commit() -> None:
         assert storage.writes == [
             GraphWrite(query="CREATE (n {uuid: $uuid})", parameters={"uuid": "node-1"})
         ]
+        assert storage.batches == [storage.writes]
 
         with pytest.raises(RuntimeError):
             async with driver.transaction() as transaction:
@@ -277,6 +280,109 @@ def test_transaction_journals_only_after_commit() -> None:
                 raise RuntimeError("roll back")
 
         assert len(storage.writes) == 1
+
+    asyncio.run(run())
+
+
+def test_commit_failure_retains_write_ahead_batch() -> None:
+    class CommitFailDriver(FakeDriver):
+        @asynccontextmanager
+        async def transaction(self) -> AsyncIterator[Transaction]:
+            yield FakeTransaction(self.queries)
+            raise RuntimeError("commit failed")
+
+    async def run() -> None:
+        storage = MemoryStorage()
+        driver = DelegatingGraphDriver(CommitFailDriver(), storage)
+
+        with pytest.raises(RuntimeError, match="commit failed"):
+            async with driver.transaction() as transaction:
+                await transaction.run("MERGE (n {uuid: $uuid})", uuid="node-1")
+
+        assert storage.writes == [
+            GraphWrite(query="MERGE (n {uuid: $uuid})", parameters={"uuid": "node-1"})
+        ]
+
+    asyncio.run(run())
+
+
+def test_session_driver_retry_records_each_attempt() -> None:
+    class RetryingSession(FakeSession):
+        async def execute_write(self, func, *args, **kwargs):
+            first = await func(FakeTransaction(self.queries), *args, **kwargs)
+            second = await func(FakeTransaction(self.queries), *args, **kwargs)
+            return second if second is not None else first
+
+    class RetryingDriver(FakeDriver):
+        def session(self, database: str | None = None) -> GraphDriverSession:
+            del database
+            return RetryingSession(self.queries)
+
+    async def run() -> None:
+        storage = MemoryStorage()
+        driver = DelegatingGraphDriver(RetryingDriver(), storage)
+
+        async with driver.session() as session:
+
+            async def write(transaction: Transaction) -> None:
+                await transaction.run("MERGE (n {uuid: $uuid})", uuid="node-1")
+
+            await session.execute_write(write)
+
+        assert len(storage.batches) == 2
+        assert [write.query for write in storage.writes] == [
+            "MERGE (n {uuid: $uuid})",
+            "MERGE (n {uuid: $uuid})",
+        ]
+
+    asyncio.run(run())
+
+
+def test_invalid_replay_entry_fails_closed_and_retries_on_next_startup() -> None:
+    class InvalidReplayDriver(FakeDriver):
+        async def execute_query(self, cypher_query_: str, **kwargs: Any) -> Any:
+            self.queries.append((cypher_query_, kwargs))
+            raise RuntimeError("invalid journal entry")
+
+    async def run() -> None:
+        delegate = InvalidReplayDriver()
+        storage = MemoryStorage([GraphWrite(query="BROKEN", parameters={})])
+        driver = DelegatingGraphDriver(delegate, storage)
+
+        with pytest.raises(RuntimeError, match="invalid journal entry"):
+            await driver.build_indices_and_constraints()
+        with pytest.raises(RuntimeError, match="invalid journal entry"):
+            await driver.build_indices_and_constraints()
+
+        assert [query for query, _ in delegate.queries if query == "BROKEN"] == [
+            "BROKEN",
+            "BROKEN",
+        ]
+
+    asyncio.run(run())
+
+
+def test_clone_shares_logical_journal_without_taking_storage_ownership() -> None:
+    class CloneDriver(FakeDriver):
+        def clone(self, database: str) -> GraphDriver:
+            cloned = CloneDriver()
+            cloned._database = database
+            return cloned
+
+    async def run() -> None:
+        storage = MemoryStorage()
+        driver = DelegatingGraphDriver(CloneDriver(), storage)
+        cloned = driver.clone("archive")
+
+        await cloned.execute_query("MERGE (n {uuid: $uuid})", uuid="node-1")
+        await cloned.close()
+
+        assert storage.writes == [
+            GraphWrite(query="MERGE (n {uuid: $uuid})", parameters={"uuid": "node-1"})
+        ]
+        assert storage.closed is False
+        await driver.close()
+        assert storage.closed is True
 
     asyncio.run(run())
 

@@ -398,6 +398,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
           await passwordlessAuth.createPasswordlessAuth({
             storage,
             baseURL: origin,
+            trustedOrigins: [origin],
             basePath: "/api/email/auth",
             appName: this.resolved.brandName,
             secret: Buffer.from(key).toString("base64url"),

@@ -13,18 +13,16 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { Command } from "commander";
+import { parse, stringify } from "smol-toml";
+import { pythonProjectInfo, stampPythonProject } from "./uniffi-python.js";
 
 interface PythonProjectFile {
   readonly directory: string;
   readonly mode: number;
   readonly name: string;
   readonly path: string;
+  readonly private: boolean;
   readonly source: string;
-}
-
-function isPrivatePythonProject(source: string): boolean {
-  const section = source.match(/^\[tool\.dbx-tools\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
-  return /^\s*private\s*=\s*true\s*$/m.test(section);
 }
 
 export interface StampPythonProjectsOptions {
@@ -34,10 +32,6 @@ export interface StampPythonProjectsOptions {
 export interface RestorePythonProjects {
   (): void;
   readonly paths: readonly string[];
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function stampPythonProjects(
@@ -52,37 +46,27 @@ export function stampPythonProjects(
     .sort();
   const allProjects: PythonProjectFile[] = packageFiles.map((path) => {
     const source = readFileSync(path, "utf8");
-    const name = /^name = "([^"]+)"$/m.exec(source)?.[1];
-    if (!name) throw new Error(`Missing project name in ${path}`);
+    const info = pythonProjectInfo(source, { parse, stringify });
     return {
       directory: basename(resolve(path, "..")),
       mode: statSync(path).mode,
-      name,
+      name: info.name,
       path,
+      private: info.private,
       source,
     };
   });
-  const projects = allProjects.filter((project) => !isPrivatePythonProject(project.source));
+  const projects = allProjects.filter((project) => !project.private);
   if (projects.length === 0) throw new Error(`No Python packages found under ${root}`);
 
   try {
     for (const project of projects) {
-      const versionPattern = /^version = "[^"]+"$/m;
-      if (!versionPattern.test(project.source)) {
-        throw new Error(`Expected one project version in ${project.path}`);
-      }
-      let stamped = project.source.replace(versionPattern, `version = "${version}"`);
-      if (options.rewriteDependencies ?? true) {
-        for (const sibling of allProjects) {
-          stamped = stamped.replace(
-            new RegExp(
-              `${escapeRegExp(sibling.name)} @ git\\+[^" ]+#subdirectory=[^" ]+/${escapeRegExp(sibling.directory)}`,
-              "g",
-            ),
-            `${sibling.name}==${version}`,
-          );
-        }
-      }
+      const stamped = stampPythonProject(project.source, {
+        packages: allProjects,
+        rewriteDependencies: options.rewriteDependencies,
+        toml: { parse, stringify },
+        version,
+      });
       chmodSync(project.path, project.mode | 0o200);
       writeFileSync(project.path, stamped);
       chmodSync(project.path, project.mode);

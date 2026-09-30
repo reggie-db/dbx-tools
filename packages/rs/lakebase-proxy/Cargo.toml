@@ -1,12 +1,23 @@
+
 [package]
 name = "dbx-tools-lakebase-proxy"
-version = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
 description = "Loopback PostgreSQL proxy for Databricks Lakebase"
-license = { workspace = true }
-repository = { workspace = true }
 publish = false
+
+  [package.version]
+  workspace = true
+
+  [package.edition]
+  workspace = true
+
+  [package.rust-version]
+  workspace = true
+
+  [package.license]
+  workspace = true
+
+  [package.repository]
+  workspace = true
 
 [lib]
 name = "dbx_tools_lakebase_proxy"
@@ -16,26 +27,63 @@ path = "src/lib.rs"
 name = "dbx-lakebase-proxy"
 path = "src/main.rs"
 
-[dependencies]
-async-trait = { workspace = true }
-bytes = { workspace = true }
-clap = { workspace = true }
-dbx-tools-core = { version = "0.6.223", path = "../core" }
-futures = { workspace = true }
-mini-moka = { workspace = true }
-pgwire = { workspace = true }
-rustls = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-tokio-rustls = { workspace = true }
-tracing = { workspace = true }
-url = { workspace = true }
-webpki-roots = { workspace = true }
+[dependencies.async-trait]
+workspace = true
 
-[dev-dependencies]
-rcgen = { workspace = true }
-tempfile = { workspace = true }
-tokio-postgres = { workspace = true }
-wiremock = { workspace = true }
+[dependencies.bytes]
+workspace = true
+
+[dependencies.clap]
+workspace = true
+
+[dependencies.dbx-tools-core]
+version = "0.6.224"
+path = "../core"
+
+[dependencies.futures]
+workspace = true
+
+[dependencies.mini-moka]
+workspace = true
+
+[dependencies.pgwire]
+workspace = true
+
+[dependencies.rustls]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.tokio]
+workspace = true
+
+[dependencies.tokio-util]
+workspace = true
+
+[dependencies.tokio-rustls]
+workspace = true
+
+[dependencies.tracing]
+workspace = true
+
+[dependencies.url]
+workspace = true
+
+[dependencies.webpki-roots]
+workspace = true
+
+[dev-dependencies.rcgen]
+workspace = true
+
+[dev-dependencies.tempfile]
+workspace = true
+
+[dev-dependencies.tokio-postgres]
+workspace = true
+
+[dev-dependencies.wiremock]
+workspace = true

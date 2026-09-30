@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli";
-export const PACKAGE_VERSION = "0.6.223";
+export const PACKAGE_VERSION = "0.6.224";
 export * as bootstrap from "./src/bootstrap.ts";
 export * as bun from "./src/bun.ts";
 export * as cli from "./src/cli.ts";
@@ -11,4 +11,3 @@ export * as root from "./src/root.ts";
 export * as rustBinary from "./src/rust-binary.ts";
 export { resolveBunArgv } from "./src/bun.ts";
 export { workspaceRoot } from "./src/root.ts";
-export type { RustReleaseBinaryAsset, RustReleaseBinaryCommand, RustReleaseBinaryOptions } from "./src/rust-binary.ts";

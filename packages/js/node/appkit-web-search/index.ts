@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-web-search";
-export const PACKAGE_VERSION = "0.6.223";
+export const PACKAGE_VERSION = "0.6.224";
 export * as allowlist from "./src/allowlist.ts";
 export * as config from "./src/config.ts";
 export * as defaults from "./src/defaults.ts";
@@ -24,7 +24,7 @@ export type { WebSearchExecuteConfig, WebSearchExecutionSettings } from "./src/d
 export { WebSearchPlugin, webSearch } from "./src/plugin.ts";
 export { WEB_SEARCH_PROVIDERS } from "./src/provider.ts";
 export type { WebSearchProvider, WebSearchProviderSpec } from "./src/provider.ts";
-export type { WebSearchExecutor, WebSearchRuntime } from "./src/runtime.ts";
+export type { WebSearchExecutor, WebSearchRuntime, WebSearchRuntimeInput } from "./src/runtime.ts";
 export { WEB_SEARCH_TOOL_DESCRIPTION, WEB_FETCH_TOOL_DESCRIPTION, webSearchRequestSchema, webSearchCitationSchema, webSearchResultSchema, webFetchRequestSchema, webFetchResultSchema } from "./src/schema.ts";
 export type { WebSearchRequest, WebSearchCitation, WebSearchResult, WebFetchRequest, WebFetchResult } from "./src/schema.ts";
 export type { WebSearchContext } from "./src/search.ts";

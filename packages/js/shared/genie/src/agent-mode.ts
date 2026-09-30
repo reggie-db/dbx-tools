@@ -7,8 +7,8 @@
  * @module
  */
 
-import { z } from "zod";
 import { json, object } from "@dbx-tools/shared-core";
+import { z } from "zod";
 
 import {
   GenieMessageSchema,

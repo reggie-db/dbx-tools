@@ -5,16 +5,14 @@
  * server) on the same key. For in-process / worker-thread exclusion use
  * {@link withProcessLock} from `./process-lock.ts` instead.
  *
- * Backends, in order:
+ * Backends:
  *
- * 1. **flock** — `flock(2)` via Bun FFI on Unix when `bun:ffi` can load libc.
- *    Not available on Windows, and not available under plain Node (no FFI).
- *    Kernel releases the lock when the fd closes (including process death).
- * 2. **file** — atomic lock-directory creation. This is the strategy used by
- *    `proper-lockfile`: `mkdir` is atomic on Windows, Unix, and network file
- *    systems where `open(..., "wx")` may not be reliable. Stale detection is
- *    always on (fixed {@link STALE_MS} + heartbeat) so a crashed holder on this
- *    backend can be reclaimed.
+ * 1. **file** (default) — `proper-lockfile` atomic lock-directory creation,
+ *    heartbeat, stale recovery, and ownership-safe release. Bun and Node use
+ *    this same protocol.
+ * 2. **flock** (explicit compatibility option) — `flock(2)` via Bun FFI on
+ *    Unix. It remains available to callers that selected it explicitly, but a
+ *    runtime-dependent cascade cannot coordinate Bun and Node.
  *
  * The first backend that can be *initialized* is used for the whole call. A busy
  * lock waits; an unavailable backend falls through to the next. Callers may only
@@ -24,18 +22,19 @@
  * @module
  */
 
-import { mkdir, open, rm, stat, utimes } from "node:fs/promises";
+import { mkdir, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { async, error, functionModule, hash, log, object } from "@dbx-tools/shared-core";
+import lockfile from "proper-lockfile";
 
 const logger = log.logger("core:file-lock");
 
 /** Backends {@link withFileLock} can attempt, in cascade order. */
 export type FileLockBackend = "flock" | "file";
 
-const DEFAULT_BACKENDS: readonly FileLockBackend[] = ["flock", "file"];
+const DEFAULT_BACKENDS: readonly FileLockBackend[] = ["file"];
 
 /** Poll interval while waiting for a contended OS lock. */
 const POLL_MS = 50;
@@ -65,7 +64,7 @@ export interface FileLockOptions {
    * Directory for lockfiles. Defaults to `$TMPDIR/dbx-tools-locks`.
    */
   dir?: string;
-  /** Override the cascade. Defaults to `flock` → `file`. */
+  /** Override the backend list. Defaults to the portable `file` protocol. */
   backends?: readonly FileLockBackend[];
   /**
    * Stop waiting and throw after this many milliseconds. Omit to poll forever.
@@ -124,7 +123,7 @@ export async function withFileLock<T>(
         return holdFlock(lockPath, flock, deadline, fn);
       }
       case "file": {
-        const lockPath = join(dir, `${id}.lock`);
+        const lockPath = join(dir, id);
         logger.debug("acquiring lock", { backend, key: id, path: lockPath });
         options.onAcquire?.({ backend });
         return holdLockDirectory(lockPath, deadline, fn);
@@ -213,12 +212,7 @@ async function waitForFlock(
 }
 
 /**
- * Atomic lock-directory creation — the portable / Windows path.
- *
- * `mkdir` is the same primitive used by `proper-lockfile`: it is atomic across
- * supported local and network filesystems. The holder refreshes mtime on a fixed
- * heartbeat so a live long-running lock is never reclaimed; a crashed holder's
- * directory becomes reclaimable after {@link STALE_MS}.
+ * Portable lock-directory ownership through `proper-lockfile`.
  */
 async function holdLockDirectory<T>(
   lockPath: string,
@@ -226,56 +220,33 @@ async function holdLockDirectory<T>(
   fn: () => T | Promise<T>,
 ): Promise<T> {
   await ensureParentDir(lockPath);
-  await acquireLockDirectory(lockPath, deadline);
-  const stopHeartbeat = startHeartbeat(lockPath);
+  const release = await acquireLockDirectory(lockPath, deadline);
   try {
     return await fn();
   } finally {
-    stopHeartbeat();
-    await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+    await release();
   }
 }
 
-async function acquireLockDirectory(lockPath: string, deadline: number | undefined): Promise<void> {
+async function acquireLockDirectory(
+  lockPath: string,
+  deadline: number | undefined,
+): Promise<() => Promise<void>> {
   for (;;) {
     try {
-      await mkdir(lockPath);
-      return;
+      return await lockfile.lock(lockPath, {
+        realpath: false,
+        stale: STALE_MS,
+        update: UPDATE_MS,
+        retries: 0,
+      });
     } catch (cause) {
       const err = cause as NodeJS.ErrnoException;
-      if (err.code !== "EEXIST") throw error.toError(cause);
-      await maybeReclaimStale(lockPath);
+      if (err.code !== "ELOCKED") throw error.toError(cause);
       assertBeforeDeadline(lockPath, deadline);
       await async.sleep(POLL_MS);
     }
   }
-}
-
-async function maybeReclaimStale(lockPath: string): Promise<void> {
-  try {
-    const { mtimeMs } = await stat(lockPath);
-    const age = Date.now() - mtimeMs;
-    if (age < STALE_MS) return;
-    logger.debug("reclaiming stale lock directory", { path: lockPath, ageMs: age });
-    await rm(lockPath, { recursive: true, force: true });
-  } catch (cause) {
-    const err = cause as NodeJS.ErrnoException;
-    if (err.code !== "ENOENT") throw error.toError(cause);
-  }
-}
-
-function startHeartbeat(lockPath: string): () => void {
-  const timer = setInterval(() => {
-    const now = new Date();
-    void utimes(lockPath, now, now).catch((cause) => {
-      logger.warn("file lock heartbeat failed", {
-        path: lockPath,
-        error: error.errorMessage(cause),
-      });
-    });
-  }, UPDATE_MS);
-  timer.unref();
-  return () => clearInterval(timer);
 }
 
 function assertBeforeDeadline(lockPath: string, deadline: number | undefined): void {

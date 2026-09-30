@@ -25,6 +25,7 @@
     "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
+    "pr:validate": "projen pr:validate",
     "pre-compile": "projen pre-compile",
     "py:build": "projen py:build",
     "py:format": "projen py:format",
@@ -78,7 +79,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.223",
+  "version": "0.6.224",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -105,6 +106,7 @@
     "packages/js/node/model-rs",
     "packages/js/node/path",
     "packages/js/node/postgres",
+    "packages/js/node/rust-binary",
     "packages/js/node/search",
     "packages/js/node/teams",
     "packages/js/node/tunnel",

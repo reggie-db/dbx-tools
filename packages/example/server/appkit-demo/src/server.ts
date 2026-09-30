@@ -11,15 +11,12 @@ import {
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
-import {
-  plugin as appkitWebSearchPlugin,
-  tool as appkitWebSearchToolApi,
-} from "@dbx-tools/appkit-web-search";
+import { plugin as appkitWebSearchPlugin } from "@dbx-tools/appkit-web-search";
 import { config, project as coreProject } from "@dbx-tools/core";
 import { brand as emailBrand, plugin as emailPlugin, tool as emailToolApi } from "@dbx-tools/email";
-import { lakebaseAiSearch, plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
+import { lakebaseAiSearch, plugin as searchPlugin } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
-import { plugin as teamsPlugin, tool as teamsToolApi } from "@dbx-tools/teams";
+import { plugin as teamsPlugin } from "@dbx-tools/teams";
 import { interceptor as tunnelInterceptorApi, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
@@ -72,12 +69,8 @@ const { buildGenieTools, GENIE_INSTRUCTIONS } = appkitMastraGenie;
 const { mastra } = appkitMastraPlugin;
 const { webSearch } = appkitWebSearchPlugin;
 const { graphiti } = graphitiPlugin;
-const { webSearchTool, webFetchTool } = appkitWebSearchToolApi;
 const { teams } = teamsPlugin;
-const { teamsCardTool } = teamsToolApi;
 const { search } = searchPlugin;
-const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, syncIndexTool } =
-  searchToolApi;
 const { defaultBrandContext } = sharedBrand;
 const mastraStorage = config.boolean(undefined, "MASTRA_STORAGE", config.ENV_ONLY) ?? true;
 const mastraMemory = config.boolean(undefined, "MASTRA_MEMORY", config.ENV_ONLY) ?? true;
@@ -162,8 +155,8 @@ const clientDist =
 // Per-request overrides via `X-Mastra-Model` header, `?model=` query,
 // or body `model` field can re-target the same agent without redeploy.
 // `GET /api/mastra/models` lists the cached catalogue.
-function demoGenieTools(plugins: MastraPlugins, agentMode: boolean): MastraTools {
-  if (agentMode) return plugins.genie?.toolkit() ?? {};
+async function demoGenieTools(plugins: MastraPlugins, agentMode: boolean): Promise<MastraTools> {
+  if (agentMode) return (await plugins.genie?.toolkit()) ?? {};
 
   const spaceId = process.env.DATABRICKS_GENIE_SPACE_ID;
   if (!spaceId) {
@@ -211,14 +204,23 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
           : "No application context was supplied for this turn.";
       return `${baseInstructions}\n\n${context}`;
     },
-    tools(plugins): MastraTools {
+    async tools(plugins): Promise<MastraTools> {
       // Materialize the selected Genie toolkit before adding the demo tools.
       // Building one contextually-typed object makes TypeScript recursively
       // expand every source-linked Mastra tool schema together and exceeds its
       // instantiation depth; Object.assign preserves the same flat runtime
       // record without forcing that useless cross-tool type expansion.
-      const agentTools = Object.assign({}, demoGenieTools(plugins, agentMode)) as MastraTools;
-      Object.assign(agentTools, plugins.graphiti?.toolkit());
+      const agentTools = Object.assign({}, await demoGenieTools(plugins, agentMode)) as MastraTools;
+      Object.assign(agentTools, await plugins.graphiti?.toolkit());
+      Object.assign(agentTools, await plugins["web-search"]?.toolkit({ prefix: "" }));
+      Object.assign(
+        agentTools,
+        await plugins.teams?.toolkit({
+          prefix: "",
+          rename: { createCard: "create_teams_card" },
+        }),
+      );
+      Object.assign(agentTools, await plugins.search?.toolkit({ prefix: "" }));
       Object.assign(agentTools, {
         // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
         // is `undefined` when the plugin isn't registered, so the `?.`
@@ -248,37 +250,6 @@ function buildSupportDefinition(agentMode: boolean): MastraAgentDefinition<DemoR
         // the tunnel's sign-in code, uses `no-reply@` there instead); SMTP host /
         // credentials come from the `email()` plugin config / env.
         send_email: emailTool(),
-        // Web search + fetch from `@dbx-tools/appkit-web-search`.
-        // `web_search` runs the Databricks Model Serving native web-search
-        // tool, resolving its OWN web-search-capable model (Gemini/GPT) via
-        // the `webSearch()` plugin config - independent of this agent's chat
-        // model, which may not support web search. `web_fetch` reads a page
-        // via got-scraping. Both honor the plugin's optional URL allow-list.
-        web_search: webSearchTool(),
-        web_fetch: webFetchTool(),
-        // Build a Microsoft Teams Adaptive Card from a short structured
-        // description. Pure transform (no side effects), so it is not
-        // approval-gated; the returned card is previewed on the Cards page and
-        // can be posted to a Teams webhook via the `teams()` plugin.
-        create_teams_card: teamsCardTool(),
-        // Databricks AI Search (Vector Search) from `@dbx-tools/search`.
-        // `search` looks up the most relevant rows in the app's configured
-        // index (hybrid semantic + keyword) under the caller's identity;
-        // `universal_search` fans a query across every configured index and
-        // merges the hits. Autocomplete is just a small-`limit` `search`.
-        search: searchTool(),
-        universal_search: universalSearchTool(),
-        // Write surface (enabled below via `search({ allowWrite: true })`):
-        // `add_documents` works with either provider. `create_index` and
-        // `sync_index` are added only for native Vector Search, where they
-        // provision or refresh workspace infrastructure.
-        add_documents: addDocumentsTool(),
-        ...(USE_VECTOR_SEARCH
-          ? {
-              create_index: createIndexTool(),
-              sync_index: syncIndexTool(),
-            }
-          : {}),
       });
       return agentTools;
     },

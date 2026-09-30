@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { search as sharedSearch } from "@dbx-tools/shared-search";
+import { toSearchOptions, toUniversalSearchOptions } from "../src/_search-options.ts";
 import { defaultAlias, resolveSearchConfig, resolveIndexName } from "../src/config.ts";
 import { toDocumentArray } from "../src/query.ts";
-import { toSearchOptions, toUniversalSearchOptions } from "../src/_search-options.ts";
 
 describe("search query translation", () => {
   it("maps modes onto AppKit AI Search query types", () => {

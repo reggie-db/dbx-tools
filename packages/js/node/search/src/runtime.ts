@@ -1,9 +1,9 @@
 /**
- * The shared AI Search runtime: the resolved config plus a single
- * {@link SearchClient} instance the plugin, the Mastra tools, and the routes
- * all read. Mirrors the web-search / email runtime pattern - the plugin primes
- * it from its config at setup, and everything else reads the same instance so
- * a tool invoked outside the agent still sees the deployment's config.
+ * AI Search runtime construction helpers.
+ *
+ * Each plugin and standalone tool set owns its runtime and client. Provider
+ * attachment updates only that runtime, so two apps in one process can use
+ * different backends without sharing state.
  *
  * @module
  */
@@ -15,40 +15,49 @@ import {
   type ResolvedSearchConfig,
 } from "./config.ts";
 
-/** Configuration and provider used to build the shared extension runtime. */
+/** Configuration and provider used to build an extension runtime. */
 export interface SearchRuntimeOptions {
   config?: SearchPluginConfig;
   readBackend?: SearchReadBackend;
 }
 
-/** The shared resolved config plus the client reads run through. */
+/** The resolved config plus the client reads run through. */
 export interface SearchRuntime {
   config: ResolvedSearchConfig;
   client: SearchClient;
   readBackend?: SearchReadBackend;
 }
 
-let runtime: SearchRuntime | undefined;
-
-/**
- * Return the shared runtime, building it on first use from the supplied config
- * layered over environment defaults. Overrides are only read when the runtime
- * is first created, so prime it from the plugin's config at setup; subsequent
- * calls pass nothing and get the same instance.
- */
-export function getSearchRuntime(options?: SearchRuntimeOptions): SearchRuntime {
-  if (!runtime) {
-    const config = resolveSearchConfig(options?.config);
-    runtime = {
-      config,
-      client: createSearchClient(config, undefined, options?.readBackend),
-      ...(options?.readBackend ? { readBackend: options.readBackend } : {}),
-    };
-  }
-  return runtime;
+/** Build an isolated runtime for one plugin instance or standalone tool set. */
+export function createSearchRuntime(options: SearchRuntimeOptions = {}): SearchRuntime {
+  const config = resolveSearchConfig(options.config);
+  return {
+    config,
+    client: createSearchClient(config, undefined, options.readBackend),
+    ...(options.readBackend ? { readBackend: options.readBackend } : {}),
+  };
 }
 
-/** Drop the memoized runtime so the next {@link getSearchRuntime} rebuilds it. */
+/** Attach a provider to one runtime while preserving its object identity. */
+export function setSearchReadBackend(runtime: SearchRuntime, readBackend: SearchReadBackend): void {
+  runtime.readBackend = readBackend;
+  runtime.client = createSearchClient(runtime.config, undefined, readBackend);
+}
+
+/**
+ * Build an isolated standalone runtime.
+ *
+ * @deprecated Use {@link createSearchRuntime}. This compatibility helper
+ * returns a new runtime on every call and never reads or updates plugin state.
+ */
+export function getSearchRuntime(options?: SearchRuntimeOptions): SearchRuntime {
+  return createSearchRuntime(options);
+}
+
+/**
+ * @deprecated Plugin runtimes are instance-owned and need no global reset.
+ * This compatibility helper is intentionally a no-op.
+ */
 export function resetSearchRuntime(): void {
-  runtime = undefined;
+  return;
 }

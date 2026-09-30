@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { parse } from "smol-toml";
 import { stampPythonProjects } from "../tasks/publish-python.ts";
 
 let outdir: string;
@@ -29,8 +30,11 @@ describe("local Python release stamping", () => {
     const original = readFileSync(appPath, "utf8");
     const restore = stampPythonProjects(outdir, "1.2.3");
     const stamped = readFileSync(appPath, "utf8");
-    assert.match(stamped, /version = "1\.2\.3"/);
-    assert.match(stamped, /fixture-core==1\.2\.3/);
+    assert.deepEqual(parse(stamped).project, {
+      name: "fixture-app",
+      version: "1.2.3",
+      dependencies: ["fixture-core==1.2.3"],
+    });
     restore();
     assert.equal(readFileSync(appPath, "utf8"), original);
   });
@@ -50,14 +54,34 @@ describe("local Python release stamping", () => {
     const restore = stampPythonProjects(outdir, "1.2.3", {
       rewriteDependencies: false,
     });
-    const stamped = readFileSync(appPath, "utf8");
-    assert.match(stamped, /version = "1\.2\.3"/);
-    assert.match(stamped, /fixture-core @ git\+https:/);
+    const stamped = parse(readFileSync(appPath, "utf8")).project as {
+      dependencies: string[];
+      version: string;
+    };
+    assert.equal(stamped.version, "1.2.3");
+    assert.deepEqual(stamped.dependencies, [
+      "fixture-core @ git+https://example.invalid/repo.git@main#subdirectory=python/core",
+    ]);
     assert.deepEqual([...restore.paths].sort(), [
       join(outdir, "app", "pyproject.toml"),
       join(outdir, "core", "pyproject.toml"),
     ]);
     restore();
     assert.equal(readFileSync(appPath, "utf8"), original);
+  });
+
+  it("restores every project when structured stamping fails", () => {
+    const appPath = join(outdir, "app", "pyproject.toml");
+    const corePath = join(outdir, "core", "pyproject.toml");
+    const appOriginal = readFileSync(appPath, "utf8");
+    const coreOriginal = readFileSync(corePath, "utf8");
+    writeFileSync(corePath, `[project]\nname = "fixture-core"\ndependencies = []\n`);
+    assert.throws(() => stampPythonProjects(outdir, "1.2.3"), /Missing Python project version/);
+    assert.equal(readFileSync(appPath, "utf8"), appOriginal);
+    assert.equal(
+      readFileSync(corePath, "utf8"),
+      `[project]\nname = "fixture-core"\ndependencies = []\n`,
+    );
+    writeFileSync(corePath, coreOriginal);
   });
 });

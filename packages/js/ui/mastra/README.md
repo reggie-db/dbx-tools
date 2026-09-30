@@ -26,8 +26,8 @@ Key features:
   resumed-stream handling. An email-shaped input (the `send_email` tool)
   renders as a formatted To / Cc / Subject / Markdown-body preview rather than
   raw JSON.
-- Complete native tool input/results retained behind expandable Request and
-  Response rows in each tool pill.
+- Complete native tool input/results retained behind expandable,
+  syntax-highlighted JSON Request and Response rows in each tool pill.
 - Typed per-turn application context through Mastra's native `RequestContext`
   and server-side `requestContextSchema`.
 - Inline embed rendering for `[chart:<id>]` and `[data:<id>]` markers produced by

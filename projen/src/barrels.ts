@@ -63,7 +63,7 @@ import { json, string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, isGenerated, makeReadonly, makeWritable, type HeaderOpts } from "./generated.ts";
 import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports.ts";
-import { isModuleFile, toPosix, recordedPackages, repoRoot } from "./packages.ts";
+import { isModuleFile, toPosix, recordedPackages, resolveRepoRoot } from "./packages.ts";
 
 /**
  * A `src`-relative posix path excluded from the root barrel:
@@ -555,8 +555,14 @@ function writeBarrel(file: string, content: string): void {
  * order, so one unwritable barrel silently left the rest of the repo stale with
  * nothing in the log to say which packages had been skipped.
  */
-export function generateBarrels(opts: { dirs?: string[] } = {}): number {
-  const dirs = opts.dirs ?? recordedPackages().map((p) => p.dir);
+export function generateBarrels(
+  opts: { dirs?: string[]; includeRoot?: boolean; projectRoot?: string } = {},
+): number {
+  const projectRoot = opts.projectRoot ?? resolveRepoRoot();
+  const dirs = opts.dirs ?? [
+    ...(opts.includeRoot ? [projectRoot] : []),
+    ...recordedPackages(projectRoot).map((p) => p.dir),
+  ];
   let total = 0;
   const failures: { dir: string; err: unknown }[] = [];
   for (const dir of dirs) {
@@ -567,7 +573,7 @@ export function generateBarrels(opts: { dirs?: string[] } = {}): number {
     }
   }
   if (failures.length) {
-    const names = failures.map((f) => relative(repoRoot, f.dir) || f.dir);
+    const names = failures.map((f) => relative(projectRoot, f.dir) || f.dir);
     throw new AggregateError(
       failures.map((f) => f.err),
       `${string.pluralize(failures.length, "barrel")} failed: ${names.join(", ")}`,

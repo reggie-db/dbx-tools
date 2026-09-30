@@ -1,25 +1,47 @@
+
 [package]
 name = "dbx-tools-google"
-version = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
 description = "Google integrations including Application Default Credentials"
-license = { workspace = true }
-repository = { workspace = true }
+
+  [package.version]
+  workspace = true
+
+  [package.edition]
+  workspace = true
+
+  [package.rust-version]
+  workspace = true
+
+  [package.license]
+  workspace = true
+
+  [package.repository]
+  workspace = true
 
 [lib]
 name = "dbx_tools_google"
 path = "src/lib.rs"
-crate-type = ["lib", "cdylib"]
+crate-type = [ "lib", "cdylib" ]
 
 [[bin]]
 name = "dbx-tools-google-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
 
-[dependencies]
-async-trait = { workspace = true }
-dbx-tools-core = { version = "0.6.223", path = "../core" }
-google-cloud-auth = { workspace = true }
-time = { workspace = true }
-tokio = { workspace = true }
-uniffi = { workspace = true }
+[dependencies.async-trait]
+workspace = true
+
+[dependencies.dbx-tools-core]
+version = "0.6.224"
+path = "../core"
+
+[dependencies.google-cloud-auth]
+workspace = true
+
+[dependencies.time]
+workspace = true
+
+[dependencies.tokio]
+workspace = true
+
+[dependencies.uniffi]
+workspace = true

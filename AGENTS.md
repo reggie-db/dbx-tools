@@ -264,7 +264,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   includes response bytes, duration, cancellation/failure state, and translated
   or pass-through usage when available. Buffered and streamed Chat Completions,
   Responses, Codex Responses, Anthropic translations, and embeddings reconcile
-  process-local input/output reservations with reported actual usage. A smaller
+  process-local input/output reservations with reported actual usage. Native
+  pass-through streams observe complete parsed SSE events while forwarding the
+  original bytes unchanged; observation state is capped at 1 MB per event, so
+  malformed or oversized events fall back to estimates without buffering an
+  unbounded response. A smaller
   actual output credits the unused reservation immediately, while output usage
   without a requested maximum is added to the current window. Each
   workspace/model queue admits requests FIFO and wakes its head when
@@ -351,7 +355,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   agent tools, federated search, Vector Search index lifecycle, reusable search
   UI, and an AppKit-compatible Lakebase full-text provider. Native AppKit owns
   Vector Search query execution, OBO, caching, reranking, pagination, routes,
-  and the React query hook.
+  and the React query hook. Every extension plugin owns its resolved config,
+  client, and provider runtime. Direct Mastra tool factories capture an
+  explicit runtime or build an isolated one from config plus a provider; they
+  never bind to whichever search plugin registered first.
 - `packages/js/node/email`, `packages/js/shared/email-template`,
   `packages/js/shared/email`, and `packages/js/ui/email` — approval-gated email
   tool/runtime, a universal React Email presentation layer, shared payload
@@ -369,8 +376,14 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   authorization policy, delivery, secret, origin, and a Lakebase pool or SQLite
   config. Storage defaults to SQLite in the platform data directory, while a
   native AppKit Lakebase pool provides shared persistence. Programmatic Better
-  Auth migrations run under a Postgres advisory lock or local file lock. Never
-  derive WebAuthn RP ID or expected origin from a request header.
+  Auth migrations use the public `better-auth/db/migration` export under a
+  Postgres advisory lock or local file lock. Never
+  derive WebAuthn RP ID or expected origin from a request header. Better Auth
+  trusts the configured base origin plus explicit `trustedOrigins`; never
+  reflect an arbitrary request Origin or Referer into that trust set. A
+  detected Databricks App additionally accepts HTTPS
+  `*.databricksapps.com` front-door origins; WebAuthn still uses the configured
+  base origin.
 - `packages/js/node/tunnel` and `packages/js/cli/tunnel` - tunnel Host
   detection, protected-header stripping, branded email delivery, identity
   injection, and AppKit/CLI transport adapters over `@dbx-tools/auth-gate`. Both
@@ -389,7 +402,13 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Responses `{"type":"web_search"}`, Gemini Chat `{"google_search":{}}`), an
   optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
   citations / refusing disallowed fetches, per-tool approval gating, and the
-  AppKit `web-search` plugin. Same shape as node-email.
+  AppKit `web-search` plugin. HTML-to-text conversion and DuckDuckGo result
+  extraction are parser-backed through direct `html-to-text`, `entities`, and
+  `cheerio` dependencies; do not restore regex tag or selector parsing. Same
+  shape as node-email. Every plugin instance owns its policy and executor
+  runtime. App-integrated agents consume the plugin's native toolkit. Direct
+  Mastra tool factories capture an explicit runtime or create an isolated one
+  from their own config; they never inherit an arbitrary process plugin.
 - `packages/js/node/appkit-graphiti` — AppKit process plugin for the Python
   `dbx-tools-graphiti` runtime. It inherits the app's Lakebase environment,
   selects separate loopback ports for Graphiti, `dbx-model-proxy`, and Caddy,
@@ -406,12 +425,21 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `MCPClient` and republishes the group-scoped subset through a Mastra
   `MCPServer`. Every call derives its Graphiti group from the AppKit user or
   Mastra memory resource id; caller-supplied groups are overwritten, and tools
-  that cannot enforce a group constraint are omitted. The structural toolkit
-  consumed by `@dbx-tools/appkit-mastra` means
-  `plugins.graphiti?.toolkit()` registers the same scoped tools on Mastra
-  agents. The generic AppKit-to-Mastra toolkit adapter passes the turn's
-  resource id as the optional fourth `executeAgentTool` argument so
-  service-principal execution does not collapse users onto one graph.
+  that cannot enforce a group constraint are omitted. The async structural
+  toolkit consumed by `@dbx-tools/appkit-mastra` waits for bounded MCP discovery
+  and derives descriptions and JSON input schemas from the same permitted
+  registry used by the public MCP server. Await
+  `plugins.graphiti?.toolkit()` while registering Mastra agents. The generic
+  AppKit-to-Mastra toolkit adapter imports AppKit's public beta contracts,
+  supports plain `getAgentTools()` providers, and passes the turn's resource id
+  as the optional fourth `executeAgentTool` argument so service-principal
+  execution does not collapse users onto one graph.
+- `packages/js/node/rust-binary` owns the generated Rust release-command
+  registry, GitHub release URL selection, exact-version installation through
+  `@dbx-tools/core`, and signal-preserving process execution. Runtime packages
+  that need a native release binary depend on `@dbx-tools/rust-binary`, not the
+  full CLI graph. `@dbx-tools/cli/rust-binary` remains a compatibility re-export;
+  command registration and argument forwarding stay in `@dbx-tools/cli`.
 - `packages/js/node/teams`, `packages/js/shared/teams`, and `packages/js/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
@@ -458,7 +486,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   activity schemas, and a React `TeamsChat` / `AdaptiveCardView` /
   `AdaptiveCardGallery` built on the `adaptivecards` JS renderer (which ships no
   markdown parser — `ui-teams` installs `marked` as its `onProcessMarkdown`).
-  Same add-on shape as node-email.
+  Each Teams plugin owns its card config, webhook, and executor runtime.
+  App-integrated agents consume the native plugin toolkit; standalone tool
+  factories use an explicit runtime or isolated config. Same add-on shape as
+  node-email.
 - `packages/js/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
   packages.
 - `packages/js/node/databricks-zerobus` builds Zerobus infrastructure on the
@@ -470,7 +501,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `packages/js/node/core/src/config.ts`: scoped environment lookup, project-root
   `.env` discovery, lazy `databricks bundle validate --output json` fallback,
   Databricks App detection, and the same string/boolean/positive-number/list
-  coercions. Keep this base deliberately small so importing config, a hash,
+  coercions. Its dependency-free App YAML reader intentionally supports only
+  the shapes config consumes: top-level `env`/`resources` record lists,
+  one-level nested resource maps, and YAML 1.2 string scalars. Shared fixtures
+  pin quoted comments, entity-like punctuation, `yes`/`no`/`on`/`off` strings,
+  and rejection of file sources containing non-string scalars. Keep this base
+  deliberately small so importing config, a hash,
   stable key, or identifier formatter does not pull database/runtime
   dependencies with it. Its `bin` module is the dependency-free executable seam:
   resolve an existing executable first, otherwise bootstrap mise under a
@@ -509,8 +545,14 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   invocation is short-lived and the connection is not. The built-in
   provisioned and Autoscaling credential providers cache until the credential's
   renewal time and use process-local check-lock-check refresh, so a SQLAlchemy
-  pool connect storm mints once. A caller-supplied `credential_provider` owns
-  its own caching and refresh policy.
+  pool connect storm mints once. Autoscaling discovery and credential minting
+  use typed `WorkspaceClient.postgres` methods so SDK pagination, workspace-id
+  headers, and `DatabaseCredential.expire_time` remain SDK-owned. A
+  caller-supplied `credential_provider` owns its own caching and refresh policy.
+  PostgreSQL SSL mode identity comes from the generated core-rs `SslMode` enum;
+  resolved connections retain that enum and translate it to the driver's query
+  string only in `ResolvedPostgresConnection.url`. Do not copy its values into a
+  Python `Literal` or tuple.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
   server with a Neo4j 5 backend and a managed `dbx-model-proxy` process.
   It must not use containers: provision Java, uv, Neo4j, and the pinned Graphiti
@@ -537,7 +579,14 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `GraphDriver` while write-ahead journaling mutations through a supplied
   storage driver before the graph operation commits. The Postgres
   implementation uses `dbx-tools-postgres` and replays the ordered journal into
-  an empty delegated graph during startup. Its default journal table lives in
+  an empty delegated graph during startup. This is attempt recovery with
+  at-least-once replay: commit failures retain the append, driver retries append
+  each attempt, invalid entries fail startup without being skipped, and replay
+  does not retain transaction grouping. Clones share one logical journal;
+  independent graphs need separate namespaces. There is no automatic
+  checkpoint, retention, or compaction, and custom mutations must be
+  replay-safe because non-idempotent writes can run more than once. Its default
+  journal table lives in
   the dedicated `dbx_tools_graphiti` schema, which the journal provisions on
   startup; do not default writes to the commonly locked-down `public` schema.
   Keep the decorator backend-agnostic and keep Postgres connection resolution
@@ -561,10 +610,13 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   upload there. UniFFI crates cannot use exclusions because every configured
   target must produce their artifacts. A release binary with `cli: true`
   appears in the generated registry at `cliRegistryPath`; the registry includes
-  only assets produced by the selected target matrix. `@dbx-tools/cli`
-  consumes that registry through its `rust-binary` module and delegates atomic
-  installation to the existing `@dbx-tools/core` `bin.ensure`. Do not put the
-  product registry or release URL policy in core. Every UniFFI crate gets
+  only assets produced by the selected target matrix.
+  `@dbx-tools/rust-binary` owns the registry, release URL policy, exact-version
+  installation through `@dbx-tools/core` `bin.ensure`, and process forwarding.
+  `@dbx-tools/cli/rust-binary` remains a compatibility re-export. Server
+  plugins import the narrow package directly; do not put product registry or
+  release URL policy in core or restore a dependency on the umbrella CLI. Every
+  UniFFI crate gets
   dedicated binding packages and never merges generated bindings into a
   handwritten package. A Rust directory `<name>` generates Node folder
   `packages/js/node/<name>-rs` with package `@<scope>/<name>-rs`, plus Python
@@ -616,10 +668,13 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   recovery can name an earlier `release.yml` run whose commit must match the
   verified annotated tag. Dispatch the workflow with that tag as its Git ref so
   the recovery run checks out the immutable release boundary. Manual runs default to
-  dry-run, while clearing `dry_run` permits the selected publication stage. npm recovery compares the
-  staged archive integrity and repository identity before skipping an exact
-  published version. Normal workspace packages are packed with Bun for the same
-  check. PyPI publishers use Twine's hash-aware existing-file check, so matching
+  dry-run, while clearing `dry_run` permits the selected publication stage. npm
+  recovery compares canonical extracted paths, executable bits, bytes, and
+  repository identity before skipping an exact published version; read-only
+  generator modes, tar timestamps, and gzip metadata do not make equivalent
+  package content conflict. Normal workspace
+  packages are packed with Bun for the same check. PyPI publishers use Twine's
+  hash-aware existing-file check, so matching
   files are skipped and a same-name content mismatch fails.
   The Rust matrix uploads native npm archives, Python wheels, and explicit
   binaries as same-run artifacts. Node publishes native packages first with npm
@@ -646,6 +701,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Packaging must
   execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.
+  Cargo manifests, UniFFI configs, and target configs use Projen `TomlFile`
+  objects with nested sections and array-of-table `bin` entries; do not restore
+  a handwritten TOML renderer. Local and release Python binding placement share
+  the dependency-free `projen/tasks/uniffi-python.js` implementation, including
+  generator arguments, Windows executable naming, generated headers, empty
+  `__init__.py`, and native-library placement.
   Node archive packaging invokes npm's JavaScript CLI through `node.exe` on
   Windows. Current Node security releases reject direct `.cmd` process spawning,
   while enabling a command shell would lose argv boundaries. Process-launch
@@ -900,7 +961,8 @@ why to use this package anyway:
   calls pause for a human. `web_search` uses the Databricks NATIVE web-search
   tool and resolves its own web-capable model (so an agent on a non-web model
   still searches); `web_fetch` uses got-scraping. Same add-on shape as
-  node-email (Mastra tool pair + AppKit plugin priming a shared runtime).
+  node-email (Mastra tool pair + AppKit plugin), with one isolated runtime per
+  plugin instance.
 - `@dbx-tools/appkit-graphiti`: AppKit has no Graphiti or embedded MCP sidecar
   surface. Use this package to run `dbx-tools-graphiti` beside an AppKit server,
   reuse the app's Lakebase binding for durable journal recovery, and publish
@@ -988,8 +1050,9 @@ Splits that ARE earning their keep, so leave them alone:
   importing a `shared-*` contract must not be able to reach Node APIs.
 - `node/path` (isolates chokidar/glob/minimatch), `node/databricks-zerobus`
   (isolates the Zerobus SDK), every `shared-*` consumed by a `ui-*`.
-- `shared-core`, which is a blanket dependency of every package and so must stay
-  light - adding a dependency to it adds it everywhere.
+- `shared-core`, which is used across most runtime packages and must stay light.
+  Dependencies are declared only on packages that import it; do not restore a
+  blanket workspace dependency.
 
 What does NOT justify a package: being a different KIND of thing (generated vs
 hand-written - the barrel generator and codegen both handle mixed packages fine),
@@ -1084,11 +1147,11 @@ polyglot `default.json` module mapping.
 
 ## Shared utilities - check here before writing a helper
 
-`@dbx-tools/shared-core` is the browser-safe base EVERY package
-already depends on (the `.projenrc.ts` blanket rule adds it), so importing from
-it never costs a new dependency. Before adding a small helper to a package,
-check whether one of these already exists; if the helper would be useful to a
-second package, put it in shared-core rather than duplicating it.
+`@dbx-tools/shared-core` is the browser-safe utility base used across the
+workspace. Before adding a small helper to a package, check whether one of these
+already exists; if the helper would be useful to a second package, put it in
+shared-core rather than duplicating it, and declare the dependency on each
+package that imports it.
 
 - `json` - `parse(text, fallback?)` and `parseRecord(text)`. Use these for ANY
   JSON that comes from outside the process (request body, env var, config file,
@@ -1156,7 +1219,11 @@ second package, put it in shared-core rather than duplicating it.
   `globToRegExp` or `/pattern/flags` parser. For a filesystem or URL PATH, where
   `/` is a segment boundary and `**` matters, use `@dbx-tools/path`'s
   `match.toPathMatcher` instead.
-- `async` - `sleep`, `tieAbortSignal`, `poll`. Do not import
+- `async` - `sleep`, `tieAbortSignal`, `combineAbortSignals`, `poll`.
+  `combineAbortSignals` preserves zero/one-signal shortcuts and delegates
+  multiple signals to native `AbortSignal.any`; do not restore a listener-owning
+  combiner. The supported floor for this surface is Bun 1.3.14, Node 20.3,
+  Chrome 116, Firefox 124, and Safari 17.4. Do not import
   `node:timers/promises` for a delay.
 - `@dbx-tools/core` `config` - Node configuration through constant data,
   process env, environment-specific `.env` files, the single Databricks bundle
@@ -1202,6 +1269,8 @@ Node-only equivalents live in `@dbx-tools/core` (`bin.ensure` for idempotent
 executable downloads, archive selection, version validation, and atomic install;
 `exec.spawn`/`spawnSync`;
 `project.root`/`name`/`repositoryUrl`/`npmRegistry`;
+`fileLock.withFileLock` for cross-process locking through one
+`proper-lockfile` directory protocol shared by Bun and Node;
 `processLock.withProcessLock` for keyed mutual exclusion across the main thread
 and its workers - a module-level promise chain only serializes ONE thread, and
 reach for `@dbx-tools/postgres`'s `withAdvisoryLock` when the scope is a
@@ -1260,7 +1329,7 @@ bounds, or other compatibility-sensitive values.
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:
 
-- `node/appkit-web-search` `src/html-text.ts` - `htmlToText` /
+- `node/appkit-web-search` `src/html-text.ts` - parser-backed `htmlToText` /
   `htmlFragmentToText` / `decodeHtmlEntities`, shared by `fetch.ts` and
   `scrape.ts`.
 - `node/appkit-web-search` `search.ts` `resolveWebSearchContext()` - the OBO
@@ -1284,10 +1353,10 @@ projen`, then `uv sync --all-packages`. Use `uv run pytest`, `uv run ruff check
 packages/py`, and `uv run ruff format packages/py` for Python validation and
 formatting. `uv.lock` and `bun.lock` are local install artifacts and must remain
 untracked; `.venv/`, Python caches, and built wheels are ignored too.
-`DBXToolsPythonWorkspace` parses and reserializes every generated
-`pyproject.toml` with `smol-toml` during synthesis because projen's underlying
-`@iarna/toml` writer indents nested table headers. Keep this normalization on
-both the root workspace file and every member's `uv.file`.
+Projen's native `PyprojectTomlFile` owns generated `pyproject.toml` formatting.
+Do not override its protected synthesizer for cosmetic table layout. Temporary
+publication stamping parses and serializes TOML with `smol-toml`, restores the
+original bytes afterward, and is tested by parsed semantic equivalence.
 
 `bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
 does not exclude `packages/js/`. Some committed files predate the current
@@ -1307,9 +1376,10 @@ task only when reformatting the repo IS the change. Either way, check
 `git status` / `git diff --stat` before finishing and revert files you did not
 mean to touch, so a behavior change is not buried in reflowed whitespace.
 
-Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
-over `packages/js`). It autofixes, so it can reformat too — same timing rule applies:
-run it when finishing up, not between edits.
+Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 9 in `eslintrc` mode,
+run over the configured package roots plus `projen`). The normal task is
+check-only; `bun run eslint:fix` is the explicit mutating path and follows the
+same final-step timing rule as formatting.
 
 ## Comments describe the code, not the changes to it
 
@@ -1388,7 +1458,16 @@ whether the sentence is about the code as it stands or about the act of changing
   `project.pnpmWorkspace` (a `PnpmWorkspaceState`:
   `addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
   Reach those fields directly (`project.dbxToolsConfig.tags.push(...)`), not
-  via delegator methods on the project.
+  via delegator methods on the project. Either class can be the tree root:
+  a standalone `DBXToolsTypeScriptProject` reuses Projen's native compiling
+  tsconfig while receiving the same Bun workspace, root tasks, repository
+  metadata, and release configuration as `DBXToolsNodeProject`. Explicit
+  `outdir` is the workspace identity for discovery, generated sources, project
+  naming, and repository probes; constructors never borrow the engine process's
+  current workspace. `releaseMode` is `"dbx-tools"` by default or `"disabled"`
+  to omit the unified workflow plus bump/version/release tasks. Projen's inherited
+  `release` and `releaseTrigger` options are intentionally excluded because its
+  native release workflow cannot coexist with the unified workflow.
 - **`pnpm-workspace.yaml` is GENERATED and committed but ONLY for the Databricks Apps
   deploy path.** The engine writes it directly (projen skips its native component
   under bun) and it exists so the platform's pnpm build phase reads `packages` +
@@ -1484,6 +1563,15 @@ whether the sentence is about the code as it stands or about the act of changing
   projen OWNS that package's `package.json`/`tsconfig.json`/tasks/`README.md`/
   `.projen/`; baseline projen features are off to match the root (`SUBPROJECT_
 DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
+- **Repository policy is explicit in the root authoring input.** Reusable Projen
+  defaults do not name this repository's docs scripts, docs output directory,
+  Python package root, PR title convention, or `projen/` tooling member.
+  `.projenrc.ts` supplies release docs preparation/build steps and artifact path,
+  the release Python root, the PR title policy, workflow cache output ignores,
+  and `extraWorkspaceMembers: ["projen"]`. Generic consumers can replace or
+  omit each surface. ESLint and generated-entrypoint handling derive extra
+  tooling paths from `extraWorkspaceMembers`; never add another literal
+  `projen/` path to the reusable engine.
 - **Tags are ONE map of mixins.** `tags.ts` — `PACKAGE_TAG_MIXINS`
   (`Record<PackageTag, IMixin>`, keyed by tag name). Each entry is a
   `tagMixin(name, fn)` that, for every package carrying the tag, adds the tag's
@@ -1787,7 +1875,8 @@ bun run model:metadata       # refresh committed model capability, retirement, a
 bun run bump                 # increment VERSION and synth; no git or publication side effects
 bun run version:check        # verify every committed version surface
 bun run release              # validate locally, publish to loopback registries, and open a release PR
-bun run eslint               # lint (autofix) every package under `packages/js`
+bun run eslint               # check lint across package roots and projen
+bun run eslint:fix           # explicitly apply supported lint fixes
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
 ```
 
@@ -1807,13 +1896,15 @@ generation stays explicit during UniFFI API development. Child `package` uses
 package `prepack` remains for a standalone `bun publish`.
 One PR workflow owns both title lint and source validation. Its `closed` event
 uses a PR-number concurrency group to cancel running checks, while both jobs
-skip the close-event replacement run.
+skip the close-event replacement run. The workflow is constructed with
+Projen's public `BuildWorkflow` and a dedicated `pr:validate` build task; do not
+rewrite a generated step by matching its display name. File-level overrides
+remain only for workflow properties the public builder does not expose.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
-runs them with its own fast runner). The generated task runs `bun test test`
-with a separate `find test -name '*.test.ts' | grep -q .` condition because
-`bun test` exits non-zero when it matches no files. The condition makes a package
-with no tests a no-op without swallowing real test failures. bun does NOT support `describe()` nested inside `test()`
+runs them with its own fast runner). The generated task runs
+`bun test test --pass-with-no-tests`, so a package with no tests is a portable
+no-op without swallowing real test failures. bun does NOT support `describe()` nested inside `test()`
 (bun issue #5090); keep suites flat.
 
 ## Package registries: public npm and PyPI are NOT reachable
@@ -1937,8 +2028,8 @@ names the real invocation.
 
 Release-enabled Rust commands are generated separately from the sibling
 Commander packages. `dbx model-proxy` and `dbx lakebase-proxy` look up the
-current platform in the synthesized Rust registry, use `bin.ensure` to install
-the asset matching the generated CLI `PACKAGE_VERSION` at
+current platform through `@dbx-tools/rust-binary`, use `bin.ensure` to install
+the asset matching the shared package `PACKAGE_VERSION` at
 `~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`, then forward argv, stdio,
 signals, and exit status to the native process. Root help registers names
 without downloading assets. Add another native command through the Rust
@@ -2609,7 +2700,10 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   would duplicate remembered turns and grow the prompt on every request.
   History, thread list/update/delete, message deletion, and suspended-run
   discovery use `@mastra/client-js`'s native resource-scoped memory and agent
-  APIs. The scoped AppKit gate allowlists only those exact native paths.
+  APIs. The scoped AppKit gate allowlists only those exact native paths. Do not
+  restore a private custom-route agent-context helper. The exported `pagination`
+  module remains deprecated compatibility surface only; new code uses native
+  Mastra pagination inputs.
   Regeneration first deletes the persisted user/assistant pair, then replays the
   user message. Persisted suspended runs restore actionable approval cards after
   reloads and server restarts.

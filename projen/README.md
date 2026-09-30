@@ -37,6 +37,34 @@ project.synth();
 Every `src`-bearing folder under the configured roots becomes a
 `DBXToolsTypeScriptProject`. Folder path drives package name and runtime tags.
 
+Use `DBXToolsTypeScriptProject` itself as the root when one package needs the
+same Bun workspace, repository, task, and release defaults without a separate
+non-compiling root. It preserves Projen's native compiling `tsconfig.json`
+instead of creating a second owner. An explicit `outdir` is the workspace root
+for naming, Git metadata, package discovery, codegen, and barrels even when the
+calling process has a different current directory.
+
+The unified dbx-tools release surface is enabled by default. Set
+`releaseMode: "disabled"` to omit its workflow and bump/version/release tasks.
+The inherited Projen `release` and `releaseTrigger` options are intentionally
+not part of this engine's public options because they create a competing release
+workflow.
+
+Repository policy stays in the consuming `.projenrc.ts`:
+
+- `releaseDocs` supplies repository-defined preparation and build steps plus
+  the Pages artifact path. The engine adds release checkout, Bun caching,
+  artifact upload, and deployment without naming a docs script or output tree.
+- `releasePythonRoot` passes the actual Python package root to local release
+  preparation. Omit it when the workspace has no standard Python packages.
+- `pullRequestTitlePolicy` configures semantic title types and scope policy.
+  Omit it or pass `false` to disable the title job.
+- `workflowCacheIgnorePaths` excludes generated output trees that may contain
+  package manifests from the dependency-only Bun cache key.
+- `extraWorkspaceMembers` declares self-synthesizing tooling packages outside
+  `packageRoots`. Their version, generated entrypoint, formatting, linting, and
+  workspace membership are derived from that declaration.
+
 Dependency installation runs once from this root. The default-on
 `ROOT_INSTALL_ONLY_MIXIN` clears child `install` / `install:ci` task steps during
 root pre-synthesis, including packages attached after root construction. Set
@@ -53,9 +81,9 @@ new package membership.
 without turning Python packages into JavaScript workspace projects. It generates
 the root and member `pyproject.toml` files, standard `py:*` tasks, the VS Code
 interpreter setting, and an optional manual PyPI trusted-publishing workflow.
-Every generated TOML file is parsed and reserialized with `smol-toml`, so nested
-tables and arrays use consistent formatting instead of projen's indented table
-headers.
+Projen's native `PyprojectTomlFile` owns generated TOML formatting. Temporary
+publication stamping uses parsed TOML, changes versions and sibling
+dependencies structurally, and restores the original files byte-for-byte.
 
 ```ts
 import { project, projectPy } from "@dbx-tools/projen";
@@ -121,6 +149,10 @@ are library-local. Release wheels replace sibling Git requirements with matching
 native-wheel versions, and dependent publishers wait for their dependencies.
 Each crate builds its own `<crate>-uniffi-bindgen` executable so a workspace
 build has no colliding binary outputs. Packaging runs that prebuilt executable.
+Cargo manifests, target config, and UniFFI config are generated from structured
+Projen `TomlFile` objects. Local and release Python generation share one
+dependency-free helper for generator arguments, target-specific executable
+names, generated headers, empty `__init__.py`, and native-library placement.
 
 `sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
 inside an existing UniFFI crate regenerate that crate and its dependent bindings
@@ -425,10 +457,12 @@ Use `--local-registry false` or `--local-pypi false` to disable either local
 publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
 auto-detection; `--python-root` defaults to `packages/py`.
 
-The GitHub PR workflow runs synth plus the workspace TypeScript compile rather
-than the complete root build. Release preparation has already run Rust tests,
-workspace type-checking, and local package preflight before opening the PR.
-JavaScript behavior tests remain an explicit developer task.
+The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
+public `BuildWorkflow` `buildTask` option. That task runs synth plus the
+workspace TypeScript compile rather than the complete root build. Release
+preparation has already run Rust tests, workspace type-checking, and local
+package preflight before opening the PR. JavaScript behavior tests remain an
+explicit developer task.
 
 The configured release branch publishes only when a reviewed PR changes
 `VERSION`. Its workflow creates the annotated `v*` public release boundary.
