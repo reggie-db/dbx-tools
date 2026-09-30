@@ -27,7 +27,7 @@ import { getExecutionContext } from "@databricks/appkit";
 import { classes, invoke, resolve } from "@dbx-tools/model";
 import { ModelServingApi, modelServingApi } from "@dbx-tools/model-rs";
 import { functionModule, json, log, net } from "@dbx-tools/shared-core";
-import { model } from "@dbx-tools/shared-model";
+import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
 
@@ -72,6 +72,43 @@ export interface BuildModelOverrides {
    * class's static list when the workspace has none.
    */
   modelClass?: ModelClass;
+}
+
+function selectionInput(
+  config: MastraPluginConfig,
+  requested: string | undefined,
+  defaultClass: ModelClass | undefined,
+  serving = resolveServingConfig(config),
+) {
+  const requestedClass = requested !== undefined ? parseModelClass(requested) : null;
+  const explicit = requestedClass === null ? requested : undefined;
+  const modelClass = requestedClass ?? defaultClass;
+  return {
+    ...(explicit !== undefined ? { explicit } : {}),
+    fuzzy: serving.fuzzy,
+    threshold: serving.threshold,
+    ...(modelClass !== undefined ? { modelClass } : {}),
+    fallbacks: serving.fallbacks,
+    liveOnly: requested === undefined,
+    ttlMs: serving.ttlMs,
+  };
+}
+
+/**
+ * Resolve an agent's unpinned default against an already-loaded live catalogue.
+ *
+ * With no configured id/class/fallback, the generic model ranker selects the
+ * highest-ranked currently available GPT, then falls back to the highest-ranked
+ * live chat endpoint when the workspace has no GPT.
+ */
+export function resolveDefaultModelId(
+  config: MastraPluginConfig,
+  endpoints: readonly ServingEndpointSummary[],
+  overrides: BuildModelOverrides = {},
+): string {
+  const requested = overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+  return resolve.resolveModel(endpoints, selectionInput(config, requested, overrides.modelClass))
+    .modelId;
 }
 
 /**
@@ -122,18 +159,12 @@ export async function buildModel(
   // internal `overrides.modelClass` (e.g. the chart planner) is the
   // floor when nothing was requested.
   const requested = override ?? overrides.modelId ?? process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
-  const requestedClass = requested !== undefined ? parseModelClass(requested) : null;
-  const explicit = requestedClass === null ? requested : undefined;
-  const modelClass = requestedClass ?? overrides.modelClass;
 
-  const { modelId, source } = await selectModel(executionContext.client, host, {
-    ...(explicit !== undefined ? { explicit } : {}),
-    fuzzy: serving.fuzzy,
-    threshold: serving.threshold,
-    ...(modelClass !== undefined ? { modelClass } : {}),
-    fallbacks: serving.fallbacks,
-    ttlMs: serving.ttlMs,
-  });
+  const { modelId, source } = await selectModel(
+    executionContext.client,
+    host,
+    selectionInput(config, requested, overrides.modelClass, serving),
+  );
   logger.debug("model selected", { modelId, source, requested });
 
   return {

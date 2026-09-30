@@ -694,10 +694,16 @@ describe("DBXToolsRustWorkspace", () => {
       smoke.if,
       "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",
     );
-    assert.equal(
-      workflowStep(release.jobs["publish-github-release"]!, "Publish GitHub release assets").uses,
-      "softprops/action-gh-release@v2",
+    const githubRelease = workflowStep(
+      release.jobs["publish-github-release"]!,
+      "Publish GitHub release assets",
     );
+    assert.equal(githubRelease.uses, "softprops/action-gh-release@v2");
+    assert.equal(
+      githubRelease.with?.body_path,
+      "docs/releases/v${{ needs.verify-context.outputs.release_version }}.md",
+    );
+    assert.equal(githubRelease.with?.["generate-release-notes"], true);
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
     assert.ok(packager.includes('"node_modules", "npm", "bin", "npm-cli.js"'));
     assert.ok(packager.includes("command: process.execPath, args: [npmCli, ...args]"));

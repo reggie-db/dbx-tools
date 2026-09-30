@@ -32,6 +32,7 @@ describe("MastraPluginClient AI SDK transport", () => {
       runId: "run-1",
       threadId: "thread-1",
       model: "model-1",
+      reasoningEffort: "high",
       requestContext: { storeId: "store-1" },
     });
     await response.stream.cancel();
@@ -41,6 +42,10 @@ describe("MastraPluginClient AI SDK transport", () => {
     assert.equal(received.headers.get("x-mastra-model"), "model-1");
     const body = await received.json();
     assert.equal(body.runId, "run-1");
+    assert.deepEqual(body.messages, [
+      { id: "user-1", role: "user", parts: [{ type: "text", text: "hello" }] },
+    ]);
+    assert.deepEqual(body.providerOptions, { openai: { reasoningEffort: "high" } });
     assert.deepEqual(body.requestContext, { storeId: "store-1" });
   });
 
@@ -102,5 +107,47 @@ describe("MastraPluginClient AI SDK transport", () => {
       approved: false,
       reason: "Not approved for this request.",
     });
+  });
+});
+
+describe("MastraPluginClient memory history", () => {
+  it("requests one native page with descending message order", async () => {
+    let received!: Request;
+    globalThis.fetch = (async (input, init) => {
+      received = new Request(input, init);
+      return Response.json({
+        messages: [],
+        uiMessages: null,
+        total: 45,
+        page: 2,
+        perPage: 20,
+        hasMore: true,
+      });
+    }) as typeof fetch;
+    const client = new MastraPluginClient({
+      basePath: "/api/mastra",
+      defaultAgent: "support",
+      agents: ["support"],
+      feedbackEnabled: false,
+      chatAlwaysAvailable: true,
+    });
+
+    const response = await client.history({
+      agentId: "support",
+      threadId: "thread-1",
+      page: 2,
+      perPage: 20,
+    });
+
+    const url = new URL(received.url);
+    assert.equal(url.pathname, "/api/mastra/memory/threads/thread-1/messages");
+    assert.equal(url.searchParams.get("agentId"), "support");
+    assert.equal(url.searchParams.get("page"), "2");
+    assert.equal(url.searchParams.get("perPage"), "20");
+    assert.deepEqual(JSON.parse(url.searchParams.get("orderBy") ?? "null"), {
+      field: "createdAt",
+      direction: "DESC",
+    });
+    assert.equal(response.hasMore, true);
   });
 });

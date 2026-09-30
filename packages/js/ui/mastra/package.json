@@ -38,6 +38,7 @@
     "@dbx-tools/ui-appkit": "workspace:*",
     "@dbx-tools/ui-branding": "workspace:*",
     "@mastra/client-js": "catalog:",
+    "@mastra/core": "catalog:",
     "@tanstack/react-table": "catalog:",
     "ai": "catalog:",
     "echarts": "catalog:",
@@ -52,7 +53,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.6.224",
+  "version": "0.6.225",
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",

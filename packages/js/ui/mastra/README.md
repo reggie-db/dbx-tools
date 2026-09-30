@@ -147,7 +147,9 @@ export function App() {
 `MastraChat` is the quickest client for the AppKit-Mastra plugin. It reads the
 plugin's published client config, creates a `MastraPluginClient`, streams turns
 through Mastra's official AI SDK chat route, hydrates native memory, and renders
-the controlled `ChatView`.
+the controlled `ChatView`. When Mastra returns persisted `messages` without a
+precomputed `uiMessages` projection, history hydration uses Mastra's native
+`convertMessages(...).to("AIV5.UI")` conversion.
 
 Useful options:
 
@@ -155,6 +157,9 @@ Useful options:
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
 - `composerActions` places host-owned per-turn controls beside the model
   selector without replacing the built-in composer.
+- `modelSelectorActions` places host-owned controls inside the model menu after
+  the endpoint choices. Supply it only when the active agent supports that
+  option, such as a Genie transport toggle.
 - `composerLeadingActions` places attachment or app actions on the left side of
   the fixed composer footer. The textarea grows above it to a cap, then scrolls;
   model and Send/Stop stay pinned bottom-right.
@@ -197,6 +202,11 @@ not currently tabbed. Closing the active tab moves to a neighbouring one, or
 starts a fresh conversation when it was the last tab open. The open set is
 session state; the strip reseeds from the most recent conversations on the next
 load.
+
+Selecting a conversation fetches only the newest 20 native memory messages.
+Scrolling upward requests the next page and prepends it without moving the
+reader's viewport. Agent turns still send only the new user message; Mastra
+loads the remembered transcript server-side.
 
 `auto` measures the chat's own element rather than the viewport, so a chat
 embedded in a split view or side panel switches to tabs on the space it actually
@@ -258,6 +268,16 @@ export function ReviewChat(props: ChatViewProps) {
 sidebar, transcript, tool progress, approval cards, suggestions, export controls,
 feedback controls, and composer from props. Use it when your app already has a
 transport or needs to combine Mastra messages with another state model.
+`MastraChat` shows a spinner in the model control while its live default model
+is being resolved. The picker groups endpoints into
+Rust-derived family submenus. Its compact first popup shows only the current
+model, host-owned actions such as Genie Agent Mode, and a reasoning slider when
+the selected endpoint supports it. The current model opens the family picker,
+so the long endpoint catalogue stays out of the primary control popup. Family
+and model menus use the same compact utility type as the composer actions,
+omit repeated headers, and omit the already-selected model. The model menu puts
+`Default (<resolved model>)` first, keeps `Other` last, and makes a one-model
+family directly selectable instead of opening another submenu.
 
 ## Call Plugin Routes Directly
 

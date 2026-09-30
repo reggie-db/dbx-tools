@@ -1,4 +1,5 @@
 import type { GenieWriterEvent } from "@dbx-tools/shared-mastra";
+import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import type { UIMessage } from "ai";
 import type { ReactNode } from "react";
 import type { ExportFormat } from "../support/export.ts";
@@ -44,7 +45,12 @@ export type ToolProgress = GenieWriterEvent;
  * `/models` endpoint derives (Databricks-provided name, else a title-cased
  * rendering of `name`). The picker shows `displayName ?? name`.
  */
-export type ChatModelOption = { name: string; displayName?: string };
+export type ChatModelOption = {
+  name: string;
+  displayName?: string;
+  family?: string;
+  reasoningEfforts?: ReasoningEffort[];
+};
 
 /**
  * A steer message submitted while a turn was already streaming. It waits in a
@@ -168,6 +174,10 @@ export type ChatViewProps = {
   /** Currently selected model name; empty string means "use server default". */
   model?: string;
   onModelChange?: (model: string) => void;
+  /** Optional reasoning effort applied to the next turn. Undefined uses the provider default. */
+  reasoningEffort?: ReasoningEffort;
+  /** Update the per-turn reasoning effort. */
+  onReasoningEffortChange?: (effort: ReasoningEffort | undefined) => void;
   /**
    * The serving-endpoint fallback the server uses when no model is pinned,
    * already humanized (the server's `displayName`, e.g. "Claude Sonnet 4.6").
@@ -175,12 +185,21 @@ export type ChatViewProps = {
    * a neutral "Default". Never a raw endpoint id.
    */
   defaultModelName?: string;
+  /** Endpoint id behind the unpinned default, used to resolve family and reasoning metadata. */
+  defaultModelId?: string;
+  /** True while the server resolves the unpinned agent's live default model. */
+  defaultModelLoading?: boolean;
   /**
    * Host-owned controls rendered in the composer footer immediately before the
    * model selector. Use this for per-turn options that belong beside model
    * routing without forking the chat surface.
    */
   composerActions?: ReactNode;
+  /**
+   * Host-owned controls rendered inside the model selector after the endpoint
+   * choices. Omit when the active agent has no matching model-adjacent option.
+   */
+  modelSelectorActions?: ReactNode;
   /**
    * Host-owned actions rendered on the left side of the composer's fixed
    * footer, before Export and Clear.

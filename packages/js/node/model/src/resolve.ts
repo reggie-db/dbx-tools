@@ -22,6 +22,12 @@
 
 import { object } from "@dbx-tools/shared-core";
 import {
+  ModelClass as ModelRsModelClass,
+  rankModels as rankModelsWithRust,
+  type ModelQuery as ModelRsModelQuery,
+  type ServingEndpointSummary as ModelRsServingEndpointSummary,
+} from "@dbx-tools/model-rs";
+import {
   classify,
   model,
   type ModelQuery,
@@ -29,7 +35,6 @@ import {
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { CHAT_CLASS_ORDER, classesAtOrBelow, MODEL_CLASS_ORDER } from "./classes.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import {
   listServingEndpoints,
@@ -41,15 +46,15 @@ import {
 
 type ModelClass = model.ModelClass;
 
-const VERSIONED_FAMILY_SEARCHES = new Set([
-  "claude",
-  "gemini",
-  "gemma",
-  "glm",
-  "gpt",
-  "llama",
-  "qwen",
-]);
+/** Preferred live family for an unconfigured general-purpose chat default. */
+const DEFAULT_MODEL_FAMILY_SEARCH = "gpt";
+
+const MODEL_CLASS_TO_RS: Readonly<Record<ModelClass, ModelRsModelClass>> = {
+  [model.ModelClass.ChatThinking]: ModelRsModelClass.ChatThinking,
+  [model.ModelClass.ChatBalanced]: ModelRsModelClass.ChatBalanced,
+  [model.ModelClass.ChatFast]: ModelRsModelClass.ChatFast,
+  [model.ModelClass.Embedding]: ModelRsModelClass.Embedding,
+};
 
 /** Caller intent passed to {@link resolveModel}. */
 export interface ResolveModelInput {
@@ -82,6 +87,12 @@ export interface ResolveModelInput {
    * the auto-classified catalogue.
    */
   fallbacks?: readonly string[];
+  /**
+   * Refuse the static offline floor when the live catalogue has no match.
+   * Use for unpinned defaults that must always name a currently available
+   * endpoint.
+   */
+  liveOnly?: boolean;
 }
 
 /** Outcome of {@link resolveModel}: the chosen id plus how it was reached. */
@@ -103,99 +114,75 @@ export interface SearchModelsInput extends ModelQuery {
 }
 
 /**
- * Round a Fuse score to the display precision so version siblings that match a
- * token identically (e.g. `opus-4-7` vs `opus-4-8` for the query `"opus"`) tie
- * on match and let the class / within-class rank decide - which is what
- * surfaces the newer, higher-quality sibling.
- */
-function matchBucket(score: number | undefined): number {
-  return Math.round((score ?? 0) * 1000);
-}
-
-function modelVariantRank(name: string): number {
-  if (!/(?:^|[-_.])gpt(?:[-_.]|$)/i.test(name)) return 2;
-  if (/(?:^|[-_.])sol(?:[-_.]|$)/i.test(name)) return 0;
-  if (/(?:^|[-_.])luna(?:[-_.]|$)/i.test(name)) return 1;
-  return 2;
-}
-
-/**
  * Rank the live catalogue against a {@link ModelQuery}, best-first.
  *
- * Candidates are the classified endpoints in the eligible classes:
- * {@link classesAtOrBelow} the requested `modelClass`, or - when none is given
- * - the chat bands only ({@link CHAT_CLASS_ORDER}), so a general ask never
- * surfaces an embedding endpoint. Each class bucket is already best-first from
- * {@link classify.classifyEndpoints}. Ranking is **match then class**:
- *
- * 1. With a `search`, only endpoints matching it survive, ordered by match
- *    distance (bucketed via {@link matchBucket} so near-identical scores tie),
- *    then by version, preferred model variant, class (more capable first), and
- *    the stable within-class rank.
- * 2. Without a `search`, the class-then-rank candidate order stands.
- *
- * A `limit` truncates the result. Returns `[]` when nothing is eligible or
- * matches - callers layer their own fallback.
+ * Rust owns classification, fuzzy scoring, family-version ordering, preferred
+ * variants, class ceilings, tool filtering, and result limiting. Node retains
+ * the caller's endpoint objects so fields outside the ranking contract remain
+ * available unchanged.
  */
 export function lookupModels(
   endpoints: readonly ServingEndpointSummary[],
   query: ModelQuery = {},
 ): RankedModel[] {
-  const classified = classify.classifyEndpoints(endpoints);
-  const eligible =
-    query.modelClass !== undefined ? classesAtOrBelow(query.modelClass) : CHAT_CLASS_ORDER;
+  const endpointsByName = new Map(endpoints.map((endpoint) => [endpoint.name, endpoint]));
+  return rankModelsWithRust(endpoints.map(toModelRsEndpoint), toModelRsQuery(query)).map(
+    (ranked) => {
+      const endpoint = endpointsByName.get(ranked.endpoint.name);
+      if (!endpoint) {
+        throw new Error(`Rust model ranking returned unknown endpoint "${ranked.endpoint.name}"`);
+      }
+      return {
+        endpoint,
+        modelClass: fromModelRsClass(ranked.modelClass),
+        ...(ranked.score !== undefined ? { score: ranked.score } : {}),
+      };
+    },
+  );
+}
 
-  // Flatten eligible classes in capability order, carrying each endpoint's
-  // class; bucket order is already best-first.
-  const candidates: RankedModel[] = [];
-  for (const modelClass of eligible) {
-    for (const endpoint of classified[modelClass]) {
-      if (query.requiresTools && !classify.endpointCapabilities(endpoint).tools) continue;
-      candidates.push({ endpoint, modelClass });
-    }
+/** Convert a public model query to the generated Rust ranking contract. */
+function toModelRsQuery(query: ModelQuery): ModelRsModelQuery {
+  return {
+    search: query.search,
+    modelClass: query.modelClass === undefined ? undefined : MODEL_CLASS_TO_RS[query.modelClass],
+    requiresTools: query.requiresTools ?? false,
+    includeDeprecated: false,
+    limit: query.limit,
+    threshold: query.threshold,
+  };
+}
+
+/** Convert a discovered endpoint to the generated Rust ranking contract. */
+function toModelRsEndpoint(endpoint: ServingEndpointSummary): ModelRsServingEndpointSummary {
+  return {
+    name: endpoint.name,
+    displayName: endpoint.displayName,
+    task: endpoint.task,
+    state: endpoint.state,
+    description: endpoint.description,
+    supportsTools: endpoint.supportsTools,
+    profile: endpoint.profile,
+    modelClass: endpoint.class === undefined ? undefined : MODEL_CLASS_TO_RS[endpoint.class],
+    serviceNames: new Map(Object.entries(endpoint.serviceNames ?? {})),
+    modelServiceName: endpoint.modelServiceName,
+    reasoningEfforts: [],
+    status: { deprecated: endpoint.status?.deprecated ?? false },
+  };
+}
+
+/** Convert a generated Rust class to the browser-safe public enum. */
+function fromModelRsClass(modelClass: ModelRsModelClass): ModelClass {
+  switch (modelClass) {
+    case ModelRsModelClass.ChatThinking:
+      return model.ModelClass.ChatThinking;
+    case ModelRsModelClass.ChatBalanced:
+      return model.ModelClass.ChatBalanced;
+    case ModelRsModelClass.ChatFast:
+      return model.ModelClass.ChatFast;
+    case ModelRsModelClass.Embedding:
+      return model.ModelClass.Embedding;
   }
-
-  const search = query.search?.trim();
-  let ranked: RankedModel[];
-  if (search) {
-    const gptFamilySearch = search.toLowerCase() === "gpt";
-    const versionedFamilySearch = VERSIONED_FAMILY_SEARCHES.has(search.toLowerCase());
-    const scores = new Map<string, number>();
-    for (const match of searchServingEndpoints(
-      search,
-      candidates.map((c) => c.endpoint),
-      query.threshold !== undefined ? { threshold: query.threshold } : {},
-    )) {
-      scores.set(match.endpoint.name, match.score);
-    }
-    // `Array.prototype.sort` is stable, so endpoints equal on match and class
-    // keep their best-first within-class order.
-    ranked = candidates
-      .filter((c) => scores.has(c.endpoint.name))
-      .filter(
-        (c) => !gptFamilySearch || !/(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)/i.test(c.endpoint.name),
-      )
-      .map((c) => ({ ...c, score: scores.get(c.endpoint.name) }))
-      .sort((a, b) => {
-        const byMatch = matchBucket(a.score) - matchBucket(b.score);
-        if (byMatch !== 0) return byMatch;
-        if (versionedFamilySearch) {
-          const aVersion = classify.versionTuple(a.endpoint.name);
-          const bVersion = classify.versionTuple(b.endpoint.name);
-          for (let index = 0; index < 3; index++) {
-            const byVersion = (bVersion[index] ?? 0) - (aVersion[index] ?? 0);
-            if (byVersion !== 0) return byVersion;
-          }
-        }
-        const byVariant = modelVariantRank(a.endpoint.name) - modelVariantRank(b.endpoint.name);
-        if (byVariant !== 0) return byVariant;
-        return MODEL_CLASS_ORDER.indexOf(a.modelClass) - MODEL_CLASS_ORDER.indexOf(b.modelClass);
-      });
-  } else {
-    ranked = candidates;
-  }
-
-  return query.limit !== undefined ? ranked.slice(0, Math.max(0, query.limit)) : ranked;
 }
 
 /**
@@ -308,9 +295,10 @@ export async function selectModel(
  *    fuzzy-ranked within the (optional) class ceiling and the best taken,
  *    falling back to the input verbatim when nothing matches.
  * 2. **No explicit ask**: an operator-pinned `fallback` that exists in the live
- *    catalogue wins first; then the ranked live catalogue (class ceiling
- *    applied); then the static {@link FALLBACK_MODEL_IDS} floor when the
- *    catalogue yields nothing in range.
+ *    catalogue wins first. A class request ranks within that ceiling. A
+ *    general request prefers the highest-ranked live GPT, then any ranked live
+ *    chat model. The static {@link FALLBACK_MODEL_IDS} floor is used only when
+ *    the catalogue yields nothing in range.
  */
 export function resolveModel(
   endpoints: readonly ServingEndpointSummary[],
@@ -341,8 +329,16 @@ export function resolveModel(
   }
 
   const source = input.modelClass !== undefined ? "class" : "fallback";
+  if (input.modelClass === undefined) {
+    const [preferred] = lookupModels(endpoints, buildQuery(input, DEFAULT_MODEL_FAMILY_SEARCH));
+    if (preferred) return { modelId: preferred.endpoint.name, source };
+  }
   const [top] = lookupModels(endpoints, buildQuery(input, undefined));
   if (top) return { modelId: top.endpoint.name, source };
+
+  if (input.liveOnly) {
+    throw new Error("No matching live Model Serving endpoint is available");
+  }
 
   // Live catalogue yielded nothing in range: walk the static floor.
   const floorSource =

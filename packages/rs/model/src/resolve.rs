@@ -114,9 +114,15 @@ pub fn lookup_models(endpoints: &[ServingEndpointSummary], query: &ModelQuery) -
     }
 
     if let Some(limit) = query.limit {
-        candidates.truncate(limit);
+        candidates.truncate(limit as usize);
     }
     candidates
+}
+
+/// Rank model endpoints through the generated UniFFI surface.
+#[uniffi::export]
+pub fn rank_models(endpoints: Vec<ServingEndpointSummary>, query: ModelQuery) -> Vec<RankedModel> {
+    lookup_models(&endpoints, &query)
 }
 
 /// Resolve a search string to the highest-ranked endpoint name.

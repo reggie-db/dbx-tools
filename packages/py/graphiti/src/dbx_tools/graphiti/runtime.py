@@ -199,6 +199,8 @@ class Runtime:
         return [
             *self._uv_command(),
             "run",
+            "--python",
+            _uv_python(),
             "--project",
             str(self.paths.graphiti / "mcp_server"),
             "python",
@@ -224,6 +226,10 @@ class Runtime:
     def environment(self, password: str, settings: ModelSettings) -> dict[str, str]:
         """Build the upstream process environment without a Graphiti config file."""
         environment = os.environ.copy()
+        environment.setdefault("UV_PYTHON", _uv_python())
+        # Upstream logs a FalkorDB Browser URL unless BROWSER=0, regardless of
+        # the selected database provider; this launcher only runs Neo4j.
+        environment.setdefault("BROWSER", "0")
         environment.setdefault("NEO4J_URI", "bolt://127.0.0.1:7687")
         environment.setdefault("NEO4J_USER", "neo4j")
         environment.setdefault("NEO4J_PASSWORD", password)
@@ -355,6 +361,8 @@ class Runtime:
             [
                 *self._uv_command(),
                 "sync",
+                "--python",
+                _uv_python(),
                 "--project",
                 str(self.paths.graphiti / "mcp_server"),
             ],
@@ -507,9 +515,44 @@ def _graphiti_port() -> str:
     return os.getenv("GRAPHITI_PORT") or os.getenv("DATABRICKS_APP_PORT", "8000")
 
 
+def _uv_python() -> str:
+    """Return the interpreter uv must use for the upstream Graphiti project.
+
+    The child process imports `dbx_tools.graphiti` from the launcher
+    `PYTHONPATH`, including this process's site-packages. An explicit
+    `UV_PYTHON` wins; otherwise uv must use this interpreter's minor so a
+    looser upstream `requires-python` cannot select 3.10 against 3.11
+    wheels.
+    """
+    value = os.getenv("UV_PYTHON")
+    if value:
+        return value
+    return f"{sys.version_info.major}.{sys.version_info.minor}"
+
+
+_CHILD_NAMESPACE_PACKAGES = ("postgres", "core", "core_rs")
+
+
 def _child_python_paths() -> list[str]:
-    """Expose package roots without mixing interpreter standard libraries."""
+    """Expose launcher package roots without mixing interpreter standard libraries.
+
+    The Graphiti child imports this package from source and then loads
+    `dbx_tools.postgres` (and its `core` / `core_rs` namespace siblings).
+    Workspace installs are editable: those modules live on `sys.path`
+    through `.pth` files, which Python does not apply when site-packages
+    is only appended to `PYTHONPATH`. Copy the resolved roots from this
+    process instead of hoping the child re-reads the `.pth` files.
+    """
     paths = [str(Path(__file__).resolve().parents[2])]
+    for entry in sys.path:
+        if not entry:
+            continue
+        root = Path(entry)
+        if not any((root / "dbx_tools" / name).exists() for name in _CHILD_NAMESPACE_PACKAGES):
+            continue
+        resolved = str(root.resolve())
+        if resolved not in paths:
+            paths.append(resolved)
     for name in ("purelib", "platlib"):
         value = sysconfig.get_path(name)
         if not value:

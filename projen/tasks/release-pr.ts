@@ -14,6 +14,7 @@ import { exec, project } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
+import { generateReleaseSummary } from "./release-summary.ts";
 import {
   releaseArchitectureOption,
   releaseLevelOption,
@@ -28,6 +29,10 @@ import {
   githubTokenArguments,
   githubTokenEnvironmentName,
 } from "../src/release-github.ts";
+import {
+  RELEASE_SUMMARY_PROVIDER_NAMES,
+  type ReleaseSummaryProviderName,
+} from "../src/release-dispatch.ts";
 import { readWorkspaceVersion, resolveNextVersion } from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
@@ -130,6 +135,22 @@ function githubAccount(root: string): {
   return { ...identity, token };
 }
 
+function releaseSummaryProviders(
+  value: string | undefined,
+): ReleaseSummaryProviderName[] | undefined {
+  if (value === undefined) return undefined;
+  const providers = value
+    .split(",")
+    .map((provider) => provider.trim())
+    .filter(Boolean);
+  for (const provider of providers) {
+    if (!RELEASE_SUMMARY_PROVIDER_NAMES.includes(provider as ReleaseSummaryProviderName)) {
+      throw new Error(`Unknown release summary provider: ${provider}`);
+    }
+  }
+  return providers as ReleaseSummaryProviderName[];
+}
+
 const program = new Command();
 program
   .description("Prepare, validate, locally publish, and open a reviewed release PR")
@@ -142,6 +163,11 @@ program
   .option("--local-registry <value>", "local npm registry: auto, false, or an explicit URL", "auto")
   .option("--local-pypi <value>", "local PyPI index: auto, false, or an explicit URL", "auto")
   .option("--python-root <path>", "Python workspace package root")
+  .option("--no-release-summary", "skip optional AI release summary generation")
+  .option(
+    "--release-summary-providers <providers>",
+    "comma-separated provider order: cursor,codex,claude",
+  )
   .option("--no-local-cargo", "skip local Cargo publication")
   .option("--approve", "merge the release branch directly into the release base")
   .action(
@@ -155,6 +181,8 @@ program
       localRegistry: string;
       localPypi: string;
       pythonRoot?: string;
+      releaseSummary: boolean;
+      releaseSummaryProviders?: string;
       localCargo: boolean;
       approve: boolean;
     }) => {
@@ -259,6 +287,14 @@ program
         localCargo: opts.localCargo,
       });
       run(releaseRoot, process.execPath, [versionCheckScript]);
+      const releaseSummary = opts.releaseSummary
+        ? await generateReleaseSummary({
+            root: releaseRoot,
+            version: next.version,
+            fromRef: `${opts.prefix}${next.base}`,
+            providers: releaseSummaryProviders(opts.releaseSummaryProviders),
+          })
+        : undefined;
 
       git(releaseRoot, ["add", "-A"]);
       const staged = git(releaseRoot, ["diff", "--cached", "--name-only"], { capture: true });
@@ -279,6 +315,7 @@ program
         `Source commit: ${git(releaseRoot, ["rev-parse", `${releaseBranch}^`], { capture: true })}`,
         "",
         "Merging this PR updates VERSION on main and starts the public release workflow.",
+        ...(releaseSummary ? ["", releaseSummary] : []),
       ].join("\n");
       const githubEnvironment = {
         ...process.env,

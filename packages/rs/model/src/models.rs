@@ -1,6 +1,9 @@
 //! Model contracts and provider-neutral model-name parsing.
 
-use std::{collections::BTreeMap, sync::LazyLock};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::LazyLock,
+};
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -73,7 +76,9 @@ impl ModelFamily {
 }
 
 /// Intent-oriented class used to select a Model Serving endpoint.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize, uniffi::Enum,
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum ModelClass {
     /// Higher-quality chat models suited to deliberate reasoning.
@@ -128,7 +133,7 @@ pub struct ParsedModelName {
 }
 
 /// Databricks AI Gateway profile scores for an endpoint.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelProfile {
     /// Relative model quality score.
@@ -143,7 +148,7 @@ pub struct ModelProfile {
 }
 
 /// Lifecycle status associated with a model.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelStatus {
     /// Whether Databricks lists the model as retired or deprecated.
@@ -152,7 +157,7 @@ pub struct ModelStatus {
 }
 
 /// Normalized metadata for a Databricks Model Serving endpoint.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(rename_all = "camelCase")]
 pub struct ServingEndpointSummary {
     /// Model Serving endpoint name used for invocation.
@@ -179,8 +184,8 @@ pub struct ServingEndpointSummary {
     #[serde(rename = "class", skip_serializing_if = "Option::is_none")]
     pub model_class: Option<ModelClass>,
     /// Provider names mapped to provider-specific model names.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub service_names: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub service_names: HashMap<String, String>,
     /// Foundation model name reported by the served entity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_service_name: Option<String>,
@@ -193,7 +198,7 @@ pub struct ServingEndpointSummary {
 }
 
 /// Filters and ranking controls for a model catalogue query.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
 pub struct ModelQuery {
     /// Optional fuzzy model-name search.
     pub search: Option<String>,
@@ -204,13 +209,13 @@ pub struct ModelQuery {
     /// Whether retired models remain eligible.
     pub include_deprecated: bool,
     /// Maximum number of results.
-    pub limit: Option<usize>,
+    pub limit: Option<u32>,
     /// Maximum fuzzy-match distance.
     pub threshold: Option<f64>,
 }
 
 /// Model Serving endpoint plus its classification and search score.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct RankedModel {
     /// Matching endpoint metadata.
     pub endpoint: ServingEndpointSummary,
@@ -221,7 +226,7 @@ pub struct RankedModel {
 }
 
 /// Result of resolving a requested model name.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct ResolvedModel {
     /// Resolved endpoint name or the original request when unmatched.
     pub model_id: String,
@@ -268,6 +273,12 @@ pub fn model_search_query(value: &str) -> Option<String> {
             .collect::<Vec<_>>()
             .join(" "),
     )
+}
+
+/// Return the normalized family name parsed from a model identity.
+#[uniffi::export]
+pub fn model_family(value: &str) -> Option<String> {
+    parse_model_name(value).map(|parsed| parsed.family.as_str().to_owned())
 }
 
 /// Return whether a model requires Databricks' native Responses endpoint.

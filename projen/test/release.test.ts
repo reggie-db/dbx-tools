@@ -61,6 +61,10 @@ after(() => {
 describe("unified release workflow", () => {
   it("releases the default branch with an annotated tag and supports manual recovery", () => {
     assert.equal(release.name, "release");
+    assert.equal(
+      release["run-name"],
+      "release 0.0.1 ${{ github.event_name == 'push' && github.sha || inputs.release_tag }}",
+    );
     assert.deepEqual(workflowTrigger<{ branches: string[]; paths: string[] }>(release, "push"), {
       branches: ["main"],
       paths: ["VERSION"],
@@ -230,6 +234,37 @@ describe("release task contracts", () => {
     );
   });
 
+  it("configures summary provider order and opt-out through project options", () => {
+    const providersOutdir = mkdtempSync(join(tmpdir(), "release-summary-providers-"));
+    const disabledOutdir = mkdtempSync(join(tmpdir(), "release-summary-disabled-"));
+    try {
+      new DBXToolsNodeProject({
+        name: "release-summary-providers",
+        outdir: providersOutdir,
+        github: true,
+        releaseSummary: { providers: ["claude", "codex"] },
+      }).synth();
+      new DBXToolsNodeProject({
+        name: "release-summary-disabled",
+        outdir: disabledOutdir,
+        github: true,
+        releaseSummary: false,
+      }).synth();
+      const command = (directory: string): string => {
+        const tasks = JSON.parse(readFileSync(join(directory, ".projen/tasks.json"), "utf8")) as {
+          tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
+        };
+        return tasks.tasks.release?.steps?.[0]?.exec ?? "";
+      };
+
+      assert.match(command(providersOutdir), /--release-summary-providers claude,codex/);
+      assert.match(command(disabledOutdir), /--no-release-summary/);
+    } finally {
+      rmSync(providersOutdir, { recursive: true, force: true });
+      rmSync(disabledOutdir, { recursive: true, force: true });
+    }
+  });
+
   it("compiles before applying publish configuration", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.ok(
@@ -274,6 +309,10 @@ describe("release task contracts", () => {
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),
+    );
+    assert.ok(
+      releasePr.indexOf("generateReleaseSummary({") <
+        releasePr.indexOf('git(releaseRoot, ["add", "-A"])'),
     );
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('.option("--approve",'));

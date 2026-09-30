@@ -3,10 +3,11 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
-export const PACKAGE_VERSION = "0.6.224";
+export const PACKAGE_VERSION = "0.6.225";
 export * as classes from "./src/classes.ts";
 export * as fallback from "./src/fallback.ts";
 export * as invoke from "./src/invoke.ts";
+export * as policy from "./src/policy.ts";
 export * as resolve from "./src/resolve.ts";
 export * as serving from "./src/serving.ts";
 export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./src/classes.ts";

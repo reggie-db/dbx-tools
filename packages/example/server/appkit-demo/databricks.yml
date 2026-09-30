@@ -107,9 +107,8 @@ resources:
           # import the already-installed dbx-tools-graphiti release.
           - name: PYTHON
             value: ./.venv/bin/python
-          # Keep uv's upstream Graphiti environment on the same Python minor as
-          # the Databricks Apps environment. This also protects published
-          # launchers that forwarded their outer interpreter search paths.
+          # Optional override. The Graphiti launcher already pins `uv` to the
+          # interpreter that provided PYTHONPATH (this App's 3.11 venv).
           - name: UV_PYTHON
             value: "3.11"
           # OTP gate allow-list (was the tunnel CLI's `--allow`). No subject /

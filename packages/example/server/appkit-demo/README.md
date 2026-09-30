@@ -109,7 +109,7 @@ workspace release, and staging converts `@dbx-tools/*` to that published version
 
 ```bash
 bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves
-bun stage-deploy.ts                                     # reads the linked example version
+bun stage-deploy.ts                                     # reads the root VERSION
 cd "$(dirname "$(mktemp -u)")/dbx-tools-deploy-app"     # printed by stage-deploy
 databricks bundle validate --profile FEVM-REGGIE-PIERCE-AWS
 databricks bundle deploy --profile FEVM-REGGIE-PIERCE-AWS
@@ -119,9 +119,10 @@ databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
 The staged app includes both `package.json` and `requirements.txt`. Databricks
 Apps installs the Node server and matching `dbx-tools-graphiti` Python release;
 the bundle sets `PYTHON=./.venv/bin/python` so the Graphiti plugin uses that
-Python 3.11 environment and `UV_PYTHON=3.11` so the upstream Graphiti project
-uses the same interpreter minor, then installs Caddy through mise on first start.
-Staging replaces workspace dependencies with `^<workspace-version>` and writes
+Python 3.11 environment. The launcher then pins upstream Graphiti's `uv`
+project to the same interpreter minor. `UV_PYTHON=3.11` remains as an
+explicit override. Caddy installs through mise on first start.
+Staging replaces workspace dependencies with the exact `<workspace-version>` and writes
 `dbx-tools-graphiti==<workspace-version>`. Uncommitted package changes are not
 included unless that version has been published.
 

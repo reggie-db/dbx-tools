@@ -73,8 +73,8 @@ describe("searchServingEndpoints / resolveModelId", () => {
   });
 });
 
-describe("listServingEndpointsUncached tool capability", () => {
-  it("exposes the verified family policy on endpoint summaries", async () => {
+describe("listServingEndpointsUncached model policy", () => {
+  it("exposes Rust-derived family, reasoning, and tool metadata", async () => {
     const client = {
       servingEndpoints: {
         async *list() {
@@ -86,10 +86,25 @@ describe("listServingEndpointsUncached tool capability", () => {
 
     const endpoints = await listServingEndpointsUncached(client);
     assert.deepEqual(
-      endpoints.map(({ name, supportsTools }) => ({ name, supportsTools })),
+      endpoints.map(({ name, family, reasoningEfforts, supportsTools }) => ({
+        name,
+        family,
+        reasoningEfforts,
+        supportsTools,
+      })),
       [
-        { name: "databricks-gpt-5-3-codex", supportsTools: true },
-        { name: "databricks-gemini-3-5-flash", supportsTools: false },
+        {
+          name: "databricks-gpt-5-3-codex",
+          family: "gpt",
+          reasoningEfforts: ["low", "medium", "high"],
+          supportsTools: true,
+        },
+        {
+          name: "databricks-gemini-3-5-flash",
+          family: "gemini",
+          reasoningEfforts: ["minimal", "low", "medium", "high"],
+          supportsTools: false,
+        },
       ],
     );
   });
@@ -146,9 +161,39 @@ describe("model resolution", () => {
       });
     });
 
+    it("prefers the newest live GPT over an older scored GPT", () => {
+      assert.deepEqual(
+        resolveModel(
+          [
+            {
+              ...chat("databricks-gpt-5-4"),
+              profile: { quality: 57, speed: 76.9, cost: 5.63 },
+            },
+            chat("databricks-gpt-6-1-sol"),
+          ],
+          {},
+        ),
+        {
+          modelId: "databricks-gpt-6-1-sol",
+          source: "fallback",
+        },
+      );
+    });
+
     it("uses the static floor only when discovery returns no chat model", () => {
       assert.deepEqual(resolveModel([], {}), {
         modelId: FALLBACK_MODEL_IDS[0]!,
+        source: "fallback",
+      });
+    });
+
+    it("can require an actually available live endpoint", () => {
+      assert.throws(
+        () => resolveModel([], { liveOnly: true }),
+        /No matching live Model Serving endpoint is available/,
+      );
+      assert.deepEqual(resolveModel([chat(OPUS_8)], { liveOnly: true }), {
+        modelId: OPUS_8,
         source: "fallback",
       });
     });

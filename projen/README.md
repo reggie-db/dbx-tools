@@ -57,6 +57,9 @@ Repository policy stays in the consuming `.projenrc.ts`:
   artifact upload, and deployment without naming a docs script or output tree.
 - `releasePythonRoot` passes the actual Python package root to local release
   preparation. Omit it when the workspace has no standard Python packages.
+- `releaseSummary` controls optional AI release notes. It defaults to enabled
+  with Cursor, Codex, Claude fallback order; pass `false` to disable or provide
+  a `providers` array to choose the order/subset.
 - `pullRequestTitlePolicy` configures semantic title types and scope policy.
   Omit it or pass `false` to disable the title job.
 - `workflowCacheIgnorePaths` excludes generated output trees that may contain
@@ -441,7 +444,17 @@ it. `--message` sets the source commit message. The task never merges
 the PR unless `--approve` is passed; that option merges the release branch
 directly through GitHub's merge API so no PR checks are created. A repository
 that blocks direct merges falls back to an immediate admin-merged PR. The task
-then fast-forwards the still-active source branch to the release commit. npm
+then fast-forwards the still-active source branch to the release commit.
+
+After validation, release preparation optionally generates an immutable
+`docs/releases/v<version>.md`. It tries the installed Cursor agent first, then
+Codex, then Claude, all in non-interactive read-only modes against bounded Git
+context. An unavailable, unauthenticated, failed, or empty provider falls
+through to the next; if none works, release preparation continues without a
+summary. The same file is included in the release PR and prepended to GitHub's
+generated release notes, so repository and GitHub views share one source.
+
+npm
 uses `npm config get registry` and publishes to a local Verdaccio automatically.
 Publishable JavaScript members compile once
 from the root in parallel, then upload through a bounded pool without rerunning

@@ -5,7 +5,12 @@ import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflo
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { projectReleaseBranch, type DBXToolsJavaScriptProject } from "./project-js.ts";
 import { applyTasks, taskScript } from "./project.ts";
-import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
+import {
+  RELEASE_VERSION,
+  releaseSourceSteps,
+  type ReleaseSummaryProviderName,
+} from "./release-dispatch.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 
 const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
@@ -28,6 +33,16 @@ export interface ReleaseDocsOptions {
   readonly artifactPath: string;
 }
 
+/** Optional local AI summary generation during reviewed release preparation. */
+export interface ReleaseSummaryOptions {
+  /**
+   * Provider fallback order.
+   *
+   * @default ["cursor", "codex", "claude"]
+   */
+  readonly providers?: readonly ReleaseSummaryProviderName[];
+}
+
 /** Options for {@link DBXToolsRelease}. */
 export interface DBXToolsReleaseOptions {
   /** Git tag prefix. Defaults to `v`. */
@@ -38,6 +53,11 @@ export interface DBXToolsReleaseOptions {
   readonly docs?: ReleaseDocsOptions;
   /** Python package root passed to local release preparation. */
   readonly pythonRoot?: string;
+  /**
+   * Generate a versioned release summary locally. Defaults to enabled with the
+   * standard Cursor, Codex, Claude fallback order.
+   */
+  readonly summary?: boolean | ReleaseSummaryOptions;
 }
 
 /** Locate the unified workflow so attached language workspaces can add jobs. */
@@ -320,6 +340,13 @@ export class DBXToolsRelease extends Component {
     super(project);
     const tagPrefix = options.tagPrefix ?? "v";
     const releaseBranch = projectReleaseBranch(project);
+    const summary = options.summary ?? true;
+    const summaryArgs =
+      summary === false || (typeof summary === "object" && summary.providers?.length === 0)
+        ? ["--no-release-summary"]
+        : typeof summary === "object" && summary.providers
+          ? [`--release-summary-providers ${summary.providers.join(",")}`]
+          : [];
     releaseTagPrefixes.set(project, tagPrefix);
     if (options.nodeRelease !== false) nodeReleaseProjects.add(project);
     applyTasks(project, {
@@ -344,6 +371,7 @@ export class DBXToolsRelease extends Component {
                   ...(options.pythonRoot
                     ? [`--python-root ${JSON.stringify(options.pythonRoot)}`]
                     : []),
+                  ...summaryArgs,
                 ].join(" "),
               ),
               receiveArgs: true,
@@ -359,8 +387,10 @@ export class DBXToolsRelease extends Component {
       limitConcurrency: true,
       concurrencyOptions: { group: "release", cancelInProgress: false },
     });
+    const version = readWorkspaceVersion(project.outdir);
     workflow.runName =
-      "release ${{ github.event_name == 'push' && github.sha || inputs.release_tag }}";
+      `release ${version} ` +
+      "${{ github.event_name == 'push' && github.sha || inputs.release_tag }}";
     workflow.on({
       push: { branches: [releaseBranch], paths: ["VERSION"] },
       workflowDispatch: {

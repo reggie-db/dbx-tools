@@ -67,9 +67,10 @@ const ranked: RankedModel = model.RankedModelSchema.parse(response);
 ```
 
 `model.ServingEndpointSummarySchema` describes the stable endpoint fields exposed
-to clients: endpoint name, task, state, optional profile scores, classified
-class, `supportsTools`, provider service names, reasoning efforts, lifecycle
-status, and embedding dimension. `requiresTools: true` filters
+to clients: endpoint name, parsed family, task, state, optional profile scores,
+classified class, `supportsTools`, provider service names, Rust-derived
+reasoning-effort wire values, lifecycle status, and embedding dimension.
+`requiresTools: true` filters
 search/ranking to endpoints that can complete both a function call and the
 subsequent `function_call_output` replay.
 
@@ -177,8 +178,8 @@ one-by-one (`openaiResponses.responsesToChat`) already can't leak them. Pass
 
 ## Modules
 
-- `model` - `ModelClass`, `ReasoningEffort`, zod schemas, and inferred types
-  for profiles, endpoint summaries, lookup requests, and ranked results.
+- `model` - `ModelClass`, reasoning-effort wire schema, and inferred types for
+  profiles, endpoint summaries, lookup requests, and ranked results.
 - `classify` - family parsing, version tuple parsing, endpoint classification,
   and capability flags.
 - `display` - human-readable endpoint labels.

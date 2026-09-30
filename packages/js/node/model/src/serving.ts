@@ -34,6 +34,7 @@ import {
 import Fuse from "fuse.js";
 
 import { MODEL_CLASS_ORDER } from "./classes.ts";
+import { modelFamily, modelReasoningEfforts } from "./policy.ts";
 
 const { ModelClass } = model;
 
@@ -125,16 +126,20 @@ export async function listServingEndpointsUncached(
   for await (const ep of client.servingEndpoints.list()) {
     if (!ep.name) continue;
     const profile = extractProfile(ep);
+    const family = modelFamily(ep.name);
+    const reasoningEfforts = modelReasoningEfforts(ep.name);
     out.push({
       name: ep.name,
       // Prefer a Databricks-provided human name (a display-name tag or an
       // external-model name); else derive a title-cased label from the id.
       displayName: display.toModelDisplayName(ep.name, providedDisplayName(ep)),
+      ...(family !== undefined ? { family } : {}),
       ...(ep.task !== undefined ? { task: ep.task } : {}),
       ...(ep.state?.ready !== undefined ? { state: String(ep.state.ready) } : {}),
       ...(ep.description !== undefined ? { description: ep.description } : {}),
       supportsTools: classify.supportsToolsByFamily(ep.name),
       ...(profile ? { profile } : {}),
+      ...(reasoningEfforts.length > 0 ? { reasoningEfforts } : {}),
     });
   }
   return out;

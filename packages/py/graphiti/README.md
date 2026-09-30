@@ -172,7 +172,12 @@ The package deliberately keeps orchestration separate from Graphiti itself:
    backends.
 5. Graphiti `0.29.3` uses mise's HTTP backend against the pinned release source
    archive because the GitHub release has no platform binary asset.
-6. `uv sync --project <checkout>/mcp_server` creates the upstream environment.
+6. `uv sync --python <launcher-minor> --project <checkout>/mcp_server`
+   creates the upstream environment on the same Python minor as the
+   launcher (or `UV_PYTHON` when set). The Graphiti child imports this
+   package from the launcher `PYTHONPATH`, including the workspace roots
+   for `dbx_tools.postgres`, so a looser upstream `requires-python` must
+   not select a different interpreter.
 7. A generated Neo4j password is stored with mode `0600`.
 8. The Rust model proxy starts against the selected Databricks profile,
    and Graphiti receives its OpenAI-compatible URL and model settings through

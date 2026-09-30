@@ -1,5 +1,4 @@
 import { error as sharedError, log } from "@dbx-tools/shared-core";
-import type { ListMemoryThreadMessagesResponse } from "@mastra/client-js";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -8,6 +7,7 @@ import type {
   ThreadSessionUpdater,
 } from "./chat-sessions.ts";
 import type { PendingApproval } from "./types.ts";
+import { toChronologicalUiMessages } from "./_history-messages.ts";
 import type { MastraPluginClient } from "../support/mastra-client.ts";
 
 const HISTORY_PAGE_SIZE = 20;
@@ -25,11 +25,6 @@ interface UseChatHistoryOptions {
 }
 
 type SuspendedRuns = Awaited<ReturnType<MastraPluginClient["suspendedRuns"]>>["runs"];
-
-/** Read a newest-first native memory page as chronological UI messages. */
-function toChronologicalUiMessages(response: ListMemoryThreadMessagesResponse): UIMessage[] {
-  return [...(response.uiMessages ?? [])].reverse() as UIMessage[];
-}
 
 /** Recover actionable approval cards from Mastra's persisted suspended runs. */
 function pendingApprovals(

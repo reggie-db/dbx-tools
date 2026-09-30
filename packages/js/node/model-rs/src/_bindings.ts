@@ -9,7 +9,7 @@
 import nativeModule from "./_bindings-ffi.ts";
 import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct,
 } from "./_bindings-ffi.ts";
-import { type UniffiByteArray, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterOptional, FfiConverterUInt8, RustBuffer, UniffiEnum, UniffiInternalError, UniffiRustCaller, uniffiCreateFfiConverterString,
+import { type UniffiByteArray, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterFloat64, FfiConverterMap, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt8, RustBuffer, UniffiEnum, UniffiInternalError, UniffiRustCaller, uniffiCreateFfiConverterString, uniffiCreateRecord,
 } from "@ubjs/core";
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
@@ -56,6 +56,25 @@ export function isResponsesOnly(value: string): boolean {
     }
 
 /**
+ * Return the normalized family name parsed from a model identity.
+ */
+export function modelFamily(value: string): string | undefined {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_model_fn_func_model_family(
+        FfiConverterString.lower(value, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterOptionalString.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Return the Databricks inference protocol required by a model.
  */
 export function modelServingApi(value: string): ModelServingApi {
@@ -69,6 +88,45 @@ export function modelServingApi(value: string): ModelServingApi {
     );
     try {
         return FfiConverterTypeModelServingApi.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Rank model endpoints through the generated UniFFI surface.
+ */
+export function rankModels(endpoints: Array<ServingEndpointSummary>, query: ModelQuery): Array<RankedModel> {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_model_fn_func_rank_models(
+        FfiConverterSequenceTypeServingEndpointSummary.lower(endpoints, nativeModule().rustbuffer_alloc),
+        FfiConverterTypeModelQuery.lower(query, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceTypeRankedModel.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Infer provider wire values accepted by a model or service name.
+ */
+export function reasoningEffortNamesByFamily(name: string): Array<string> {
+    const __rb: Uint8Array = uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_model_fn_func_reasoning_effort_names_by_family(
+        FfiConverterString.lower(name, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceString.lift(__rb);
     } finally {
         nativeModule().rustbuffer_free(__rb);
     }
@@ -108,39 +166,256 @@ export function supportsToolsByFamily(name: string): boolean {
     }
 
 /**
- * Databricks inference protocol selected for a model.
+ * Databricks AI Gateway profile scores for an endpoint.
  */
-export enum ModelServingApi {
+export type ModelProfile = {
     /**
-     * OpenAI-compatible Chat Completions.
+     * Relative model quality score.
      */
-    Chat,
+    quality?: number,
     /**
-     * Native OpenAI Responses.
+     * Relative model speed score.
      */
-    Responses
+    speed?: number,
+    /**
+     * Relative model cost score.
+     */
+    cost?: number
 }
 
-const FfiConverterTypeModelServingApi = (() => {
-    type TypeName = ModelServingApi;
+/**
+ * Generated factory for {@link ModelProfile} record objects.
+ */
+export const ModelProfile = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ModelProfile, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ModelProfile>,
+    });
+})();
+
+const FfiConverterTypeModelProfile = (() => {
+    type TypeName = ModelProfile;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                quality: FfiConverterOptionalFloat64.readFromCursor(c),
+                speed: FfiConverterOptionalFloat64.readFromCursor(c),
+                cost: FfiConverterOptionalFloat64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterOptionalFloat64.writeIntoCursor(value.quality, c);
+            FfiConverterOptionalFloat64.writeIntoCursor(value.speed, c);
+            FfiConverterOptionalFloat64.writeIntoCursor(value.cost, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterOptionalFloat64.allocationSize(value.quality) +
+             FfiConverterOptionalFloat64.allocationSize(value.speed) +
+             FfiConverterOptionalFloat64.allocationSize(value.cost);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+const stringConverter = (() => {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    return {
+        stringToBytes: (s: string) => encoder.encode(s),
+        bytesToString: (ab: UniffiByteArray) => decoder.decode(ab),
+        stringByteLength: (s: string) => encoder.encode(s).byteLength,
+        writeStringIntoBuffer: (s: string, buf: any, offset: number): number => {
+            const view = new Uint8Array(
+                buf.arrayBuffer,
+                offset,
+                buf.arrayBuffer.byteLength - offset,
+            );
+            return encoder.encodeInto(s, view).written;
+        },
+        readStringFromBuffer: (buf: any, offset: number, length: number): string =>
+            decoder.decode(new Uint8Array(buf.arrayBuffer, offset, length)),
+    };
+})();
+const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
+
+/**
+ * Intent-oriented class used to select a Model Serving endpoint.
+ */
+export enum ModelClass {
+    /**
+     * Higher-quality chat models suited to deliberate reasoning.
+     */
+    ChatThinking,
+    /**
+     * General-purpose chat models balancing quality and latency.
+     */
+    ChatBalanced,
+    /**
+     * Low-latency chat models.
+     */
+    ChatFast,
+    /**
+     * Text embedding models.
+     */
+    Embedding
+}
+
+const FfiConverterTypeModelClass = (() => {
+    type TypeName = ModelClass;
     class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
         readFromCursor(c: Cursor): TypeName {
             switch (c.readI32()) {
-                case 1: return ModelServingApi.Chat;
-                case 2: return ModelServingApi.Responses;
+                case 1: return ModelClass.ChatThinking;
+                case 2: return ModelClass.ChatBalanced;
+                case 3: return ModelClass.ChatFast;
+                case 4: return ModelClass.Embedding;
                 default: throw new UniffiInternalError.UnexpectedEnumCase();
             }
         }
         writeIntoCursor(value: TypeName, c: Cursor): void {
             switch (value) {
-                case ModelServingApi.Chat: return c.writeI32(1);
-                case ModelServingApi.Responses: return c.writeI32(2);
+                case ModelClass.ChatThinking: return c.writeI32(1);
+                case ModelClass.ChatBalanced: return c.writeI32(2);
+                case ModelClass.ChatFast: return c.writeI32(3);
+                case ModelClass.Embedding: return c.writeI32(4);
             }
         }
         allocationSize(value: TypeName): number {
             return 4;
         }
     }
+    return new FFIConverter();
+})();
+
+/**
+ * Filters and ranking controls for a model catalogue query.
+ */
+export type ModelQuery = {
+    /**
+     * Optional fuzzy model-name search.
+     */
+    search?: string,
+    /**
+     * Requested model-class ceiling, or the exact embedding class.
+     */
+    modelClass?: ModelClass,
+    /**
+     * Whether candidates must support tool calling.
+     */
+    requiresTools: boolean,
+    /**
+     * Whether retired models remain eligible.
+     */
+    includeDeprecated: boolean,
+    /**
+     * Maximum number of results.
+     */
+    limit?: number,
+    /**
+     * Maximum fuzzy-match distance.
+     */
+    threshold?: number
+}
+
+/**
+ * Generated factory for {@link ModelQuery} record objects.
+ */
+export const ModelQuery = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ModelQuery, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ModelQuery>,
+    });
+})();
+
+const FfiConverterTypeModelQuery = (() => {
+    type TypeName = ModelQuery;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                search: FfiConverterOptionalString.readFromCursor(c),
+                modelClass: FfiConverterOptionalTypeModelClass.readFromCursor(c),
+                requiresTools: FfiConverterBool.readFromCursor(c),
+                includeDeprecated: FfiConverterBool.readFromCursor(c),
+                limit: FfiConverterOptionalUInt32.readFromCursor(c),
+                threshold: FfiConverterOptionalFloat64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterOptionalString.writeIntoCursor(value.search, c);
+            FfiConverterOptionalTypeModelClass.writeIntoCursor(value.modelClass, c);
+            FfiConverterBool.writeIntoCursor(value.requiresTools, c);
+            FfiConverterBool.writeIntoCursor(value.includeDeprecated, c);
+            FfiConverterOptionalUInt32.writeIntoCursor(value.limit, c);
+            FfiConverterOptionalFloat64.writeIntoCursor(value.threshold, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterOptionalString.allocationSize(value.search) +
+             FfiConverterOptionalTypeModelClass.allocationSize(value.modelClass) +
+             FfiConverterBool.allocationSize(value.requiresTools) +
+             FfiConverterBool.allocationSize(value.includeDeprecated) +
+             FfiConverterOptionalUInt32.allocationSize(value.limit) +
+             FfiConverterOptionalFloat64.allocationSize(value.threshold);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Lifecycle status associated with a model.
+ */
+export type ModelStatus = {
+    /**
+     * Whether Databricks lists the model as retired or deprecated.
+     */
+    deprecated: boolean
+}
+
+/**
+ * Generated factory for {@link ModelStatus} record objects.
+ */
+export const ModelStatus = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ModelStatus, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ModelStatus>,
+    });
+})();
+
+const FfiConverterTypeModelStatus = (() => {
+    type TypeName = ModelStatus;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                deprecated: FfiConverterBool.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterBool.writeIntoCursor(value.deprecated, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterBool.allocationSize(value.deprecated);
+
+        }
+    };
     return new FFIConverter();
 })();
 
@@ -211,32 +486,318 @@ const FfiConverterTypeReasoningEffort = (() => {
     return new FFIConverter();
 })();
 
-const stringConverter = (() => {
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    return {
-        stringToBytes: (s: string) => encoder.encode(s),
-        bytesToString: (ab: UniffiByteArray) => decoder.decode(ab),
-        stringByteLength: (s: string) => encoder.encode(s).byteLength,
-        writeStringIntoBuffer: (s: string, buf: any, offset: number): number => {
-            const view = new Uint8Array(
-                buf.arrayBuffer,
-                offset,
-                buf.arrayBuffer.byteLength - offset,
-            );
-            return encoder.encodeInto(s, view).written;
-        },
-        readStringFromBuffer: (buf: any, offset: number, length: number): string =>
-            decoder.decode(new Uint8Array(buf.arrayBuffer, offset, length)),
-    };
+/**
+ * Normalized metadata for a Databricks Model Serving endpoint.
+ */
+export type ServingEndpointSummary = {
+    /**
+     * Model Serving endpoint name used for invocation.
+     */
+    name: string,
+    /**
+     * Human-readable endpoint or model name.
+     */
+    displayName?: string,
+    /**
+     * Endpoint task, such as chat or embeddings.
+     */
+    task?: string,
+    /**
+     * Endpoint readiness state.
+     */
+    state?: string,
+    /**
+     * Endpoint description supplied by Databricks.
+     */
+    description?: string,
+    /**
+     * Whether the endpoint supports tool calling.
+     */
+    supportsTools?: boolean,
+    /**
+     * AI Gateway model profile scores.
+     */
+    profile?: ModelProfile,
+    /**
+     * Intent-oriented endpoint class.
+     */
+    modelClass?: ModelClass,
+    /**
+     * Provider names mapped to provider-specific model names.
+     */
+    serviceNames: Map<string, string>,
+    /**
+     * Foundation model name reported by the served entity.
+     */
+    modelServiceName?: string,
+    /**
+     * Reasoning effort values accepted by the endpoint.
+     */
+    reasoningEfforts: Array<ReasoningEffort>,
+    /**
+     * Retirement status for the served model.
+     */
+    status: ModelStatus
+}
+
+/**
+ * Generated factory for {@link ServingEndpointSummary} record objects.
+ */
+export const ServingEndpointSummary = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ServingEndpointSummary, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ServingEndpointSummary>,
+    });
 })();
-const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
+
+const FfiConverterTypeServingEndpointSummary = (() => {
+    type TypeName = ServingEndpointSummary;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                name: FfiConverterString.readFromCursor(c),
+                displayName: FfiConverterOptionalString.readFromCursor(c),
+                task: FfiConverterOptionalString.readFromCursor(c),
+                state: FfiConverterOptionalString.readFromCursor(c),
+                description: FfiConverterOptionalString.readFromCursor(c),
+                supportsTools: FfiConverterOptionalBoolean.readFromCursor(c),
+                profile: FfiConverterOptionalTypeModelProfile.readFromCursor(c),
+                modelClass: FfiConverterOptionalTypeModelClass.readFromCursor(c),
+                serviceNames: FfiConverterMapStringString.readFromCursor(c),
+                modelServiceName: FfiConverterOptionalString.readFromCursor(c),
+                reasoningEfforts: FfiConverterSequenceTypeReasoningEffort.readFromCursor(c),
+                status: FfiConverterTypeModelStatus.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.name, c);
+            FfiConverterOptionalString.writeIntoCursor(value.displayName, c);
+            FfiConverterOptionalString.writeIntoCursor(value.task, c);
+            FfiConverterOptionalString.writeIntoCursor(value.state, c);
+            FfiConverterOptionalString.writeIntoCursor(value.description, c);
+            FfiConverterOptionalBoolean.writeIntoCursor(value.supportsTools, c);
+            FfiConverterOptionalTypeModelProfile.writeIntoCursor(value.profile, c);
+            FfiConverterOptionalTypeModelClass.writeIntoCursor(value.modelClass, c);
+            FfiConverterMapStringString.writeIntoCursor(value.serviceNames, c);
+            FfiConverterOptionalString.writeIntoCursor(value.modelServiceName, c);
+            FfiConverterSequenceTypeReasoningEffort.writeIntoCursor(value.reasoningEfforts, c);
+            FfiConverterTypeModelStatus.writeIntoCursor(value.status, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.name) +
+             FfiConverterOptionalString.allocationSize(value.displayName) +
+             FfiConverterOptionalString.allocationSize(value.task) +
+             FfiConverterOptionalString.allocationSize(value.state) +
+             FfiConverterOptionalString.allocationSize(value.description) +
+             FfiConverterOptionalBoolean.allocationSize(value.supportsTools) +
+             FfiConverterOptionalTypeModelProfile.allocationSize(value.profile) +
+             FfiConverterOptionalTypeModelClass.allocationSize(value.modelClass) +
+             FfiConverterMapStringString.allocationSize(value.serviceNames) +
+             FfiConverterOptionalString.allocationSize(value.modelServiceName) +
+             FfiConverterSequenceTypeReasoningEffort.allocationSize(value.reasoningEfforts) +
+             FfiConverterTypeModelStatus.allocationSize(value.status);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Model Serving endpoint plus its classification and search score.
+ */
+export type RankedModel = {
+    /**
+     * Matching endpoint metadata.
+     */
+    endpoint: ServingEndpointSummary,
+    /**
+     * Intent-oriented endpoint class.
+     */
+    modelClass: ModelClass,
+    /**
+     * Fuzzy-match distance, where lower values are closer.
+     */
+    score?: number
+}
+
+/**
+ * Generated factory for {@link RankedModel} record objects.
+ */
+export const RankedModel = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<RankedModel, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<RankedModel>,
+    });
+})();
+
+const FfiConverterTypeRankedModel = (() => {
+    type TypeName = RankedModel;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                endpoint: FfiConverterTypeServingEndpointSummary.readFromCursor(c),
+                modelClass: FfiConverterTypeModelClass.readFromCursor(c),
+                score: FfiConverterOptionalFloat64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterTypeServingEndpointSummary.writeIntoCursor(value.endpoint, c);
+            FfiConverterTypeModelClass.writeIntoCursor(value.modelClass, c);
+            FfiConverterOptionalFloat64.writeIntoCursor(value.score, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterTypeServingEndpointSummary.allocationSize(value.endpoint) +
+             FfiConverterTypeModelClass.allocationSize(value.modelClass) +
+             FfiConverterOptionalFloat64.allocationSize(value.score);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Result of resolving a requested model name.
+ */
+export type ResolvedModel = {
+    /**
+     * Resolved endpoint name or the original request when unmatched.
+     */
+    modelId: string,
+    /**
+     * Whether the request matched a known endpoint.
+     */
+    matched: boolean,
+    /**
+     * Fuzzy-match distance when available.
+     */
+    score?: number
+}
+
+/**
+ * Generated factory for {@link ResolvedModel} record objects.
+ */
+export const ResolvedModel = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<ResolvedModel, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<ResolvedModel>,
+    });
+})();
+
+const FfiConverterTypeResolvedModel = (() => {
+    type TypeName = ResolvedModel;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                modelId: FfiConverterString.readFromCursor(c),
+                matched: FfiConverterBool.readFromCursor(c),
+                score: FfiConverterOptionalFloat64.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.modelId, c);
+            FfiConverterBool.writeIntoCursor(value.matched, c);
+            FfiConverterOptionalFloat64.writeIntoCursor(value.score, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.modelId) +
+             FfiConverterBool.allocationSize(value.matched) +
+             FfiConverterOptionalFloat64.allocationSize(value.score);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Databricks inference protocol selected for a model.
+ */
+export enum ModelServingApi {
+    /**
+     * OpenAI-compatible Chat Completions.
+     */
+    Chat,
+    /**
+     * Native OpenAI Responses.
+     */
+    Responses
+}
+
+const FfiConverterTypeModelServingApi = (() => {
+    type TypeName = ModelServingApi;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            switch (c.readI32()) {
+                case 1: return ModelServingApi.Chat;
+                case 2: return ModelServingApi.Responses;
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            switch (value) {
+                case ModelServingApi.Chat: return c.writeI32(1);
+                case ModelServingApi.Responses: return c.writeI32(2);
+            }
+        }
+        allocationSize(value: TypeName): number {
+            return 4;
+        }
+    }
+    return new FFIConverter();
+})();
+
+// FfiConverter for number | undefined
+const FfiConverterOptionalFloat64 = new FfiConverterOptional(FfiConverterFloat64);
+
+// FfiConverter for string | undefined
+const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
+
+// FfiConverter for ModelClass | undefined
+const FfiConverterOptionalTypeModelClass = new FfiConverterOptional(FfiConverterTypeModelClass);
+
+// FfiConverter for number | undefined
+const FfiConverterOptionalUInt32 = new FfiConverterOptional(FfiConverterUInt32);
+
+// FfiConverter for boolean | undefined
+const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
+
+// FfiConverter for ModelProfile | undefined
+const FfiConverterOptionalTypeModelProfile = new FfiConverterOptional(FfiConverterTypeModelProfile);
+
+// FfiConverter for Map<string, string>
+const FfiConverterMapStringString = new FfiConverterMap(FfiConverterString, FfiConverterString);
+
+// FfiConverter for Array<ReasoningEffort>
+const FfiConverterSequenceTypeReasoningEffort = new FfiConverterArray(FfiConverterTypeReasoningEffort);
 
 // FfiConverter for ReasoningEffort | undefined
 const FfiConverterOptionalTypeReasoningEffort = new FfiConverterOptional(FfiConverterTypeReasoningEffort);
 
-// FfiConverter for Array<ReasoningEffort>
-const FfiConverterSequenceTypeReasoningEffort = new FfiConverterArray(FfiConverterTypeReasoningEffort);
+// FfiConverter for Array<ServingEndpointSummary>
+const FfiConverterSequenceTypeServingEndpointSummary = new FfiConverterArray(FfiConverterTypeServingEndpointSummary);
+
+// FfiConverter for Array<RankedModel>
+const FfiConverterSequenceTypeRankedModel = new FfiConverterArray(FfiConverterTypeRankedModel);
+
+// FfiConverter for Array<string>
+const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
 
 
 /**
@@ -263,8 +824,17 @@ function uniffiEnsureInitialized() {
     if (nativeModule().uniffi_dbx_tools_model_checksum_func_is_responses_only() !== 5794) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_is_responses_only");
     }
+    if (nativeModule().uniffi_dbx_tools_model_checksum_func_model_family() !== 2675) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_model_family");
+    }
     if (nativeModule().uniffi_dbx_tools_model_checksum_func_model_serving_api() !== 54338) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_model_serving_api");
+    }
+    if (nativeModule().uniffi_dbx_tools_model_checksum_func_rank_models() !== 57675) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_rank_models");
+    }
+    if (nativeModule().uniffi_dbx_tools_model_checksum_func_reasoning_effort_names_by_family() !== 48201) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_reasoning_effort_names_by_family");
     }
     if (nativeModule().uniffi_dbx_tools_model_checksum_func_reasoning_efforts_by_family() !== 49390) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_reasoning_efforts_by_family");
@@ -278,7 +848,14 @@ function uniffiEnsureInitialized() {
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
   converters: {
+    FfiConverterTypeModelClass,
+    FfiConverterTypeModelProfile,
+    FfiConverterTypeModelQuery,
     FfiConverterTypeModelServingApi,
+    FfiConverterTypeModelStatus,
+    FfiConverterTypeRankedModel,
     FfiConverterTypeReasoningEffort,
+    FfiConverterTypeResolvedModel,
+    FfiConverterTypeServingEndpointSummary,
   }
 });

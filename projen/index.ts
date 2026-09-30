@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.6.224";
+export const PACKAGE_VERSION = "0.6.225";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -55,8 +55,9 @@ export { RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustProj
 export type { CargoDependencyOptions, CargoDependency, RustCliOptions, RustPackageOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping, RustReleaseBinaryAssetMapping, RustReleaseBinaryMapping } from "./src/project-rs.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
 export { DBXToolsRelease } from "./src/release.ts";
-export type { ReleaseStage, ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
-export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION } from "./src/release-dispatch.ts";
+export type { ReleaseStage, ReleaseDocsOptions, ReleaseSummaryOptions, DBXToolsReleaseOptions } from "./src/release.ts";
+export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, RELEASE_SUMMARY_DIRECTORY, RELEASE_SUMMARY_PROVIDER_NAMES, RELEASE_SUMMARY_FILE } from "./src/release-dispatch.ts";
+export type { ReleaseSummaryProviderName } from "./src/release-dispatch.ts";
 export type { GithubRepositoryIdentity } from "./src/release-github.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
