@@ -67,7 +67,13 @@ export async function prepareReleaseRequest(
   }
   const latest = capture(root, ["log", "-1", "--format=%B"]);
   if (/^Release-Request:\s*true$/m.test(latest)) {
-    logger.info("release request already exists at branch head; skipping", { branch });
+    const notesPath = latest.match(/^Release-Notes-Path:\s*(.+)$/m)?.[1]?.trim();
+    if (options.push !== false && notesPath) {
+      run(root, ["push", "--set-upstream", "origin", branch]);
+      const pullRequest = upsertReleasePullRequest(root, branch, options.baseBranch, notesPath);
+      dispatchReleaseMerge(root, branch, options.baseBranch, pullRequest);
+    }
+    logger.info("release request already exists at branch head", { branch });
     return false;
   }
   if (branch === options.baseBranch) {
@@ -96,7 +102,11 @@ export async function prepareReleaseRequest(
       `Release-Notes-Path: ${notesPath}`,
     ].join("\n"),
   ]);
-  if (options.push !== false) run(root, ["push", "--set-upstream", "origin", branch]);
+  if (options.push !== false) {
+    run(root, ["push", "--set-upstream", "origin", branch]);
+    const pullRequest = upsertReleasePullRequest(root, branch, options.baseBranch, notesPath);
+    dispatchReleaseMerge(root, branch, options.baseBranch, pullRequest);
+  }
   logger.success("release request pushed", { branch });
   return true;
 }
@@ -129,10 +139,85 @@ async function generateRequestNotes(root: string, range: string): Promise<string
   return subjects || "Release source changes are ready for review.";
 }
 
+/** Create or refresh the source pull request with the local GitHub identity. */
+function upsertReleasePullRequest(
+  root: string,
+  branch: string,
+  baseBranch: string,
+  notesPath: string,
+): string {
+  const title = capture(root, ["log", "-1", "--skip=1", "--format=%s"]);
+  const notes = readFileSync(resolve(root, notesPath), "utf8").trim();
+  const body = `## Release notes\n\n${notes}\n`;
+  const pullRequest = findReleasePullRequest(root, branch, baseBranch);
+  if (pullRequest) {
+    runCommand(root, "gh", ["pr", "edit", pullRequest, "--title", title, "--body", body]);
+    return pullRequest;
+  }
+  runCommand(root, "gh", [
+    "pr",
+    "create",
+    "--head",
+    branch,
+    "--base",
+    baseBranch,
+    "--title",
+    title,
+    "--body",
+    body,
+  ]);
+  const created = findReleasePullRequest(root, branch, baseBranch);
+  if (!created) throw new Error(`Could not resolve the pull request for ${branch}`);
+  return created;
+}
+
+/** Find the open source pull request for a release branch. */
+function findReleasePullRequest(root: string, branch: string, baseBranch: string): string {
+  return captureCommand(root, "gh", [
+    "pr",
+    "list",
+    "--head",
+    branch,
+    "--base",
+    baseBranch,
+    "--state",
+    "open",
+    "--json",
+    "number",
+    "--jq",
+    ".[0].number // empty",
+  ]);
+}
+
+/** Ask the repository workflow to merge the reviewed source and start release planning. */
+function dispatchReleaseMerge(
+  root: string,
+  branch: string,
+  baseBranch: string,
+  pullRequest: string,
+): void {
+  runCommand(root, "gh", [
+    "workflow",
+    "run",
+    "release-request.yml",
+    "--ref",
+    branch,
+    "-f",
+    `pull_request=${pullRequest}`,
+    "-f",
+    `base_branch=${baseBranch}`,
+  ]);
+}
+
 function capture(root: string, args: string[]): string {
+  return captureCommand(root, "git", args);
+}
+
+/** Run a command and return its trimmed standard output. */
+function captureCommand(root: string, command: string, args: string[]): string {
   return (
     exec
-      .spawnSync("git", args, {
+      .spawnSync(command, args, {
         cwd: root,
         stdout: "capture",
         stderr: "inherit",
@@ -144,7 +229,12 @@ function capture(root: string, args: string[]): string {
 }
 
 function run(root: string, args: string[]): void {
-  exec.spawnSync("git", args, {
+  runCommand(root, "git", args);
+}
+
+/** Run a command with inherited output and fail on a nonzero exit. */
+function runCommand(root: string, command: string, args: string[]): void {
+  exec.spawnSync(command, args, {
     cwd: root,
     stdout: "inherit",
     stderr: "inherit",

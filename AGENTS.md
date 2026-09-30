@@ -1998,10 +1998,13 @@ What is configured, and why:
 `bun run release` exits before notes or AI when the current branch has no change
 from `main`. Otherwise it commits dirty source, stores custom `--notes` /
 `--notes-file` content or a bounded Cursor, Codex, Claude, then Git fallback in
-`.release-notes/requests/<branch>.md`, adds a request commit, and pushes. The
-generated workflow creates or updates the source PR. Merging that PR is the one
-human approval signal. `bun run release:refresh` invokes Release Please directly
-for operator recovery.
+`.release-notes/requests/<branch>.md`, adds a request commit, pushes, and creates
+or updates the source PR through the caller's `gh` credentials. Creating the PR
+locally avoids GitHub's `action_required` trust gate for PRs opened by
+`github-actions[bot]`. The task dispatches a focused workflow that merges the
+source PR with `GITHUB_TOKEN` and starts release planning, so running the task is
+the release signal and no UI approval or merge is required.
+`bun run release:refresh` invokes Release Please directly for operator recovery.
 
 After the source PR merges, Release Please refreshes one combined component
 release PR from conventional commits and the generated release-unit graph. The

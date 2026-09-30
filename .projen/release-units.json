@@ -391,7 +391,7 @@
         "projen"
       ],
       "artifacts": [],
-      "sourceHash": "dd2233955608ddc941d0ca422e693f4a6f8c9b422b7d0bcc957d60a87ecc1ff1"
+      "sourceHash": "6da9488b3652b89d8cd5efdb8c073889374ba307ca8ffcc5f3e0a618bb5217e4"
     },
     {
       "id": "python-core",
@@ -1002,7 +1002,7 @@
       "path": "projen",
       "unit": "projen-cli",
       "publish": true,
-      "sourceHash": "3b3157d956e3294f57a035121d7258070672f753f540f3957dc4a6aabd8f71ac"
+      "sourceHash": "c921d89a10620dc3a0c092398129e87f6c18a5edc21d1543bdb0991efd31f723"
     }
   ],
   "artifacts": [

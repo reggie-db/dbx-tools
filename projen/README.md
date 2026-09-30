@@ -454,8 +454,11 @@ a new package is covered without a re-synth. Work from the root:
 before notes, AI, commits, pushes, or PR creation. It commits dirty source,
 writes custom `--notes` / `--notes-file` content or a bounded Cursor, Codex,
 Claude, then Git fallback to `.release-notes/requests/<branch>.md`, adds one
-request commit, and pushes. The generated request workflow creates or updates
-the source PR. Merging that PR is the one human approval signal.
+request commit, pushes, and creates or updates the source PR with the caller's
+`gh` credentials. This keeps the PR workflow under the caller's trusted GitHub
+identity instead of `github-actions[bot]`. The task then dispatches a focused
+workflow that merges the PR and starts release planning, so no UI approval or
+merge is required.
 
 After the source PR merges, Release Please retains direct conventional semantic
 increments and applies required dependent patches. Reconciliation copies the
