@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { log } from "@dbx-tools/shared-core";
+import { parse, stringify } from "smol-toml";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import type { RustBindingMapping, RustWorkspaceMapping } from "../src/project-rs.ts";
 
@@ -110,19 +111,21 @@ function publishCargo(config: RustWorkspaceMapping, registry: string, version: s
     );
     for (const manifest of manifests) {
       const mode = statSync(manifest).mode;
-      let source = readFileSync(manifest, "utf8");
+      const document = parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
       for (const crateName of crateNames) {
         if (!crateName) continue;
-        source = source.replace(
-          new RegExp(
-            `(${crateName.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")} = \\{[^}]*)( \\})`,
-            "g",
-          ),
-          `$1, registry = "${registry}"$2`,
-        );
+        for (const sectionName of ["dependencies", "dev-dependencies", "build-dependencies"]) {
+          const section = document[sectionName];
+          if (!section || typeof section !== "object" || Array.isArray(section)) continue;
+          const dependency = (section as Record<string, unknown>)[crateName];
+          if (!dependency || typeof dependency !== "object" || Array.isArray(dependency)) {
+            continue;
+          }
+          (dependency as Record<string, unknown>).registry = registry;
+        }
       }
       chmodSync(manifest, mode | 0o200);
-      writeFileSync(manifest, source);
+      writeFileSync(manifest, `${stringify(document).trimEnd()}\n`);
       chmodSync(manifest, mode);
     }
     for (const crateName of crateNames) {
