@@ -434,7 +434,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   AppKit-to-Mastra toolkit adapter imports AppKit's public beta contracts,
   supports plain `getAgentTools()` providers, and passes the turn's resource id
   as the optional fourth `executeAgentTool` argument so service-principal
-  execution does not collapse users onto one graph.
+  execution does not collapse users onto one graph. Routine `write` and `update`
+  effects describe mutation but do not automatically require Mastra approval;
+  only `effect: "destructive"` or the legacy `destructive: true` annotation
+  enables the generic approval gate. A tool with stricter policy owns its
+  explicit Mastra `requireApproval` setting.
 - `packages/js/node/rust-binary` owns the generated Rust release-command
   registry, GitHub release URL selection, exact-version installation through
   `@dbx-tools/core`, and signal-preserving process execution. Runtime packages

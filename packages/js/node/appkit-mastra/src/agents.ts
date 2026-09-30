@@ -980,8 +980,7 @@ function toolkitEntriesToMastraTools(
 function toolkitEntryToMastraTool(entry: ToolkitEntry, plugin: ContextualToolProvider): Tool {
   const annotations = entry.annotations ?? entry.def.annotations;
   const effect = annotations?.effect;
-  const requiresApproval =
-    (effect !== undefined && effect !== "read") || annotations?.destructive === true;
+  const requiresApproval = effect === "destructive" || annotations?.destructive === true;
   return createTool({
     id: `${entry.pluginName}__${entry.localName}`,
     description: entry.def.description,
