@@ -464,7 +464,7 @@ function configureReleaseRequestWorkflow(
     if: `\${{ github.ref_name != '${baseBranch}' }}`,
     runsOn: ["ubuntu-latest"],
     permissions: {
-      contents: JobPermission.READ,
+      contents: JobPermission.WRITE,
       pullRequests: JobPermission.WRITE,
     },
     steps: [
@@ -489,7 +489,7 @@ function configureReleaseRequestWorkflow(
           "  exit 0",
           "fi",
           'echo "requested=true" >> "$GITHUB_OUTPUT"',
-          'echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"',
+          'echo "branch=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"',
           'echo "approve=$(sed -n \'s/^Release-Approve: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
           'echo "notes_path=$(sed -n \'s/^Release-Notes-Path: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
           'echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"',
@@ -515,7 +515,8 @@ function configureReleaseRequestWorkflow(
           'if [ -n "$PR" ]; then',
           '  gh pr edit "$PR" --title "$TITLE" --body "$BODY"',
           "else",
-          '  PR="$(gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY" --json number --jq .number)"',
+          '  gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"',
+          '  PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number\')"',
           "fi",
           'if [ "$APPROVE" = "true" ]; then gh pr merge "$PR" --auto --merge; fi',
         ].join("\n"),

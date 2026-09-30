@@ -488,6 +488,7 @@ describe("optional Node release stage", () => {
         name: "independent-release-fixture",
         outdir: independentOutdir,
         github: true,
+        buildWorkflow: true,
         defaultTagMixins: false,
         versioningMode: "independent",
         releaseSyncBranch: "dev",
@@ -535,6 +536,12 @@ describe("optional Node release stage", () => {
       ) as { tasks: Record<string, { steps?: Array<{ exec?: string }> }> };
       assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-request\.ts/);
       assert.match(tasks.tasks["release:refresh"]?.steps?.[0]?.exec ?? "", /release-please\.ts/);
+      const build = readWorkflow(independentOutdir, "build");
+      const pullRequest = workflowTrigger(build, "pull_request") as {
+        paths?: string[];
+      };
+      assert.ok(pullRequest.paths?.includes("!.release-units/**"));
+      assert.ok(pullRequest.paths?.includes("!**/package.json"));
     } finally {
       rmSync(independentOutdir, { recursive: true, force: true });
     }

@@ -15,7 +15,7 @@ import { type IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { BuildWorkflow } from "projen/lib/build";
 import { AutoMerge } from "projen/lib/github";
-import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
+import { JobPermission, type JobStep, type Triggers } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
 import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
@@ -943,7 +943,35 @@ function configureBuildWorkflow(
   });
   validation.exec("bunx projen default");
   validation.exec("bun run compile");
-  const configured = options.buildWorkflowOptions ?? {};
+  const configured = {
+    ...options.buildWorkflowOptions,
+    ...(!options.buildWorkflowOptions?.workflowTriggers &&
+    project.releaseCatalog.mode === "independent"
+      ? {
+          workflowTriggers: {
+            pullRequest: {
+              types: ["opened", "synchronize", "reopened", "closed"],
+              paths: [
+                "**",
+                "!.projen/release-units.json",
+                "!.release-please-manifest.json",
+                "!.release-units/**",
+                "!.release-notes/**",
+                "!docs/releases/**",
+                "!Cargo.lock",
+                "!**/Cargo.toml",
+                "!**/package.json",
+                "!**/pyproject.toml",
+                "!**/index.ts",
+                "!packages/js/node/rust-binary/src/_rust-release-binaries.ts",
+                "!packages/js/node/appkit-graphiti/src/_python-runtime.ts",
+              ],
+            },
+            workflowDispatch: {},
+          } satisfies Triggers,
+        }
+      : {}),
+  };
   const compatibility = nodeWorkflowCompatibility(project);
   const configuredRunner = configured.runsOn !== undefined || configured.runsOnGroup !== undefined;
   const workflow = new BuildWorkflow(project, {
