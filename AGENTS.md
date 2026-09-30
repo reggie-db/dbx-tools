@@ -2005,6 +2005,11 @@ Public npm, PyPI, Cargo, and GitHub publication consume the same affected plan
 and remain idempotent per component, so recovery does not replay unrelated
 units.
 
+This repository sets `releaseSyncBranch: "dev"`. After successful publication,
+the workflow fast-forwards `dev` only when that branch still exists and is an
+ancestor of released `main`. A missing, deleted, ahead, or diverged branch is
+left untouched without opening a PR or forcing history.
+
 A Databricks notebook or job is a different network with its own package index.
 Documentation and notebooks install the published distributions by name
 (`dbx-tools-core`, `dbx-tools-core-rs`, `dbx-tools-google-rs`,

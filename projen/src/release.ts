@@ -57,6 +57,12 @@ export interface DBXToolsReleaseOptions {
   /** Repository task names run in the release worktree before expensive validation and publication. */
   readonly validationTasks?: readonly string[];
   /**
+   * Existing source branch safely fast-forwarded after publication.
+   *
+   * Missing or diverged branches are left untouched.
+   */
+  readonly syncBranch?: string | false;
+  /**
    * Generate a versioned release summary locally. Defaults to enabled with the
    * standard Cursor, Codex, Claude fallback order.
    */
@@ -617,6 +623,39 @@ function addIndependentDocsJobs(
   });
 }
 
+function addIndependentBranchSyncJob(workflow: GithubWorkflow, branch: string): void {
+  workflow.addJob("sync-release-branch", {
+    if: "${{ github.event_name == 'push' && needs.publication-complete.result == 'success' }}",
+    needs: ["publication-complete"],
+    runsOn: ["ubuntu-latest"],
+    permissions: { contents: JobPermission.WRITE },
+    steps: [
+      {
+        name: "Checkout released main",
+        uses: "actions/checkout@v6",
+        with: { "fetch-depth": 0 },
+      },
+      {
+        name: `Safely fast-forward ${branch}`,
+        shell: "bash",
+        env: { SOURCE_BRANCH: branch },
+        run: [
+          'if ! git ls-remote --exit-code --heads origin "refs/heads/$SOURCE_BRANCH" >/dev/null 2>&1; then',
+          '  echo "source branch $SOURCE_BRANCH no longer exists; nothing to sync"',
+          "  exit 0",
+          "fi",
+          'git fetch origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"',
+          'if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" HEAD; then',
+          '  git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
+          "else",
+          '  echo "::warning::source branch $SOURCE_BRANCH diverged from released main; leaving it untouched"',
+          "fi",
+        ].join("\n"),
+      },
+    ],
+  });
+}
+
 class IndependentReleaseFinalizer extends Component {
   private finalized = false;
 
@@ -624,6 +663,7 @@ class IndependentReleaseFinalizer extends Component {
     project: DBXToolsJavaScriptProject,
     private readonly workflow: GithubWorkflow,
     private readonly docs: ReleaseDocsOptions | undefined,
+    private readonly syncBranch: string | undefined,
   ) {
     super(project);
   }
@@ -644,6 +684,9 @@ class IndependentReleaseFinalizer extends Component {
     });
     if (this.docs) {
       addIndependentDocsJobs(this.workflow, this.project as DBXToolsJavaScriptProject, this.docs);
+    }
+    if (this.syncBranch) {
+      addIndependentBranchSyncJob(this.workflow, this.syncBranch);
     }
   }
 }
@@ -713,7 +756,7 @@ function configureIndependentRelease(
     workflow.addJob("publish-node", independentNodePublishJob(project));
     registerIndependentPublicationJob(workflow, "publish-node");
   }
-  new IndependentReleaseFinalizer(project, workflow, options.docs);
+  new IndependentReleaseFinalizer(project, workflow, options.docs, options.syncBranch || undefined);
   releaseWorkflows.set(project, workflow);
 }
 

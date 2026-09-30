@@ -194,6 +194,11 @@ archive content and repository identity, PyPI uses hash-aware existing-file
 behavior, Cargo checks existing versions, and GitHub assets upload to the
 component release.
 
+Set `releaseSyncBranch` when a repository retains a long-lived source branch.
+After publication the workflow fast-forwards that branch only when it exists
+and is an ancestor of released `main`; missing or diverged branches are left
+untouched.
+
 The Rust matrix has one row per target. Each row installs native dependencies,
 builds the Cargo workspace once, then packages every discovered output from
 that shared build. Set a source-only crate's or

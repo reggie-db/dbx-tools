@@ -634,6 +634,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releaseValidationTasks?: readonly string[];
     /** Optional AI-generated release summary. Defaults to enabled. */
     readonly releaseSummary?: boolean | ReleaseSummaryOptions;
+    /** Existing source branch safely fast-forwarded after an independent release. */
+    readonly releaseSyncBranch?: string | false;
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
@@ -1601,6 +1603,7 @@ function initProject(
       pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
       summary: options.releaseSummary,
+      syncBranch: options.releaseSyncBranch,
     });
   }
 }

@@ -490,6 +490,7 @@ describe("optional Node release stage", () => {
         github: true,
         defaultTagMixins: false,
         versioningMode: "independent",
+        releaseSyncBranch: "dev",
       });
       project.synth();
       const workflow = readWorkflow(independentOutdir);
@@ -497,6 +498,10 @@ describe("optional Node release stage", () => {
       assert.ok(workflow.jobs["release-plan"]);
       assert.ok(workflow.jobs["publish-node"]);
       assert.ok(workflow.jobs["publication-complete"]);
+      const sync = workflow.jobs["sync-release-branch"];
+      assert.equal(sync?.needs, "publication-complete");
+      assert.match(step(sync!, "Safely fast-forward dev").run ?? "", /merge-base --is-ancestor/);
+      assert.match(step(sync!, "Safely fast-forward dev").run ?? "", /no longer exists/);
       assert.equal("verify-context" in workflow.jobs, false);
       assert.equal("rust-build" in workflow.jobs, false);
       assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");

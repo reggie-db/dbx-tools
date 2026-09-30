@@ -211,6 +211,7 @@ const root = new projenProject.DBXToolsNodeProject({
   },
   releasePythonRoot: PYTHON_ROOT,
   releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
+  releaseSyncBranch: "dev",
   pullRequestTitlePolicy: {
     types: ["feat", "fix", "chore"],
     requireScope: false,

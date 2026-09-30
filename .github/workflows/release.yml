@@ -1167,5 +1167,33 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
     timeout-minutes: 15
+  sync-release-branch:
+    needs: publication-complete
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: ${{ github.event_name == 'push' && needs.publication-complete.result == 'success' }}
+    steps:
+      - name: Checkout released main
+        id: checkout_released_main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Safely fast-forward dev
+        id: safely_fast-forward_dev
+        env:
+          SOURCE_BRANCH: dev
+        run: |-
+          if ! git ls-remote --exit-code --heads origin "refs/heads/$SOURCE_BRANCH" >/dev/null 2>&1; then
+            echo "source branch $SOURCE_BRANCH no longer exists; nothing to sync"
+            exit 0
+          fi
+          git fetch origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"
+          if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" HEAD; then
+            git push origin "HEAD:refs/heads/$SOURCE_BRANCH"
+          else
+            echo "::warning::source branch $SOURCE_BRANCH diverged from released main; leaving it untouched"
+          fi
+        shell: bash
 permissions:
   contents: read
