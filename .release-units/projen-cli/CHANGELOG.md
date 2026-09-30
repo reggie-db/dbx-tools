@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1](https://github.com/reggie-db/dbx-tools/compare/projen-cli-v0.9.0...projen-cli-v0.9.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* speed up and correct docs generation ([269b3e7](https://github.com/reggie-db/dbx-tools/commit/269b3e7ff8aedffdeb15917aff35a7bde6733530))
+* speed up and correct docs generation ([72abe2c](https://github.com/reggie-db/dbx-tools/commit/72abe2c11d0036b79a93e436bcebdb52cd156db7))
+
 ## [0.9.0](https://github.com/reggie-db/dbx-tools/compare/projen-cli-v0.8.1...projen-cli-v0.9.0) (2026-09-30)
 
 
