@@ -89,7 +89,7 @@ jobs:
       - name: Detect documentation changes
         id: changes
         run: |-
-          if git diff --quiet HEAD^ HEAD -- README.md AGENTS.md ':(glob)**/README.md' docs; then
+          if git diff --quiet HEAD^ HEAD -- README.md AGENTS.md ':(glob)**/README.md' docs ':(exclude)docs/releases/**' ':(exclude).release-notes/**'; then
             echo "docs_changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "docs_changed=true" >> "$GITHUB_OUTPUT"
@@ -247,8 +247,24 @@ jobs:
           jq -c '.units[]' dist/release-plan.json | while read -r UNIT; do
             COMPONENT="$(jq -r .component <<<"$UNIT")"
             VERSION="$(jq -r .newVersion <<<"$UNIT")"
-            gh release edit "$COMPONENT-v$VERSION" --notes-file "docs/releases/$COMPONENT-v$VERSION.md"
+            gh release edit "$COMPONENT-v$VERSION" --notes-file ".release-notes/final/$COMPONENT-v$VERSION.md"
           done
+        shell: bash
+      - name: Remove consumed release notes
+        id: remove_consumed_release_notes
+        run: |-
+          git fetch origin "main"
+          if [ "$(git rev-parse origin/main)" != "$(git rev-parse HEAD)" ]; then
+            echo "::warning::main advanced before release-note cleanup; leaving temporary notes for the next release"
+            exit 0
+          fi
+          git rm -r --ignore-unmatch .release-notes
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: remove consumed release notes"
+            git push origin "HEAD:main"
+          fi
         shell: bash
   publish-node:
     needs: release-plan
@@ -1065,7 +1081,7 @@ jobs:
       GITHUB_PAGES: "true"
       SITE_URL: https://docs.dbx.tools
       BASE_PATH: /
-    if: ${{ needs.release-plan.outputs.docs == 'true' && needs.publication-complete.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs') }}
+    if: ${{ always() && needs['release-plan'].outputs.docs == 'true' && needs['publication-complete'].result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs') }}
     steps:
       - name: Checkout release source
         id: checkout_release_source
@@ -1172,7 +1188,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: ${{ github.event_name == 'push' && needs.publication-complete.result == 'success' }}
+    if: ${{ always() && github.event_name == 'push' && needs['publication-complete'].result == 'success' }}
     steps:
       - name: Checkout released main
         id: checkout_released_main

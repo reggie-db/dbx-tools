@@ -495,6 +495,10 @@ describe("optional Node release stage", () => {
       project.synth();
       const workflow = readWorkflow(independentOutdir);
       assert.ok(workflow.jobs["release-please"]);
+      const docsDetection =
+        step(workflow.jobs["release-please"]!, "Detect documentation changes").run ?? "";
+      assert.match(docsDetection, /exclude\)docs\/releases/);
+      assert.match(docsDetection, /exclude\)\.release-notes/);
       assert.ok(workflow.jobs["release-plan"]);
       assert.ok(workflow.jobs["publish-node"]);
       assert.ok(workflow.jobs["publication-complete"]);
@@ -508,6 +512,29 @@ describe("optional Node release stage", () => {
       assert.equal("verify-context" in workflow.jobs, false);
       assert.equal("rust-build" in workflow.jobs, false);
       assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");
+      const requestWorkflow = readWorkflow(independentOutdir, "release-request");
+      const requestJob = requestWorkflow.jobs.request!;
+      assert.match(
+        step(requestJob, "Create or update source pull request").run ?? "",
+        /gh pr create/,
+      );
+      assert.match(
+        step(requestJob, "Create or update source pull request").run ?? "",
+        /gh pr merge.*--auto --merge/,
+      );
+      assert.match(
+        step(requestJob, "Create or update source pull request").run ?? "",
+        /NOTES_PATH/,
+      );
+      assert.doesNotMatch(
+        step(requestJob, "Create or update source pull request").run ?? "",
+        /Base64/,
+      );
+      const tasks = JSON.parse(
+        readFileSync(join(independentOutdir, ".projen/tasks.json"), "utf8"),
+      ) as { tasks: Record<string, { steps?: Array<{ exec?: string }> }> };
+      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-request\.ts/);
+      assert.match(tasks.tasks["release:refresh"]?.steps?.[0]?.exec ?? "", /release-please\.ts/);
     } finally {
       rmSync(independentOutdir, { recursive: true, force: true });
     }

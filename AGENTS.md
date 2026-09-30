@@ -1931,7 +1931,8 @@ bun run model:metadata       # refresh committed model capability, retirement, a
 bun run release:bootstrap    # initialize Release Please state once
 bun run release:plan         # generate the affected component publication plan
 bun run version:check        # verify package versions against release units
-bun run release              # refresh Release Please PRs, tags, and releases
+bun run release              # commit, annotate, and push a source release request
+bun run release:refresh      # refresh Release Please PRs, tags, and releases
 bun run eslint               # check lint across package roots and projen
 bun run eslint:fix           # explicitly apply supported lint fixes
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
@@ -1994,12 +1995,19 @@ What is configured, and why:
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
   restores the corporate index when it is unavailable.
 
-`bun run release` invokes the pinned Release Please runner. It refreshes one
-combined release PR from conventional source commits and the generated
-release-unit graph. `--approve` remains a compatibility alias; Release Please
-creates component tags and GitHub Releases after the reviewed PR merges.
-The GitHub workflow reconciles Projen-generated manifests and release summaries
-onto the Release Please branch before review.
+`bun run release` exits before notes or AI when the current branch has no change
+from `main`. Otherwise it commits dirty source, stores custom `--notes` /
+`--notes-file` content or a bounded Cursor, Codex, Claude, then Git fallback in
+`.release-notes/requests/<branch>.md`, adds a request commit, and pushes. The
+generated workflow creates or updates the source PR; `--approve` enables
+auto-merge after checks. `bun run release:refresh` invokes Release Please
+directly for operator recovery.
+
+After the source PR merges, Release Please refreshes one combined component
+release PR from conventional commits and the generated release-unit graph. The
+workflow reconciles Projen-owned manifests, copies readable request notes into
+component-qualified summaries, and deletes consumed request Markdown before
+review.
 
 Public npm, PyPI, Cargo, and GitHub publication consume the same affected plan
 and remain idempotent per component, so recovery does not replay unrelated
@@ -2010,6 +2018,11 @@ the workflow fast-forwards `dev` when it is behind, does nothing when it already
 contains released `main`, and cleanly merges `main` into a diverged `dev`.
 Missing branches and conflicted merges are left untouched without opening a PR
 or forcing history.
+
+Temporary request and rendered notes under `.release-notes/`, plus historical
+summaries under `docs/releases/`, are excluded from release-unit and
+documentation change detection. Creating, consuming, or deleting notes must
+not start another release.
 
 A Databricks notebook or job is a different network with its own package index.
 Documentation and notebooks install the published distributions by name

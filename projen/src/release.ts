@@ -395,7 +395,7 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
         id: "changes",
         shell: "bash",
         run: [
-          "if git diff --quiet HEAD^ HEAD -- README.md AGENTS.md ':(glob)**/README.md' docs; then",
+          "if git diff --quiet HEAD^ HEAD -- README.md AGENTS.md ':(glob)**/README.md' docs ':(exclude)docs/releases/**' ':(exclude).release-notes/**'; then",
           '  echo "docs_changed=false" >> "$GITHUB_OUTPUT"',
           "else",
           '  echo "docs_changed=true" >> "$GITHUB_OUTPUT"',
@@ -442,6 +442,86 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
       },
     ],
   };
+}
+
+function configureReleaseRequestWorkflow(
+  project: DBXToolsJavaScriptProject,
+  baseBranch: string,
+): void {
+  if (!project.github) return;
+  const workflow = new GithubWorkflow(project.github, "release-request", {
+    fileName: "release-request.yml",
+    limitConcurrency: true,
+    concurrencyOptions: {
+      group: "release-request-${{ github.ref_name }}",
+      cancelInProgress: false,
+    },
+  });
+  workflow.runName = "release request ${{ github.ref_name }}";
+  workflow.on({ push: {} });
+  workflow.file?.addOverride("permissions.contents", "read");
+  workflow.addJob("request", {
+    if: `\${{ github.ref_name != '${baseBranch}' }}`,
+    runsOn: ["ubuntu-latest"],
+    permissions: {
+      contents: JobPermission.READ,
+      pullRequests: JobPermission.WRITE,
+    },
+    steps: [
+      {
+        name: "Checkout source branch",
+        uses: "actions/checkout@v6",
+        with: { "fetch-depth": 2 },
+      },
+      {
+        name: "Read release request",
+        id: "request",
+        shell: "bash",
+        run: [
+          'MESSAGE="$(git log -1 --format=%B)"',
+          'if ! grep -q "^Release-Request: true$" <<<"$MESSAGE"; then',
+          '  echo "requested=false" >> "$GITHUB_OUTPUT"',
+          "  exit 0",
+          "fi",
+          `git fetch origin ${JSON.stringify(baseBranch)}`,
+          `if git diff --quiet "origin/${baseBranch}...HEAD"; then`,
+          '  echo "requested=false" >> "$GITHUB_OUTPUT"',
+          "  exit 0",
+          "fi",
+          'echo "requested=true" >> "$GITHUB_OUTPUT"',
+          'echo "branch=$(git branch --show-current)" >> "$GITHUB_OUTPUT"',
+          'echo "approve=$(sed -n \'s/^Release-Approve: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
+          'echo "notes_path=$(sed -n \'s/^Release-Notes-Path: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
+          'echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"',
+        ].join("\n"),
+      },
+      {
+        name: "Create or update source pull request",
+        if: "${{ steps.request.outputs.requested == 'true' }}",
+        env: {
+          GH_TOKEN: "${{ github.token }}",
+          SOURCE_BRANCH: "${{ steps.request.outputs.branch }}",
+          BASE_BRANCH: baseBranch,
+          TITLE: "${{ steps.request.outputs.title }}",
+          NOTES_PATH: "${{ steps.request.outputs.notes_path }}",
+          APPROVE: "${{ steps.request.outputs.approve }}",
+        },
+        shell: "bash",
+        run: [
+          'test -f "$NOTES_PATH"',
+          'NOTES="$(cat "$NOTES_PATH")"',
+          'BODY="$(printf \'## Release notes\\n\\n%s\\n\' "$NOTES")"',
+          'PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number // empty\')"',
+          'if [ -n "$PR" ]; then',
+          '  gh pr edit "$PR" --title "$TITLE" --body "$BODY"',
+          "else",
+          '  PR="$(gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY" --json number --jq .number)"',
+          "fi",
+          'if [ "$APPROVE" = "true" ]; then gh pr merge "$PR" --auto --merge; fi',
+        ].join("\n"),
+      },
+    ],
+  });
 }
 
 function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
@@ -563,8 +643,26 @@ function independentReleaseNotesJob(project: DBXToolsJavaScriptProject): Job {
           "jq -c '.units[]' dist/release-plan.json | while read -r UNIT; do",
           '  COMPONENT="$(jq -r .component <<<"$UNIT")"',
           '  VERSION="$(jq -r .newVersion <<<"$UNIT")"',
-          '  gh release edit "$COMPONENT-v$VERSION" --notes-file "docs/releases/$COMPONENT-v$VERSION.md"',
+          '  gh release edit "$COMPONENT-v$VERSION" --notes-file ".release-notes/final/$COMPONENT-v$VERSION.md"',
           "done",
+        ].join("\n"),
+      },
+      {
+        name: "Remove consumed release notes",
+        shell: "bash",
+        run: [
+          `git fetch origin ${JSON.stringify(projectReleaseBranch(project))}`,
+          `if [ "$(git rev-parse origin/${projectReleaseBranch(project)})" != "$(git rev-parse HEAD)" ]; then`,
+          '  echo "::warning::main advanced before release-note cleanup; leaving temporary notes for the next release"',
+          "  exit 0",
+          "fi",
+          "git rm -r --ignore-unmatch .release-notes",
+          "if ! git diff --cached --quiet; then",
+          '  git config user.name "github-actions[bot]"',
+          '  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
+          '  git commit -m "chore: remove consumed release notes"',
+          `  git push origin "HEAD:${projectReleaseBranch(project)}"`,
+          "fi",
         ].join("\n"),
       },
     ],
@@ -577,7 +675,7 @@ function addIndependentDocsJobs(
   options: ReleaseDocsOptions,
 ): void {
   workflow.addJob("build-docs", {
-    if: "${{ needs.release-plan.outputs.docs == 'true' && needs.publication-complete.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs') }}",
+    if: "${{ always() && needs['release-plan'].outputs.docs == 'true' && needs['publication-complete'].result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs') }}",
     needs: ["release-plan", "publication-complete"],
     runsOn: ["ubuntu-latest"],
     permissions: {
@@ -625,7 +723,7 @@ function addIndependentDocsJobs(
 
 function addIndependentBranchSyncJob(workflow: GithubWorkflow, branch: string): void {
   workflow.addJob("sync-release-branch", {
-    if: "${{ github.event_name == 'push' && needs.publication-complete.result == 'success' }}",
+    if: "${{ always() && github.event_name == 'push' && needs['publication-complete'].result == 'success' }}",
     needs: ["publication-complete"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
@@ -718,9 +816,14 @@ function configureIndependentRelease(
       description: "Build the affected release plan",
     },
     release: {
+      exec: taskScript(project, "release-request.ts", `--base ${JSON.stringify(branch)}`),
+      receiveArgs: true,
+      description: "Commit, annotate, and push a source release request",
+    },
+    "release:refresh": {
       exec: taskScript(project, "release-please.ts", `--target-branch ${JSON.stringify(branch)}`),
       receiveArgs: true,
-      description: "Refresh independent release PRs, tags, and GitHub Releases",
+      description: "Refresh Release Please PRs, tags, and GitHub Releases",
     },
   });
   if (!project.github) return;
@@ -767,6 +870,7 @@ function configureIndependentRelease(
     registerIndependentPublicationJob(workflow, "publish-node");
   }
   new IndependentReleaseFinalizer(project, workflow, options.docs, options.syncBranch || undefined);
+  configureReleaseRequestWorkflow(project, branch);
   releaseWorkflows.set(project, workflow);
 }
 

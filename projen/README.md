@@ -447,18 +447,23 @@ a new package is covered without a re-synth. Work from the root:
 | `bun run release:bootstrap` | initialize writable Release Please state once         |
 | `bun run release:plan`      | emit the affected component and publication plan      |
 | `bun run version:check`     | verify every package against its owning release unit  |
-| `bun run release`           | refresh Release Please PRs, tags, and GitHub Releases |
+| `bun run release`           | commit, annotate, and push one source release request |
+| `bun run release:refresh`   | refresh Release Please PRs, tags, and releases        |
 
-`release` runs the pinned Release Please library with the generated
-cross-language graph plugin. Direct changes retain their conventional semantic
-increment, while required dependents receive patches. The combined release PR
-is reconciled by Projen before review. Merging it creates component tags and
-GitHub Releases, then the affected plan selects publication jobs.
+`release` first proves the branch differs from `main`; an unchanged branch exits
+before notes, AI, commits, pushes, or PR creation. It commits dirty source,
+writes custom `--notes` / `--notes-file` content or a bounded Cursor, Codex,
+Claude, then Git fallback to `.release-notes/requests/<branch>.md`, adds one
+request commit, and pushes. The generated request workflow creates or updates
+the source PR. `--approve` enables auto-merge after checks.
 
-Each changed component receives
-`docs/releases/<component>-v<version>.md`. Summary generation tries Cursor,
-Codex, and Claude in order, logs provider events, and falls back to Git. The
-committed file becomes that component's GitHub Release body.
+After the source PR merges, Release Please retains direct conventional semantic
+increments and applies required dependent patches. Reconciliation copies the
+readable request Markdown into one temporary
+`.release-notes/final/<component>-v<version>.md` per affected component and
+deletes the consumed request file in the release PR. Publication applies each
+file to its matching GitHub Release, then removes the temporary notes tree in a
+cleanup commit. Request and final notes never count as source changes.
 
 The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
 public `BuildWorkflow` `buildTask` option. That task runs synth plus the

@@ -313,10 +313,10 @@
     },
     "release": {
       "name": "release",
-      "description": "Refresh independent release PRs, tags, and GitHub Releases",
+      "description": "Commit, annotate, and push a source release request",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-please.ts --target-branch \"main\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-request.ts --base \"main\"",
           "receiveArgs": true
         }
       ]
@@ -336,6 +336,16 @@
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/release-plan.ts",
+          "receiveArgs": true
+        }
+      ]
+    },
+    "release:refresh": {
+      "name": "release:refresh",
+      "description": "Refresh Release Please PRs, tags, and GitHub Releases",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-please.ts --target-branch \"main\"",
           "receiveArgs": true
         }
       ]

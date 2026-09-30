@@ -84,4 +84,29 @@ describe("optional release summary providers", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("uses custom notes without invoking an AI provider", async () => {
+    const root = mkdtempSync(join(tmpdir(), "release-summary-custom-"));
+    let providers = 0;
+    try {
+      const content = await generateReleaseSummary({
+        root,
+        component: "node-appkit",
+        version: "1.2.5",
+        customSummary: "Operator-authored release notes.",
+        runner: () => {
+          providers++;
+          return "unexpected";
+        },
+      });
+      assert.equal(providers, 0);
+      assert.equal(content, "# Release node-appkit 1.2.5\n\nOperator-authored release notes.\n");
+      assert.equal(
+        readFileSync(join(root, releaseSummaryFile("1.2.5", "node-appkit")), "utf8"),
+        content,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

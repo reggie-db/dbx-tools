@@ -36,6 +36,7 @@
     "release": "projen release",
     "release:bootstrap": "projen release:bootstrap",
     "release:plan": "projen release:plan",
+    "release:refresh": "projen release:refresh",
     "rs:bindings": "projen rs:bindings",
     "rs:build": "projen rs:build",
     "rs:format": "projen rs:format",

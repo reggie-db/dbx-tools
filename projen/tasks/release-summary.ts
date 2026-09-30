@@ -265,12 +265,15 @@ export async function generateReleaseSummary(options: {
   readonly version: string;
   readonly component?: string;
   readonly paths?: readonly string[];
+  readonly customSummary?: string;
+  readonly outputFile?: string;
   readonly fromRef?: string;
   readonly toRef?: string;
   readonly providers?: readonly ReleaseSummaryProviderName[];
   readonly runner?: ReleaseSummaryRunner;
 }): Promise<string | undefined> {
-  const relativeOutput = releaseSummaryFile(options.version, options.component);
+  const relativeOutput =
+    options.outputFile ?? releaseSummaryFile(options.version, options.component);
   const output = join(options.root, relativeOutput);
   if (existsSync(output)) rmSync(output);
   const target =
@@ -306,15 +309,21 @@ export async function generateReleaseSummary(options: {
     ...scopedPaths,
     `:(exclude)${relativeOutput}`,
   ]);
-  const result = await selectReleaseSummary(
-    options.root,
-    summaryPrompt(options.version, options.fromRef, commits, changedFiles, diffStat),
-    options.runner,
-    options.providers,
-  );
-  const summary = result?.summary ?? gitSummary(options.version, commits, changedFiles);
-  const provider = result?.provider ?? "git";
-  if (!result) logger.info("AI providers unavailable; using Git release summary");
+  const customSummary = string.trimToNull(options.customSummary);
+  const result = customSummary
+    ? undefined
+    : await selectReleaseSummary(
+        options.root,
+        summaryPrompt(options.version, options.fromRef, commits, changedFiles, diffStat),
+        options.runner,
+        options.providers,
+      );
+  const summary =
+    customSummary ?? result?.summary ?? gitSummary(options.version, commits, changedFiles);
+  const provider = customSummary ? "custom" : (result?.provider ?? "git");
+  if (!customSummary && !result) {
+    logger.info("AI providers unavailable; using Git release summary");
+  }
   const content = `# Release ${options.component ? `${options.component} ` : ""}${options.version}\n\n${summary.trim()}\n`;
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, content);
