@@ -79,7 +79,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.223",
+  "version": "0.6.224",
   "type": "module",
   "private": true,
   "workspaces": [
