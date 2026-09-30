@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { createTestPlugin, createTestPluginContext } from "@databricks/appkit/testing";
 import type { AgentToolDefinition, ToolkitEntry } from "@databricks/appkit/beta";
+import { createTestPlugin, createTestPluginContext } from "@databricks/appkit/testing";
 import { log } from "@dbx-tools/shared-core";
 import { MASTRA_RESOURCE_ID_KEY, RequestContext } from "@mastra/core/request-context";
 import type { Tool } from "@mastra/core/tools";
@@ -149,7 +149,7 @@ describe("AppKit toolkit adaptation", () => {
     ]);
   });
 
-  it("awaits asynchronous toolkit providers and preserves write approval", async () => {
+  it("awaits asynchronous toolkit providers without gating routine writes", async () => {
     const fixture = createTestPluginContext();
     await fixture.attach(createTestPlugin(memoryPlugin));
     let tools: MastraTools = {};
@@ -174,10 +174,10 @@ describe("AppKit toolkit adaptation", () => {
       log: log.logger("test/toolkit"),
     });
 
-    assert.equal((tools.save as Tool).requireApproval, true);
+    assert.notEqual((tools.save as Tool).requireApproval, true);
   });
 
-  it("requires approval for legacy destructive annotations", async () => {
+  it("requires approval for explicit destructive annotations", async () => {
     const fixture = createTestPluginContext();
     await fixture.attach(
       createTestPlugin(recordsPlugin, {
@@ -187,6 +187,12 @@ describe("AppKit toolkit adaptation", () => {
             description: "Delete a record",
             parameters: { type: "object" },
             annotations: { destructive: true },
+          },
+          {
+            name: "remove",
+            description: "Remove a record",
+            parameters: { type: "object" },
+            annotations: { effect: "destructive" },
           },
         ],
       }),
@@ -214,5 +220,6 @@ describe("AppKit toolkit adaptation", () => {
     });
 
     assert.equal((tools["records.delete"] as Tool).requireApproval, true);
+    assert.equal((tools["records.remove"] as Tool).requireApproval, true);
   });
 });

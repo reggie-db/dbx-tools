@@ -192,7 +192,11 @@ tool-provider plugins. Each entry exposes `.toolkit(opts)` with AppKit's public
 `prefix`, `only`, `except`, and `rename` contract. Await toolkit resolution so
 providers backed by asynchronous discovery can finish registration. Providers
 that expose only AppKit's native `getAgentTools()` and `executeAgentTool()` are
-adapted too.
+adapted too. Routine `effect: "write"` and `effect: "update"` annotations remain
+mutation metadata and do not automatically suspend a Mastra run. The adapter
+requires approval only for `effect: "destructive"` or the legacy
+`destructive: true` annotation. Tools needing stricter policy set Mastra's
+`requireApproval` explicitly.
 
 ```ts
 const agent = agents.createAgent({
