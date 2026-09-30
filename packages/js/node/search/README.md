@@ -27,8 +27,9 @@ search instead of Vector Search.
   (or set `DATABRICKS_VECTOR_SEARCH_INDEX`) and the columns, page size, mode,
   aliases, and route path all have defaults you can override when you need to go
   deeper.
-- OBO for Vector Search comes from native AppKit `aiSearch`. Lakebase full-text
-  search uses the sibling `lakebase` plugin's service-principal pool.
+- OBO for Vector Search comes from native AppKit `aiSearch`. Each Lakebase
+  full-text index selects `service-principal` or `on-behalf-of-user` through the
+  sibling native `lakebase` routing pool.
 - Filters use AppKit's scalar/array shape: `{ column: valueOrValues }`.
 - Embedding-model resolution for index creation reuses
   [`@dbx-tools/model`](../model): a loose name fuzzy-matches the live catalogue,
@@ -224,8 +225,11 @@ Sync index instead of a managed direct-access one.
 full-text index. It provisions one table per alias (a generated `tsvector`
 column with a GIN index), seeds configured documents, and answers queries with
 a prefix `to_tsquery` + `ts_rank`. The pool comes from the native `lakebase`
-plugin's service-principal config, so database authentication is not
-re-implemented.
+plugin's routing pool, so database authentication is not re-implemented. HTTP
+callers cannot widen configured projection columns; `columns` overrides remain
+available only to trusted programmatic `query()` calls. Set an index's `auth`
+to `on-behalf-of-user` for OBO query/write routes or leave it at
+`service-principal`.
 
 Queries are compiled from the search box rather than handed to
 `websearch_to_tsquery`, which is too literal for type-ahead in two ways:

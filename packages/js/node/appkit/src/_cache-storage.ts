@@ -56,7 +56,7 @@ let persistentStorageCtor: PersistentStorageConstructor | undefined | null = nul
  * Lazily resolve AppKit's internal `PersistentStorage` constructor. `null`
  * means not attempted yet; `undefined` means the lookup already failed.
  */
-function loadPersistentStorage(): PersistentStorageConstructor | undefined {
+export function loadPersistentStorage(): PersistentStorageConstructor | undefined {
   if (persistentStorageCtor !== null) {
     return persistentStorageCtor;
   }

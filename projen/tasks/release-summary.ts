@@ -215,7 +215,35 @@ function summaryPrompt(
   ].join("\n");
 }
 
-/** Generate one immutable versioned summary, or remove a stale retry artifact. */
+/** Deterministic fallback when every configured AI provider is unavailable. */
+function gitSummary(version: string, commits: string, changedFiles: string): string {
+  const subjects = commits
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line, index, lines) => lines.indexOf(line) === index)
+    .slice(0, 20);
+  const files = changedFiles
+    .split("\n")
+    .map((line) => line.trim().split(/\s+/).at(-1))
+    .filter((value): value is string => Boolean(value));
+  const areas = files
+    .map((file) => {
+      if (file.startsWith("packages/")) return file.split("/").slice(0, 4).join("/");
+      return file.split("/")[0] ?? file;
+    })
+    .filter((area, index, all) => all.indexOf(area) === index)
+    .slice(0, 12);
+  const bullets = subjects.length ? subjects : areas.map((area) => `Updated ${area}`);
+  return [
+    `dbx-tools ${version} contains the reviewed changes listed below.`,
+    "",
+    "## Changes",
+    ...(bullets.length ? bullets.map((item) => `- ${item}`) : ["- Release metadata updated."]),
+  ].join("\n");
+}
+
+/** Generate one immutable versioned summary with an AI or Git fallback. */
 export async function generateReleaseSummary(options: {
   readonly root: string;
   readonly version: string;
@@ -258,13 +286,12 @@ export async function generateReleaseSummary(options: {
     options.runner,
     options.providers,
   );
-  if (!result) {
-    logger.info("no supported AI CLI available; skipping release summary");
-    return undefined;
-  }
-  const content = `# Release ${options.version}\n\n${result.summary.trim()}\n`;
+  const summary = result?.summary ?? gitSummary(options.version, commits, changedFiles);
+  const provider = result?.provider ?? "git";
+  if (!result) logger.info("AI providers unavailable; using Git release summary");
+  const content = `# Release ${options.version}\n\n${summary.trim()}\n`;
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, content);
-  logger.info("generated", { provider: result.provider, path: output });
+  logger.info("generated", { provider, path: output });
   return content;
 }

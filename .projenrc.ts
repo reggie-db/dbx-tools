@@ -320,6 +320,7 @@ root.pnpmWorkspace?.addCatalog("lucide-react", "^0.554.0");
 root.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
 root.pnpmWorkspace?.addCatalog("streamdown", "^2.5.0");
 root.pnpmWorkspace?.addCatalog("@mastra/client-js", "1.50.0");
+root.pnpmWorkspace?.addCatalog("vitest", "3.2.4");
 root.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
 root.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
 root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
@@ -417,6 +418,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "zod@catalog:",
   );
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
+  p.addDevDeps("vitest@catalog:");
 });
 
 // cli-appkit-env: the `dbx appkit` command group - run AppKit auto-config
@@ -550,7 +552,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@mastra/mcp@catalog:",
     "concurrently@catalog:",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
+  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "vitest@catalog:");
 });
 
 // node-rust-binary: narrow runtime owner for generated Rust release metadata,
@@ -655,7 +657,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "zod@catalog:",
     "pg@^8.22.0",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/pg@^8");
+  p.addDevDeps("@types/express@catalog:", "@types/pg@^8", "vitest@catalog:");
   // `skills` (https://www.npmjs.com/package/skills) is the OPTIONAL Agent-Skills
   // CLI `remote-skills.ts` shells out to when present. Left as an optional peer
   // so consumers opt in; the runtime falls back to a direct fetch when it is

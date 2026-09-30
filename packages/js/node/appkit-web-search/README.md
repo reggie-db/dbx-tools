@@ -81,21 +81,41 @@ the native plugin toolkit as shown above, which preserves that plugin's policy,
 OBO scope, and AppKit execution chain. Approval, when enabled, requires Mastra
 storage, so register `lakebase()` or configure storage in the Mastra plugin.
 
-The plugin is also an AppKit `ToolProvider`, so an AppKit agent can take the
-same two tools without Mastra in the picture:
+The plugin is also an AppKit `ToolProvider`, so a simple native code agent can
+take the same two tools without Mastra. Put the definition at
+`server/agents/researcher/agent.ts` so AppKit discovers it:
 
 ```ts
 import { createAgent } from "@databricks/appkit/beta";
 
-const researcher = createAgent({
+export default createAgent({
+  name: "Researcher",
+  default: true,
+  model: "databricks-gpt-6-1-sol",
   instructions: "Research questions with web_search, then read sources with web_fetch.",
   tools: (plugins) => ({ ...plugins["web-search"].toolkit() }),
+  skills: ["research-policy"],
 });
+```
+
+Place the curated skill at
+`server/agents/skills/research-policy/SKILL.md`, register native `agents()` with
+no deprecated agent map, and build a compiled native-agent server with:
+
+```ts
+import { appkitServerConfig } from "@databricks/appkit/tsdown";
+
+export default appkitServerConfig();
 ```
 
 Both tools are annotated `effect: "read"` and require user context, and neither
 is auto-inheritable: an agent has to ask for them, because `web_fetch` reaches
 whatever URL the model produces.
+
+Native volume skills currently execute as the service principal; the 0.81
+`skillCredentialMode: "obo"` option is not wired. Keep request-scoped writable
+skills, remote sources, asynchronous Graphiti discovery, Sandbox/Monty,
+Mastra memory, and durable approvals on `@dbx-tools/appkit-mastra`.
 
 ## Choose The Web-Search Model
 

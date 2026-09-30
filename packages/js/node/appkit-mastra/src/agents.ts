@@ -23,7 +23,7 @@ import type {
   ToolkitOptions as AppKitToolkitOptions,
   ToolProvider,
 } from "@databricks/appkit/beta";
-import { plugin } from "@dbx-tools/appkit";
+import { plugin, toolkit as appkitToolkit } from "@dbx-tools/appkit";
 import { log, object, string } from "@dbx-tools/shared-core";
 import type {
   AgentConfig,
@@ -952,36 +952,7 @@ function toolkitEntriesFromDefinitions(
   definitions: AgentToolDefinition[],
   options: ToolkitOptions = {},
 ): Record<string, ToolkitEntry> {
-  return Object.fromEntries(
-    definitions.flatMap((definition) => {
-      const key = toolkitName(definition.name, pluginName, options);
-      if (key === null) return [];
-      return [
-        [
-          key,
-          {
-            __toolkitRef: true as const,
-            pluginName,
-            localName: definition.name,
-            def: { ...definition, name: key },
-            annotations: definition.annotations,
-          } satisfies ToolkitEntry,
-        ],
-      ];
-    }),
-  );
-}
-
-function toolkitName(
-  localName: string,
-  pluginName: string,
-  options: ToolkitOptions,
-): string | null {
-  if (options.only && !options.only.includes(localName)) return null;
-  if (options.except?.includes(localName)) return null;
-  const renamed = options.rename?.[localName];
-  if (renamed) return renamed;
-  return `${options.prefix ?? `${pluginName}.`}${localName}`;
+  return appkitToolkit.entries(pluginName, definitions, options);
 }
 
 function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
@@ -1009,11 +980,13 @@ function toolkitEntriesToMastraTools(
 function toolkitEntryToMastraTool(entry: ToolkitEntry, plugin: ContextualToolProvider): Tool {
   const annotations = entry.annotations ?? entry.def.annotations;
   const effect = annotations?.effect;
+  const requiresApproval =
+    (effect !== undefined && effect !== "read") || annotations?.destructive === true;
   return createTool({
     id: `${entry.pluginName}__${entry.localName}`,
     description: entry.def.description,
     ...(entry.def.parameters ? { inputSchema: entry.def.parameters as never } : {}),
-    ...(effect && effect !== "read" ? { requireApproval: true } : {}),
+    ...(requiresApproval ? { requireApproval: true } : {}),
     ...(annotations
       ? {
           mcp: {

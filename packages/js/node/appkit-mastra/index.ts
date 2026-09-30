@@ -3,12 +3,13 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.6.226";
+export const PACKAGE_VERSION = "0.6.227";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
 export * as config from "./src/config.ts";
 export * as defaults from "./src/defaults.ts";
+export * as evaluation from "./src/evaluation.ts";
 export * as filesystems from "./src/filesystems.ts";
 export * as genie from "./src/genie.ts";
 export * as identity from "./src/identity.ts";
@@ -43,6 +44,7 @@ export type { ChartPlannerRequest, ChartToolOutput, PrepareChartOptions, FetchCh
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
 export type { User, MastraMemoryConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
+export type { MastraEvalDriverOptions } from "./src/evaluation.ts";
 export { MastraFileSystemAdapter } from "./src/filesystems.ts";
 export type { MastraFileSystemAdapterOptions } from "./src/filesystems.ts";
 export { DEFAULT_GENIE_ALIAS, GENIE_INSTRUCTIONS } from "./src/genie.ts";

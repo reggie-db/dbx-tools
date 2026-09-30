@@ -87,8 +87,8 @@ const DEFAULT_CATALOG: Catalog = {
   tsoa: "^6.6.0",
   concurrently: "^10.0.3",
   pnpm: "^11.0.6",
-  "@databricks/appkit": "^0.60.0",
-  "@databricks/appkit-ui": "^0.60.0",
+  "@databricks/appkit": "0.81.0",
+  "@databricks/appkit-ui": "0.81.0",
   "@databricks/sdk-experimental": "^0.17.0",
 };
 

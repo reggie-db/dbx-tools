@@ -56,6 +56,7 @@ const CONFIG_SCHEMA: JSONSchema7 = {
           columns: { type: "array", items: { type: "string" } },
           numResults: { type: "number" },
           queryType: { enum: ["full_text"] },
+          auth: { enum: ["service-principal", "on-behalf-of-user"] },
           textColumn: { type: "string" },
           documents: { type: "array", items: { type: "object" } },
         },
@@ -91,12 +92,14 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
   private backend: LakebaseSearchBackend | undefined;
 
   override async setup(): Promise<void> {
+    const indexes = this.indexes();
+    for (const index of indexes) this.validateAuth(index);
     const lake = appkitPlugin.require(this.context, lakebase, this);
     this.backend = new LakebaseSearchBackend(
       { managedPool: () => lake.exports().pool },
       string.trimToNull(this.config.schema) ?? "public",
     );
-    for (const index of this.indexes()) {
+    for (const index of indexes) {
       await this.backend.provision(index.indexName, {
         textColumn: index.config.textColumn ?? "text",
         ...(index.config.documents ? { seed: index.config.documents } : {}),
@@ -115,7 +118,12 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
       path: "/:alias/query",
       handler: async (req: express.Request, res: express.Response) => {
         try {
-          res.json(await this.query(routeParam(req.params.alias), req.body as SearchRequest));
+          const alias = routeParam(req.params.alias);
+          const index = this.resolveIndex(alias);
+          const { columns: _untrustedColumns, ...request } = object.isRecord(req.body)
+            ? req.body
+            : {};
+          res.json(await this.routeRuntime(index, req).query(alias, request as SearchRequest));
         } catch (error) {
           res.status(400).json({
             error: error instanceof Error ? error.message : "Search failed",
@@ -146,10 +154,12 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
         method: "post",
         path: "/:alias/documents",
         handler: async (req: express.Request, res: express.Response) => {
+          const alias = routeParam(req.params.alias);
+          const index = this.resolveIndex(alias);
           const documents = Array.isArray(req.body?.documents)
             ? req.body.documents.filter(object.isRecord)
             : [];
-          res.json(await this.addDocuments(routeParam(req.params.alias), documents));
+          res.json(await this.routeRuntime(index, req).addDocuments(alias, documents));
         },
       });
     }
@@ -236,6 +246,17 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
     const index = this.indexes().find((candidate) => candidate.alias === alias);
     if (!index) throw new ValidationError(`Unknown AI Search index alias "${alias}"`);
     return index;
+  }
+
+  private validateAuth(index: ResolvedLakebaseIndex): void {
+    const auth = (index.config as { auth?: unknown }).auth;
+    if (auth !== undefined && auth !== "service-principal" && auth !== "on-behalf-of-user") {
+      throw new ValidationError(`Unknown AI Search auth mode for "${index.alias}"`);
+    }
+  }
+
+  private routeRuntime(index: ResolvedLakebaseIndex, req: express.Request): this {
+    return index.config.auth === "on-behalf-of-user" ? this.asUser(req) : this;
   }
 
   private requireBackend(): LakebaseSearchBackend {

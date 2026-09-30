@@ -14,9 +14,9 @@
  * ```
  *
  * Auto-configuration runs BEFORE delegating so plugins see a fully populated
- * `process.env` during their synchronous `setup()`. Lakebase Postgres runs when
- * a `lakebase` plugin is present, or when {@link AutoConfigureMode} is set
- * explicitly on the config object.
+ * `process.env` during their synchronous `setup()`. Lakebase Postgres resolution
+ * runs when a native `lakebase` or `database` plugin is present, or when
+ * {@link AutoConfigureMode} is set explicitly on the config object.
  *
  * `getExecutionContext()` is AppKit's own accessor for the OBO-scoped workspace
  * client + request metadata; the wrappers here make it safe to call outside a
@@ -37,6 +37,7 @@ import {
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { async, log } from "@dbx-tools/shared-core";
 
+import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { createSoftPersistentStorage } from "./_cache-storage.ts";
 import { loadBrandContext } from "./brand.ts";
 import {
@@ -61,9 +62,11 @@ type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;
  *   grant the AppKit cache schema to the connecting role.
  * - `"env"`: resolve the Lakebase connection into `process.env` only.
  *
- * Omit it to get `"provision"` gated on a `lakebase` plugin being registered;
- * set it explicitly to run regardless of the plugin list, or pass `false` to
- * skip auto-configuration entirely.
+ * Omit it to resolve database environment when a native `lakebase` or
+ * `database` plugin is registered. Implicit cache-schema grants remain gated on
+ * `lakebase`; `database` owns its own pool and does not broaden grants. Set the
+ * mode explicitly to run regardless of the plugin list, or pass `false` to skip
+ * auto-configuration entirely.
  *
  * Set it EXPLICITLY on an app that has no `lakebase()` plugin but still wants
  * AppKit's PERSISTENT cache. AppKit picks Lakebase for `CacheManager` only when
@@ -94,7 +97,6 @@ export type CreateAppConfig<T extends AppKitPlugins = AppKitPlugins> = Omit<
 };
 
 const LAKEBASE_PLUGIN = "lakebase";
-const DEFAULT_AUTO_CONFIGURE: AutoConfigureMode = "provision";
 
 /**
  * Upper bound on boot-time auto-configuration. It runs as the service principal
@@ -121,9 +123,9 @@ function pluginNames(config: CreateAppConfig | undefined): string[] {
  * Run enabled auto-configuration steps without calling AppKit's `createApp`.
  *
  * Lakebase Postgres resolves when {@link CreateAppConfig.autoConfigure} is set
- * explicitly or a `lakebase` plugin is listed in `config.plugins`. `signal`
- * cancels the resolution; it is combined with an internal boot timeout either
- * way.
+ * explicitly or a native `lakebase`/`database` plugin is listed in
+ * `config.plugins`. `signal` cancels the resolution; it is combined with an
+ * internal boot timeout either way.
  *
  * @example
  * import { appkit } from "@dbx-tools/appkit";
@@ -135,27 +137,23 @@ export async function autoConfigure<T extends AppKitPlugins>(
   config?: CreateAppConfig<T>,
   signal?: AbortSignal,
 ): Promise<LakebaseConnection | undefined> {
-  const mode = config?.autoConfigure ?? DEFAULT_AUTO_CONFIGURE;
-  const explicit = config?.autoConfigure !== undefined;
-  const lakebasePluginPresent = usesPlugin(config, LAKEBASE_PLUGIN);
   const plugins = pluginNames(config);
+  const policy = resolveAutoConfigurePolicy(plugins, config?.autoConfigure);
   logger.debug("autoConfigure: start", {
-    mode,
-    explicit,
-    lakebasePluginPresent,
+    ...policy,
     plugins,
     timeoutMs: AUTO_CONFIGURE_TIMEOUT_MS,
     callerSignal: Boolean(signal),
   });
 
-  if (mode === false || !(explicit || lakebasePluginPresent)) {
-    const skippedReason = mode === false ? "disabled" : "no lakebase plugin";
-    logger.debug("autoConfigure: skip", { skippedReason, mode, lakebasePluginPresent, plugins });
+  if (!policy.shouldResolve) {
+    logger.debug("autoConfigure: skip", { ...policy, plugins });
     logger.info("ready", {
-      autoConfigure: mode,
-      lakebasePluginPresent,
+      autoConfigure: policy.mode,
+      lakebasePluginPresent: policy.lakebasePluginPresent,
+      databasePluginPresent: policy.databasePluginPresent,
       provisioned: false,
-      skippedReason,
+      skippedReason: policy.skippedReason,
     });
     return undefined;
   }
@@ -164,16 +162,24 @@ export async function autoConfigure<T extends AppKitPlugins>(
   async.tieAbortSignal(controller, signal);
   async.tieAbortSignal(controller, AbortSignal.timeout(AUTO_CONFIGURE_TIMEOUT_MS));
 
-  const provision = mode === "provision";
-  logger.debug("autoConfigure: resolve lakebase", { provision, mode });
-  const resolved = await autoConfigureLakebase(provision, controller.signal);
+  logger.debug("autoConfigure: resolve lakebase", {
+    provision: policy.provision,
+    mode: policy.mode,
+  });
+  const resolved = await autoConfigureLakebase(policy.provision, controller.signal);
   logger.debug("autoConfigure: done", {
-    mode,
-    lakebasePluginPresent,
-    provisioned: provision,
+    mode: policy.mode,
+    lakebasePluginPresent: policy.lakebasePluginPresent,
+    databasePluginPresent: policy.databasePluginPresent,
+    provisioned: policy.provision,
     ...redactLakebaseConnection(resolved),
   });
-  logger.info("ready", { autoConfigure: mode, lakebasePluginPresent, provisioned: provision });
+  logger.info("ready", {
+    autoConfigure: policy.mode,
+    lakebasePluginPresent: policy.lakebasePluginPresent,
+    databasePluginPresent: policy.databasePluginPresent,
+    provisioned: policy.provision,
+  });
   return resolved;
 }
 

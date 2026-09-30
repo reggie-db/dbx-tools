@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import type { IAppRouter } from "@databricks/appkit";
+import { createMockRouter } from "@databricks/appkit/testing";
 import { GraphitiPlugin, ensureGraphitiModelProxy, ensureGraphitiPython } from "../src/plugin.ts";
 
 const SCOPED_TOOL_NAMES = [
@@ -112,22 +112,12 @@ describe("GraphitiPlugin routes", () => {
   });
 
   it("registers the MCP transport on the AppKit server", () => {
-    const routes: Array<{ method: string; path: string }> = [];
-    const router = Object.fromEntries(
-      ["get", "post", "delete"].map((method) => [
-        method,
-        (path: string) => routes.push({ method, path }),
-      ]),
-    ) as unknown as IAppRouter;
+    const { router, handlers } = createMockRouter();
     const plugin = new GraphitiPlugin({});
 
     plugin.injectRoutes(router);
 
-    assert.deepEqual(routes, [
-      { method: "get", path: "/mcp" },
-      { method: "post", path: "/mcp" },
-      { method: "delete", path: "/mcp" },
-    ]);
+    assert.deepEqual(Object.keys(handlers), ["GET:/mcp", "POST:/mcp", "DELETE:/mcp"]);
     assert.deepEqual(plugin.getEndpoints(), {
       getMcp: "/api/graphiti/mcp",
       postMcp: "/api/graphiti/mcp",

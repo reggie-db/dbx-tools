@@ -46,7 +46,7 @@ describe("optional release summary providers", () => {
     assert.equal(selected?.provider, "claude");
   });
 
-  it("writes a summary and removes stale content when providers are unavailable", async () => {
+  it("writes an AI summary and replaces stale content with a Git fallback", async () => {
     const root = mkdtempSync(join(tmpdir(), "release-summary-"));
     const output = join(root, releaseSummaryFile("1.2.3"));
     try {
@@ -66,15 +66,19 @@ describe("optional release summary providers", () => {
 
       const nextOutput = join(root, releaseSummaryFile("1.2.4"));
       writeFileSync(nextOutput, "stale");
+      const fallback = await generateReleaseSummary({
+        root,
+        version: "1.2.4",
+        runner: () => undefined,
+      });
       assert.equal(
-        await generateReleaseSummary({
-          root,
-          version: "1.2.4",
-          runner: () => undefined,
-        }),
-        undefined,
+        fallback,
+        "# Release 1.2.4\n\n" +
+          "dbx-tools 1.2.4 contains the reviewed changes listed below.\n\n" +
+          "## Changes\n" +
+          "- Release metadata updated.\n",
       );
-      assert.throws(() => readFileSync(nextOutput, "utf8"));
+      assert.equal(readFileSync(nextOutput, "utf8"), fallback);
       assert.equal(readFileSync(output, "utf8"), content);
     } finally {
       rmSync(root, { recursive: true, force: true });

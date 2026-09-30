@@ -9,8 +9,9 @@ for streamed markdown/code output.
 
 Key features:
 
-- Stable `@dbx-tools/ui-appkit/react` re-export of AppKit's React component
-  primitives for feature packages.
+- Stable `@dbx-tools/ui-appkit/react` re-export of the repository's tested
+  AppKit UI 0.81 primitives for feature packages. AppKit and AppKit UI move as
+  one exact-tested pair.
 - `BrandPicker`, a controlled AppKit-native editor for portable identity,
   color tokens, document metadata, and assets.
 - AppKit UI stylesheet import path for host applications and feature packages.

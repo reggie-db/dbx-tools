@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit";
-export const PACKAGE_VERSION = "0.6.226";
+export const PACKAGE_VERSION = "0.6.227";
 export * as appkit from "./src/appkit.ts";
 export * as brand from "./src/brand.ts";
 export * as bundle from "./src/bundle.ts";
@@ -14,6 +14,7 @@ export * as lakebaseResolver from "./src/lakebase-resolver.ts";
 export * as pgaddress from "./src/pgaddress.ts";
 export * as plugin from "./src/plugin.ts";
 export * as provision from "./src/provision.ts";
+export * as toolkit from "./src/toolkit.ts";
 export type { AutoConfigureMode, CreateAppConfig, ExecutionContextLike, WorkspaceClientLike } from "./src/appkit.ts";
 export { bundleAppResourceSchema, flattenAppYamlEnv, flattenAppEnv, getBundlePath } from "./src/bundle.ts";
 export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, ResolveConfigValueOptions } from "./src/bundle.ts";

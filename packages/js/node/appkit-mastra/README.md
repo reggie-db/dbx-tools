@@ -732,6 +732,25 @@ The plugin resolves the active thread from `x-mastra-thread-id`, `?threadId=`,
 or a per-session fallback cookie. That keeps streaming, history, and clear
 operations aligned around the same conversation id.
 
+## Evaluate In Process
+
+`eval.createMastraEvalDriver()` adapts a Mastra agent's native `generate()`
+result to AppKit 0.81's `EvalDriver` contract without reducing a chat stream:
+
+```ts
+import { runEval } from "@databricks/appkit/beta";
+import { evaluation } from "@dbx-tools/appkit-mastra";
+
+await runEval(definition, {
+  driver: evaluation.createMastraEvalDriver(agent),
+});
+```
+
+The driver keeps multi-turn memory on one thread, forwards timeout
+cancellation, reports complete tool names/arguments and trace IDs, and starts a
+new thread on `reset()`. It deliberately does not replace production feedback,
+MLflow reporting, OTel tracing, or the official AI SDK chat route.
+
 ## Feedback And Observability
 
 `observability.buildObservability()` wires Mastra tracing when OTLP export is
@@ -971,6 +990,7 @@ client that talks to these routes.
 ## Modules
 
 - `plugin` - `MastraPlugin` and `mastra()` AppKit plugin factory.
+- `evaluation` - in-process AppKit `EvalDriver` over Mastra `Agent.generate()`.
 - `agents` - `createAgent`, `tool`, `createTool`, agent build helpers, fallback
   defaults, and approval-gated tool inspection.
 - `config` - plugin config types and RequestContext key constants.

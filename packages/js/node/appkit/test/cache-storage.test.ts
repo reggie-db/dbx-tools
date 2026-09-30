@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  loadPersistentStorage,
   probeStorage,
   softenInitialize,
   type PersistentStorageBase,
@@ -31,6 +32,10 @@ function storageWithInit(
 }
 
 describe("soft persistent cache initialization", () => {
+  it("resolves the AppKit 0.81 private persistent storage compatibility seam", () => {
+    assert.equal(typeof loadPersistentStorage(), "function");
+  });
+
   it("skips migrations when a preflight detects a different table owner", async () => {
     let attempts = 0;
     const storage = storageWithInit(async () => {

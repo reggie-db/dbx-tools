@@ -24,7 +24,8 @@
     "@types/node": "catalog:",
     "@types/pg": "^8",
     "skills": "^1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "skills": "^1"
@@ -74,7 +75,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.226",
+  "version": "0.6.227",
   "types": "index.ts",
   "type": "module",
   "exports": {

@@ -125,6 +125,12 @@ the conversation pills remain on their own second row. Replace `icon`, `closeIco
 dismissal while the covered application is inert. A `storageKey` retains
 horizontal and vertical sizes independently.
 
+This shell intentionally remains mounted instead of wrapping AppKit
+Sheet/Dialog/Resizable. Those overlays unmount their portal subtree when closed,
+and native resizable panels persist percentages rather than this component's
+independent horizontal/vertical pixel sizes; either change would lose drafts,
+scroll state, active streams, or sizing parity.
+
 ## Render A Drop-In Chat
 
 ```tsx
