@@ -88,28 +88,32 @@ itself. Set `--image-resize-threshold-bytes` or
 `IMAGE_RESIZE_THRESHOLD_BYTES` to change the size threshold.
 
 `LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`, case-insensitively,
-and defaults to `info`. Request summaries include protocol, selected model,
-streaming mode, status, latency, raw request bytes, a fast `tokenx-rs` token
-estimate, and the immediate TCP peer IP and port without logging request bodies
-or credentials. The peer can be a local or platform proxy rather than the end
-user. The estimate includes model-visible JSON but excludes encrypted
-reasoning/compaction state, signatures, and embedded image, file, audio, and
-screenshot payloads. Buffered responses also report upstream input, output, and
-total usage. Streams log connection and completion separately; completion
-includes response bytes, total duration, cancellation/failure state, and usage
-from both translated and pass-through Chat or Responses events. Pass-through
-usage comes from complete parsed SSE events while the original chunks are
-forwarded unchanged. Observation is capped at 1 MB per event; a malformed or
-larger event safely retains the estimate. Reported usage reconciles process-local
-reservations across Chat Completions, Responses, Codex,
+and defaults to `info`. Pass `-v` or `--verbose` to select debug when
+`LOG_LEVEL` is absent. An explicit `LOG_LEVEL` always wins. Normal completions
+log only the resolved model, route or protocol pair, streaming mode, status,
+and total duration. Rate limiting, exhausted retries, upstream 5xx responses,
+and recoverable transport failures log at `warn`.
+
+Debug completions add request and response byte counts, the immediate TCP peer,
+raw and calibrated token estimates, reported usage, attempt count, reservation
+state, queue wait, and adaptive budget without logging request bodies,
+credentials, identities, encrypted state, or embedded binary content. The token
+estimate includes model-visible JSON but excludes encrypted reasoning and
+compaction state, signatures, and embedded image, file, audio, and screenshot
+payloads. Streams emit their connection event at debug and one completion event
+at info or warn.
+
+Pass-through usage comes from complete parsed SSE events while the original
+chunks are forwarded unchanged. Observation is capped at 1 MB per event; a
+malformed or larger event safely retains the estimate. Reported usage
+reconciles process-local reservations across Chat Completions, Responses, Codex,
 Anthropic translations, and embeddings. Unused output reservations are
 credited immediately, and actual output is recorded when no maximum was
 specified. Each workspace/model queue admits requests FIFO and wakes its head
 when reconciliation frees capacity, without blocking unrelated models. After
-three consistent samples outside a five-percent noise band, a bounded
-per-model exponential moving ratio calibrates raw input estimates against
-actual usage. Logs include both the raw estimate and applied factor. Streaming
-Chat Completions defaults
+three consistent samples outside a five-percent noise band, a bounded per-model
+exponential moving ratio calibrates raw input estimates against actual usage.
+Streaming Chat Completions defaults
 `stream_options.include_usage` to `true`; an explicit caller value is
 preserved.
 
@@ -127,6 +131,10 @@ Supported routes:
 - `POST /v1/responses`
 - `POST /v1/messages`
 - `GET /healthz`
+- `GET /metrics`
+- `GET /metrics/snapshot`
+- `GET /metrics/events`
+- `GET /metrics/prometheus`
 
 `GET /v1/models` reads the cached live serving-endpoint catalogue. Standard
 requests receive an OpenAI `object` / `data` envelope. An `originator` header
@@ -264,13 +272,100 @@ per-minute budget with a local structured 429 rather than clamping it.
 `RATE_LIMIT_MODE` / `--rate-limit-mode` accepts `auto`, `on`, or `off` and
 defaults to `auto`. Auto mode leaves each workspace/model key unthrottled until
 its first 429 message containing `Exceeded workspace input tokens`,
-case-insensitively. `on` applies budgets immediately; `off` never applies them.
+case-insensitively. A matching 429 starts with a 50 percent input-budget
+penalty, repeated matches add 25 percentage points up to a 90 percent penalty,
+and each clean recovery step removes 10 percentage points. Output admission is
+not reduced.
+
+Recovery requires both ten minutes since the latest matching 429 and ten clean
+upstream 2xx responses. Later steps require another five minutes and ten clean
+responses. Zero penalty starts one final full-budget probation interval before
+the key becomes inactive again. Idle time alone never relaxes a key, and a
+renewed matching 429 immediately tightens or reactivates it. The state is
+process-local adaptive congestion control and resets when the process exits. It
+does not claim ownership of the complete workspace quota.
+
+The complete configured or documented input limit remains the per-request
+ceiling. The temporary penalty only reduces the rolling budget. A request above
+the adaptive budget but within the complete ceiling can run as the sole
+reservation in an empty window, so adaptive recovery cannot make a valid
+request impossible to admit. `on` applies complete budgets immediately and
+never decays. `off` never applies them. Provisioned throughput bypasses token
+admission in every mode. An unknown model limit retains shared cooldown and
+retry behavior without creating an active no-op limiter.
 
 Use `INPUT_TOKENS_PER_MINUTE` / `--input-tokens-per-minute` and
 `OUTPUT_TOKENS_PER_MINUTE` / `--output-tokens-per-minute` to override the
 published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
 `--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
 Databricks because process-local tracking cannot coordinate a workspace across
-proxy replicas. `/healthz` exposes process-local counters for automatic
-activation, admission waits, oversized rejections, post-admission input 429s,
+proxy replicas. `/healthz` exposes aggregate process-local counters for
+automatic activation, tightening, relaxation, probation, deactivation,
+reactivation, admission waits, oversized rejections, post-admission input 429s,
 retry reacquisition, and fallback full-window delays.
+
+## Metrics And Dashboard
+
+Metrics use the existing proxy listener and are enabled by default. The normal
+release binary defaults to `--metrics=ui`:
+
+- `ui` collects metrics and serves all metrics routes, including the dashboard;
+- `collect` collects metrics and serves JSON, SSE, and Prometheus without UI
+  routes;
+- `off` removes metrics collection, middleware, history, and routes;
+- `true` selects the fullest mode compiled into the binary;
+- `false` aliases `off`.
+
+Use `METRICS` for the same values. A non-loopback `--host` keeps collecting but
+returns 404 from every metrics route unless `--metrics-public` or
+`METRICS_PUBLIC=true` explicitly acknowledges remote exposure. Forwarded
+headers do not bypass this safeguard. Put an operator-owned authenticated proxy
+in front before exposing model names, traffic rates, and limit pressure.
+
+`/metrics/snapshot` returns the bounded dashboard payload.
+`/metrics/events` streams five-second snapshot events with SSE.
+`/metrics/prometheus` returns Prometheus text from the in-process recorder.
+`/metrics` serves the static dashboard embedded in the normal release binary.
+The dashboard provides 1h, 6h, and 24h ranges, model filtering, live
+pause/resume, compact/full detail, traffic and token charts, model latency and
+error summaries, and the adaptive rate-limit timeline.
+
+History remains in process memory:
+
+- five-second buckets retain the latest hour;
+- one-minute rollups retain the latest 24 hours;
+- at most 32 named model series are retained, with additional names combined
+  under `other`;
+- aggregate history targets and caps retained data at 16 MiB;
+- no request events, bodies, identities, peers, credentials, or model traffic
+  are written to disk.
+
+The dashboard follows the approved
+[Figma frame](https://www.figma.com/design/0qI0u23Tx4jzasligbW6PD?node-id=1-294)
+and canonical `branding/brand.yaml` tokens. Assets are static and require no
+runtime CDN or Node server. Validate their canonical tokens and Figma status
+markers with:
+
+```sh
+bun run model-proxy:metrics-assets
+```
+
+## Cargo Features
+
+The default feature is `metrics-ui`, which includes `metrics`. A headless build
+keeps collection and machine endpoints without dashboard assets:
+
+```sh
+cargo build -p dbx-tools-model-proxy --no-default-features --features metrics
+```
+
+A metrics-free build accepts only `--metrics=false` and excludes the recorder,
+histograms, Prometheus exporter, embedded assets, and metrics routes:
+
+```sh
+cargo build -p dbx-tools-model-proxy --no-default-features
+```
+
+Metrics persistence is deliberately not implemented. Process-local memory is
+the only supported retention layer until operational evidence justifies the
+separate optional SQLite phase.

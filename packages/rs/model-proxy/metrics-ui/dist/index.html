@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Process-local traffic, latency, token, model, and rate-limit diagnostics for dbx-model-proxy."
+    />
+    <title>Model proxy metrics</title>
+    <link rel="icon" href="/metrics/assets/favicon.svg" />
+    <link rel="stylesheet" href="/metrics/brand.0b7222df.css" />
+    <link rel="stylesheet" href="/metrics/app.9f4c1e2a.css" />
+    <script src="/metrics/app.9f4c1e2a.js" defer></script>
+  </head>
+  <body>
+    <main class="dashboard" data-detail="full" aria-busy="true">
+      <header class="header">
+        <div class="brand">
+          <div class="mark" aria-hidden="true">dbx</div>
+          <div>
+            <h1>Model proxy metrics</h1>
+            <p>Real-time process diagnostics · retention 24h</p>
+          </div>
+        </div>
+        <div class="controls" aria-label="Dashboard controls">
+          <span class="live-status" id="live-status">
+            <img src="/metrics/assets/status-live-8.svg" alt="" />
+            <span>Connecting</span>
+          </span>
+          <label class="select-control">
+            <span class="sr-only">Model</span>
+            <select id="model-filter">
+              <option value="all">All models</option>
+            </select>
+          </label>
+          <div class="range-control" role="group" aria-label="Time range">
+            <button type="button" data-range="1">1h</button>
+            <button type="button" data-range="6" aria-pressed="true">6h</button>
+            <button type="button" data-range="24">24h</button>
+          </div>
+          <button type="button" id="detail-toggle" aria-pressed="false">Compact</button>
+          <button type="button" id="pause-toggle" aria-pressed="false">Pause live</button>
+        </div>
+      </header>
+
+      <section class="summary" aria-label="Current metrics">
+        <article class="metric-card">
+          <span>Connections</span>
+          <div class="metric-value">
+            <strong id="connections">0</strong>
+            <img src="/metrics/assets/status-success-7.svg" alt="" />
+          </div>
+          <small id="active-requests">0 active requests</small>
+        </article>
+        <article class="metric-card">
+          <span>Requests / min</span>
+          <div class="metric-value">
+            <strong id="requests-minute">0</strong>
+            <img src="/metrics/assets/status-info-7.svg" alt="" />
+          </div>
+          <small id="total-requests">0 since process start</small>
+        </article>
+        <article class="metric-card">
+          <span>Token throughput</span>
+          <div class="metric-value">
+            <strong id="tokens-minute">0</strong>
+            <img src="/metrics/assets/status-success-7.svg" alt="" />
+          </div>
+          <small>input + output / min</small>
+        </article>
+        <article class="metric-card">
+          <span>p95 latency</span>
+          <div class="metric-value">
+            <strong id="p95-latency">0ms</strong>
+            <img src="/metrics/assets/status-info-7.svg" alt="" />
+          </div>
+          <small id="p50-latency">p50 0ms</small>
+        </article>
+        <article class="metric-card">
+          <span>429 rate</span>
+          <div class="metric-value">
+            <strong id="rate-429">0.00%</strong>
+            <img src="/metrics/assets/status-warning-7.svg" alt="" />
+          </div>
+          <small id="rate-429-count">0 in range</small>
+        </article>
+        <article class="metric-card">
+          <span>Active models</span>
+          <div class="metric-value">
+            <strong id="active-models">0</strong>
+            <img src="/metrics/assets/status-muted-7.svg" alt="" />
+          </div>
+          <small>32-series limit</small>
+        </article>
+      </section>
+
+      <section class="charts" aria-label="Traffic history">
+        <article class="panel chart-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Request throughput</h2>
+              <p>status and errors tracked in runtime</p>
+            </div>
+            <strong id="request-chart-value">0 rpm</strong>
+          </div>
+          <svg id="request-chart" role="img" aria-label="Request throughput over time"></svg>
+          <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Token throughput</h2>
+              <p>input and output token volume</p>
+            </div>
+            <strong id="token-chart-value">0 tpm</strong>
+          </div>
+          <svg id="token-chart" role="img" aria-label="Token throughput over time"></svg>
+          <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
+        </article>
+        <article class="panel chart-panel latency-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Latency</h2>
+              <p>average and peak response time</p>
+            </div>
+            <strong id="latency-chart-value">p95 0ms</strong>
+          </div>
+          <svg id="latency-chart" role="img" aria-label="Request latency over time"></svg>
+          <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
+        </article>
+      </section>
+
+      <section class="details">
+        <article class="panel models-panel">
+          <div class="panel-heading">
+            <h2>Model performance</h2>
+            <p id="model-count">No active models</p>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Requests</th>
+                  <th>p50</th>
+                  <th>p95</th>
+                  <th>p99</th>
+                  <th>Tokens</th>
+                  <th>Errors</th>
+                  <th>Retries</th>
+                  <th>Queue wait / max</th>
+                  <th>Limiter</th>
+                </tr>
+              </thead>
+              <tbody id="models-body">
+                <tr><td colspan="10" class="empty">Waiting for model traffic</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel timeline-panel">
+          <div class="panel-heading">
+            <h2>Rate-limit timeline</h2>
+            <p id="timeline-status">Live</p>
+          </div>
+          <ol id="timeline">
+            <li class="empty">No rate-limit transitions in retained history</li>
+          </ol>
+        </article>
+      </section>
+
+      <footer>
+        <p>
+          <img src="/metrics/assets/status-success-7.svg" alt="" />
+          <span id="retention-status">Collecting · process uptime 00:00:00</span>
+        </p>
+        <p id="retention-detail">5s resolution · 1h detail · 24h rollup · process-local</p>
+      </footer>
+      <div class="notice" id="notice" role="status" aria-live="polite"></div>
+    </main>
+  </body>
+</html>

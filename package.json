@@ -22,6 +22,7 @@
     "eslint": "projen eslint",
     "eslint:fix": "projen eslint:fix",
     "format": "projen format",
+    "model-proxy:metrics-assets": "projen model-proxy:metrics-assets",
     "model:metadata": "projen model:metadata",
     "openapi": "projen openapi",
     "package": "projen package",
