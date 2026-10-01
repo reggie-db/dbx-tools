@@ -8,7 +8,7 @@
  */
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { ignore, match } from "@dbx-tools/path";
 import { object, stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";

@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
 import { Command } from "commander";
 import { parse, stringify } from "smol-toml";
 import { pythonProjectInfo, stampPythonProject } from "./uniffi-python.js";

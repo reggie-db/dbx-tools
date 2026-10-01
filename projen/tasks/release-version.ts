@@ -2,7 +2,7 @@
 /** Validate one stable release version against the canonical workspace policy. */
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { compareSemver, parseSemver, resolveRemoteVersion } from "../src/workspace-version.ts";
 
 export function assertReleaseVersion(

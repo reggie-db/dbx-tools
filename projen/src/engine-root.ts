@@ -6,7 +6,7 @@
  */
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { functionUtils } from "@dbx-tools/shared-core";
 
 const ENGINE_PKG = "@dbx-tools/projen";

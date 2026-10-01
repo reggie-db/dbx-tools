@@ -4,7 +4,8 @@
  * generated version surface. This task has no git, registry, or publication
  * side effects; release preparation owns those operations.
  */
-import { exec, projectUtils } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import {

@@ -3,7 +3,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { json, log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import type { ReleaseUnitGraph } from "../src/release-catalog.ts";

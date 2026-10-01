@@ -1,6 +1,6 @@
 /** Shared subprocess policy for Projen source and task entrypoints. */
 
-import { exec } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
 
 export interface TaskCommandOptions {
   readonly env?: NodeJS.ProcessEnv;

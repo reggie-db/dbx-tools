@@ -2,7 +2,8 @@
 /** Verify that every committed package version matches its owning release unit. */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { exec, projectUtils } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
 import { json, log, object } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";

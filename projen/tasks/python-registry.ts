@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
 import { net } from "@dbx-tools/shared-core";
 
 export interface LocalPythonRegistry {

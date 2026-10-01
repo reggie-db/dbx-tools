@@ -1,5 +1,5 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, javascript, python, vscode } from "projen";
 import { JobPermission } from "projen/lib/github/workflows-model";

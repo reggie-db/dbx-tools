@@ -6,7 +6,8 @@
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { exec, projectUtils } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { captureTaskCommand } from "../src/_task-command.ts";
 import {

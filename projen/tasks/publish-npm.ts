@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 

@@ -25,7 +25,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { extname, relative, resolve, sep } from "node:path";
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
 import { json, object, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "yaml";

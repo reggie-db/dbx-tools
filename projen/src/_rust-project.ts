@@ -1,7 +1,7 @@
 /** Projen-native standalone and workspace-owned Rust project implementation. */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { License, Project, TextFile, TomlFile, javascript, type Task } from "projen";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";

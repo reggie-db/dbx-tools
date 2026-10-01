@@ -435,7 +435,11 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // belongs here because `config.ts` owns both
 // bundle and app.yaml config-source parsing.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
-  projectJs.addExports(p, { "./exec": "./src/exec.ts" });
+  projectJs.addExports(p, {
+    "./bin": "./src/bin.ts",
+    "./exec": "./src/exec.ts",
+    "./project-utils": "./src/project-utils.ts",
+  });
   p.addDeps(
     "@dbx-tools/core-rs@workspace:^",
     "extract-zip@^2.0.1",

@@ -3,7 +3,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log, stringUtils } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { selectReleaseSummary } from "./release-summary.ts";

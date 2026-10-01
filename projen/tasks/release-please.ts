@@ -3,7 +3,7 @@
 
 import { appendFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { GitHub } from "release-please";

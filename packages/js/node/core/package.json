@@ -44,9 +44,17 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./bin": {
+        "types": "./lib/src/bin.d.ts",
+        "default": "./lib/src/bin.js"
+      },
       "./exec": {
         "types": "./lib/src/exec.d.ts",
         "default": "./lib/src/exec.js"
+      },
+      "./project-utils": {
+        "types": "./lib/src/project-utils.d.ts",
+        "default": "./lib/src/project-utils.js"
       },
       "./package.json": "./package.json"
     }
@@ -56,7 +64,9 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./bin": "./src/bin.ts",
     "./exec": "./src/exec.ts",
+    "./project-utils": "./src/project-utils.ts",
     "./package.json": "./package.json"
   },
   "files": [
