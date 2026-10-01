@@ -730,7 +730,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(stepNames(rustBuild).includes("Resolve Cargo dependency cache key"), false);
     assert.deepEqual(workflowStep(rustBuild, "Cache Cargo registry and dependencies").with, {
       "cache-targets": true,
-      "cache-workspace-crates": false,
+      "cache-workspace-crates": true,
       "add-job-id-key": false,
       "add-rust-environment-hash-key": true,
       "shared-key": "release-${{ matrix.cargo }}-rust-stable",

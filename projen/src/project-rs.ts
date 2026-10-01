@@ -199,7 +199,7 @@ function rustCacheSteps(sharedKey: string): readonly JobStep[] {
       uses: "Swatinem/rust-cache@v2.9.2",
       with: {
         "cache-targets": true,
-        "cache-workspace-crates": false,
+        "cache-workspace-crates": true,
         "add-job-id-key": false,
         "add-rust-environment-hash-key": true,
         "shared-key": sharedKey,

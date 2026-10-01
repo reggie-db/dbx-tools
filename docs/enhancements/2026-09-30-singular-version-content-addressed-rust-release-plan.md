@@ -6,9 +6,10 @@ Updated: 2026-10-01
 
 Status: Implemented for the singular-version workflow, structured Rust version
 slot, exact-key raw bundle reuse, Cargo timing artifacts, and first-pass docs
-parallelism/caching. Persistent TypeDoc workers, per-package generated-output
-caching, linker experiments, and workspace-crate cache benchmarking remain
-optional measured follow-ups.
+parallelism/caching. Target-scoped Cargo caches retain both dependencies and
+unchanged workspace crate outputs. Persistent TypeDoc workers, per-package
+generated-output caching, and linker experiments remain optional measured
+follow-ups.
 
 ## Objective
 
