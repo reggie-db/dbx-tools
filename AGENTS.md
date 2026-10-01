@@ -2415,9 +2415,10 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `!/Cargo.lock` after the broad lockfile ignore. Cargo records canonical
   crates.io package identities and checksums, not this machine's configured
   sparse mirror URL. Rust workspace synthesis refreshes workspace package
-  versions in the lock, and release builds use `--locked` whenever the file
-  exists. This keeps dependency resolution and Rust cache inputs stable across
-  releases.
+  versions by updating only source-less workspace package blocks; it does not
+  invoke Cargo metadata or contact a registry. Release builds use `--locked`
+  whenever the file exists. This keeps dependency resolution and Rust cache
+  inputs stable across releases.
 - **Do not set projen's `workflowPackageCache: true`.** `bun.lock` is not tracked,
   so a lockfile-keyed cache has no stable input. Generated workflows instead use
   the helpers in `bun-workflow.ts`: one `BUN_VERSION` environment value drives
