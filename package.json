@@ -7,6 +7,7 @@
   "scripts": {
     "barrels": "projen barrels",
     "build": "projen build",
+    "bump": "projen bump",
     "clean": "projen clean",
     "clobber": "projen clobber",
     "compile": "projen compile",
@@ -34,13 +35,11 @@
     "py:test": "projen py:test",
     "pypiTrustedPublisherInstructions": "projen pypiTrustedPublisherInstructions",
     "release": "projen release",
-    "release:bootstrap": "projen release:bootstrap",
-    "release:plan": "projen release:plan",
-    "release:refresh": "projen release:refresh",
     "rs:bindings": "projen rs:bindings",
     "rs:build": "projen rs:build",
     "rs:format": "projen rs:format",
     "rs:lint": "projen rs:lint",
+    "rs:release-fingerprint": "projen rs:release-fingerprint",
     "rs:test": "projen rs:test",
     "sync": "projen sync",
     "test": "projen test",
@@ -82,7 +81,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.0.0",
+  "version": "0.6.229",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -205,7 +204,8 @@
         "packages/rs/google",
         "packages/rs/lakebase-proxy",
         "packages/rs/model",
-        "packages/rs/model-proxy"
+        "packages/rs/model-proxy",
+        "packages/rs/release-tools"
       ],
       "bindings": [
         {

@@ -8,6 +8,9 @@ pub const LOG_LEVEL_ENV: &str = "LOG_LEVEL";
 pub const DEFAULT_LOG_LEVEL: &str = "info";
 
 /// Install the shared tracing subscriber for dbx-tools Rust binaries.
+///
+/// Debug output includes source locations to make low-level diagnostics
+/// actionable without adding noise to the default info-level format.
 pub fn init_logging() -> Result<(), LoggingError> {
     let level = parse_log_level(std::env::var(LOG_LEVEL_ENV).ok().as_deref());
     let filter = EnvFilter::new(format!(
@@ -16,6 +19,8 @@ pub fn init_logging() -> Result<(), LoggingError> {
     fmt()
         .with_env_filter(filter)
         .with_target(false)
+        .with_file(level == LevelFilter::DEBUG)
+        .with_line_number(level == LevelFilter::DEBUG)
         .try_init()
         .map_err(|error| LoggingError::Initialize(error.to_string()))
 }

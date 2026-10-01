@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "versionSlotSchema": 1,
+  "rustSourceHash": "192eca751c750c8ccb82ad4e780f7b1a4fec01d33ba97ba08805db15a88ab8de",
+  "targets": {
+    "aarch64-apple-darwin": "99507c2f6bef75f82215cd9e23d9431f9e8aba16c422f9fccb22d1780f45b5f4",
+    "aarch64-pc-windows-msvc": "c3b0c1bc1b3a3186031fa825d9c3b4e4f61aa6eeb6e1bcad055623cf9bc0da5c",
+    "aarch64-unknown-linux-gnu": "0cb88d63b55b6bf41c74d9d050a9515b595904a012bee2dccd0bc296de6e46e1",
+    "x86_64-apple-darwin": "c861df238db4a7512abedc26258ab1eaabb5f5313d991a15ed6c74fb093184ec",
+    "x86_64-pc-windows-msvc": "5d5422782bf43930478ccabee3e62f085f629df9bc4fa2dc0e5b906b30257538",
+    "x86_64-unknown-linux-gnu": "631fcccf024f971444cd17cc1a64aa20f70b58a9a4e9b82c71d53f2176a2bbd5"
+  }
+}

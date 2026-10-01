@@ -175,7 +175,10 @@ program
     "comma-separated provider order: cursor,codex,claude",
   )
   .option("--no-local-cargo", "skip local Cargo publication")
-  .option("--approve", "merge the release branch directly into the release base")
+  .option(
+    "--no-approve",
+    "open the release pull request without enabling automatic merge",
+  )
   .action(
     async (opts: {
       level: VersionLevel;
@@ -353,38 +356,20 @@ program
           githubEnvironment,
         );
       };
+      ensurePullRequest();
       if (opts.approve) {
-        const merged = commandSucceeds(
+        run(
           root,
           "gh",
-          [
-            "api",
-            "--method",
-            "POST",
-            `repos/${account.owner}/${account.repository}/merges`,
-            "-f",
-            `base=${opts.base}`,
-            "-f",
-            `head=${releaseBranch}`,
-            "-f",
-            `commit_message=Merge ${releaseTag}`,
-          ],
+          ["pr", "merge", releaseBranch, "--auto", "--merge"],
           githubEnvironment,
         );
-        if (!merged) {
-          ensurePullRequest();
-          run(root, "gh", ["pr", "merge", releaseBranch, "--admin", "--merge"], githubEnvironment);
-        }
-        git(releaseRoot, ["push", "--no-verify", "origin", "--delete", releaseBranch]);
-        git(root, ["fetch", "origin", opts.base]);
-        git(root, ["merge", "--ff-only", `origin/${opts.base}`]);
-        git(root, ["push", "origin", currentBranch]);
-      } else {
-        ensurePullRequest();
       }
       git(root, ["worktree", "remove", "--force", releaseRoot]);
       git(root, ["branch", "--delete", "--force", releaseBranch]);
-      logger.success(`${opts.approve ? "merged" : "opened"} ${releaseBranch} for ${releaseTag}`);
+      logger.success(
+        `${opts.approve ? "enabled automatic merge for" : "opened"} ${releaseBranch} for ${releaseTag}`,
+      );
     },
   );
 

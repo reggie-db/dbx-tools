@@ -173,26 +173,20 @@ a host Rust build. Regenerate bindings through the focused watcher or explicit
 task while changing a UniFFI API. Release preparation runs Cargo workspace tests
 without invoking UBRN.
 
-The workspace generates one `release.yml` workflow for every ecosystem.
-Independent mode runs Release Please on default-branch pushes. It owns the
-combined release PR, per-component semantic increments, component-qualified
-tags, and GitHub Releases. A Projen reconciliation pass reads the reviewed
-manifest, regenerates every owned version surface, validates a clean second
-synthesis, and commits component-qualified release notes to the release PR.
-One non-cancelling `release` concurrency group serializes publication.
+The workspace generates one `release.yml` workflow for every ecosystem. One
+root `VERSION` drives every Node, Python, Cargo, native, and GitHub artifact.
+`bun run release` prepares one reviewed PR into `main`; it enables automatic
+merge by default and accepts `--no-approve` for a human-controlled merge. One
+non-cancelling `release` concurrency group serializes publication.
 
 Release generation writes `release.yml` without scanning for or removing other
 workflow files. Consumers explicitly delete exact workflow files they no longer
 want.
 
-The release-plan job compares the previous and reviewed release-unit graphs and
-selects only changed units, required dependents, packages, native targets,
-assets, and docs. A Node-only release allocates no Rust runner. Manual recovery
-names one component, reviewed version, and publication stage; it reconstructs
-that component's plan without changing any other version. npm retries compare
-archive content and repository identity, PyPI uses hash-aware existing-file
-behavior, Cargo checks existing versions, and GitHub assets upload to the
-component release.
+The release workflow accepts stage-specific manual recovery only for the exact
+annotated tag and expected SHA. npm retries compare archive content and
+repository identity, PyPI uses hash-aware existing-file behavior, Cargo checks
+existing versions, and GitHub assets upload to the single repository release.
 
 Set `releaseSyncBranch` when a repository retains a long-lived source branch.
 After publication the workflow fast-forwards a branch that is behind, skips a
@@ -444,30 +438,16 @@ a new package is covered without a re-synth. Work from the root:
 | `bun run test`              | `eslint` once, then each member's tests               |
 | `bun run sync`              | re-synth (`--watch` to keep synthing)                 |
 | `bun run barrels`           | regenerate the read-only `index.ts` barrels           |
-| `bun run release:bootstrap` | initialize writable Release Please state once         |
-| `bun run release:plan`      | emit the affected component and publication plan      |
-| `bun run version:check`     | verify every package against its owning release unit  |
-| `bun run release`           | commit, annotate, and push one source release request |
-| `bun run release:refresh`   | refresh Release Please PRs, tags, and releases        |
+| `bun run bump`              | increment `VERSION` and regenerate version surfaces   |
+| `bun run version:check`     | verify every generated version against `VERSION`      |
+| `bun run release`           | validate, open, and automatically merge a release PR  |
+| `bun run release --no-approve` | open the release PR without automatic merge       |
 
-`release` first proves the branch differs from `main`; an unchanged branch exits
-before notes, AI, commits, pushes, or PR creation. It commits dirty source,
-writes custom `--notes` / `--notes-file` content or a bounded Cursor, Codex,
-Claude, then Git fallback to `.release-notes/requests/<branch>.md`, adds one
-request commit, and pushes. The generated workflow creates or updates the source
-PR, merges it directly with `GITHUB_TOKEN`, and dispatches release planning, so
-no UI approval or merge is required. GitHub may briefly record
-`action_required` for the bot-authored PR validation; it is not a required gate.
-
-After the source PR merges, Release Please retains direct conventional semantic
-increments and applies required dependent patches. Reconciliation copies the
-readable request Markdown into one temporary
-`.release-notes/final/<component>-v<version>.md` per affected component and
-deletes the consumed request file in the release PR, then merges that generated
-PR and explicitly dispatches publication. A source merge with no affected
-release units creates no release PR or publication work. Publication applies
-each file to its matching GitHub Release, then removes the temporary notes tree
-in a cleanup commit. Request and final notes never count as source changes.
+`release` commits and pushes pending source work, creates a release worktree,
+increments `VERSION`, synthesizes manifests and registries, runs validation and
+local publication, writes the release summary, and opens one PR. It enables
+automatic merge unless `--no-approve` is supplied. The merged `VERSION` change
+starts publication from the exact `main` SHA and creates one `v<version>` tag.
 
 The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
 public `BuildWorkflow` `buildTask` option. That task runs synth plus the
@@ -476,10 +456,9 @@ preparation has already run Rust tests, workspace type-checking, and local
 package preflight before opening the PR. JavaScript behavior tests remain an
 explicit developer task.
 
-The generated workflow runs Release Please on the configured branch. A merged
-release PR produces an affected plan, then selected Rust, Python, Node, GitHub
-asset, and docs jobs run behind a publication barrier. A stage with no selected
-outputs is skipped before runner allocation.
+The generated workflow publishes the complete public workspace at the singular
+version. Rust, Python, Node, GitHub asset, and docs stages share the verified tag
+and SHA. Documentation generation runs only on this version-triggered workflow.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
@@ -506,14 +485,8 @@ from the root instead.
 
 ## Versioning
 
-`DBXToolsReleaseCatalog` is the language-neutral version seam. It generates
-`.projen/release-units.json` from attached projects, explicit external members,
-UniFFI families, and binary assets. Independent mode reads component versions
-from `.release-please-manifest.json`; fixed mode reads `VERSION`.
-
-Every unit has `.release-units/<component>/source.json`, generated from
-release-affecting inputs. Release Please owns the adjacent `version.txt` and
-`CHANGELOG.md`. Real package manifests remain Projen-owned and reproduce the
-reviewed manifest exactly. `versioningMode: "fixed"` remains the default for
-consumers during migration; `versioningMode: "independent"` enables the
-Release Please and affected-workflow surface.
+`VERSION` is the language-neutral version seam. Real package manifests remain
+Projen-owned and reproduce it exactly across JavaScript, Python, Rust, UniFFI
+bindings, native package metadata, and runtime binary registries. Package and
+artifact discovery still supplies publication order and target inventory; it
+does not create independent version ownership.

@@ -126,6 +126,42 @@ function eventDetail(event: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+function eventToolName(event: Record<string, unknown>): string | undefined {
+  const item = object.isRecord(event.item) ? event.item : undefined;
+  for (const value of [event.tool_name, event.toolName, event.name, item?.tool_name, item?.name]) {
+    if (typeof value === "string") return string.trimToNull(value) ?? undefined;
+  }
+  const toolCall = object.isRecord(event.tool_call)
+    ? event.tool_call
+    : object.isRecord(event.toolCall)
+      ? event.toolCall
+      : undefined;
+  const wrapper = toolCall
+    ? Object.keys(toolCall).find(
+        (key) => key.endsWith("ToolCall") && object.isRecord(toolCall[key]),
+      )
+    : undefined;
+  return wrapper ? wrapper.slice(0, -"ToolCall".length) : undefined;
+}
+
+/** Normalize one provider event into the fields retained in release logs. */
+export function releaseSummaryProviderEvent(event: Record<string, unknown>): {
+  type: string;
+  text?: string;
+  detail?: string;
+  tool?: string;
+} {
+  const text = eventText(event);
+  const detail = eventDetail(event);
+  const tool = eventToolName(event);
+  return {
+    type: eventType(event),
+    ...(text ? { text } : {}),
+    ...(detail ? { detail } : {}),
+    ...(tool ? { tool } : {}),
+  };
+}
+
 async function runProvider(
   provider: ReleaseSummaryProvider,
   root: string,
@@ -133,7 +169,15 @@ async function runProvider(
 ): Promise<string | undefined> {
   if (!capture(root, provider.command, [...provider.probeArgs])) return undefined;
   let summary: string | undefined;
+  let previousEventKey: string | undefined;
   const textOutput: string[] = [];
+  const logEvent = (event: Record<string, unknown>) => {
+    const fields = { provider: provider.name, ...event };
+    const key = JSON.stringify(fields);
+    if (key === previousEventKey) return;
+    previousEventKey = key;
+    logger.info("provider-event", fields);
+  };
   const child = exec.spawn(provider.command, provider.args(root, prompt), {
     cwd: root,
     stdout: [
@@ -144,19 +188,13 @@ async function runProvider(
           const text = string.trimToNull(line);
           if (text) {
             textOutput.push(text);
-            logger.info("provider-event", { provider: provider.name, type: "text", text });
+            logEvent({ type: "text", text });
           }
           return;
         }
-        const text = eventText(event);
-        const detail = eventDetail(event);
-        if (text) summary = text;
-        logger.info("provider-event", {
-          provider: provider.name,
-          type: eventType(event),
-          ...(text ? { text } : {}),
-          ...(detail ? { detail } : {}),
-        });
+        const fields = releaseSummaryProviderEvent(event);
+        if (fields.text) summary = fields.text;
+        logEvent(fields);
       },
     ],
     stderr: (line) => {

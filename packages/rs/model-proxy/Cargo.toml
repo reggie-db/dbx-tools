@@ -1,8 +1,10 @@
 
 [package]
 name = "dbx-tools-model-proxy"
-version = "0.6.229"
 description = "Multi-protocol Databricks model proxy"
+
+  [package.version]
+  workspace = true
 
   [package.edition]
   workspace = true

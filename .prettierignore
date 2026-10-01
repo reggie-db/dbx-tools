@@ -53,7 +53,6 @@ packages/py/graphiti/pyproject.toml
 .gitattributes
 .github/pull_request_template.md
 .github/workflows/build.yml
-.github/workflows/release-request.yml
 .github/workflows/release.yml
 .gitignore
 .mergify.yml
@@ -63,7 +62,6 @@ packages/py/graphiti/pyproject.toml
 .projen/deps.json
 .projen/files.json
 .projen/pypi-trusted-publisher-instructions.mjs
-.projen/release-units.json
 .projen/smol-toml.cjs
 .projen/smol-toml.LICENSE
 .projen/tasks.json
@@ -77,7 +75,6 @@ Cargo.toml
 LICENSE
 packages/js/node/rust-binary/src/_rust-release-binaries.ts
 pyproject.toml
-release-please-config.json
 tsconfig.base.json
 tsconfig.json
 tsconfig.projen.json

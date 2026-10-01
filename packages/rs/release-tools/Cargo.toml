@@ -1,0 +1,39 @@
+
+[package]
+name = "dbx-tools-release-tools"
+description = "Private content-addressed Rust release fingerprint and binary stamping tools"
+publish = false
+
+  [package.version]
+  workspace = true
+
+  [package.edition]
+  workspace = true
+
+  [package.rust-version]
+  workspace = true
+
+  [package.license]
+  workspace = true
+
+  [package.repository]
+  workspace = true
+
+[[bin]]
+name = "dbx-tools-release-tools"
+path = "src/main.rs"
+
+[dependencies.clap]
+workspace = true
+
+[dependencies.object]
+workspace = true
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+[dependencies.sha2]
+workspace = true

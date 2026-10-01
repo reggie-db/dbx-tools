@@ -36,6 +36,16 @@
         }
       ]
     },
+    "bump": {
+      "name": "bump",
+      "description": "Increment VERSION and synchronize generated workspace versions",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v",
+          "receiveArgs": true
+        }
+      ]
+    },
     "clean": {
       "name": "clean",
       "steps": [
@@ -313,39 +323,10 @@
     },
     "release": {
       "name": "release",
-      "description": "Commit, annotate, and push a source release request",
+      "description": "Prepare, validate, locally publish, and automatically merge a release PR",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-request.ts --base \"main\"",
-          "receiveArgs": true
-        }
-      ]
-    },
-    "release:bootstrap": {
-      "name": "release:bootstrap",
-      "description": "Bootstrap Release Please state from release units",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-bootstrap.ts"
-        }
-      ]
-    },
-    "release:plan": {
-      "name": "release:plan",
-      "description": "Build the affected release plan",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-plan.ts",
-          "receiveArgs": true
-        }
-      ]
-    },
-    "release:refresh": {
-      "name": "release:refresh",
-      "description": "Refresh Release Please PRs, tags, and GitHub Releases",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-please.ts --target-branch \"main\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"rs:release-fingerprint\"",
           "receiveArgs": true
         }
       ]
@@ -380,6 +361,15 @@
       "steps": [
         {
           "exec": "cargo clippy --workspace --all-targets --all-features"
+        }
+      ]
+    },
+    "rs:release-fingerprint": {
+      "name": "rs:release-fingerprint",
+      "description": "Write the version-independent Rust release build manifest",
+      "steps": [
+        {
+          "exec": "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\""
         }
       ]
     },
@@ -426,7 +416,7 @@
     },
     "version:check": {
       "name": "version:check",
-      "description": "Verify every package against its release unit",
+      "description": "Verify every package and generated barrel matches VERSION",
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/version-check.ts"

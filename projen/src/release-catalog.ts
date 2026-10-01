@@ -268,12 +268,12 @@ export class DBXToolsReleaseCatalog extends Component {
     this.bootstrapSha = options.bootstrapSha;
     this.rules = [...(options.units ?? [])];
     for (const external of options.externalProjects ?? []) this.registerExternalProject(external);
-    new JsonFile(project, this.graphFile, {
-      marker: false,
-      readonly: true,
-      obj: () => this.graph(),
-    });
     if (this.mode === "independent") {
+      new JsonFile(project, this.graphFile, {
+        marker: false,
+        readonly: true,
+        obj: () => this.graph(),
+      });
       new JsonFile(project, this.releasePleaseConfigFile, {
         marker: false,
         readonly: true,
@@ -284,6 +284,9 @@ export class DBXToolsReleaseCatalog extends Component {
           description: "Bootstrap Release Please state from release units",
         })
         .exec("bun node_modules/@dbx-tools/projen/tasks/release-bootstrap.ts");
+    } else {
+      project.tryRemoveFile(this.graphFile);
+      project.tryRemoveFile(this.releasePleaseConfigFile);
     }
   }
 

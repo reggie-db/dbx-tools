@@ -5,12 +5,18 @@ members = [
   "packages/rs/google",
   "packages/rs/lakebase-proxy",
   "packages/rs/model",
-  "packages/rs/model-proxy"
+  "packages/rs/model-proxy",
+  "packages/rs/release-tools"
 ]
-default-members = [ "packages/rs/lakebase-proxy", "packages/rs/model-proxy" ]
+default-members = [
+  "packages/rs/lakebase-proxy",
+  "packages/rs/model-proxy",
+  "packages/rs/release-tools"
+]
 resolver = "2"
 
   [workspace.package]
+  version = "0.6.229"
   edition = "2021"
   rust-version = "1.89"
   license = "Apache-2.0"
@@ -59,6 +65,11 @@ resolver = "2"
     version = "0.25"
     default-features = false
     features = [ "jpeg", "png", "webp" ]
+
+    [workspace.dependencies.object]
+    version = "0.37"
+    default-features = false
+    features = [ "read" ]
 
     [workspace.dependencies.oauth2]
     version = "5"

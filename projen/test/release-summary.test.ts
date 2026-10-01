@@ -8,6 +8,7 @@ import { releaseSummaryFile } from "../src/release-dispatch.ts";
 import {
   generateReleaseSummary,
   RELEASE_SUMMARY_PROVIDERS,
+  releaseSummaryProviderEvent,
   selectReleaseSummary,
 } from "../tasks/release-summary.ts";
 
@@ -44,6 +45,24 @@ describe("optional release summary providers", () => {
     );
     assert.deepEqual(calls, ["claude"]);
     assert.equal(selected?.provider, "claude");
+  });
+
+  it("includes Cursor tool names in normalized provider events", () => {
+    assert.deepEqual(
+      releaseSummaryProviderEvent({
+        type: "tool_call",
+        subtype: "started",
+        tool_call: {
+          readToolCall: {
+            args: { path: "AGENTS.md" },
+          },
+        },
+      }),
+      {
+        type: "tool_call",
+        tool: "read",
+      },
+    );
   });
 
   it("writes an AI summary and replaces stale content with a Git fallback", async () => {

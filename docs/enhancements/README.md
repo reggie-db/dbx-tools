@@ -12,7 +12,11 @@ date and final status.
 
 ## Active plans
 
-No active enhancement plans.
+- [Singular version and content-addressed Rust release plan](2026-09-30-singular-version-content-addressed-rust-release-plan.md)
+  - Implemented singular-version release flow: one reviewed PR into `main`, one
+    repository version, exact-key reuse of checksummed raw Rust target bundles,
+    structured binary version stamping, Cargo timings, and existing-runner
+    documentation parallelism/cache improvements.
 
 ## Cross-repository suggestions
 

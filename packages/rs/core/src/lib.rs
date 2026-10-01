@@ -4,6 +4,7 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 
 mod auth;
+pub mod build_info;
 mod client;
 mod credentials;
 mod databricks_cli;
