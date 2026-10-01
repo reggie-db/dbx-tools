@@ -32,6 +32,7 @@
   "dependencies": {
     "@databricks/sdk-experimental": "catalog:",
     "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/core-rs": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "zod": "catalog:"
   },

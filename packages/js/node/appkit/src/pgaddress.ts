@@ -1,218 +1,68 @@
 /**
- * Flexible address parser for Lakebase Postgres connection inputs.
+ * Lakebase PostgreSQL address parsing backed by `@dbx-tools/core-rs`.
  *
- * Accepts whatever shape a user is likely to paste into
- * `LAKEBASE_ENDPOINT` (or the matching config field) and extracts
- * every recognizable piece. Whatever it can't recover is left for the
- * Lakebase resolver to discover.
- *
- * Recognized formats:
- *
- * - **Postgres URI** -
- *   `postgresql://user@host:port/db?sslmode=require` (also `postgres://`).
- *   Yields `user`, `host`, `port`, `database`, `sslMode`.
- *
- * - **Canonical endpoint resource path** -
- *   `projects/{p}/branches/{b}/endpoints/{e}` -
- *   yields `project`, `branch`, `endpointId`, and the original string as
- *   `endpoint` (already in lakebase's expected form).
- *
- * - **Database resource path** -
- *   `projects/{p}/branches/{b}/databases/{d}` -
- *   yields `project`, `branch`, and `databaseResourceId` (the UC
- *   resource leaf, not `PGDATABASE`; the resolver looks up the real
- *   Postgres name via REST).
- *
- * - **Branch resource path** -
- *   `projects/{p}/branches/{b}` - yields `project`, `branch`.
- *
- * - **Project resource path** -
- *   `projects/{p}` - yields `project`.
- *
- * - **Bare hostname** -
- *   `ep-steep-forest-e199v43w.database.eastus2.azuredatabricks.net` -
- *   yields `host` only; the resolver reverse-looks up the owning
- *   endpoint to recover the resource path.
- *
- * - **Bare project id** -
- *   `dbx-tools-demo` (1-63 chars, lowercase letters/digits/hyphens) -
- *   yields `project`.
- *
- * Returns an empty object for inputs it doesn't recognize.
+ * Rust owns the recognized URL, resource-path, hostname, project-id, and SSL
+ * mode rules. This module preserves AppKit's existing namespace, string SSL
+ * spelling, sparse records, and nullable input compatibility.
  *
  * @module
  */
 
-import { object } from "@dbx-tools/shared-core";
+import {
+  parseAddress as parseNativeAddress,
+  parseResourcePath as parseNativeResourcePath,
+  SslMode as NativeSslMode,
+  type ParsedAddress as NativeParsedAddress,
+} from "@dbx-tools/core-rs";
 
-/** Postgres TLS modes accepted by {@link SslMode}, in `PGSSLMODE` spelling. */
-export const SSL_MODES = ["require", "disable", "prefer"] as const;
+type NativeSslModeName = Extract<keyof typeof NativeSslMode, string>;
 
-/** Postgres TLS mode passed through to `pg`. */
-export type SslMode = (typeof SSL_MODES)[number];
+/** PostgreSQL TLS mode in `PGSSLMODE` spelling. */
+export type SslMode = Lowercase<NativeSslModeName>;
 
-/**
- * Optional Lakebase Postgres connection fields shared by parsed addresses,
- * resolver/env inputs, and resolved connections.
- */
-export interface LakebaseConnectionInputs {
-  /** Lakebase project id. Resolved from the workspace when unset. */
-  project?: string;
-  /** Branch id within the project. Defaults to the project's default branch. */
-  branch?: string;
-  /**
-   * Canonical endpoint resource path (`projects/.../endpoints/...`), from
-   * `LAKEBASE_ENDPOINT`. Defaults to the branch's read-write endpoint.
-   */
-  endpoint?: string;
-  /** Postgres database name (`PGDATABASE`). Defaults to `databricks_postgres`. */
-  database?: string;
-  /** Postgres hostname (`PGHOST`). Defaults to the resolved endpoint's host. */
-  host?: string;
-  /** Postgres port (`PGPORT`). Defaults to 5432. */
-  port?: number;
-  /** Postgres TLS mode (`PGSSLMODE`). Defaults to `require`. */
-  sslMode?: SslMode;
+/** Postgres TLS modes accepted by the native parser, in `PGSSLMODE` spelling. */
+export const SSL_MODES: readonly SslMode[] = Object.keys(NativeSslMode)
+  .filter((name): name is NativeSslModeName => Number.isNaN(Number(name)))
+  .map((name) => name.toLowerCase() as SslMode);
+
+/** Native parser output with AppKit's existing string SSL spelling. */
+export type ParsedAddress = {
+  [Key in keyof NativeParsedAddress]: Key extends "sslMode"
+    ? SslMode | undefined
+    : NativeParsedAddress[Key];
+};
+
+/** Inputs shared by parsing and Lakebase connection resolution. */
+export type LakebaseConnectionInputs = ParsedAddress;
+
+function sslModeName(mode: NativeParsedAddress["sslMode"]): SslMode | undefined {
+  return mode === undefined ? undefined : (NativeSslMode[mode].toLowerCase() as SslMode);
 }
 
-/** Pieces recovered from parsing a single address or resource-path input. */
-export interface ParsedAddress extends LakebaseConnectionInputs {
-  /** Endpoint leaf id (last segment of an endpoint resource path). */
-  endpointId?: string;
-  /**
-   * Database resource id leaf from a `.../databases/{id}` path. Not the
-   * Postgres database name.
-   */
-  databaseResourceId?: string;
-  /** Postgres user (URI-decoded if encoded). */
-  user?: string;
-}
-
-const URL_SCHEME_RE = /^(postgres|postgresql):\/\//i;
-const PROJECT_ID_RE = /^[a-z][a-z0-9-]{0,61}[a-z0-9]$|^[a-z]$/;
-const HOSTNAME_HINT_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/i;
-
-/**
- * Parse a Lakebase connection input into whatever pieces it carries.
- * See module docstring for the supported formats. Returns `{}` for
- * `undefined`, empty strings, and unrecognized inputs.
- *
- * @example
- * import { pgaddress } from "@dbx-tools/appkit";
- *
- * pgaddress.parseAddress("projects/demo/branches/production/endpoints/ep-1");
- * // { project: "demo", branch: "production", endpointId: "ep-1", endpoint: "projects/..." }
- *
- * pgaddress.parseAddress("postgresql://me@ep-1.database.azuredatabricks.net/app?sslmode=require");
- * // { host: "ep-1.database.azuredatabricks.net", user: "me", database: "app", sslMode: "require" }
- */
-export function parseAddress(input: string | undefined | null): ParsedAddress {
-  if (!input) return {};
-  const s = input.trim();
-  if (!s) return {};
-
-  if (URL_SCHEME_RE.test(s)) return parseUri(s);
-  if (s.startsWith("projects/")) return parseResourcePathSegments(s);
-  // Resource ids never contain dots; a dotted input must be a hostname.
-  if (HOSTNAME_HINT_RE.test(s) && s.includes(".")) return { host: s };
-  if (PROJECT_ID_RE.test(s)) return { project: s };
-  return {};
+function normalizeAddress(address: NativeParsedAddress): ParsedAddress {
+  const normalized = { ...address, sslMode: sslModeName(address.sslMode) } as ParsedAddress;
+  for (const key of Object.keys(normalized) as (keyof ParsedAddress)[]) {
+    if (normalized[key] === undefined) delete normalized[key];
+  }
+  return normalized;
 }
 
 /**
- * Parse a Lakebase `projects/...` resource path. Returns `{}` when the
- * input is not a resource path (so bare branch ids are not mistaken for
- * project ids).
+ * Parse a PostgreSQL URL, Lakebase resource path, hostname, or project id.
+ * Returns an empty record when the input is absent or unrecognized.
  */
-export function parseResourcePath(input: string | undefined | null): ParsedAddress {
-  if (!input) return {};
-  const s = input.trim();
-  if (!s.startsWith("projects/")) return {};
-  return parseResourcePathSegments(s);
+export function parseAddress(input: string | null | undefined): ParsedAddress {
+  return normalizeAddress(parseNativeAddress(input ?? undefined));
 }
 
-function parseUri(s: string): ParsedAddress {
-  let url: URL;
-  try {
-    url = new URL(s);
-  } catch {
-    return {};
-  }
-  const target = url.pathname.replace(/^\//, "");
-  const decodedTarget = target ? decodeURIComponent(target) : "";
-  const result: ParsedAddress = decodedTarget.startsWith("projects/")
-    ? parseResourcePathSegments(decodedTarget)
-    : {};
-  if (url.hostname) result.host = url.hostname;
-  const port = object.toNumber(url.port);
-  if (port !== undefined) result.port = port;
-  if (url.username) {
-    try {
-      result.user = decodeURIComponent(url.username);
-    } catch {
-      result.user = url.username;
-    }
-  }
-  if (decodedTarget && !result.project) result.database = decodedTarget;
-  const sslmodeRaw = url.searchParams.get("sslmode") ?? url.searchParams.get("sslMode");
-  const sslmode = sslmodeRaw?.toLowerCase();
-  if (isSslMode(sslmode)) {
-    result.sslMode = sslmode;
-  }
-  return result;
+/** Parse a canonical Lakebase `projects/...` resource path. */
+export function parseResourcePath(input: string | null | undefined): ParsedAddress {
+  return normalizeAddress(parseNativeResourcePath(input ?? undefined));
 }
 
-function isSslMode(value: string | undefined): value is SslMode {
-  return SSL_MODES.some((mode) => mode === value);
-}
-
-function parseResourcePathSegments(s: string): ParsedAddress {
-  const parts = s.split("/");
-  if (parts[0] !== "projects" || parts.length < 2) {
-    return {};
-  }
-
-  const project = parts[1];
-  if (!project) {
-    return {};
-  }
-
-  if (parts.length === 2) {
-    return { project };
-  }
-
-  if (parts.length === 4 && parts[2] === "branches" && parts[3]) {
-    return { project, branch: parts[3] };
-  }
-
-  if (
-    parts.length === 6 &&
-    parts[2] === "branches" &&
-    parts[4] === "endpoints" &&
-    parts[3] &&
-    parts[5]
-  ) {
-    return {
-      project,
-      branch: parts[3],
-      endpointId: parts[5],
-      endpoint: s,
-    };
-  }
-
-  if (
-    parts.length === 6 &&
-    parts[2] === "branches" &&
-    parts[4] === "databases" &&
-    parts[3] &&
-    parts[5]
-  ) {
-    return {
-      project,
-      branch: parts[3],
-      databaseResourceId: parts[5],
-    };
-  }
-
-  return {};
+/** Normalize a PostgreSQL TLS mode through the native address parser. */
+export function parseSslMode(input: string | null | undefined): SslMode | undefined {
+  if (input === undefined || input === null || input.trim() === "") return undefined;
+  const query = encodeURIComponent(input.trim());
+  return sslModeName(parseNativeAddress(`postgresql://localhost?sslmode=${query}`).sslMode);
 }

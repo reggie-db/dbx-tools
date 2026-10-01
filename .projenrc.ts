@@ -453,6 +453,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
 project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/core-rs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
     "zod@catalog:",
   );

@@ -50,6 +50,7 @@ import { toContext } from "./databricks.ts";
 import {
   parseAddress,
   parseResourcePath,
+  parseSslMode as parseNativeSslMode,
   SSL_MODES,
   type LakebaseConnectionInputs,
   type SslMode,
@@ -196,8 +197,6 @@ type Operation = z.infer<typeof operationSchema>;
 /** `PGPORT` must land inside the TCP port range. */
 const portSchema = z.coerce.number().int().min(1).max(coreConfig.MAX_TCP_PORT);
 
-const sslModeSchema = z.enum(SSL_MODES);
-
 /**
  * Validate a `PGPORT`-shaped value. Returns `undefined` when unset, and throws
  * a {@link ValidationError} naming `PGPORT` for anything that is not a TCP
@@ -223,11 +222,11 @@ export function parsePort(value: string | number | undefined): number | undefine
  */
 export function parseSslMode(value: string | undefined): SslMode | undefined {
   if (value === undefined || value === "") return undefined;
-  const parsed = sslModeSchema.safeParse(value.trim().toLowerCase());
-  if (!parsed.success) {
+  const parsed = parseNativeSslMode(value);
+  if (parsed === undefined) {
     throw ValidationError.invalidValue("PGSSLMODE", value, SSL_MODES.join(", "));
   }
-  return parsed.data;
+  return parsed;
 }
 
 /**
@@ -269,6 +268,8 @@ export async function readLakebaseInputs(
   const parsed = parseAddress(rawAddress);
   const portEnv = parsePort(coreConfig.resolveValue("PGPORT"));
   const sslModeEnv = parseSslMode(coreConfig.resolveValue("PGSSLMODE"));
+  const configuredSslMode = parseSslMode(config?.sslMode);
+  const parsedSslMode = parseSslMode(parsed.sslMode);
   return {
     project: config?.project ?? parsed.project,
     branch: config?.branch ?? parsed.branch,
@@ -279,7 +280,7 @@ export async function readLakebaseInputs(
     database: config?.database ?? coreConfig.resolveValue("PGDATABASE") ?? parsed.database,
     host: config?.host ?? coreConfig.resolveValue("PGHOST") ?? parsed.host,
     port: config?.port ?? portEnv ?? parsed.port,
-    sslMode: config?.sslMode ?? sslModeEnv ?? parsed.sslMode,
+    sslMode: configuredSslMode ?? sslModeEnv ?? parsedSslMode,
     autoCreate: config?.autoCreate,
   };
 }
@@ -309,7 +310,7 @@ export async function resolveLakebaseConnection(
   const inputs = await readLakebaseInputs(config);
   let { project, branch, endpoint, database, host } = inputs;
   const port = inputs.port ?? DEFAULT_PORT;
-  const sslMode = inputs.sslMode ?? DEFAULT_SSL_MODE;
+  const sslMode = parseSslMode(inputs.sslMode) ?? DEFAULT_SSL_MODE;
 
   // Resource paths may carry redundant info; harvest project/branch
   // from any canonical path that snuck in via PGDATABASE or similar.

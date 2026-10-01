@@ -25,5 +25,5 @@ export { LifecycleBridgePlugin, lifecycleBridge } from "./src/interceptor.ts";
 export type { LifecycleEvent, LifecycleHandler, ResolvedAppEnv, BindableProcess, InterceptorContext, Interceptor, InterceptorRuntime } from "./src/interceptor.ts";
 export type { LakebaseResolverInputs, LakebaseConnection } from "./src/lakebase-resolver.ts";
 export { SSL_MODES } from "./src/pgaddress.ts";
-export type { SslMode, LakebaseConnectionInputs, ParsedAddress } from "./src/pgaddress.ts";
+export type { SslMode, ParsedAddress, LakebaseConnectionInputs } from "./src/pgaddress.ts";
 export type { PluginContextLike } from "./src/plugin.ts";

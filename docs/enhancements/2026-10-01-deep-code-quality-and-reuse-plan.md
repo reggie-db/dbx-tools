@@ -52,6 +52,13 @@ Before each implementation phase, re-inspect the active diff and preserve concur
   are now split into focused Projen modules. Standalone synthesis, positional
   compatibility, discovered workspaces, generated workflows, and a packed
   external consumer that compiles and tests the generated Rust project pass.
+- **Phase 5 is in progress.** AppKit no longer implements a second Lakebase
+  address parser or record. It consumes `@dbx-tools/core-rs`, derives its SSL
+  spelling from the generated enum, and retains the existing sparse-object and
+  string-mode API through a generated-type projection. SSL validation also
+  delegates to the native parser. TypeScript/Python parity, the complete AppKit
+  suite, and an isolated packed consumer pass without requiring an unpublished
+  native binding revision.
 
 ## Comparison with the Kanna implementation
 
