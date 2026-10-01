@@ -319,9 +319,10 @@ describe("release task contracts", () => {
       releasePr.indexOf("generateReleaseSummary({") < releasePr.indexOf("if (opts.approve)"),
     );
     assert.match(releasePr, /"pr",\s*"create"/);
-    assert.ok(releasePr.includes('.option("--approve",'));
-    assert.match(releasePr, /account\.repository}\/merges/);
-    assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--admin",\s*"--merge"/);
+    assert.ok(releasePr.includes('"--no-approve",'));
+    assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--auto",\s*"--merge"/);
+    assert.doesNotMatch(releasePr, /repos\/\$\{account\.owner\}\/\$\{account\.repository\}\/merges/);
+    assert.doesNotMatch(releasePr, /"--admin"/);
   });
 
   it("publishes reviewed versions without repairing manifests", () => {

@@ -180,6 +180,21 @@ const root = new projenProject.DBXToolsNodeProject({
         with: { "python-version": "3.11" },
       },
       { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+      {
+        name: "Resolve Rustdoc cache key",
+        id: "rustdoc-cache-key",
+        run: "echo \"key=$(bun docs/scripts/rustdoc-cache-key.mjs)\" >> \"$GITHUB_OUTPUT\"",
+      },
+      {
+        name: "Restore Rustdoc cache",
+        id: "rustdoc-cache",
+        uses: "actions/cache/restore@v5",
+        with: {
+          path: `${DOCS_BUILD_ROOT}/rustdoc-target`,
+          key: "rustdoc-${{ runner.os }}-${{ steps.rustdoc-cache-key.outputs.key }}",
+          "restore-keys": "rustdoc-${{ runner.os }}-",
+        },
+      },
       { name: "Configure Pages", uses: "actions/configure-pages@v5" },
       { name: "Install dependencies", run: "bun install" },
       {
@@ -198,6 +213,15 @@ const root = new projenProject.DBXToolsNodeProject({
         run: "bun docs/scripts/generate-api-docs.mjs",
       },
       {
+        name: "Save Rustdoc cache",
+        if: "${{ steps.rustdoc-cache.outputs.cache-hit != 'true' }}",
+        uses: "actions/cache/save@v5",
+        with: {
+          path: `${DOCS_BUILD_ROOT}/rustdoc-target`,
+          key: "rustdoc-${{ runner.os }}-${{ steps.rustdoc-cache-key.outputs.key }}",
+        },
+      },
+      {
         name: "Check generated titles",
         run: "bun docs/scripts/check-generated-titles.mjs",
       },
@@ -210,7 +234,11 @@ const root = new projenProject.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
+  releaseValidationTasks: [
+    "docs:check-source",
+    "docs:check-readmes",
+    "rs:release-fingerprint",
+  ],
   releaseSyncBranch: "dev",
   pullRequestTitlePolicy: {
     types: ["feat", "fix", "chore"],
@@ -221,22 +249,6 @@ const root = new projenProject.DBXToolsNodeProject({
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:^` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
-  versioningMode: "independent",
-  releaseBootstrapSha: "9129d7704ec9b782747606eed61eb25f8091e67b",
-  externalReleaseProjects: [
-    {
-      path: "projen",
-      language: "javascript",
-      identity: "@dbx-tools/projen",
-    },
-  ],
-  releaseUnits: [
-    {
-      id: "projen-cli",
-      component: "projen-cli",
-      projectPaths: ["projen", "packages/js/cli/dbx-tools"],
-    },
-  ],
   syncResynthPaths: ["branding/brand.yaml", "branding/assets"],
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
   // workspace, so it links from source via `workspace:^`. `.projenrc.ts` imports it
@@ -1119,6 +1131,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       features: ["jpeg", "png", "webp"],
     },
     "mini-moka": "0.10",
+    object: { version: "0.37", defaultFeatures: false, features: ["read"] },
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
     "percent-encoding": "2",
@@ -1156,6 +1169,17 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     wiremock: "0.6",
   },
   packages: {
+    "release-tools": {
+      description: "Private content-addressed Rust release fingerprint and binary stamping tools",
+      private: true,
+      dependencies: {
+        clap: { workspace: true },
+        object: { workspace: true },
+        serde: { workspace: true },
+        "serde_json": { workspace: true },
+        sha2: { workspace: true },
+      },
+    },
     core: {
       description:
         "Databricks authentication, flexible API requests, Lakebase parsing, caching, and filesystem primitives",

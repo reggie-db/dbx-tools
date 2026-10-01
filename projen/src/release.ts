@@ -986,7 +986,8 @@ export class DBXToolsRelease extends Component {
                 ].join(" "),
               ),
               receiveArgs: true,
-              description: "Prepare, validate, locally publish, and open a reviewed release PR",
+              description:
+                "Prepare, validate, locally publish, and automatically merge a release PR",
             },
           }
         : {}),

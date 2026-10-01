@@ -1,3 +1,5 @@
+import { json, object } from "@dbx-tools/shared-core";
+
 /** GitHub repository identity used by release preparation. */
 export interface GithubRepositoryIdentity {
   hostname: string;
@@ -19,9 +21,38 @@ export function githubRepositoryIdentity(repositoryUrl: string): GithubRepositor
   };
 }
 
-/** Ask GitHub CLI for the current actor's token on the repository host. */
-export function githubTokenArguments(hostname: string): string[] {
-  return ["auth", "token", "--hostname", hostname];
+/** One authenticated GitHub CLI account available on a repository host. */
+export interface GithubAuthenticatedAccount {
+  login: string;
+  active: boolean;
+}
+
+/** Parse successful GitHub CLI accounts with the active account first. */
+export function githubAuthenticatedAccounts(
+  statusOutput: string,
+  hostname: string,
+): GithubAuthenticatedAccount[] {
+  const status = json.parseRecord(statusOutput);
+  const hosts = object.isRecord(status?.hosts) ? status.hosts : undefined;
+  const entries = hosts?.[hostname];
+  if (!Array.isArray(entries)) return [];
+  return entries
+    .flatMap((entry) => {
+      if (!object.isRecord(entry) || entry.state !== "success" || typeof entry.login !== "string") {
+        return [];
+      }
+      return [{ login: entry.login, active: entry.active === true }];
+    })
+    .filter(
+      (account, index, accounts) =>
+        accounts.findIndex((candidate) => candidate.login === account.login) === index,
+    )
+    .sort((left, right) => Number(right.active) - Number(left.active));
+}
+
+/** Ask GitHub CLI for one account token on the repository host. */
+export function githubTokenArguments(hostname: string, user?: string): string[] {
+  return ["auth", "token", "--hostname", hostname, ...(user ? ["--user", user] : [])];
 }
 
 /** GitHub CLI token variable for a public, data-residency, or enterprise host. */
@@ -34,4 +65,9 @@ export function githubTokenEnvironmentName(hostname: string): "GH_TOKEN" | "GH_E
 /** Host-qualified repository selector consumed by GitHub CLI. */
 export function githubRepositorySpecifier(identity: GithubRepositoryIdentity): string {
   return `${identity.hostname}/${identity.owner}/${identity.repository}`;
+}
+
+/** GitHub REST path for the detected repository. */
+export function githubRepositoryApiPath(identity: GithubRepositoryIdentity): string {
+  return `repos/${identity.owner}/${identity.repository}`;
 }

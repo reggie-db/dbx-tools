@@ -406,13 +406,13 @@ describe("DBXToolsRustWorkspace", () => {
       const buildJob = readWorkflow(multiOutdir).jobs["rust-build"]!;
       assert.equal(
         workflowStep(buildJob, "Build Rust outputs").run?.match(
-          /cargo build --release --workspace(?: --locked)? --target/g,
+          /cargo build --release --timings --workspace(?: --locked)? --target/g,
         )?.length,
         1,
       );
       assert.match(
         workflowStep(buildJob, "Build Rust outputs").run ?? "",
-        /cargo build --release --workspace --locked --target/,
+        /cargo build --release --timings --workspace --locked --target/,
       );
       const packageBindings = workflowStep(buildJob, "Package UniFFI outputs").run!;
       assert.ok(packageBindings.includes('--crate "fixture-alpha"'));
@@ -673,7 +673,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(stepNames(rustBuild).includes("Setup Bun"), false);
     assert.ok(
       workflowStep(rustBuild, "Build Rust outputs").run?.includes(
-        'cargo build --release --workspace --target "${{ matrix.cargo }}"',
+        'cargo build --release --timings --workspace --target "${{ matrix.cargo }}"',
       ),
     );
     assert.ok(workflowStep(rustBuild, "Package UniFFI outputs").run?.includes("--skip-build"));
@@ -683,6 +683,8 @@ describe("DBXToolsRustWorkspace", () => {
         .filter((candidate) => candidate.uses === "actions/upload-artifact@v7")
         .map((candidate) => candidate.with?.name),
       [
+        "rust-${{ matrix.node }}-cargo-timings",
+        "rust-${{ matrix.node }}-raw",
         "fixture-databricks-auth-${{ matrix.node }}-npm",
         "fixture-databricks-auth-rs--${{ matrix.python }}--python-wheel",
         "fixture-tool-${{ matrix.node }}-binary",

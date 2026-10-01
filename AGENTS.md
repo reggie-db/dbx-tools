@@ -135,7 +135,8 @@ Primary package areas:
   in `packages/js/node/core-rs` and `packages/py/core-rs`.
   `log` initializes tracing from `LOG_LEVEL` using the shared four-level parser
   (`debug`, `info`, `warn`, `error`, case-insensitive, unknown values default to
-  `info`).
+  `info`). Debug formatting additionally includes source file and line context;
+  the default info format stays compact.
   Providers supply endpoints and acquisition policy; `AuthOptions` owns shared
   lifecycle durations and callback configuration. `StorageAdapter` remains
   caller-implementable. Built-in storage is file or memory only. Do not add
@@ -683,7 +684,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   absent, unauthenticated, failed, or empty provider falls through; when all are
   unavailable a deterministic Git summary still creates the versioned file.
   Provider JSON/text events are normalized into structured release logs while
-  the final assistant message alone becomes the summary. `releaseSummary: false` disables the feature;
+  the final assistant message alone becomes the summary. Consecutive identical
+  events are suppressed, and tool events include the tool name when the provider
+  exposes it. `releaseSummary: false` disables the feature;
   `releaseSummary.providers` selects the order/subset. The immutable file is
   included in the release PR and prepended to GitHub's generated release notes.
   Release workflow generation is non-destructive: it writes `release.yml` and
@@ -1934,11 +1937,10 @@ bun run --filter '*' compile # type-check every package (projen's per-package co
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
 bun run test:installer       # standalone installer tests; RUN_DOCKER_INSTALL_TESTS=1 adds container coverage
 bun run model:metadata       # refresh committed model capability, retirement, and limit snapshots
-bun run release:bootstrap    # initialize Release Please state once
-bun run release:plan         # generate the affected component publication plan
-bun run version:check        # verify package versions against release units
-bun run release              # commit, annotate, and push a source release request
-bun run release:refresh      # refresh Release Please PRs, tags, and releases
+  bun run bump                 # increment VERSION and synchronize generated versions only
+  bun run version:check        # verify every package and generated version against VERSION
+  bun run release              # prepare a release PR and enable automatic merge after checks
+  bun run release --no-approve # prepare the same PR but leave merging to a human
 bun run eslint               # check lint across package roots and projen
 bun run eslint:fix           # explicitly apply supported lint fixes
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
@@ -2001,28 +2003,22 @@ What is configured, and why:
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
   restores the corporate index when it is unavailable.
 
-`bun run release` exits before notes or AI when the current branch has no change
-from `main`. Otherwise it commits dirty source, stores custom `--notes` /
-`--notes-file` content or a bounded Cursor, Codex, Claude, then Git fallback in
-`.release-notes/requests/<branch>.md`, adds a request commit, pushes, and creates
-or updates the source PR through the generated workflow. The workflow merges the
-PR directly with `GITHUB_TOKEN` and explicitly dispatches release planning, so
-running the task is the release signal and no UI approval or merge is required.
-GitHub may briefly record `action_required` for the bot-authored PR's validation
-run; the release workflow does not require that run and no user action is needed.
-`bun run release:refresh` invokes Release Please directly for operator recovery.
+`bun run release` commits and pushes pending source work, creates a dedicated
+`release/v<version>` worktree, increments the single root `VERSION`, regenerates
+every owned version surface, runs release validation and local publication, then
+opens one pull request into `main`. Automatic merge is enabled by default after
+required checks pass. Pass `--no-approve` to leave that PR for a human merge.
+`--os` and `--arch` remain repeatable filters for a narrowed release validation.
+Repository owner and host come from the configured Git remote. When several
+GitHub CLI accounts exist on that host, release preparation probes them in
+active-first order and uses the first token with write access to that repository;
+it never assumes the repository owner is the authenticated login.
 
-After the source PR merges, Release Please refreshes one combined component
-release PR from conventional commits and the generated release-unit graph. The
-workflow reconciles Projen-owned manifests, copies readable request notes into
-component-qualified summaries, deletes consumed request Markdown, merges that
-generated PR, and explicitly dispatches publication because GitHub suppresses
-push workflows for merges made by `GITHUB_TOKEN`. A source merge with no
-affected release units creates no release PR or publication work.
-
-Public npm, PyPI, Cargo, and GitHub publication consume the same affected plan
-and remain idempotent per component, so recovery does not replay unrelated
-units.
+Merging the release PR is the only automatic publication signal. The generated
+workflow verifies that the triggering SHA is the exact `main` commit, creates one
+annotated `v<version>` tag, and publishes all public npm, PyPI, Cargo, native, and
+GitHub artifacts at that version. Manual recovery must provide the same annotated
+tag and exact expected SHA; it never calculates another version.
 
 This repository sets `releaseSyncBranch: "dev"`. After successful publication,
 the workflow fast-forwards `dev` when it is behind, does nothing when it already
@@ -2030,10 +2026,10 @@ contains released `main`, and cleanly merges `main` into a diverged `dev`.
 Missing branches and conflicted merges are left untouched without opening a PR
 or forcing history.
 
-Temporary request and rendered notes under `.release-notes/`, plus historical
-summaries under `docs/releases/`, are excluded from release-unit and
-documentation change detection. Creating, consuming, or deleting notes must
-not start another release.
+Historical summaries under `docs/releases/` do not trigger a release. Expensive
+API documentation generation runs only in the version-triggered release workflow,
+after publication succeeds; ordinary source pushes run documentation validation
+without rebuilding the complete API site.
 
 A Databricks notebook or job is a different network with its own package index.
 Documentation and notebooks install the published distributions by name
@@ -2045,40 +2041,26 @@ changes.
 
 ## Versioning
 
-Versions are owned by generated release units, not by the repository as a
-whole. `DBXToolsReleaseCatalog` builds one cross-language graph from attached
-Projen projects plus explicitly registered external projects and generated
-artifacts. The committed `.projen/release-units.json` records ownership,
-dependency edges, publication batches, source hashes, and the current version
-of each unit.
-
-This repository uses `versioningMode: "independent"`. Release Please owns the
-writable `.release-please-manifest.json`, each
-`.release-units/<component>/version.txt`, component changelogs, release PRs,
-component-qualified tags, and GitHub Releases. Projen owns package manifests,
-Cargo dependency versions, generated bindings, runtime registries, workflow
-matrices, and `.release-units/<component>/source.json`.
+The root `VERSION` file is the only version authority. Projen copies it into all
+public and private Node manifests, Python projects, the Rust workspace package
+version, generated binding metadata, native package metadata, runtime registries,
+and release documentation. There are no component versions, release units,
+component tags, propagation rules, or affected-package release plans.
 
 Hard rules:
 
-- `bunx projen` reads reviewed component versions and reproduces every Node,
-  Python, Rust, OpenAPI, binding, binary-registry, and barrel version. It never
-  computes a semantic increment.
-- Generated source hashes exclude version-only and generated release metadata,
-  so reconciling a release PR cannot create another release.
-- Normal internal dependencies use compatible ranges; generated, ABI, bundled,
-  and embedded-runtime edges are exact or propagate a dependent patch.
-- Release Please preserves direct semantic increments and the generated graph
-  adds only required dependent patches. Propagation runs from dependency to
-  dependent and never backward.
-- `release:plan` is the publication contract. npm, PyPI, Cargo, native binding,
-  binary asset, and docs jobs consume selected units and omit unrelated stages.
-- Component recovery names one component and reviewed version. Existing
-  registry content is compared or safely skipped; recovery never bumps another
-  unit.
-- `VERSION`, `workspace-version.ts`, `bump`, and the scalar release path remain
-  only for `versioningMode: "fixed"`, which stays the consumer default during
-  the compatibility period.
+- `bunx projen` reproduces every version surface from `VERSION`; it never computes
+  a semantic increment.
+- `bun run bump` is the low-level version mutation task. `bun run release` owns
+  the reviewed PR, validation, and merge behavior.
+- Internal publication order remains dependency-aware, but every published
+  package receives the same version.
+- GitHub publication is scoped to `main` and exact SHA equality. A matching tag
+  on another commit is an error.
+- Rust build reuse must be content-addressed and version-independent. Reuse only
+  an exact target-key match from a previously successful GitHub Release, verify
+  checksums and provenance, then stamp the dedicated structured version section.
+- Never patch arbitrary binary strings or use `sed` against executables.
 
 ## The `dbx` CLI
 

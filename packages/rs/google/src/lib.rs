@@ -3,6 +3,9 @@
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
+#[used]
+static RELEASE_VERSION_LINK: fn() -> &'static str = dbx_tools_core::build_info::version;
+
 use std::{
     path::PathBuf,
     sync::Arc,

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
@@ -402,6 +403,7 @@ async function generatePackageApi(pkg, typedocBin) {
       "--hidePageHeader",
       "--hideBreadcrumbs",
       "--disableSources",
+      "--skipErrorChecking",
       "--cleanOutputDir",
       "true",
     ],
@@ -533,7 +535,7 @@ async function generateRustApis(packages) {
   const targetRoot = path.join(root, ".docs-build", "rustdoc-target");
   const generatedRoot = path.join(targetRoot, "doc");
   const publishedRoot = path.join(publicRoot, "rustdoc");
-  fs.rmSync(targetRoot, { force: true, recursive: true });
+  fs.rmSync(generatedRoot, { force: true, recursive: true });
   fs.rmSync(publishedRoot, { force: true, recursive: true });
   if (libraryPackages.length > 0) {
     await checkedSpawn(
@@ -543,6 +545,8 @@ async function generateRustApis(packages) {
         "--locked",
         "--no-deps",
         "--lib",
+        "-j",
+        process.env.DOCS_RUSTDOC_JOBS ?? "2",
         "--target-dir",
         targetRoot,
         ...libraryPackages.flatMap((pkg) => ["--package", pkg.name]),
@@ -575,22 +579,29 @@ async function main() {
   const pythonPackages = discoverPythonPackages(root);
   const rustPackages = discoverRustPackages(root);
   const typedocBin = packageBinary("typedoc", "typedoc");
+  const typedocWorkers = Number(
+    process.env.DOCS_TYPEDOC_WORKERS ?? Math.min(4, availableParallelism()),
+  );
+  if (!Number.isSafeInteger(typedocWorkers) || typedocWorkers < 1) {
+    throw new Error(`DOCS_TYPEDOC_WORKERS must be a positive integer, got ${typedocWorkers}`);
+  }
   fs.rmSync(apiRoot, { recursive: true, force: true });
   fs.mkdirSync(apiRoot, { recursive: true });
 
-  const generated = (
-    await mapConcurrent(typescriptPackages, 2, async (pkg) =>
+  const [typescriptGenerated, pythonGenerated, rustGenerated] = await Promise.all([
+    mapConcurrent(typescriptPackages, typedocWorkers, async (pkg) =>
       (await generatePackageApi(pkg, typedocBin)) ? pkg : undefined,
-    )
-  ).filter(Boolean);
-  generated.push(
-    ...(
-      await mapConcurrent(pythonPackages, 5, async (pkg) =>
-        (await generatePythonPackageApi(pkg)) ? pkg : undefined,
-      )
-    ).filter(Boolean),
-  );
-  generated.push(...(await generateRustApis(rustPackages)));
+    ),
+    mapConcurrent(pythonPackages, 5, async (pkg) =>
+      (await generatePythonPackageApi(pkg)) ? pkg : undefined,
+    ),
+    generateRustApis(rustPackages),
+  ]);
+  const generated = [
+    ...typescriptGenerated.filter(Boolean),
+    ...pythonGenerated.filter(Boolean),
+    ...rustGenerated,
+  ];
 
   write(
     path.join(apiRoot, "index.md"),

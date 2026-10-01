@@ -4,8 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use clap::{Parser, Subcommand};
-use dbx_tools_core::{connection_url, init_logging, shutdown_signal, DatabricksAuthOptions};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use dbx_tools_core::{
+    build_info, connection_url, init_logging, shutdown_signal, DatabricksAuthOptions,
+};
 use dbx_tools_lakebase_proxy::{
     databricks::LakebaseClient,
     proxy::{report_connection_stats, ConnectionStats, PostgresProxy},
@@ -14,7 +16,7 @@ use tokio::{net::TcpListener, task::JoinSet};
 use tracing::{error, info};
 
 #[derive(Debug, Parser)]
-#[command(name = "dbx-lakebase-proxy", version)]
+#[command(name = "dbx-lakebase-proxy")]
 struct Cli {
     #[arg(long, default_value = "127.0.0.1")]
     host: IpAddr,
@@ -52,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         startup_timeout_seconds,
         profile,
         command,
-    } = Cli::parse();
+    } = Cli::from_arg_matches(&Cli::command().version(build_info::version()).get_matches())?;
     if let Some(Command::Url {
         target,
         endpoint,

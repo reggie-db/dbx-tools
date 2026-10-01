@@ -16,7 +16,8 @@ Key features:
 - Lakebase address parsing for PostgreSQL URLs, resource paths, hosts, and
   project ids.
 - Cross-process file locking and file-backed TTL caches.
-- Shared tracing initialization from `LOG_LEVEL`, defaulting to `info`.
+- Shared tracing initialization from `LOG_LEVEL`, defaulting to compact `info`
+  output and adding source locations at `debug`.
 - UniFFI bindings published separately as `@dbx-tools/core-rs` and
   `dbx-tools-core-rs`.
 

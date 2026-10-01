@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  githubAuthenticatedAccounts,
+  githubRepositoryApiPath,
   githubRepositoryIdentity,
   githubRepositorySpecifier,
   githubTokenArguments,
@@ -21,6 +23,44 @@ describe("release GitHub identity", () => {
       "--hostname",
       "github.com",
     ]);
+    assert.deepEqual(githubTokenArguments("github.com", "release-user"), [
+      "auth",
+      "token",
+      "--hostname",
+      "github.com",
+      "--user",
+      "release-user",
+    ]);
+    assert.equal(
+      githubRepositoryApiPath({
+        hostname: "github.com",
+        owner: "example-org",
+        repository: "tooling",
+      }),
+      "repos/example-org/tooling",
+    );
+  });
+
+  it("orders successful authenticated accounts without assuming the repository owner", () => {
+    assert.deepEqual(
+      githubAuthenticatedAccounts(
+        JSON.stringify({
+          hosts: {
+            "github.com": [
+              { state: "success", active: false, login: "write-user" },
+              { state: "failed", active: false, login: "expired-user" },
+              { state: "success", active: true, login: "active-user" },
+              { state: "success", active: false, login: "write-user" },
+            ],
+          },
+        }),
+        "github.com",
+      ),
+      [
+        { login: "active-user", active: true },
+        { login: "write-user", active: false },
+      ],
+    );
   });
 
   it("preserves enterprise repository hosts", () => {

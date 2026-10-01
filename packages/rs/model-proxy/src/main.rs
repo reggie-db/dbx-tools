@@ -16,8 +16,8 @@ use std::{
     time::Duration,
 };
 
-use clap::Parser;
-use dbx_tools_core::{init_logging, shutdown_signal, DatabricksClient};
+use clap::{CommandFactory, FromArgMatches, Parser};
+use dbx_tools_core::{build_info, init_logging, shutdown_signal, DatabricksClient};
 use dbx_tools_model::{ModelCapabilitiesResolver, ModelClient, ModelRateLimitsResolver};
 use images::DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES;
 use protocol::TargetWire;
@@ -38,7 +38,7 @@ const DEFAULT_RATE_LIMIT_MAX_DELAY_MS: NonZeroU64 =
     NonZeroU64::new(60_000).expect("default maximum retry delay is non-zero");
 
 #[derive(Debug, Parser)]
-#[command(name = "dbx-model-proxy", version)]
+#[command(name = "dbx-model-proxy")]
 struct Cli {
     /// Databricks CLI profile.
     #[arg(long, env = "DATABRICKS_CONFIG_PROFILE")]
@@ -115,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rate_limit_retries,
         rate_limit_initial_delay_ms,
         rate_limit_max_delay_ms,
-    } = Cli::parse();
+    } = Cli::from_arg_matches(&Cli::command().version(build_info::version()).get_matches())?;
     if rate_limit_initial_delay_ms > rate_limit_max_delay_ms {
         return Err("RATE_LIMIT_INITIAL_DELAY_MS must not exceed RATE_LIMIT_MAX_DELAY_MS".into());
     }
