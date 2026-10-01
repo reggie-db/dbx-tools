@@ -17,7 +17,7 @@ import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
-const logger = log.logger("dbx-tools:publish-npm");
+const logger = log.logger("projen:publish-npm");
 
 export interface NpmReleaseIdentity {
   readonly contentDigest?: string;
@@ -101,7 +101,7 @@ export async function publishedNpmRelease(
     if (!archive.ok) {
       throw new Error(`npm tarball lookup failed for ${name}@${version}: ${archive.status}`);
     }
-    const temp = mkdtempSync(join(tmpdir(), "dbx-tools-published-npm-"));
+    const temp = mkdtempSync(join(tmpdir(), "projen-published-npm-"));
     const path = join(temp, "package.tgz");
     try {
       writeFileSync(path, Buffer.from(await archive.arrayBuffer()));
@@ -149,7 +149,7 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
 
 /** Hash paths, executable bits, symlink targets, and bytes while ignoring tar metadata. */
 export function npmArchiveContentDigest(path: string): string {
-  const temp = mkdtempSync(join(tmpdir(), "dbx-tools-npm-content-"));
+  const temp = mkdtempSync(join(tmpdir(), "projen-npm-content-"));
   try {
     exec.spawnSync("tar", ["-xzf", path, "-C", temp], {
       cwd: process.cwd(),

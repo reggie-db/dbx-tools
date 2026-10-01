@@ -20,13 +20,13 @@
  * @module
  */
 
-import { object } from "@dbx-tools/shared-core";
 import {
   ModelClass as ModelRsModelClass,
   rankModels as rankModelsWithRust,
   type ModelQuery as ModelRsModelQuery,
   type ServingEndpointSummary as ModelRsServingEndpointSummary,
 } from "@dbx-tools/model-rs";
+import { object } from "@dbx-tools/shared-core";
 import {
   classify,
   model,

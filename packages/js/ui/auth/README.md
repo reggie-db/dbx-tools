@@ -4,8 +4,8 @@ React passwordless authentication surfaces for `@dbx-tools/auth-gate`.
 
 Key features:
 
-- email OTP sign-in with passkey actions presented underneath;
-- automatic conditional passkey mediation on supported browsers;
+- email OTP sign-in with a manual passkey fallback where conditional mediation is unavailable;
+- automatic conditional passkey mediation on supported browsers, without a redundant button;
 - first-login passkey enrollment prompt;
 - authenticated passkey list, rename, add, and remove controls;
 - status and logout helpers for tunnel-aware application controls;

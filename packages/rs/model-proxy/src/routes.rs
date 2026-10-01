@@ -46,7 +46,7 @@ use crate::{
     rate_limit::{
         rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
     },
-    request_log::{RequestLogContext, RequestLogMetadata},
+    request_log::{ReasoningSetting, RequestLogContext, RequestLogMetadata},
     stream::{stream_response, StreamLogContext},
     throttle::{
         is_input_limit_message, response_token_usage, AutoActivation, RequestThrottle,
@@ -470,6 +470,7 @@ async fn embeddings(
             peer: caller.peer,
             request_bytes,
             started,
+            reasoning_setting: None,
         },
         throttle,
         upstream_attempt,
@@ -492,6 +493,7 @@ async fn proxy(
     let mut input: Value = serde_json::from_slice(&body)?;
     normalize_embedded_images(&mut input, state.image_resize_threshold_bytes)?;
     let requested_model = requested_model(&input)?.to_owned();
+    let reasoning_setting = ReasoningSetting::from_request(&input);
     let streaming = input
         .get("stream")
         .and_then(Value::as_bool)
@@ -571,6 +573,7 @@ async fn proxy(
             peer: caller.peer,
             request_bytes,
             started,
+            reasoning_setting: Some(reasoning_setting),
         },
         throttle,
         upstream_attempt,

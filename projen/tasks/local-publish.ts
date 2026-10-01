@@ -18,6 +18,8 @@ export interface LocalPublishOptions {
   readonly localPypi: string;
   readonly pythonRoot?: string;
   readonly localCargo: boolean;
+  /** Reuse the root TypeScript compile that immediately preceded local publication. */
+  readonly reuseValidatedNodeCompile?: boolean;
 }
 
 function resolveLocalRegistry(value: string): string | undefined {
@@ -45,6 +47,21 @@ function localCargoRegistry(): string | undefined {
   return undefined;
 }
 
+/** Arguments for the workspace npm publisher used by local release preflight. */
+export function localNodePublishArguments(
+  publishScript: string,
+  options: Pick<LocalPublishOptions, "version" | "reuseValidatedNodeCompile">,
+  registry: string,
+): string[] {
+  return [
+    publishScript,
+    options.version,
+    "--registry",
+    registry,
+    ...(options.reuseValidatedNodeCompile ? ["--skip-compile"] : []),
+  ];
+}
+
 /** Publish the exact release candidate to local npm, PyPI, and Cargo mirrors. */
 export async function publishLocalRelease(options: LocalPublishOptions): Promise<void> {
   const localRegistry = resolveLocalRegistry(options.localRegistry);
@@ -68,7 +85,7 @@ export async function publishLocalRelease(options: LocalPublishOptions): Promise
     logger.info(`publishing ${options.version} to local registry ${localRegistry}`);
     localPublishes.push(
       exec
-        .spawn(process.execPath, [publishScript, options.version, "--registry", localRegistry], {
+        .spawn(process.execPath, localNodePublishArguments(publishScript, options, localRegistry), {
           cwd: options.root,
           stdout: "inherit",
           stderr: "inherit",

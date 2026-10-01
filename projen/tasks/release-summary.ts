@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { exec } from "@dbx-tools/core";
+import { exec, project } from "@dbx-tools/core";
 import { json, log, object, string } from "@dbx-tools/shared-core";
 import {
   RELEASE_SUMMARY_PROVIDER_NAMES,
@@ -243,6 +243,7 @@ export async function selectReleaseSummary(
 }
 
 function summaryPrompt(
+  projectName: string,
   version: string,
   fromRef: string | undefined,
   commits: string,
@@ -250,7 +251,7 @@ function summaryPrompt(
   diffStat: string,
 ): string {
   return [
-    `Write a concise user-facing Markdown release summary for dbx-tools ${version}.`,
+    `Write a concise user-facing Markdown release summary for ${projectName} ${version}.`,
     "Use only the supplied Git context. Do not run commands, edit files, speculate,",
     "mention commit hashes, use emojis, or use em/en dashes.",
     "Return no title and no fenced block. Start with one short paragraph, then",
@@ -270,7 +271,12 @@ function summaryPrompt(
 }
 
 /** Deterministic fallback when every configured AI provider is unavailable. */
-function gitSummary(version: string, commits: string, changedFiles: string): string {
+function gitSummary(
+  projectName: string,
+  version: string,
+  commits: string,
+  changedFiles: string,
+): string {
   const subjects = commits
     .split("\n")
     .map((line) => line.trim())
@@ -290,7 +296,7 @@ function gitSummary(version: string, commits: string, changedFiles: string): str
     .slice(0, 12);
   const bullets = subjects.length ? subjects : areas.map((area) => `Updated ${area}`);
   return [
-    `dbx-tools ${version} contains the reviewed changes listed below.`,
+    `${projectName} ${version} contains the reviewed changes listed below.`,
     "",
     "## Changes",
     ...(bullets.length ? bullets.map((item) => `- ${item}`) : ["- Release metadata updated."]),
@@ -310,6 +316,7 @@ export async function generateReleaseSummary(options: {
   readonly providers?: readonly ReleaseSummaryProviderName[];
   readonly runner?: ReleaseSummaryRunner;
 }): Promise<string | undefined> {
+  const projectName = project.name(options.root);
   const relativeOutput =
     options.outputFile ?? releaseSummaryFile(options.version, options.component);
   const output = join(options.root, relativeOutput);
@@ -352,12 +359,21 @@ export async function generateReleaseSummary(options: {
     ? undefined
     : await selectReleaseSummary(
         options.root,
-        summaryPrompt(options.version, options.fromRef, commits, changedFiles, diffStat),
+        summaryPrompt(
+          projectName,
+          options.version,
+          options.fromRef,
+          commits,
+          changedFiles,
+          diffStat,
+        ),
         options.runner,
         options.providers,
       );
   const summary =
-    customSummary ?? result?.summary ?? gitSummary(options.version, commits, changedFiles);
+    customSummary ??
+    result?.summary ??
+    gitSummary(projectName, options.version, commits, changedFiles);
   const provider = customSummary ? "custom" : (result?.provider ?? "git");
   if (!customSummary && !result) {
     logger.info("AI providers unavailable; using Git release summary");

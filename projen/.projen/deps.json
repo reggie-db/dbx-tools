@@ -17,6 +17,7 @@
     },
     {
       "name": "projen",
+      "version": "^0.103.27",
       "type": "build"
     },
     {
@@ -28,6 +29,11 @@
       "name": "typescript",
       "version": "^5.9.3",
       "type": "build"
+    },
+    {
+      "name": "projen",
+      "version": "^0.103.27",
+      "type": "peer"
     },
     {
       "name": "@clack/prompts",
@@ -77,11 +83,6 @@
     {
       "name": "oxc-parser",
       "version": "^0.90.0",
-      "type": "runtime"
-    },
-    {
-      "name": "projen",
-      "version": "^0.101.16",
       "type": "runtime"
     },
     {

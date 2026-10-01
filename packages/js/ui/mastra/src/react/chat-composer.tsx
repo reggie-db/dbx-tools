@@ -28,8 +28,8 @@ import {
 } from "lucide-react";
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { autosizeComposerTextarea, observeComposerWidth } from "./_composer-autosize.ts";
-import { ExportMenu } from "./export-menu.tsx";
 import { ModelSelector } from "./_model-selector.tsx";
+import { ExportMenu } from "./export-menu.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import type { ChatViewProps } from "./types.ts";
 

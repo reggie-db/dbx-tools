@@ -144,6 +144,33 @@ barrel. Python keeps `bindings.py` as the generated implementation and leaves
 `__init__.py` empty. Node generation fails when direct binding names conflict.
 Do not create a `nodeExports` binding subpath or a handwritten type facade.
 
+Each discovered member is a native Projen `Project`, exposed as
+`DBXToolsRustProject`. Consumers that need to construct one directly should use
+the same object-style options shape as the Node and Python project classes:
+
+```ts
+import { project as projenProject } from "@dbx-tools/projen";
+
+const root = new projenProject.DBXToolsNodeProject({
+  name: "my-apps",
+  scope: "my-apps",
+});
+
+new projenProject.DBXToolsRustProject({
+  parent: root,
+  root: "native",
+  package: {
+    directory: "core",
+    description: "Shared native runtime",
+  },
+});
+```
+
+`root` defaults to `packages/rs`, and `scope` defaults to the parent project's
+scope or name. `DBXToolsRustWorkspaceOptions.private` supplies the default Cargo
+publication policy for every discovered crate; a package-level `private` value
+overrides it. These defaults keep consumer configuration repository-neutral.
+
 Rust dependencies between binding-enabled workspace crates become Node
 `workspace:*` and Python `internalDependencies` automatically. Python generation
 selects the owning crate and supplies `external_packages` imports. UBRN currently
@@ -172,6 +199,12 @@ JavaScript PR builds type-check committed generated bindings without performing
 a host Rust build. Regenerate bindings through the focused watcher or explicit
 task while changing a UniFFI API. Release preparation runs Cargo workspace tests
 without invoking UBRN.
+
+Rust fingerprinting and binary version stamping use the dependency-free Node
+helper generated at `.projen/rust-release.mjs`. The implementation ships with
+`@dbx-tools/projen`, so consumers do not need a repository-specific helper
+crate, a crates.io publication, or an extra Cargo build before release
+orchestration can start.
 
 The workspace generates one `release.yml` workflow for every ecosystem. One
 root `VERSION` drives every Node, Python, Cargo, native, and GitHub artifact.
@@ -252,6 +285,14 @@ The docs jobs generate README and TypeScript API content and deploy GitHub Pages
 from the same workflow. When a conventional Node binding path already belongs
 to a root subproject, Rust mapping reuses that project and adds binding
 dependencies and metadata to its existing manifest.
+
+The workspace npm publisher owns compilation for normal release publication. It
+selects every publishable package with compiled entry points, invokes one
+root-level filtered compile, then packs each package with lifecycle scripts
+disabled. Local release preparation passes `--skip-compile` only after its
+immediately preceding validation compile and verifies every expected output
+exists before reuse. Package `prepack` tasks remain available for standalone
+publishes without multiplying `tsc --build` across the monorepo release flow.
 
 ## Customize Packages With Mixins
 

@@ -1,13 +1,13 @@
 import { error as sharedError, log } from "@dbx-tools/shared-core";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toChronologicalUiMessages } from "./_history-messages.ts";
 import type {
   ThreadMessageWriter,
   ThreadSessionReader,
   ThreadSessionUpdater,
 } from "./chat-sessions.ts";
 import type { PendingApproval } from "./types.ts";
-import { toChronologicalUiMessages } from "./_history-messages.ts";
 import type { MastraPluginClient } from "../support/mastra-client.ts";
 
 const HISTORY_PAGE_SIZE = 20;

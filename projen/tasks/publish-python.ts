@@ -111,7 +111,7 @@ export function publishPythonProjects(options: {
   readonly plan?: ReleasePlan;
 }): void {
   const root = resolve(options.root);
-  const output = mkdtempSync(join(tmpdir(), "dbx-tools-python-publish-"));
+  const output = mkdtempSync(join(tmpdir(), "projen-python-publish-"));
   const planned = new Map(
     options.plan?.pythonPackages.map((pkg) => [pkg.path.replace(/^.*\//, ""), pkg.version]) ?? [],
   );

@@ -54,6 +54,7 @@ button[aria-pressed="true"] {
 }
 
 .dashboard {
+  box-sizing: border-box;
   display: flex;
   width: 100%;
   max-width: 1600px;
@@ -284,6 +285,7 @@ small {
 
 .metric-card,
 .panel {
+  position: relative;
   overflow: hidden;
   border: 1px solid var(--brand-border);
   border-radius: var(--radius-card);
@@ -344,16 +346,11 @@ small {
   justify-content: flex-start;
   gap: 16px;
   min-height: 36px;
+  padding-right: 30px;
 }
 
 .panel-heading > :first-child {
   margin-right: auto;
-}
-
-.panel-heading > .widget-info {
-  position: static;
-  flex: 0 0 auto;
-  margin-left: -8px;
 }
 
 .panel-heading h2 {
@@ -362,7 +359,8 @@ small {
   font-weight: 500;
 }
 
-.panel-heading p {
+.panel-heading p,
+.chart-legend {
   margin-top: 3px;
   font-size: 11px;
 }
@@ -372,50 +370,76 @@ small {
   white-space: nowrap;
 }
 
-.chart-panel svg {
-  display: block;
+.chart {
   width: 100%;
-  min-height: 100px;
+  min-height: 140px;
   flex: 1;
   margin-top: 14px;
-  border: 1px solid var(--brand-border);
-  background-image: linear-gradient(
-    to bottom,
-    transparent calc(50% - 0.5px),
-    color-mix(in srgb, var(--brand-border) 65%, transparent) 50%,
-    transparent calc(50% + 0.5px)
-  );
+  overflow: hidden;
 }
 
-.chart-grid {
-  stroke: color-mix(in srgb, var(--brand-border) 72%, transparent);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.chart-area {
-  opacity: 0.12;
-}
-
-.chart-line {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.5;
-  vector-effect: non-scaling-stroke;
-}
-
-.chart-point {
-  fill: var(--brand-background);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-
-.axis {
+.chart-legend,
+.chart-legend > span {
   display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
-  font-size: 10px;
+  align-items: center;
+}
+
+.chart-legend {
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--dashboard-muted);
+}
+
+.chart-legend > span {
+  gap: 6px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.legend-primary {
+  color: var(--brand-primary-hover);
+}
+
+.legend-success {
+  color: var(--brand-accent);
+}
+
+.legend-warning {
+  color: var(--dashboard-warning);
+}
+
+.legend-muted {
+  color: var(--brand-muted);
+}
+
+.chart .uplot {
+  font-family: var(--brand-font-sans);
+}
+
+.chart .u-wrap {
+  border: 1px solid var(--brand-border);
+  background: var(--brand-surface);
+}
+
+.chart .u-over {
+  cursor: crosshair;
+}
+
+.chart .u-cursor-x,
+.chart .u-cursor-y {
+  border-color: color-mix(in srgb, var(--brand-muted) 70%, transparent);
+}
+
+.chart .u-marker {
+  border-width: 2px !important;
+  background: var(--brand-surface) !important;
 }
 
 .table-scroll {
@@ -456,6 +480,10 @@ td:first-child {
 .limiter {
   font-family: var(--brand-font-sans);
   text-transform: capitalize;
+}
+
+.reasoning-setting {
+  font-family: var(--brand-font-sans);
 }
 
 .limiter[data-state="activated"],
@@ -526,6 +554,52 @@ td:first-child {
   padding: 24px 12px;
 }
 
+.reasoning-levels {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  margin: 14px 0 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.reasoning-levels li > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+
+.reasoning-levels li > div:first-child strong {
+  font-family: var(--brand-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.reasoning-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-muted) 18%, transparent);
+}
+
+.reasoning-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand-primary-hover);
+}
+
+.reasoning-levels li.empty {
+  padding: 24px 12px;
+}
+
 footer {
   padding-top: 8px;
   color: var(--dashboard-muted);
@@ -593,7 +667,9 @@ footer p:first-child {
 
   .controls {
     width: 100%;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    justify-content: stretch;
   }
 
   .header {
@@ -604,12 +680,32 @@ footer p:first-child {
 
   .header-select {
     min-width: 0;
-    flex: 1;
+    width: 100%;
   }
 
   .select-control select {
     width: 100%;
+    min-width: 0;
     max-width: none;
+  }
+
+  .range-control {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .range-control button {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .controls > .icon-control {
+    justify-self: end;
+  }
+
+  .controls > .connection-status {
+    justify-self: start;
   }
 
   footer {

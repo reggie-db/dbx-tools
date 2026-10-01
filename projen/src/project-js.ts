@@ -40,6 +40,7 @@ import {
 } from "./packages.ts";
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
+import { PROJEN_VERSION } from "./projen-version.ts";
 import { applyCompiledPublish } from "./publish.ts";
 import {
   DBXToolsReleaseCatalog,
@@ -382,14 +383,7 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
   endOfLine: javascript.EndOfLine.LF,
 };
 
-/**
- * The `projen` version every generated manifest pins.
- *
- * Kept as one constant so the root's devDependency and this engine's own
- * dependency can never drift apart - a synth run loads the engine from one copy
- * of projen and the tasks execute against another otherwise.
- */
-export const PROJEN_VERSION = "^0.101.16";
+export { PROJEN_VERSION } from "./projen-version.ts";
 
 /** SPDX license shared by generated JavaScript, Python, and Rust packages. */
 export const DBX_TOOLS_LICENSE = "Apache-2.0";
@@ -412,7 +406,7 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // phase installs with pnpm - so a deployed app keeps its catalog + build
     // allowances even though the local/CI manager is bun.
     packageManager: javascript.NodePackageManager.BUN,
-    // Pinned rather than left to projen's "latest": 0.101.16 is the first release
+    // Pinned rather than left to projen's "latest": this is the co-tested release
     // whose `NodePackage` renders bun's `trustedDependencies` natively. Under bun,
     // projen does NOT create the `pnpm-workspace.yaml` component itself (that call
     // site is gated to pnpm), so the engine constructs it directly ({@link
@@ -750,7 +744,7 @@ export class DBXToolsNodeProject
     const steps = super.renderWorkflowSetup(options);
     if (this.parent) return steps;
     return steps.flatMap((step) => {
-      if (step.uses === "oven-sh/setup-bun@v2") {
+      if (step.uses?.startsWith("oven-sh/setup-bun@")) {
         return [...bunCacheRestoreSteps(this, { ignorePaths: this.workflowCacheIgnorePaths })];
       }
       if (step.run === "bun install") {

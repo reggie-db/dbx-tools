@@ -12,6 +12,7 @@ import {
 } from "./auth-client.ts";
 
 type Phase = "loading" | "email" | "code" | "enroll" | "authed" | "open";
+type ConditionalMediation = "checking" | "available" | "unavailable";
 
 export interface AuthGateProps {
   children: ReactNode;
@@ -28,6 +29,8 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [passkeysEnabled, setPasskeysEnabled] = useState(false);
+  const [conditionalMediation, setConditionalMediation] =
+    useState<ConditionalMediation>("checking");
 
   useEffect(() => {
     let cancelled = false;
@@ -46,22 +49,34 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
   }, []);
 
   useEffect(() => {
+    if (!passkeysEnabled || phase !== "email") {
+      return;
+    }
     if (
-      !passkeysEnabled ||
-      phase !== "email" ||
       typeof PublicKeyCredential === "undefined" ||
       typeof PublicKeyCredential.isConditionalMediationAvailable !== "function"
     ) {
+      setConditionalMediation("unavailable");
       return;
     }
     let cancelled = false;
     // Conditional mediation cannot reveal whether a credential exists. It lets
     // the browser offer one immediately on the focused `webauthn` input without
     // showing an empty modal to users who have no passkey.
-    void PublicKeyCredential.isConditionalMediationAvailable().then(async (available) => {
-      if (!available || cancelled) return;
-      if ((await signInPasskey(true)) && !cancelled) setPhase("authed");
-    });
+    void PublicKeyCredential.isConditionalMediationAvailable()
+      .then(async (available) => {
+        if (cancelled) return;
+        setConditionalMediation(available ? "available" : "unavailable");
+        if (!available) return;
+        if (await signInPasskey(true)) {
+          if (!cancelled) setPhase("authed");
+        } else if (!cancelled) {
+          setConditionalMediation("unavailable");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setConditionalMediation("unavailable");
+      });
     return () => {
       cancelled = true;
     };
@@ -173,7 +188,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
             <Button type="submit" disabled={busy} className="w-full">
               Sign in with email OTP
             </Button>
-            {passkeysEnabled ? (
+            {passkeysEnabled && conditionalMediation === "unavailable" ? (
               <Button
                 type="button"
                 variant="outline"

@@ -80,8 +80,10 @@ describe("workspace validation tasks", () => {
   });
 
   it("checks lint without mutating and exposes fixes explicitly", () => {
-    const lintCommand = tasks.root.tasks.eslint.steps?.[0]?.exec ?? "";
-    const fixCommand = tasks.root.tasks["eslint:fix"].steps?.[0]?.exec ?? "";
+    const lintStep = tasks.root.tasks.eslint.steps?.[0];
+    const fixStep = tasks.root.tasks["eslint:fix"].steps?.[0];
+    const lintCommand = lintStep?.exec ?? (lintStep?.execArgs ?? []).join(" ");
+    const fixCommand = fixStep?.exec ?? (fixStep?.execArgs ?? []).join(" ");
     assert.doesNotMatch(lintCommand, /--fix/);
     assert.match(lintCommand, /\bpackages\b/);
     assert.match(lintCommand, /\btooling$/);

@@ -261,6 +261,7 @@ const root = new projenProject.DBXToolsNodeProject({
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
     "gridstack@^12.3.3",
+    "uplot@^1.6.32",
     "zod@catalog:",
   ],
 });
@@ -311,6 +312,7 @@ root.gitignore.addPatterns(
   ".astro/",
   ".worktrees/",
   ".home/",
+  ".kanna/",
   "**/.logs/",
 );
 // Rust release rows embed reviewed dashboard assets and do not build them.
@@ -328,21 +330,21 @@ root.pnpmWorkspace?.addCatalog("@react-email/components", "^1.0.12");
 root.pnpmWorkspace?.addCatalog("@react-email/render", "^2.1.0");
 root.pnpmWorkspace?.addCatalog("@mastra/core", "1.71.0");
 root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.10.5");
-root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.14");
+root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.15");
 root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.3.2");
 root.pnpmWorkspace?.addCatalog("@mastra/mcp", "2.1.0");
 root.pnpmWorkspace?.addCatalog("@modelcontextprotocol/sdk", "^1.29.0");
 root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.32.1");
-root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.18.0");
-root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.10");
+root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.18.1");
+root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.11");
 root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.27.1");
 root.pnpmWorkspace?.addCatalog("@pydantic/monty", "0.0.23");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
 // pulls it, but the pin belongs with the other add-on runtime deps.
 root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
-root.pnpmWorkspace?.addCatalog("better-auth", "1.7.3");
-root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.3");
+root.pnpmWorkspace?.addCatalog("better-auth", "1.7.6");
+root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.6");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
@@ -1142,7 +1144,6 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     metrics: "0.24",
     "metrics-exporter-prometheus": { version: "0.17", defaultFeatures: false },
     "mime_guess": "2",
-    object: { version: "0.37", defaultFeatures: false, features: ["read"] },
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
     "percent-encoding": "2",
@@ -1181,17 +1182,6 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     wiremock: "0.6",
   },
   packages: {
-    "release-tools": {
-      description: "Private content-addressed Rust release fingerprint and binary stamping tools",
-      private: true,
-      dependencies: {
-        clap: { workspace: true },
-        object: { workspace: true },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        sha2: { workspace: true },
-      },
-    },
     core: {
       description:
         "Databricks authentication, flexible API requests, Lakebase parsing, caching, and filesystem primitives",

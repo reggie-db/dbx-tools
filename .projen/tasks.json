@@ -63,22 +63,35 @@
       },
       "steps": [
         {
-          "exec": "git checkout -b scratch",
+          "execArgs": [
+            "git",
+            "checkout",
+            "-b",
+            "scratch"
+          ],
           "name": "save current HEAD in \"scratch\" branch"
         },
         {
-          "exec": "git checkout $BRANCH"
+          "exec": "git checkout \"$BRANCH\""
         },
         {
-          "exec": "git fetch origin",
+          "execArgs": [
+            "git",
+            "fetch",
+            "origin"
+          ],
           "name": "fetch latest changes from origin"
         },
         {
-          "exec": "git reset --hard origin/$BRANCH",
+          "exec": "git reset --hard \"origin/$BRANCH\"",
           "name": "hard reset to origin commit"
         },
         {
-          "exec": "git clean -fdx",
+          "execArgs": [
+            "git",
+            "clean",
+            "-fdx"
+          ],
           "name": "clean all untracked files"
         },
         {
@@ -184,7 +197,17 @@
       },
       "steps": [
         {
-          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern $@ packages/js packages/test packages/example projen",
+          "execArgs": [
+            "eslint",
+            "--ext",
+            ".ts,.tsx",
+            "--no-error-on-unmatched-pattern",
+            "$@",
+            "packages/js",
+            "packages/test",
+            "packages/example",
+            "projen"
+          ],
           "receiveArgs": true
         }
       ]
@@ -378,7 +401,7 @@
       "description": "Write the version-independent Rust release build manifest",
       "steps": [
         {
-          "exec": "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\" --portable"
+          "exec": "node .projen/rust-release.mjs fingerprint --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\" --source \"packages/rs\" --portable"
         }
       ]
     },

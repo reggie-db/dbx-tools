@@ -1,4 +1,4 @@
-# evaAppKit 0.81 upgrade and native reuse plan
+# AppKit 0.81 upgrade and native reuse plan
 
 Date: 2026-09-29
 
@@ -13,7 +13,7 @@ define a staged upgrade. This is a separate review from the completed
 It does not implement an upgrade, retire packages, or change current runtime
 contracts.
 
-## Snapshot and evidencevae
+## Snapshot and evidence
 
 - Both registry queries, `bun info @databricks/appkit version --json` and
   `bun info @databricks/appkit-ui version --json`, returned **0.81.0**.

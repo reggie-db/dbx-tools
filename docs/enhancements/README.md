@@ -12,6 +12,10 @@ date and final status.
 
 ## Active plans
 
+- [Repository code-quality audit](2026-10-01-repository-code-quality-audit.md)
+  - Records the model-proxy metrics redesign, conditional passkey flow, reusable
+    Rust Projen project and release helper, release compile ownership, dependency
+    upgrades, package-boundary review, and remaining measured follow-up.
 - [Model proxy adaptive rate-limit and observability plan](2026-09-30-model-proxy-adaptive-rate-limit-decay-plan.md)
   - Recover auto-mode workspace/model queues from temporary input-token
     contention through conservative activation, clean-traffic evidence,

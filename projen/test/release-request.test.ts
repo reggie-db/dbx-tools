@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { execFileSync } from "node:child_process";
 
 import { isReleasableMessage, prepareReleaseRequest } from "../tasks/release-request.ts";
 

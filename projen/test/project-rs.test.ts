@@ -10,6 +10,7 @@ import {
   type WorkflowDefinition,
   type WorkflowJob,
 } from "./workflow.ts";
+import { synchronizeCargoLockVersions } from "../src/project-rs.ts";
 import {
   DBXToolsNodeProject,
   DBXToolsPythonWorkspace,
@@ -17,7 +18,6 @@ import {
   RustReleaseCpu,
   RustReleaseOs,
 } from "../src/project.ts";
-import { synchronizeCargoLockVersions } from "../src/project-rs.ts";
 
 let outdir: string;
 
@@ -696,12 +696,15 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(stepNames(rustBuild).includes("Setup Bun"), false);
     const fingerprint = workflowStep(rustBuild, "Verify Rust build fingerprint");
     assert.equal(fingerprint.id, "rust-fingerprint");
+    assert.match(fingerprint.run ?? "", /node \.projen\/rust-release\.mjs fingerprint/);
+    assert.doesNotMatch(fingerprint.run ?? "", /dbx-tools-release-tools/);
     assert.match(
       fingerprint.run ?? "",
       /dist\/rust-raw\/rust-build-\$\{\{ matrix\.node \}\}\.json/,
     );
     assert.match(fingerprint.run ?? "", /rustSourceHash/);
     assert.match(fingerprint.run ?? "", /echo "key=\$KEY" >> "\$GITHUB_OUTPUT"/);
+    assert.equal(existsSync(join(outdir, ".projen/rust-release.mjs")), true);
     const reuse = workflowStep(rustBuild, "Reuse matching raw Rust outputs").run ?? "";
     assert.match(reuse, /steps\.rust-fingerprint\.outputs\.key/);
     assert.match(reuse, /command -v sha256sum/);
@@ -900,7 +903,7 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
-  it("marks private crates as unpublished", () => {
+  it("applies a workspace private default with per-crate overrides", () => {
     const project = new DBXToolsNodeProject({
       name: "@fixture/private-root",
       scope: "fixture",
@@ -911,16 +914,24 @@ describe("DBXToolsRustWorkspace", () => {
     });
     mkdirSync(join(project.outdir, "packages/rs/private-cli/src"), { recursive: true });
     writeFileSync(join(project.outdir, "packages/rs/private-cli/src/main.rs"), "fn main() {}\n");
+    mkdirSync(join(project.outdir, "packages/rs/public-cli/src"), { recursive: true });
+    writeFileSync(join(project.outdir, "packages/rs/public-cli/src/main.rs"), "fn main() {}\n");
     new DBXToolsRustWorkspace(project, {
       scope: "fixture",
-      packages: { "private-cli": { private: true } },
+      private: true,
+      packages: { "public-cli": { private: false } },
     });
     project.synth();
-    const manifest = readFileSync(
+    const privateManifest = readFileSync(
       join(project.outdir, "packages/rs/private-cli/Cargo.toml"),
       "utf8",
     );
-    assert.match(manifest, /^publish = false$/m);
-    assert.match(manifest, /\[\[bin\]\]\nname = "fixture-private-cli"/);
+    const publicManifest = readFileSync(
+      join(project.outdir, "packages/rs/public-cli/Cargo.toml"),
+      "utf8",
+    );
+    assert.match(privateManifest, /^publish = false$/m);
+    assert.match(privateManifest, /\[\[bin\]\]\nname = "fixture-private-cli"/);
+    assert.doesNotMatch(publicManifest, /^publish = false$/m);
   });
 });

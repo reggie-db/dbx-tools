@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun
 /**
- * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run]`
+ * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]`
  * - verify every workspace member and the Bun lock carry the release version,
  * then publish each package owned by the standard Node release with `bun publish`.
  *
@@ -75,7 +75,7 @@ import {
 } from "./publish-npm.ts";
 import type { ReleasePlan } from "../src/release-plan.ts";
 
-const logger = log.logger("dbx-tools:publish");
+const logger = log.logger("projen:publish");
 
 /** A manifest's on-disk bytes + mode, captured before this task edits it. */
 interface ManifestBackup {
@@ -228,6 +228,14 @@ function restoreManifests(): void {
 /** Entry-point fields projen writes as `.ts` source in-repo and rewrites to `lib/` for publish. */
 const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const;
 
+/** Compiled files referenced by a publishConfig entry-point tree. */
+function compiledPublishTargets(value: unknown): string[] {
+  if (typeof value === "string") return value.startsWith("./lib/") ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap(compiledPublishTargets);
+  if (!value || typeof value !== "object") return [];
+  return Object.values(value).flatMap(compiledPublishTargets);
+}
+
 /**
  * Fold a package's `publishConfig` entry-point fields onto the top-level manifest,
  * the way pnpm/npm do at pack time but `bun publish` does NOT (see the module
@@ -272,13 +280,14 @@ const plan =
     : undefined;
 if (!version && !plan) {
   logger.error(
-    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run]",
+    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]",
   );
   process.exit(1);
 }
 const registryIdx = rest.indexOf("--registry");
 const registry = registryIdx >= 0 ? rest[registryIdx + 1] : undefined;
 const dryRun = rest.includes("--dry-run");
+const skipCompile = rest.includes("--skip-compile");
 const concurrencyIdx = rest.indexOf("--concurrency");
 const parsedConcurrency = Number(concurrencyIdx >= 0 ? rest[concurrencyIdx + 1] : 4);
 if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
@@ -343,6 +352,7 @@ const publishable: Array<{
   name: string;
   version: string;
   compile: boolean;
+  compiledTargets: string[];
 }> = [];
 for (const dir of members) {
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
@@ -350,7 +360,7 @@ for (const dir of members) {
     version?: string;
     private?: boolean;
     dbxToolsConfig?: { uniffi?: boolean };
-    scripts?: Record<string, string>;
+    publishConfig?: unknown;
   };
   if (pkg.private) {
     logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
@@ -361,18 +371,39 @@ for (const dir of members) {
     continue;
   }
   if (!pkg.version) throw new Error(`Missing package version for ${pkg.name ?? dirname(dir)}`);
+  const compiledTargets = [...new Set(compiledPublishTargets(pkg.publishConfig))];
   publishable.push({
     dir,
     name: pkg.name ?? dirname(dir),
     version: pkg.version,
-    compile: Boolean(pkg.scripts && typeof pkg.scripts === "object" && "prepack" in pkg.scripts),
+    compile: compiledTargets.length > 0,
+    compiledTargets,
   });
 }
 
 const compiled = publishable.filter((pkg) => pkg.compile);
 if (compiled.length > 0) {
-  logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
-  run(root, "bun", ["run", ...compiled.flatMap((pkg) => ["--filter", pkg.name]), "compile"], path);
+  if (skipCompile) {
+    const missing = compiled.flatMap((pkg) =>
+      pkg.compiledTargets
+        .filter((target) => !existsSync(resolve(pkg.dir, target)))
+        .map((target) => `${pkg.name}:${target}`),
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `--skip-compile requires validated compiled output; missing ${missing.join(", ")}`,
+      );
+    }
+    logger.info(`reusing validated compiled output for ${compiled.length} publishable packages`);
+  } else {
+    logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
+    run(
+      root,
+      "bun",
+      ["run", ...compiled.flatMap((pkg) => ["--filter", pkg.name]), "compile"],
+      path,
+    );
+  }
 }
 
 // Compile against workspace source exports first. Switching manifests to their
@@ -389,7 +420,7 @@ logger.info(
 );
 await runConcurrent(publishable, concurrency, async ({ dir, name, version: packageVersion }) => {
   if (!dryRun) {
-    const packed = mkdtempSync(join(tmpdir(), "dbx-tools-npm-release-"));
+    const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));
     try {
       const archive = packNpmPackage(dir, packed, path);
       const local = readNpmArchiveIdentity(archive);

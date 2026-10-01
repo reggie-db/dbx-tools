@@ -15,6 +15,7 @@
 import { fileURLToPath } from "node:url";
 import { javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
+import { PROJEN_VERSION } from "./src/projen-version.ts";
 import { readReleaseUnitVersion } from "./src/release-catalog.ts";
 
 const PACKAGE_VERSION = readReleaseUnitVersion(
@@ -28,6 +29,7 @@ const project = new typescript.TypeScriptProject({
   // A member of the single bun workspace. No nested `pnpm-workspace.yaml` marker is
   // needed - bun resolves the `workspace:^` sibling deps from the root install.
   packageManager: NodePackageManager.BUN,
+  projenVersion: PROJEN_VERSION,
   // The projenrc runner is reset to `bun` below (bun runs `.ts` directly). This
   // package is `type: module` and `.projenrc.ts` does a directory import
   // (`projen/lib/javascript`); bun resolves it fine.
@@ -79,13 +81,13 @@ const project = new typescript.TypeScriptProject({
     "is-identifier@^1",
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
-    "projen@^0.101.16",
     "release-please@17.11.2",
     "semver@^7.7.3",
     "smol-toml@1.8.0",
     "ts-to-zod@^5.1.0",
     "yaml@^2.9.0",
   ],
+  peerDeps: [`projen@${PROJEN_VERSION}`],
   devDeps: [
     "@types/node@^24.6.0",
     "@types/semver@^7.7.1",

@@ -16,7 +16,7 @@ import {
 } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
-import type { DBXToolsProject } from "./project.ts";
+import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { defaultReleaseUnitId, type ReleaseDependencyInput } from "./release-catalog.ts";
 import {
   RELEASE_SHA,
@@ -77,6 +77,16 @@ export interface RustPackageOptions {
   readonly uniffiConfig?: Readonly<Record<string, unknown>>;
 }
 
+/** Options for one projen-native Cargo workspace member. */
+export interface DBXToolsRustProjectOptions extends DBXToolsProjectOptions {
+  readonly parent: javascript.NodeProject;
+  /** Repository-relative Cargo workspace root. Defaults to `packages/rs`. */
+  readonly root?: string;
+  /** Crate-name prefix. Defaults to the parent dbx-tools scope or project name. */
+  readonly scope?: string;
+  readonly package: RustPackageOptions;
+}
+
 export interface DBXToolsRustWorkspaceOptions {
   readonly root?: string;
   readonly scope?: string;
@@ -92,6 +102,7 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly nodeRoot?: string;
   readonly pythonRoot?: string;
   readonly pythonModulePrefix?: string;
+  /** Default publication policy for discovered crates. Individual packages can override it. */
   readonly private?: boolean;
   /** Generate release-branch-driven cross-platform UniFFI package releases. */
   readonly release?: boolean;
@@ -454,30 +465,52 @@ function structuredTomlSections(value: Readonly<Record<string, unknown>>): Recor
 export class DBXToolsRustProject extends Project implements DBXToolsProject {
   readonly language = "rust" as const;
   readonly crateName: string;
+  readonly workspaceRoot: string;
+  readonly scope: string;
   readonly packageOptions: RustPackageOptions;
   readonly uniffi: boolean;
   readonly manifestFile: TomlFile;
 
+  constructor(options: DBXToolsRustProjectOptions);
   constructor(
     parent: javascript.NodeProject,
     root: string,
     scope: string,
     options: RustPackageOptions,
+  );
+  constructor(
+    parentOrOptions: javascript.NodeProject | DBXToolsRustProjectOptions,
+    legacyRoot?: string,
+    legacyScope?: string,
+    legacyPackage?: RustPackageOptions,
   ) {
-    const crateName = `${string.toSlug(scope)}-${options.directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`;
-    super({ parent, outdir: `${root}/${options.directory}`, name: crateName });
+    const directOptions =
+      arguments.length === 1 ? (parentOrOptions as DBXToolsRustProjectOptions) : null;
+    const parent = directOptions?.parent ?? (parentOrOptions as javascript.NodeProject);
+    const root = directOptions?.root ?? legacyRoot ?? "packages/rs";
+    const scope = string.toSlug(
+      directOptions?.scope ??
+        legacyScope ??
+        (isDBXToolsJavaScriptProject()(parent) ? parent.scope : parent.name),
+    );
+    const packageOptions = directOptions?.package ?? legacyPackage;
+    if (!packageOptions) throw new Error("Rust package options are required");
+    const crateName = `${scope}-${packageOptions.directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`;
+    super({ parent, outdir: `${root}/${packageOptions.directory}`, name: crateName });
     this.crateName = crateName;
-    this.packageOptions = options;
+    this.workspaceRoot = root;
+    this.scope = scope;
+    this.packageOptions = packageOptions;
     this.uniffi = hasUniFFIBindings(this.outdir);
     const library = existsSync(join(this.outdir, "src/lib.rs"));
     const binary = existsSync(join(this.outdir, "src/main.rs"));
-    const binaryName = options.binaryName ?? crateName;
+    const binaryName = packageOptions.binaryName ?? crateName;
     const packageVersion =
       isDBXToolsJavaScriptProject()(parent) && parent.releaseCatalog.mode === "independent"
         ? parent.releaseCatalog.versionForRegistration(
             "rust",
             crateName,
-            `${root}/${options.directory}`,
+            `${root}/${packageOptions.directory}`,
           )
         : { workspace: true };
     const manifest: Record<string, unknown> = {
@@ -486,10 +519,10 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
         version: packageVersion,
         edition: { workspace: true },
         "rust-version": { workspace: true },
-        description: options.description ?? crateName,
+        description: packageOptions.description ?? crateName,
         license: { workspace: true },
         repository: { workspace: true },
-        ...(options.private ? { publish: false } : {}),
+        ...(packageOptions.private ? { publish: false } : {}),
       },
       ...(library
         ? {
@@ -509,28 +542,30 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
             ],
           }
         : {}),
-      ...(options.features || options.defaultFeatures
+      ...(packageOptions.features || packageOptions.defaultFeatures
         ? {
             features: {
-              ...(options.defaultFeatures ? { default: [...options.defaultFeatures] } : {}),
-              ...options.features,
+              ...(packageOptions.defaultFeatures
+                ? { default: [...packageOptions.defaultFeatures] }
+                : {}),
+              ...packageOptions.features,
             },
           }
         : {}),
-      ...(options.dependencies
+      ...(packageOptions.dependencies
         ? {
             dependencies: Object.fromEntries(
-              Object.entries(options.dependencies).map(([name, value]) => [
+              Object.entries(packageOptions.dependencies).map(([name, value]) => [
                 name,
                 cargoDependency(value, readWorkspaceVersion(parent.outdir)),
               ]),
             ),
           }
         : {}),
-      ...(options.devDependencies
+      ...(packageOptions.devDependencies
         ? {
             "dev-dependencies": Object.fromEntries(
-              Object.entries(options.devDependencies).map(([name, value]) => [
+              Object.entries(packageOptions.devDependencies).map(([name, value]) => [
                 name,
                 cargoDependency(value, readWorkspaceVersion(parent.outdir)),
               ]),
@@ -546,7 +581,7 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
       new TomlFile(this, "uniffi.toml", {
         marker: false,
         obj: structuredTomlSections(
-          options.uniffiConfig ?? {
+          packageOptions.uniffiConfig ?? {
             "bindings.python": { cdylib_name: crateName.replaceAll("-", "_") },
             "bindings.typescript": { strictTypeChecking: true },
           },
@@ -593,6 +628,7 @@ interface ResolvedRustWorkspaceOptions {
   readonly nativeTargets: readonly UniFFIReleaseTarget[];
   readonly pythonModulePrefix: string;
   readonly packageOptions: Readonly<Record<string, Omit<RustPackageOptions, "directory">>>;
+  readonly private?: boolean;
   readonly release: boolean;
 }
 
@@ -615,6 +651,7 @@ function resolveRustWorkspaceOptions(
     nativeTargets: releaseTargets(options),
     pythonModulePrefix: options.pythonModulePrefix ?? scope.replaceAll("-", "_"),
     packageOptions: options.packages ?? {},
+    private: options.private,
     release: options.release ?? true,
   };
 }
@@ -865,9 +902,15 @@ function createRustPackages(
 ): DBXToolsRustProject[] {
   return discoverRustCrates(resolve(project.outdir, resolved.root)).map(
     (directory) =>
-      new DBXToolsRustProject(project, resolved.root, resolved.scope, {
-        directory,
-        ...resolved.packageOptions[directory],
+      new DBXToolsRustProject({
+        parent: project,
+        root: resolved.root,
+        scope: resolved.scope,
+        package: {
+          directory,
+          private: resolved.private,
+          ...resolved.packageOptions[directory],
+        },
       }),
   );
 }
@@ -1071,6 +1114,8 @@ type RustReleaseTargetPlan = Readonly<Record<string, string | boolean | number>>
 interface RustReleasePlan {
   readonly releaseRustVersion: string;
   readonly releaseTask: string;
+  readonly releaseHelper: string;
+  readonly rustRoot: string;
   readonly bindings: readonly RustReleaseBinding[];
   readonly nodeBindings: readonly RustReleaseBinding[];
   readonly releaseBinaries: readonly RustReleaseBinaryPlan[];
@@ -1140,6 +1185,8 @@ function planRustRelease(
   return {
     releaseRustVersion,
     releaseTask: ".projen/uniffi-release.mjs",
+    releaseHelper: ".projen/rust-release.mjs",
+    rustRoot: options.root ?? "packages/rs",
     bindings,
     nodeBindings: bindings.filter((binding) => Boolean(binding.node && binding.nodePackage)),
     releaseBinaries,
@@ -1154,37 +1201,41 @@ function planRustRelease(
 }
 
 function configureRustReleaseTask(project: javascript.NodeProject, plan: RustReleasePlan): void {
-  const supportFiles = [
+  const bindingSupportFiles = [
     plan.releaseTask,
     ".projen/uniffi-python.js",
     ".projen/smol-toml.cjs",
     ".projen/smol-toml.LICENSE",
   ] as const;
+  new TextFile(project, plan.releaseHelper, {
+    lines: taskSource("rust-release.mjs").trimEnd().split("\n"),
+  });
   if (plan.bindings.length) {
     new TextFile(project, plan.releaseTask, {
       lines: taskSource("uniffi-release.mjs").trimEnd().split("\n"),
     });
-    new TextFile(project, supportFiles[1], {
+    new TextFile(project, bindingSupportFiles[1], {
       lines: taskSource("uniffi-python.js").trimEnd().split("\n"),
     });
-    new TextFile(project, supportFiles[2], {
+    new TextFile(project, bindingSupportFiles[2], {
       lines: smolTomlSource("dist/index.cjs").trimEnd().split("\n"),
     });
-    new TextFile(project, supportFiles[3], {
+    new TextFile(project, bindingSupportFiles[3], {
       lines: smolTomlSource("LICENSE").trimEnd().split("\n"),
     });
   } else {
-    for (const path of supportFiles) project.tryRemoveFile(path);
+    for (const path of bindingSupportFiles) project.tryRemoveFile(path);
   }
   project.addTask("rs:release-fingerprint", {
     description: "Write the version-independent Rust release build manifest",
     exec: [
-      "cargo run --quiet --package dbx-tools-release-tools -- fingerprint",
+      `node ${plan.releaseHelper} fingerprint`,
       ...plan.targets.map(
         (target) =>
           `--target ${JSON.stringify(`${String(target.cargo)}|${String(target.cargoExcludes ?? "")}`)}`,
       ),
       `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
+      `--source ${JSON.stringify(plan.rustRoot)}`,
       "--portable",
     ].join(" "),
   });
@@ -1377,19 +1428,21 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
         shell: "bash",
         run: independentSetup
           ? [
-              "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --check",
+              `node ${plan.releaseHelper} fingerprint --check`,
               '--target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}"',
               `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
+              `--source ${JSON.stringify(plan.rustRoot)}`,
               "--portable",
             ].join(" ")
           : [
               'RUNTIME_MANIFEST="dist/rust-raw/rust-build-${{ matrix.node }}.json"',
               'mkdir -p "$(dirname "$RUNTIME_MANIFEST")"',
               [
-                "cargo run --quiet --package dbx-tools-release-tools -- fingerprint",
+                `node ${plan.releaseHelper} fingerprint`,
                 '--output "$RUNTIME_MANIFEST"',
                 '--target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}"',
                 `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
+                `--source ${JSON.stringify(plan.rustRoot)}`,
               ].join(" "),
               'test "$(jq -r .rustSourceHash "$RUNTIME_MANIFEST")" = "$(jq -r .rustSourceHash .release/rust-build.json)"',
               'KEY="$(jq -r --arg target "${{ matrix.cargo }}" \'.targets[$target] // empty\' "$RUNTIME_MANIFEST")"',
@@ -1482,7 +1535,7 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
               name: "Stamp native release version",
               shell: "bash",
               env: { VERSION: RELEASE_VERSION },
-              run: 'cargo run --quiet --package dbx-tools-release-tools -- stamp-tree --root "target/${{ matrix.cargo }}/release" --version "$VERSION"',
+              run: `node ${plan.releaseHelper} stamp-tree --root "target/\${{ matrix.cargo }}/release" --version "$VERSION"`,
             },
           ]
         : []),
@@ -1877,7 +1930,7 @@ function configureIndependentRustVersions(
 }
 
 /** Generated Rust workspace plus convention-derived UniFFI binding packages. */
-export class DBXToolsRustWorkspace {
+export class DBXToolsRustWorkspace extends Component {
   readonly packages: readonly DBXToolsRustProject[];
   readonly nodePackages: readonly DBXToolsTypeScriptProject[];
   readonly pythonPackages: readonly PythonPackageOptions[];
@@ -1886,6 +1939,7 @@ export class DBXToolsRustWorkspace {
   readonly workspaceMapping: RustWorkspaceMapping;
 
   constructor(project: javascript.NodeProject, options: DBXToolsRustWorkspaceOptions) {
+    super(project);
     const resolved = resolveRustWorkspaceOptions(project, options);
     this.packages = createRustPackages(project, resolved);
     const packageDependencies = createRustPackageDependencyResolver(

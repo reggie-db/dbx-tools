@@ -24,6 +24,10 @@ import {
   type VersionLevel,
 } from "../src/_release-platform.ts";
 import {
+  RELEASE_SUMMARY_PROVIDER_NAMES,
+  type ReleaseSummaryProviderName,
+} from "../src/release-dispatch.ts";
+import {
   githubAccountSupportsWorkflowChanges,
   githubAuthenticatedAccounts,
   githubRepositoryApiPath,
@@ -32,10 +36,6 @@ import {
   githubTokenArguments,
   githubTokenEnvironmentName,
 } from "../src/release-github.ts";
-import {
-  RELEASE_SUMMARY_PROVIDER_NAMES,
-  type ReleaseSummaryProviderName,
-} from "../src/release-dispatch.ts";
 import {
   readWorkspaceVersion,
   resolveBaseVersion,
@@ -495,6 +495,7 @@ program
           localPypi: opts.localPypi,
           pythonRoot: opts.pythonRoot,
           localCargo: opts.localCargo,
+          reuseValidatedNodeCompile: opts.validate,
         });
       } else {
         logger.info("local publication skipped by --no-local-publish");
