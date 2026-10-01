@@ -9,9 +9,9 @@ export const RELEASE_BINARY_COMMANDS = [
     "hidden": false,
     "unit": "rs-lakebase-proxy",
     "component": "rs-lakebase-proxy",
-    "version": "0.9.8",
+    "version": "0.9.9",
     "tagPrefix": "v",
-    "tag": "v0.9.8",
+    "tag": "v0.9.9",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
@@ -43,9 +43,9 @@ export const RELEASE_BINARY_COMMANDS = [
     "hidden": false,
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.8",
+    "version": "0.9.9",
     "tagPrefix": "v",
-    "tag": "v0.9.8",
+    "tag": "v0.9.9",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
@@ -87,9 +87,9 @@ export const RELEASE_BINARY_COMMANDS = [
     "hidden": true,
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.8",
+    "version": "0.9.9",
     "tagPrefix": "v",
-    "tag": "v0.9.8",
+    "tag": "v0.9.9",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
