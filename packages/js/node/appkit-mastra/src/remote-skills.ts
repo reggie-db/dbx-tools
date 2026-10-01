@@ -60,7 +60,16 @@ import { exec } from "@dbx-tools/core";
 import { DatabricksFileSystem, workspace as databricksWorkspace } from "@dbx-tools/databricks";
 import { localFS, type LocalFileSystem } from "@dbx-tools/fs";
 import { find } from "@dbx-tools/path";
-import { error, hash, json, log, net, object, string } from "@dbx-tools/shared-core";
+import {
+  async as asyncTools,
+  error,
+  hash,
+  json,
+  log,
+  net,
+  object,
+  string,
+} from "@dbx-tools/shared-core";
 import type { OneOrMany } from "@dbx-tools/shared-core";
 import type { FileSystem } from "@dbx-tools/shared-fs";
 
@@ -620,11 +629,15 @@ async function stageAiTools(
       path: join(target, name, ...file.split("/")),
     })),
   );
-  await mapConcurrent(files, AITOOLS_CONCURRENCY, async (item) => {
-    const body = await download(item.url, maxBytes);
-    await mkdir(dirname(item.path), { recursive: true });
-    await writeFile(item.path, body);
-  });
+  await asyncTools.mapConcurrent(
+    files,
+    async (item) => {
+      const body = await download(item.url, maxBytes);
+      await mkdir(dirname(item.path), { recursive: true });
+      await writeFile(item.path, body);
+    },
+    { concurrency: AITOOLS_CONCURRENCY },
+  );
 
   logger.debug("aitools:staged", { ref, skills: selected.length, files: files.length });
   return target;
@@ -633,21 +646,6 @@ async function stageAiTools(
 /** Raw-content URL for a path in the AI Tools repo at `ref`. */
 function aiToolsRawUrl(ref: string, path: string): string {
   return `https://raw.githubusercontent.com/${AITOOLS_REPO}/${ref}/${path}`;
-}
-
-/** Run `worker` over `items`, at most `limit` in flight. */
-async function mapConcurrent<T>(
-  items: readonly T[],
-  limit: number,
-  worker: (item: T) => Promise<void>,
-): Promise<void> {
-  let cursor = 0;
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      await worker(items[cursor++]!);
-    }
-  });
-  await Promise.all(runners);
 }
 
 /**

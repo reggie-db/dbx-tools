@@ -12,6 +12,53 @@ describe("async.boundedRetryDelay", () => {
   });
 });
 
+describe("async.mapConcurrent", () => {
+  it("bounds active callbacks and preserves result order", async () => {
+    let active = 0;
+    let peak = 0;
+    const results = await async.mapConcurrent(
+      [4, 3, 2, 1],
+      async (value) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await Bun.sleep(value);
+        active -= 1;
+        return value * 2;
+      },
+      { concurrency: 2 },
+    );
+    assert.deepEqual(results, [8, 6, 4, 2]);
+    assert.equal(peak, 2);
+  });
+
+  it("settles every value and aggregates failures in input order", async () => {
+    const attempted: number[] = [];
+    await assert.rejects(
+      async.mapConcurrent(
+        [0, 1, 2, 3],
+        async (value) => {
+          attempted.push(value);
+          if (value === 1 || value === 3) throw new Error(`failure-${value}`);
+        },
+        { concurrency: 2, errorMode: "settle" },
+      ),
+      (err) => {
+        assert.ok(err instanceof AggregateError);
+        assert.deepEqual(err.errors.map(String), ["Error: failure-1", "Error: failure-3"]);
+        return true;
+      },
+    );
+    assert.deepEqual(attempted.sort(), [0, 1, 2, 3]);
+  });
+
+  it("rejects invalid concurrency", async () => {
+    await assert.rejects(
+      async.mapConcurrent([1], async (value) => value, { concurrency: 0 }),
+      /concurrency must be a positive integer/,
+    );
+  });
+});
+
 describe("poll", () => {
   it("waits between values skipped by the distinct filter", async () => {
     let attempts = 0;

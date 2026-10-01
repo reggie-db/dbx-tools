@@ -64,7 +64,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { exec } from "@dbx-tools/core";
-import { log } from "@dbx-tools/shared-core";
+import { async as asyncTools, log } from "@dbx-tools/shared-core";
 import ts from "typescript";
 import { parse } from "yaml";
 import {
@@ -169,25 +169,6 @@ async function runAsync(cwd: string, command: string, args: string[], path: stri
     check: true,
     env: { ...process.env, PATH: path },
   });
-}
-
-/** Run independent jobs with a small fixed worker pool. */
-async function runConcurrent<T>(
-  values: readonly T[],
-  concurrency: number,
-  worker: (value: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  const results = await Promise.allSettled(
-    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-      while (next < values.length) {
-        const value = values[next++];
-        await worker(value);
-      }
-    }),
-  );
-  const failure = results.find((result) => result.status === "rejected");
-  if (failure?.status === "rejected") throw failure.reason;
 }
 
 /**
@@ -424,9 +405,8 @@ for (const { dir } of publishable) {
 logger.info(
   `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
-await runConcurrent(
+await asyncTools.mapConcurrent(
   publishable,
-  concurrency,
   async ({ dir, name, version: packageVersion, access }) => {
     const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));
     try {
@@ -460,5 +440,6 @@ await runConcurrent(
       rmSync(packed, { recursive: true, force: true });
     }
   },
+  { concurrency, errorMode: "settle" },
 );
 logger.success(`${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages`);

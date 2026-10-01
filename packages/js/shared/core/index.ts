@@ -19,7 +19,7 @@ export * as pattern from "./src/pattern.ts";
 export * as predicate from "./src/predicate.ts";
 export * as string from "./src/string.ts";
 export * as token from "./src/token.ts";
-export type { PollContext, PollProducer, PollOptions } from "./src/async.ts";
+export type { ConcurrentErrorMode, MapConcurrentOptions, PollContext, PollProducer, PollOptions } from "./src/async.ts";
 export { DEFAULT_BRAND_ASSETS, BrandAssetSetSchema, BrandColorsSchema, BrandVoiceSchema, BrandContextSchema, defaultBrandContext } from "./src/brand.ts";
 export type { BrandContext, BrandContextInput, BrandAssetSet } from "./src/brand.ts";
 export type { ErrorContext } from "./src/error.ts";

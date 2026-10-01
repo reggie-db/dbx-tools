@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
+import { async as asyncTools } from "@dbx-tools/shared-core";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
   discoverJavaScriptPackages,
@@ -44,21 +45,6 @@ function packageBinary(packageName, binaryName) {
     throw new Error(`${packageName} does not declare the ${binaryName} binary`);
   }
   return path.resolve(packageRoot, relative);
-}
-
-/** Map values through a bounded number of asynchronous workers while preserving order. */
-async function mapConcurrent(values, limit, callback) {
-  const results = new Array(values.length);
-  let next = 0;
-  async function worker() {
-    while (next < values.length) {
-      const index = next;
-      next += 1;
-      results[index] = await callback(values[index], index);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()));
-  return results;
 }
 
 /**
@@ -589,11 +575,15 @@ async function main() {
   fs.mkdirSync(apiRoot, { recursive: true });
 
   const [typescriptGenerated, pythonGenerated, rustGenerated] = await Promise.all([
-    mapConcurrent(typescriptPackages, typedocWorkers, async (pkg) =>
-      (await generatePackageApi(pkg, typedocBin)) ? pkg : undefined,
+    asyncTools.mapConcurrent(
+      typescriptPackages,
+      async (pkg) => ((await generatePackageApi(pkg, typedocBin)) ? pkg : undefined),
+      { concurrency: typedocWorkers },
     ),
-    mapConcurrent(pythonPackages, 5, async (pkg) =>
-      (await generatePythonPackageApi(pkg)) ? pkg : undefined,
+    asyncTools.mapConcurrent(
+      pythonPackages,
+      async (pkg) => ((await generatePythonPackageApi(pkg)) ? pkg : undefined),
+      { concurrency: 5 },
     ),
     generateRustApis(rustPackages),
   ]);

@@ -10,6 +10,68 @@ import { deepEqual } from "./object.ts";
 
 const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000] as const;
 
+/** Controls how {@link mapConcurrent} reacts when a worker rejects. */
+export type ConcurrentErrorMode = "fail-fast" | "settle";
+
+/** Bounded-worker settings for {@link mapConcurrent}. */
+export interface MapConcurrentOptions {
+  /** Maximum number of callbacks running at once. */
+  concurrency: number;
+  /**
+   * `"fail-fast"` stops claiming new work after the first rejection.
+   * `"settle"` attempts every value and throws an `AggregateError` afterward.
+   */
+  errorMode?: ConcurrentErrorMode;
+}
+
+/**
+ * Map values through a bounded worker pool while preserving input order.
+ *
+ * Active callbacks are always allowed to settle. In fail-fast mode no new
+ * callback starts after the first observed rejection. Settle mode attempts
+ * every value and reports all failures in input order through `AggregateError`.
+ */
+export async function mapConcurrent<T, R>(
+  values: readonly T[],
+  callback: (value: T, index: number) => R | PromiseLike<R>,
+  options: MapConcurrentOptions,
+): Promise<R[]> {
+  const { concurrency, errorMode = "fail-fast" } = options;
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
+    throw new RangeError(`concurrency must be a positive integer, got ${String(concurrency)}`);
+  }
+  if (values.length === 0) return [];
+
+  const results = new Array<R>(values.length);
+  const failures: Array<{ index: number; reason: unknown }> = [];
+  let next = 0;
+  let failed = false;
+
+  const worker = async (): Promise<void> => {
+    while (next < values.length && !(failed && errorMode === "fail-fast")) {
+      const index = next++;
+      try {
+        results[index] = await callback(values[index]!, index);
+      } catch (reason) {
+        failures.push({ index, reason });
+        failed = true;
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()));
+  if (failures.length === 0) return results;
+
+  failures.sort((left, right) => left.index - right.index);
+  if (errorMode === "settle") {
+    throw new AggregateError(
+      failures.map(({ reason }) => reason),
+      `${failures.length} concurrent operation${failures.length === 1 ? "" : "s"} failed`,
+    );
+  }
+  throw failures[0]!.reason;
+}
+
 export function boundedRetryDelay(
   attempt: number,
   delaysMs: readonly number[] = DEFAULT_RETRY_DELAYS_MS,
