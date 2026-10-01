@@ -31,5 +31,5 @@ export type { UrlLike, IpVersion, ParsedIp, Cidr, UrlBuilder, ParseEmailsOptions
 export type { Sequence, Container, Collection, OneOrMany, NameLike, NonFunctionKeys, SerializablePrimitive, SerializableValue, ToNumberOptions, ToDateOptions, ToDurationOptions, DeepEqualComparator } from "./src/object.ts";
 export type { PatternOptions } from "./src/pattern.ts";
 export type { PredicateFunction, TypePredicateFunction, PredicateInput, Predicate } from "./src/predicate.ts";
-export type { TokenizeOptions, KeyOptions, IdentifierOptions, Description } from "./src/string-utils.ts";
+export type { TokenizeOptions, KeyOptions, IdentifierOptions, DedentOptions, Description } from "./src/string-utils.ts";
 export { ACCESS_TOKEN_HEADER, USER_ID_HEADER, USER_EMAIL_HEADER } from "./src/token.ts";

@@ -1,4 +1,5 @@
 /** Shared Bun setup and package-cache steps for generated workflows. */
+import { stringUtils } from "@dbx-tools/shared-core";
 import { TextFile, javascript } from "projen";
 
 export const BUN_VERSION = "1.3.14";
@@ -16,61 +17,68 @@ const DEFAULT_CACHE_IGNORE_PATHS = [
 
 function cacheKeyScript(extraIgnorePaths: readonly string[]): string {
   const ignorePaths = [...new Set(extraIgnorePaths)].sort();
-  return `#!/usr/bin/env node
-import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import { join, sep } from "node:path";
+  // prettier-ignore
+  const source = (
+    // ============================================================================
+    /*js*/`
+  #!/usr/bin/env node
+  import { createHash } from "node:crypto";
+  import { readdirSync, readFileSync } from "node:fs";
+  import { join, sep } from "node:path";
 
-const root = process.cwd();
-const ignoredNames = new Set(${JSON.stringify(DEFAULT_CACHE_IGNORE_PATHS)});
-const ignoredPaths = new Set(${JSON.stringify(ignorePaths)});
-const manifests = [];
-const walk = (directory) => {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name);
-    const relativePath = path.slice(root.length + 1).split(sep).join("/");
-    if (ignoredNames.has(entry.name) || ignoredPaths.has(relativePath)) continue;
-    if (entry.isDirectory()) walk(path);
-    else if (entry.name === "package.json") manifests.push(path);
-  }
-};
-walk(root);
+  const root = process.cwd();
+  const ignoredNames = new Set(${JSON.stringify(DEFAULT_CACHE_IGNORE_PATHS)});
+  const ignoredPaths = new Set(${JSON.stringify(ignorePaths)});
+  const manifests = [];
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      const relativePath = path.slice(root.length + 1).split(sep).join("/");
+      if (ignoredNames.has(entry.name) || ignoredPaths.has(relativePath)) continue;
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name === "package.json") manifests.push(path);
+    }
+  };
+  walk(root);
 
-const dependencyFields = [
-  "catalog",
-  "dependencies",
-  "devDependencies",
-  "optionalDependencies",
-  "overrides",
-  "peerDependencies",
-  "peerDependenciesMeta",
-  "resolutions",
-  "trustedDependencies",
-];
-const canonical = (value) => {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, child]) => [key, canonical(child)]),
+  const dependencyFields = [
+    "catalog",
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "overrides",
+    "peerDependencies",
+    "peerDependenciesMeta",
+    "resolutions",
+    "trustedDependencies",
+  ];
+  const canonical = (value) => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonical(child)]),
+    );
+  };
+  const dependencies = manifests
+    .sort()
+    .map((path) => {
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      return [
+        path.slice(root.length + 1),
+        Object.fromEntries(
+          dependencyFields
+            .filter((field) => manifest[field] !== undefined)
+            .map((field) => [field, canonical(manifest[field])]),
+        ),
+      ];
+    });
+  process.stdout.write(createHash("sha256").update(JSON.stringify(dependencies)).digest("hex"));
+  `
+    // ============================================================================
   );
-};
-const dependencies = manifests
-  .sort()
-  .map((path) => {
-    const manifest = JSON.parse(readFileSync(path, "utf8"));
-    return [
-      path.slice(root.length + 1),
-      Object.fromEntries(
-        dependencyFields
-          .filter((field) => manifest[field] !== undefined)
-          .map((field) => [field, canonical(manifest[field])]),
-      ),
-    ];
-  });
-process.stdout.write(createHash("sha256").update(JSON.stringify(dependencies)).digest("hex"));
-`;
+  return stringUtils.dedent(source, { trimEnd: false });
 }
 
 const configured = new WeakMap<javascript.NodeProject, string>();

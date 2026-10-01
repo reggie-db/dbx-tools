@@ -1310,7 +1310,9 @@ package that imports it.
   hand-roll `charAt(0).toUpperCase()`), `toSlug` / `toUniqueSlug`, `trimToNull`
   / `trimToEmpty` / `firstNonEmpty` (coercing an unknown JSON field to a
   string), `parseList` (a config value that may be an array OR one
-  comma/whitespace-separated env string), `escapeHtml`, `pluralize`.
+  comma/whitespace-separated env string), `dedent` / `dedentLines`
+  (left-aligning naturally indented multiline code and configuration templates
+  as a string or line array), `escapeHtml`, `pluralize`.
 - `object` - `isRecord` (narrowing parsed JSON), `deepEqual` (never compare via
   `JSON.stringify`), `toBoolean`, `optional` (spread a field only when present),
   plus the lazy `Sequence` transforms.

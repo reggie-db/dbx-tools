@@ -130,6 +130,10 @@ reading a file this repo generated itself.
 const slug = stringUtils.toSlug("My Cool Project!");
 const id = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, "Model Name");
 const unique = stringUtils.toUniqueSlug("Send Email", { fallbackPrefix: "tool" });
+const script = stringUtils.dedent(`
+  set -euo pipefail
+  bun run build
+`);
 const description = stringUtils.toDescription([
   "Answer with SQL first.",
   { "When data is missing": "Say what is missing." },
@@ -139,6 +143,11 @@ const description = stringUtils.toDescription([
 `stringUtils.tokenize()`, `toSlug()`, and `toIdentifier()` keep package names, tool
 ids, schema ids, and generated labels consistent. `toDescription()` turns nested
 description data into prompt/tool text without hand-concatenating paragraphs.
+`dedent()` removes common indentation and surrounding blank lines from multiline
+code or configuration templates. Its `trimStart` and `trimEnd` options preserve
+boundary blank lines when generated output requires them, while `trimLineEnd:
+false` preserves trailing spaces and tabs. `dedentLines()` returns the same
+normalization as a line array for file generators.
 
 Three helpers exist so call sites stop re-implementing them:
 
@@ -402,7 +411,8 @@ when disabled.
 - `hash` - ids, FNV hashes, and base32 encoding.
 - `json` - non-throwing `parse()` and record-narrowing `parseRecord()`.
 - `stringUtils` - tokenization, slugs, identifiers, human labels, string coercion,
-  config lists, descriptions, pluralization, and HTML escaping.
+  config lists, multiline string/line dedenting, descriptions, pluralization,
+  and HTML escaping.
 - `object` - record checks, number/boolean/date/duration coercion, present-only
   field spreading, deep equality, JSON-round-trip guards
   (`isSerializableValue`), canonical identity keys (`toStableKey`), shape types,

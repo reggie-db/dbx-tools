@@ -58,6 +58,53 @@ describe("stringUtils.parseList", () => {
   });
 });
 
+describe("stringUtils.dedent", () => {
+  it("removes common indentation and surrounding blank lines", () => {
+    assert.equal(
+      stringUtils.dedent(`
+        if ready; then
+          run
+        fi
+      `),
+      "if ready; then\n  run\nfi",
+    );
+  });
+
+  it("right-strips lines while preserving relative indentation", () => {
+    assert.equal(stringUtils.dedent("  first  \n    second\t\n\n"), "first\n  second");
+  });
+
+  it("can preserve spaces and tabs at line ends", () => {
+    assert.equal(
+      stringUtils.dedent("  first  \n    second\t", { trimLineEnd: false }),
+      "first  \n  second\t",
+    );
+  });
+
+  it("returns an empty string for empty or blank input", () => {
+    assert.equal(stringUtils.dedent(""), "");
+    assert.equal(stringUtils.dedent("\n  \n\t\n"), "");
+  });
+
+  it("can preserve leading and trailing blank lines", () => {
+    assert.equal(
+      stringUtils.dedent("\n  first\n    second\n", { trimStart: false, trimEnd: false }),
+      "\nfirst\n  second\n",
+    );
+  });
+
+  it("returns normalized lines without joining them", () => {
+    assert.deepEqual(stringUtils.dedentLines("\n  first\n    second\n"), ["first", "  second"]);
+    assert.deepEqual(stringUtils.dedentLines("\n  first\n   \n    second\n"), [
+      "first",
+      "",
+      "  second",
+    ]);
+    assert.deepEqual(stringUtils.dedentLines("\n  first\n", { trimEnd: false }), ["first", ""]);
+    assert.deepEqual(stringUtils.dedentLines(""), []);
+  });
+});
+
 await polygotTest(
   async () => ({ PACKAGE_IDENTIFIER, string: identifierContract }),
   "string",

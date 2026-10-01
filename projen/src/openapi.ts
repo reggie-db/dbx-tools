@@ -37,7 +37,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import * as bin from "@dbx-tools/core/bin";
 import { find } from "@dbx-tools/path";
-import { log } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated.ts";
@@ -61,14 +61,21 @@ const SPEAKEASY_OPENAPI_VERSION = "1.24.0";
 const SPEAKEASY_OPENAPI_RELEASE_URL = `https://github.com/speakeasy-api/openapi/releases/download/v${SPEAKEASY_OPENAPI_VERSION}`;
 const execFileAsync = promisify(execFile);
 
-const CLIENT_SRC = `import createClient, { type ClientOptions } from "openapi-fetch";
-import type { paths } from "./schema";
+// prettier-ignore
+const CLIENT_TEMPLATE = (
+  // ============================================================================
+  /*ts*/`
+  import createClient, { type ClientOptions } from "openapi-fetch";
+  import type { paths } from "./schema";
 
-/** Create a typed OpenAPI client (openapi-fetch); safe to use in the browser. */
-export function createApiClient(options?: ClientOptions) {
-  return createClient<paths>(options);
-}
-`;
+  /** Create a typed OpenAPI client (openapi-fetch); safe to use in the browser. */
+  export function createApiClient(options?: ClientOptions) {
+    return createClient<paths>(options);
+  }
+  `
+  // ============================================================================
+);
+const CLIENT_SRC = stringUtils.dedent(CLIENT_TEMPLATE, { trimEnd: false });
 
 /** True if any module file in `<pkg>/src` matches {@link TSOA_IMPORT}. */
 function hasTsoaControllers(pkg: Pick<RecordedPackage, "dir">): boolean {

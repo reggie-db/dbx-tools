@@ -160,7 +160,10 @@ describe("withProcessLock", () => {
         withProcessLock("dies", () => new Promise(() => {}));
         setTimeout(() => parentPort.postMessage("holding"), 20);
       `,
-      "main.mjs": `
+      // prettier-ignore
+      "main.mjs": (
+        // ============================================================================
+        /*js*/`
         import { Worker } from "node:worker_threads";
         import {
           processLockWorkerOptions,
@@ -172,7 +175,9 @@ describe("withProcessLock", () => {
         const waiter = withProcessLock("dies", () => "granted-after-death");
         await worker.terminate();
         console.log(await waiter);
-      `,
+      `
+        // ============================================================================
+      ),
     });
     assert.equal(stderr.includes("Error"), false, stderr);
     assert.equal(stdout.trim(), "granted-after-death");

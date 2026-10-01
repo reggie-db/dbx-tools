@@ -47,6 +47,18 @@ export type IdentifierOptions = KeyOptions & {
   delimiter?: string;
 };
 
+/** Leading and trailing blank-line handling for {@link dedent}. */
+export type DedentOptions = {
+  /** Remove leading blank lines after indentation normalization. Defaults to `true`. */
+  trimStart?: boolean;
+  /**
+   * Remove trailing blank lines after indentation normalization. Defaults to `true`.
+   */
+  trimEnd?: boolean;
+  /** Remove spaces and tabs from each line end. Defaults to `true`. */
+  trimLineEnd?: boolean;
+};
+
 type ResolvedTokenizeOptions = Required<TokenizeOptions>;
 type ResolvedIdentifierOptions = Required<
   IdentifierOptions & Pick<TokenizeOptions, "lowerCase" | "capitalize">
@@ -420,7 +432,7 @@ export function toDescription(node: Description): string {
 
 function renderBlock(node: Description, pad: string): string {
   if (node == null) return "";
-  if (typeof node === "string") return prependPad(dedentSection(node), pad);
+  if (typeof node === "string") return prependPad(dedent(node), pad);
   if (Array.isArray(node)) return renderSequence(node, pad);
   const kind = listKind(node as Record<string, unknown>);
   if (kind) {
@@ -430,18 +442,17 @@ function renderBlock(node: Description, pad: string): string {
 }
 
 /**
- * Normalize a string section: right-strip every line, drop the
- * common leading-whitespace prefix shared by all non-blank lines,
- * and trim leading / trailing blank lines. Matches Python's
- * `textwrap.dedent` semantics so embedded indented template
- * literals round-trip cleanly.
+ * Right-strip every line, remove common indentation, and optionally trim
+ * leading and trailing blank lines. Whitespace-only lines normalize to empty
+ * lines, matching common dedent implementations.
  */
-function dedentSection(text: string): string {
-  if (!text) return "";
-  const lines = text.split("\n").map((line) => line.replace(/[ \t]+$/, ""));
+export function dedentLines(text: string, options: DedentOptions = {}): string[] {
+  if (!text) return [];
+  const { trimStart = true, trimEnd = true, trimLineEnd = true } = options;
+  const lines = text.split("\n").map((line) => (trimLineEnd ? line.replace(/[ \t]+$/, "") : line));
   let min = Infinity;
   for (const line of lines) {
-    if (!line) continue;
+    if (!line.trim()) continue;
     const match = /^[ \t]*/.exec(line);
     const width = match ? match[0].length : 0;
     if (width < min) min = width;
@@ -450,9 +461,18 @@ function dedentSection(text: string): string {
     min === Infinity || min === 0 ? lines : lines.map((line) => (line ? line.slice(min) : ""));
   let start = 0;
   let end = stripped.length;
-  while (start < end && !stripped[start]) start += 1;
-  while (end > start && !stripped[end - 1]) end -= 1;
-  return stripped.slice(start, end).join("\n");
+  if (trimStart) {
+    while (start < end && !stripped[start]!.trim()) start += 1;
+  }
+  if (trimEnd) {
+    while (end > start && !stripped[end - 1]!.trim()) end -= 1;
+  }
+  return stripped.slice(start, end);
+}
+
+/** Join {@link dedentLines}, trimming leading and trailing blank lines by default. */
+export function dedent(text: string, options: DedentOptions = {}): string {
+  return dedentLines(text, options).join("\n");
 }
 
 /**
