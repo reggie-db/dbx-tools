@@ -50,7 +50,8 @@ pub use reasoning::{
     reasoning_efforts_for_names, ReasoningEffort,
 };
 pub use resolve::{
-    lookup_models, rank_model_id, rank_models, search_serving_endpoints, DEFAULT_FUZZY_THRESHOLD,
+    lookup_models, rank_model_id, rank_models, same_family_fallbacks, search_serving_endpoints,
+    DEFAULT_FUZZY_THRESHOLD,
 };
 
 uniffi::setup_scaffolding!();

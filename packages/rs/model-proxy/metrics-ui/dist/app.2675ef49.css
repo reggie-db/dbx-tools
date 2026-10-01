@@ -489,6 +489,62 @@ td:first-child {
   font-family: var(--brand-font-sans);
 }
 
+.capacity-cell {
+  min-width: 260px;
+  font-family: var(--brand-font-sans);
+  white-space: normal;
+}
+
+.capacity-summary {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.capacity-row + .capacity-row {
+  margin-top: 6px;
+}
+
+.capacity-row > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 3px;
+  color: var(--dashboard-muted);
+  font-size: 9px;
+}
+
+.capacity-row > div:first-child strong {
+  color: var(--brand-foreground);
+  font-family: var(--brand-font-mono);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.capacity-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-muted) 18%, transparent);
+}
+
+.capacity-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dashboard-accent);
+}
+
+.capacity-track span[data-state="warning"] {
+  background: var(--dashboard-warning);
+}
+
+.capacity-track span[data-state="danger"] {
+  background: var(--dashboard-danger);
+}
+
 .limiter[data-state="activated"],
 .limiter[data-state="tightened"],
 .limiter[data-state="reactivated"],

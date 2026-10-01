@@ -327,14 +327,14 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Auto mode starts with TPM admission disabled for each workspace/model key and
   activates it only after that key receives a 429 whose message contains
   `Exceeded workspace input tokens`, case-insensitively. Activation applies a
-  5,000-basis-point input rolling-budget penalty; repeated matching 429s add
-  2,500 up to 9,000. Recovery requires ten minutes since the latest signal plus
-  ten upstream 2xx responses, then removes 1,000 basis points at most once per
-  five minutes and ten further successes. Zero penalty enters one full-budget
-  probation interval before deactivation. Idle time alone does not relax a key,
-  and a renewed signal tightens or reactivates immediately. Keep this state
-  process-local and memory-only. It is congestion response, not complete
-  workspace or account quota ownership. Every upstream attempt,
+  1,000-basis-point input rolling-budget penalty; repeated matching 429s add
+  1,000 up to 9,000. Recovery requires five minutes since the latest signal plus
+  five upstream 2xx responses, then removes 1,000 basis points at most once per
+  minute and five further successes. Reaching zero penalty deactivates automatic
+  admission immediately, so a fully relaxed key does not retain a queue. Idle
+  time alone never relaxes a key, and a renewed signal tightens or reactivates
+  immediately. Keep this state process-local and memory-only. It is congestion
+  response, not complete workspace or account quota ownership. Every upstream attempt,
   including retries after automatic activation, acquires one token reservation;
   rejected or failed attempts release it. An active queue rejects an input
   estimate above its complete per-request ceiling with a structured local 429
@@ -354,22 +354,51 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   identity claims decoded from an already-present bearer JWT, then the in-memory
   client ID/profile captured by `DatabricksClient`. Principal resolution must
   not call an identity API. Keep the gate map unbounded by default; the caller
-  owns connection scope and process lifetime. Honor the `Retry-After` response
-  header first, then the documented Foundation Model API
-  `error.retry_after` body value. An input-token 429 without either waits for the
-  local token window, or uses a conservative 60-second fallback when local
-  history cannot explain the workspace limit. Other 429s use BackON jittered
-  exponential delay from one second to one minute. Exhaustion logs no future
-  unslept delay. `/healthz` exposes process-local activation, tightening,
-  relaxation, deactivation, reactivation, active/probation key, wait, oversized,
-  post-admission 429, retry-reacquisition, and fallback-delay counters. Log a
-  returned `error.message` on every 429, including the final attempt. Use five
-  request retries by default.
+  owns connection scope and process lifetime. Treat the `Retry-After` response
+  header, then the documented Foundation Model API `error.retry_after` body
+  value, as an upper recovery horizon divided across the remaining attempts
+  instead of one immediate sleep. An input-token 429 without either uses the
+  local token-window delay as the same horizon, or a conservative 60-second
+  horizon when local history cannot explain the workspace limit. Other 429s use
+  BackON jittered exponential delay from one second to one minute. Exhaustion
+  logs no future unslept delay. `/healthz` exposes process-local activation,
+  tightening, relaxation, deactivation, reactivation, active key, wait,
+  oversized, post-admission 429, retry-reacquisition, and fallback-delay
+  counters. Metrics snapshots and Prometheus expose each bounded model label's
+  current limiter phase, penalty basis points, effective input budget, and
+  fallback count. Log a returned `error.message` on every 429, including the
+  final attempt. Use five request retries by default.
+  Same-family model fallback is enabled by default. A projected wait above ten
+  seconds tries a compatible lower version before sleeping, through at most
+  five lower versions. Build the ladder from the live endpoint catalogue:
+  preserve parsed variant tokens when the lower version offers them, otherwise
+  use the highest live `ai_gateway_model_profile` quality. Never encode a
+  provider variant ladder. Require the same family, a lower version, ready and
+  non-deprecated state, and request capability compatibility. Embeddings never
+  fallback. Cooldowns, local token windows, retries, logs, and metrics use the
+  actual candidate endpoint, never the client's unresolved model string. The
+  full server or token-window horizon keeps a higher model unavailable while
+  lower models serve requests; one request probes it after expiry. Successful
+  probes restore the higher model, while another 429 extends its cooldown.
+  Responses report the actual serving model and fallback headers rather than
+  hiding quality changes. `RATE_LIMIT_MODEL_FALLBACK`,
+  `RATE_LIMIT_MODEL_FALLBACK_MAX_STEPS`, and
+  `RATE_LIMIT_MODEL_FALLBACK_THRESHOLD_MS` configure this behavior.
+  `RATE_LIMIT_MAX_WAIT_MS` caps total per-request rate-limit waiting at one
+  minute and cannot be configured above 60,000 milliseconds. When the budget
+  expires after an upstream 429, return the latest original 429 response
+  unchanged; a local-only queue timeout returns a structured local 429.
   `RATE_LIMIT_RETRIES=0` or
   `--rate-limit-retries 0` disables retries and the shared cooldown;
   `RATE_LIMIT_INITIAL_DELAY_MS` and `RATE_LIMIT_MAX_DELAY_MS` plus matching CLI
   flags tune the fallback. Never replay an SSE request after response streaming
-  has begun. Forwarded headers and JWT claims partition the gate only; they do
+  has begun. Native pass-through Responses streams inspect complete bounded SSE
+  events for terminal `response.failed` and `error` signals without changing
+  their bytes. Record a semantic rate-limit failure as a 429 and another
+  terminal failure as a 502 in completion logs and metrics even though the HTTP
+  stream connected with 200. Local oversized-input and wait-budget rejections
+  also contribute to the dashboard's rate-limit totals. Forwarded headers and
+  JWT claims partition the gate only; they do
   not replace the upstream credential held by the startup
   `DatabricksClient`. The binary resolves one client at startup, so an App uses
   App SP unless a host integration explicitly constructs request-scoped OBO
@@ -387,7 +416,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   in process memory. Do not retain request events or identities and do not write
   history to disk. The embedded vanilla dashboard uses snapshot JSON plus SSE,
   canonical generated brand tokens, model and outcome filters, request, token,
-  and latency line graphs. GridStack owns drag-and-drop placement and widget resizing; do not
+  and latency line graphs. Each model's rate-limit capacity cell renders the
+  live process-local input-window use against its effective budget, adaptive
+  penalty against the 90-percent maximum, and current waiting depth against the
+  process-lifetime peak with average wait. Transition events remain the
+  authority for limiter phase and budget so the completing request that caused
+  deactivation cannot turn the displayed limiter back on. GridStack owns drag-and-drop placement and widget resizing; do not
   restore a separate compact/full-detail mode or hand-roll grid interactions.
   SSE carries aggregate summaries only; model selection fetches
   `/metrics/snapshot?model=<resolved-model>` so one bounded model history does

@@ -30,6 +30,7 @@ pub(crate) struct RequestOutcome {
     pub(crate) usage: ResponseTokenUsage,
     pub(crate) throttle: ThrottleAcquisition,
     pub(crate) upstream_attempt: u32,
+    pub(crate) fallback_step: usize,
     pub(crate) finished: bool,
     pub(crate) failed: bool,
 }
@@ -45,6 +46,7 @@ pub(crate) struct RequestLogContext {
     reasoning_setting: Option<ReasoningSetting>,
     throttle: ThrottleAcquisition,
     upstream_attempt: u32,
+    fallback_step: usize,
     metrics: MetricsRuntime,
 }
 
@@ -57,6 +59,7 @@ pub(crate) struct RequestLogMetadata {
     pub(crate) request_bytes: usize,
     pub(crate) started: Instant,
     pub(crate) reasoning_setting: Option<ReasoningSetting>,
+    pub(crate) fallback_step: usize,
 }
 
 /// Bounded reasoning classification retained by logs and aggregate metrics.
@@ -69,7 +72,9 @@ pub(crate) enum ReasoningSetting {
 }
 
 impl ReasoningSetting {
+    #[cfg(feature = "metrics")]
     pub(crate) const COUNT: usize = 10;
+    #[cfg(feature = "metrics")]
     pub(crate) const ALL: [Self; Self::COUNT] = [
         Self::Default,
         Self::Effort(ReasoningEffort::None),
@@ -151,6 +156,7 @@ impl ReasoningSetting {
         }
     }
 
+    #[cfg(feature = "metrics")]
     pub(crate) const fn index(self) -> usize {
         match self {
             Self::Default => 0,
@@ -199,6 +205,7 @@ impl RequestLogContext {
             request_bytes,
             started,
             reasoning_setting,
+            fallback_step,
         } = metadata;
         Self {
             requested_model,
@@ -209,6 +216,7 @@ impl RequestLogContext {
             reasoning_setting,
             throttle,
             upstream_attempt,
+            fallback_step,
             metrics,
         }
     }
@@ -254,6 +262,7 @@ impl RequestLogContext {
             reserved_output_tokens = self.throttle.reserved_output_tokens,
             estimated_tokens = self.throttle.estimated_tokens,
             upstream_attempt = self.upstream_attempt,
+            fallback_step = self.fallback_step,
             token_throttle_mode = ?self.throttle.mode,
             token_throttle_active = self.throttle.active,
             token_limit_input = self.throttle.input_limit,
@@ -302,20 +311,23 @@ impl RequestLogContext {
         target: TargetWire,
         response_bytes: u64,
         usage: ResponseTokenUsage,
+        status: StatusCode,
         finished: bool,
-        failed: bool,
     ) {
         self.metrics.stream_finished();
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            self.metrics.record_in_band_rate_limit(&self.resolved_model);
+        }
         self.complete_outcome(self.outcome(
             "/v1/model",
             Some(client_wire),
             Some(target),
             true,
-            StatusCode::OK,
+            status,
             response_bytes,
             usage,
             finished,
-            failed,
+            !status.is_success(),
         ));
     }
 
@@ -348,6 +360,7 @@ impl RequestLogContext {
             usage,
             throttle: self.throttle.clone(),
             upstream_attempt: self.upstream_attempt,
+            fallback_step: self.fallback_step,
             finished,
             failed,
         }
@@ -369,6 +382,7 @@ fn emit_request_outcome(outcome: RequestOutcome) {
             streaming = outcome.streaming,
             status = outcome.status.as_u16(),
             duration_ms = outcome.duration_ms,
+            fallback_step = outcome.fallback_step,
             failed = outcome.failed,
             "model request completed"
         ),
@@ -380,6 +394,7 @@ fn emit_request_outcome(outcome: RequestOutcome) {
             streaming = outcome.streaming,
             status = outcome.status.as_u16(),
             duration_ms = outcome.duration_ms,
+            fallback_step = outcome.fallback_step,
             cancelled = outcome.streaming && !outcome.finished,
             "model request completed"
         ),
@@ -407,6 +422,7 @@ fn emit_request_outcome(outcome: RequestOutcome) {
         output_tokens = outcome.usage.output,
         total_tokens = outcome.usage.total,
         upstream_attempt = outcome.upstream_attempt,
+        fallback_step = outcome.fallback_step,
         token_throttle_mode = ?outcome.throttle.mode,
         token_throttle_active = outcome.throttle.active,
         token_limit_input = outcome.throttle.input_limit,
@@ -458,6 +474,7 @@ mod tests {
             usage: ResponseTokenUsage::default(),
             throttle: ThrottleAcquisition::test_fixture(),
             upstream_attempt: 1,
+            fallback_step: 0,
             finished,
             failed,
         }
@@ -485,6 +502,44 @@ mod tests {
             completion_level(&outcome(StatusCode::OK, true, false)),
             CompletionLevel::Warn
         );
+    }
+
+    #[cfg(feature = "metrics")]
+    #[tokio::test]
+    async fn in_band_stream_rate_limit_updates_error_and_rate_limit_metrics() {
+        let metrics = MetricsRuntime::new(crate::metrics::MetricsConfig {
+            mode: crate::metrics::MetricsMode::Collect,
+            routes_visible: true,
+        })
+        .unwrap();
+        let context = RequestLogContext::new(
+            RequestLogMetadata {
+                requested_model: "requested".to_owned(),
+                resolved_model: "resolved".to_owned(),
+                peer: "127.0.0.1:1".parse().unwrap(),
+                request_bytes: 1,
+                started: Instant::now(),
+                reasoning_setting: Some(ReasoningSetting::Default),
+                fallback_step: 0,
+            },
+            ThrottleAcquisition::test_fixture(),
+            1,
+            metrics.clone(),
+        );
+        context.stream_connected(ClientWire::Responses, TargetWire::Responses, StatusCode::OK);
+        context.stream_completed(
+            ClientWire::Responses,
+            TargetWire::Responses,
+            1,
+            ResponseTokenUsage::default(),
+            StatusCode::TOO_MANY_REQUESTS,
+            true,
+        );
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.summary.total_rate_limited, 1);
+        assert_eq!(snapshot.models[0].rate_limited, 1);
+        assert_eq!(snapshot.models[0].errors, 1);
     }
 
     #[test]
