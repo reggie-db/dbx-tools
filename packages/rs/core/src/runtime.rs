@@ -74,11 +74,17 @@ fn contains_interpolation(value: &str) -> bool {
 
 fn valid_http_url(value: &str) -> bool {
     valid_value(value)
-        && url::Url::parse(value.trim()).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
+        && url::Url::parse(value.trim()).is_ok_and(|url| {
+            matches!(url.scheme(), "http" | "https")
+                && url.host_str().is_some_and(|host| !host.is_empty())
+        })
 }
 
 fn valid_port(value: &str) -> bool {
-    value.trim().parse::<u16>().is_ok_and(|port| port > 0)
+    let value = value.trim();
+    !value.is_empty()
+        && value.bytes().all(|byte| byte.is_ascii_digit())
+        && value.parse::<u16>().is_ok_and(|port| port > 0)
 }
 
 #[cfg(test)]
@@ -132,6 +138,29 @@ mod tests {
             let mut environment = app_environment();
             environment.insert(key.into(), value.into());
             assert!(!is_databricks_app_environment(&environment));
+        }
+    }
+
+    #[test]
+    fn matches_shared_runtime_fixtures() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            name: String,
+            environment: HashMap<String, String>,
+            detected: bool,
+        }
+
+        let fixtures: Vec<Fixture> = serde_json::from_str(include_str!(
+            "../../../test/fixtures/config/databricks-app-environments.json"
+        ))
+        .unwrap();
+        for fixture in fixtures {
+            assert_eq!(
+                is_databricks_app_environment(&fixture.environment),
+                fixture.detected,
+                "{}",
+                fixture.name
+            );
         }
     }
 }

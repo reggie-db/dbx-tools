@@ -67,6 +67,9 @@ Before each implementation phase, re-inspect the active diff and preserve concur
   and the static fallback ordering also run through the Rust owner. The
   browser-safe handwritten classification helpers are deprecated for removal
   at the next major release; clients consume the classified `/models` response.
+  Node, Python, and Rust App-environment detection now share golden fixtures
+  and agree on interpolation rejection, host-bearing HTTP(S) URLs, and decimal
+  `u16` ports.
 
 ## Comparison with the Kanna implementation
 

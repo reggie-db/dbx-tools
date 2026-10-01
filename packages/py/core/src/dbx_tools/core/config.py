@@ -86,15 +86,24 @@ def is_databricks_app_env(source: Mapping[str, str | None] | None = None) -> boo
     app_name = _trim_to_none(values.get("DATABRICKS_APP_NAME"))
     host = _trim_to_none(values.get("DATABRICKS_HOST"))
     port = _trim_to_none(values.get("DATABRICKS_APP_PORT"))
-    if app_name is None or host is None or port is None:
+    if (
+        app_name is None
+        or _INTERPOLATION_PATTERN.search(app_name)
+        or host is None
+        or _INTERPOLATION_PATTERN.search(host)
+        or port is None
+    ):
         return False
     try:
-        if urlparse(host).scheme not in {"http", "https"}:
+        parsed_host = urlparse(host)
+        if parsed_host.scheme not in {"http", "https"} or not parsed_host.hostname:
             return False
     except ValueError:
         return False
-    port_number = _to_number(port)
-    return port_number is not None and port_number.is_integer() and 1 <= port_number <= MAX_TCP_PORT
+    normalized_port = port.strip()
+    if re.fullmatch(r"[0-9]+", normalized_port) is None:
+        return False
+    return 1 <= int(normalized_port) <= MAX_TCP_PORT
 
 
 def text(input: ConfigKey, options: ConfigOptions | None = None) -> str | None:

@@ -115,10 +115,11 @@ export const valueSchema = z
     message: "Interpolated values are not allowed",
   });
 
-const portValueSchema = z.preprocess(
-  (input) => object.toNumber(input),
-  z.number().int().min(1).max(MAX_TCP_PORT),
-);
+const portValueSchema = z.preprocess((input) => {
+  if (typeof input === "number") return input;
+  if (typeof input !== "string" || !/^\d+$/.test(input.trim())) return Number.NaN;
+  return Number(input.trim());
+}, z.number().int().min(1).max(MAX_TCP_PORT));
 
 const positiveNumberValue = z.preprocess((input) => object.toNumber(input), z.number().positive());
 const positiveIntValue = positiveNumberValue.transform(Math.floor);
@@ -126,7 +127,8 @@ const positiveIntValue = positiveNumberValue.transform(Math.floor);
 const workspaceHostSchema = valueSchema.refine(
   (host) => {
     try {
-      return ["http:", "https:"].includes(new URL(host).protocol);
+      const url = new URL(host);
+      return ["http:", "https:"].includes(url.protocol) && url.hostname.length > 0;
     } catch {
       return false;
     }

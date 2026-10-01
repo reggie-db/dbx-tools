@@ -5,7 +5,33 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { parse as parseYaml } from "yaml";
-import { environmentKeys, flattenAppEnv, port, resolveValue, text } from "../src/config.ts";
+import {
+  environmentKeys,
+  flattenAppEnv,
+  isDatabricksAppEnv,
+  port,
+  resolveValue,
+  text,
+} from "../src/config.ts";
+
+interface AppEnvironmentFixture {
+  name: string;
+  environment: Record<string, string>;
+  detected: boolean;
+}
+
+describe("Databricks App environment parity", () => {
+  it("matches the shared runtime fixtures", () => {
+    const fixturePath = resolve(
+      import.meta.dirname,
+      "../../../../test/fixtures/config/databricks-app-environments.json",
+    );
+    const fixtures = JSON.parse(readFileSync(fixturePath, "utf8")) as AppEnvironmentFixture[];
+    for (const fixture of fixtures) {
+      assert.equal(isDatabricksAppEnv(fixture.environment), fixture.detected, fixture.name);
+    }
+  });
+});
 
 describe("app YAML subset parity", () => {
   it("matches shared YAML 1.2 scalar fixtures", () => {

@@ -1,0 +1,92 @@
+[
+  {
+    "name": "valid app environment",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "8000"
+    },
+    "detected": true
+  },
+  {
+    "name": "maximum port",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "http://localhost",
+      "DATABRICKS_APP_PORT": "65535"
+    },
+    "detected": true
+  },
+  {
+    "name": "interpolated app name",
+    "environment": {
+      "DATABRICKS_APP_NAME": "${app.name}",
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "8000"
+    },
+    "detected": false
+  },
+  {
+    "name": "hostless URL",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "https://",
+      "DATABRICKS_APP_PORT": "8000"
+    },
+    "detected": false
+  },
+  {
+    "name": "non-HTTP URL",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "ftp://workspace.example.com",
+      "DATABRICKS_APP_PORT": "8000"
+    },
+    "detected": false
+  },
+  {
+    "name": "scientific-notation port",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "8e3"
+    },
+    "detected": false
+  },
+  {
+    "name": "grouped port",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "8,000"
+    },
+    "detected": false
+  },
+  {
+    "name": "decimal port",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "8000.0"
+    },
+    "detected": false
+  },
+  {
+    "name": "overflow port",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "65536"
+    },
+    "detected": false
+  },
+  {
+    "name": "zero port",
+    "environment": {
+      "DATABRICKS_APP_NAME": "demo",
+      "DATABRICKS_HOST": "https://workspace.example.com",
+      "DATABRICKS_APP_PORT": "0"
+    },
+    "detected": false
+  }
+]

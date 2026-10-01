@@ -102,7 +102,22 @@ def test_databricks_app_detection_honors_validated_values_and_override() -> None
 
     assert config.is_databricks_app_env(detected) is True
     assert config.is_databricks_app_env({**detected, config.DATABRICKS_APP_ENV_KEY: "off"}) is False
-    assert config.is_databricks_app_env({**detected, "DATABRICKS_APP_PORT": "70000"}) is False
+
+
+def test_databricks_app_detection_matches_shared_runtime_fixtures() -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[3]
+        / "test"
+        / "fixtures"
+        / "config"
+        / "databricks-app-environments.json"
+    )
+    fixtures = json.loads(fixture_path.read_text())
+
+    for fixture in fixtures:
+        assert config.is_databricks_app_env(fixture["environment"]) is fixture["detected"], fixture[
+            "name"
+        ]
 
 
 def test_typed_coercion_uses_sensible_fallbacks() -> None:
