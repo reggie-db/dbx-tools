@@ -1388,7 +1388,7 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
                 "  URL=\"${MATCH#*$'\\t'}\"",
                 '  CHECKSUM_URL="$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq \'.assets[] | select(.name == "\'"$ASSET.sha256"\'") | .url\')"',
                 '  rm -rf "target/${{ matrix.cargo }}/release"',
-                '  if test -n "$CHECKSUM_URL" && gh api "$URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET" && gh api "$CHECKSUM_URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET.sha256" && (cd dist/rust-raw && sha256sum --check "$ASSET.sha256") && tar -xzf "dist/rust-raw/$ASSET"; then',
+                '  if test -n "$CHECKSUM_URL" && gh api "$URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET" && gh api "$CHECKSUM_URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET.sha256" && (cd dist/rust-raw && if command -v sha256sum >/dev/null 2>&1; then sha256sum --check "$ASSET.sha256"; else shasum -a 256 --check "$ASSET.sha256"; fi) && tar -xzf "dist/rust-raw/$ASSET"; then',
                 '    echo "hit=true" >> "$GITHUB_OUTPUT"',
                 "  else",
                 '    rm -rf "target/${{ matrix.cargo }}/release" "dist/rust-raw/$ASSET" "dist/rust-raw/$ASSET.sha256"',
@@ -1448,7 +1448,7 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
               run: [
                 "mkdir -p dist/rust-raw",
                 'tar -czf "dist/rust-raw/${{ steps.raw-native.outputs.asset }}" "target/${{ matrix.cargo }}/release"',
-                '(cd dist/rust-raw && sha256sum "${{ steps.raw-native.outputs.asset }}" > "${{ steps.raw-native.outputs.asset }}.sha256")',
+                '(cd dist/rust-raw && if command -v sha256sum >/dev/null 2>&1; then sha256sum "${{ steps.raw-native.outputs.asset }}"; else shasum -a 256 "${{ steps.raw-native.outputs.asset }}"; fi > "${{ steps.raw-native.outputs.asset }}.sha256")',
               ].join("\n"),
             },
             {

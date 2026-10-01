@@ -679,10 +679,13 @@ describe("DBXToolsRustWorkspace", () => {
     );
     assert.match(fingerprint.run ?? "", /rustSourceHash/);
     assert.match(fingerprint.run ?? "", /echo "key=\$KEY" >> "\$GITHUB_OUTPUT"/);
-    assert.match(
-      workflowStep(rustBuild, "Reuse matching raw Rust outputs").run ?? "",
-      /steps\.rust-fingerprint\.outputs\.key/,
-    );
+    const reuse = workflowStep(rustBuild, "Reuse matching raw Rust outputs").run ?? "";
+    assert.match(reuse, /steps\.rust-fingerprint\.outputs\.key/);
+    assert.match(reuse, /command -v sha256sum/);
+    assert.match(reuse, /shasum -a 256 --check/);
+    const archive = workflowStep(rustBuild, "Archive raw Rust outputs").run ?? "";
+    assert.match(archive, /command -v sha256sum/);
+    assert.match(archive, /shasum -a 256/);
     assert.ok(
       workflowStep(rustBuild, "Build Rust outputs").run?.includes(
         'cargo build --release --timings --workspace --target "${{ matrix.cargo }}"',
