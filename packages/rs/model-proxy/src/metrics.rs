@@ -1524,7 +1524,7 @@ mod tests {
         assert!(index.contains("Model proxy metrics"));
         assert!(index.contains("app.js"));
         assert!(!dashboard_asset("app.js").unwrap().immutable);
-        assert!(dashboard_asset("app.256993ee.css").unwrap().immutable);
+        assert!(dashboard_asset("app.20cfdf0a.css").unwrap().immutable);
         assert!(dashboard_asset("assets/status-live-8.svg").is_some());
         assert!(dashboard_asset("missing.js").is_none());
     }

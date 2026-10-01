@@ -292,6 +292,10 @@ small {
   background: var(--brand-surface);
 }
 
+.panel {
+  padding: 18px;
+}
+
 .metric-card {
   display: flex;
   min-height: 0;
@@ -332,7 +336,6 @@ small {
 .models-panel,
 .timeline-panel {
   min-height: 0;
-  padding: 18px;
 }
 
 .chart-panel,
