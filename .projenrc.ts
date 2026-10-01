@@ -310,9 +310,6 @@ root.gitignore.addPatterns(
   ".docs-build/",
   ".astro/",
   ".worktrees/",
-  ".kanna/",
-  ".isaac/",
-  ".polly/",
   ".home/",
   "**/.logs/",
 );
