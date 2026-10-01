@@ -305,6 +305,7 @@ describe("release task contracts", () => {
       releasePr.indexOf("if (opts.approve)") < releasePr.indexOf('git(root, ["worktree", "remove"'),
     );
     assert.match(releasePr, /"test",\s*"--workspace"/);
+    assert.doesNotMatch(releasePr, /cargo",\s*\["metadata"/);
     assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
     assert.doesNotMatch(releasePr, /process\.execPath, \["run", "test"\]/);
     assert.match(releasePr, /\["push", "--no-verify", "--set-upstream", "origin", releaseBranch\]/);

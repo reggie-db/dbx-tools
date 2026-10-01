@@ -227,16 +227,6 @@ async function waitForReleaseWorkflow(
   await runWithTimeout(root, "gh", ["run", "watch", runId, "--exit-status"], env, timeoutMs);
 }
 
-function runIgnoringStdout(root: string, command: string, args: string[]): void {
-  exec.spawnSync(command, args, {
-    cwd: root,
-    stdout: "ignore",
-    stderr: "inherit",
-    stdin: "ignore",
-    check: true,
-  });
-}
-
 function githubAccount(root: string): {
   hostname: string;
   owner: string;
@@ -481,9 +471,6 @@ program
         throw new Error(`Release preparation did not produce ${next.version}`);
       }
 
-      if (existsSync(join(releaseRoot, "Cargo.toml"))) {
-        runIgnoringStdout(releaseRoot, "cargo", ["metadata", "--format-version", "1"]);
-      }
       run(releaseRoot, process.execPath, [versionCheckScript]);
       if (opts.validate) {
         for (const task of opts.validateTask) {
