@@ -322,7 +322,9 @@ returns 404 from every metrics route unless `--metrics-public` or
 headers do not bypass this safeguard. Put an operator-owned authenticated proxy
 in front before exposing model names, traffic rates, and limit pressure.
 
-`/metrics/snapshot` returns the bounded dashboard payload.
+`/metrics/snapshot` returns the bounded dashboard payload. Pass
+`?model=<resolved-model>` to include the selected model's bounded history;
+ordinary snapshots and SSE retain only aggregate model summaries.
 `/metrics/events` streams five-second snapshot events with SSE.
 `/metrics/prometheus` returns Prometheus text from the in-process recorder.
 `/metrics` serves the static dashboard embedded in the normal release binary.
@@ -330,7 +332,11 @@ The dashboard provides 1h, 6h, and 24h ranges, model and outcome filters,
 request, token, and latency line graphs, model latency and error summaries, the
 adaptive rate-limit timeline, and process-wide retention status. GridStack
 provides drag-and-drop placement and widget resizing without a runtime CDN or
-framework server.
+framework server. The bounded widget geometry is stored in browser
+`localStorage`, restored after reloads and proxy restarts, and synchronized
+across open tabs. Metric history remains process-local and is never stored in
+the browser. The reset-layout icon restores and persists the canonical widget
+geometry.
 
 History remains in process memory:
 

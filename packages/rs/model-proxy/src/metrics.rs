@@ -346,6 +346,17 @@ impl MetricsRuntime {
         MetricsSnapshot::disabled(self.config.mode)
     }
 
+    pub(crate) fn snapshot_for_model(&self, model: &str) -> MetricsSnapshot {
+        #[cfg(feature = "metrics")]
+        if let Some(inner) = &self.inner {
+            let mut snapshot = inner.snapshot_for_model(model);
+            snapshot.mode = self.config.mode;
+            return snapshot;
+        }
+        let _ = model;
+        MetricsSnapshot::disabled(self.config.mode)
+    }
+
     pub(crate) fn prometheus(&self) -> Option<String> {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -539,6 +550,10 @@ pub(crate) struct BucketSnapshot {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ModelSnapshot {
     pub(crate) model: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) history: Vec<BucketSnapshot>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) rollup_history: Vec<BucketSnapshot>,
     pub(crate) requests: u64,
     pub(crate) input_tokens: u64,
     pub(crate) output_tokens: u64,
@@ -724,6 +739,14 @@ impl MetricsInner {
     }
 
     fn snapshot(&self) -> MetricsSnapshot {
+        self.snapshot_with_model(None)
+    }
+
+    fn snapshot_for_model(&self, model: &str) -> MetricsSnapshot {
+        self.snapshot_with_model(Some(model))
+    }
+
+    fn snapshot_with_model(&self, model: Option<&str>) -> MetricsSnapshot {
         let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
         let connections = self.connections.load(Ordering::Relaxed);
         let active_requests = self.active_requests.load(Ordering::Relaxed);
@@ -731,7 +754,13 @@ impl MetricsInner {
         self.store
             .lock()
             .expect("metrics store lock is not poisoned")
-            .snapshot(elapsed_ms, connections, active_requests, active_streams)
+            .snapshot(
+                elapsed_ms,
+                connections,
+                active_requests,
+                active_streams,
+                model,
+            )
     }
 }
 
@@ -802,12 +831,12 @@ impl MetricsStore {
             "other".to_owned()
         };
         if model_label == "other" {
-            self.other.record(outcome);
+            self.other.record(elapsed_ms, outcome);
         } else {
             self.models
                 .entry(model_label.clone())
                 .or_insert_with(|| ModelMetrics::new(&model_label))
-                .record(outcome);
+                .record(elapsed_ms, outcome);
         }
         model_label
     }
@@ -819,13 +848,13 @@ impl MetricsStore {
         self.rollup_current.rate_limited = self.rollup_current.rate_limited.saturating_add(1);
         let label = self.model_label(model);
         if label == "other" {
-            self.other.rate_limited = self.other.rate_limited.saturating_add(1);
+            self.other.record_rate_limited(elapsed_ms);
         } else {
             let target = self
                 .models
                 .entry(label.clone())
                 .or_insert_with(|| ModelMetrics::new(&label));
-            target.rate_limited = target.rate_limited.saturating_add(1);
+            target.record_rate_limited(elapsed_ms);
         }
         label
     }
@@ -911,6 +940,7 @@ impl MetricsStore {
         connections: u64,
         active_requests: u64,
         active_streams: u64,
+        selected_model: Option<&str>,
     ) -> MetricsSnapshot {
         self.advance(elapsed_ms);
         let mut history = self
@@ -928,14 +958,20 @@ impl MetricsStore {
         let minute = recent_totals(&history, elapsed_ms.saturating_sub(60_000));
         let mut models = self
             .models
-            .values()
-            .map(ModelMetrics::snapshot)
+            .values_mut()
+            .map(|model| {
+                let include_history = selected_model == Some(model.model.as_str());
+                model.snapshot(elapsed_ms, include_history)
+            })
             .collect::<Vec<_>>();
         if self.other.requests > 0
             || self.other.rate_limited > 0
             || self.other.oversized_rejections > 0
         {
-            models.push(self.other.snapshot());
+            models.push(
+                self.other
+                    .snapshot(elapsed_ms, selected_model == Some("other")),
+            );
         }
         models.sort_by(|left, right| {
             right
@@ -1047,6 +1083,10 @@ impl Bucket {
 #[derive(Debug)]
 struct ModelMetrics {
     model: String,
+    detailed: VecDeque<Bucket>,
+    detailed_current: Bucket,
+    rollups: VecDeque<Bucket>,
+    rollup_current: Bucket,
     requests: u64,
     input_tokens: u64,
     output_tokens: u64,
@@ -1066,6 +1106,10 @@ impl ModelMetrics {
     fn new(model: &str) -> Self {
         Self {
             model: model.to_owned(),
+            detailed: VecDeque::with_capacity(DETAILED_BUCKET_LIMIT),
+            detailed_current: Bucket::default(),
+            rollups: VecDeque::with_capacity(ROLLUP_BUCKET_LIMIT),
+            rollup_current: Bucket::default(),
             requests: 0,
             input_tokens: 0,
             output_tokens: 0,
@@ -1081,7 +1125,10 @@ impl ModelMetrics {
         }
     }
 
-    fn record(&mut self, outcome: &RequestOutcome) {
+    fn record(&mut self, elapsed_ms: u64, outcome: &RequestOutcome) {
+        self.advance(elapsed_ms);
+        self.detailed_current.record(outcome);
+        self.rollup_current.record(outcome);
         self.requests = self.requests.saturating_add(1);
         self.input_tokens = self.input_tokens.saturating_add(if outcome.usage.reported {
             outcome.usage.input
@@ -1116,9 +1163,53 @@ impl ModelMetrics {
         }
     }
 
-    fn snapshot(&self) -> ModelSnapshot {
+    fn record_rate_limited(&mut self, elapsed_ms: u64) {
+        self.advance(elapsed_ms);
+        self.rate_limited = self.rate_limited.saturating_add(1);
+        self.detailed_current.rate_limited = self.detailed_current.rate_limited.saturating_add(1);
+        self.rollup_current.rate_limited = self.rollup_current.rate_limited.saturating_add(1);
+    }
+
+    fn advance(&mut self, elapsed_ms: u64) {
+        advance_bucket(
+            &mut self.detailed,
+            &mut self.detailed_current,
+            elapsed_ms,
+            5_000,
+            DETAILED_BUCKET_LIMIT,
+        );
+        advance_bucket(
+            &mut self.rollups,
+            &mut self.rollup_current,
+            elapsed_ms,
+            60_000,
+            ROLLUP_BUCKET_LIMIT,
+        );
+    }
+
+    fn snapshot(&mut self, elapsed_ms: u64, include_history: bool) -> ModelSnapshot {
+        self.advance(elapsed_ms);
+        let (history, rollup_history) = if include_history {
+            let mut history = self
+                .detailed
+                .iter()
+                .map(Bucket::snapshot)
+                .collect::<Vec<_>>();
+            history.push(self.detailed_current.snapshot());
+            let mut rollup_history = self
+                .rollups
+                .iter()
+                .map(Bucket::snapshot)
+                .collect::<Vec<_>>();
+            rollup_history.push(self.rollup_current.snapshot());
+            (history, rollup_history)
+        } else {
+            (Vec::new(), Vec::new())
+        };
         ModelSnapshot {
             model: self.model.clone(),
+            history,
+            rollup_history,
             requests: self.requests,
             input_tokens: self.input_tokens,
             output_tokens: self.output_tokens,
@@ -1189,9 +1280,11 @@ fn recent_totals(history: &[BucketSnapshot], since_ms: u64) -> BucketSnapshot {
 
 #[cfg(feature = "metrics")]
 fn estimated_retained_bytes(detailed: usize, rollups: usize, models: usize) -> u64 {
-    let buckets = detailed.saturating_add(rollups) as u64 * 96;
+    let bucket_bytes = detailed.saturating_add(rollups) as u64 * 96;
+    let model_buckets = bucket_bytes.saturating_mul(models as u64);
     let model_histograms = models as u64 * 192 * 1024;
-    buckets
+    bucket_bytes
+        .saturating_add(model_buckets)
         .saturating_add(model_histograms)
         .saturating_add((RATE_LIMIT_EVENT_LIMIT * 256) as u64)
         .min(RETENTION_TARGET_BYTES)
@@ -1218,7 +1311,9 @@ pub(crate) fn dashboard_asset(path: &str) -> Option<DashboardAsset> {
         content_type: mime_guess::from_path(normalized)
             .first_raw()
             .unwrap_or("application/octet-stream"),
-        immutable: normalized != "index.html",
+        immutable: normalized
+            .split('.')
+            .any(|part| part.len() == 8 && part.bytes().all(|byte| byte.is_ascii_hexdigit())),
     })
 }
 
@@ -1285,10 +1380,23 @@ mod tests {
             let outcome = fixture_outcome(format!("model-{index}"));
             store.record_outcome(index * 5_000, &outcome);
         }
-        let snapshot = store.snapshot(200_000, 0, 0, 0);
+        let snapshot = store.snapshot(200_000, 0, 0, 0, Some("model-0"));
         assert_eq!(store.models.len(), MODEL_SERIES_LIMIT);
         assert!(snapshot.models.iter().any(|model| model.model == "other"));
         assert!(snapshot.history.len() <= DETAILED_BUCKET_LIMIT + 1);
+        let selected = snapshot
+            .models
+            .iter()
+            .find(|model| model.model == "model-0")
+            .unwrap();
+        assert!(!selected.history.is_empty());
+        assert!(selected.history.len() <= DETAILED_BUCKET_LIMIT + 1);
+        assert!(selected.rollup_history.len() <= ROLLUP_BUCKET_LIMIT + 1);
+        assert!(snapshot
+            .models
+            .iter()
+            .filter(|model| model.model != "model-0")
+            .all(|model| model.history.is_empty() && model.rollup_history.is_empty()));
         assert!(snapshot.retention.estimated_bytes <= RETENTION_TARGET_BYTES);
     }
 
@@ -1309,8 +1417,11 @@ mod tests {
         assert_eq!(snapshot.summary.total_requests, 1);
         assert_eq!(snapshot.summary.total_rate_limited, 1);
         assert_eq!(snapshot.models[0].requests, 1);
+        assert!(snapshot.models[0].history.is_empty());
         assert_eq!(snapshot.models[0].rate_limited, 1);
         assert_eq!(snapshot.models[0].oversized_rejections, 1);
+        let model_snapshot = runtime.snapshot_for_model("model");
+        assert!(!model_snapshot.models[0].history.is_empty());
         assert!(runtime
             .prometheus()
             .unwrap()
@@ -1349,7 +1460,9 @@ mod tests {
         let index = dashboard_asset("index.html").expect("dashboard index is embedded");
         let index = std::str::from_utf8(&index.body).unwrap();
         assert!(index.contains("Model proxy metrics"));
-        assert!(index.contains("app.9f4c1e2a.js"));
+        assert!(index.contains("app.js"));
+        assert!(!dashboard_asset("app.js").unwrap().immutable);
+        assert!(dashboard_asset("app.9f4c1e2a.css").unwrap().immutable);
         assert!(dashboard_asset("assets/status-live-8.svg").is_some());
         assert!(dashboard_asset("missing.js").is_none());
     }

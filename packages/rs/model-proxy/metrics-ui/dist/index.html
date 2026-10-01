@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="/metrics/brand.0b7222df.css" />
     <link rel="stylesheet" href="/metrics/app.9f4c1e2a.css" />
     <script src="/metrics/vendor/gridstack-all.js" defer></script>
-    <script src="/metrics/app.9f4c1e2a.js" defer></script>
+    <script src="/metrics/app.js" defer></script>
   </head>
   <body>
     <main class="dashboard" aria-busy="true">
@@ -51,7 +51,25 @@
             <button type="button" data-range="6" aria-pressed="true">6h</button>
             <button type="button" data-range="24">24h</button>
           </div>
-          <span class="connection-status" id="live-status" title="Connecting to metrics stream">
+          <button
+            type="button"
+            class="icon-control"
+            id="layout-reset"
+            aria-label="Reset widget layout"
+            data-tooltip="Reset widget layout"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </button>
+          <span
+            class="connection-status"
+            id="live-status"
+            tabindex="0"
+            aria-label="Connecting to metrics stream"
+            data-tooltip="Connecting to metrics stream"
+          >
             <img src="/metrics/assets/status-live-8.svg" alt="" />
             <span class="sr-only">Connecting</span>
           </span>
@@ -59,7 +77,7 @@
       </header>
 
       <section class="grid-stack" id="metrics-grid" aria-label="Resizable metrics widgets">
-        <div class="grid-stack-item" gs-x="0" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
+        <div class="grid-stack-item" gs-id="connections" gs-x="0" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
           <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Open TCP connections and HTTP requests currently executing in this proxy process.">
             <span>Connections</span>
             <div class="metric-value">
@@ -69,7 +87,7 @@
             <small id="active-requests">0 active requests</small>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="2" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
+        <div class="grid-stack-item" gs-id="requests" gs-x="2" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
           <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Requests completed during the latest minute, plus the process-lifetime total.">
             <span>Requests / min</span>
             <div class="metric-value">
@@ -79,7 +97,7 @@
             <small id="total-requests">0 since process start</small>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="4" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
+        <div class="grid-stack-item" gs-id="tokens" gs-x="4" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
           <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Estimated or reported input and output tokens processed during the latest minute.">
             <span>Token throughput</span>
             <div class="metric-value">
@@ -89,7 +107,7 @@
             <small>input + output / min</small>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="6" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
+        <div class="grid-stack-item" gs-id="latency-summary" gs-x="6" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
           <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Median and 95th percentile end-to-end request latency for this process.">
             <span>p95 latency</span>
             <div class="metric-value">
@@ -99,7 +117,7 @@
             <small id="p50-latency">p50 0ms</small>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="8" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
+        <div class="grid-stack-item" gs-id="rate-limit-summary" gs-x="8" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
           <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Upstream HTTP 429 responses as a percentage of requests in the selected time range.">
             <span>429 rate</span>
             <div class="metric-value">
@@ -109,7 +127,7 @@
             <small id="rate-429-count">0 in range</small>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="10" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
+        <div class="grid-stack-item" gs-id="active-models" gs-x="10" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
           <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Resolved models observed by this process, capped at 32 named series plus other.">
             <span>Active models</span>
             <div class="metric-value">
@@ -120,7 +138,7 @@
           </article>
         </div>
 
-        <div class="grid-stack-item" gs-x="0" gs-y="2" gs-w="6" gs-h="5" gs-min-w="4">
+        <div class="grid-stack-item" gs-id="request-chart" gs-x="0" gs-y="2" gs-w="6" gs-h="5" gs-min-w="4">
           <article class="grid-stack-item-content panel chart-panel" tabindex="0" data-tooltip="Request volume over time. The primary line follows the selected outcome and amber highlights rate limiting.">
             <div class="panel-heading">
               <div>
@@ -133,7 +151,7 @@
             <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="6" gs-y="2" gs-w="6" gs-h="5" gs-min-w="4">
+        <div class="grid-stack-item" gs-id="token-chart" gs-x="6" gs-y="2" gs-w="6" gs-h="5" gs-min-w="4">
           <article class="grid-stack-item-content panel chart-panel" tabindex="0" data-tooltip="Input and output token throughput over the selected time range.">
             <div class="panel-heading">
               <div>
@@ -146,7 +164,7 @@
             <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="0" gs-y="7" gs-w="12" gs-h="5" gs-min-w="6">
+        <div class="grid-stack-item" gs-id="latency-chart" gs-x="0" gs-y="7" gs-w="12" gs-h="5" gs-min-w="6">
           <article class="grid-stack-item-content panel chart-panel" tabindex="0" data-tooltip="Average and maximum end-to-end request latency over the selected time range.">
             <div class="panel-heading">
               <div>
@@ -160,7 +178,7 @@
           </article>
         </div>
 
-        <div class="grid-stack-item" gs-x="0" gs-y="12" gs-w="8" gs-h="6" gs-min-w="6">
+        <div class="grid-stack-item" gs-id="models-table" gs-x="0" gs-y="12" gs-w="8" gs-h="6" gs-min-w="6">
           <article class="grid-stack-item-content panel models-panel" tabindex="0" data-tooltip="Per-model request, token, latency, error, retry, queue, and adaptive limiter metrics.">
             <div class="panel-heading">
               <h2>Model performance</h2>
@@ -189,7 +207,7 @@
             </div>
           </article>
         </div>
-        <div class="grid-stack-item" gs-x="8" gs-y="12" gs-w="4" gs-h="6" gs-min-w="3">
+        <div class="grid-stack-item" gs-id="rate-limit-timeline" gs-x="8" gs-y="12" gs-w="4" gs-h="6" gs-min-w="3">
           <article class="grid-stack-item-content panel timeline-panel" tabindex="0" data-tooltip="Recent adaptive rate-limit activation, tightening, recovery, probation, and deactivation events.">
             <div class="panel-heading">
               <h2>Rate-limit timeline</h2>

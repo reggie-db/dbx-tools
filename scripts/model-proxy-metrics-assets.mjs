@@ -92,7 +92,7 @@ for (const [relativePath, [size, color]] of Object.entries(FIGMA_ASSETS)) {
 for (const file of [
   "index.html",
   "app.9f4c1e2a.css",
-  "app.9f4c1e2a.js",
+  "app.js",
   "vendor/gridstack-all.js",
   "vendor/gridstack.min.css",
   "vendor/gridstack.LICENSE",
@@ -105,7 +105,7 @@ for (const file of [
 const runtimeAssets = [
   "index.html",
   "app.9f4c1e2a.css",
-  "app.9f4c1e2a.js",
+  "app.js",
   "vendor/gridstack-all.js",
   "vendor/gridstack.min.css",
 ]

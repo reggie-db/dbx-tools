@@ -19,12 +19,75 @@
     reconnectAttempt: 0,
     reconnectTimer: null,
     eventSource: null,
+    snapshotRequest: 0,
   };
 
   const statusAssets = {
     live: "/metrics/assets/status-live-8.svg",
     reconnecting: "/metrics/assets/status-danger-8.svg",
   };
+
+  const layoutStorageKey = "dbx-tools.model-proxy.metrics-layout.v2";
+  const defaultLayout = Array.from(document.querySelectorAll(".grid-stack-item[gs-id]"), (item) => ({
+    id: item.getAttribute("gs-id"),
+    x: Number(item.getAttribute("gs-x")),
+    y: Number(item.getAttribute("gs-y")),
+    w: Number(item.getAttribute("gs-w")),
+    h: Number(item.getAttribute("gs-h")),
+  }));
+
+  function readStoredLayout(value) {
+    try {
+      const layout = JSON.parse(value ?? localStorage.getItem(layoutStorageKey));
+      if (!Array.isArray(layout) || layout.length > 32) {
+        return null;
+      }
+      const known = new Set(
+        Array.from(document.querySelectorAll(".grid-stack-item[gs-id]"), (item) =>
+          item.getAttribute("gs-id"),
+        ),
+      );
+      const valid = layout
+        .map((item) => {
+          const fallback = defaultLayout.find((candidate) => candidate.id === item?.id);
+          return fallback
+            ? {
+                id: item.id,
+                x: item.x ?? fallback.x,
+                y: item.y ?? fallback.y,
+                w: item.w ?? fallback.w,
+                h: item.h ?? fallback.h,
+              }
+            : null;
+        })
+        .filter(
+          (item) =>
+            known.has(item?.id) &&
+            ["x", "y", "w", "h"].every((field) => Number.isInteger(item[field])) &&
+            item.x >= 0 &&
+            item.y >= 0 &&
+            item.w > 0 &&
+            item.h > 0,
+        );
+      return valid.length ? valid : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function applyInitialLayout(layout) {
+    layout?.forEach((item) => {
+      const element = document.querySelector(`.grid-stack-item[gs-id="${CSS.escape(item.id)}"]`);
+      if (!element) {
+        return;
+      }
+      ["x", "y", "w", "h"].forEach((field) => {
+        element.setAttribute(`gs-${field}`, String(item[field]));
+      });
+    });
+  }
+
+  applyInitialLayout(readStoredLayout());
 
   const grid = window.GridStack?.init({
     column: 12,
@@ -44,18 +107,76 @@
     notice.textContent = "Dashboard layout controls could not be loaded.";
   }
 
+  function saveLayout() {
+    if (!grid) {
+      return;
+    }
+    const layout = grid
+      .save(false, false, undefined, 12)
+      .filter((item) => item.id)
+      .map((item) => {
+        const fallback = defaultLayout.find((candidate) => candidate.id === item.id);
+        return {
+          id: item.id,
+          x: item.x ?? fallback?.x ?? 0,
+          y: item.y ?? fallback?.y ?? 0,
+          w: item.w ?? item.minW ?? fallback?.w ?? 1,
+          h: item.h ?? item.minH ?? fallback?.h ?? 1,
+        };
+      });
+    try {
+      localStorage.setItem(layoutStorageKey, JSON.stringify(layout));
+    } catch {
+      notice.textContent = "Widget layout could not be saved in browser storage.";
+    }
+  }
+
+  grid?.on("change", saveLayout);
+  document.querySelector("#layout-reset").addEventListener("click", () => {
+    if (!grid) {
+      return;
+    }
+    grid.load(
+      defaultLayout.map((item) => ({ ...item })),
+      false,
+    );
+    try {
+      localStorage.setItem(layoutStorageKey, JSON.stringify(defaultLayout));
+    } catch {
+      notice.textContent = "Default widget layout could not be saved in browser storage.";
+    }
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== layoutStorageKey || !grid) {
+      return;
+    }
+    const layout = readStoredLayout(event.newValue);
+    if (layout) {
+      grid.load(layout, false);
+    }
+  });
+
   function setLiveState(value, label) {
     liveStatus.dataset.state = value;
     liveIcon.src = statusAssets[value];
     liveLabel.textContent = label;
-    liveStatus.title = value === "live" ? "Metrics stream connected" : "Metrics stream disconnected";
-    liveStatus.setAttribute("aria-label", liveStatus.title);
+    const description =
+      value === "live" ? "Metrics stream connected" : "Metrics stream disconnected";
+    liveStatus.dataset.tooltip = description;
+    liveStatus.setAttribute("aria-label", description);
   }
 
-  function showWidgetTooltip(widget) {
-    widgetTooltip.textContent = widget.dataset.tooltip;
+  let tooltipTimer = null;
+  let tooltipOwner = null;
+
+  function showTooltip(target) {
+    window.clearTimeout(tooltipTimer);
+    tooltipOwner?.setAttribute("aria-expanded", "false");
+    tooltipOwner = target;
+    target.setAttribute("aria-expanded", "true");
+    widgetTooltip.textContent = target.dataset.tooltip;
     widgetTooltip.hidden = false;
-    const widgetRect = widget.getBoundingClientRect();
+    const widgetRect = target.getBoundingClientRect();
     const tooltipRect = widgetTooltip.getBoundingClientRect();
     const left = Math.min(
       window.innerWidth - tooltipRect.width - 12,
@@ -66,17 +187,58 @@
     widgetTooltip.style.top = `${above >= 12 ? above : widgetRect.bottom + 10}px`;
   }
 
-  function hideWidgetTooltip() {
+  function hideTooltip() {
+    window.clearTimeout(tooltipTimer);
+    tooltipTimer = null;
+    tooltipOwner?.setAttribute("aria-expanded", "false");
+    tooltipOwner = null;
     widgetTooltip.hidden = true;
   }
 
-  document.querySelectorAll("[data-tooltip]").forEach((widget) => {
-    widget.addEventListener("pointerenter", () => showWidgetTooltip(widget));
-    widget.addEventListener("pointerleave", hideWidgetTooltip);
-    widget.addEventListener("focus", () => showWidgetTooltip(widget));
-    widget.addEventListener("blur", hideWidgetTooltip);
+  function scheduleTooltip(target) {
+    window.clearTimeout(tooltipTimer);
+    tooltipTimer = window.setTimeout(() => showTooltip(target), 500);
+  }
+
+  document.querySelectorAll(".grid-stack-item-content[data-tooltip]").forEach((widget) => {
+    const description = widget.dataset.tooltip;
+    widget.removeAttribute("data-tooltip");
+    widget.removeAttribute("tabindex");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "widget-info";
+    button.setAttribute("aria-label", "About this metric");
+    button.setAttribute("aria-expanded", "false");
+    button.dataset.tooltip = description;
+    button.dataset.tooltipTrigger = "click";
+    button.innerHTML =
+      '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></svg>';
+    widget.append(button);
   });
-  grid?.on("dragstart resizestart", hideWidgetTooltip);
+
+  document.querySelectorAll("[data-tooltip]").forEach((target) => {
+    if (target.dataset.tooltipTrigger === "click") {
+      target.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (tooltipOwner === target && !widgetTooltip.hidden) {
+          hideTooltip();
+        } else {
+          showTooltip(target);
+        }
+      });
+      return;
+    }
+    target.addEventListener("pointerenter", () => scheduleTooltip(target));
+    target.addEventListener("pointerleave", hideTooltip);
+    target.addEventListener("focus", () => scheduleTooltip(target));
+    target.addEventListener("blur", hideTooltip);
+  });
+  document.addEventListener("click", (event) => {
+    if (tooltipOwner && !tooltipOwner.contains(event.target)) {
+      hideTooltip();
+    }
+  });
+  grid?.on("dragstart resizestart", hideTooltip);
 
   function formatNumber(value) {
     return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(
@@ -104,8 +266,11 @@
     return [hours, minutes, remainder].map((part) => String(part).padStart(2, "0")).join(":");
   }
 
-  function selectedBuckets(snapshot) {
-    const source = state.rangeHours === 1 ? snapshot.history : snapshot.rollupHistory;
+  function selectedBuckets(snapshot, selectedModel) {
+    const source =
+      state.rangeHours === 1
+        ? (selectedModel?.history ?? snapshot.history)
+        : (selectedModel?.rollupHistory ?? snapshot.rollupHistory);
     const boundary = Math.max(0, snapshot.generatedAtMs - state.rangeHours * 60 * 60 * 1000);
     return source.filter((bucket) => bucket.startedAtMs >= boundary);
   }
@@ -189,6 +354,9 @@
 
   function renderSummary(snapshot, buckets, selectedModel) {
     const summary = snapshot.summary;
+    const minuteBuckets = buckets.filter(
+      (bucket) => bucket.startedAtMs >= snapshot.generatedAtMs - 60_000,
+    );
     const requestCount = sumBuckets(buckets, "requests");
     const rateLimited = sumBuckets(buckets, "rateLimited");
     const ratePercent = requestCount ? (rateLimited * 100) / requestCount : 0;
@@ -196,13 +364,13 @@
     document.querySelector("#active-requests").textContent =
       `${formatInteger(summary.activeRequests)} active requests`;
     document.querySelector("#requests-minute").textContent = formatInteger(
-      selectedModel ? selectedModel.requests : summary.requestsPerMinute,
+      selectedModel ? sumBuckets(minuteBuckets, "requests") : summary.requestsPerMinute,
     );
     document.querySelector("#total-requests").textContent =
       `${formatInteger(summary.totalRequests)} since process start`;
     document.querySelector("#tokens-minute").textContent = formatNumber(
       selectedModel
-        ? selectedModel.inputTokens + selectedModel.outputTokens
+        ? sumBuckets(minuteBuckets, "inputTokens") + sumBuckets(minuteBuckets, "outputTokens")
         : summary.tokensPerMinute,
     );
     document.querySelector("#p95-latency").textContent = formatDuration(
@@ -216,9 +384,16 @@
     document.querySelector("#active-models").textContent = formatInteger(summary.activeModels);
   }
 
-  function renderCharts(snapshot, buckets) {
-    const requestRate = snapshot.summary.requestsPerMinute;
-    const tokenRate = snapshot.summary.tokensPerMinute;
+  function renderCharts(snapshot, buckets, selectedModel) {
+    const minuteBuckets = buckets.filter(
+      (bucket) => bucket.startedAtMs >= snapshot.generatedAtMs - 60_000,
+    );
+    const requestRate = selectedModel
+      ? sumBuckets(minuteBuckets, "requests")
+      : snapshot.summary.requestsPerMinute;
+    const tokenRate = selectedModel
+      ? sumBuckets(minuteBuckets, "inputTokens") + sumBuckets(minuteBuckets, "outputTokens")
+      : snapshot.summary.tokensPerMinute;
     const blue = chartColor("--brand-primary-hover", "#0E538B");
     const green = chartColor("--brand-accent", "#00A972");
     const muted = chartColor("--brand-muted", "#618794");
@@ -245,7 +420,7 @@
       `${outcomeFilter.options[outcomeFilter.selectedIndex].text.toLowerCase()} · 429 highlighted`;
     document.querySelector("#token-chart-value").textContent = `${formatNumber(tokenRate)} tpm`;
     document.querySelector("#latency-chart-value").textContent =
-      `p95 ${formatDuration(snapshot.summary.p95LatencyMs)}`;
+      `p95 ${formatDuration(selectedModel?.p95LatencyMs ?? snapshot.summary.p95LatencyMs)}`;
     drawLines(document.querySelector("#request-chart"), buckets, [
       { label: state.outcome, value: requestValue, color: blue },
       {
@@ -413,13 +588,13 @@
     if (state.hidden) {
       return;
     }
-    const buckets = selectedBuckets(snapshot);
     const selectedModel =
       state.model === "all"
         ? null
         : snapshot.models.find((model) => model.model === state.model) || null;
+    const buckets = selectedBuckets(snapshot, selectedModel);
     renderSummary(snapshot, buckets, selectedModel);
-    renderCharts(snapshot, buckets);
+    renderCharts(snapshot, buckets, selectedModel);
     renderModels(snapshot);
     renderTimeline(snapshot);
     renderFooter(snapshot);
@@ -428,14 +603,19 @@
   }
 
   async function loadSnapshot() {
-    const response = await fetch("/metrics/snapshot", {
+    const request = ++state.snapshotRequest;
+    const query = state.model === "all" ? "" : `?model=${encodeURIComponent(state.model)}`;
+    const response = await fetch(`/metrics/snapshot${query}`, {
       headers: { accept: "application/json" },
       cache: "no-store",
     });
     if (!response.ok) {
       throw new Error(`Snapshot request failed with ${response.status}`);
     }
-    render(await response.json());
+    const snapshot = await response.json();
+    if (request === state.snapshotRequest) {
+      render(snapshot);
+    }
   }
 
   function scheduleReconnect() {
@@ -463,7 +643,15 @@
     });
     source.addEventListener("snapshot", (event) => {
       try {
-        render(JSON.parse(event.data));
+        const snapshot = JSON.parse(event.data);
+        if (state.model === "all") {
+          render(snapshot);
+        } else {
+          updateModelOptions(snapshot.models);
+          loadSnapshot().catch(() => {
+            notice.textContent = "Selected model history could not be refreshed.";
+          });
+        }
       } catch {
         notice.textContent = "A metrics update could not be decoded.";
       }
@@ -491,9 +679,9 @@
 
   modelFilter.addEventListener("change", () => {
     state.model = modelFilter.value;
-    if (state.snapshot) {
-      render(state.snapshot);
-    }
+    loadSnapshot().catch((error) => {
+      notice.textContent = error.message;
+    });
   });
 
   outcomeFilter.addEventListener("change", () => {

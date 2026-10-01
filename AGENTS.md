@@ -360,11 +360,18 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   history to disk. The embedded vanilla dashboard uses snapshot JSON plus SSE,
   canonical generated brand tokens, model and outcome filters, request, token,
   and latency line graphs. GridStack owns drag-and-drop placement and widget resizing; do not
-  restore a separate compact/full-detail mode or hand-roll grid interactions. A
-  proxy owns one startup workspace, so never add a workspace selector to this
-  process-local UI. Committed assets are validated by
+  restore a separate compact/full-detail mode or hand-roll grid interactions.
+  SSE carries aggregate summaries only; model selection fetches
+  `/metrics/snapshot?model=<resolved-model>` so one bounded model history does
+  not multiply every five-second event by all retained models.
+  Persist only bounded widget geometry in browser `localStorage` and synchronize
+  it across tabs; the icon-only reset control restores and persists the canonical
+  layout. Never put metric history or request data there. A proxy owns one
+  startup workspace, so never add a workspace selector to this process-local UI.
+  Committed assets are validated by
   `bun run model-proxy:metrics-assets`. Rust release rows embed those assets
-  without Bun. `metrics` and `metrics-ui` remain additive optional features; a
+  without Bun. Only content-addressed assets use immutable caching; `app.js` and
+  every other stable-name asset revalidate. `metrics` and `metrics-ui` remain additive optional features; a
   metrics-free build contains no recorder, histogram, exporter, or UI assets.
   Persistence remains a later optional phase and must not be added to the
   default release without operational evidence.

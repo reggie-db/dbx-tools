@@ -132,6 +132,7 @@ small {
   width: 32px;
   height: 32px;
   justify-content: center;
+  border: 1px solid var(--brand-border);
   border-radius: var(--radius-card);
   background: var(--brand-surface);
 }
@@ -139,6 +140,61 @@ small {
 .connection-status img {
   width: 9px;
   height: 9px;
+}
+
+.icon-control {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  place-items: center;
+}
+
+.icon-control svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.widget-info {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  place-items: center;
+  border-color: transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dashboard-muted);
+  cursor: pointer;
+}
+
+.widget-info:hover,
+.widget-info:focus-visible,
+.widget-info[aria-expanded="true"] {
+  border-color: var(--brand-border);
+  background: var(--brand-background);
+  color: var(--brand-primary-hover);
+}
+
+.widget-info svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .range-control {
@@ -228,11 +284,11 @@ small {
 
 .metric-card {
   display: flex;
-  height: 100%;
+  min-height: 0;
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  padding: 18px;
+  padding: 18px 42px 18px 18px;
 }
 
 .metric-card > span {
@@ -265,8 +321,8 @@ small {
 .chart-panel,
 .models-panel,
 .timeline-panel {
-  height: 100%;
-  padding: 18px 20px;
+  min-height: 0;
+  padding: 18px;
 }
 
 .chart-panel,
@@ -279,6 +335,7 @@ small {
 .panel-heading {
   gap: 16px;
   min-height: 36px;
+  padding-right: 28px;
 }
 
 .panel-heading h2 {

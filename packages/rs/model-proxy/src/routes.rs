@@ -241,13 +241,30 @@ impl Drop for ActiveRequestGuard {
     }
 }
 
-async fn metrics_snapshot(State(state): State<AppState>) -> Response {
+#[derive(Debug, Default, Deserialize)]
+struct MetricsSnapshotQuery {
+    model: Option<String>,
+}
+
+async fn metrics_snapshot(
+    State(state): State<AppState>,
+    Query(query): Query<MetricsSnapshotQuery>,
+) -> Response {
     if !state.metrics.routes_visible() {
         return StatusCode::NOT_FOUND.into_response();
     }
+    let model = query
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|model| !model.is_empty());
+    let snapshot = model.map_or_else(
+        || state.metrics.snapshot(),
+        |model| state.metrics.snapshot_for_model(model),
+    );
     (
         [(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))],
-        Json(state.metrics.snapshot()),
+        Json(snapshot),
     )
         .into_response()
 }

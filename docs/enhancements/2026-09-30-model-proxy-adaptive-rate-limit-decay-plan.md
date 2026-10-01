@@ -506,14 +506,28 @@ Use GridStack for dashboard placement and resizing. Embed its reviewed
 JavaScript, CSS, and license with the dashboard assets. Do not maintain a second
 compact/full-detail mode or custom drag-and-resize implementation.
 
+Persist only the bounded 12-column widget geometry in browser `localStorage`.
+Restore it before GridStack initializes and synchronize updates through the
+browser `storage` event so reloads, proxy restarts, and new tabs share the same
+layout. Version the storage key and ignore malformed or unknown widget records.
+Provide an icon-only control that restores and persists the canonical geometry.
+Never store metric snapshots, model history, request details, or identities in
+browser storage.
+
+Keep periodic SSE snapshots aggregate-only. When a model is selected, fetch
+`/metrics/snapshot?model=<resolved-model>` so the response includes that one
+model's bounded history without broadcasting every retained model history to
+every dashboard every five seconds.
+
 Commit deterministic generated assets that Rust release rows can embed without
 installing Bun. Keep focused asset generation and freshness validation in the
 normal JavaScript validation path. The Rust build consumes reviewed assets
 without invoking a frontend build or downloading packages.
 
-Use immutable caching for versioned JavaScript and CSS assets and no-cache for
-the HTML shell and live JSON/SSE endpoints. Keep all assets under `/metrics/` so
-the route can be enabled or omitted as one unit.
+Use immutable caching only for content-addressed assets. Serve `app.js`, the
+HTML shell, canonical brand assets, vendored library assets, and live JSON/SSE
+endpoints with revalidation. Keep all assets under `/metrics/` so the route can
+be enabled or omitted as one unit.
 
 ## Cargo feature boundaries
 
