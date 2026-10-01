@@ -145,31 +145,31 @@ barrel. Python keeps `bindings.py` as the generated implementation and leaves
 Do not create a `nodeExports` binding subpath or a handwritten type facade.
 
 Each discovered member is a native Projen `Project`, exposed as
-`DBXToolsRustProject`. Consumers that need to construct one directly should use
-the same object-style options shape as the Node and Python project classes:
+`DBXToolsRustProject`. The same class also owns standalone Cargo projects with
+the flat object-style options used by the Node and Python project classes:
 
 ```ts
 import { project as projenProject } from "@dbx-tools/projen";
 
-const root = new projenProject.DBXToolsNodeProject({
-  name: "my-apps",
-  scope: "my-apps",
-});
-
 new projenProject.DBXToolsRustProject({
-  parent: root,
-  root: "native",
-  package: {
-    directory: "core",
-    description: "Shared native runtime",
-  },
+  name: "my-apps-core",
+  outdir: "native/core",
+  version: "0.1.0",
+  description: "Shared native runtime",
+  repository: "https://github.com/example/my-apps",
 });
 ```
 
-`root` defaults to `packages/rs`, and `scope` defaults to the parent project's
-scope or name. `DBXToolsRustWorkspaceOptions.private` supplies the default Cargo
-publication policy for every discovered crate; a package-level `private` value
-overrides it. These defaults keep consumer configuration repository-neutral.
+The project emits concrete standalone Cargo metadata plus `compile`, `test`,
+`package`, `lint`, `format`, and `format:check` tasks. A nested standalone
+project declares its own empty Cargo workspace so a surrounding repository
+workspace does not absorb it accidentally. `DBXToolsRustWorkspace` constructs
+the same class with workspace-owned metadata and keeps aggregate binding and
+release coordination. `DBXToolsRustWorkspaceOptions.private` supplies the
+default Cargo publication policy for every discovered crate; a package-level
+`private` value overrides it. The positional constructor and nested
+`RustPackageOptions` compatibility shape remain deprecated until the next major
+release.
 
 Rust dependencies between binding-enabled workspace crates become Node
 `workspace:*` and Python `internalDependencies` automatically. Python generation

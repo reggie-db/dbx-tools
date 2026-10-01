@@ -14,6 +14,7 @@ import { synchronizeCargoLockVersions } from "../src/project-rs.ts";
 import {
   DBXToolsNodeProject,
   DBXToolsPythonWorkspace,
+  DBXToolsRustProject,
   DBXToolsRustWorkspace,
   RustReleaseCpu,
   RustReleaseOs,
@@ -87,6 +88,98 @@ it("updates workspace lock versions without changing registry packages", () => {
     synchronizeCargoLockVersions(lock, new Set(["fixture-core"]), "1.2.3"),
     lock.replace('version = "0.1.0"', 'version = "1.2.3"'),
   );
+});
+
+describe("DBXToolsRustProject", () => {
+  it("synthesizes a standalone Cargo project with concrete metadata and native tasks", () => {
+    const directory = mkdtempSync(join(tmpdir(), "project-rs-standalone-"));
+    try {
+      mkdirSync(join(directory, "src"), { recursive: true });
+      writeFileSync(join(directory, "src/lib.rs"), "pub fn value() -> u8 { 1 }\n");
+      writeFileSync(join(directory, "src/main.rs"), "fn main() {}\n");
+      const project = new DBXToolsRustProject({
+        name: "external-native",
+        outdir: directory,
+        version: "1.2.3",
+        edition: "2024",
+        rustVersion: "1.85",
+        license: "MIT",
+        copyrightOwner: "Example",
+        repository: "https://github.com/example/external-native",
+        description: "Standalone Rust fixture",
+        binaryName: "external",
+        features: { native: [] },
+        defaultFeatures: ["native"],
+        dependencies: { serde: "1" },
+      });
+      project.synth();
+
+      const manifest = parse(readFileSync(join(directory, "Cargo.toml"), "utf8")) as {
+        package: Record<string, unknown>;
+        lib: Record<string, unknown>;
+        bin: Array<Record<string, unknown>>;
+        features: Record<string, unknown>;
+        dependencies: Record<string, unknown>;
+      };
+      assert.deepEqual(manifest.package, {
+        name: "external-native",
+        version: "1.2.3",
+        edition: "2024",
+        "rust-version": "1.85",
+        description: "Standalone Rust fixture",
+        license: "MIT",
+        repository: "https://github.com/example/external-native",
+      });
+      assert.equal(manifest.lib.name, "external_native");
+      assert.deepEqual(manifest.bin, [{ name: "external", path: "src/main.rs" }]);
+      assert.deepEqual(manifest.features, { default: ["native"], native: [] });
+      assert.equal(manifest.dependencies.serde, "1");
+      assert.match(readFileSync(join(directory, "LICENSE"), "utf8"), /Copyright \(c\).*Example/);
+      assert.match(readFileSync(join(directory, ".gitignore"), "utf8"), /^target\/$/m);
+
+      const tasks = JSON.parse(readFileSync(join(directory, ".projen/tasks.json"), "utf8")) as {
+        tasks: Record<string, { steps: Array<{ exec?: string }> }>;
+      };
+      assert.equal(tasks.tasks.compile?.steps[0]?.exec, "cargo build");
+      assert.equal(tasks.tasks.test?.steps[0]?.exec, "cargo test");
+      assert.equal(tasks.tasks.package?.steps[0]?.exec, "cargo package");
+      assert.equal(tasks.tasks.lint?.steps[0]?.exec, "cargo clippy --all-targets --all-features");
+      assert.equal(tasks.tasks.format?.steps[0]?.exec, "cargo fmt");
+      assert.equal(tasks.tasks["format:check"]?.steps[0]?.exec, "cargo fmt -- --check");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("retains the deprecated positional workspace-member constructor", () => {
+    const directory = mkdtempSync(join(tmpdir(), "project-rs-positional-"));
+    try {
+      mkdirSync(join(directory, "native/core/src"), { recursive: true });
+      writeFileSync(join(directory, "native/core/src/lib.rs"), "pub fn value() {}\n");
+      const parent = new DBXToolsNodeProject({
+        name: "@fixture/root",
+        scope: "fixture",
+        outdir: directory,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+      });
+      const project = new DBXToolsRustProject(parent, "native", "fixture", {
+        directory: "core",
+      });
+      parent.synth();
+      assert.equal(project.crateName, "fixture-core");
+      assert.deepEqual(
+        (
+          parse(readFileSync(join(directory, "native/core/Cargo.toml"), "utf8")) as {
+            package: Record<string, unknown>;
+          }
+        ).package.version,
+        { workspace: true },
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("DBXToolsRustWorkspace", () => {

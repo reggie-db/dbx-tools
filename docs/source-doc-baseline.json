@@ -479,11 +479,6 @@
     },
     {
       "package": "@dbx-tools/tunnel",
-      "name": "AUTH_PREFIX",
-      "source": "packages/js/node/tunnel/src/gate.ts"
-    },
-    {
-      "package": "@dbx-tools/tunnel",
       "name": "LoginPageOptions",
       "source": "packages/js/node/tunnel/src/login-page.ts"
     },

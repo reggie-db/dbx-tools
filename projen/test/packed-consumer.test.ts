@@ -51,6 +51,7 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
   mkdirSync(archiveDir, { recursive: true });
   mkdirSync(join(consumer, "modules/example/src"), { recursive: true });
   mkdirSync(join(consumer, "native/example/src"), { recursive: true });
+  mkdirSync(join(consumer, "standalone-rust/src"), { recursive: true });
   mkdirSync(join(consumer, "fixtures"), { recursive: true });
   mkdirSync(unrelatedCwd, { recursive: true });
   const environment = { ...process.env };
@@ -88,14 +89,24 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
         "  release: false,",
         '  packages: { example: { description: "External Rust fixture" } },',
         "});",
+        "const standaloneRust = new projenProject.DBXToolsRustProject({",
+        '  name: "external-standalone",',
+        `  outdir: ${JSON.stringify(join(consumer, "standalone-rust"))},`,
+        '  version: "1.2.3",',
+        '  description: "Standalone external Rust fixture",',
+        '  license: "MIT",',
+        '  copyrightOwner: "External Consumer",',
+        "});",
         'if (!(project instanceof Project)) throw new Error("consumer and engine resolved different Projen runtimes");',
         'if (!(rust.packages[0] instanceof Project)) throw new Error("Rust projects must be native Projen projects");',
         "project.synth();",
+        "standaloneRust.synth();",
         "",
       ].join("\n"),
     );
     writeFileSync(join(consumer, "modules/example/src/example.ts"), "export const value = 1;\n");
     writeFileSync(join(consumer, "native/example/src/lib.rs"), "pub fn value() -> u8 { 1 }\n");
+    writeFileSync(join(consumer, "standalone-rust/src/lib.rs"), "pub fn value() -> u8 { 1 }\n");
     writeFileSync(
       join(consumer, "fixtures/model.ts"),
       "export interface ExternalModel { value: string }\n",
@@ -111,6 +122,10 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
       readFileSync(join(consumer, "native/example/Cargo.toml"), "utf8"),
       /name = "external-example"[\s\S]*publish = false/,
     );
+    assert.match(
+      readFileSync(join(consumer, "standalone-rust/Cargo.toml"), "utf8"),
+      /name = "external-standalone"[\s\S]*version = "1\.2\.3"[\s\S]*edition = "2021"/,
+    );
 
     run(unrelatedCwd, [join(consumer, ".projenrc.ts")], environment);
     assert.equal(
@@ -121,6 +136,8 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
 
     run(consumer, ["run", "compile"], environment);
     run(consumer, ["run", "test"], environment);
+    run(join(consumer, "standalone-rust"), ["x", "projen", "compile"], environment);
+    run(join(consumer, "standalone-rust"), ["x", "projen", "test"], environment);
     execFileSync("npm", ["pack", "--ignore-scripts", "--pack-destination", archiveDir], {
       cwd: join(consumer, "modules/example"),
       env: environment,

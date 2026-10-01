@@ -39,6 +39,19 @@ Before each implementation phase, re-inspect the active diff and preserve concur
   60 KB. Its declaration is generated from the same owner. Format, malformed
   record, missing section, mode, signing, arbitrary-name/root, asset-change,
   version-only, generated-consumer, and full Projen tests pass.
+- **Phase 3 completed on 2026-10-01.** `DBXToolsRustProject` now accepts flat,
+  standalone-capable options for Cargo identity, metadata, dependencies,
+  features, binaries, bindings, and release behavior. Standalone projects emit
+  concrete metadata, their own Cargo workspace boundary, a license, target
+  ignores, and native `compile`, `test`, `package`, `lint`, `format`, and
+  `format:check` tasks. Workspace discovery constructs the same class with only
+  workspace-owned metadata inherited. The positional constructor and initial
+  nested object shape remain deprecated compatibility paths, while
+  `RustPackageOptions` is an alias of the canonical crate configuration.
+  Project, workspace, release-workflow, and generated release-helper ownership
+  are now split into focused Projen modules. Standalone synthesis, positional
+  compatibility, discovered workspaces, generated workflows, and a packed
+  external consumer that compiles and tests the generated Rust project pass.
 
 ## Comparison with the Kanna implementation
 

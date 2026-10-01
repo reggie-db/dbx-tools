@@ -55,8 +55,8 @@ export { PackageIdentifier, DBX_TOOLS_LICENSE, DBXToolsNodeProject, ROOT_INSTALL
 export type { DBXToolsJavaScriptProject, DBXToolsReleaseMode, PullRequestTitlePolicyOptions, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
 export { DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";
 export type { PythonRepositoryOptions, PythonPackageOptions, PythonTrustedPublisherOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
-export { RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustProject, DBXToolsRustWorkspace } from "./src/project-rs.ts";
-export type { CargoDependencyOptions, CargoDependency, RustCliOptions, RustPackageOptions, DBXToolsRustProjectOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping, RustReleaseBinaryAssetMapping, RustReleaseBinaryMapping } from "./src/project-rs.ts";
+export { DBXToolsRustProject, RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustWorkspace } from "./src/project-rs.ts";
+export type { CargoDependency, CargoDependencyOptions, DBXToolsRustProjectOptions, LegacyDBXToolsRustProjectOptions, RustCrateOptions, RustCliOptions, RustPackageOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping, RustReleaseBinaryAssetMapping, RustReleaseBinaryMapping } from "./src/project-rs.ts";
 export { PROJEN_VERSION } from "./src/projen-version.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
 export { DBXToolsRelease } from "./src/release.ts";
