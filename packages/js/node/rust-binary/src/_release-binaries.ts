@@ -8,8 +8,8 @@ export const RELEASE_BINARY_COMMANDS = [
     "binaryName": "dbx-lakebase-proxy",
     "unit": "rs-lakebase-proxy",
     "component": "rs-lakebase-proxy",
-    "version": "0.9.5",
-    "tag": "rs-lakebase-proxy-v0.9.5",
+    "version": "0.9.6",
+    "tag": "rs-lakebase-proxy-v0.9.6",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
@@ -40,8 +40,8 @@ export const RELEASE_BINARY_COMMANDS = [
     "binaryName": "dbx-model-proxy",
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.5",
-    "tag": "rs-model-proxy-v0.9.5",
+    "version": "0.9.6",
+    "tag": "rs-model-proxy-v0.9.6",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
