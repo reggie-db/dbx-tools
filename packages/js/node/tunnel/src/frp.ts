@@ -72,7 +72,11 @@ export function resolveFrpConfig(opts: {
   targetPort?: number;
 }): FrpConfig | undefined {
   const publicDomain = bareHost(
-    config.string(opts.publicDomain, ["FRP_PUBLIC_DOMAIN", "PUBLIC_DOMAIN"], TUNNEL_CONFIG),
+    config.string(
+      opts.publicDomain,
+      ["TUNNEL_FRP_PUBLIC_DOMAIN", "TUNNEL_PUBLIC_DOMAIN"],
+      TUNNEL_CONFIG,
+    ),
   );
   if (!publicDomain) return undefined;
   const server = bareHost(config.string(opts.server, "FRP_SERVER")) ?? publicDomain;

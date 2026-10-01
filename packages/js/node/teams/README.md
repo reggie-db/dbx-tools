@@ -162,10 +162,7 @@ const teamsRuntime = runtime.createTeamsRuntime({ cardVersion: "1.5" });
 const createTeamsCard = tool.teamsCardTool({ runtime: teamsRuntime });
 ```
 
-`getTeamsRuntime()` remains as a deprecated compatibility constructor and
-returns a new isolated runtime on every call. Process-global
-`setTeamsExecutor(executor)` registration is no longer supported; pass the
-runtime explicitly or provide the executor to `createTeamsRuntime`.
+Pass the runtime explicitly or provide the executor to `createTeamsRuntime`.
 
 ## Why Use This Over Native AppKit
 
@@ -271,8 +268,7 @@ Mounted under the plugin base path `/api/teams`:
 - `messaging` - `deliverTurn` (acknowledge-then-deliver turn) and
   `resolveServiceUrl`.
 - `runtime` - `createTeamsRuntime`, `buildCardWithRuntime`,
-  `postCardWithRuntime`, standalone `buildCard` / `postCard`, and deprecated
-  global-era compatibility names.
+  `postCardWithRuntime`, and standalone `buildCard` / `postCard`.
 - `config` - `resolveTeamsConfig`, `TEAMS_CONFIG_SCHEMA`, the env-name
   constants, and the `TeamsPluginConfig` / `ResolvedTeamsConfig` types.
 - `defaults` - the interceptor execution settings and named caps.

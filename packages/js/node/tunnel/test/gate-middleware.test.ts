@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
+import { AUTH_BASE_PATH, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
 import type { Request, RequestHandler, Response } from "express";
 import {
-  AUTH_PREFIX,
   isTunnelHost,
   mountGate,
   normalizeReturnTo,
@@ -26,7 +25,7 @@ describe("isTunnelHost", () => {
 /** A gate API double: every session is valid iff a cookie value is present. */
 function fakeGate(overrides: Partial<AuthGateApi> = {}): AuthGateApi {
   return {
-    basePath: AUTH_PREFIX,
+    basePath: AUTH_BASE_PATH,
     passkeysEnabled: true,
     handler: async () => new globalThis.Response("{}", { status: 200 }),
     session: async (headers) =>
@@ -57,7 +56,7 @@ function mount(opts: Partial<GateOptions> = {}): {
     { gate: fakeGate(), publicDomain: PUBLIC_DOMAIN, ...opts },
     (method, path, handler) => routes.set(`${method} ${path}`, handler),
     (path, handler) => {
-      if (path === AUTH_PREFIX) authMiddleware = handler;
+      if (path === AUTH_BASE_PATH) authMiddleware = handler;
       else middleware = handler;
     },
   );
@@ -159,7 +158,7 @@ describe("gate middleware", () => {
     assert.equal(res.statusCode, 401);
     assert.deepEqual(res.jsonBody, {
       error: "authentication required",
-      loginPath: `${AUTH_PREFIX}?returnTo=%2F`,
+      loginPath: `${AUTH_BASE_PATH}?returnTo=%2F`,
     });
   });
 
@@ -177,7 +176,7 @@ describe("gate middleware", () => {
 
     assert.deepEqual(res.jsonBody, {
       error: "authentication required",
-      loginPath: `${AUTH_PREFIX}?returnTo=${encodeURIComponent("/reports/weekly?team=data")}`,
+      loginPath: `${AUTH_BASE_PATH}?returnTo=${encodeURIComponent("/reports/weekly?team=data")}`,
     });
   });
 
@@ -202,7 +201,7 @@ describe("gate middleware", () => {
     const { middleware } = mount();
     let nexted = false;
     await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
-      makeReq(PUBLIC_DOMAIN, `${AUTH_PREFIX}/status`),
+      makeReq(PUBLIC_DOMAIN, `${AUTH_BASE_PATH}/status`),
       makeRes(),
       () => {
         nexted = true;
@@ -213,7 +212,7 @@ describe("gate middleware", () => {
 
   it("does not treat auth lookalike application routes as open", async () => {
     const { middleware } = mount();
-    for (const path of [`${AUTH_PREFIX}z/private`, `${AUTH_PREFIX}-private`]) {
+    for (const path of [`${AUTH_BASE_PATH}z/private`, `${AUTH_BASE_PATH}-private`]) {
       const req = makeReq(PUBLIC_DOMAIN, path);
       req.headers["x-forwarded-user"] = "spoofed@example.com";
       const res = makeRes();
@@ -261,7 +260,7 @@ describe("gate middleware", () => {
     assert.equal(res.statusCode, 401);
     assert.deepEqual(res.jsonBody, {
       error: "authentication required",
-      loginPath: `${AUTH_PREFIX}?returnTo=%2F`,
+      loginPath: `${AUTH_BASE_PATH}?returnTo=%2F`,
     });
   });
 
@@ -320,7 +319,7 @@ describe("gate middleware", () => {
     const res = makeRes();
     const req = makeReq(
       PUBLIC_DOMAIN,
-      `${AUTH_PREFIX}?returnTo=${encodeURIComponent("/reports/weekly?team=data")}`,
+      `${AUTH_BASE_PATH}?returnTo=${encodeURIComponent("/reports/weekly?team=data")}`,
     );
     req.headers.accept = "text/html";
 
@@ -335,7 +334,7 @@ describe("gate middleware", () => {
     const res = makeRes();
     const req = makeReq(
       PUBLIC_DOMAIN,
-      `${AUTH_PREFIX}?returnTo=${encodeURIComponent("/</script><script>alert(1)</script>")}`,
+      `${AUTH_BASE_PATH}?returnTo=${encodeURIComponent("/</script><script>alert(1)</script>")}`,
     );
     req.headers.accept = "text/html";
 
@@ -370,7 +369,7 @@ describe("gate middleware", () => {
     const { authMiddleware } = mount();
     const res = makeRes();
     await (authMiddleware as (req: Request, res: Response) => Promise<void>)(
-      makeReq("127.0.0.1:6868", `${AUTH_PREFIX}/status`),
+      makeReq("127.0.0.1:6868", `${AUTH_BASE_PATH}/status`),
       res,
     );
     assert.equal(res.statusCode, 200);
@@ -393,7 +392,7 @@ describe("gate middleware", () => {
     for (const path of ["request", "verify", "logout"]) {
       const res = makeRes();
       await Promise.resolve(
-        authMiddleware(makeReq("127.0.0.1:6868", `${AUTH_PREFIX}/${path}`), res, () => {}),
+        authMiddleware(makeReq("127.0.0.1:6868", `${AUTH_BASE_PATH}/${path}`), res, () => {}),
       );
       assert.equal(res.statusCode, 404);
     }
@@ -452,6 +451,6 @@ describe("gate context mounting", () => {
     );
 
     assert.equal(buffered, false);
-    assert.deepEqual(registrations, [`use ${AUTH_PREFIX}`, "use /"]);
+    assert.deepEqual(registrations, [`use ${AUTH_BASE_PATH}`, "use /"]);
   });
 });

@@ -240,11 +240,15 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
   const storage = authStorage.resolveAuthStorageConfig({
     storage:
       config.storage ??
-      (coreConfig.text("AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
-    sqlitePath: config.sqlitePath ?? coreConfig.text("AUTH_SQLITE_PATH", TUNNEL_CONFIG),
+      (coreConfig.text("TUNNEL_AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
+    sqlitePath: config.sqlitePath ?? coreConfig.text("TUNNEL_AUTH_SQLITE_PATH", TUNNEL_CONFIG),
   });
-  const publicDomain = coreConfig.string(config.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG);
-  const frpPublicDomain = coreConfig.text("FRP_PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const publicDomain = coreConfig.string(
+    config.publicDomain,
+    "TUNNEL_PUBLIC_DOMAIN",
+    TUNNEL_CONFIG,
+  );
+  const frpPublicDomain = coreConfig.text("TUNNEL_FRP_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
     // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
@@ -252,28 +256,31 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     // first source that yields anything.
     allow: [
       ...string.parseList(config.allow),
-      ...string.parseList(coreConfig.text(["AUTH_ALLOW", "EMAIL_AUTH_ALLOW"], TUNNEL_CONFIG)),
+      ...string.parseList(coreConfig.text("TUNNEL_AUTH_ALLOW", TUNNEL_CONFIG)),
     ],
-    subject: coreConfig.string(config.subject, "AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
+    subject:
+      coreConfig.string(config.subject, "TUNNEL_AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
     brandName:
-      coreConfig.string(config.brandName, "AUTH_BRAND_NAME", TUNNEL_CONFIG) ?? DEFAULTS.brandName,
-    message: coreConfig.string(config.message, "AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
+      coreConfig.string(config.brandName, "TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG) ??
+      DEFAULTS.brandName,
+    message:
+      coreConfig.string(config.message, "TUNNEL_AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
     sessionTtlSeconds: coreConfig.positiveInt(
       config.sessionTtlSeconds,
-      "AUTH_SESSION_TTL",
+      "TUNNEL_AUTH_SESSION_TTL",
       DEFAULTS.sessionTtlSeconds,
       TUNNEL_CONFIG,
     ),
     codeTtlSeconds: coreConfig.positiveInt(
       config.codeTtlSeconds,
-      "AUTH_CODE_TTL",
+      "TUNNEL_AUTH_CODE_TTL",
       DEFAULTS.codeTtlSeconds,
       TUNNEL_CONFIG,
     ),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
     logoutRedirectPath: passwordlessAuth.normalizeLogoutRedirectPath(
-      coreConfig.string(config.logoutRedirectPath, "AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
+      coreConfig.string(config.logoutRedirectPath, "TUNNEL_AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
         DEFAULTS.logoutRedirectPath,
     ),
     publicDomain,
@@ -286,13 +293,13 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ],
     forwardHeaders: [
       ...string.parseList(config.forwardHeaders),
-      ...string.parseList(coreConfig.text("FORWARD_HEADERS", TUNNEL_CONFIG)),
+      ...string.parseList(coreConfig.text("TUNNEL_FORWARD_HEADERS", TUNNEL_CONFIG)),
     ],
     gatePaths: [
       ...string.parseList(config.gatePaths),
-      ...string.parseList(coreConfig.text("GATE_PATHS", TUNNEL_CONFIG)),
+      ...string.parseList(coreConfig.text("TUNNEL_GATE_PATHS", TUNNEL_CONFIG)),
     ],
-    insecure: coreConfig.boolean(config.insecure, "INSECURE", TUNNEL_CONFIG) ?? false,
+    insecure: coreConfig.boolean(config.insecure, "TUNNEL_INSECURE", TUNNEL_CONFIG) ?? false,
     storage: storage.mode,
     sqlitePath: storage.sqlitePath,
   };
@@ -355,7 +362,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
 
   override async setup(): Promise<void> {
     this.resolved = resolveAuthGateConfig(this.config);
-    if (!this.config.brandName && !coreConfig.text("AUTH_BRAND_NAME", TUNNEL_CONFIG)) {
+    if (!this.config.brandName && !coreConfig.text("TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG)) {
       this.resolved.brandName = appkitBrand.getBrandContext().name;
     }
 

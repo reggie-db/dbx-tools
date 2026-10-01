@@ -61,6 +61,19 @@ When you update docs, README positioning, or agent instructions:
   types directly. When generated types are inconvenient, fix the generator or
   generated export surface instead of adding a handwritten wrapper, mirror,
   `Pick`, or compatibility interface.
+- This monorepo changes in lockstep. Remove obsolete APIs instead of retaining
+  deprecated aliases, constructors, coercions, or re-export shims. Update every
+  in-repo caller in the same change.
+- Consumer feature symbols describe the capability and do not expose the
+  implementation language. Generated binding packages retain their established
+  `-rs` names as implementation bridges; do not create replacement `-native`
+  packages. Internal bridge helpers may use `Rs` or `withRust` when that
+  distinction is useful. Language-specific Projen abstractions keep the
+  conventional `RustProject` and `RustWorkspace` names, like their Node and
+  Python counterparts.
+- Generated bindings, barrels, and bundles are derived artifacts. Fix their
+  owning generator or source and regenerate them; never preserve an obsolete
+  public surface by editing or exempting generated output.
 - Small infrastructure helpers follow the same ownership rule. Projen tasks use
   `@dbx-tools/core` for repository discovery and subprocess execution, and share
   task-specific command policies from one task utility rather than adding local
@@ -504,12 +517,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   only `effect: "destructive"` or the legacy `destructive: true` annotation
   enables the generic approval gate. A tool with stricter policy owns its
   explicit Mastra `requireApproval` setting.
-- `packages/js/node/rust-binary` owns the generated Rust release-command
+- `packages/js/node/rust-binary` owns the generated native release-command
   registry, GitHub release URL selection, exact-version installation through
   `@dbx-tools/core`, and signal-preserving process execution. Runtime packages
   that need a native release binary depend on `@dbx-tools/rust-binary`, not the
-  full CLI graph. `@dbx-tools/cli/rust-binary` remains a compatibility re-export;
-  command registration and argument forwarding stay in `@dbx-tools/cli`.
+  full CLI graph. Command registration and argument forwarding stay in
+  `@dbx-tools/cli`.
 - `packages/js/node/teams`, `packages/js/shared/teams`, and `packages/js/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
@@ -690,8 +703,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   only assets produced by the selected target matrix.
   `@dbx-tools/rust-binary` owns the registry, release URL policy, exact-version
   installation through `@dbx-tools/core` `bin.ensure`, and process forwarding.
-  `@dbx-tools/cli/rust-binary` remains a compatibility re-export. Server
-  plugins import the narrow package directly; do not put product registry or
+  Server plugins import the narrow package directly; do not put product registry or
   release URL policy in core or restore a dependency on the umbrella CLI. Every
   UniFFI crate gets
   dedicated binding packages and never merges generated bindings into a
@@ -701,8 +713,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   module `<scope>.<name>_rs`. Generated Node packages carry
   `dbxToolsConfig.uniffi = true`; generated Python packages carry
   `[tool.dbx_tools.config] uniffi = true`.
-  These are public packages prepared by Rust and published by the Node and Python
-  jobs in `release.yml`. Do not mark them private. Rust release rows need uv only when a
+  These are published implementation packages prepared by Rust for the capability
+  facades. Retain their established identifiers and do not replace them with a
+  parallel package family. The Node and Python jobs publish them in `release.yml`;
+  do not mark them private. Rust release rows need uv only when a
   Python binding exists; they do not install Bun or UBRN because Node facades
   compile later from committed generated TypeScript. `rustVersion` is the package compatibility
   floor written to Cargo manifests; `releaseRustVersion` is the build toolchain
@@ -722,9 +736,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   appear. Never auto-write a documentation baseline in CI.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
-  without a `bindings` namespace. Python keeps an empty `__init__.py`; consumers
-  import generated values from `<scope>.<name>_rs.bindings`. Node generation
-  fails on binding-name conflicts.
+  without a `bindings` namespace. Python package roots export their generated
+  bindings from `__init__.py`, while the generated `bindings` module remains
+  available directly. Node generation fails on binding-name conflicts.
   Stable Windows release rows use the toolchain already installed on the hosted
   runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
   Their workspace build selects `rust-lld`. Both MSVC targets use
@@ -1414,18 +1428,10 @@ its own.
 
 Cross-package contracts that are easy to duplicate by accident:
 
-- `@dbx-tools/shared-model` `openaiResponses.REASONING_TYPES` - the Claude
-  extended-thinking block types. Both wire sanitizers (Responses and Chat
-  Completions) MUST strip the same set; Anthropic signs these blocks, so a
-  replay that mutates one is rejected.
-- Anthropic's "assistant message prefill" rule applies on both wire surfaces.
-  `openaiResponses.repairTrailingAssistantInput` remains a public compatibility
-  helper for TypeScript Responses adapters, while `appkit-mastra` owns
-  `repairAssistantPrefill` for Chat Completions `messages`. The Rust model proxy
+- `appkit-mastra` owns Chat Completions replay repair, including the signed
+  Claude reasoning-part vocabulary and assistant-prefill repair. The model proxy
   uses the `aigw_*` request and response adapters and forwards native Responses
-  input directly; it does not call the TypeScript translator. In either adapter,
-  reasoning stripping must precede prefill repair and neither step may discard
-  an unanswered `function_call` / `tool_calls` turn.
+  input directly. Do not restore a TypeScript Responses translation surface.
 - `@dbx-tools/model` `invoke.*_PATH` / `*Url` - the Databricks serving paths
   (`invocations`, `responses`, `open-responses`, `chat/completions`). Never
   hard-code a `/serving-endpoints/...` string in a consumer.
@@ -2860,9 +2866,8 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   initial history request reads the newest 20 messages; upward scrolling fetches
   and prepends one older native page at a time while preserving scroll position.
   scoped AppKit gate allowlists only those exact native paths. Do not
-  restore a private custom-route agent-context helper. The exported `pagination`
-  module remains deprecated compatibility surface only; new code uses native
-  Mastra pagination inputs.
+  restore a private custom-route agent-context helper or pagination coercion;
+  use native Mastra pagination inputs.
   Regeneration first deletes the persisted user/assistant pair, then replays the
   user message. Persisted suspended runs restore actionable approval cards after
   reloads and server restarts.

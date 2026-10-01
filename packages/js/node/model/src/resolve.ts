@@ -28,7 +28,7 @@ import {
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { rankEndpointsWithRust } from "./_native.ts";
+import { rankEndpoints } from "./_native.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import { endpointSupportsTools } from "./policy.ts";
 import {
@@ -116,7 +116,7 @@ export function lookupModels(
   endpoints: readonly ServingEndpointSummary[],
   query: ModelQuery = {},
 ): RankedModel[] {
-  return rankEndpointsWithRust(endpoints, query);
+  return rankEndpoints(endpoints, query);
 }
 
 /**

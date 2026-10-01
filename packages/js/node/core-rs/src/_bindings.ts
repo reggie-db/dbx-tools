@@ -23,6 +23,20 @@ const uniffiIsDebug =
 // Public interface members begin here.
 
 /**
+ * Derive PostgreSQL's signed 64-bit advisory-lock id from canonical key parts.
+ */
+export function advisoryLockId(canonicalParts: Array<string>): bigint {
+    return FfiConverterInt64.lift(uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_core_fn_func_advisory_lock_id(
+        FfiConverterSequenceString.lower(canonicalParts, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    ));
+    }
+
+/**
  * Trim, sort, and deduplicate scopes for requests and credential identities.
  */
 export function canonicalScopes(scopes: Array<string>): Array<string> {
@@ -232,6 +246,20 @@ export function isDatabricksApp(): boolean {
     return FfiConverterBool.lift(uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
                 return nativeModule().uniffi_dbx_tools_core_fn_func_is_databricks_app(
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    ));
+    }
+
+/**
+ * Detect a Databricks App from a supplied environment map.
+ */
+export function isDatabricksAppEnvironment(environment: Map<string, string>): boolean {
+    return FfiConverterBool.lift(uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_core_fn_func_is_databricks_app_environment(
+        FfiConverterMapStringString.lower(environment, nativeModule().rustbuffer_alloc),
                 callStatus);
             },
             /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
@@ -1190,10 +1218,6 @@ export interface PersistentAuthLike {
  */
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
-/**
- * @deprecated Use `PersistentAuthLike` instead.
- */
-export type PersistentAuthInterface = PersistentAuthLike;
 
 
 /**
@@ -1571,10 +1595,6 @@ export interface ProviderAuthLike {
  */
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
-/**
- * @deprecated Use `ProviderAuthLike` instead.
- */
-export type ProviderAuthInterface = ProviderAuthLike;
 
 
 /**
@@ -2522,10 +2542,6 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
 export interface StorageHandleLike {
 
 }
-/**
- * @deprecated Use `StorageHandleLike` instead.
- */
-export type StorageHandleInterface = StorageHandleLike;
 
 
 /**
@@ -2681,6 +2697,9 @@ function uniffiEnsureInitialized() {
     if (bindingsContractVersion !== scaffoldingContractVersion) {
         throw new UniffiInternalError.ContractVersionMismatch(scaffoldingContractVersion, bindingsContractVersion);
     }
+    if (nativeModule().uniffi_dbx_tools_core_checksum_func_advisory_lock_id() !== 57317) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_advisory_lock_id");
+    }
     if (nativeModule().uniffi_dbx_tools_core_checksum_func_canonical_scopes() !== 62077) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_canonical_scopes");
     }
@@ -2707,6 +2726,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_func_is_databricks_app() !== 52373) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_is_databricks_app");
+    }
+    if (nativeModule().uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment() !== 48341) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_func_parse_address() !== 9538) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_parse_address");

@@ -5,7 +5,6 @@ import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { License, Project, TextFile, TomlFile, javascript, type Task } from "projen";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
-import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { RustReleaseOs } from "./project-rs.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
@@ -88,29 +87,6 @@ export interface DBXToolsRustProjectOptions extends DBXToolsProjectOptions, Rust
   readonly repository?: string;
 }
 
-/**
- * Workspace package compatibility shape.
- *
- * @deprecated Construct {@link DBXToolsRustProject} with flat
- * {@link DBXToolsRustProjectOptions}. Workspace package maps continue to accept
- * this alias until the next major release.
- */
-export type RustPackageOptions = RustCrateOptions & {
-  readonly directory: string;
-};
-
-/**
- * Compatibility for the initial options-object constructor.
- *
- * @deprecated Use flat {@link DBXToolsRustProjectOptions}.
- */
-export interface LegacyDBXToolsRustProjectOptions extends DBXToolsProjectOptions {
-  readonly parent: javascript.NodeProject;
-  readonly root?: string;
-  readonly scope?: string;
-  readonly package: RustPackageOptions;
-}
-
 function rustSources(directory: string): string[] {
   if (!existsSync(directory)) return [];
   const files: string[] = [];
@@ -182,64 +158,9 @@ interface ResolvedRustProjectOptions extends DBXToolsRustProjectOptions {
   readonly workspaceRoot: string;
 }
 
-function legacyRustProjectOptions(
-  parent: javascript.NodeProject,
-  root: string,
-  scope: string,
-  packageOptions: RustPackageOptions,
-): DBXToolsRustProjectOptions {
-  const normalizedScope = string.toSlug(scope);
-  const crateName = `${normalizedScope}-${packageOptions.directory
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")}`;
-  const version =
-    isDBXToolsJavaScriptProject()(parent) && parent.releaseCatalog.mode === "independent"
-      ? parent.releaseCatalog.versionForRegistration(
-          "rust",
-          crateName,
-          `${root}/${packageOptions.directory}`,
-        )
-      : undefined;
-  return {
-    ...packageOptions,
-    parent,
-    outdir: `${root}/${packageOptions.directory}`,
-    name: crateName,
-    directory: packageOptions.directory,
-    workspaceRoot: root,
-    workspace: true,
-    scope: normalizedScope,
-    ...(version ? { version } : {}),
-  };
-}
-
 function resolveRustProjectOptions(
-  parentOrOptions:
-    javascript.NodeProject | DBXToolsRustProjectOptions | LegacyDBXToolsRustProjectOptions,
-  legacyRoot?: string,
-  legacyScope?: string,
-  legacyPackage?: RustPackageOptions,
+  options: DBXToolsRustProjectOptions,
 ): ResolvedRustProjectOptions {
-  let options: DBXToolsRustProjectOptions;
-  if (legacyPackage) {
-    options = legacyRustProjectOptions(
-      parentOrOptions as javascript.NodeProject,
-      legacyRoot ?? "packages/rs",
-      legacyScope ?? (parentOrOptions as javascript.NodeProject).name,
-      legacyPackage,
-    );
-  } else if ("package" in parentOrOptions) {
-    const legacy = parentOrOptions as LegacyDBXToolsRustProjectOptions;
-    options = legacyRustProjectOptions(
-      legacy.parent,
-      legacy.root ?? "packages/rs",
-      legacy.scope ??
-        (isDBXToolsJavaScriptProject()(legacy.parent) ? legacy.parent.scope : legacy.parent.name),
-      legacy.package,
-    );
-  } else {
-    options = parentOrOptions as DBXToolsRustProjectOptions;
-  }
   if (!/^[A-Za-z0-9_][A-Za-z0-9_-]*$/.test(options.name)) {
     throw new Error(`Invalid Cargo package name: ${options.name}`);
   }
@@ -256,7 +177,9 @@ function resolveRustProjectOptions(
   };
 }
 
-function compatibilityPackageOptions(options: ResolvedRustProjectOptions): RustPackageOptions {
+function packageOptions(
+  options: ResolvedRustProjectOptions,
+): RustCrateOptions & { readonly directory: string } {
   return {
     directory: options.directory,
     ...(options.description !== undefined ? { description: options.description } : {}),
@@ -288,41 +211,20 @@ export class RustProject extends Project implements DBXToolsProject {
   readonly crateName: string;
   readonly workspaceRoot: string;
   readonly scope: string;
-  readonly packageOptions: RustPackageOptions;
+  readonly packageOptions: RustCrateOptions & { readonly directory: string };
   readonly uniffi: boolean;
   readonly manifestFile: TomlFile;
   readonly lintTask: Task;
   readonly formatTask: Task;
   readonly formatCheckTask: Task;
 
-  constructor(options: DBXToolsRustProjectOptions);
-  /** @deprecated Use flat {@link DBXToolsRustProjectOptions}. */
-  constructor(options: LegacyDBXToolsRustProjectOptions);
-  /** @deprecated Use flat {@link DBXToolsRustProjectOptions}. */
-  constructor(
-    parent: javascript.NodeProject,
-    root: string,
-    scope: string,
-    options: RustPackageOptions,
-  );
-  constructor(
-    parentOrOptions:
-      javascript.NodeProject | DBXToolsRustProjectOptions | LegacyDBXToolsRustProjectOptions,
-    legacyRoot?: string,
-    legacyScope?: string,
-    legacyPackage?: RustPackageOptions,
-  ) {
-    const options = resolveRustProjectOptions(
-      parentOrOptions,
-      legacyRoot,
-      legacyScope,
-      legacyPackage,
-    );
+  constructor(projectOptions: DBXToolsRustProjectOptions) {
+    const options = resolveRustProjectOptions(projectOptions);
     super({ parent: options.parent, outdir: options.outdir, name: options.name });
     this.crateName = options.name;
     this.workspaceRoot = options.workspaceRoot;
     this.scope = string.toSlug(options.scope ?? options.name.split("-")[0]!);
-    this.packageOptions = compatibilityPackageOptions(options);
+    this.packageOptions = packageOptions(options);
     this.uniffi = hasUniFFIBindings(this.outdir);
     const library = existsSync(join(this.outdir, "src/lib.rs"));
     const binary = existsSync(join(this.outdir, "src/main.rs"));

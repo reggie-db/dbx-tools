@@ -33,9 +33,6 @@ import type { AuthGateApi } from "./plugin.ts";
 
 const logger = log.logger("tunnel:gate");
 
-/** @deprecated Import `AUTH_BASE_PATH` from `@dbx-tools/shared-auth`. */
-export const AUTH_PREFIX = AUTH_BASE_PATH;
-
 /** Segment-aware auth-route predicate owned by `@dbx-tools/shared-auth`. */
 export const isAuthPath = sharedAuth.isAuthPath;
 
@@ -60,7 +57,7 @@ export interface GateOptions {
    * The default gating model assumes a self-protecting SPA: static loads freely
    * so the app can render, and only `/api/*` is gated. An app whose privileged
    * surface is NOT under `/api/` (e.g. a WebSocket at `/ws`) lists those prefixes
-   * here so they are gated too. Login routes (`AUTH_PREFIX`) are always open.
+   * here so they are gated too. Login routes (`AUTH_BASE_PATH`) are always open.
    */
   gatePaths?: readonly string[];
   /** Product name displayed by the hosted login page. */
@@ -165,7 +162,7 @@ export async function sendWebResponse(
  *     ALREADY been rewritten (policy applied, identity injected, session cookie
  *     stripped), so forward it as it now stands.
  *   - `deny` - tunnel traffic with no valid session. Answer `401` with
- *     {@link AUTH_PREFIX} as the login path.
+ *     {@link AUTH_BASE_PATH} as the login path.
  */
 export type GateAction = "pass" | "allow" | "deny";
 
@@ -233,7 +230,7 @@ export async function gateRequest(
 /** The body of a `deny`, shared so both paths answer a 401 identically. */
 export const UNAUTHORIZED_BODY = {
   error: "authentication required",
-  loginPath: AUTH_PREFIX,
+  loginPath: AUTH_BASE_PATH,
 } as const;
 
 /** Restrict a post-login destination to one same-origin application path. */
@@ -266,7 +263,7 @@ export function requestReturnTo(req: IncomingMessage): string {
 
 /** Build the hosted login URL with a validated same-origin return path. */
 export function loginPath(req: IncomingMessage): string {
-  return `${AUTH_PREFIX}?returnTo=${encodeURIComponent(requestReturnTo(req))}`;
+  return `${AUTH_BASE_PATH}?returnTo=${encodeURIComponent(requestReturnTo(req))}`;
 }
 
 /** Build a denied JSON response that preserves the calling page. */
@@ -279,7 +276,7 @@ export function unauthorizedBody(req: IncomingMessage): {
 
 /** Return the validated destination carried by a hosted login URL. */
 export function loginReturnTo(req: IncomingMessage): string {
-  const url = new URL(req.url ?? AUTH_PREFIX, "http://app.local");
+  const url = new URL(req.url ?? AUTH_BASE_PATH, "http://app.local");
   return normalizeReturnTo(url.searchParams.get("returnTo") ?? "/");
 }
 
@@ -288,7 +285,7 @@ export function wantsHostedLogin(req: IncomingMessage): boolean {
   const method = (req.method ?? "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") return false;
   const path = (req.url ?? "/").split("?")[0] ?? "/";
-  return path === AUTH_PREFIX && String(req.headers.accept ?? "").includes("text/html");
+  return path === AUTH_BASE_PATH && String(req.headers.accept ?? "").includes("text/html");
 }
 
 /**
@@ -355,7 +352,7 @@ export function mountGate(
     }
     await sendWebResponse(res, await gate.handler(webRequest(req)));
   }) as RequestHandler;
-  addMiddleware(AUTH_PREFIX, authHandler);
+  addMiddleware(AUTH_BASE_PATH, authHandler);
 
   // --- The gate middleware (runs before static + the app's /api handlers) ---
 

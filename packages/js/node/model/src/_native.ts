@@ -50,7 +50,7 @@ interface NativeRankingOptions {
 }
 
 /** Rank public endpoint records through the Rust-owned model policy. */
-export function rankEndpointsWithRust(
+export function rankEndpoints(
   endpoints: readonly ServingEndpointSummary[],
   query: ModelQuery = {},
   options: NativeRankingOptions = {},
@@ -73,11 +73,11 @@ export function rankEndpointsWithRust(
 }
 
 /** Classify chat and embedding endpoints through the Rust-owned policy. */
-export function classifyEndpointClassesWithRust(
+export function classifyEndpointClasses(
   endpoints: readonly ServingEndpointSummary[],
 ): ReadonlyMap<string, ModelClass> {
-  const chat = rankEndpointsWithRust(endpoints, {}, { includeDeprecated: true });
-  const embeddings = rankEndpointsWithRust(
+  const chat = rankEndpoints(endpoints, {}, { includeDeprecated: true });
+  const embeddings = rankEndpoints(
     endpoints,
     { modelClass: model.ModelClass.Embedding },
     { includeDeprecated: true },
@@ -88,9 +88,7 @@ export function classifyEndpointClassesWithRust(
 }
 
 /** Normalize serialized SDK endpoint records through the Rust-owned catalogue policy. */
-export function normalizeEndpointsWithRust(
-  endpoints: readonly unknown[],
-): ServingEndpointSummary[] {
+export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpointSummary[] {
   return normalizeServingEndpointsJson(JSON.stringify({ endpoints })).map(fromNativeEndpoint);
 }
 

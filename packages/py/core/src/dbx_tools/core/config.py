@@ -10,7 +10,8 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypedDict, TypeVar, cast
-from urllib.parse import urlparse
+
+from dbx_tools.core_rs import is_databricks_app_environment
 
 ConfigKey = str | Sequence[str]
 ConfigData = Mapping[str, object]
@@ -80,30 +81,9 @@ _YAML_NUMBER_PATTERN = re.compile(
 
 def is_databricks_app_env(source: Mapping[str, str | None] | None = None) -> bool:
     values = os.environ if source is None else source
-    override = _to_boolean(values.get(DATABRICKS_APP_ENV_KEY))
-    if override is not None:
-        return override
-    app_name = _trim_to_none(values.get("DATABRICKS_APP_NAME"))
-    host = _trim_to_none(values.get("DATABRICKS_HOST"))
-    port = _trim_to_none(values.get("DATABRICKS_APP_PORT"))
-    if (
-        app_name is None
-        or _INTERPOLATION_PATTERN.search(app_name)
-        or host is None
-        or _INTERPOLATION_PATTERN.search(host)
-        or port is None
-    ):
-        return False
-    try:
-        parsed_host = urlparse(host)
-        if parsed_host.scheme not in {"http", "https"} or not parsed_host.hostname:
-            return False
-    except ValueError:
-        return False
-    normalized_port = port.strip()
-    if re.fullmatch(r"[0-9]+", normalized_port) is None:
-        return False
-    return 1 <= int(normalized_port) <= MAX_TCP_PORT
+    return is_databricks_app_environment(
+        {key: value for key, value in values.items() if value is not None}
+    )
 
 
 def text(input: ConfigKey, options: ConfigOptions | None = None) -> str | None:

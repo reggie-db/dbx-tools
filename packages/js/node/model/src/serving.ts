@@ -27,11 +27,7 @@ import { appkit } from "@dbx-tools/appkit";
 import { error, log } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import {
-  classifyEndpointClassesWithRust,
-  normalizeEndpointsWithRust,
-  rankEndpointsWithRust,
-} from "./_native.ts";
+import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_native.ts";
 
 const { ModelClass } = model;
 
@@ -128,7 +124,7 @@ export async function listServingEndpointsUncached(
   for await (const ep of client.servingEndpoints.list()) {
     endpoints.push(ep);
   }
-  return normalizeEndpointsWithRust(endpoints);
+  return normalizeEndpoints(endpoints);
 }
 
 async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpointSummary[]> {
@@ -147,7 +143,7 @@ async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpo
  * class.
  */
 function stampModelClasses(summaries: ServingEndpointSummary[]): void {
-  const classOf = classifyEndpointClassesWithRust(summaries);
+  const classOf = classifyEndpointClasses(summaries);
   for (const summary of summaries) {
     const cls = classOf.get(summary.name);
     if (cls !== undefined) summary.class = cls;
@@ -264,7 +260,7 @@ export function searchServingEndpoints(
   options: ResolveModelOptions = {},
 ): ScoredEndpoint[] {
   if (endpoints.length === 0 || !input.trim()) return [];
-  return rankEndpointsWithRust(
+  return rankEndpoints(
     endpoints,
     {
       search: input,

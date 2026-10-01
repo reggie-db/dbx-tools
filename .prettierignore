@@ -74,7 +74,7 @@ packages/py/graphiti/pyproject.toml
 bunfig.toml
 Cargo.toml
 LICENSE
-packages/js/node/rust-binary/src/_rust-release-binaries.ts
+packages/js/node/rust-binary/src/_release-binaries.ts
 pyproject.toml
 tsconfig.base.json
 tsconfig.json

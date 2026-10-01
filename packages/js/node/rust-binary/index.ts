@@ -4,5 +4,5 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/rust-binary";
 export const PACKAGE_VERSION = "0.9.4";
-export * as rustBinary from "./src/rust-binary.ts";
+export * as releaseBinary from "./src/release-binary.ts";
 export * from "./exports.ts";

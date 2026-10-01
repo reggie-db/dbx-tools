@@ -3,12 +3,14 @@
 [project]
 name = "dbx-tools-core"
 version = "0.9.4"
-description = "Dependency-free configuration, identity, and mise-backed executable helpers for dbx-tools Python packages"
+description = "Configuration, identity, and mise-backed executable helpers for dbx-tools Python packages"
 readme = "README.md"
 requires-python = ">=3.11,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
-dependencies = [ ]
+dependencies = [
+  "dbx-tools-core-rs @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core-rs"
+]
 
   [project.urls]
   Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/core"

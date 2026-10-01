@@ -160,7 +160,7 @@ export const installPythonBindings = ({
 
     const init = join(packageDirectory, "__init__.py");
     setWritable(init);
-    writeFileSync(init, "");
+    writeFileSync(init, `${generatedHeader(crate)}from .bindings import *\n`);
 
     const nativeLibrary = join(packageDirectory, basename(library));
     setWritable(nativeLibrary);

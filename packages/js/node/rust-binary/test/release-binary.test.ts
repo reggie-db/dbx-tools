@@ -7,14 +7,14 @@ import { describe, it } from "node:test";
 
 import { PACKAGE_VERSION } from "../index.ts";
 import {
-  ensureRustReleaseBinary,
-  runRustReleaseBinary,
-  rustReleaseBinaryAsset,
-  rustReleaseBinaryUrl,
-  type RustReleaseBinaryCommand,
-} from "../src/rust-binary.ts";
+  ensureReleaseBinary,
+  runReleaseBinary,
+  releaseBinaryAsset,
+  releaseBinaryUrl,
+  type ReleaseBinaryCommand,
+} from "../src/release-binary.ts";
 
-const COMMAND: RustReleaseBinaryCommand = {
+const COMMAND: ReleaseBinaryCommand = {
   command: "fixture",
   description: "Run a fixture",
   binaryName: "fixture-bin",
@@ -79,7 +79,11 @@ describe("Rust release binaries", () => {
     const cliReach = internalDependencyReach(manifests, "@dbx-tools/cli");
 
     assert.deepEqual(Object.keys(runtime?.dependencies ?? {}), ["@dbx-tools/core"]);
-    assert.deepEqual([...runtimeReach].sort(), ["@dbx-tools/core", "@dbx-tools/shared-core"]);
+    assert.deepEqual([...runtimeReach].sort(), [
+      "@dbx-tools/core",
+      "@dbx-tools/core-rs",
+      "@dbx-tools/shared-core",
+    ]);
     assert.ok(cliReach.size > runtimeReach.size);
     assert.equal(
       internalDependencyReach(manifests, "@dbx-tools/appkit-graphiti").has("@dbx-tools/cli"),
@@ -88,15 +92,15 @@ describe("Rust release binaries", () => {
   });
 
   it("selects the generated platform archive and builds its release URL", () => {
-    const asset = rustReleaseBinaryAsset(COMMAND, "linux", "x64");
+    const asset = releaseBinaryAsset(COMMAND, "linux", "x64");
 
     assert.equal(asset.name, "fixture-bin-linux-x64-gnu.tar.gz");
     assert.equal(
-      rustReleaseBinaryUrl(COMMAND, asset, "1.2.3"),
+      releaseBinaryUrl(COMMAND, asset, "1.2.3"),
       "https://github.com/example/project/releases/download/rs-fixture-v1.2.3/fixture-bin-linux-x64-gnu.tar.gz",
     );
     assert.throws(
-      () => rustReleaseBinaryAsset(COMMAND, "darwin", "arm64"),
+      () => releaseBinaryAsset(COMMAND, "darwin", "arm64"),
       /no release binary for darwin\/arm64/,
     );
   });
@@ -114,14 +118,14 @@ describe("Rust release binaries", () => {
       );
       await chmod(path, 0o755);
 
-      const installed = await ensureRustReleaseBinary(COMMAND, {
+      const installed = await ensureReleaseBinary(COMMAND, {
         homeDir,
         platform: "linux",
         arch: "x64",
       });
       assert.equal(installed.path, path);
       assert.equal(
-        await runRustReleaseBinary(COMMAND, ["value"], {
+        await runReleaseBinary(COMMAND, ["value"], {
           homeDir,
           platform: "linux",
           arch: "x64",
@@ -150,7 +154,7 @@ describe("Rust release binaries", () => {
         await chmod(path, 0o755);
 
         assert.equal(
-          await runRustReleaseBinary(COMMAND, [], {
+          await runReleaseBinary(COMMAND, [], {
             homeDir,
             platform: "linux",
             arch: "x64",

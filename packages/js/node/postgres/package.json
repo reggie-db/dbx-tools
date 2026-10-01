@@ -30,6 +30,7 @@
     "@databricks/appkit": "catalog:"
   },
   "dependencies": {
+    "@dbx-tools/core-rs": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "pg": "^8.22.0"
   },

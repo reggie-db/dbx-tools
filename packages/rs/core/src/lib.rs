@@ -7,6 +7,7 @@ mod auth;
 pub mod build_info;
 mod client;
 mod credentials;
+mod database;
 mod databricks_cli;
 mod file_cache;
 mod file_lock;
@@ -18,6 +19,7 @@ mod runtime;
 pub use auth::*;
 pub use client::{DatabricksClient, DatabricksClientError};
 pub use credentials::*;
+pub use database::advisory_lock_id;
 pub use databricks_cli::{
     databricks_cli_available, databricks_cli_login, databricks_cli_token, DatabricksCliError,
 };

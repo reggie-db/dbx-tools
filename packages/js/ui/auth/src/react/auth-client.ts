@@ -4,7 +4,7 @@
  */
 
 export {
-  AUTH_BASE,
+  AUTH_BASE_PATH,
   addPasskey,
   beginPasskeyEnrollment,
   beginPasskeySignIn,
@@ -18,4 +18,4 @@ export {
   signInPasskey,
   verifyEmailOtp,
 } from "@dbx-tools/shared-auth/client";
-export type { PasskeyOperation, PasskeySummary } from "@dbx-tools/shared-auth/client";
+export type { Passkey, PasskeyOperation } from "@dbx-tools/shared-auth/client";

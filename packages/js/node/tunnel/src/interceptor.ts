@@ -27,7 +27,7 @@ const logger = log.logger("tunnel:interceptor");
 
 /** Options for {@link tunnelInterceptor} (each also resolvable from env). */
 export interface TunnelInterceptorOptions {
-  /** Tunnel clients to run. Env `DBX_TOOLS_TUNNEL_TRANSPORT`; defaults to `portr`. */
+  /** Tunnel clients to run. Env `TUNNEL_TRANSPORT`; defaults to `portr`. */
   transport?: TunnelTransport;
   /** Public host to serve on. Env `TUNNEL_PUBLIC_DOMAIN`. */
   publicDomain?: string;
@@ -103,8 +103,7 @@ const defaultRuntime: TunnelRuntime = {
 
 /** Resolve and validate the tunnel transport selector. */
 export function resolveTunnelTransport(transport?: string): TunnelTransport {
-  const resolved =
-    transport ?? process.env.DBX_TOOLS_TUNNEL_TRANSPORT ?? process.env.TUNNEL_TRANSPORT ?? "portr";
+  const resolved = transport ?? process.env.TUNNEL_TRANSPORT ?? "portr";
   if (resolved === "portr" || resolved === "frp" || resolved === "both") return resolved;
   throw new TypeError(`invalid tunnel transport: ${resolved} (expected portr, frp, or both)`);
 }

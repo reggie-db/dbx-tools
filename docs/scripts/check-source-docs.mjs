@@ -12,7 +12,7 @@ const GENERATED_PATHS = [
   /\/src\/_bindings(?:-ffi)?\.ts$/,
   /\/src\/bindings\.ts$/,
   /\/src\/dashboards\.ts$/,
-  /\/src\/_rust-release-binaries\.ts$/,
+  /\/src\/_release-binaries\.ts$/,
 ];
 
 function discoverPackages(root) {

@@ -1,5 +1,5 @@
 import {
-  AUTH_BASE,
+  AUTH_BASE_PATH,
   beginPasskeySignIn,
   getAuthStatus,
   requestEmailOtp,
@@ -21,7 +21,7 @@ let email = "";
 let passkeyOperation: PasskeyOperation | undefined;
 let returnTo = document.body.dataset.returnTo || "/";
 
-if (window.location.pathname !== AUTH_BASE) {
+if (window.location.pathname !== AUTH_BASE_PATH) {
   returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 

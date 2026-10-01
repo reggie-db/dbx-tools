@@ -107,10 +107,6 @@ const searchRuntime = runtime.createSearchRuntime({
 const search = tool.searchTool({ runtime: searchRuntime });
 ```
 
-`getSearchRuntime()` remains as a deprecated compatibility constructor and
-returns a new isolated runtime on every call. It does not discover a registered
-plugin or provider.
-
 Use Lakebase full-text search without changing the AppKit UI hook:
 
 ```ts
@@ -315,8 +311,7 @@ default.
   full-text provider.
 - `lakebase` - `LakebaseSearchBackend`, the provider's `tsvector` runtime.
 - `query` - `toDocumentArray`, shared by write routes and tools.
-- `runtime` - `createSearchRuntime` / `setSearchReadBackend` for isolated
-  clients, plus deprecated global-era compatibility names.
+- `runtime` - `createSearchRuntime` / `setSearchReadBackend` for isolated clients.
 - `schema` - the tool descriptions and re-exported request schemas.
 
 Browser-safe schemas live in

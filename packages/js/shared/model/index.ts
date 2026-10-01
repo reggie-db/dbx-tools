@@ -4,15 +4,10 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-model";
 export const PACKAGE_VERSION = "0.9.4";
-export * as classify from "./src/classify.ts";
 export * as display from "./src/display.ts";
 export * as model from "./src/model.ts";
 export * as openaiChat from "./src/openai-chat.ts";
-export * as openaiResponses from "./src/openai-responses.ts";
-export type { EndpointCapabilities, FamilyClass } from "./src/classify.ts";
 export { ModelClass, ReasoningEffortValues, ModelClassSchema, ModelProfileSchema, ReasoningEffortSchema, ModelStatusSchema, ServingEndpointSummarySchema, ModelQuerySchema, RankedModelSchema } from "./src/model.ts";
 export type { ModelProfile, ModelQuery, ModelStatus, RankedModel, ReasoningEffort, ServingEndpointSummary } from "./src/model.ts";
 export { UNSUPPORTED_CHAT_FIELDS } from "./src/openai-chat.ts";
 export type { ChatRole, ChatContentPart, ChatToolCallFunction, ChatToolCall, ChatMessage, ChatContentToTextOptions } from "./src/openai-chat.ts";
-export { REASONING_TYPES } from "./src/openai-responses.ts";
-export type { ResponsesStreamTranslator, ResponsesCitation, ResponsesOutput } from "./src/openai-responses.ts";

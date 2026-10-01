@@ -30,6 +30,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseEnv } from "node:util";
+import { isDatabricksAppEnvironment } from "@dbx-tools/core-rs";
 import { json, log, object, string as sharedString } from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -92,9 +93,6 @@ const NODE_ENV_ALTERNATIVES = {
 /** Highest valid TCP port number. */
 export const MAX_TCP_PORT = 65_535;
 
-/** Boolean environment override for {@link isDatabricksAppEnv}. */
-const DATABRICKS_APP_ENV_KEY = "DBX_TOOLS_DATABRICKS_APP_ENV";
-
 /** Boolean environment override for project `.env` reads. */
 const CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV";
 
@@ -123,24 +121,6 @@ const portValueSchema = z.preprocess((input) => {
 
 const positiveNumberValue = z.preprocess((input) => object.toNumber(input), z.number().positive());
 const positiveIntValue = positiveNumberValue.transform(Math.floor);
-
-const workspaceHostSchema = valueSchema.refine(
-  (host) => {
-    try {
-      const url = new URL(host);
-      return ["http:", "https:"].includes(url.protocol) && url.hostname.length > 0;
-    } catch {
-      return false;
-    }
-  },
-  { message: "Must be an HTTP(S) URL" },
-);
-
-const databricksAppEnvSchema = z.object({
-  DATABRICKS_APP_NAME: valueSchema,
-  DATABRICKS_HOST: workspaceHostSchema,
-  DATABRICKS_APP_PORT: portValueSchema,
-});
 
 /** A named bundle or App resource; concrete resource fields pass through. */
 export const bundleResourceSchema = z.object({ name: valueSchema.optional() }).passthrough();
@@ -271,10 +251,11 @@ export function getBundlePath(data: Record<string, unknown>, path: string): stri
 export function isDatabricksAppEnv(
   source: Record<string, string | undefined> = process.env,
 ): boolean {
-  const override = object.toBoolean(source[DATABRICKS_APP_ENV_KEY]);
-  if (override !== undefined) return override;
-  const parsed = databricksAppEnvSchema.safeParse(source);
-  return parsed.success;
+  return isDatabricksAppEnvironment(
+    new Map(
+      Object.entries(source).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    ),
+  );
 }
 
 /** Exact, uppercase, and tokenized-uppercase names for a human-friendly key. */

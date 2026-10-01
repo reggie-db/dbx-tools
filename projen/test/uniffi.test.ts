@@ -17,6 +17,7 @@ import {
   addExplicitInterfaceReexports,
   addTypeScriptExtensionsToBindingImports,
   makeDefaultedInterfaceParametersOptional,
+  removeObsoleteInterfaceAliases,
 } from "../src/uniffi.ts";
 import {
   installPythonBindings,
@@ -56,6 +57,19 @@ export class Auth implements AuthLike {
         "import ffi from './_bindings-ffi.ts';",
         "import existing from './_bindings.ts';",
       ].join("\n"),
+    );
+  });
+
+  it("removes obsolete generated interface aliases", () => {
+    const source = `export interface AuthLike {}
+/**
+ * @deprecated Use \`AuthLike\` instead.
+ */
+export type AuthInterface = AuthLike;
+export class Auth implements AuthLike {}`;
+    assert.equal(
+      removeObsoleteInterfaceAliases(source),
+      "export interface AuthLike {}\nexport class Auth implements AuthLike {}",
     );
   });
 

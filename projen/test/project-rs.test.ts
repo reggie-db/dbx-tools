@@ -165,36 +165,6 @@ describe("DBXToolsRustProject", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
-
-  it("retains the deprecated positional workspace-member constructor", () => {
-    const directory = mkdtempSync(join(tmpdir(), "project-rs-positional-"));
-    try {
-      mkdirSync(join(directory, "native/core/src"), { recursive: true });
-      writeFileSync(join(directory, "native/core/src/lib.rs"), "pub fn value() {}\n");
-      const parent = new DBXToolsNodeProject({
-        name: "@fixture/root",
-        scope: "fixture",
-        outdir: directory,
-        packageRoots: ["packages/js"],
-        defaultTagMixins: false,
-      });
-      const project = new DBXToolsRustProject(parent, "native", "fixture", {
-        directory: "core",
-      });
-      parent.synth();
-      assert.equal(project.crateName, "fixture-core");
-      assert.deepEqual(
-        (
-          parse(readFileSync(join(directory, "native/core/Cargo.toml"), "utf8")) as {
-            package: Record<string, unknown>;
-          }
-        ).package.version,
-        { workspace: true },
-      );
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
 });
 
 describe("DBXToolsRustWorkspace", () => {
@@ -459,7 +429,7 @@ describe("DBXToolsRustWorkspace", () => {
       });
       const rust = new DBXToolsRustWorkspace(project, {
         root: "native",
-        cliRegistryPath: "packages/js/cli/root/src/_rust-release-binaries.ts",
+        cliRegistryPath: "packages/js/cli/root/src/_release-binaries.ts",
         releasePlatforms: [
           { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
           { os: RustReleaseOs.WINDOWS, cpu: RustReleaseCpu.X64 },
@@ -496,10 +466,10 @@ describe("DBXToolsRustWorkspace", () => {
         },
       ]);
       const registry = readFileSync(
-        join(directory, "packages/js/cli/root/src/_rust-release-binaries.ts"),
+        join(directory, "packages/js/cli/root/src/_release-binaries.ts"),
         "utf8",
       );
-      assert.match(registry, /export const RUST_RELEASE_BINARY_COMMANDS/);
+      assert.match(registry, /export const RELEASE_BINARY_COMMANDS/);
       assert.match(registry, /fixture-tool-linux-x64-gnu\.tar\.gz/);
       assert.doesNotMatch(registry, /win32-x64-msvc/);
     } finally {

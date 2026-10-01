@@ -43,21 +43,3 @@ export function setSearchReadBackend(runtime: SearchRuntime, readBackend: Search
   runtime.readBackend = readBackend;
   runtime.client = createSearchClient(runtime.config, undefined, readBackend);
 }
-
-/**
- * Build an isolated standalone runtime.
- *
- * @deprecated Use {@link createSearchRuntime}. This compatibility helper
- * returns a new runtime on every call and never reads or updates plugin state.
- */
-export function getSearchRuntime(options?: SearchRuntimeOptions): SearchRuntime {
-  return createSearchRuntime(options);
-}
-
-/**
- * @deprecated Plugin runtimes are instance-owned and need no global reset.
- * This compatibility helper is intentionally a no-op.
- */
-export function resetSearchRuntime(): void {
-  return;
-}

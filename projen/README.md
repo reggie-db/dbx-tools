@@ -131,8 +131,8 @@ derives the crate name and repository from the parent project. A crate containin
 `uniffi::setup_scaffolding!()`
 automatically wires matching public Node and Python binding packages using the
 `<name>-rs` folder suffix. Node packages are named `@<scope>/<name>-rs`;
-Python distributions are named `<scope>-<name>-rs` and import generated values
-from `<scope>.<name>_rs.bindings`. Binding packages are always dedicated and
+Python distributions are named `<scope>-<name>-rs` and export generated values
+from `<scope>.<name>_rs`. Binding packages are always dedicated and
 never merge generated code into handwritten Node or Python packages.
 Repository-specific dependencies and features remain
 declarative options in `.projenrc.ts`; generated bindings are built separately
@@ -142,7 +142,8 @@ facades compile to `lib/` and publish JavaScript entry points that plain Node
 can load from `node_modules`. A complete `bindings.ts` / `_bindings.ts` /
 `_bindings-ffi.ts` triplet is exported directly from the generated package
 barrel. Python keeps `bindings.py` as the generated implementation and leaves
-`__init__.py` empty. Node generation fails when direct binding names conflict.
+`__init__.py` as its generated package-root export. Node generation fails when
+direct binding names conflict.
 Do not create a `nodeExports` binding subpath or a handwritten type facade.
 
 Each discovered member is a native Projen `Project`, exposed as
@@ -171,8 +172,7 @@ excluded from ordinary workspace tests until its feature is enabled.
 and keeps aggregate binding and release coordination.
 `DBXToolsRustWorkspaceOptions.private` supplies the default Cargo publication
 policy for every discovered crate; a package-level `private` value overrides it.
-The positional constructor and nested `RustPackageOptions` compatibility shape
-remain deprecated until the next major release.
+Cargo projects use the flat object-style constructor exclusively.
 
 Rust dependencies between binding-enabled workspace crates become Node
 `workspace:*` and Python `internalDependencies` automatically. Python generation
@@ -189,7 +189,8 @@ build has no colliding binary outputs. Packaging runs that prebuilt executable.
 Cargo manifests, target config, and UniFFI config are generated from structured
 Projen `TomlFile` objects. Local and release Python generation share one
 dependency-free helper for generator arguments, target-specific executable
-names, generated headers, empty `__init__.py`, and native-library placement.
+names, generated headers, generated package-root exports, and native-library
+placement.
 
 `sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
 inside an existing UniFFI crate regenerate that crate and its dependent bindings

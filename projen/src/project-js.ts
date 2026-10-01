@@ -957,7 +957,7 @@ function configureBuildWorkflow(
                 "!**/package.json",
                 "!**/pyproject.toml",
                 "!**/index.ts",
-                "!packages/js/node/rust-binary/src/_rust-release-binaries.ts",
+                "!packages/js/node/rust-binary/src/_release-binaries.ts",
                 "!packages/js/node/appkit-graphiti/src/_python-runtime.ts",
               ],
             },

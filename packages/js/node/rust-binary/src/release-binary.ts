@@ -1,5 +1,5 @@
 /**
- * Lazy installation and transparent execution of Rust release binaries.
+ * Lazy installation and transparent execution of native release binaries.
  *
  * @module
  */
@@ -8,17 +8,17 @@ import { constants as osConstants, homedir } from "node:os";
 import { join } from "node:path";
 
 import { bin } from "@dbx-tools/core";
-import { RUST_RELEASE_BINARY_COMMANDS } from "./_rust-release-binaries.ts";
+import { RELEASE_BINARY_COMMANDS } from "./_release-binaries.ts";
 
 /** One release archive available to the current Node runtime. */
-export interface RustReleaseBinaryAsset {
+export interface ReleaseBinaryAsset {
   readonly os: string;
   readonly cpu: string;
   readonly name: string;
 }
 
-/** Generated registration for one `dbx` Rust command. */
-export interface RustReleaseBinaryCommand {
+/** Generated registration for one native `dbx` command. */
+export interface ReleaseBinaryCommand {
   readonly command: string;
   readonly description: string;
   readonly binaryName: string;
@@ -27,26 +27,26 @@ export interface RustReleaseBinaryCommand {
   readonly version: string;
   readonly tag: string;
   readonly repository: string;
-  readonly assets: readonly RustReleaseBinaryAsset[];
+  readonly assets: readonly ReleaseBinaryAsset[];
 }
 
 /** Overrides used by tests and callers that install under a custom home. */
-export interface RustReleaseBinaryOptions {
+export interface ReleaseBinaryOptions {
   readonly homeDir?: string;
   readonly platform?: NodeJS.Platform;
   readonly arch?: string;
   readonly version?: string;
 }
 
-/** Return every Rust command registered by the synthesized workspace. */
-export function rustReleaseBinaryCommands(): readonly RustReleaseBinaryCommand[] {
-  return RUST_RELEASE_BINARY_COMMANDS;
+/** Return every native command registered by the synthesized workspace. */
+export function releaseBinaryCommands(): readonly ReleaseBinaryCommand[] {
+  return RELEASE_BINARY_COMMANDS;
 }
 
-/** Resolve one registered Rust command by its `dbx` subcommand. */
-export function rustReleaseBinaryCommand(command: string): RustReleaseBinaryCommand {
-  const resolved = RUST_RELEASE_BINARY_COMMANDS.find((candidate) => candidate.command === command);
-  if (!resolved) throw new Error(`Unknown Rust release command: ${command}`);
+/** Resolve one registered native command by its `dbx` subcommand. */
+export function releaseBinaryCommand(command: string): ReleaseBinaryCommand {
+  const resolved = RELEASE_BINARY_COMMANDS.find((candidate) => candidate.command === command);
+  if (!resolved) throw new Error(`Unknown native release command: ${command}`);
   return resolved;
 }
 
@@ -54,7 +54,7 @@ function repositoryName(repository: string): string {
   const parsed = new URL(repository.replace(/^git\+/, ""));
   const name = parsed.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/, "");
   if (parsed.hostname !== "github.com" || name.split("/").length !== 2) {
-    throw new Error(`Rust release repository must be a GitHub owner/repository: ${repository}`);
+    throw new Error(`Release repository must be a GitHub owner/repository: ${repository}`);
   }
   return name;
 }
@@ -70,11 +70,11 @@ function versionedBinaryName(
 }
 
 /** Select the archive for an OS and CPU pair. */
-export function rustReleaseBinaryAsset(
-  command: RustReleaseBinaryCommand,
+export function releaseBinaryAsset(
+  command: ReleaseBinaryCommand,
   platform: NodeJS.Platform,
   arch: string,
-): RustReleaseBinaryAsset {
+): ReleaseBinaryAsset {
   const asset = command.assets.find(
     (candidate) => candidate.os === platform && candidate.cpu === arch,
   );
@@ -85,9 +85,9 @@ export function rustReleaseBinaryAsset(
 }
 
 /** Build the GitHub release URL for a generated archive entry. */
-export function rustReleaseBinaryUrl(
-  command: RustReleaseBinaryCommand,
-  asset: RustReleaseBinaryAsset,
+export function releaseBinaryUrl(
+  command: ReleaseBinaryCommand,
+  asset: ReleaseBinaryAsset,
   version = command.version,
 ): string {
   const tag = version === command.version ? command.tag : `${command.component}-v${version}`;
@@ -95,14 +95,14 @@ export function rustReleaseBinaryUrl(
 }
 
 /** Install the registered binary release matching the host platform. */
-export async function ensureRustReleaseBinary(
-  command: RustReleaseBinaryCommand,
-  options: RustReleaseBinaryOptions = {},
+export async function ensureReleaseBinary(
+  command: ReleaseBinaryCommand,
+  options: ReleaseBinaryOptions = {},
 ): Promise<bin.BinContext> {
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
   const version = options.version ?? command.version;
-  const asset = rustReleaseBinaryAsset(command, platform, arch);
+  const asset = releaseBinaryAsset(command, platform, arch);
   const root = join(options.homeDir ?? homedir(), ".dbx-tools");
   const binDir = join(root, "bin");
   const destination: bin.BinContext = {
@@ -110,7 +110,7 @@ export async function ensureRustReleaseBinary(
     binDir,
     path: join(binDir, versionedBinaryName(command.binaryName, version, platform)),
   };
-  return bin.ensure(command.binaryName, () => rustReleaseBinaryUrl(command, asset, version), {
+  return bin.ensure(command.binaryName, () => releaseBinaryUrl(command, asset, version), {
     autoUnpackage: true,
     destination,
     minVersion: version,
@@ -125,13 +125,13 @@ function signalExitCode(signal: NodeJS.Signals): number {
   return 128 + (osConstants.signals[signal] ?? 0);
 }
 
-/** Install and run a Rust command with inherited terminal I/O. */
-export async function runRustReleaseBinary(
-  command: RustReleaseBinaryCommand,
+/** Install and run a native command with inherited terminal I/O. */
+export async function runReleaseBinary(
+  command: ReleaseBinaryCommand,
   args: readonly string[],
-  options: RustReleaseBinaryOptions = {},
+  options: ReleaseBinaryOptions = {},
 ): Promise<number> {
-  const installed = await ensureRustReleaseBinary(command, options);
+  const installed = await ensureReleaseBinary(command, options);
   const child = spawn(installed.path, args, { stdio: "inherit" });
   const signals = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
   const handlers = new Map<NodeJS.Signals, () => void>();

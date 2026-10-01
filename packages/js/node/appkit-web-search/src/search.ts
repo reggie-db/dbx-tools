@@ -30,7 +30,7 @@ import {
 } from "@databricks/appkit";
 import { invoke, resolve, serving } from "@dbx-tools/model";
 import { log, object, string } from "@dbx-tools/shared-core";
-import { openaiChat, openaiResponses } from "@dbx-tools/shared-model";
+import { openaiChat } from "@dbx-tools/shared-model";
 import { MODEL_ENV, SERVING_ENDPOINT_ENV, type ResolvedWebSearchConfig } from "./config.ts";
 import { toCallSettings, webSearchExecuteDefaults } from "./defaults.ts";
 import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider.ts";
@@ -218,15 +218,37 @@ async function postServing(
 /* --------------------------- response extraction --------------------------- */
 
 /**
- * Extract answer text and citations from an OpenAI Responses API payload through
- * the shared reader in `@dbx-tools/shared-model`.
+ * Extract answer text and citations from an OpenAI Responses API payload.
  */
 function fromResponsesPayload(payload: Record<string, unknown>): {
   answer: string;
   citations: WebSearchCitation[];
 } {
-  const { text, citations } = openaiResponses.readResponsesOutput(payload);
-  return { answer: text, citations };
+  const output = Array.isArray(payload.output) ? payload.output : [];
+  const texts: string[] = [];
+  const citations: WebSearchCitation[] = [];
+  const seen = new Set<string>();
+  for (const item of output) {
+    if (!object.isRecord(item)) continue;
+    const parts = openaiChat.chatContentParts(item.content);
+    if (!parts) continue;
+    for (const part of parts) {
+      if (!object.isRecord(part)) continue;
+      const text = string.trimToEmpty(part.text);
+      if (text) texts.push(text);
+      const annotations = Array.isArray(part.annotations) ? part.annotations : [];
+      for (const annotation of annotations) {
+        if (!object.isRecord(annotation)) continue;
+        const url = string.trimToEmpty(annotation.url);
+        if (!url || seen.has(url)) continue;
+        seen.add(url);
+        const title = string.trimToEmpty(annotation.title);
+        citations.push({ url, ...(title ? { title } : {}) });
+      }
+    }
+  }
+  const answer = string.trimToEmpty(payload.output_text) || texts.join("\n").trim();
+  return { answer, citations };
 }
 
 /**

@@ -8,11 +8,12 @@ const APP_PORT: &str = "DATABRICKS_APP_PORT";
 /// Detect whether the current process is running as a Databricks App.
 #[uniffi::export]
 pub fn is_databricks_app() -> bool {
-    is_databricks_app_environment(&std::env::vars().collect())
+    is_databricks_app_environment(std::env::vars().collect())
 }
 
 /// Detect a Databricks App from a supplied environment map.
-pub fn is_databricks_app_environment(environment: &HashMap<String, String>) -> bool {
+#[uniffi::export]
+pub fn is_databricks_app_environment(environment: HashMap<String, String>) -> bool {
     if let Some(override_value) = environment
         .get(APP_ENV_OVERRIDE)
         .and_then(|value| parse_boolean(value))
@@ -104,25 +105,25 @@ mod tests {
 
     #[test]
     fn detects_valid_databricks_app_environment() {
-        assert!(is_databricks_app_environment(&app_environment()));
+        assert!(is_databricks_app_environment(app_environment()));
     }
 
     #[test]
     fn recognized_override_takes_precedence() {
         let mut environment = app_environment();
         environment.insert(APP_ENV_OVERRIDE.into(), "off".into());
-        assert!(!is_databricks_app_environment(&environment));
+        assert!(!is_databricks_app_environment(environment));
 
-        environment.clear();
+        let mut environment = HashMap::new();
         environment.insert(APP_ENV_OVERRIDE.into(), "yes".into());
-        assert!(is_databricks_app_environment(&environment));
+        assert!(is_databricks_app_environment(environment));
     }
 
     #[test]
     fn invalid_override_falls_back_to_structural_detection() {
         let mut environment = app_environment();
         environment.insert(APP_ENV_OVERRIDE.into(), "automatic".into());
-        assert!(is_databricks_app_environment(&environment));
+        assert!(is_databricks_app_environment(environment));
     }
 
     #[test]
@@ -137,7 +138,7 @@ mod tests {
         ] {
             let mut environment = app_environment();
             environment.insert(key.into(), value.into());
-            assert!(!is_databricks_app_environment(&environment));
+            assert!(!is_databricks_app_environment(environment));
         }
     }
 
@@ -156,7 +157,7 @@ mod tests {
         .unwrap();
         for fixture in fixtures {
             assert_eq!(
-                is_databricks_app_environment(&fixture.environment),
+                is_databricks_app_environment(fixture.environment),
                 fixture.detected,
                 "{}",
                 fixture.name

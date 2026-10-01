@@ -437,6 +437,7 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   projectJs.addExports(p, { "./exec": "./src/exec.ts" });
   p.addDeps(
+    "@dbx-tools/core-rs@workspace:^",
     "extract-zip@^2.0.1",
     "proper-lockfile@^4.1.2",
     "tar@^7.5.22",
@@ -607,7 +608,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "vitest@catalog:");
 });
 
-// node-rust-binary: narrow runtime owner for generated Rust release metadata,
+// node-rust-binary: narrow runtime owner for generated native release metadata,
 // atomic installation, and process/signal forwarding.
 project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (p) => {
   p.addDeps("@dbx-tools/core@workspace:^");
@@ -617,7 +618,7 @@ project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (
 // node-postgres: connection-correct Postgres utilities shared by packages.
 // Advisory locks reserve one PoolClient for the full protected callback.
 project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) => {
-  p.addDeps("pg@^8.22.0");
+  p.addDeps("@dbx-tools/core-rs@workspace:^", "pg@^8.22.0");
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
   p.addDevDeps("@types/pg@^8");
 });
@@ -1141,7 +1142,7 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // ---------------------------------------------------------------------------
 const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   rustVersion: "1.89",
-  cliRegistryPath: "packages/js/node/rust-binary/src/_rust-release-binaries.ts",
+  cliRegistryPath: "packages/js/node/rust-binary/src/_release-binaries.ts",
   pythonRoot: PYTHON_ROOT,
   workspaceDependencies: {
     "async-trait": "0.1",
@@ -1358,10 +1359,6 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   },
 });
 
-project.applyToProjects(root, { identifierName: "core-rs", tags: "node" }, (p) => {
-  p.addDevDeps("@dbx-tools/core@workspace:^");
-});
-
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
@@ -1370,7 +1367,8 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
   {
     directory: "core",
     description:
-      "Dependency-free configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
+      "Configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
+    internalDependencies: ["core-rs"],
     dependencies: [],
   },
   {

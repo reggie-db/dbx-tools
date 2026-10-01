@@ -5,7 +5,7 @@ import {
   beginPasskeyEnrollment,
   listPasskeys,
   type PasskeyOperation,
-  type PasskeySummary,
+  type Passkey,
   removePasskey,
   renamePasskey,
 } from "./auth-client.ts";
@@ -16,7 +16,7 @@ export interface PasskeyManagerProps {
 
 /** Authenticated management surface for a user's Better Auth passkeys. */
 export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
-  const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
+  const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);

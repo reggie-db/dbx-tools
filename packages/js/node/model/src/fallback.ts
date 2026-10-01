@@ -18,7 +18,7 @@
 
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import { rankEndpointsWithRust } from "./_native.ts";
+import { rankEndpoints } from "./_native.ts";
 
 type ModelClass = model.ModelClass;
 const { ModelClass } = model;
@@ -57,7 +57,7 @@ const FALLBACK_ENDPOINTS: readonly ServingEndpointSummary[] = FALLBACK_MODEL_NAM
  * {@link ModelClass.Embedding} (the floor is chat-only).
  */
 export function modelsForClass(cls: ModelClass): readonly string[] {
-  return rankEndpointsWithRust(FALLBACK_ENDPOINTS, { modelClass: cls })
+  return rankEndpoints(FALLBACK_ENDPOINTS, { modelClass: cls })
     .filter((ranked) => ranked.modelClass === cls)
     .map((ranked) => ranked.endpoint.name);
 }

@@ -1,13 +1,13 @@
 export {
-  ensureRustReleaseBinary,
-  runRustReleaseBinary,
-  rustReleaseBinaryAsset,
-  rustReleaseBinaryCommand,
-  rustReleaseBinaryCommands,
-  rustReleaseBinaryUrl,
-} from "./src/rust-binary.ts";
+  ensureReleaseBinary,
+  runReleaseBinary,
+  releaseBinaryAsset,
+  releaseBinaryCommand,
+  releaseBinaryCommands,
+  releaseBinaryUrl,
+} from "./src/release-binary.ts";
 export type {
-  RustReleaseBinaryAsset,
-  RustReleaseBinaryCommand,
-  RustReleaseBinaryOptions,
-} from "./src/rust-binary.ts";
+  ReleaseBinaryAsset,
+  ReleaseBinaryCommand,
+  ReleaseBinaryOptions,
+} from "./src/release-binary.ts";

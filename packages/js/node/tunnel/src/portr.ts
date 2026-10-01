@@ -79,7 +79,7 @@ export function resolvePortrConfig(opts: {
 }): PortrConfig | undefined {
   // PORTR_* is upstream portr's own namespace, so it keeps its name.
   const token = config.string(opts.token, "PORTR_TOKEN");
-  const domain = config.string(opts.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const domain = config.string(opts.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   if (!token) return undefined;
   let subdomain = opts.subdomain;
   let server: string | undefined;

@@ -16,11 +16,8 @@ import { emailOTPClient } from "better-auth/client/plugins";
 import { AUTH_BASE_PATH } from "./_route.ts";
 import type { AuthStatus } from "./auth.ts";
 
-/** @deprecated Import `AUTH_BASE_PATH` from `@dbx-tools/shared-auth`. */
-export const AUTH_BASE = AUTH_BASE_PATH;
-
-/** Compatibility name for Better Auth's owned passkey record. */
-export type PasskeySummary = Passkey;
+export { AUTH_BASE_PATH } from "./_route.ts";
+export type { Passkey } from "@better-auth/passkey/client";
 
 interface BrowserLocation {
   readonly origin: string;
@@ -177,7 +174,7 @@ export async function addPasskey(name?: string): Promise<boolean> {
 }
 
 /** List passkeys enrolled for the current authenticated account. */
-export async function listPasskeys(): Promise<PasskeySummary[]> {
+export async function listPasskeys(): Promise<Passkey[]> {
   const result = await client.passkey.listUserPasskeys();
   if (result.error) {
     throw new Error(result.error.message ?? `Passkey listing failed with ${result.error.status}`);
