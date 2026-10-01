@@ -11,7 +11,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
-import { log } from "@dbx-tools/shared-core";
+import { json, log, object } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
 import { generateReleaseSummary } from "./release-summary.ts";
@@ -24,6 +24,8 @@ import {
   type VersionLevel,
 } from "../src/_release-platform.ts";
 import {
+  githubAuthenticatedAccounts,
+  githubRepositoryApiPath,
   githubRepositoryIdentity,
   githubRepositorySpecifier,
   githubTokenArguments,
@@ -115,24 +117,69 @@ function githubAccount(root: string): {
   hostname: string;
   owner: string;
   repository: string;
+  login: string;
   token: string;
 } {
   const repository = project.repositoryUrl(root);
   if (!repository) throw new Error("Release preparation requires a GitHub repository");
   const identity = githubRepositoryIdentity(repository);
-  const token = exec
-    .spawnSync("gh", githubTokenArguments(identity.hostname), {
+  const status = exec
+    .spawnSync("gh", ["auth", "status", "--hostname", identity.hostname, "--json", "hosts"], {
       cwd: root,
       stdout: "capture",
       stderr: "ignore",
       stdin: "ignore",
-      check: true,
+      check: false,
     })
     .stdout?.trim();
-  if (!token) {
-    throw new Error(`No GitHub CLI authentication found for ${identity.hostname}`);
+  const accounts = githubAuthenticatedAccounts(status ?? "", identity.hostname);
+  for (const account of accounts) {
+    const token = exec
+      .spawnSync("gh", githubTokenArguments(identity.hostname, account.login), {
+        cwd: root,
+        stdout: "capture",
+        stderr: "ignore",
+        stdin: "ignore",
+        check: false,
+      })
+      .stdout?.trim();
+    if (!token) continue;
+    const tokenEnvironment = {
+      ...process.env,
+      GH_HOST: identity.hostname,
+      GH_REPO: githubRepositorySpecifier(identity),
+      [githubTokenEnvironmentName(identity.hostname)]: token,
+    };
+    const repositoryResult = exec.spawnSync("gh", ["api", githubRepositoryApiPath(identity)], {
+      cwd: root,
+      env: tokenEnvironment,
+      stdout: "capture",
+      stderr: "ignore",
+      stdin: "ignore",
+      check: false,
+    });
+    const repositoryData =
+      repositoryResult.exitCode === 0 ? json.parseRecord(repositoryResult.stdout ?? "") : undefined;
+    const permissions = object.isRecord(repositoryData?.permissions)
+      ? repositoryData.permissions
+      : undefined;
+    if (
+      permissions?.push !== true &&
+      permissions?.maintain !== true &&
+      permissions?.admin !== true
+    ) {
+      continue;
+    }
+    logger.info("selected GitHub CLI account", {
+      login: account.login,
+      repository: `${identity.owner}/${identity.repository}`,
+    });
+    return { ...identity, login: account.login, token };
   }
-  return { ...identity, token };
+  const detected = accounts.map((account) => account.login).join(", ") || "none";
+  throw new Error(
+    `No authenticated GitHub CLI account can write ${identity.owner}/${identity.repository} on ${identity.hostname}; detected accounts: ${detected}`,
+  );
 }
 
 function releaseSummaryProviders(
@@ -175,10 +222,7 @@ program
     "comma-separated provider order: cursor,codex,claude",
   )
   .option("--no-local-cargo", "skip local Cargo publication")
-  .option(
-    "--no-approve",
-    "open the release pull request without enabling automatic merge",
-  )
+  .option("--no-approve", "open the release pull request without enabling automatic merge")
   .action(
     async (opts: {
       level: VersionLevel;
@@ -358,12 +402,7 @@ program
       };
       ensurePullRequest();
       if (opts.approve) {
-        run(
-          root,
-          "gh",
-          ["pr", "merge", releaseBranch, "--auto", "--merge"],
-          githubEnvironment,
-        );
+        run(root, "gh", ["pr", "merge", releaseBranch, "--auto", "--merge"], githubEnvironment);
       }
       git(root, ["worktree", "remove", "--force", releaseRoot]);
       git(root, ["branch", "--delete", "--force", releaseBranch]);

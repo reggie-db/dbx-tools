@@ -431,23 +431,26 @@ Every repo-wide task lives on the root, and the root's `compile` / `test`
 delegate with `bun run --filter '*'` rather than emitting a step per member - so
 a new package is covered without a re-synth. Work from the root:
 
-| Task                        | What it does                                          |
-| --------------------------- | ----------------------------------------------------- |
-| `bun run build`             | synth + workspace compile and tests                   |
-| `bun run compile`           | `tsc --build` in each member, in parallel             |
-| `bun run test`              | `eslint` once, then each member's tests               |
-| `bun run sync`              | re-synth (`--watch` to keep synthing)                 |
-| `bun run barrels`           | regenerate the read-only `index.ts` barrels           |
-| `bun run bump`              | increment `VERSION` and regenerate version surfaces   |
-| `bun run version:check`     | verify every generated version against `VERSION`      |
-| `bun run release`           | validate, open, and automatically merge a release PR  |
-| `bun run release --no-approve` | open the release PR without automatic merge       |
+| Task                           | What it does                                         |
+| ------------------------------ | ---------------------------------------------------- |
+| `bun run build`                | synth + workspace compile and tests                  |
+| `bun run compile`              | `tsc --build` in each member, in parallel            |
+| `bun run test`                 | `eslint` once, then each member's tests              |
+| `bun run sync`                 | re-synth (`--watch` to keep synthing)                |
+| `bun run barrels`              | regenerate the read-only `index.ts` barrels          |
+| `bun run bump`                 | increment `VERSION` and regenerate version surfaces  |
+| `bun run version:check`        | verify every generated version against `VERSION`     |
+| `bun run release`              | validate, open, and automatically merge a release PR |
+| `bun run release --no-approve` | open the release PR without automatic merge          |
 
 `release` commits and pushes pending source work, creates a release worktree,
 increments `VERSION`, synthesizes manifests and registries, runs validation and
 local publication, writes the release summary, and opens one PR. It enables
 automatic merge unless `--no-approve` is supplied. The merged `VERSION` change
 starts publication from the exact `main` SHA and creates one `v<version>` tag.
+The repository host and owner are derived from the Git remote. If the GitHub CLI
+has multiple accounts for that host, release preparation selects the first
+authenticated account with write access to the detected repository.
 
 The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
 public `BuildWorkflow` `buildTask` option. That task runs synth plus the
