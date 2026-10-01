@@ -43,6 +43,10 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./exec": {
+        "types": "./lib/src/exec.d.ts",
+        "default": "./lib/src/exec.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -51,6 +55,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./exec": "./src/exec.ts",
     "./package.json": "./package.json"
   },
   "files": [

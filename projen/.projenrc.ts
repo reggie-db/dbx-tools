@@ -139,5 +139,11 @@ project.addTask("test:external-consumer", {
   description: "Pack the engine and validate an isolated consumer lifecycle",
   exec: "bun test test/packed-consumer.test.ts",
 });
+const rustReleaseBundle = project.addTask("bundle:rust-release", {
+  description: "Bundle the standalone Node Rust release helper",
+  exec: "bun tasks/build-rust-release.ts",
+});
+project.compileTask.prependSpawn(rustReleaseBundle);
+project.testTask.prependSpawn(rustReleaseBundle);
 project.testTask.exec("bun test test");
 project.synth();

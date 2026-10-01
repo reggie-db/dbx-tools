@@ -384,6 +384,10 @@ jobs:
           rustup target list --installed | grep -Fx "${{ matrix.cargo }}"
           test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.cargo }}/bin/rust-lld.exe"
         shell: bash
+      - name: Install LLVM release tools
+        id: install_llvm_release_tools
+        run: rustup component add llvm-tools-preview
+        shell: bash
       - name: Cache Cargo registry and dependencies
         id: cargo_cache
         uses: Swatinem/rust-cache@v2.9.2
@@ -407,7 +411,7 @@ jobs:
         run: |-
           RUNTIME_MANIFEST="dist/rust-raw/rust-build-${{ matrix.node }}.json"
           mkdir -p "$(dirname "$RUNTIME_MANIFEST")"
-          node .projen/rust-release.mjs fingerprint --output "$RUNTIME_MANIFEST" --target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}" --toolchain "stable" --source "packages/rs"
+          node .projen/rust-release.mjs fingerprint --root . --output "$RUNTIME_MANIFEST" --target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}" --toolchain "stable" --source "packages/rs"
           test "$(jq -r .rustSourceHash "$RUNTIME_MANIFEST")" = "$(jq -r .rustSourceHash .release/rust-build.json)"
           KEY="$(jq -r --arg target "${{ matrix.cargo }}" '.targets[$target] // empty' "$RUNTIME_MANIFEST")"
           test -n "$KEY"

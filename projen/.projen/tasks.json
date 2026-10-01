@@ -28,6 +28,15 @@
         }
       ]
     },
+    "bundle:rust-release": {
+      "name": "bundle:rust-release",
+      "description": "Bundle the standalone Node Rust release helper",
+      "steps": [
+        {
+          "exec": "bun tasks/build-rust-release.ts"
+        }
+      ]
+    },
     "clobber": {
       "name": "clobber",
       "description": "hard resets to HEAD of origin and cleans the local repo",
@@ -77,6 +86,9 @@
       "name": "compile",
       "description": "Only compile",
       "steps": [
+        {
+          "spawn": "bundle:rust-release"
+        },
         {
           "execArgs": [
             "tsc",
@@ -161,6 +173,9 @@
       "name": "test",
       "description": "Run tests",
       "steps": [
+        {
+          "spawn": "bundle:rust-release"
+        },
         {
           "exec": "bun test test"
         }

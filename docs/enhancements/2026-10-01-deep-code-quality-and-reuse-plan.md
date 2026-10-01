@@ -26,6 +26,19 @@ Before each implementation phase, re-inspect the active diff and preserve concur
   parser; local release preparation and the generated release workflow invoke
   the same validator and reject prefixes, embedded versions, prereleases, build
   metadata, and non-increasing tags.
+- **Phase 2 completed on 2026-10-01.** The Rust release helper now has one
+  private TypeScript owner in `@dbx-tools/projen` and one generated standalone
+  Node artifact. It uses `cargo metadata`, structured TOML, Node crypto, and all
+  tracked or unignored files under Cargo-discovered members and configured
+  roots, so embedded assets invalidate reuse while workspace-only version bumps
+  do not. Native stamping selects the format-specific ELF, PE, or Mach-O
+  section, validates the fixed record, updates it through `llvm-objcopy`,
+  preserves modes, and re-signs Mach-O output. Release jobs install
+  `llvm-tools-preview`. The helper takes an explicit root and imports the narrow
+  canonical `@dbx-tools/core/exec` subpath; its bundle fell from 1.1 MB to about
+  60 KB. Its declaration is generated from the same owner. Format, malformed
+  record, missing section, mode, signing, arbitrary-name/root, asset-change,
+  version-only, generated-consumer, and full Projen tests pass.
 
 ## Comparison with the Kanna implementation
 
@@ -53,18 +66,18 @@ These findings were verified against production source. Generated UniFFI files,
 generated barrels, test fixtures, and small test-local command wrappers are not
 counted as violations.
 
-| Area | Repeated implementation | Disposition |
-| --- | --- | --- |
-| Repository/process helpers | `projen/tasks/rust-release.mjs` shells out to `git rev-parse` despite canonical `coreProject.root`; release tasks separately define `run`, `capture`, and `gitCapture` around `@dbx-tools/core.exec`. | Use one Projen task command utility and pass an explicit root into the generated standalone helper. |
-| Lakebase address contracts | AppKit handwrites `SslMode`, `ParsedAddress`, URL/resource parsing, and validation already owned by `packages/rs/core` and generated in `@dbx-tools/core-rs`. | Consume the generated owner and retain compatibility re-exports only. |
-| Model policy/contracts | Shared TypeScript repeats Rust model classes, profiles, status, queries, family classification, quantiles, capabilities, normalization, and fuzzy resolution; Node also retains Fuse. | Complete the generated browser-contract and Rust binding migration in phase 5. |
-| Auth contracts | The auth base path is repeated in tunnel and UI; `SendCodeOptions`, `AuthGateApi`, `PasskeySummary`, and AppKit `PluginData` weaken or copy owning types. | Move the browser-safe route contract to shared auth and alias/re-export owner types. |
-| Node/Fetch bridging | Tunnel and CLI copy request buffering, response headers, cookies, and bodies; input errors currently resolve partial bodies successfully. | Use Better Call's Node adapters with one trusted-origin policy shim. |
-| Common primitives | Tunnel duplicates `shared-core` HTML escaping and email validation; Projen and docs repeat POSIX conversion; docs repeat walkers, heading stripping, YAML quoting, and base-path wrappers. | Import the canonical shared primitive or move docs-only logic into `repository-docs.mjs`. |
-| Plugin execution | Email, Teams, web search, and search repeat registry-backed `ToolProvider` methods; email/Teams/web search repeat the same `execution.run` failure adapter. | Add small AppKit/shared-core adapters where the behavior is identical; keep product-specific messages/configuration as inputs. |
-| Storage migration handling | AppKit cache and AppKit Mastra memory repeat debug checks, ownership-error classification, and warning de-duplication. | Own the common classification/log policy in AppKit and reuse it from Mastra. |
-| Documentation utilities | Multiple docs scripts separately implement file walking, POSIX paths, Markdown H1 removal, YAML string quoting, regex escaping, and package discovery. | Consolidate dependency-free utilities without pulling the Projen runtime into docs validation. |
-| Bounded concurrency | Projen publication, remote-skill staging, and API docs each implement a cursor/worker pool with small semantic differences. | Add one shared async map primitive with explicit ordered-result and settle/fail-fast behavior. |
+| Area                       | Repeated implementation                                                                                                                                                                               | Disposition                                                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Repository/process helpers | `projen/tasks/rust-release.mjs` shells out to `git rev-parse` despite canonical `coreProject.root`; release tasks separately define `run`, `capture`, and `gitCapture` around `@dbx-tools/core.exec`. | Use one Projen task command utility and pass an explicit root into the generated standalone helper.                            |
+| Lakebase address contracts | AppKit handwrites `SslMode`, `ParsedAddress`, URL/resource parsing, and validation already owned by `packages/rs/core` and generated in `@dbx-tools/core-rs`.                                         | Consume the generated owner and retain compatibility re-exports only.                                                          |
+| Model policy/contracts     | Shared TypeScript repeats Rust model classes, profiles, status, queries, family classification, quantiles, capabilities, normalization, and fuzzy resolution; Node also retains Fuse.                 | Complete the generated browser-contract and Rust binding migration in phase 5.                                                 |
+| Auth contracts             | The auth base path is repeated in tunnel and UI; `SendCodeOptions`, `AuthGateApi`, `PasskeySummary`, and AppKit `PluginData` weaken or copy owning types.                                             | Move the browser-safe route contract to shared auth and alias/re-export owner types.                                           |
+| Node/Fetch bridging        | Tunnel and CLI copy request buffering, response headers, cookies, and bodies; input errors currently resolve partial bodies successfully.                                                             | Use Better Call's Node adapters with one trusted-origin policy shim.                                                           |
+| Common primitives          | Tunnel duplicates `shared-core` HTML escaping and email validation; Projen and docs repeat POSIX conversion; docs repeat walkers, heading stripping, YAML quoting, and base-path wrappers.            | Import the canonical shared primitive or move docs-only logic into `repository-docs.mjs`.                                      |
+| Plugin execution           | Email, Teams, web search, and search repeat registry-backed `ToolProvider` methods; email/Teams/web search repeat the same `execution.run` failure adapter.                                           | Add small AppKit/shared-core adapters where the behavior is identical; keep product-specific messages/configuration as inputs. |
+| Storage migration handling | AppKit cache and AppKit Mastra memory repeat debug checks, ownership-error classification, and warning de-duplication.                                                                                | Own the common classification/log policy in AppKit and reuse it from Mastra.                                                   |
+| Documentation utilities    | Multiple docs scripts separately implement file walking, POSIX paths, Markdown H1 removal, YAML string quoting, regex escaping, and package discovery.                                                | Consolidate dependency-free utilities without pulling the Projen runtime into docs validation.                                 |
+| Bounded concurrency        | Projen publication, remote-skill staging, and API docs each implement a cursor/worker pool with small semantic differences.                                                                           | Add one shared async map primitive with explicit ordered-result and settle/fail-fast behavior.                                 |
 
 Similar names that are not violations remain separate: uppercase polling Genie
 statuses versus lowercase Agent Mode terminal statuses; Rust-source UniFFI

@@ -1230,6 +1230,7 @@ function configureRustReleaseTask(project: javascript.NodeProject, plan: RustRel
     description: "Write the version-independent Rust release build manifest",
     exec: [
       `node ${plan.releaseHelper} fingerprint`,
+      "--root .",
       ...plan.targets.map(
         (target) =>
           `--target ${JSON.stringify(`${String(target.cargo)}|${String(target.cargoExcludes ?? "")}`)}`,
@@ -1409,6 +1410,11 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
             },
           ]
         : []),
+      {
+        name: "Install LLVM release tools",
+        shell: "bash",
+        run: "rustup component add llvm-tools-preview",
+      },
       ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${plan.releaseRustVersion}`),
       {
         name: "Install Linux native dependencies",
@@ -1428,7 +1434,7 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
         shell: "bash",
         run: independentSetup
           ? [
-              `node ${plan.releaseHelper} fingerprint --check`,
+              `node ${plan.releaseHelper} fingerprint --check --root .`,
               '--target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}"',
               `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
               `--source ${JSON.stringify(plan.rustRoot)}`,
@@ -1438,7 +1444,7 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
               'RUNTIME_MANIFEST="dist/rust-raw/rust-build-${{ matrix.node }}.json"',
               'mkdir -p "$(dirname "$RUNTIME_MANIFEST")"',
               [
-                `node ${plan.releaseHelper} fingerprint`,
+                `node ${plan.releaseHelper} fingerprint --root .`,
                 '--output "$RUNTIME_MANIFEST"',
                 '--target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}"',
                 `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,

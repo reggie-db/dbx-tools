@@ -432,6 +432,7 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // belongs here because `config.ts` owns both
 // bundle and app.yaml config-source parsing.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
+  projectJs.addExports(p, { "./exec": "./src/exec.ts" });
   p.addDeps(
     "extract-zip@^2.0.1",
     "proper-lockfile@^4.1.2",

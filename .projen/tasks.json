@@ -401,7 +401,7 @@
       "description": "Write the version-independent Rust release build manifest",
       "steps": [
         {
-          "exec": "node .projen/rust-release.mjs fingerprint --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\" --source \"packages/rs\" --portable"
+          "exec": "node .projen/rust-release.mjs fingerprint --root . --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\" --source \"packages/rs\" --portable"
         }
       ]
     },

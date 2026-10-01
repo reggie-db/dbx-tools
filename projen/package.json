@@ -2,6 +2,7 @@
   "name": "@dbx-tools/projen",
   "scripts": {
     "build": "projen build",
+    "bundle:rust-release": "projen bundle:rust-release",
     "clobber": "projen clobber",
     "compile": "projen compile",
     "default": "projen default",
