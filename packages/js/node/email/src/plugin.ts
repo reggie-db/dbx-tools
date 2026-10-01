@@ -29,7 +29,6 @@ import {
   ConnectionError,
   ExecutionError,
   getExecutionContext,
-  Plugin,
   toPlugin,
   ValidationError,
   type AppKitError,
@@ -37,15 +36,8 @@ import {
   type IAppRouter,
   type PluginManifest,
 } from "@databricks/appkit";
-import {
-  defineTool,
-  executeFromRegistry,
-  toolsFromRegistry,
-  type AgentToolDefinition,
-  type ToolProvider,
-  type ToolRegistry,
-} from "@databricks/appkit/beta";
-import { brand as appkitBrand } from "@dbx-tools/appkit";
+import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
+import { brand as appkitBrand, ToolRegistryPlugin } from "@dbx-tools/appkit";
 import { log, string, token } from "@dbx-tools/shared-core";
 import {
   email as sharedEmail,
@@ -95,7 +87,7 @@ const logger = log.logger("email");
  * });
  * ```
  */
-export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvider {
+export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
   static manifest = {
     name: "email",
     displayName: "Email",
@@ -121,7 +113,7 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
    * against the same schema first, but re-parsing is what gives the body typed
    * arguments instead of `unknown`.
    */
-  private readonly tools: ToolRegistry = {
+  protected readonly toolRegistry: ToolRegistry = {
     [SEND_TOOL]: defineTool({
       description: SEND_EMAIL_DESCRIPTION,
       schema: sharedEmail.emailMessageSchema,
@@ -261,20 +253,6 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
        */
       listSenders: async (): Promise<EmailSenders> => unwrap(await this.executeListSenders()),
     };
-  }
-
-  /** AppKit `ToolProvider`: the tool definitions offered to an agent. */
-  getAgentTools(): AgentToolDefinition[] {
-    return toolsFromRegistry(this.tools);
-  }
-
-  /**
-   * AppKit `ToolProvider`: run one tool call. Arguments are validated against
-   * the tool's schema first, and a validation failure comes back as an
-   * LLM-friendly string so the model can correct itself on the next turn.
-   */
-  async executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
-    return executeFromRegistry(this.tools, name, args, signal);
   }
 
   /**

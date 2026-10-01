@@ -22,12 +22,8 @@
  * @module
  */
 
-import {
-  ConfigurationError,
-  ExecutionError,
-  ValidationError,
-  type ExecutionResult,
-} from "@databricks/appkit";
+import { ConfigurationError, ValidationError, type ExecutionResult } from "@databricks/appkit";
+import { execution as appkitExecution } from "@dbx-tools/appkit";
 import { execution, log } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
@@ -146,23 +142,14 @@ export async function executeWrite<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const { execute } = getEmailRuntime();
-  return execution.run({
+  return appkitExecution.runPluginExecution({
+    plugin: "email",
+    logger,
     operation,
     settings,
     execute,
     fn,
     signal,
-    canceled: ExecutionError.canceled,
-    failed: (failure) => {
-      logger.warn("execution-failed", {
-        operation: failure.operation,
-        status: failure.status,
-        error: failure.message,
-      });
-      return new ExecutionError(`email: ${failure.operation} failed`, {
-        context: { operation: failure.operation, status: failure.status },
-      });
-    },
   });
 }
 

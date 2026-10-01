@@ -16,20 +16,13 @@
  */
 
 import {
-  Plugin,
   ResourceType,
   toPlugin,
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import {
-  defineTool,
-  executeFromRegistry,
-  toolsFromRegistry,
-  type AgentToolDefinition,
-  type ToolProvider,
-  type ToolRegistry,
-} from "@databricks/appkit/beta";
+import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
+import { ToolRegistryPlugin } from "@dbx-tools/appkit";
 import { log, string } from "@dbx-tools/shared-core";
 import {
   MODEL_ENV,
@@ -104,7 +97,7 @@ const SERVING_ENDPOINT_RESOURCE = {
  * });
  * ```
  */
-export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements ToolProvider {
+export class WebSearchPlugin extends ToolRegistryPlugin<WebSearchPluginConfig> {
   static manifest = {
     name: "web-search",
     displayName: "Web Search",
@@ -153,7 +146,7 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
    * against the same schema first, but re-parsing is what gives the body typed
    * arguments instead of `unknown`.
    */
-  private readonly tools: ToolRegistry = {
+  protected readonly toolRegistry: ToolRegistry = {
     web_search: defineTool({
       description: WEB_SEARCH_TOOL_DESCRIPTION,
       schema: webSearchRequestSchema,
@@ -200,20 +193,6 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
   /** Abort in-flight work owned by this plugin instance. */
   override abortActiveOperations(): void {
     super.abortActiveOperations();
-  }
-
-  /** AppKit `ToolProvider`: the tool definitions offered to an agent. */
-  getAgentTools(): AgentToolDefinition[] {
-    return toolsFromRegistry(this.tools);
-  }
-
-  /**
-   * AppKit `ToolProvider`: run one tool call. Arguments are validated against
-   * the tool's schema first, and a validation failure comes back as an
-   * LLM-friendly string so the model can correct itself on the next turn.
-   */
-  async executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
-    return executeFromRegistry(this.tools, name, args, signal);
   }
 
   override exports() {

@@ -21,17 +21,9 @@
  * @module
  */
 
-import { Plugin, toPlugin, type IAppRouter, type PluginManifest } from "@databricks/appkit";
-import {
-  aiSearch,
-  defineTool,
-  executeFromRegistry,
-  toolsFromRegistry,
-  type AgentToolDefinition,
-  type ToolProvider,
-  type ToolRegistry,
-} from "@databricks/appkit/beta";
-import { plugin as appkitPlugin } from "@dbx-tools/appkit";
+import { toPlugin, type IAppRouter, type PluginManifest } from "@databricks/appkit";
+import { aiSearch, defineTool, type ToolRegistry } from "@databricks/appkit/beta";
+import { plugin as appkitPlugin, ToolRegistryPlugin } from "@dbx-tools/appkit";
 import { error as sharedError, log, string } from "@dbx-tools/shared-core";
 import { search as sharedSearch, type SearchClientConfig } from "@dbx-tools/shared-search";
 import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
@@ -95,7 +87,7 @@ const INDEX_SYNC_ROUTE = "/index/sync";
  * });
  * ```
  */
-export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProvider {
+export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   static manifest = {
     name: "search",
     displayName: "AI Search",
@@ -125,7 +117,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
    * autoInheritable: every tool runs under the caller's identity, so it must be
    * granted explicitly.
    */
-  private get tools(): ToolRegistry {
+  protected get toolRegistry(): ToolRegistry {
     const { config, readBackend } = this.runtime;
     const registry: ToolRegistry = {
       search: defineTool({
@@ -387,16 +379,6 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       basePath: this.basePath,
     };
     return payload as unknown as Record<string, unknown>;
-  }
-
-  /** AppKit `ToolProvider`: the tool definitions offered to an agent. */
-  getAgentTools(): AgentToolDefinition[] {
-    return toolsFromRegistry(this.tools);
-  }
-
-  /** AppKit `ToolProvider`: run one tool call, validating input against its schema. */
-  async executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
-    return executeFromRegistry(this.tools, name, args, signal);
   }
 
   override exports() {

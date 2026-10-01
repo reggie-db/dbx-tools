@@ -36,20 +36,13 @@
  */
 
 import {
-  Plugin,
   toPlugin,
   type ExecutionResult,
   type IAppRouter,
   type PluginManifest,
 } from "@databricks/appkit";
-import {
-  defineTool,
-  executeFromRegistry,
-  toolsFromRegistry,
-  type AgentToolDefinition,
-  type ToolProvider,
-  type ToolRegistry,
-} from "@databricks/appkit/beta";
+import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
+import { ToolRegistryPlugin } from "@dbx-tools/appkit";
 import { error, log, object, string } from "@dbx-tools/shared-core";
 import { activity as sharedActivity, card } from "@dbx-tools/shared-teams";
 import { verifyBotToken } from "./auth.ts";
@@ -111,7 +104,7 @@ const logger = log.logger("teams");
  * });
  * ```
  */
-export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvider {
+export class TeamsPlugin extends ToolRegistryPlugin<TeamsPluginConfig> {
   static manifest = {
     name: "teams",
     displayName: "Teams",
@@ -143,7 +136,7 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
    * against the same schema first, but re-parsing is what gives the body typed
    * arguments instead of `unknown`.
    */
-  private readonly tools: ToolRegistry = {
+  protected readonly toolRegistry: ToolRegistry = {
     [CREATE_TOOL]: defineTool({
       description: CREATE_CARD_DESCRIPTION,
       schema: card.cardSpecSchema,
@@ -268,20 +261,6 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
       postCard: (cardDocument: card.AdaptiveCard, signal?: AbortSignal): Promise<void> =>
         postCardWithRuntime(this.runtime, cardDocument, signal),
     };
-  }
-
-  /** AppKit `ToolProvider`: the tool definitions offered to an agent. */
-  getAgentTools(): AgentToolDefinition[] {
-    return toolsFromRegistry(this.tools);
-  }
-
-  /**
-   * AppKit `ToolProvider`: run one tool call. Arguments are validated against
-   * the tool's schema first, and a validation failure comes back as an
-   * LLM-friendly string so the model can correct itself on the next turn.
-   */
-  async executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
-    return executeFromRegistry(this.tools, name, args, signal);
   }
 
   /**

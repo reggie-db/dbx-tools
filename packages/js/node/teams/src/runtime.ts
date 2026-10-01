@@ -9,6 +9,7 @@
  */
 
 import { ExecutionError, type ExecutionResult } from "@databricks/appkit";
+import { execution as appkitExecution } from "@dbx-tools/appkit";
 import { execution, log } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import { buildCardResult } from "./builder.ts";
@@ -106,23 +107,14 @@ async function run<T>(
   fn: (signal?: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  return execution.run({
+  return appkitExecution.runPluginExecution({
+    plugin: "teams",
+    logger,
     operation,
     settings,
     execute: runtime.execute,
     fn,
     signal,
-    canceled: ExecutionError.canceled,
-    failed: (failure) => {
-      logger.warn("execution-failed", {
-        operation: failure.operation,
-        status: failure.status,
-        error: failure.message,
-      });
-      return new ExecutionError(`teams: ${failure.operation} failed`, {
-        context: { operation: failure.operation, status: failure.status },
-      });
-    },
   });
 }
 
