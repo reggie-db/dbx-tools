@@ -57,15 +57,15 @@ futures-util = "0.3"
   workspace = true
 
   [dependencies.dbx-tools-core]
-  version = "0.9.9"
+  version = "0.9.10"
   path = "../core"
 
   [dependencies.dbx-tools-model]
-  version = "0.9.9"
+  version = "0.9.10"
   path = "../model"
 
   [dependencies.dbx-tools-service]
-  version = "0.9.9"
+  version = "0.9.10"
   path = "../service"
 
   [dependencies.hdrhistogram]
