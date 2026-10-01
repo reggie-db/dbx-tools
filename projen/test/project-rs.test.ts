@@ -17,6 +17,7 @@ import {
   RustReleaseCpu,
   RustReleaseOs,
 } from "../src/project.ts";
+import { synchronizeCargoLockVersions } from "../src/project-rs.ts";
 
 let outdir: string;
 
@@ -66,6 +67,27 @@ function bindingWorkflow(binding: "node" | "python"): WorkflowDefinition {
 function stepNames(job: WorkflowJob): string[] {
   return job.steps.flatMap((step) => (step.name ? [step.name] : []));
 }
+
+it("updates workspace lock versions without changing registry packages", () => {
+  const lock = [
+    "version = 4",
+    "",
+    "[[package]]",
+    'name = "fixture-core"',
+    'version = "0.1.0"',
+    "",
+    "[[package]]",
+    'name = "external"',
+    'version = "2.0.0"',
+    'source = "registry+https://github.com/rust-lang/crates.io-index"',
+    'checksum = "abc"',
+    "",
+  ].join("\n");
+  assert.equal(
+    synchronizeCargoLockVersions(lock, new Set(["fixture-core"]), "1.2.3"),
+    lock.replace('version = "0.1.0"', 'version = "1.2.3"'),
+  );
+});
 
 describe("DBXToolsRustWorkspace", () => {
   it("imports shared binding contracts through workspace dependencies", () => {

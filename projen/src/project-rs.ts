@@ -1,9 +1,9 @@
 /** Filesystem-discovered Rust workspaces and UniFFI binding package wiring. */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exec, project as coreProject } from "@dbx-tools/core";
+import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Component, Project, TextFile, TomlFile, javascript } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
@@ -287,16 +287,39 @@ function smolTomlSource(name: "dist/index.cjs" | "LICENSE"): string {
   );
 }
 
+/** Update only source-less workspace package entries in Cargo.lock. */
+export function synchronizeCargoLockVersions(
+  content: string,
+  packageNames: ReadonlySet<string>,
+  version: string,
+): string {
+  return content
+    .split("[[package]]")
+    .map((block, index) => {
+      if (index === 0 || /^source = /m.test(block)) return block;
+      const name = /^name = "([^"]+)"$/m.exec(block)?.[1];
+      if (!name || !packageNames.has(name)) return block;
+      return block.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
+    })
+    .join("[[package]]");
+}
+
 /** Keep tracked workspace package versions in Cargo.lock aligned with VERSION. */
 class RustWorkspaceVersionLock extends Component {
+  constructor(
+    project: Project,
+    private readonly packageNames: ReadonlySet<string>,
+    private readonly version: string,
+  ) {
+    super(project);
+  }
+
   public override postSynthesize(): void {
-    exec.spawnSync("cargo", ["metadata", "--format-version", "1"], {
-      cwd: this.project.outdir,
-      stdout: "ignore",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: true,
-    });
+    const path = join(this.project.outdir, "Cargo.lock");
+    if (!existsSync(path)) return;
+    const content = readFileSync(path, "utf8");
+    const next = synchronizeCargoLockVersions(content, this.packageNames, this.version);
+    if (next !== content) writeFileSync(path, next);
   }
 }
 
@@ -1011,7 +1034,11 @@ function configureRustWorkspaceFiles(
       },
     },
   });
-  new RustWorkspaceVersionLock(project);
+  new RustWorkspaceVersionLock(
+    project,
+    new Set(packages.map((pkg) => pkg.crateName)),
+    readWorkspaceVersion(project.outdir),
+  );
 }
 
 function configureRustWorkspaceTasks(project: javascript.NodeProject): void {

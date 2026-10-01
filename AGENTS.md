@@ -2014,6 +2014,9 @@ workflow to finish. Pass `--no-approve` to leave that PR for a human merge or
 repository tests/compile, while `--no-local-publish` skips all local registry
 preflight; both are explicit recovery shortcuts and are never defaults.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
+Version resolution scans both repository `v<version>` tags and historical
+`<component>-v<version>` tags, so the first singular release automatically starts
+above every independently published component version.
 Repository owner and host come from the configured Git remote. When several
 GitHub CLI accounts exist on that host, release preparation probes them in
 active-first order and uses the first token with write access to that repository;
@@ -2412,9 +2415,10 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `!/Cargo.lock` after the broad lockfile ignore. Cargo records canonical
   crates.io package identities and checksums, not this machine's configured
   sparse mirror URL. Rust workspace synthesis refreshes workspace package
-  versions in the lock, and release builds use `--locked` whenever the file
-  exists. This keeps dependency resolution and Rust cache inputs stable across
-  releases.
+  versions by updating only source-less workspace package blocks; it does not
+  invoke Cargo metadata or contact a registry. Release builds use `--locked`
+  whenever the file exists. This keeps dependency resolution and Rust cache
+  inputs stable across releases.
 - **Do not set projen's `workflowPackageCache: true`.** `bun.lock` is not tracked,
   so a lockfile-keyed cache has no stable input. Generated workflows instead use
   the helpers in `bun-workflow.ts`: one `BUN_VERSION` environment value drives

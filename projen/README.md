@@ -451,6 +451,9 @@ starts publication from the exact `main` SHA and creates one `v<version>` tag;
 the command waits for that workflow by default. Use `--no-wait` to return after
 requesting auto-merge, `--no-validate` to skip repository tests/compile, or
 `--no-local-publish` to skip local registry preflight.
+Version resolution considers both repository tags and historical
+`<component>-v<version>` tags, ensuring a singular release starts above every
+component version left by an independent-version migration.
 The repository host and owner are derived from the Git remote. If the GitHub CLI
 has multiple accounts for that host, release preparation selects the first
 authenticated account with write access to the detected repository. Classic
