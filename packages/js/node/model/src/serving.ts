@@ -1,10 +1,10 @@
 /**
  * Live Databricks Model Serving catalogue access.
  *
- * Lists the workspace's `/serving-endpoints` once per host and caches the
- * result with a TTL via AppKit's `CacheManager`, with concurrent callers
- * sharing one in-flight promise (the coalescing pattern of Python's
- * `cachetools-async`). Surfaces each endpoint as a stable
+ * Lists the workspace's `/serving-endpoints` and, when the caller supplies a
+ * trusted credential identity, caches the result per host and identity with a
+ * TTL via AppKit's `CacheManager`. Concurrent callers in the same scope share
+ * one in-flight promise. Surfaces each endpoint as a stable
  * {@link ServingEndpointSummary} - including the Foundation Model API
  * `quality` / `speed` / `cost` profile when present, the classified
  * {@link ModelClass}, and (for embedding endpoints) the measured vector
@@ -21,6 +21,7 @@
  * @module
  */
 
+import { createHash } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { error, log, string } from "@dbx-tools/shared-core";
@@ -56,16 +57,6 @@ export const DEFAULT_FUZZY_THRESHOLD = 0.4;
 /** Cache key parts under which endpoint listings are stored. */
 const CACHE_KEY_NAMESPACE = "serving-endpoints";
 
-/**
- * Stable `userKey` arg for AppKit's `CacheManager.getOrExecute`. Endpoint
- * visibility is effectively workspace-scoped (we cache by host in the key
- * parts), so a single shared key lets every user of the same workspace share
- * one cached fetch and coalesce on the in-flight promise. Permissions can
- * differ in theory, but the Foundation Model API catalogue is the same view for
- * every caller.
- */
-const SHARED_USER_KEY = "model-shared";
-
 /** Options for {@link listServingEndpoints}. */
 export interface ListServingEndpointsOptions {
   /**
@@ -73,6 +64,20 @@ export interface ListServingEndpointsOptions {
    * `CacheManager` as seconds.
    */
   ttlMs?: number;
+  /**
+   * Trusted identity of the credential used by `client`.
+   *
+   * The value is hashed before it enters the cache key and is never logged.
+   * Omit it when the caller cannot prove the credential identity; that call
+   * bypasses shared caching so one principal can never read another's
+   * catalogue.
+   */
+  cacheIdentity?: string;
+}
+
+/** Hash an opaque credential identity before handing it to CacheManager. */
+function cacheUserKey(identity: string): string {
+  return `model-${createHash("sha256").update(identity).digest("hex")}`;
 }
 
 /**
@@ -100,11 +105,12 @@ export async function listServingEndpoints(
   host: string,
   options: ListServingEndpointsOptions = {},
 ): Promise<ServingEndpointSummary[]> {
+  if (!options.cacheIdentity) return fetchEndpoints(client);
   const ttlSec = Math.max(1, Math.round((options.ttlMs ?? DEFAULT_MODEL_CACHE_TTL_MS) / 1000));
   return CacheManager.getInstanceSync().getOrExecute(
     [CACHE_KEY_NAMESPACE, host],
     () => fetchEndpoints(client),
-    SHARED_USER_KEY,
+    cacheUserKey(options.cacheIdentity),
     { ttl: ttlSec },
   );
 }
@@ -280,16 +286,18 @@ function extractProfile(ep: unknown): ModelProfile | undefined {
 }
 
 /**
- * Force-evict cached endpoint listings via AppKit's `CacheManager`. With a
- * `host` deletes that one workspace's entry; without one clears every cache
- * entry on the manager (since `CacheManager` doesn't expose a namespace-scoped
- * clear, this is the brute-force path - fine for tests, avoid in steady-state
- * code).
+ * Force-evict cached endpoint listings via AppKit's `CacheManager`. A host and
+ * identity delete only that principal's workspace entry. Because CacheManager
+ * cannot enumerate a namespace, omitting either value clears the complete
+ * manager and should be reserved for tests or administrative refreshes.
  */
-export async function clearServingEndpointsCache(host?: string): Promise<void> {
+export async function clearServingEndpointsCache(
+  host?: string,
+  cacheIdentity?: string,
+): Promise<void> {
   const cache = CacheManager.getInstanceSync();
-  if (host) {
-    const key = cache.generateKey([CACHE_KEY_NAMESPACE, host], SHARED_USER_KEY);
+  if (host && cacheIdentity) {
+    const key = cache.generateKey([CACHE_KEY_NAMESPACE, host], cacheUserKey(cacheIdentity));
     await cache.delete(key);
   } else {
     await cache.clear();

@@ -23,6 +23,7 @@
  */
 
 import type { IncomingMessage } from "node:http";
+import { AUTH_BASE_PATH, auth as sharedAuth } from "@dbx-tools/shared-auth";
 import { log, token } from "@dbx-tools/shared-core";
 import type { RequestHandler, Response } from "express";
 import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
@@ -36,7 +37,11 @@ type WebRequestInput = IncomingMessage & {
   originalUrl?: string;
 };
 
-export const AUTH_PREFIX = "/api/email/auth";
+/** @deprecated Import `AUTH_BASE_PATH` from `@dbx-tools/shared-auth`. */
+export const AUTH_PREFIX = AUTH_BASE_PATH;
+
+/** Segment-aware auth-route predicate owned by `@dbx-tools/shared-auth`. */
+export const isAuthPath = sharedAuth.isAuthPath;
 
 /** Options for {@link mountGate}. */
 export interface GateOptions {
@@ -217,7 +222,7 @@ export async function gateRequest(
 
   const path = (req.url ?? "/").split("?")[0] ?? "/";
   // The login flow is open so the browser can render <AuthGate> and sign in.
-  if (path.startsWith(AUTH_PREFIX)) return "pass";
+  if (isAuthPath(path)) return "pass";
 
   // Anti-spoof: only the gate may assert identity on tunnel traffic.
   const policy = options.headerPolicy ?? toHeaderPolicy(options.forwardHeaders);
@@ -328,7 +333,7 @@ export function wantsLoginPage(req: IncomingMessage): boolean {
   const method = (req.method ?? "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") return false;
   const path = (req.url ?? "/").split("?")[0] ?? "/";
-  if (path.startsWith(AUTH_PREFIX)) return false;
+  if (isAuthPath(path)) return false;
   const accept = String(req.headers.accept ?? "");
   return accept.includes("text/html");
 }

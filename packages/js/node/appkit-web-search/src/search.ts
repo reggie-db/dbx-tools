@@ -66,6 +66,8 @@ const RATE_LIMITED_STATUS = 429;
 export interface WebSearchContext {
   client: WorkspaceClientLike;
   host: string;
+  /** Trusted identity of the credential carried by `client`. */
+  cacheIdentity?: string;
 }
 
 /**
@@ -77,7 +79,8 @@ export interface WebSearchContext {
 export async function resolveWebSearchContext(): Promise<WebSearchContext> {
   const ctx = getExecutionContext();
   const host = (await ctx.client.config.getHost()).toString();
-  return { client: ctx.client, host };
+  const cacheIdentity = "userId" in ctx ? ctx.userId : ctx.serviceUserId;
+  return { client: ctx.client, host, cacheIdentity };
 }
 
 /**
@@ -104,7 +107,9 @@ async function resolveWebSearchModel(
   config: ResolvedWebSearchConfig,
   requested: string | undefined,
 ): Promise<string | null> {
-  const endpoints = await listServingEndpoints(ctx.client, ctx.host);
+  const endpoints = await listServingEndpoints(ctx.client, ctx.host, {
+    ...(ctx.cacheIdentity ? { cacheIdentity: ctx.cacheIdentity } : {}),
+  });
   // Only deployed, web-search-capable endpoints are candidates.
   const capable = endpoints.filter((e) => supportsWebSearch(e.name));
   const pinned = requested ?? config.model;

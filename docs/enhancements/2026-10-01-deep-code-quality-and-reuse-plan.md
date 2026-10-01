@@ -9,6 +9,17 @@ Prioritize two verified isolation defects, then consolidate Rust release tooling
 
 Before each implementation phase, re-inspect the active diff and preserve concurrent work. Treat the current Projen, Mastra, Better Auth, and compile-reuse edits as work to integrate and validate.
 
+## Progress
+
+- **Phase 1 completed on 2026-10-01.** The auth base path and segment-aware
+  predicate now live in `@dbx-tools/shared-auth`; Express and CLI transports use
+  the shared boundary, auth WebSocket upgrades are rejected, and lookalike
+  application paths remain gated with protected-header stripping. Model
+  catalogue caching now requires an opaque credential identity, hashes that
+  identity before cache use, isolates OBO and service-principal entries, supports
+  scoped eviction, and bypasses shared caching when identity is unknown. AppKit
+  Mastra and web search supply their trusted execution-context identity.
+
 ## Comparison with the Kanna implementation
 
 The Kanna chat completed and its independently validated changes were committed

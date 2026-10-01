@@ -14,7 +14,7 @@
  * @module
  */
 
-import { AUTH_PREFIX } from "./gate.ts";
+import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
 
 export interface LoginPageOptions {
   /** Product/brand name shown in the heading. */
@@ -26,7 +26,7 @@ export interface LoginPageOptions {
 /** The login page HTML for a `text/html` request to a gated path with no session. */
 export function loginPageHtml(options: LoginPageOptions): string {
   const brand = escapeHtml(options.brandName);
-  const prefix = jsonForInlineScript(AUTH_PREFIX);
+  const prefix = jsonForInlineScript(AUTH_BASE_PATH);
   const returnTo = jsonForInlineScript(options.returnTo);
   return `<!doctype html>
 <html lang="en">

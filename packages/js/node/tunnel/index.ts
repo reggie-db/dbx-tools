@@ -19,7 +19,7 @@ export * as signingKey from "./src/signing-key.ts";
 export * as supervisor from "./src/supervisor.ts";
 export type { CodeCopy } from "./src/code-email.ts";
 export type { FrpInstallOptions, FrpConfig } from "./src/frp.ts";
-export { AUTH_PREFIX, UNAUTHORIZED_BODY } from "./src/gate.ts";
+export { AUTH_PREFIX, isAuthPath, UNAUTHORIZED_BODY } from "./src/gate.ts";
 export type { GateOptions, GateAction } from "./src/gate.ts";
 export { PROTECTED_HEADERS, DEFAULT_FORWARD_HEADERS } from "./src/headers.ts";
 export type { HeaderPolicy } from "./src/headers.ts";

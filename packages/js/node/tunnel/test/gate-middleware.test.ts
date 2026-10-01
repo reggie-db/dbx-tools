@@ -210,6 +210,28 @@ describe("gate middleware", () => {
     assert.equal(nexted, true);
   });
 
+  it("does not treat auth lookalike application routes as open", async () => {
+    const { middleware } = mount();
+    for (const path of [`${AUTH_PREFIX}z/private`, `${AUTH_PREFIX}-private`]) {
+      const req = makeReq(PUBLIC_DOMAIN, path);
+      req.headers["x-forwarded-user"] = "spoofed@example.com";
+      const res = makeRes();
+      let nexted = false;
+
+      await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+        req,
+        res,
+        () => {
+          nexted = true;
+        },
+      );
+
+      assert.equal(nexted, false, path);
+      assert.equal(res.statusCode, 401, path);
+      assert.equal(req.headers["x-forwarded-user"], undefined, path);
+    }
+  });
+
   it("lets tunnel STATIC (non-api) through so the SPA can render", async () => {
     const { middleware } = mount();
     let nexted = false;

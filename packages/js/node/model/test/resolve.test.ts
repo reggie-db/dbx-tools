@@ -6,6 +6,8 @@ import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
 import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
 import {
+  clearServingEndpointsCache,
+  listServingEndpoints,
   listServingEndpointsUncached,
   resolveModelId,
   searchServingEndpoints,
@@ -107,6 +109,48 @@ describe("listServingEndpointsUncached model policy", () => {
         },
       ],
     );
+  });
+});
+
+describe("listServingEndpoints cache identity", () => {
+  function catalogue(name: string, calls: { value: number }): WorkspaceClientLike {
+    return {
+      servingEndpoints: {
+        async *list() {
+          calls.value += 1;
+          yield { name, task: CHAT_TASK };
+        },
+      },
+    } as WorkspaceClientLike;
+  }
+
+  it("isolates principals, coalesces one identity, and bypasses when identity is unknown", async () => {
+    await CacheManager.getInstance();
+    const host = `https://identity-${Date.now()}.example.com`;
+    const callsA = { value: 0 };
+    const callsB = { value: 0 };
+    const clientA = catalogue("principal-a-private", callsA);
+    const clientB = catalogue("principal-b-private", callsB);
+
+    const firstA = await listServingEndpoints(clientA, host, { cacheIdentity: "principal-a" });
+    const secondA = await listServingEndpoints(clientA, host, { cacheIdentity: "principal-a" });
+    const firstB = await listServingEndpoints(clientB, host, { cacheIdentity: "principal-b" });
+
+    assert.deepEqual(firstA.map((endpoint) => endpoint.name), ["principal-a-private"]);
+    assert.deepEqual(secondA.map((endpoint) => endpoint.name), ["principal-a-private"]);
+    assert.deepEqual(firstB.map((endpoint) => endpoint.name), ["principal-b-private"]);
+    assert.equal(callsA.value, 1);
+    assert.equal(callsB.value, 1);
+
+    await listServingEndpoints(clientA, host);
+    await listServingEndpoints(clientA, host);
+    assert.equal(callsA.value, 3);
+
+    await clearServingEndpointsCache(host, "principal-a");
+    await listServingEndpoints(clientA, host, { cacheIdentity: "principal-a" });
+    await listServingEndpoints(clientB, host, { cacheIdentity: "principal-b" });
+    assert.equal(callsA.value, 4);
+    assert.equal(callsB.value, 1);
   });
 });
 

@@ -1,9 +1,15 @@
 import { passkeyClient } from "@better-auth/passkey/client";
-import { authLogoutResultSchema, authStatusSchema, type AuthStatus } from "@dbx-tools/shared-auth";
+import {
+  AUTH_BASE_PATH,
+  authLogoutResultSchema,
+  authStatusSchema,
+  type AuthStatus,
+} from "@dbx-tools/shared-auth";
 import { createAuthClient } from "better-auth/client";
 import { emailOTPClient } from "better-auth/client/plugins";
 
-export const AUTH_BASE = "/api/email/auth";
+/** @deprecated Import `AUTH_BASE_PATH` from `@dbx-tools/shared-auth`. */
+export const AUTH_BASE = AUTH_BASE_PATH;
 
 const client = createAuthClient({
   baseURL:

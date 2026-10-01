@@ -105,12 +105,16 @@ export interface ResolvedModelSelection {
 export interface SelectModelInput extends ResolveModelInput {
   /** TTL override for the cached `/serving-endpoints` listing, in ms. */
   ttlMs?: number;
+  /** Trusted opaque identity of the credential used by the workspace client. */
+  cacheIdentity?: string;
 }
 
 /** TTL override merged into a {@link ModelQuery} for {@link searchModels}. */
 export interface SearchModelsInput extends ModelQuery {
   /** TTL override for the cached `/serving-endpoints` listing, in ms. */
   ttlMs?: number;
+  /** Trusted opaque identity of the credential used by the workspace client. */
+  cacheIdentity?: string;
 }
 
 /**
@@ -254,7 +258,10 @@ export async function searchModels(
   const endpoints = await listServingEndpoints(
     client,
     host,
-    input.ttlMs !== undefined ? { ttlMs: input.ttlMs } : {},
+    {
+      ...(input.ttlMs !== undefined ? { ttlMs: input.ttlMs } : {}),
+      ...(input.cacheIdentity !== undefined ? { cacheIdentity: input.cacheIdentity } : {}),
+    },
   );
   return lookupModels(endpoints, input);
 }
@@ -283,6 +290,7 @@ export async function selectModel(
   }
   const endpoints = await listServingEndpoints(client, host, {
     ...(input.ttlMs !== undefined ? { ttlMs: input.ttlMs } : {}),
+    ...(input.cacheIdentity !== undefined ? { cacheIdentity: input.cacheIdentity } : {}),
   });
   return resolveModel(endpoints, input);
 }

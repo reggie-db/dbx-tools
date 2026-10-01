@@ -77,7 +77,12 @@ import type { Pool } from "pg";
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
 import { fetchChart } from "./chart.ts";
 import { agentChatRoutes } from "./chat.ts";
-import { attributedUserId, MASTRA_CONFIG_SCHEMA, type MastraPluginConfig } from "./config.ts";
+import {
+  attributedUserId,
+  executionContextUserId,
+  MASTRA_CONFIG_SCHEMA,
+  type MastraPluginConfig,
+} from "./config.ts";
 import {
   chartFetchDefaults,
   feedbackWriteDefaults,
@@ -1003,10 +1008,15 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    */
   private async listModelsResult(): Promise<ExecutionResult<ServingEndpointSummary[]>> {
     return this.execute(async () => {
-      const client = getExecutionContext().client;
+      const context = getExecutionContext();
+      const client = context.client;
+      const cacheIdentity = executionContextUserId(context);
       const host = (await client.config.getHost()).toString();
       const serving = resolveServingConfig(this.config);
-      return modelServing.listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+      return modelServing.listServingEndpoints(client, host, {
+        ttlMs: serving.ttlMs,
+        cacheIdentity,
+      });
     }, modelCatalogueDefaults);
   }
 
