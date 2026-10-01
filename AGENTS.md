@@ -721,10 +721,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   configuration while normalizing workspace package versions and path
   dependencies. Keep it enabled: a `shared-key` causes the action to ignore its
   separate `key` input, and disabling the environment hash would leave one
-  immutable stale cache per target. `cache-workspace-crates: false` ensures every
-  release recompiles repository code. There is no separate cache workflow and no
-  sccache layer. `Cargo.lock` and `--locked` keep dependency resolution
-  reproducible.
+  immutable stale cache per target. `cache-workspace-crates: true` retains
+  unchanged workspace crate outputs when an exact raw-bundle hit is unavailable;
+  Cargo's source hashing still rebuilds changed crates. There is no separate
+  cache workflow and no GitHub sccache layer: that backend previously exhausted
+  the repository quota with per-object entries. `Cargo.lock` and `--locked` keep
+  dependency resolution reproducible.
   Set
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
