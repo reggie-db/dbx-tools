@@ -27,7 +27,10 @@ pub use lakebase_address::{
     connection_url, parse_address, parse_lakebase_address, parse_resource_path, AddressError,
     ParsedAddress, SslMode,
 };
-pub use log::{init_logging, parse_log_level, LoggingError, DEFAULT_LOG_LEVEL, LOG_LEVEL_ENV};
+pub use log::{
+    init_logging, init_logging_with_verbose, parse_log_level, LoggingError, DEFAULT_LOG_LEVEL,
+    LOG_LEVEL_ENV,
+};
 pub use oauth::*;
 pub use runtime::{is_databricks_app, is_databricks_app_environment, shutdown_signal};
 

@@ -255,16 +255,17 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   OpenAI Embeddings, and live model-list compatibility over Databricks. It depends on `core`
   for credentials and on `model` for cached discovery and ranking. Releases
   publish the crate to Cargo and attach the compiled binary for each selected
-  platform to the GitHub release. It logs payload-free request summaries with
-  model, protocol, status, streaming mode, latency, raw request bytes, a
-  `tokenx-rs` input estimate, reserved output tokens, and the transport peer IP
-  and port. The peer identifies the immediate TCP connection, which can be a
-  local or platform proxy rather than the end user. Token estimation walks
-  model-visible JSON and excludes encrypted reasoning/compaction state,
-  signatures, and embedded image, file, audio, and screenshot payloads.
-  Streaming requests log both connection and body completion; the latter
-  includes response bytes, duration, cancellation/failure state, and translated
-  or pass-through usage when available. Buffered and streamed Chat Completions,
+  platform to the GitHub release. Default info logs contain one compact
+  payload-free completion with resolved model, route or protocol pair,
+  streaming mode, status, and duration. Rate limits, retry exhaustion,
+  transport failures, and upstream 5xx responses log at warn. `-v` /
+  `--verbose` selects debug only when `LOG_LEVEL` is absent. Debug adds the
+  complete request, peer, byte, token, attempt, reservation, and stream fields
+  without logging payloads, credentials, identities, encrypted state, or
+  embedded binary content. Stream connection is debug-only and body completion
+  emits the one normal completion. Token estimation walks model-visible JSON
+  and excludes encrypted reasoning/compaction state, signatures, and embedded
+  image, file, audio, and screenshot payloads. Buffered and streamed Chat Completions,
   Responses, Codex Responses, Anthropic translations, and embeddings reconcile
   process-local input/output reservations with reported actual usage. Native
   pass-through streams observe complete parsed SSE events while forwarding the
@@ -297,11 +298,23 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `--rate-limit-mode` accepts `auto`, `on`, or `off` and defaults to `auto`.
   Auto mode starts with TPM admission disabled for each workspace/model key and
   activates it only after that key receives a 429 whose message contains
-  `Exceeded workspace input tokens`, case-insensitively. Every upstream attempt,
+  `Exceeded workspace input tokens`, case-insensitively. Activation applies a
+  5,000-basis-point input rolling-budget penalty; repeated matching 429s add
+  2,500 up to 9,000. Recovery requires ten minutes since the latest signal plus
+  ten upstream 2xx responses, then removes 1,000 basis points at most once per
+  five minutes and ten further successes. Zero penalty enters one full-budget
+  probation interval before deactivation. Idle time alone does not relax a key,
+  and a renewed signal tightens or reactivates immediately. Keep this state
+  process-local and memory-only. It is congestion response, not complete
+  workspace or account quota ownership. Every upstream attempt,
   including retries after automatic activation, acquires one token reservation;
   rejected or failed attempts release it. An active queue rejects an input
-  estimate above its complete per-minute budget with a structured local 429
-  instead of clamping it. Callers can override the budgets through
+  estimate above its complete per-request ceiling with a structured local 429
+  instead of clamping it. Adaptive penalties reduce only the rolling input
+  budget. A request within the complete ceiling but above the adaptive budget
+  can run alone in an empty window. Output admission remains at the complete
+  budget. Unknown input limits do not create an active no-op state. Callers can
+  override the budgets through
   `INPUT_TOKENS_PER_MINUTE` /
   `OUTPUT_TOKENS_PER_MINUTE` or matching flags. Explicit `off` and
   `PROVISIONED_THROUGHPUT=true` / `--provisioned-throughput` prevent activation;
@@ -319,7 +332,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   local token window, or uses a conservative 60-second fallback when local
   history cannot explain the workspace limit. Other 429s use BackON jittered
   exponential delay from one second to one minute. Exhaustion logs no future
-  unslept delay. `/healthz` exposes process-local activation, wait, oversized,
+  unslept delay. `/healthz` exposes process-local activation, tightening,
+  relaxation, deactivation, reactivation, active/probation key, wait, oversized,
   post-admission 429, retry-reacquisition, and fallback-delay counters. Log a
   returned `error.message` on every 429, including the final attempt. Use five
   request retries by default.
@@ -332,6 +346,35 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `DatabricksClient`. The binary resolves one client at startup, so an App uses
   App SP unless a host integration explicitly constructs request-scoped OBO
   clients.
+  The normal release binary enables the `metrics-ui` Cargo feature and defaults
+  `METRICS` / `--metrics` to `ui`. `collect` retains bounded JSON, SSE, and
+  Prometheus machine endpoints without UI routes; `off` / `false` removes
+  collection and routes; `true` selects the fullest compiled mode. Mount
+  `/metrics`, `/metrics/snapshot`, `/metrics/events`, and
+  `/metrics/prometheus` on the existing Axum listener only. A non-loopback bind
+  returns 404 for metrics routes unless `METRICS_PUBLIC=true` or
+  `--metrics-public` explicitly acknowledges exposure. Forwarded headers never
+  bypass this guard. Retain five-second buckets for one hour, one-minute
+  rollups for 24 hours, 32 named model series plus `other`, and at most 16 MiB
+  in process memory. Do not retain request events or identities and do not write
+  history to disk. The embedded vanilla dashboard uses snapshot JSON plus SSE,
+  canonical generated brand tokens, model and outcome filters, request, token,
+  and latency line graphs. GridStack owns drag-and-drop placement and widget resizing; do not
+  restore a separate compact/full-detail mode or hand-roll grid interactions.
+  SSE carries aggregate summaries only; model selection fetches
+  `/metrics/snapshot?model=<resolved-model>` so one bounded model history does
+  not multiply every five-second event by all retained models.
+  Persist only bounded widget geometry in browser `localStorage` and synchronize
+  it across tabs; the icon-only reset control restores and persists the canonical
+  layout. Never put metric history or request data there. A proxy owns one
+  startup workspace, so never add a workspace selector to this process-local UI.
+  Committed assets are validated by
+  `bun run model-proxy:metrics-assets`. Rust release rows embed those assets
+  without Bun. Only content-addressed assets use immutable caching; `app.js` and
+  every other stable-name asset revalidate. `metrics` and `metrics-ui` remain additive optional features; a
+  metrics-free build contains no recorder, histogram, exporter, or UI assets.
+  Persistence remains a later optional phase and must not be added to the
+  default release without operational evidence.
   `dbx model-proxy` downloads and runs the release asset matching the installed
   `@dbx-tools/cli` version and host platform.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback

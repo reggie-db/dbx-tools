@@ -225,6 +225,15 @@
         }
       ]
     },
+    "model-proxy:metrics-assets": {
+      "name": "model-proxy:metrics-assets",
+      "description": "Validate embedded model-proxy dashboard assets and brand tokens",
+      "steps": [
+        {
+          "exec": "bun scripts/model-proxy-metrics-assets.mjs"
+        }
+      ]
+    },
     "model:metadata": {
       "name": "model:metadata",
       "description": "Refresh committed model retirement, capability, and rate-limit snapshots",
@@ -326,7 +335,7 @@
       "description": "Prepare, validate, locally publish, and automatically merge a release PR",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"rs:release-fingerprint\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"model-proxy:metrics-assets\" --validate-task \"rs:release-fingerprint\"",
           "receiveArgs": true
         }
       ]
@@ -399,6 +408,9 @@
         },
         {
           "spawn": "test:installer"
+        },
+        {
+          "spawn": "model-proxy:metrics-assets"
         },
         {
           "exec": "bun run --filter '*' test"

@@ -2,10 +2,21 @@
 
 use std::{net::SocketAddr, num::NonZeroUsize, time::Instant};
 
+#[cfg(feature = "metrics")]
+use std::convert::Infallible;
+
+#[cfg(feature = "metrics-ui")]
+use axum::extract::Path;
+#[cfg(feature = "metrics")]
+use axum::response::{
+    sse::{Event, KeepAlive},
+    Sse,
+};
 use axum::{
     body::Bytes,
-    extract::{ConnectInfo, DefaultBodyLimit, Query, State},
+    extract::{ConnectInfo, DefaultBodyLimit, Query, Request, State},
     http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -23,19 +34,23 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::info;
 
+#[cfg(feature = "metrics-ui")]
+use crate::metrics::{dashboard_asset, MetricsMode};
 use crate::{
     adapt::{adapt_request, adapt_response, select_request_target, upstream_path},
+    adaptive::{AutoTransition, AutoTransitionKind},
     error::ProxyError,
     images::normalize_embedded_images,
+    metrics::{MetricsRuntime, PeerAddr},
     protocol::{is_codex_originator, ClientWire, TargetWire},
     rate_limit::{
         rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
     },
-    request_log::RequestLogContext,
+    request_log::{RequestLogContext, RequestLogMetadata},
     stream::{stream_response, StreamLogContext},
     throttle::{
-        is_input_limit_message, response_token_usage, RequestThrottle, ResponseTokenUsage,
-        ThrottleAcquisition, ThrottleConfig, TokenEstimate,
+        is_input_limit_message, response_token_usage, AutoActivation, RequestThrottle,
+        ResponseTokenUsage, ThrottleAcquisition, ThrottleConfig, TokenEstimate,
     },
 };
 
@@ -52,6 +67,15 @@ pub(crate) struct AppState {
     throttle: RequestThrottle,
     image_resize_threshold_bytes: usize,
     rate_limits: RateLimitGate,
+    metrics: MetricsRuntime,
+}
+
+pub(crate) struct AppConfig {
+    pub(crate) target: TargetWire,
+    pub(crate) throttle: ThrottleConfig,
+    pub(crate) image_resize_threshold_bytes: usize,
+    pub(crate) rate_limits: RateLimitPolicy,
+    pub(crate) metrics: MetricsRuntime,
 }
 
 impl AppState {
@@ -59,21 +83,19 @@ impl AppState {
         capabilities: ModelCapabilitiesResolver,
         databricks: DatabricksClient,
         models: ModelClient,
-        target: TargetWire,
-        throttle_config: ThrottleConfig,
-        image_resize_threshold_bytes: usize,
-        rate_limit_policy: RateLimitPolicy,
+        config: AppConfig,
     ) -> Self {
-        let throttle = RequestThrottle::new(databricks.host(), throttle_config);
-        let rate_limits = RateLimitGate::new(rate_limit_policy);
+        let throttle = RequestThrottle::new(databricks.host(), config.throttle);
+        let rate_limits = RateLimitGate::new(config.rate_limits);
         Self {
             capabilities,
             databricks,
             models,
-            target,
+            target: config.target,
             throttle,
-            image_resize_threshold_bytes,
+            image_resize_threshold_bytes: config.image_resize_threshold_bytes,
             rate_limits,
+            metrics: config.metrics,
         }
     }
 }
@@ -96,6 +118,7 @@ struct UpstreamControls<'a> {
     client: &'a DatabricksClient,
     rate_limits: &'a RateLimitGate,
     throttle: &'a RequestThrottle,
+    metrics: &'a MetricsRuntime,
 }
 
 struct UpstreamRequest<'a> {
@@ -115,14 +138,15 @@ struct UpstreamResult {
 }
 
 pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router {
-    Router::new()
+    let metrics = state.metrics.clone();
+    let mut router = Router::new()
         .route("/healthz", get(health))
         .route("/v1/models", get(list_models))
         .route("/v1/embeddings", post(embeddings))
         .route(
             "/v1/chat/completions",
             post(
-                |ConnectInfo(peer): ConnectInfo<SocketAddr>,
+                |ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
                  State(state): State<AppState>,
                  headers: HeaderMap,
                  body: Bytes| async move {
@@ -133,7 +157,7 @@ pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router
         .route(
             "/v1/responses",
             post(
-                |ConnectInfo(peer): ConnectInfo<SocketAddr>,
+                |ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
                  State(state): State<AppState>,
                  headers: HeaderMap,
                  body: Bytes| async move {
@@ -144,24 +168,49 @@ pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router
         .route(
             "/v1/messages",
             post(
-                |ConnectInfo(peer): ConnectInfo<SocketAddr>,
+                |ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
                  State(state): State<AppState>,
                  headers: HeaderMap,
                  body: Bytes| async move {
                     proxy(state, ClientWire::Anthropic, peer, headers, body).await
                 },
             ),
-        )
-        .layer(DefaultBodyLimit::max(max_request_bytes.get()))
-        .with_state(state)
+        );
+    if metrics.collection_enabled() {
+        router = router
+            .route("/metrics/snapshot", get(metrics_snapshot))
+            .route("/metrics/events", get(metrics_events))
+            .route("/metrics/prometheus", get(metrics_prometheus));
+    }
+    #[cfg(feature = "metrics-ui")]
+    if metrics.ui_enabled() {
+        router = router
+            .route("/metrics", get(metrics_index))
+            .route("/metrics/", get(metrics_index))
+            .route("/metrics/{*path}", get(metrics_asset));
+    }
+    router = router.layer(DefaultBodyLimit::max(max_request_bytes.get()));
+    if metrics.collection_enabled() {
+        router = router.layer(middleware::from_fn_with_state(
+            metrics.clone(),
+            track_active_request,
+        ));
+    }
+    router.with_state(state)
 }
 
 async fn health(State(state): State<AppState>) -> Json<Value> {
-    let counters = state.throttle.counters();
+    let counters = state.throttle.counters().await;
     Json(json!({
         "status": "ok",
         "rateLimits": {
             "automaticActivations": counters.automatic_activations,
+            "automaticTightenings": counters.automatic_tightenings,
+            "automaticRelaxations": counters.automatic_relaxations,
+            "automaticDeactivations": counters.automatic_deactivations,
+            "automaticReactivations": counters.automatic_reactivations,
+            "autoActiveKeys": counters.auto_active_keys,
+            "autoProbationKeys": counters.auto_probation_keys,
             "admissionWaits": counters.admission_waits,
             "oversizedRejections": counters.oversized_rejections,
             "input429AfterAdmission": counters.input_429_after_admission,
@@ -171,8 +220,154 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
     }))
 }
 
+async fn track_active_request(
+    State(metrics): State<MetricsRuntime>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if request.uri().path().starts_with("/metrics") {
+        return next.run(request).await;
+    }
+    metrics.request_started();
+    let _active_request = ActiveRequestGuard(metrics);
+    next.run(request).await
+}
+
+struct ActiveRequestGuard(MetricsRuntime);
+
+impl Drop for ActiveRequestGuard {
+    fn drop(&mut self) {
+        self.0.request_finished();
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct MetricsSnapshotQuery {
+    model: Option<String>,
+}
+
+async fn metrics_snapshot(
+    State(state): State<AppState>,
+    Query(query): Query<MetricsSnapshotQuery>,
+) -> Response {
+    if !state.metrics.routes_visible() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let model = query
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|model| !model.is_empty());
+    let snapshot = model.map_or_else(
+        || state.metrics.snapshot(),
+        |model| state.metrics.snapshot_for_model(model),
+    );
+    (
+        [(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))],
+        Json(snapshot),
+    )
+        .into_response()
+}
+
+async fn metrics_prometheus(State(state): State<AppState>) -> Response {
+    if !state.metrics.routes_visible() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(payload) = state.metrics.prometheus() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    (
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),
+            ),
+            (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
+        ],
+        payload,
+    )
+        .into_response()
+}
+
+async fn metrics_events(State(state): State<AppState>) -> Response {
+    if !state.metrics.routes_visible() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    #[cfg(feature = "metrics")]
+    {
+        let Some(mut receiver) = state.metrics.subscribe() else {
+            return StatusCode::NOT_FOUND.into_response();
+        };
+        let initial = serde_json::to_string(&state.metrics.snapshot()).ok();
+        let stream = async_stream::stream! {
+            if let Some(initial) = initial {
+                yield Ok::<Event, Infallible>(Event::default().event("snapshot").data(initial));
+            }
+            loop {
+                match receiver.recv().await {
+                    Ok(payload) => {
+                        yield Ok(Event::default().event("snapshot").data(payload));
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        };
+        Sse::new(stream)
+            .keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(15)))
+            .into_response()
+    }
+    #[cfg(not(feature = "metrics"))]
+    StatusCode::NOT_FOUND.into_response()
+}
+
+#[cfg(feature = "metrics-ui")]
+async fn metrics_index(State(state): State<AppState>) -> Response {
+    embedded_metrics_asset(&state.metrics, "index.html")
+}
+
+#[cfg(feature = "metrics-ui")]
+async fn metrics_asset(State(state): State<AppState>, Path(path): Path<String>) -> Response {
+    embedded_metrics_asset(&state.metrics, &path)
+}
+
+#[cfg(feature = "metrics-ui")]
+fn embedded_metrics_asset(metrics: &MetricsRuntime, path: &str) -> Response {
+    if !metrics.routes_visible() || metrics.mode() != MetricsMode::Ui {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(asset) = dashboard_asset(path) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let cache_control = if asset.immutable {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache"
+    };
+    (
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static(asset.content_type),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(cache_control),
+            ),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                HeaderValue::from_static(
+                    "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'",
+                ),
+            ),
+        ],
+        asset.body,
+    )
+        .into_response()
+}
+
 async fn list_models(
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
     State(state): State<AppState>,
     Query(query): Query<ModelsQuery>,
     headers: HeaderMap,
@@ -206,20 +401,26 @@ async fn list_models(
         .unwrap_or_default();
     info!(
         route = "/v1/models",
+        status = StatusCode::OK.as_u16(),
+        duration_ms = started.elapsed().as_millis(),
+        "model request completed"
+    );
+    tracing::debug!(
+        route = "/v1/models",
         format = if codex { "codex" } else { "openai" },
         search = query.search.as_deref().unwrap_or_default(),
         extended = query.extended,
         models = count,
         client_ip = %peer.ip(),
         client_port = peer.port(),
-        latency_ms = started.elapsed().as_millis(),
-        "model request completed"
+        duration_ms = started.elapsed().as_millis(),
+        "model request details"
     );
     Ok(Json(payload))
 }
 
 async fn embeddings(
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
     State(state): State<AppState>,
     headers: HeaderMap,
     body: Bytes,
@@ -242,6 +443,7 @@ async fn embeddings(
             client: &state.databricks,
             rate_limits: &state.rate_limits,
             throttle: &state.throttle,
+            metrics: &state.metrics,
         },
         &caller,
         UpstreamRequest {
@@ -262,13 +464,16 @@ async fn embeddings(
     let upstream = buffered_response(response).await?;
     let usage = response_usage(&upstream.body);
     RequestLogContext::new(
-        requested_model,
-        endpoint.name,
-        caller.peer,
-        request_bytes,
-        started,
+        RequestLogMetadata {
+            requested_model,
+            resolved_model: endpoint.name,
+            peer: caller.peer,
+            request_bytes,
+            started,
+        },
         throttle,
         upstream_attempt,
+        state.metrics.clone(),
     )
     .complete_embedding(upstream.status, usage)
     .await;
@@ -341,6 +546,7 @@ async fn proxy(
             client: &state.databricks,
             rate_limits: &state.rate_limits,
             throttle: &state.throttle,
+            metrics: &state.metrics,
         },
         &caller,
         UpstreamRequest {
@@ -359,13 +565,16 @@ async fn proxy(
         upstream_attempt,
     } = upstream;
     let request_log = RequestLogContext::new(
-        requested_model,
-        model.clone(),
-        caller.peer,
-        request_bytes,
-        started,
+        RequestLogMetadata {
+            requested_model,
+            resolved_model: model.clone(),
+            peer: caller.peer,
+            request_bytes,
+            started,
+        },
         throttle,
         upstream_attempt,
+        state.metrics.clone(),
     );
     let status = upstream_status(&upstream)?;
     if status.is_success() && streaming {
@@ -421,6 +630,7 @@ async fn send_upstream(
         client,
         rate_limits,
         throttle,
+        metrics,
     } = controls;
     let UpstreamRequest {
         model,
@@ -450,6 +660,7 @@ async fn send_upstream(
                 if let Some(permit) = permit.as_ref() {
                     rate_limits.completed(permit).await;
                 }
+                metrics.record_oversized(model);
                 tracing::warn!(
                     host = client.host(),
                     model,
@@ -485,12 +696,26 @@ async fn send_upstream(
                 if let Some(permit) = permit.as_ref() {
                     rate_limits.completed(permit).await;
                 }
+                metrics.record_transport_failure(model);
+                tracing::warn!(
+                    host = client.host(),
+                    model,
+                    upstream_attempt,
+                    %error,
+                    "model request transport failed"
+                );
                 return Err(DatabricksClientError::from(error).into());
             }
         };
         if response.status() != StatusCode::TOO_MANY_REQUESTS {
             if let Some(permit) = permit.as_ref() {
                 rate_limits.completed(permit).await;
+            }
+            if response.status().is_success() {
+                if let Some(transition) = throttle.record_success(model, model_class).await {
+                    metrics.record_transition(model, transition);
+                    log_auto_transition(client, model, transition);
+                }
             }
             return Ok(UpstreamResult {
                 response,
@@ -512,16 +737,18 @@ async fn send_upstream(
             .message
             .as_deref()
             .is_some_and(is_input_limit_message);
+        metrics.record_upstream_429(model, input_token_limit);
         if input_token_limit && admission.active {
             throttle.record_input_429_after_admission();
         }
         admission.release().await;
-        activate_token_throttle(throttle, client, model, &details).await;
+        activate_token_throttle(throttle, metrics, client, model, model_class, &details).await;
         let exhausted = retries >= policy.max_retries;
         if exhausted {
             if let Some(permit) = permit.as_ref() {
                 rate_limits.completed(permit).await;
             }
+            metrics.record_retry("exhausted", true);
             log_rate_limit(RetryLog {
                 client,
                 caller,
@@ -541,8 +768,8 @@ async fn send_upstream(
             });
         }
         let server_delay = server_retry_after(response.headers(), &details);
-        let (delay, delay_source) = if let Some((delay, _)) = server_delay {
-            (delay, "retry-after")
+        let (delay, delay_source) = if let Some((delay, source)) = server_delay {
+            (delay, source)
         } else if input_token_limit {
             match throttle
                 .token_window_delay(model, model_class, estimate)
@@ -568,6 +795,7 @@ async fn send_upstream(
         } else {
             tokio::time::sleep(delay).await;
         }
+        metrics.record_retry(delay_source, false);
         log_rate_limit(RetryLog {
             client,
             caller,
@@ -588,19 +816,58 @@ async fn send_upstream(
 /// Activate auto TPM admission once Databricks reports an input-token limit.
 async fn activate_token_throttle(
     throttle: &RequestThrottle,
+    metrics: &MetricsRuntime,
     client: &DatabricksClient,
     model: &str,
+    model_class: Option<ModelClass>,
     details: &RateLimitDetails,
 ) {
-    if throttle
-        .activate_from_message(model, details.message.as_deref())
+    match throttle
+        .activate_from_message(model, model_class, details.message.as_deref())
         .await
     {
-        tracing::info!(
+        AutoActivation::Ignored => {}
+        AutoActivation::Unavailable => tracing::warn!(
             host = client.host(),
             model,
-            "model token rate limiting activated"
-        );
+            "automatic token rate limiting has no local input budget"
+        ),
+        AutoActivation::Transition(transition) => {
+            metrics.record_transition(model, transition);
+            log_auto_transition(client, model, transition)
+        }
+    }
+}
+
+fn log_auto_transition(client: &DatabricksClient, model: &str, transition: AutoTransition) {
+    let fields = (
+        transition.penalty_basis_points,
+        transition.base_input_budget,
+        transition.effective_input_budget,
+    );
+    match transition.kind {
+        AutoTransitionKind::Activated
+        | AutoTransitionKind::Tightened
+        | AutoTransitionKind::Reactivated => tracing::warn!(
+            host = client.host(),
+            model,
+            transition = ?transition.kind,
+            penalty_basis_points = fields.0,
+            base_input_budget = fields.1,
+            effective_input_budget = fields.2,
+            "automatic token rate limiting changed"
+        ),
+        AutoTransitionKind::Relaxed
+        | AutoTransitionKind::Probation
+        | AutoTransitionKind::Deactivated => tracing::info!(
+            host = client.host(),
+            model,
+            transition = ?transition.kind,
+            penalty_basis_points = fields.0,
+            base_input_budget = fields.1,
+            effective_input_budget = fields.2,
+            "automatic token rate limiting changed"
+        ),
     }
 }
 
@@ -625,6 +892,20 @@ fn log_rate_limit(log: RetryLog<'_>) {
         model = log.model,
         retry = log.retry,
         max_retries = log.policy.max_retries,
+        retry_delay_ms = log.delay.as_millis(),
+        retry_delay_source = log.delay_source,
+        rate_limit_message = log.details.message.as_deref().unwrap_or_default(),
+        token_throttle_active = log.admission.active,
+        penalty_basis_points = log.admission.penalty_basis_points,
+        effective_input_budget = log.admission.input_window_budget,
+        exhausted,
+        "model request rate limited"
+    );
+    tracing::debug!(
+        host = log.client.host(),
+        model = log.model,
+        retry = log.retry,
+        max_retries = log.policy.max_retries,
         upstream_attempt = log.upstream_attempt,
         retry_delay_ms = log.delay.as_millis(),
         retry_delay_source = log.delay_source,
@@ -635,14 +916,16 @@ fn log_rate_limit(log: RetryLog<'_>) {
         token_throttle_mode = ?log.admission.mode,
         token_throttle_active = log.admission.active,
         token_limit_input = log.admission.input_limit,
+        token_window_budget = log.admission.input_window_budget,
+        token_penalty_basis_points = log.admission.penalty_basis_points,
+        token_queue_depth = log.admission.queue_depth,
         token_reservation_input = log.admission.reserved_input_tokens,
         token_window_used_before = log.admission.input_window_used_before,
         token_window_wait_ms = log.admission.wait.as_millis(),
-        oversized_request = false,
         client_ip = %log.caller.peer.ip(),
         client_port = log.caller.peer.port(),
         exhausted,
-        "model request rate limited"
+        "model request rate-limit details"
     );
 }
 
@@ -906,6 +1189,14 @@ mod tests {
         }
     }
 
+    fn test_metrics() -> MetricsRuntime {
+        MetricsRuntime::new(crate::metrics::MetricsConfig {
+            mode: crate::metrics::MetricsMode::Off,
+            routes_visible: false,
+        })
+        .unwrap()
+    }
+
     #[test]
     fn embeddings_use_the_resolved_endpoint_invocation_path() {
         let (path, body) = prepare_embedding_request(
@@ -945,7 +1236,7 @@ mod tests {
         let throttle = RequestThrottle::new(
             "host",
             ThrottleConfig {
-                input_tokens_per_minute: None,
+                input_tokens_per_minute: NonZeroU64::new(100),
                 output_tokens_per_minute: None,
                 provisioned_throughput: false,
                 mode: crate::throttle::RateLimitMode::Auto,
@@ -953,6 +1244,7 @@ mod tests {
             },
         );
         let caller = test_caller();
+        let metrics = test_metrics();
 
         let response = tokio::time::timeout(
             Duration::from_millis(900),
@@ -961,6 +1253,7 @@ mod tests {
                     client: &client,
                     rate_limits: &gate,
                     throttle: &throttle,
+                    metrics: &metrics,
                 },
                 &caller,
                 UpstreamRequest {
@@ -982,14 +1275,22 @@ mod tests {
 
         assert_eq!(response.response.status(), StatusCode::OK);
         assert_eq!(response.upstream_attempt, 2);
-        let counters = throttle.counters();
+        let counters = throttle.counters().await;
         assert_eq!(counters.automatic_activations, 1);
         assert_eq!(counters.retry_reacquisitions, 1);
-        assert!(
-            !throttle
-                .activate_from_message("model", Some("Exceeded workspace input tokens per minute"))
-                .await
-        );
+        assert!(matches!(
+            throttle
+                .activate_from_message(
+                    "model",
+                    None,
+                    Some("Exceeded workspace input tokens per minute"),
+                )
+                .await,
+            AutoActivation::Transition(AutoTransition {
+                kind: AutoTransitionKind::Tightened,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]
@@ -1022,12 +1323,14 @@ mod tests {
             },
         );
         let caller = test_caller();
+        let metrics = test_metrics();
 
         let response = send_upstream(
             UpstreamControls {
                 client: &client,
                 rate_limits: &gate,
                 throttle: &throttle,
+                metrics: &metrics,
             },
             &caller,
             UpstreamRequest {
@@ -1083,12 +1386,14 @@ mod tests {
             },
         );
         let caller = test_caller();
+        let metrics = test_metrics();
 
         let response = send_upstream(
             UpstreamControls {
                 client: &client,
                 rate_limits: &gate,
                 throttle: &throttle,
+                metrics: &metrics,
             },
             &caller,
             UpstreamRequest {
@@ -1108,6 +1413,70 @@ mod tests {
 
         assert_eq!(response.response.status(), StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(response.upstream_attempt, 3);
+    }
+
+    #[tokio::test]
+    async fn final_input_token_429_tightens_adaptive_state() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(429).set_body_json(json!({
+                "error": {
+                    "message": "Exceeded workspace input tokens per minute",
+                    "retry_after": 0
+                }
+            })))
+            .expect(2)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 1,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_millis(10),
+        });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: NonZeroU64::new(100),
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::Auto,
+                documented_limits: Default::default(),
+            },
+        );
+        let caller = test_caller();
+        let metrics = test_metrics();
+
+        let response = send_upstream(
+            UpstreamControls {
+                client: &client,
+                rate_limits: &gate,
+                throttle: &throttle,
+                metrics: &metrics,
+            },
+            &caller,
+            UpstreamRequest {
+                model: "model",
+                model_class: None,
+                estimate: TokenEstimate {
+                    input: 1,
+                    output: 0,
+                },
+                path: "/test",
+                headers: upstream_headers(None),
+                body: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.response.status(), StatusCode::TOO_MANY_REQUESTS);
+        let counters = throttle.counters().await;
+        assert_eq!(counters.automatic_activations, 1);
+        assert_eq!(counters.automatic_tightenings, 1);
+        assert_eq!(counters.retry_reacquisitions, 1);
+        assert_eq!(counters.auto_active_keys, 1);
     }
 
     #[tokio::test]
@@ -1136,12 +1505,14 @@ mod tests {
             },
         );
         let caller = test_caller();
+        let metrics = test_metrics();
 
         let error = send_upstream(
             UpstreamControls {
                 client: &client,
                 rate_limits: &gate,
                 throttle: &throttle,
+                metrics: &metrics,
             },
             &caller,
             UpstreamRequest {
@@ -1167,7 +1538,7 @@ mod tests {
                 ..
             }
         ));
-        assert_eq!(throttle.counters().oversized_rejections, 1);
+        assert_eq!(throttle.counters().await.oversized_rejections, 1);
     }
 
     #[test]

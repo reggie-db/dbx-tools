@@ -88,11 +88,9 @@ jspm_packages/
 .docs-build/
 .astro/
 .worktrees/
-.kanna/
-.isaac/
-.polly/
 .home/
 **/.logs/
+!/packages/rs/model-proxy/metrics-ui/dist/**
 !/packages/js/node/rust-binary/src/_rust-release-binaries.ts
 !/Cargo.lock
 target/

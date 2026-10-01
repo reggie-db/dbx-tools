@@ -12,6 +12,11 @@ date and final status.
 
 ## Active plans
 
+- [Model proxy adaptive rate-limit and observability plan](2026-09-30-model-proxy-adaptive-rate-limit-decay-plan.md)
+  - Recover auto-mode workspace/model queues from temporary input-token
+    contention through conservative activation, clean-traffic evidence,
+    stepwise relaxation, and eventual deactivation; add concise logging, bounded
+    metrics, optional persistence, and a Figma-designed embedded dashboard.
 - [Singular version and content-addressed Rust release plan](2026-09-30-singular-version-content-addressed-rust-release-plan.md)
   - Implemented singular-version release flow: one reviewed PR into `main`, one
     repository version, exact-key reuse of checksummed raw Rust target bundles,

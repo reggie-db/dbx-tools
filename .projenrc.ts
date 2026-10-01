@@ -237,6 +237,7 @@ const root = new projenProject.DBXToolsNodeProject({
   releaseValidationTasks: [
     "docs:check-source",
     "docs:check-readmes",
+    "model-proxy:metrics-assets",
     "rs:release-fingerprint",
   ],
   releaseSyncBranch: "dev",
@@ -259,6 +260,7 @@ const root = new projenProject.DBXToolsNodeProject({
     "@dbx-tools/projen@workspace:^",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
+    "gridstack@^12.3.3",
     "zod@catalog:",
   ],
 });
@@ -279,6 +281,12 @@ const readmeDocs = root.addTask("docs:check-readmes", {
   description: "Validate and generate documentation from package READMEs",
 });
 readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
+
+const modelProxyMetricsAssets = root.addTask("model-proxy:metrics-assets", {
+  description: "Validate embedded model-proxy dashboard assets and brand tokens",
+});
+modelProxyMetricsAssets.exec("bun scripts/model-proxy-metrics-assets.mjs");
+root.testTask.spawn(modelProxyMetricsAssets);
 
 // ---------------------------------------------------------------------------
 // JavaScript and Python lockfiles stay UNTRACKED
@@ -302,12 +310,11 @@ root.gitignore.addPatterns(
   ".docs-build/",
   ".astro/",
   ".worktrees/",
-  ".kanna/",
-  ".isaac/",
-  ".polly/",
   ".home/",
   "**/.logs/",
 );
+// Rust release rows embed reviewed dashboard assets and do not build them.
+root.gitignore.addPatterns("!/packages/rs/model-proxy/metrics-ui/dist/**");
 
 // ---------------------------------------------------------------------------
 // pnpm workspace: build-script allowances + version overrides
@@ -1123,6 +1130,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     fs4: "0.13",
     futures: "0.3",
     "google-cloud-auth": "=0.18.0",
+    hdrhistogram: "7",
     http: "1",
     httpdate: "1",
     image: {
@@ -1131,6 +1139,9 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       features: ["jpeg", "png", "webp"],
     },
     "mini-moka": "0.10",
+    metrics: "0.24",
+    "metrics-exporter-prometheus": { version: "0.17", defaultFeatures: false },
+    "mime_guess": "2",
     object: { version: "0.37", defaultFeatures: false, features: ["read"] },
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
@@ -1145,6 +1156,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     regex: "1",
     rcgen: "0.14",
     rustls: "0.23",
+    "rust-embed": { version: "8", features: ["debug-embed"] },
     scraper: "0.24",
     serde: { version: "1", features: ["derive"] },
     "serde_json": "1",
@@ -1247,6 +1259,11 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       release: true,
       cli: true,
       binaryName: "dbx-model-proxy",
+      defaultFeatures: ["metrics-ui"],
+      features: {
+        metrics: ["dep:metrics", "dep:metrics-exporter-prometheus", "dep:hdrhistogram"],
+        "metrics-ui": ["metrics", "dep:rust-embed", "dep:mime_guess"],
+      },
       dependencies: {
         "aigw-anthropic": "=0.6.0",
         "aigw-core": "=0.6.0",
@@ -1260,9 +1277,14 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         [`${root.scope}-model`]: { path: "../model" },
         "eventsource-stream": "0.2",
         "futures-util": "0.3",
+        hdrhistogram: { workspace: true, optional: true },
         image: { workspace: true },
         httpdate: { workspace: true },
+        metrics: { workspace: true, optional: true },
+        "metrics-exporter-prometheus": { workspace: true, optional: true },
+        "mime_guess": { workspace: true, optional: true },
         reqwest: { workspace: true, features: ["stream"] },
+        "rust-embed": { workspace: true, optional: true },
         serde: { workspace: true },
         "serde_json": { workspace: true },
         thiserror: { workspace: true },
@@ -1272,6 +1294,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       },
       devDependencies: {
         tempfile: { workspace: true },
+        tokio: { workspace: true, features: ["test-util"] },
         wiremock: { workspace: true },
       },
     },
