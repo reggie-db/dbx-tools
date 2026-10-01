@@ -438,6 +438,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   projectJs.addExports(p, {
     "./bin": "./src/bin.ts",
     "./exec": "./src/exec.ts",
+    "./file-lock": "./src/file-lock.ts",
     "./project-utils": "./src/project-utils.ts",
   });
   p.addDeps(
@@ -1351,6 +1352,7 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
       release: true,
       cli: true,
       binaryName: "dbx-model-proxy",
+      defaultRun: "dbx-model-proxy",
       defaultFeatures: ["metrics-ui"],
       features: {
         desktop: [`${root.scope}-service/desktop`],

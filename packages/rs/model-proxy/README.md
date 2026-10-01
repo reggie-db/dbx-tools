@@ -439,8 +439,9 @@ ordinary snapshots and SSE retain only aggregate model summaries.
 `/metrics` serves the static dashboard embedded in the normal release binary.
 The dashboard provides 1h, 6h, and 24h ranges, model and outcome filters,
 request, token, and latency line graphs, model latency and error summaries, the
-current per-model limiter phase, penalty, and effective input budget, the
-adaptive rate-limit timeline, and process-wide retention status. Prometheus
+current per-model limiter phase, penalty, and effective input budget, a
+filter-aware reasoning-level donut chart, the adaptive rate-limit timeline, and
+process-wide retention status. Prometheus
 exports the current penalty basis points, effective input budget, and fallback
 count for each bounded model label. On loopback, the dashboard also lists
 ambient and named profiles with secret-free host and authentication metadata,

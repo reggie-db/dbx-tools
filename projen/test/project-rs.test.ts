@@ -108,6 +108,7 @@ describe("DBXToolsRustProject", () => {
         repository: "https://github.com/example/external-native",
         description: "Standalone Rust fixture",
         binaryName: "external",
+        defaultRun: "external",
         features: { native: [] },
         defaultFeatures: ["native"],
         examples: [
@@ -135,6 +136,7 @@ describe("DBXToolsRustProject", () => {
       };
       assert.deepEqual(manifest.package, {
         name: "external-native",
+        "default-run": "external",
         version: "1.2.3",
         edition: "2024",
         "rust-version": "1.85",

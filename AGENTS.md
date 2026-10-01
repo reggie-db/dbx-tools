@@ -445,7 +445,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   writes and restore the current runtime's aggregates on startup. The embedded
   vanilla dashboard uses snapshot JSON plus SSE,
   canonical generated brand tokens, model and outcome filters, request, token,
-  and latency line graphs. Each model's rate-limit capacity cell renders the
+  and latency line graphs plus a filter-aware reasoning-level donut chart. Each
+  model's rate-limit capacity cell renders the
   live process-local input-window use against its effective budget, adaptive
   penalty against the 90-percent maximum, and current waiting depth against the
   process-lifetime peak with average wait. Transition events remain the

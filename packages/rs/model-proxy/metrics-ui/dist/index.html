@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/metrics/vendor/gridstack.min.css" />
     <link rel="stylesheet" href="/metrics/vendor/uPlot.min.css" />
     <link rel="stylesheet" href="/metrics/brand.0b7222df.css" />
-    <link rel="stylesheet" href="/metrics/app.28002a60.css" />
+    <link rel="stylesheet" href="/metrics/app.f2ff8387.css" />
     <script src="/metrics/vendor/gridstack-all.js" defer></script>
     <script src="/metrics/vendor/uPlot.iife.min.js" defer></script>
     <script src="/metrics/app.js" defer></script>
@@ -270,9 +270,19 @@
               <h2>Reasoning levels</h2>
               <p id="reasoning-total">No model requests</p>
             </div>
-            <ol id="reasoning-levels" class="reasoning-levels">
-              <li class="empty">Waiting for model traffic</li>
-            </ol>
+            <div class="reasoning-content">
+              <div
+                id="reasoning-chart"
+                class="reasoning-chart"
+                role="img"
+                aria-label="No reasoning data"
+              >
+                <strong id="reasoning-chart-total">0</strong>
+              </div>
+              <ol id="reasoning-levels" class="reasoning-levels">
+                <li class="empty">Waiting for model traffic</li>
+              </ol>
+            </div>
           </article>
         </div>
         <div class="grid-stack-item" gs-id="rate-limit-timeline" gs-x="6" gs-y="19" gs-w="6" gs-h="5" gs-min-w="4">

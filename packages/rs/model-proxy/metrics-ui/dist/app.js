@@ -819,39 +819,64 @@
     const levels = selectedModel?.reasoningLevels ?? snapshot.reasoningLevels ?? [];
     const total = levels.reduce((sum, level) => sum + Number(level.requests || 0), 0);
     const list = document.querySelector("#reasoning-levels");
+    const chart = document.querySelector("#reasoning-chart");
+    const chartTotal = document.querySelector("#reasoning-chart-total");
     list.replaceChildren();
     if (!total) {
       const empty = document.createElement("li");
       empty.className = "empty";
       empty.textContent = "Waiting for model traffic";
       list.append(empty);
+      chart.style.background = "color-mix(in srgb, var(--brand-muted) 18%, transparent)";
+      chart.setAttribute("aria-label", "No reasoning data");
+      chartTotal.textContent = "0";
       document.querySelector("#reasoning-total").textContent = "No model requests";
       return;
     }
-    [...levels]
-      .sort(
-        (left, right) =>
-          Number(right.requests || 0) - Number(left.requests || 0) ||
-          reasoningLabel(left.level).localeCompare(reasoningLabel(right.level)),
-      )
-      .forEach((level) => {
-        const requests = Number(level.requests || 0);
-        const percent = (requests * 100) / total;
-        const row = document.createElement("li");
-        const heading = document.createElement("div");
-        const label = document.createElement("span");
-        label.textContent = reasoningLabel(level.level);
-        const value = document.createElement("strong");
-        value.textContent = `${formatInteger(requests)} · ${percent.toFixed(percent >= 10 ? 0 : 1)}%`;
-        heading.append(label, value);
-        const track = document.createElement("div");
-        track.className = "reasoning-track";
-        const fill = document.createElement("span");
-        fill.style.width = `${Math.max(1, percent)}%`;
-        track.append(fill);
-        row.append(heading, track);
-        list.append(row);
-      });
+    const palette = [
+      chartColor("--brand-primary", "#14324B"),
+      chartColor("--brand-primary-hover", "#0E538B"),
+      chartColor("--brand-accent", "#00A972"),
+      chartColor("--dashboard-warning", "#955100"),
+      "#7A5AF8",
+      "#D92D20",
+      "#0086C9",
+      "#DC6803",
+      "#6172F3",
+      "#039855",
+    ];
+    const sorted = [...levels].sort(
+      (left, right) =>
+        Number(right.requests || 0) - Number(left.requests || 0) ||
+        reasoningLabel(left.level).localeCompare(reasoningLabel(right.level)),
+    );
+    let start = 0;
+    const segments = [];
+    const accessible = [];
+    sorted.forEach((level, index) => {
+      const requests = Number(level.requests || 0);
+      const percent = (requests * 100) / total;
+      const end = start + percent;
+      const color = palette[index % palette.length];
+      segments.push(`${color} ${start}% ${end}%`);
+      accessible.push(
+        `${reasoningLabel(level.level)} ${formatInteger(requests)} ${percent.toFixed(1)} percent`,
+      );
+      const row = document.createElement("li");
+      const swatch = document.createElement("span");
+      swatch.className = "reasoning-swatch";
+      swatch.style.background = color;
+      const label = document.createElement("span");
+      label.textContent = reasoningLabel(level.level);
+      const value = document.createElement("strong");
+      value.textContent = `${formatInteger(requests)} · ${percent.toFixed(percent >= 10 ? 0 : 1)}%`;
+      row.append(swatch, label, value);
+      list.append(row);
+      start = end;
+    });
+    chart.style.background = `conic-gradient(${segments.join(", ")})`;
+    chart.setAttribute("aria-label", accessible.join(", "));
+    chartTotal.textContent = formatInteger(total);
     document.querySelector("#reasoning-total").textContent =
       `${formatInteger(total)} classified requests`;
   }

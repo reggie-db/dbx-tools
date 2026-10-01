@@ -2809,6 +2809,7 @@ mod tests {
         assert!(index.contains("data-sort=\"fallbacks\""));
         assert!(index.contains("Search models"));
         assert!(index.contains("Databricks profile"));
+        assert!(index.contains("reasoning-chart"));
         assert!(index.contains("app.js"));
         let app = dashboard_asset("app.js").expect("dashboard script is embedded");
         assert!(std::str::from_utf8(&app.body)
@@ -2832,8 +2833,11 @@ mod tests {
         assert!(std::str::from_utf8(&app.body)
             .unwrap()
             .contains("/api/metrics/events"));
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("conic-gradient"));
         assert!(!dashboard_asset("app.js").unwrap().immutable);
-        assert!(dashboard_asset("app.28002a60.css").unwrap().immutable);
+        assert!(dashboard_asset("app.f2ff8387.css").unwrap().immutable);
         assert!(dashboard_asset("assets/status-live-8.svg").is_some());
         assert!(dashboard_asset("missing.js").is_none());
     }

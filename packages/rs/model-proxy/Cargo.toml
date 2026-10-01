@@ -1,6 +1,7 @@
 
 [package]
 name = "dbx-tools-model-proxy"
+default-run = "dbx-model-proxy"
 description = "Multi-protocol Databricks model proxy"
 
   [package.version]

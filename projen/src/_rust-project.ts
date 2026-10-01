@@ -71,6 +71,8 @@ export interface RustCrateOptions {
   readonly binaryName?: string;
   /** Additional Cargo binary targets owned by this crate. */
   readonly binaries?: readonly RustBinaryOptions[];
+  /** Cargo binary selected by `cargo run` when this crate has multiple binaries. */
+  readonly defaultRun?: string;
   /** Publish this release binary through the generated `dbx` command registry. */
   readonly cli?: boolean | RustCliOptions;
   readonly bindings?: readonly ("node" | "python")[];
@@ -263,6 +265,7 @@ export class RustProject extends Project implements DBXToolsProject {
       ...(!workspace ? { workspace: {} } : {}),
       package: {
         name: this.crateName,
+        ...(options.defaultRun ? { "default-run": options.defaultRun } : {}),
         version: inheritedCargoValue(workspace, options.version, "0.1.0"),
         edition: inheritedCargoValue(workspace, options.edition, "2021"),
         "rust-version": inheritedCargoValue(workspace, options.rustVersion, "1.82"),

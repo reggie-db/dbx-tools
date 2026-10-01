@@ -765,49 +765,79 @@ td:first-child {
   padding: 24px 12px;
 }
 
+.reasoning-content {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
+  gap: 20px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.reasoning-chart {
+  position: relative;
+  display: grid;
+  width: min(100%, 190px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.reasoning-chart::after {
+  position: absolute;
+  width: 58%;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 72%, transparent);
+  border-radius: 50%;
+  background: var(--brand-surface);
+  content: "";
+}
+
+.reasoning-chart strong {
+  z-index: 1;
+  font-family: var(--brand-font-mono);
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .reasoning-levels {
   display: flex;
   min-height: 0;
   flex: 1;
-  margin: 14px 0 0;
+  margin: 0;
   padding: 0;
   flex-direction: column;
-  gap: 12px;
+  gap: 9px;
   overflow-y: auto;
   list-style: none;
 }
 
-.reasoning-levels li > div:first-child {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+.reasoning-levels li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
   margin-bottom: 5px;
   font-size: 11px;
 }
 
-.reasoning-levels li > div:first-child strong {
+.reasoning-levels li strong {
   font-family: var(--brand-font-mono);
   font-size: 10px;
   font-weight: 500;
   white-space: nowrap;
 }
 
-.reasoning-track {
-  height: 7px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--brand-muted) 18%, transparent);
-}
-
-.reasoning-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--brand-primary-hover);
+.reasoning-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
 }
 
 .reasoning-levels li.empty {
+  display: block;
   padding: 24px 12px;
 }
 

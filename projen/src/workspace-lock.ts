@@ -1,6 +1,6 @@
 /** Cross-process coordination for generated workspace mutations. */
 import { resolve } from "node:path";
-import { fileLock } from "@dbx-tools/core";
+import * as fileLock from "@dbx-tools/core/file-lock";
 import { log } from "@dbx-tools/shared-core";
 
 const MUTATION_LOCK_SCOPE = "dbx-tools-workspace-mutation";
