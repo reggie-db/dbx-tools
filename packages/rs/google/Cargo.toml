@@ -31,7 +31,7 @@ path = "uniffi-bindgen.rs"
 workspace = true
 
 [dependencies.dbx-tools-core]
-version = "0.9.8"
+version = "0.9.9"
 path = "../core"
 
 [dependencies.google-cloud-auth]
