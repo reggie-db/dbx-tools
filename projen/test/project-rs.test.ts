@@ -118,6 +118,9 @@ describe("DBXToolsRustProject", () => {
           },
         ],
         dependencies: { serde: "1" },
+        targetDependencies: {
+          'cfg(target_os = "linux")': { libc: "0.2" },
+        },
       });
       project.synth();
 
@@ -128,6 +131,7 @@ describe("DBXToolsRustProject", () => {
         example: Array<Record<string, unknown>>;
         features: Record<string, unknown>;
         dependencies: Record<string, unknown>;
+        target: Record<string, { dependencies: Record<string, unknown> }>;
       };
       assert.deepEqual(manifest.package, {
         name: "external-native",
@@ -149,6 +153,7 @@ describe("DBXToolsRustProject", () => {
       ]);
       assert.deepEqual(manifest.features, { default: ["native"], native: [] });
       assert.equal(manifest.dependencies.serde, "1");
+      assert.equal(manifest.target['cfg(target_os = "linux")']?.dependencies.libc, "0.2");
       assert.match(readFileSync(join(directory, "LICENSE"), "utf8"), /Copyright \(c\).*Example/);
       assert.match(readFileSync(join(directory, ".gitignore"), "utf8"), /^target\/$/m);
 
@@ -344,6 +349,12 @@ describe("DBXToolsRustWorkspace", () => {
       assert.ok(workflow.jobs["publish-cargo"]);
       assert.ok(workflow.jobs["publish-github-release"]);
       assert.equal("verify-context" in workflow.jobs, false);
+      const registry = readFileSync(
+        join(independentOutdir, "packages/js/node/rust-binary/src/_registry.ts"),
+        "utf8",
+      );
+      assert.match(registry, /"tagPrefix": "rs-fixture-tool-v"/);
+      assert.match(registry, /"tag": "rs-fixture-tool-v1\.4\.0"/);
     } finally {
       rmSync(independentOutdir, { recursive: true, force: true });
     }
@@ -441,7 +452,18 @@ describe("DBXToolsRustWorkspace", () => {
             releaseExcludeOs: [RustReleaseOs.WINDOWS],
             binaryName: "fixture-tool",
             description: "Run the fixture tool",
-            cli: { command: "tool" },
+            cli: { command: "tool", hidden: true },
+            features: { desktop: [] },
+            binaries: [
+              {
+                name: "fixture-tool-desktop",
+                path: "src/desktop.rs",
+                requiredFeatures: ["desktop"],
+                release: true,
+                description: "Run the desktop fixture",
+                cli: { command: "tool-desktop", hidden: true },
+              },
+            ],
           },
         },
       });
@@ -452,16 +474,42 @@ describe("DBXToolsRustWorkspace", () => {
           command: "tool",
           description: "Run the fixture tool",
           binaryName: "fixture-tool",
+          hidden: true,
           unit: "rs-fixture-tool",
           component: "rs-fixture-tool",
           version: "0.0.1",
-          tag: "rs-fixture-tool-v0.0.1",
+          tagPrefix: "v",
+          tag: "v0.0.1",
           repository: "https://github.com/example/fixture",
           assets: [
             {
               os: "linux",
               cpu: "x64",
               name: "fixture-tool-linux-x64-gnu.tar.gz",
+            },
+          ],
+        },
+        {
+          command: "tool-desktop",
+          description: "Run the desktop fixture",
+          binaryName: "fixture-tool-desktop",
+          hidden: true,
+          unit: "rs-fixture-tool",
+          component: "rs-fixture-tool",
+          version: "0.0.1",
+          tagPrefix: "v",
+          tag: "v0.0.1",
+          repository: "https://github.com/example/fixture",
+          assets: [
+            {
+              os: "linux",
+              cpu: "x64",
+              name: "fixture-tool-desktop-linux-x64-gnu.tar.gz",
+            },
+            {
+              os: "win32",
+              cpu: "x64",
+              name: "fixture-tool-desktop-win32-x64-msvc.zip",
             },
           ],
         },
@@ -472,7 +520,17 @@ describe("DBXToolsRustWorkspace", () => {
       );
       assert.match(registry, /export const RELEASE_BINARY_COMMANDS/);
       assert.match(registry, /fixture-tool-linux-x64-gnu\.tar\.gz/);
-      assert.doesNotMatch(registry, /win32-x64-msvc/);
+      assert.match(registry, /fixture-tool-desktop-win32-x64-msvc\.zip/);
+      assert.doesNotMatch(registry, /"name": "fixture-tool-win32-x64-msvc\.zip"/);
+      const buildJob = readWorkflow(directory).jobs["rust-build"]!;
+      assert.match(
+        workflowStep(buildJob, "Build Rust outputs").run ?? "",
+        /--bin "fixture-tool-desktop" --features "desktop"/,
+      );
+      assert.equal(
+        buildJob.steps.filter((step) => step.name === "Upload fixture-tool release binary").length,
+        1,
+      );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

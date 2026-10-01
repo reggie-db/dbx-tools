@@ -8,6 +8,8 @@ import { describe, it } from "node:test";
 import { PACKAGE_VERSION } from "../index.ts";
 import {
   ensureReleaseBinary,
+  releaseBinaryCommand,
+  releaseBinaryCommands,
   runReleaseBinary,
   releaseBinaryAsset,
   releaseBinaryUrl,
@@ -18,9 +20,11 @@ const COMMAND: ReleaseBinaryCommand = {
   command: "fixture",
   description: "Run a fixture",
   binaryName: "fixture-bin",
+  hidden: false,
   unit: "rs-fixture",
   component: "rs-fixture",
   version: PACKAGE_VERSION,
+  tagPrefix: "rs-fixture-v",
   tag: `rs-fixture-v${PACKAGE_VERSION}`,
   repository: "https://github.com/example/project",
   assets: [
@@ -72,13 +76,24 @@ function internalDependencyReach(
 }
 
 describe("Rust release binaries", () => {
+  it("keeps hidden auxiliary binaries available without exposing commands", () => {
+    assert.equal(
+      releaseBinaryCommands().some((command) => command.command === "model-proxy-desktop"),
+      false,
+    );
+    assert.equal(releaseBinaryCommand("model-proxy-desktop").binaryName, "dbx-model-proxy-desktop");
+  });
+
   it("keeps the isolated runtime dependency reach below the CLI graph", () => {
     const manifests = workspaceManifests();
     const runtime = manifests.get("@dbx-tools/rust-binary");
     const runtimeReach = internalDependencyReach(manifests, "@dbx-tools/rust-binary");
     const cliReach = internalDependencyReach(manifests, "@dbx-tools/cli");
 
-    assert.deepEqual(Object.keys(runtime?.dependencies ?? {}), ["@dbx-tools/core"]);
+    assert.deepEqual(Object.keys(runtime?.dependencies ?? {}).sort(), [
+      "@dbx-tools/core",
+      "@dbx-tools/shared-core",
+    ]);
     assert.deepEqual([...runtimeReach].sort(), [
       "@dbx-tools/core",
       "@dbx-tools/core-rs",

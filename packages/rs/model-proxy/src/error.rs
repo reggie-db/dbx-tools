@@ -33,6 +33,8 @@ pub(crate) enum ProxyError {
     },
     #[error("rate-limit wait budget exhausted for {model} after {wait_ms} ms")]
     RateLimitWait { model: String, wait_ms: u64 },
+    #[error("rate-limit wait cancelled by an operator for {model}")]
+    RateLimitWaitCancelled { model: String },
     #[error("invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error("Databricks request failed: {0}")]
@@ -80,6 +82,20 @@ impl IntoResponse for ProxyError {
             )
                 .into_response();
         }
+        if let Self::RateLimitWaitCancelled { model } = self {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({
+                    "error": {
+                        "message": "The proxy cancelled the local rate-limit wait at an operator's request.",
+                        "type": "local_rate_limit_wait_cancelled",
+                        "code": 429,
+                        "model": model
+                    }
+                })),
+            )
+                .into_response();
+        }
         let status = match &self {
             Self::MissingModel
             | Self::EmbeddingModelNotFound(_)
@@ -95,7 +111,8 @@ impl IntoResponse for ProxyError {
             | Self::Databricks(_)
             | Self::Model(_)
             | Self::OversizedInput { .. }
-            | Self::RateLimitWait { .. } => StatusCode::BAD_GATEWAY,
+            | Self::RateLimitWait { .. }
+            | Self::RateLimitWaitCancelled { .. } => StatusCode::BAD_GATEWAY,
         };
         (
             status,
@@ -104,5 +121,26 @@ impl IntoResponse for ProxyError {
             })),
         )
             .into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn wait_cancellation_is_a_structured_local_429() {
+        let response = ProxyError::RateLimitWaitCancelled {
+            model: "resolved-model".to_owned(),
+        }
+        .into_response();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["error"]["type"], "local_rate_limit_wait_cancelled");
+        assert_eq!(body["error"]["model"], "resolved-model");
+        assert_eq!(body["error"]["code"], 429);
     }
 }

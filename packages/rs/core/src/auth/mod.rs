@@ -18,9 +18,9 @@ pub use m2m::MachineToMachineFlow;
 pub use oauth::OAuthFlow;
 use profile::{app_service_principal_available, request_obo_token, resolve_app_auth_type};
 pub use profile::{
-    config_profile_exists, resolve_config_file, AuthKind, Profile, ProfileOptions, TargetKind,
-    AUTH_TYPE_APP_OBO, AUTH_TYPE_APP_SP, DEFAULT_ACCOUNTS_HOST, DEFAULT_CLIENT_ID,
-    DEFAULT_CONFIG_FILE,
+    config_profile_exists, invalidate_config_file, list_config_profiles, resolve_config_file,
+    AuthKind, DatabricksProfileSummary, Profile, ProfileOptions, TargetKind, AUTH_TYPE_APP_OBO,
+    AUTH_TYPE_APP_SP, DEFAULT_ACCOUNTS_HOST, DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE,
 };
 pub use storage::{open_databricks_store, StoreOptions};
 
@@ -112,6 +112,16 @@ pub struct DatabricksAuthStatus {
     pub storage: Storage,
 }
 
+#[uniffi::export(default(config_file = None, refresh = false))]
+/// Enumerate secret-free Databricks CLI profile metadata.
+pub fn list_databricks_profiles(
+    config_file: Option<String>,
+    refresh: bool,
+) -> BindingResult<Vec<DatabricksProfileSummary>> {
+    list_config_profiles(config_file.as_deref().map(std::path::Path::new), refresh)
+        .map_err(binding_error)
+}
+
 #[derive(uniffi::Object)]
 /// Databricks binding facade over the shared persistent authentication lifecycle.
 pub struct PersistentAuth {
@@ -129,8 +139,22 @@ pub async fn create_persistent_auth(
     options: DatabricksAuthOptions,
     storage: Option<Storage>,
 ) -> BindingResult<Arc<PersistentAuth>> {
+    create_persistent_auth_internal(options, storage, false).await
+}
+
+pub(crate) async fn create_persistent_auth_for_exact_profile(
+    options: DatabricksAuthOptions,
+) -> BindingResult<Arc<PersistentAuth>> {
+    create_persistent_auth_internal(options, None, true).await
+}
+
+async fn create_persistent_auth_internal(
+    options: DatabricksAuthOptions,
+    storage: Option<Storage>,
+    exact_profile: bool,
+) -> BindingResult<Arc<PersistentAuth>> {
     let in_app = is_databricks_app();
-    let profile = resolve_profile(&options, in_app)?;
+    let profile = resolve_profile(&options, in_app, exact_profile)?;
     let use_databricks_cli = should_use_databricks_cli(
         profile.auth_kind,
         storage,
@@ -148,7 +172,7 @@ pub async fn create_persistent_auth_with_storage(
     options: DatabricksAuthOptions,
     storage: Arc<StorageHandle>,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    let profile = resolve_profile(&options, is_databricks_app())?;
+    let profile = resolve_profile(&options, is_databricks_app(), false)?;
     create_persistent_auth_with_store(options, profile, storage.store.clone(), false).await
 }
 
@@ -208,7 +232,16 @@ fn storage_backend(storage: Option<Storage>, in_app: bool) -> Storage {
     }
 }
 
-fn resolve_profile(options: &DatabricksAuthOptions, in_app: bool) -> BindingResult<Profile> {
+fn resolve_profile(
+    options: &DatabricksAuthOptions,
+    in_app: bool,
+    exact_profile: bool,
+) -> BindingResult<Profile> {
+    if exact_profile && options.profile.is_none() {
+        return Err(DatabricksAuthError::Failure {
+            message: "exact profile resolution requires a profile name".into(),
+        });
+    }
     let explicit_profile = options.profile.is_some()
         || std::env::var("DATABRICKS_CONFIG_PROFILE")
             .ok()
@@ -260,8 +293,8 @@ fn resolve_profile(options: &DatabricksAuthOptions, in_app: bool) -> BindingResu
         config_file: options.config_file.as_deref().map(PathBuf::from),
         prefer_user_to_machine: options.prefer_user_to_machine,
         skip_implicit_pat: in_app,
-        ignore_ambient_credentials: in_app && explicit_profile && !app_auth,
-        ignore_ambient_auth_type: in_app,
+        ignore_ambient_credentials: exact_profile || (in_app && explicit_profile && !app_auth),
+        ignore_ambient_auth_type: exact_profile || in_app,
     })
     .map_err(binding_error)
 }
@@ -412,6 +445,11 @@ impl PersistentAuth {
     /// Return the workspace identifier resolved from options or the profile.
     pub(crate) fn workspace_id(&self) -> Option<&str> {
         self.profile().workspace_id.as_deref()
+    }
+
+    /// Return the resolved authentication strategy.
+    pub(crate) fn auth_kind(&self) -> AuthKind {
+        self.profile().auth_kind
     }
 }
 

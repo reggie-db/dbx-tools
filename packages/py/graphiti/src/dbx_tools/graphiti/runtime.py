@@ -172,7 +172,7 @@ class Runtime:
         model_proxy_running = (
             manages_model_proxy is True
             and isinstance(model_proxy_url, str)
-            and _url_ready(f"{model_proxy_url.removesuffix('/v1')}/healthz")
+            and _url_ready(f"{model_proxy_url.removesuffix('/v1')}/api/healthz")
         )
         neo4j_running = False
         if (self.paths.neo4j / "bin" / "neo4j").exists():

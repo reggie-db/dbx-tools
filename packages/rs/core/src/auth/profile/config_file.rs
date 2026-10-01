@@ -54,14 +54,19 @@ pub fn config_profile_exists(profile: &str, config_file: Option<&Path>) -> Resul
         .is_some_and(|config| config.sections().iter().any(|name| name == profile)))
 }
 
+/// Invalidate the cached Databricks CLI configuration for one resolved path.
+pub fn invalidate_config_file(config_file: Option<&Path>) -> Result<()> {
+    let path = absolute_config_path(&resolve_config_file(config_file)?)?;
+    CONFIG_CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| Error::Config("Databricks profile cache lock is poisoned".into()))?
+        .remove(&path);
+    Ok(())
+}
+
 pub(super) fn load_config(path: &Path) -> Result<Option<Arc<Ini>>> {
-    let path = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        env::current_dir()
-            .map_err(|error| Error::Config(format!("could not resolve profile path: {error}")))?
-            .join(path)
-    };
+    let path = absolute_config_path(path)?;
     let mut cache = CONFIG_CACHE
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
@@ -100,6 +105,15 @@ pub(super) fn load_profile(ini: &Ini, name: &str) -> RawProfile {
             .map(|value| value.trim().to_ascii_lowercase())
             .filter(|value| !value.is_empty()),
     }
+}
+
+fn absolute_config_path(path: &Path) -> Result<PathBuf> {
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+    Ok(env::current_dir()
+        .map_err(|error| Error::Config(format!("could not resolve profile path: {error}")))?
+        .join(path))
 }
 
 fn expand_home(path: PathBuf) -> Result<PathBuf> {

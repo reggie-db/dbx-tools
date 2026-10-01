@@ -130,7 +130,7 @@ class ModelSettings:
     def health_url(self) -> str:
         """Health endpoint for the configured OpenAI-compatible model proxy."""
         base = self.openai_api_url.removesuffix("/v1")
-        return f"{base}/healthz"
+        return f"{base}/api/healthz"
 
     def graphiti_environment(self) -> dict[str, str]:
         """Non-secret settings injected into the upstream Graphiti process."""

@@ -22,8 +22,14 @@ description = "Multi-protocol Databricks model proxy"
 name = "dbx-model-proxy"
 path = "src/main.rs"
 
+[[bin]]
+name = "dbx-model-proxy-desktop"
+path = "src/bin/desktop.rs"
+required-features = [ "desktop" ]
+
 [features]
 default = [ "metrics-ui" ]
+desktop = [ "dbx-tools-service/desktop" ]
 metrics = [
   "dep:metrics",
   "dep:metrics-exporter-prometheus",
@@ -56,6 +62,10 @@ futures-util = "0.3"
   [dependencies.dbx-tools-model]
   version = "0.9.6"
   path = "../model"
+
+  [dependencies.dbx-tools-service]
+  version = "0.9.6"
+  path = "../service"
 
   [dependencies.hdrhistogram]
   workspace = true
@@ -91,6 +101,9 @@ futures-util = "0.3"
   workspace = true
 
   [dependencies.serde_json]
+  workspace = true
+
+  [dependencies.sha2]
   workspace = true
 
   [dependencies.thiserror]

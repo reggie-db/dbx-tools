@@ -95,6 +95,7 @@
     "packages/js/cli/appkit-env",
     "packages/js/cli/auth",
     "packages/js/cli/dbx-tools",
+    "packages/js/cli/model-proxy",
     "packages/js/cli/tunnel",
     "packages/js/node/appkit",
     "packages/js/node/appkit-graphiti",
@@ -211,7 +212,8 @@
         "packages/rs/google",
         "packages/rs/lakebase-proxy",
         "packages/rs/model",
-        "packages/rs/model-proxy"
+        "packages/rs/model-proxy",
+        "packages/rs/service"
       ],
       "bindings": [
         {
@@ -250,10 +252,12 @@
           "command": "lakebase-proxy",
           "description": "Loopback PostgreSQL proxy for Databricks Lakebase",
           "binaryName": "dbx-lakebase-proxy",
+          "hidden": false,
           "unit": "rs-lakebase-proxy",
           "component": "rs-lakebase-proxy",
           "version": "0.9.6",
-          "tag": "rs-lakebase-proxy-v0.9.6",
+          "tagPrefix": "v",
+          "tag": "v0.9.6",
           "repository": "https://github.com/reggie-db/dbx-tools",
           "assets": [
             {
@@ -282,10 +286,12 @@
           "command": "model-proxy",
           "description": "Multi-protocol Databricks model proxy",
           "binaryName": "dbx-model-proxy",
+          "hidden": false,
           "unit": "rs-model-proxy",
           "component": "rs-model-proxy",
           "version": "0.9.6",
-          "tag": "rs-model-proxy-v0.9.6",
+          "tagPrefix": "v",
+          "tag": "v0.9.6",
           "repository": "https://github.com/reggie-db/dbx-tools",
           "assets": [
             {
@@ -317,6 +323,50 @@
               "os": "win32",
               "cpu": "arm64",
               "name": "dbx-model-proxy-win32-arm64-msvc.zip"
+            }
+          ]
+        },
+        {
+          "command": "model-proxy-desktop",
+          "description": "Native tray and metrics webview companion for dbx-model-proxy",
+          "binaryName": "dbx-model-proxy-desktop",
+          "hidden": true,
+          "unit": "rs-model-proxy",
+          "component": "rs-model-proxy",
+          "version": "0.9.6",
+          "tagPrefix": "v",
+          "tag": "v0.9.6",
+          "repository": "https://github.com/reggie-db/dbx-tools",
+          "assets": [
+            {
+              "os": "linux",
+              "cpu": "x64",
+              "name": "dbx-model-proxy-desktop-linux-x64-gnu.tar.gz"
+            },
+            {
+              "os": "linux",
+              "cpu": "arm64",
+              "name": "dbx-model-proxy-desktop-linux-arm64-gnu.tar.gz"
+            },
+            {
+              "os": "darwin",
+              "cpu": "x64",
+              "name": "dbx-model-proxy-desktop-darwin-x64.tar.gz"
+            },
+            {
+              "os": "darwin",
+              "cpu": "arm64",
+              "name": "dbx-model-proxy-desktop-darwin-arm64.tar.gz"
+            },
+            {
+              "os": "win32",
+              "cpu": "x64",
+              "name": "dbx-model-proxy-desktop-win32-x64-msvc.zip"
+            },
+            {
+              "os": "win32",
+              "cpu": "arm64",
+              "name": "dbx-model-proxy-desktop-win32-arm64-msvc.zip"
             }
           ]
         }

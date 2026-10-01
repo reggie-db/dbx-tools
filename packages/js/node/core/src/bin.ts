@@ -4,7 +4,7 @@
  * @module
  */
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   chmod,
   copyFile,
@@ -83,8 +83,14 @@ export interface BinOptions {
   versionParser?: BinVersionParser;
 }
 
-/** A URL resolved only when the executable is not already installed. */
-export type BinUrl = string | (() => string | Promise<string>);
+/** Download source resolved only when the executable is not already installed. */
+export interface BinSource {
+  url: string;
+  sha256?: string;
+}
+
+/** A download source resolved only when the executable is not already installed. */
+export type BinUrl = string | BinSource | (() => string | BinSource | Promise<string | BinSource>);
 
 function context(name: string, homeDir: string, destination?: BinContext): BinContext {
   if (!name || basename(name) !== name || name === "." || name === "..") {
@@ -258,10 +264,11 @@ async function selectSingleFile(source: string): Promise<string> {
 
 async function selectedBin(
   destination: BinContext,
-  url: string,
+  source: BinSource,
   temp: string,
   options: BinOptions,
 ): Promise<string> {
+  const { url } = source;
   const name = downloadName(url, basename(destination.path));
   const downloadPath = join(temp, name);
   logger.debug("downloading binary", {
@@ -272,25 +279,39 @@ async function selectedBin(
   if (!response.ok) {
     throw new Error(`binary download failed (${response.status})`);
   }
-  await writeFile(downloadPath, Buffer.from(await response.arrayBuffer()), { mode: 0o755 });
+  const downloaded = Buffer.from(await response.arrayBuffer());
+  if (source.sha256) {
+    if (!/^[0-9a-f]{64}$/i.test(source.sha256)) {
+      throw new TypeError("binary download SHA-256 digest must contain 64 hexadecimal characters");
+    }
+    const actual = createHash("sha256").update(downloaded).digest("hex");
+    if (actual.toLowerCase() !== source.sha256.toLowerCase()) {
+      throw new Error(`binary download digest mismatch: ${displayUrl(url)}`);
+    }
+  }
+  await writeFile(downloadPath, downloaded, { mode: 0o755 });
 
-  let source = downloadPath;
+  let selectedSource = downloadPath;
   if (options.autoUnpackage) {
-    source = join(temp, `unpacked-${randomUUID()}`);
-    await mkdir(source);
+    selectedSource = join(temp, `unpacked-${randomUUID()}`);
+    await mkdir(selectedSource);
     logger.debug("unpacking binary archive", {
       archive: downloadPath,
-      to: source,
+      to: selectedSource,
     });
-    await unpack(downloadPath, source);
+    await unpack(downloadPath, selectedSource);
   }
 
   if (options.selector) {
-    const selected = await options.selector({ destination, downloadPath, source });
+    const selected = await options.selector({
+      destination,
+      downloadPath,
+      source: selectedSource,
+    });
     logger.debug("selected binary", { path: selected });
     return selected;
   }
-  const selected = options.autoUnpackage ? await selectSingleFile(source) : source;
+  const selected = options.autoUnpackage ? await selectSingleFile(selectedSource) : selectedSource;
   logger.debug("selected binary", { path: selected });
   return selected;
 }
@@ -326,8 +347,9 @@ export async function ensure(
       return destination;
     }
 
-    const resolvedUrl = typeof url === "function" ? await url() : url;
-    const from = displayUrl(resolvedUrl);
+    const resolved = typeof url === "function" ? await url() : url;
+    const source = typeof resolved === "string" ? { url: resolved } : resolved;
+    const from = displayUrl(source.url);
     logger.debug("installing binary", {
       name,
       from,
@@ -337,7 +359,7 @@ export async function ensure(
     const temp = await mkdtemp(join(tmpdir(), `${name}-`));
     let staged: string | undefined;
     try {
-      const selected = await selectedBin(destination, resolvedUrl, temp, options);
+      const selected = await selectedBin(destination, source, temp, options);
       await chmod(selected, 0o755);
       if (!(await isValidBin(selected, options))) {
         throw new Error(`selected binary has no acceptable version: ${selected}`);

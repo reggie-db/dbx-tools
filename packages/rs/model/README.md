@@ -7,7 +7,8 @@ Databricks.
 
 - Lists live Databricks serving endpoints through the authenticated
   `dbx-tools-core` client.
-- Caches the workspace catalogue on disk for five minutes.
+- Caches the workspace catalogue on disk for five minutes, isolated by host,
+  workspace ID, and non-secret principal.
 - Parses provider, family, version, and model components.
 - Classifies chat and embedding endpoints from live task and profile metadata.
 - Ranks loose searches with deterministic short-string similarity.

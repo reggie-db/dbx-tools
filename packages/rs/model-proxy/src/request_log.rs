@@ -15,6 +15,8 @@ use crate::{
 /// One completed request consumed by logging and process-local metrics.
 #[derive(Debug)]
 pub(crate) struct RequestOutcome {
+    #[cfg_attr(not(feature = "metrics"), allow(dead_code))]
+    pub(crate) runtime_key: String,
     pub(crate) route: &'static str,
     pub(crate) requested_model: String,
     pub(crate) resolved_model: String,
@@ -38,6 +40,7 @@ pub(crate) struct RequestOutcome {
 /// Request metadata shared by buffered and streamed completion events.
 #[derive(Debug)]
 pub(crate) struct RequestLogContext {
+    runtime_key: String,
     requested_model: String,
     resolved_model: String,
     peer: SocketAddr,
@@ -53,6 +56,7 @@ pub(crate) struct RequestLogContext {
 /// Request fields captured before upstream admission.
 #[derive(Debug)]
 pub(crate) struct RequestLogMetadata {
+    pub(crate) runtime_key: String,
     pub(crate) requested_model: String,
     pub(crate) resolved_model: String,
     pub(crate) peer: SocketAddr,
@@ -199,6 +203,7 @@ impl RequestLogContext {
         metrics: MetricsRuntime,
     ) -> Self {
         let RequestLogMetadata {
+            runtime_key,
             requested_model,
             resolved_model,
             peer,
@@ -208,6 +213,7 @@ impl RequestLogContext {
             fallback_step,
         } = metadata;
         Self {
+            runtime_key,
             requested_model,
             resolved_model,
             peer,
@@ -345,6 +351,7 @@ impl RequestLogContext {
         failed: bool,
     ) -> RequestOutcome {
         RequestOutcome {
+            runtime_key: self.runtime_key.clone(),
             route,
             requested_model: self.requested_model.clone(),
             resolved_model: self.resolved_model.clone(),
@@ -459,6 +466,7 @@ mod tests {
 
     fn outcome(status: StatusCode, failed: bool, finished: bool) -> RequestOutcome {
         RequestOutcome {
+            runtime_key: "runtime".to_owned(),
             route: "/v1/model",
             requested_model: "model".to_owned(),
             resolved_model: "model".to_owned(),
@@ -512,8 +520,10 @@ mod tests {
             routes_visible: true,
         })
         .unwrap();
+        metrics.activate_runtime("runtime".to_owned()).unwrap();
         let context = RequestLogContext::new(
             RequestLogMetadata {
+                runtime_key: "runtime".to_owned(),
                 requested_model: "requested".to_owned(),
                 resolved_model: "resolved".to_owned(),
                 peer: "127.0.0.1:1".parse().unwrap(),

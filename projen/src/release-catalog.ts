@@ -311,7 +311,10 @@ export class DBXToolsReleaseCatalog extends Component {
   /** Replace grouping metadata for an already registered project. */
   configureProject(
     project: Project,
-    options: Pick<ReleaseProjectRegistration, "unit" | "component" | "publish" | "sourcePaths">,
+    options: Pick<
+      ReleaseProjectRegistration,
+      "unit" | "component" | "publish" | "sourcePaths" | "dependencies"
+    >,
   ): void {
     const current = this.projects.get(project);
     if (!current) throw new Error(`Release project is not registered: ${project.outdir}`);

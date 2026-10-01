@@ -453,6 +453,7 @@ jobs:
           SECONDS=0
           trap 'status=$?; echo "phase=rust_workspace duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
           cargo build --release --timings --workspace --locked --target "${{ matrix.cargo }}" ${{ matrix.cargoExcludes }}
+          cargo build --release --package "dbx-tools-model-proxy" --bin "dbx-model-proxy-desktop" --features "desktop" --locked --target "${{ matrix.cargo }}"
         shell: bash
       - name: Upload Cargo timings
         id: upload_cargo_timings
@@ -557,6 +558,16 @@ jobs:
             7z a "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/dbx-model-proxy-${{ matrix.node }}.zip" "$DESTINATION"
           else
             tar -C "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage" -czf "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/dbx-model-proxy-${{ matrix.node }}.tar.gz" "dbx-model-proxy"
+          fi
+          rm -rf "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage"
+          mkdir -p "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage"
+          SOURCE="target/${{ matrix.cargo }}/release/dbx-model-proxy-desktop${{ matrix.os == 'win32' && '.exe' || '' }}"
+          DESTINATION="dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage/dbx-model-proxy-desktop${{ matrix.os == 'win32' && '.exe' || '' }}"
+          cp "$SOURCE" "$DESTINATION"
+          if [ "${{ matrix.os }}" = "win32" ]; then
+            7z a "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/dbx-model-proxy-desktop-${{ matrix.node }}.zip" "$DESTINATION"
+          else
+            tar -C "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage" -czf "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/dbx-model-proxy-desktop-${{ matrix.node }}.tar.gz" "dbx-model-proxy-desktop"
           fi
           rm -rf "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage"
         shell: bash
@@ -702,6 +713,7 @@ jobs:
           cargo publish --package "dbx-tools-core" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-google" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-model" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-service" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-model-proxy" --registry crates-io --no-verify
   publish-local-cargo:
     needs:
@@ -740,6 +752,7 @@ jobs:
           cargo publish --package "dbx-tools-core" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-google" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-model" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-service" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-model-proxy" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
   publish-github-release:
     needs:

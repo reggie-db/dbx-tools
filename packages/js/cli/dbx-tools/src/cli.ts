@@ -141,7 +141,15 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
   );
 
+  addForwardedCommand(
+    program,
+    "model-proxy",
+    "Run or manage the native Databricks model proxy",
+    async () => (await import("@dbx-tools/cli-model-proxy/cli")).buildProgram,
+  );
+
   for (const command of releaseBinaryCommands()) {
+    if (command.command === "model-proxy") continue;
     addReleaseCommand(program, command);
   }
 

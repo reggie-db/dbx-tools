@@ -15,16 +15,17 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex, OnceLock,
     },
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use dbx_tools_service::ServiceStorage;
 #[cfg(feature = "metrics")]
 use hdrhistogram::Histogram;
 #[cfg(feature = "metrics")]
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 #[cfg(feature = "metrics-ui")]
 use rust_embed::RustEmbed;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "metrics")]
 use tokio::sync::broadcast;
 use tokio::{
@@ -33,7 +34,8 @@ use tokio::{
 };
 
 use crate::{
-    adaptive::AutoTransition, request_log::RequestOutcome, throttle::ThrottleModelSnapshot,
+    adaptive::AutoTransition, rate_limit::RateLimitModelSnapshot, request_log::RequestOutcome,
+    throttle::ThrottleModelSnapshot,
 };
 #[cfg(feature = "metrics")]
 use crate::{adaptive::AutoTransitionKind, request_log::ReasoningSetting};
@@ -50,6 +52,7 @@ const RETENTION_TARGET_BYTES: u64 = 16 * 1024 * 1024;
 /// Requested metrics behavior before build capabilities are resolved.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum MetricsOption {
+    Auto,
     Ui,
     Collect,
     Off,
@@ -59,6 +62,7 @@ pub(crate) enum MetricsOption {
 impl fmt::Display for MetricsOption {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
+            Self::Auto => "auto",
             Self::Ui => "ui",
             Self::Collect => "collect",
             Self::Off => "off",
@@ -72,17 +76,18 @@ impl FromStr for MetricsOption {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
             "ui" => Ok(Self::Ui),
             "collect" => Ok(Self::Collect),
             "off" | "false" => Ok(Self::Off),
             "true" => Ok(Self::Fullest),
-            _ => Err("expected ui, collect, off, true, or false".to_owned()),
+            _ => Err("expected auto, ui, collect, off, true, or false".to_owned()),
         }
     }
 }
 
 /// Resolved metrics behavior supported by the current binary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum MetricsMode {
     Ui,
@@ -101,13 +106,7 @@ impl fmt::Display for MetricsMode {
 }
 
 pub(crate) const fn default_metrics_option() -> MetricsOption {
-    if cfg!(feature = "metrics-ui") {
-        MetricsOption::Ui
-    } else if cfg!(feature = "metrics") {
-        MetricsOption::Collect
-    } else {
-        MetricsOption::Off
-    }
+    MetricsOption::Auto
 }
 
 /// Validated metrics configuration for the running listener.
@@ -122,8 +121,13 @@ impl MetricsConfig {
         requested: MetricsOption,
         host: IpAddr,
         metrics_public: bool,
+        in_databricks_app: bool,
     ) -> Result<Self, MetricsError> {
         let mode = match requested {
+            MetricsOption::Auto if in_databricks_app => MetricsMode::Off,
+            MetricsOption::Auto if cfg!(feature = "metrics-ui") => MetricsMode::Ui,
+            MetricsOption::Auto if cfg!(feature = "metrics") => MetricsMode::Collect,
+            MetricsOption::Auto => MetricsMode::Off,
             MetricsOption::Off => MetricsMode::Off,
             MetricsOption::Fullest if cfg!(feature = "metrics-ui") => MetricsMode::Ui,
             MetricsOption::Fullest if cfg!(feature = "metrics") => MetricsMode::Collect,
@@ -141,6 +145,15 @@ impl MetricsConfig {
     }
 }
 
+/// Persistent aggregate metrics scoped to one hashed runtime identity.
+#[derive(Clone)]
+#[cfg_attr(not(feature = "metrics"), allow(dead_code))]
+pub(crate) struct MetricsPersistenceConfig {
+    pub(crate) storage: ServiceStorage,
+    pub(crate) runtime_key: String,
+    pub(crate) max_bytes: u64,
+}
+
 #[derive(thiserror::Error)]
 pub(crate) enum MetricsError {
     #[error("metrics collection is not compiled into this binary; use --metrics=false")]
@@ -150,6 +163,9 @@ pub(crate) enum MetricsError {
     #[cfg(feature = "metrics")]
     #[error("could not install the metrics recorder: {0}")]
     Recorder(String),
+    #[cfg(feature = "metrics")]
+    #[error("aggregate metrics persistence failed: {0}")]
+    Persistence(String),
 }
 
 impl fmt::Debug for MetricsError {
@@ -176,13 +192,23 @@ impl fmt::Debug for MetricsRuntime {
 }
 
 impl MetricsRuntime {
+    #[cfg(test)]
     pub(crate) fn new(config: MetricsConfig) -> Result<Self, MetricsError> {
+        Self::new_with_persistence(config, None)
+    }
+
+    pub(crate) fn new_with_persistence(
+        config: MetricsConfig,
+        persistence: Option<MetricsPersistenceConfig>,
+    ) -> Result<Self, MetricsError> {
         #[cfg(feature = "metrics")]
         let inner = if config.mode == MetricsMode::Off {
             None
         } else {
-            Some(MetricsInner::new()?)
+            Some(MetricsInner::new(persistence)?)
         };
+        #[cfg(not(feature = "metrics"))]
+        let _ = persistence;
         let runtime = Self {
             config,
             #[cfg(feature = "metrics")]
@@ -191,6 +217,16 @@ impl MetricsRuntime {
         #[cfg(feature = "metrics")]
         runtime.start_sampler();
         Ok(runtime)
+    }
+
+    pub(crate) fn activate_runtime(&self, runtime_key: String) -> Result<(), MetricsError> {
+        #[cfg(feature = "metrics")]
+        if let Some(inner) = &self.inner {
+            inner.activate_runtime(runtime_key)?;
+        }
+        #[cfg(not(feature = "metrics"))]
+        let _ = runtime_key;
+        Ok(())
     }
 
     pub(crate) fn mode(&self) -> MetricsMode {
@@ -388,6 +424,19 @@ impl MetricsRuntime {
         let _ = capacities;
     }
 
+    pub(crate) fn record_rate_limit_snapshots(
+        &self,
+        snapshots: &[RateLimitModelSnapshot],
+        controls_enabled: bool,
+    ) {
+        #[cfg(feature = "metrics")]
+        if let Some(inner) = &self.inner {
+            inner.record_rate_limit_snapshots(snapshots, controls_enabled);
+        }
+        #[cfg(not(feature = "metrics"))]
+        let _ = (snapshots, controls_enabled);
+    }
+
     pub(crate) fn prometheus(&self) -> Option<String> {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -415,6 +464,16 @@ impl MetricsRuntime {
                 let snapshot = inner.snapshot();
                 if let Ok(payload) = serde_json::to_string(&snapshot) {
                     let _ = inner.events.send(payload);
+                }
+                let persistence = Arc::clone(&inner);
+                match tokio::task::spawn_blocking(move || persistence.persist()).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        tracing::warn!(%error, "aggregate metrics persistence failed");
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "aggregate metrics persistence task failed");
+                    }
                 }
             }
         });
@@ -508,10 +567,11 @@ impl Drop for MetricsStream {
 }
 
 /// Current dashboard and JSON endpoint payload.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MetricsSnapshot {
     pub(crate) mode: MetricsMode,
+    pub(crate) controls_enabled: bool,
     pub(crate) generated_at_ms: u64,
     pub(crate) uptime_seconds: u64,
     pub(crate) summary: SummarySnapshot,
@@ -527,6 +587,7 @@ impl MetricsSnapshot {
     fn disabled(mode: MetricsMode) -> Self {
         Self {
             mode,
+            controls_enabled: false,
             generated_at_ms: 0,
             uptime_seconds: 0,
             summary: SummarySnapshot::default(),
@@ -549,40 +610,98 @@ impl MetricsSnapshot {
     }
 
     pub(crate) fn apply_capacity_snapshots(&mut self, capacities: &[ThrottleModelSnapshot]) {
-        for capacity in capacities {
-            let model = if let Some(model) = self
-                .models
-                .iter_mut()
-                .find(|model| model.model == capacity.model)
-            {
-                model
-            } else {
-                self.models.push(ModelSnapshot::from_capacity(capacity));
-                self.models.last_mut().expect("capacity model was appended")
-            };
-            model.queue_depth = capacity.queue_depth;
-            model.queue_depth_max = model.queue_depth_max.max(capacity.queue_depth);
-            model.limiter = if capacity.active {
-                "enforced".to_owned()
-            } else {
-                "inactive".to_owned()
-            };
-            model.penalty_basis_points = capacity.penalty_basis_points;
-            model.input_limit = capacity.input_limit;
-            model.effective_input_budget = capacity.effective_input_budget;
-            model.input_window_used = capacity.input_window_used;
+        for model in &mut self.models {
+            model.reset_capacity();
         }
+        for capacity in capacities {
+            let (index, aggregate) = self.model_merge_index(&capacity.model);
+            self.models[index].merge_capacity(capacity, aggregate);
+        }
+        self.finish_model_merge();
+    }
+
+    pub(crate) fn apply_rate_limit_snapshots(
+        &mut self,
+        snapshots: &[RateLimitModelSnapshot],
+        controls_enabled: bool,
+    ) {
+        self.controls_enabled = controls_enabled;
+        for model in &mut self.models {
+            model.reset_rate_limit();
+        }
+        for snapshot in snapshots {
+            let (index, aggregate) = self.model_merge_index(&snapshot.model);
+            self.models[index].merge_rate_limit(snapshot, aggregate);
+        }
+        self.finish_model_merge();
+    }
+
+    fn model_merge_index(&mut self, model: &str) -> (usize, bool) {
+        if let Some(index) = self
+            .models
+            .iter()
+            .position(|current| current.model == model)
+        {
+            return (index, model == "other");
+        }
+        let named_models = self
+            .models
+            .iter()
+            .filter(|current| current.model != "other")
+            .count();
+        let target = if model != "other" && named_models < MODEL_SERIES_LIMIT {
+            model
+        } else {
+            "other"
+        };
+        if let Some(index) = self
+            .models
+            .iter()
+            .position(|current| current.model == target)
+        {
+            return (index, target == "other");
+        }
+        self.models.push(ModelSnapshot::empty(target));
+        (self.models.len() - 1, target == "other")
+    }
+
+    fn finish_model_merge(&mut self) {
         self.models.sort_by(|left, right| {
-            right
-                .requests
-                .cmp(&left.requests)
+            (left.model == "other")
+                .cmp(&(right.model == "other"))
+                .then_with(|| right.requests.cmp(&left.requests))
                 .then_with(|| left.model.cmp(&right.model))
         });
         self.summary.active_models = self.models.len();
+        self.summary.cooldown_keys = self.models.iter().map(|model| model.cooldown_keys).sum();
+        self.summary.rate_limit_waiters = self
+            .models
+            .iter()
+            .map(|model| {
+                model
+                    .capacity_waiters
+                    .saturating_add(model.cooldown_waiters)
+            })
+            .sum();
+        self.summary.probe_keys = self.models.iter().map(|model| model.probe_keys).sum();
+        self.summary.wait_cancellations = self
+            .models
+            .iter()
+            .map(|model| {
+                model
+                    .capacity_wait_cancellations
+                    .saturating_add(model.cooldown_wait_cancellations)
+            })
+            .sum();
+        self.summary.cooldown_releases = self
+            .models
+            .iter()
+            .map(|model| model.cooldown_releases)
+            .sum();
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SummarySnapshot {
     pub(crate) connections: u64,
@@ -598,9 +717,14 @@ pub(crate) struct SummarySnapshot {
     pub(crate) total_requests: u64,
     pub(crate) total_rate_limited: u64,
     pub(crate) total_fallbacks: u64,
+    pub(crate) cooldown_keys: u64,
+    pub(crate) rate_limit_waiters: u64,
+    pub(crate) probe_keys: u64,
+    pub(crate) wait_cancellations: u64,
+    pub(crate) cooldown_releases: u64,
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BucketSnapshot {
     pub(crate) started_at_ms: u64,
@@ -613,14 +737,14 @@ pub(crate) struct BucketSnapshot {
     pub(crate) maximum_latency_ms: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReasoningLevelSnapshot {
     pub(crate) level: String,
     pub(crate) requests: u64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ModelSnapshot {
     pub(crate) model: String,
@@ -647,13 +771,21 @@ pub(crate) struct ModelSnapshot {
     pub(crate) input_limit: Option<u64>,
     pub(crate) effective_input_budget: Option<u64>,
     pub(crate) input_window_used: Option<u64>,
+    pub(crate) capacity_waiters: u64,
+    pub(crate) cooldown_keys: u64,
+    pub(crate) cooldown_waiters: u64,
+    pub(crate) max_remaining_cooldown_ms: u64,
+    pub(crate) probe_keys: u64,
+    pub(crate) capacity_wait_cancellations: u64,
+    pub(crate) cooldown_wait_cancellations: u64,
+    pub(crate) cooldown_releases: u64,
     pub(crate) reasoning_levels: Vec<ReasoningLevelSnapshot>,
 }
 
 impl ModelSnapshot {
-    fn from_capacity(capacity: &ThrottleModelSnapshot) -> Self {
+    fn empty(model: &str) -> Self {
         Self {
-            model: capacity.model.clone(),
+            model: model.to_owned(),
             history: Vec::new(),
             rollup_history: Vec::new(),
             requests: 0,
@@ -665,26 +797,110 @@ impl ModelSnapshot {
             retries: 0,
             fallbacks: 0,
             queue_wait_ms: 0,
-            queue_depth: capacity.queue_depth,
-            queue_depth_max: capacity.queue_depth,
+            queue_depth: 0,
+            queue_depth_max: 0,
             p50_latency_ms: 0,
             p95_latency_ms: 0,
             p99_latency_ms: 0,
-            limiter: if capacity.active {
-                "enforced".to_owned()
-            } else {
-                "inactive".to_owned()
-            },
-            penalty_basis_points: capacity.penalty_basis_points,
-            input_limit: capacity.input_limit,
-            effective_input_budget: capacity.effective_input_budget,
-            input_window_used: capacity.input_window_used,
+            limiter: "inactive".to_owned(),
+            penalty_basis_points: 0,
+            input_limit: None,
+            effective_input_budget: None,
+            input_window_used: None,
+            capacity_waiters: 0,
+            cooldown_keys: 0,
+            cooldown_waiters: 0,
+            max_remaining_cooldown_ms: 0,
+            probe_keys: 0,
+            capacity_wait_cancellations: 0,
+            cooldown_wait_cancellations: 0,
+            cooldown_releases: 0,
             reasoning_levels: Vec::new(),
         }
     }
+
+    fn merge_capacity(&mut self, capacity: &ThrottleModelSnapshot, aggregate: bool) {
+        self.queue_depth = if aggregate {
+            self.queue_depth.saturating_add(capacity.queue_depth)
+        } else {
+            capacity.queue_depth
+        };
+        self.capacity_waiters = if aggregate {
+            self.capacity_waiters.saturating_add(capacity.waiters)
+        } else {
+            capacity.waiters
+        };
+        self.capacity_wait_cancellations = if aggregate {
+            self.capacity_wait_cancellations
+                .saturating_add(capacity.wait_cancellations)
+        } else {
+            capacity.wait_cancellations
+        };
+        self.queue_depth_max = self.queue_depth_max.max(capacity.queue_depth);
+        if capacity.active {
+            self.limiter = "enforced".to_owned();
+        } else if !aggregate {
+            self.limiter = "inactive".to_owned();
+        }
+        if aggregate {
+            self.penalty_basis_points =
+                self.penalty_basis_points.max(capacity.penalty_basis_points);
+            self.input_limit = None;
+            self.effective_input_budget = None;
+            self.input_window_used = None;
+        } else {
+            self.penalty_basis_points = capacity.penalty_basis_points;
+            self.input_limit = capacity.input_limit;
+            self.effective_input_budget = capacity.effective_input_budget;
+            self.input_window_used = capacity.input_window_used;
+        }
+    }
+
+    fn reset_capacity(&mut self) {
+        self.queue_depth = 0;
+        self.capacity_waiters = 0;
+        self.capacity_wait_cancellations = 0;
+        self.limiter = "inactive".to_owned();
+        self.penalty_basis_points = 0;
+        self.input_limit = None;
+        self.effective_input_budget = None;
+        self.input_window_used = None;
+    }
+
+    fn merge_rate_limit(&mut self, snapshot: &RateLimitModelSnapshot, aggregate: bool) {
+        if aggregate {
+            self.cooldown_keys = self.cooldown_keys.saturating_add(snapshot.cooldown_keys);
+            self.cooldown_waiters = self.cooldown_waiters.saturating_add(snapshot.waiters);
+            self.probe_keys = self.probe_keys.saturating_add(snapshot.probe_keys);
+            self.cooldown_wait_cancellations = self
+                .cooldown_wait_cancellations
+                .saturating_add(snapshot.wait_cancellations);
+            self.cooldown_releases = self
+                .cooldown_releases
+                .saturating_add(snapshot.cooldown_releases);
+        } else {
+            self.cooldown_keys = snapshot.cooldown_keys;
+            self.cooldown_waiters = snapshot.waiters;
+            self.probe_keys = snapshot.probe_keys;
+            self.cooldown_wait_cancellations = snapshot.wait_cancellations;
+            self.cooldown_releases = snapshot.cooldown_releases;
+        }
+        self.max_remaining_cooldown_ms = self
+            .max_remaining_cooldown_ms
+            .max(snapshot.max_remaining_cooldown_ms);
+    }
+
+    fn reset_rate_limit(&mut self) {
+        self.cooldown_keys = 0;
+        self.cooldown_waiters = 0;
+        self.max_remaining_cooldown_ms = 0;
+        self.probe_keys = 0;
+        self.cooldown_wait_cancellations = 0;
+        self.cooldown_releases = 0;
+    }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RateLimitEvent {
     pub(crate) at_ms: u64,
@@ -692,7 +908,7 @@ pub(crate) struct RateLimitEvent {
     pub(crate) transition: AutoTransition,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RetentionSnapshot {
     pub(crate) detailed_resolution_seconds: u64,
@@ -708,36 +924,191 @@ pub(crate) struct RetentionSnapshot {
 #[cfg(feature = "metrics")]
 struct MetricsInner {
     started: tokio::time::Instant,
+    timeline_base_ms: AtomicU64,
     store: Mutex<MetricsStore>,
     connections: AtomicU64,
     active_requests: AtomicU64,
     active_streams: AtomicU64,
     events: broadcast::Sender<String>,
     prometheus: PrometheusHandle,
+    active_runtime_key: Mutex<Option<String>>,
+    persistence: Mutex<Option<MetricsPersistenceState>>,
+}
+
+#[cfg(feature = "metrics")]
+#[derive(Clone)]
+struct MetricsPersistenceState {
+    storage: ServiceStorage,
+    runtime_key: String,
+    max_bytes: u64,
+}
+
+#[cfg(feature = "metrics")]
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistedMetrics {
+    version: u8,
+    stored_at_ms: u64,
+    snapshot: MetricsSnapshot,
 }
 
 #[cfg(feature = "metrics")]
 impl MetricsInner {
-    fn new() -> Result<Arc<Self>, MetricsError> {
+    fn new(persistence: Option<MetricsPersistenceConfig>) -> Result<Arc<Self>, MetricsError> {
         let (events, _) = broadcast::channel(8);
+        let mut timeline_base_ms = 0;
+        let mut store = MetricsStore::new();
+        let persistence = persistence.map(|config| MetricsPersistenceState {
+            storage: config.storage,
+            runtime_key: config.runtime_key,
+            max_bytes: config.max_bytes,
+        });
+        let active_runtime_key = persistence
+            .as_ref()
+            .map(|persistence| persistence.runtime_key.clone());
+        if let Some(persistence) = &persistence {
+            if let Some(payload) = persistence
+                .storage
+                .load_aggregate_metrics(&persistence.runtime_key)
+                .map_err(|error| MetricsError::Persistence(error.to_string()))?
+            {
+                match serde_json::from_slice::<PersistedMetrics>(&payload) {
+                    Ok(restored) if restored.version == 1 => {
+                        let now = wall_clock_ms();
+                        timeline_base_ms = restored
+                            .snapshot
+                            .generated_at_ms
+                            .saturating_add(now.saturating_sub(restored.stored_at_ms));
+                        store = MetricsStore::restore(restored.snapshot, timeline_base_ms);
+                    }
+                    Ok(_) => tracing::warn!("aggregate metrics version is unsupported"),
+                    Err(error) => {
+                        tracing::warn!(%error, "aggregate metrics snapshot could not be restored")
+                    }
+                }
+            }
+        }
         Ok(Arc::new(Self {
             started: tokio::time::Instant::now(),
-            store: Mutex::new(MetricsStore::new()),
+            timeline_base_ms: AtomicU64::new(timeline_base_ms),
+            store: Mutex::new(store),
             connections: AtomicU64::new(0),
             active_requests: AtomicU64::new(0),
             active_streams: AtomicU64::new(0),
             events,
             prometheus: prometheus_handle()?,
+            active_runtime_key: Mutex::new(active_runtime_key),
+            persistence: Mutex::new(persistence),
         }))
     }
 
-    fn record_outcome(&self, outcome: &RequestOutcome) {
-        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-        let model_label = self
+    fn timeline_ms(&self) -> u64 {
+        self.timeline_base_ms
+            .load(Ordering::Relaxed)
+            .saturating_add(self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64)
+    }
+
+    fn persist(&self) -> Result<(), MetricsError> {
+        let persistence = self
+            .persistence
+            .lock()
+            .expect("metrics persistence lock is not poisoned")
+            .clone();
+        let Some(persistence) = persistence else {
+            return Ok(());
+        };
+        let timeline_ms = self.timeline_ms();
+        let snapshot = self
             .store
             .lock()
             .expect("metrics store lock is not poisoned")
-            .record_outcome(elapsed_ms, outcome);
+            .snapshot_for_persistence(timeline_ms);
+        let stored_at_ms = wall_clock_ms();
+        let payload = serde_json::to_vec(&PersistedMetrics {
+            version: 1,
+            stored_at_ms,
+            snapshot,
+        })
+        .map_err(|error| MetricsError::Persistence(error.to_string()))?;
+        persistence
+            .storage
+            .store_aggregate_metrics(
+                &persistence.runtime_key,
+                &payload,
+                stored_at_ms,
+                persistence.max_bytes,
+            )
+            .map_err(|error| MetricsError::Persistence(error.to_string()))?;
+        Ok(())
+    }
+
+    fn activate_runtime(&self, runtime_key: String) -> Result<(), MetricsError> {
+        self.persist()?;
+        *self
+            .active_runtime_key
+            .lock()
+            .expect("active runtime key lock is not poisoned") = Some(runtime_key.clone());
+        let mut persistence = self
+            .persistence
+            .lock()
+            .expect("metrics persistence lock is not poisoned");
+        let Some(state) = persistence.as_mut() else {
+            *self
+                .store
+                .lock()
+                .expect("metrics store lock is not poisoned") = MetricsStore::new();
+            self.timeline_base_ms.store(0, Ordering::Relaxed);
+            return Ok(());
+        };
+        state.runtime_key = runtime_key;
+        let restored = state
+            .storage
+            .load_aggregate_metrics(&state.runtime_key)
+            .map_err(|error| MetricsError::Persistence(error.to_string()))?
+            .and_then(
+                |payload| match serde_json::from_slice::<PersistedMetrics>(&payload) {
+                    Ok(restored) => Some(restored),
+                    Err(error) => {
+                        tracing::warn!(%error, "aggregate metrics snapshot could not be restored");
+                        None
+                    }
+                },
+            );
+        let (store, timeline_base_ms) =
+            if let Some(restored) = restored.filter(|restored| restored.version == 1) {
+                let timeline = restored
+                    .snapshot
+                    .generated_at_ms
+                    .saturating_add(wall_clock_ms().saturating_sub(restored.stored_at_ms));
+                (MetricsStore::restore(restored.snapshot, timeline), timeline)
+            } else {
+                (MetricsStore::new(), 0)
+            };
+        *self
+            .store
+            .lock()
+            .expect("metrics store lock is not poisoned") = store;
+        self.timeline_base_ms
+            .store(timeline_base_ms, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn record_outcome(&self, outcome: &RequestOutcome) {
+        let elapsed_ms = self.timeline_ms();
+        let active = self
+            .active_runtime_key
+            .lock()
+            .expect("active runtime key lock is not poisoned")
+            .as_deref()
+            == Some(outcome.runtime_key.as_str());
+        let model_label = if active {
+            self.store
+                .lock()
+                .expect("metrics store lock is not poisoned")
+                .record_outcome(elapsed_ms, outcome)
+        } else {
+            "other".to_owned()
+        };
         let status_class = format!("{}xx", outcome.status.as_u16() / 100);
         let streaming = if outcome.streaming { "true" } else { "false" };
         let client = outcome
@@ -842,7 +1213,7 @@ impl MetricsInner {
     }
 
     fn record_transition(&self, model: &str, transition: AutoTransition) {
-        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let elapsed_ms = self.timeline_ms();
         let model_label = self
             .store
             .lock()
@@ -866,7 +1237,7 @@ impl MetricsInner {
     }
 
     fn record_upstream_429(&self, model: &str, input_token_limit: bool) {
-        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let elapsed_ms = self.timeline_ms();
         let model_label = self
             .store
             .lock()
@@ -881,7 +1252,7 @@ impl MetricsInner {
     }
 
     fn record_in_band_rate_limit(&self, model: &str) {
-        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let elapsed_ms = self.timeline_ms();
         let model_label = self
             .store
             .lock()
@@ -895,7 +1266,7 @@ impl MetricsInner {
     }
 
     fn record_local_rate_limit(&self, model: &str, reason: &'static str) {
-        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let elapsed_ms = self.timeline_ms();
         let model_label = self
             .store
             .lock()
@@ -910,7 +1281,7 @@ impl MetricsInner {
     }
 
     fn record_oversized(&self, model: &str) {
-        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let elapsed_ms = self.timeline_ms();
         let mut store = self
             .store
             .lock()
@@ -939,21 +1310,12 @@ impl MetricsInner {
     }
 
     fn record_capacity_snapshots(&self, capacities: &[ThrottleModelSnapshot]) {
-        for capacity in capacities {
-            let model = {
-                let mut store = self
-                    .store
-                    .lock()
-                    .expect("metrics store lock is not poisoned");
-                let label = store.model_label(&capacity.model);
-                if label != "other" {
-                    store
-                        .models
-                        .entry(label.clone())
-                        .or_insert_with(|| ModelMetrics::new(&label));
-                }
-                label
-            };
+        let labels = self
+            .store
+            .lock()
+            .expect("metrics store lock is not poisoned")
+            .record_capacity_snapshots(capacities);
+        for (capacity, model) in capacities.iter().zip(labels) {
             ::metrics::gauge!(
                 "dbx_model_proxy_current_queue_depth",
                 "model" => model.clone()
@@ -981,10 +1343,64 @@ impl MetricsInner {
             if let Some(input_used) = capacity.input_window_used {
                 ::metrics::gauge!(
                     "dbx_model_proxy_input_window_used_tokens",
-                    "model" => model
+                    "model" => model.clone()
                 )
                 .set(input_used as f64);
             }
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_capacity_waiters",
+                "model" => model.clone()
+            )
+            .set(capacity.waiters as f64);
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_capacity_wait_cancellations",
+                "model" => model
+            )
+            .set(capacity.wait_cancellations as f64);
+        }
+    }
+
+    fn record_rate_limit_snapshots(
+        &self,
+        snapshots: &[RateLimitModelSnapshot],
+        controls_enabled: bool,
+    ) {
+        let labels = self
+            .store
+            .lock()
+            .expect("metrics store lock is not poisoned")
+            .record_rate_limit_snapshots(snapshots, controls_enabled);
+        for (snapshot, model) in snapshots.iter().zip(labels) {
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_cooldown_keys",
+                "model" => model.clone()
+            )
+            .set(snapshot.cooldown_keys as f64);
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_cooldown_waiters",
+                "model" => model.clone()
+            )
+            .set(snapshot.waiters as f64);
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_max_remaining_cooldown_seconds",
+                "model" => model.clone()
+            )
+            .set(snapshot.max_remaining_cooldown_ms as f64 / 1_000.0);
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_probe_keys",
+                "model" => model.clone()
+            )
+            .set(snapshot.probe_keys as f64);
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_cooldown_wait_cancellations",
+                "model" => model.clone()
+            )
+            .set(snapshot.wait_cancellations as f64);
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_cooldown_releases",
+                "model" => model
+            )
+            .set(snapshot.cooldown_releases as f64);
         }
     }
 
@@ -997,11 +1413,12 @@ impl MetricsInner {
     }
 
     fn snapshot_with_model(&self, model: Option<&str>) -> MetricsSnapshot {
-        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let elapsed_ms = self.timeline_ms();
         let connections = self.connections.load(Ordering::Relaxed);
         let active_requests = self.active_requests.load(Ordering::Relaxed);
         let active_streams = self.active_streams.load(Ordering::Relaxed);
-        self.store
+        let mut snapshot = self
+            .store
             .lock()
             .expect("metrics store lock is not poisoned")
             .snapshot(
@@ -1010,8 +1427,24 @@ impl MetricsInner {
                 active_requests,
                 active_streams,
                 model,
-            )
+            );
+        snapshot.uptime_seconds = self.started.elapsed().as_secs();
+        snapshot.retention.process_local = self
+            .persistence
+            .lock()
+            .expect("metrics persistence lock is not poisoned")
+            .is_none();
+        snapshot
     }
+}
+
+#[cfg(feature = "metrics")]
+fn wall_clock_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64
 }
 
 #[cfg(feature = "metrics")]
@@ -1059,11 +1492,25 @@ impl ReasoningCounts {
             })
             .collect()
     }
+
+    fn restore(snapshots: &[ReasoningLevelSnapshot]) -> Self {
+        let mut counts = Self::default();
+        for snapshot in snapshots {
+            if let Some(setting) = ReasoningSetting::ALL
+                .into_iter()
+                .find(|setting| setting.label() == snapshot.level)
+            {
+                counts.requests[setting.index()] = snapshot.requests;
+            }
+        }
+        counts
+    }
 }
 
 #[cfg(feature = "metrics")]
 #[derive(Debug)]
 struct MetricsStore {
+    controls_enabled: bool,
     total_requests: u64,
     total_rate_limited: u64,
     total_fallbacks: u64,
@@ -1082,6 +1529,7 @@ struct MetricsStore {
 impl MetricsStore {
     fn new() -> Self {
         Self {
+            controls_enabled: false,
             total_requests: 0,
             total_rate_limited: 0,
             total_fallbacks: 0,
@@ -1095,6 +1543,75 @@ impl MetricsStore {
             reasoning: ReasoningCounts::default(),
             rate_limit_events: VecDeque::with_capacity(RATE_LIMIT_EVENT_LIMIT),
         }
+    }
+
+    fn restore(snapshot: MetricsSnapshot, timeline_ms: u64) -> Self {
+        let (detailed, detailed_current) =
+            restore_buckets(snapshot.history, timeline_ms, 5_000, DETAILED_BUCKET_LIMIT);
+        let (rollups, rollup_current) = restore_buckets(
+            snapshot.rollup_history,
+            timeline_ms,
+            60_000,
+            ROLLUP_BUCKET_LIMIT,
+        );
+        let mut latency = latency_histogram();
+        restore_quantiles(
+            &mut latency,
+            snapshot.summary.p50_latency_ms,
+            snapshot.summary.p95_latency_ms,
+            snapshot.summary.p99_latency_ms,
+        );
+        let mut models = HashMap::with_capacity(MODEL_SERIES_LIMIT);
+        let mut other = ModelMetrics::new("other");
+        for model in snapshot.models {
+            let restored = ModelMetrics::restore(model, timeline_ms);
+            if restored.model == "other" {
+                other = restored;
+            } else if models.len() < MODEL_SERIES_LIMIT {
+                models.insert(restored.model.clone(), restored);
+            }
+        }
+        let mut rate_limit_events = snapshot
+            .rate_limit_events
+            .into_iter()
+            .filter(|event| event.at_ms.saturating_add(86_400_000) >= timeline_ms)
+            .collect::<VecDeque<_>>();
+        while rate_limit_events.len() > RATE_LIMIT_EVENT_LIMIT {
+            rate_limit_events.pop_front();
+        }
+        Self {
+            controls_enabled: false,
+            total_requests: snapshot.summary.total_requests,
+            total_rate_limited: snapshot.summary.total_rate_limited,
+            total_fallbacks: snapshot.summary.total_fallbacks,
+            latency,
+            detailed,
+            detailed_current,
+            rollups,
+            rollup_current,
+            models,
+            other,
+            reasoning: ReasoningCounts::restore(&snapshot.reasoning_levels),
+            rate_limit_events,
+        }
+    }
+
+    fn snapshot_for_persistence(&mut self, elapsed_ms: u64) -> MetricsSnapshot {
+        let mut snapshot = self.snapshot(elapsed_ms, 0, 0, 0, None);
+        let mut models = self
+            .models
+            .values_mut()
+            .map(|model| model.snapshot(elapsed_ms, true))
+            .collect::<Vec<_>>();
+        if self.other.requests > 0
+            || self.other.rate_limited > 0
+            || self.other.oversized_rejections > 0
+        {
+            models.push(self.other.snapshot(elapsed_ms, true));
+        }
+        models.sort_by(|left, right| left.model.cmp(&right.model));
+        snapshot.models = models;
+        snapshot
     }
 
     fn record_outcome(&mut self, elapsed_ms: u64, outcome: &RequestOutcome) -> String {
@@ -1126,6 +1643,55 @@ impl MetricsStore {
                 .record(elapsed_ms, outcome);
         }
         model_label
+    }
+
+    fn record_capacity_snapshots(&mut self, capacities: &[ThrottleModelSnapshot]) -> Vec<String> {
+        for model in self.models.values_mut() {
+            model.reset_capacity();
+        }
+        self.other.reset_capacity();
+        capacities
+            .iter()
+            .map(|capacity| {
+                let label = self.model_label(&capacity.model);
+                if label == "other" {
+                    self.other.merge_capacity(capacity, true);
+                } else {
+                    self.models
+                        .entry(label.clone())
+                        .or_insert_with(|| ModelMetrics::new(&label))
+                        .merge_capacity(capacity, false);
+                }
+                label
+            })
+            .collect()
+    }
+
+    fn record_rate_limit_snapshots(
+        &mut self,
+        snapshots: &[RateLimitModelSnapshot],
+        controls_enabled: bool,
+    ) -> Vec<String> {
+        self.controls_enabled = controls_enabled;
+        for model in self.models.values_mut() {
+            model.reset_rate_limit();
+        }
+        self.other.reset_rate_limit();
+        snapshots
+            .iter()
+            .map(|snapshot| {
+                let label = self.model_label(&snapshot.model);
+                if label == "other" {
+                    self.other.merge_rate_limit(snapshot, true);
+                } else {
+                    self.models
+                        .entry(label.clone())
+                        .or_insert_with(|| ModelMetrics::new(&label))
+                        .merge_rate_limit(snapshot, false);
+                }
+                label
+            })
+            .collect()
     }
 
     fn record_rate_limited(&mut self, elapsed_ms: u64, model: &str) -> String {
@@ -1274,6 +1840,11 @@ impl MetricsStore {
         if self.other.requests > 0
             || self.other.rate_limited > 0
             || self.other.oversized_rejections > 0
+            || self.other.capacity_waiters > 0
+            || self.other.cooldown_keys > 0
+            || self.other.capacity_wait_cancellations > 0
+            || self.other.cooldown_wait_cancellations > 0
+            || self.other.cooldown_releases > 0
         {
             models.push(
                 self.other
@@ -1299,6 +1870,7 @@ impl MetricsStore {
             } else {
                 MetricsMode::Collect
             },
+            controls_enabled: self.controls_enabled,
             generated_at_ms: elapsed_ms,
             uptime_seconds: elapsed_ms / 1_000,
             summary: SummarySnapshot {
@@ -1315,6 +1887,25 @@ impl MetricsStore {
                 total_requests: self.total_requests,
                 total_rate_limited: self.total_rate_limited,
                 total_fallbacks: self.total_fallbacks,
+                cooldown_keys: models.iter().map(|model| model.cooldown_keys).sum(),
+                rate_limit_waiters: models
+                    .iter()
+                    .map(|model| {
+                        model
+                            .capacity_waiters
+                            .saturating_add(model.cooldown_waiters)
+                    })
+                    .sum(),
+                probe_keys: models.iter().map(|model| model.probe_keys).sum(),
+                wait_cancellations: models
+                    .iter()
+                    .map(|model| {
+                        model
+                            .capacity_wait_cancellations
+                            .saturating_add(model.cooldown_wait_cancellations)
+                    })
+                    .sum(),
+                cooldown_releases: models.iter().map(|model| model.cooldown_releases).sum(),
             },
             history,
             rollup_history,
@@ -1386,6 +1977,21 @@ impl Bucket {
             maximum_latency_ms: self.latency_maximum_ms,
         }
     }
+
+    fn restore(snapshot: BucketSnapshot) -> Self {
+        Self {
+            started_at_ms: snapshot.started_at_ms,
+            requests: snapshot.requests,
+            input_tokens: snapshot.input_tokens,
+            output_tokens: snapshot.output_tokens,
+            errors: snapshot.errors,
+            rate_limited: snapshot.rate_limited,
+            latency_total_ms: snapshot
+                .average_latency_ms
+                .saturating_mul(snapshot.requests),
+            latency_maximum_ms: snapshot.maximum_latency_ms,
+        }
+    }
 }
 
 #[cfg(feature = "metrics")]
@@ -1414,6 +2020,14 @@ struct ModelMetrics {
     input_limit: Option<u64>,
     effective_input_budget: Option<u64>,
     input_window_used: Option<u64>,
+    capacity_waiters: u64,
+    cooldown_keys: u64,
+    cooldown_waiters: u64,
+    max_remaining_cooldown_ms: u64,
+    probe_keys: u64,
+    capacity_wait_cancellations: u64,
+    cooldown_wait_cancellations: u64,
+    cooldown_releases: u64,
     reasoning: ReasoningCounts,
 }
 
@@ -1444,8 +2058,130 @@ impl ModelMetrics {
             input_limit: None,
             effective_input_budget: None,
             input_window_used: None,
+            capacity_waiters: 0,
+            cooldown_keys: 0,
+            cooldown_waiters: 0,
+            max_remaining_cooldown_ms: 0,
+            probe_keys: 0,
+            capacity_wait_cancellations: 0,
+            cooldown_wait_cancellations: 0,
+            cooldown_releases: 0,
             reasoning: ReasoningCounts::default(),
         }
+    }
+
+    fn restore(snapshot: ModelSnapshot, timeline_ms: u64) -> Self {
+        let (detailed, detailed_current) =
+            restore_buckets(snapshot.history, timeline_ms, 5_000, DETAILED_BUCKET_LIMIT);
+        let (rollups, rollup_current) = restore_buckets(
+            snapshot.rollup_history,
+            timeline_ms,
+            60_000,
+            ROLLUP_BUCKET_LIMIT,
+        );
+        let mut latency = latency_histogram();
+        restore_quantiles(
+            &mut latency,
+            snapshot.p50_latency_ms,
+            snapshot.p95_latency_ms,
+            snapshot.p99_latency_ms,
+        );
+        Self {
+            model: snapshot.model,
+            detailed,
+            detailed_current,
+            rollups,
+            rollup_current,
+            requests: snapshot.requests,
+            input_tokens: snapshot.input_tokens,
+            output_tokens: snapshot.output_tokens,
+            errors: snapshot.errors,
+            rate_limited: snapshot.rate_limited,
+            oversized_rejections: snapshot.oversized_rejections,
+            retries: snapshot.retries,
+            fallbacks: snapshot.fallbacks,
+            queue_wait_ms: snapshot.queue_wait_ms,
+            queue_depth: 0,
+            queue_depth_max: snapshot.queue_depth_max,
+            latency,
+            limiter: "inactive".to_owned(),
+            limiter_observed: false,
+            penalty_basis_points: 0,
+            input_limit: None,
+            effective_input_budget: None,
+            input_window_used: None,
+            capacity_waiters: 0,
+            cooldown_keys: 0,
+            cooldown_waiters: 0,
+            max_remaining_cooldown_ms: 0,
+            probe_keys: 0,
+            capacity_wait_cancellations: snapshot.capacity_wait_cancellations,
+            cooldown_wait_cancellations: snapshot.cooldown_wait_cancellations,
+            cooldown_releases: snapshot.cooldown_releases,
+            reasoning: ReasoningCounts::restore(&snapshot.reasoning_levels),
+        }
+    }
+
+    fn reset_capacity(&mut self) {
+        self.queue_depth = 0;
+        self.capacity_waiters = 0;
+        self.limiter = "inactive".to_owned();
+        self.penalty_basis_points = 0;
+        self.input_limit = None;
+        self.effective_input_budget = None;
+        self.input_window_used = None;
+        self.capacity_wait_cancellations = 0;
+    }
+
+    fn merge_capacity(&mut self, capacity: &ThrottleModelSnapshot, aggregate: bool) {
+        self.queue_depth = self.queue_depth.saturating_add(capacity.queue_depth);
+        self.queue_depth_max = self.queue_depth_max.max(capacity.queue_depth);
+        self.capacity_waiters = self.capacity_waiters.saturating_add(capacity.waiters);
+        self.capacity_wait_cancellations = if aggregate {
+            self.capacity_wait_cancellations
+                .saturating_add(capacity.wait_cancellations)
+        } else {
+            capacity.wait_cancellations
+        };
+        if capacity.active {
+            self.limiter = "enforced".to_owned();
+        }
+        self.penalty_basis_points = self.penalty_basis_points.max(capacity.penalty_basis_points);
+        if !aggregate {
+            self.input_limit = capacity.input_limit;
+            self.effective_input_budget = capacity.effective_input_budget;
+            self.input_window_used = capacity.input_window_used;
+        }
+    }
+
+    fn reset_rate_limit(&mut self) {
+        self.cooldown_keys = 0;
+        self.cooldown_waiters = 0;
+        self.max_remaining_cooldown_ms = 0;
+        self.probe_keys = 0;
+        self.cooldown_wait_cancellations = 0;
+        self.cooldown_releases = 0;
+    }
+
+    fn merge_rate_limit(&mut self, snapshot: &RateLimitModelSnapshot, aggregate: bool) {
+        self.cooldown_keys = self.cooldown_keys.saturating_add(snapshot.cooldown_keys);
+        self.cooldown_waiters = self.cooldown_waiters.saturating_add(snapshot.waiters);
+        self.max_remaining_cooldown_ms = self
+            .max_remaining_cooldown_ms
+            .max(snapshot.max_remaining_cooldown_ms);
+        self.probe_keys = self.probe_keys.saturating_add(snapshot.probe_keys);
+        self.cooldown_wait_cancellations = if aggregate {
+            self.cooldown_wait_cancellations
+                .saturating_add(snapshot.wait_cancellations)
+        } else {
+            snapshot.wait_cancellations
+        };
+        self.cooldown_releases = if aggregate {
+            self.cooldown_releases
+                .saturating_add(snapshot.cooldown_releases)
+        } else {
+            snapshot.cooldown_releases
+        };
     }
 
     fn record(&mut self, elapsed_ms: u64, outcome: &RequestOutcome) {
@@ -1565,6 +2301,14 @@ impl ModelMetrics {
             input_limit: self.input_limit,
             effective_input_budget: self.effective_input_budget,
             input_window_used: self.input_window_used,
+            capacity_waiters: self.capacity_waiters,
+            cooldown_keys: self.cooldown_keys,
+            cooldown_waiters: self.cooldown_waiters,
+            max_remaining_cooldown_ms: self.max_remaining_cooldown_ms,
+            probe_keys: self.probe_keys,
+            capacity_wait_cancellations: self.capacity_wait_cancellations,
+            cooldown_wait_cancellations: self.cooldown_wait_cancellations,
+            cooldown_releases: self.cooldown_releases,
             reasoning_levels: self.reasoning.snapshot(),
         }
     }
@@ -1596,6 +2340,46 @@ fn quantile(histogram: &Histogram<u64>, quantile: f64) -> u64 {
 }
 
 #[cfg(feature = "metrics")]
+fn restore_quantiles(histogram: &mut Histogram<u64>, p50: u64, p95: u64, p99: u64) {
+    for value in [p50, p95, p99].into_iter().filter(|value| *value > 0) {
+        let _ = histogram.record(value);
+    }
+}
+
+#[cfg(feature = "metrics")]
+fn restore_buckets(
+    snapshots: Vec<BucketSnapshot>,
+    elapsed_ms: u64,
+    resolution_ms: u64,
+    limit: usize,
+) -> (VecDeque<Bucket>, Bucket) {
+    let current_start = elapsed_ms / resolution_ms * resolution_ms;
+    let retained_after = current_start.saturating_sub(resolution_ms.saturating_mul(limit as u64));
+    let mut buckets = snapshots
+        .into_iter()
+        .filter(|bucket| bucket.started_at_ms >= retained_after)
+        .map(Bucket::restore)
+        .collect::<Vec<_>>();
+    buckets.sort_by_key(|bucket| bucket.started_at_ms);
+    buckets.dedup_by_key(|bucket| bucket.started_at_ms);
+    let current = if buckets
+        .last()
+        .is_some_and(|bucket| bucket.started_at_ms == current_start)
+    {
+        buckets.pop().expect("current bucket exists")
+    } else {
+        Bucket {
+            started_at_ms: current_start,
+            ..Bucket::default()
+        }
+    };
+    while buckets.len() > limit {
+        buckets.remove(0);
+    }
+    (buckets.into(), current)
+}
+
+#[cfg(feature = "metrics")]
 fn advance_bucket(
     history: &mut VecDeque<Bucket>,
     current: &mut Bucket,
@@ -1604,6 +2388,13 @@ fn advance_bucket(
     limit: usize,
 ) {
     let start = elapsed_ms / resolution_ms * resolution_ms;
+    let retained_after = start.saturating_sub(resolution_ms.saturating_mul(limit as u64));
+    while history
+        .front()
+        .is_some_and(|bucket| bucket.started_at_ms < retained_after)
+    {
+        history.pop_front();
+    }
     if current.started_at_ms == start {
         return;
     }
@@ -1688,25 +2479,26 @@ mod tests {
             "collect".parse::<MetricsOption>().unwrap(),
             MetricsOption::Collect
         );
+        assert_eq!(default_metrics_option(), MetricsOption::Auto);
         assert_eq!(
-            default_metrics_option(),
-            if cfg!(feature = "metrics-ui") {
-                MetricsOption::Ui
-            } else if cfg!(feature = "metrics") {
-                MetricsOption::Collect
-            } else {
-                MetricsOption::Off
-            }
+            "auto".parse::<MetricsOption>().unwrap(),
+            MetricsOption::Auto
         );
     }
 
     #[test]
     fn non_loopback_listener_requires_public_acknowledgement() {
         let host = "0.0.0.0".parse().unwrap();
-        let config = MetricsConfig::resolve(default_metrics_option(), host, false).unwrap();
+        let config = MetricsConfig::resolve(default_metrics_option(), host, false, false).unwrap();
         assert!(!config.routes_visible);
-        let public = MetricsConfig::resolve(default_metrics_option(), host, true).unwrap();
+        let public = MetricsConfig::resolve(default_metrics_option(), host, true, false).unwrap();
         assert_eq!(public.routes_visible, public.mode != MetricsMode::Off);
+        assert_eq!(
+            MetricsConfig::resolve(MetricsOption::Auto, host, true, true)
+                .unwrap()
+                .mode,
+            MetricsMode::Off
+        );
     }
 
     #[cfg(not(feature = "metrics"))]
@@ -1714,11 +2506,11 @@ mod tests {
     fn metrics_free_build_rejects_collection() {
         let host = "127.0.0.1".parse().unwrap();
         assert!(matches!(
-            MetricsConfig::resolve(MetricsOption::Fullest, host, false),
+            MetricsConfig::resolve(MetricsOption::Fullest, host, false, false),
             Err(MetricsError::CollectionUnavailable)
         ));
         assert_eq!(
-            MetricsConfig::resolve(MetricsOption::Off, host, false)
+            MetricsConfig::resolve(MetricsOption::Off, host, false, false)
                 .unwrap()
                 .mode,
             MetricsMode::Off
@@ -1761,6 +2553,7 @@ mod tests {
             routes_visible: true,
         })
         .unwrap();
+        runtime.activate_runtime("runtime".into()).unwrap();
         let mut receiver = runtime.subscribe().unwrap();
         let mut outcome = fixture_outcome("model".to_owned());
         outcome.fallback_step = 1;
@@ -1837,18 +2630,87 @@ mod tests {
             input_window_used: Some(120_000),
             penalty_basis_points: 1_000,
             queue_depth: 3,
+            waiters: 3,
+            wait_cancellations: 2,
         };
         runtime.record_capacity_snapshots(std::slice::from_ref(&capacity));
+        let cooldown = RateLimitModelSnapshot {
+            model: "model".to_owned(),
+            cooldown_keys: 2,
+            waiters: 4,
+            max_remaining_cooldown_ms: 12_500,
+            probe_keys: 1,
+            wait_cancellations: 3,
+            cooldown_releases: 1,
+        };
+        runtime.record_rate_limit_snapshots(std::slice::from_ref(&cooldown), true);
         let mut live = runtime.snapshot();
         live.apply_capacity_snapshots(&[capacity]);
+        live.apply_rate_limit_snapshots(&[cooldown], true);
         assert_eq!(live.models[0].limiter, "enforced");
         assert_eq!(live.models[0].input_window_used, Some(120_000));
         assert_eq!(live.models[0].queue_depth, 3);
+        assert_eq!(live.models[0].capacity_waiters, 3);
+        assert_eq!(live.models[0].cooldown_keys, 2);
+        assert_eq!(live.models[0].cooldown_waiters, 4);
+        assert_eq!(live.models[0].max_remaining_cooldown_ms, 12_500);
+        assert_eq!(live.models[0].probe_keys, 1);
+        assert_eq!(live.summary.rate_limit_waiters, 7);
+        assert_eq!(live.summary.wait_cancellations, 5);
+        assert_eq!(live.summary.cooldown_releases, 1);
+        assert!(live.controls_enabled);
+        let prometheus = runtime.prometheus().unwrap();
+        assert!(prometheus.contains("dbx_model_proxy_rate_limit_capacity_waiters"));
+        assert!(prometheus.contains("dbx_model_proxy_rate_limit_cooldown_keys"));
+        assert!(prometheus.contains("dbx_model_proxy_rate_limit_max_remaining_cooldown_seconds"));
 
         tokio::time::timeout(Duration::from_secs(6), receiver.recv())
             .await
             .expect("sampler publishes within one interval")
             .expect("SSE payload channel remains open");
+    }
+
+    #[test]
+    fn live_model_merges_preserve_the_named_model_bound() {
+        let mut snapshot = MetricsSnapshot::disabled(MetricsMode::Collect);
+        let capacities = (0..40)
+            .map(|index| ThrottleModelSnapshot {
+                model: format!("capacity-{index}"),
+                active: true,
+                queue_depth: 1,
+                waiters: 1,
+                ..ThrottleModelSnapshot::default()
+            })
+            .collect::<Vec<_>>();
+        snapshot.apply_capacity_snapshots(&capacities);
+        let cooldowns = (0..40)
+            .map(|index| RateLimitModelSnapshot {
+                model: format!("cooldown-{index}"),
+                cooldown_keys: 1,
+                waiters: 1,
+                ..RateLimitModelSnapshot::default()
+            })
+            .collect::<Vec<_>>();
+        snapshot.apply_rate_limit_snapshots(&cooldowns, true);
+
+        assert_eq!(
+            snapshot
+                .models
+                .iter()
+                .filter(|model| model.model != "other")
+                .count(),
+            MODEL_SERIES_LIMIT
+        );
+        assert_eq!(
+            snapshot
+                .models
+                .iter()
+                .filter(|model| model.model == "other")
+                .count(),
+            1
+        );
+        assert!(snapshot.models.len() <= MODEL_SERIES_LIMIT + 1);
+        assert!(snapshot.controls_enabled);
     }
 
     #[cfg(feature = "metrics")]
@@ -1872,13 +2734,81 @@ mod tests {
         assert_eq!(runtime.snapshot().summary.connections, 0);
     }
 
+    #[cfg(feature = "metrics")]
+    #[tokio::test]
+    async fn aggregate_metrics_restore_by_opaque_runtime_key() {
+        let directory = tempfile::tempdir().unwrap();
+        let storage = ServiceStorage::open(directory.path()).unwrap();
+        let config = MetricsConfig {
+            mode: MetricsMode::Collect,
+            routes_visible: true,
+        };
+        let runtime = MetricsRuntime::new_with_persistence(
+            config,
+            Some(MetricsPersistenceConfig {
+                storage: storage.clone(),
+                runtime_key: "runtime-a".into(),
+                max_bytes: 1024 * 1024,
+            }),
+        )
+        .unwrap();
+        let mut outcome = fixture_outcome("model".into());
+        outcome.runtime_key = "runtime-a".into();
+        runtime.record_outcome(&outcome);
+        runtime.inner.as_ref().unwrap().persist().unwrap();
+
+        let restored = MetricsRuntime::new_with_persistence(
+            config,
+            Some(MetricsPersistenceConfig {
+                storage,
+                runtime_key: "runtime-a".into(),
+                max_bytes: 1024 * 1024,
+            }),
+        )
+        .unwrap();
+        let snapshot = restored.snapshot_for_model("model");
+        assert_eq!(snapshot.summary.total_requests, 1);
+        assert_eq!(snapshot.models[0].model, "model");
+        assert_eq!(snapshot.models[0].requests, 1);
+        assert!(!snapshot.models[0].history.is_empty());
+        assert!(!snapshot.retention.process_local);
+
+        restored.activate_runtime("runtime-b".into()).unwrap();
+        assert_eq!(restored.snapshot().summary.total_requests, 0);
+        restored.activate_runtime("runtime-a".into()).unwrap();
+        assert_eq!(restored.snapshot().summary.total_requests, 1);
+    }
+
+    #[cfg(feature = "metrics")]
+    #[tokio::test]
+    async fn memory_runtime_switch_starts_fresh_aggregates() {
+        let runtime = MetricsRuntime::new(MetricsConfig {
+            mode: MetricsMode::Collect,
+            routes_visible: true,
+        })
+        .unwrap();
+        runtime.activate_runtime("runtime".into()).unwrap();
+        runtime.record_outcome(&fixture_outcome("model".into()));
+        assert_eq!(runtime.snapshot().summary.total_requests, 1);
+        runtime.activate_runtime("another-runtime".into()).unwrap();
+        assert_eq!(runtime.snapshot().summary.total_requests, 0);
+        runtime.record_outcome(&fixture_outcome("model".into()));
+        assert_eq!(runtime.snapshot().summary.total_requests, 0);
+        let mut current = fixture_outcome("model".into());
+        current.runtime_key = "another-runtime".into();
+        runtime.record_outcome(&current);
+        assert_eq!(runtime.snapshot().summary.total_requests, 1);
+    }
+
     #[cfg(feature = "metrics-ui")]
     #[test]
     fn embedded_dashboard_contains_the_approved_assets() {
         let index = dashboard_asset("index.html").expect("dashboard index is embedded");
         let index = std::str::from_utf8(&index.body).unwrap();
         assert!(index.contains("Model proxy metrics"));
-        assert!(index.contains("<th>Fallbacks</th>"));
+        assert!(index.contains("data-sort=\"fallbacks\""));
+        assert!(index.contains("Search models"));
+        assert!(index.contains("Databricks profile"));
         assert!(index.contains("app.js"));
         let app = dashboard_asset("app.js").expect("dashboard script is embedded");
         assert!(std::str::from_utf8(&app.body)
@@ -1887,8 +2817,23 @@ mod tests {
         assert!(std::str::from_utf8(&app.body)
             .unwrap()
             .contains("inputWindowUsed"));
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("API_ENDPOINTS"));
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("Cancel waits"));
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("controlsEnabled"));
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("/api/auth"));
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("/api/metrics/events"));
         assert!(!dashboard_asset("app.js").unwrap().immutable);
-        assert!(dashboard_asset("app.2675ef49.css").unwrap().immutable);
+        assert!(dashboard_asset("app.28002a60.css").unwrap().immutable);
         assert!(dashboard_asset("assets/status-live-8.svg").is_some());
         assert!(dashboard_asset("missing.js").is_none());
     }
@@ -1902,6 +2847,7 @@ mod tests {
         use crate::throttle::ThrottleAcquisition;
 
         RequestOutcome {
+            runtime_key: "runtime".to_owned(),
             route: "/v1/model",
             requested_model: model.clone(),
             resolved_model: model,

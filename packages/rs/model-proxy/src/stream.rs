@@ -4,6 +4,7 @@ use std::{
     convert::Infallible,
     io,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -28,13 +29,13 @@ use crate::{
     error::ProxyError,
     protocol::{ClientWire, TargetWire},
     request_log::RequestLogContext,
+    runtime::RuntimeGeneration,
     throttle::{response_token_usage, ResponseTokenUsage},
 };
 
 const MAX_OBSERVED_SSE_EVENT_BYTES: usize = 1024 * 1024;
 
 /// Request metadata emitted when an SSE body completes or is dropped.
-#[derive(Debug)]
 pub(crate) struct StreamLogContext {
     /// Protocol presented by the caller.
     pub(crate) client_wire: ClientWire,
@@ -42,6 +43,8 @@ pub(crate) struct StreamLogContext {
     pub(crate) target: TargetWire,
     /// Shared request metadata and local token reservation.
     pub(crate) request: RequestLogContext,
+    /// Runtime lease retained until the response body completes or is dropped.
+    pub(crate) _runtime: Arc<RuntimeGeneration>,
 }
 
 /// Bounded input for observing native SSE frames without changing their wire bytes.

@@ -22,7 +22,8 @@ body {
 }
 
 button,
-select {
+select,
+input {
   color: inherit;
   font: inherit;
 }
@@ -41,6 +42,7 @@ button {
 
 button:hover,
 button:focus-visible,
+input:focus-visible,
 select:focus-visible {
   border-color: var(--brand-primary-hover);
   outline: 2px solid color-mix(in srgb, var(--brand-primary-hover) 25%, transparent);
@@ -127,6 +129,31 @@ small {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.auth-control {
+  display: grid;
+  min-width: 320px;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 4px 6px;
+}
+
+.auth-control button {
+  min-height: 36px;
+  padding-block: 6px;
+}
+
+.auth-control > span {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--dashboard-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-select {
+  min-width: 0;
 }
 
 .connection-status {
@@ -318,6 +345,36 @@ small {
   font-weight: 500;
 }
 
+.models-panel .panel-heading {
+  align-items: flex-start;
+}
+
+.model-table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.model-table-controls input,
+.model-table-controls select {
+  min-height: 32px;
+  margin: 0;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-background);
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+.model-table-controls input {
+  width: 180px;
+}
+
+.model-table-controls .select-control {
+  min-width: 130px;
+}
+
 .metric-card strong {
   font-size: 25px;
 }
@@ -470,6 +527,38 @@ th {
   font-weight: 400;
 }
 
+.sort-control {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.sort-control::after {
+  display: inline-block;
+  width: 10px;
+  margin-left: 3px;
+  content: "";
+}
+
+.sort-control[data-direction="asc"]::after {
+  content: "↑";
+}
+
+.sort-control[data-direction="desc"]::after {
+  content: "↓";
+}
+
+.sort-control:hover,
+.sort-control:focus-visible {
+  border-color: transparent;
+  outline-offset: 2px;
+}
+
 td {
   font-family: var(--brand-font-mono);
 }
@@ -543,6 +632,69 @@ td:first-child {
 
 .capacity-track span[data-state="danger"] {
   background: var(--dashboard-danger);
+}
+
+.wait-state-cell {
+  min-width: 220px;
+  font-family: var(--brand-font-sans);
+  white-space: normal;
+}
+
+.wait-state-cell > * {
+  display: block;
+}
+
+.wait-state-cell > span {
+  margin-top: 3px;
+  color: var(--brand-foreground);
+  font-family: var(--brand-font-mono);
+  font-size: 9px;
+}
+
+.wait-state-cell > small {
+  margin-top: 3px;
+  font-size: 9px;
+}
+
+.wait-state {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.wait-state[data-state="waiting"],
+.wait-state[data-state="probing"] {
+  color: var(--dashboard-danger);
+}
+
+.wait-state[data-state="cooldown"] {
+  color: var(--dashboard-warning);
+}
+
+.wait-state[data-state="idle"] {
+  color: var(--dashboard-accent);
+}
+
+.model-actions {
+  min-width: 110px;
+  white-space: normal;
+}
+
+.model-actions button {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  font-size: 9px;
+}
+
+.model-actions button + button {
+  margin-top: 5px;
+}
+
+.model-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .limiter[data-state="activated"],
@@ -742,6 +894,12 @@ footer p:first-child {
     width: 100%;
   }
 
+  .auth-control {
+    width: 100%;
+    min-width: 0;
+    grid-column: 1 / -1;
+  }
+
   .select-control select {
     width: 100%;
     min-width: 0;
@@ -765,6 +923,17 @@ footer p:first-child {
 
   .controls > .connection-status {
     justify-self: start;
+  }
+
+  .model-table-controls {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .model-table-controls label,
+  .model-table-controls input,
+  .model-table-controls .select-control {
+    width: 100%;
   }
 
   footer {

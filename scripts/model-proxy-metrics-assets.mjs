@@ -1,7 +1,15 @@
 /**
  * Generates canonical model-proxy dashboard tokens and verifies embedded assets.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -74,7 +82,32 @@ function verify(path, expected) {
   }
 }
 
+/** Validate or repair the content-addressed application stylesheet filename. */
+function applicationStylesheet() {
+  const candidates = readdirSync(DIST).filter((file) => /^app\.[0-9a-f]{8}\.css$/.test(file));
+  if (candidates.length !== 1) {
+    throw new Error(`Expected one content-addressed app stylesheet, found ${candidates.length}`);
+  }
+  const current = candidates[0];
+  const contents = readFileSync(join(DIST, current));
+  const expected = `app.${createHash("sha256").update(contents).digest("hex").slice(0, 8)}.css`;
+  if (current !== expected) {
+    if (!WRITE) {
+      throw new Error(`${current} has stale content hash; expected ${expected}`);
+    }
+    renameSync(join(DIST, current), join(DIST, expected));
+  }
+  return expected;
+}
+
 const brand = parse(readFileSync(BRAND_PATH, "utf8"));
+const appStylesheet = applicationStylesheet();
+const indexPath = join(DIST, "index.html");
+const index = readFileSync(indexPath, "utf8").replace(
+  /\/metrics\/app\.[0-9a-f]{8}\.css/,
+  `/metrics/${appStylesheet}`,
+);
+verify(indexPath, index);
 verify(BRAND_OUTPUT, renderBrandCss(brand));
 verify(join(DIST, "assets/favicon.svg"), readFileSync(FAVICON_PATH, "utf8"));
 verify(join(DIST, "assets/logo-light.svg"), readFileSync(LOGO_LIGHT_PATH, "utf8"));
@@ -106,7 +139,7 @@ for (const [relativePath, [size, color]] of Object.entries(FIGMA_ASSETS)) {
 
 for (const file of [
   "index.html",
-  "app.2675ef49.css",
+  appStylesheet,
   "app.js",
   "vendor/gridstack-all.js",
   "vendor/gridstack.min.css",
@@ -122,7 +155,7 @@ for (const file of [
 
 const runtimeAssets = [
   "index.html",
-  "app.2675ef49.css",
+  appStylesheet,
   "app.js",
   "vendor/gridstack-all.js",
   "vendor/gridstack.min.css",

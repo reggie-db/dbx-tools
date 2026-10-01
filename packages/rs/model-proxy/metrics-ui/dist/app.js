@@ -7,13 +7,36 @@
   const liveIcon = liveStatus.querySelector("img");
   const modelFilter = document.querySelector("#model-filter");
   const outcomeFilter = document.querySelector("#outcome-filter");
+  const modelSearch = document.querySelector("#model-search");
+  const modelStateFilter = document.querySelector("#model-state-filter");
+  const modelOutcomeFilter = document.querySelector("#model-outcome-filter");
+  const authProfile = document.querySelector("#auth-profile");
+  const authSwitch = document.querySelector("#auth-switch");
+  const authStatus = document.querySelector("#auth-status");
+  const authControl = document.querySelector("#auth-control");
   const notice = document.querySelector("#notice");
   const widgetTooltip = document.querySelector("#widget-tooltip");
+
+  const API_ENDPOINTS = Object.freeze({
+    snapshot: "/api/metrics/snapshot",
+    events: "/api/metrics/events",
+    auth: "/api/auth",
+    authProfiles: "/api/auth/profiles",
+    cancelWaits: (model) =>
+      `/api/rate-limits/models/${encodeURIComponent(model)}/cancel-waits`,
+    retryNow: (model) =>
+      `/api/rate-limits/models/${encodeURIComponent(model)}/retry-now`,
+  });
 
   const state = {
     rangeHours: 1,
     model: "all",
     outcome: "all",
+    modelSearch: "",
+    modelState: "all",
+    modelOutcome: "all",
+    modelSort: "requests",
+    modelSortDirection: "desc",
     hidden: document.hidden,
     snapshot: null,
     epochOffsetMs: Date.now(),
@@ -21,6 +44,8 @@
     reconnectTimer: null,
     eventSource: null,
     snapshotRequest: 0,
+    auth: null,
+    profiles: [],
   };
   const charts = new Map();
 
@@ -687,6 +712,109 @@
     return element;
   }
 
+  function waitStateCell(model) {
+    const element = cell("", "wait-state-cell");
+    const cooldownKeys = Number(model.cooldownKeys || 0);
+    const capacityWaiters = Number(model.capacityWaiters || 0);
+    const cooldownWaiters = Number(model.cooldownWaiters || 0);
+    const probeKeys = Number(model.probeKeys || 0);
+    const remaining = Number(model.maxRemainingCooldownMs || 0);
+    const stateName =
+      capacityWaiters + cooldownWaiters > 0
+        ? "waiting"
+        : probeKeys > 0
+          ? "probing"
+          : remaining > 0
+            ? "cooldown"
+            : "idle";
+    const stateLabel = document.createElement("strong");
+    stateLabel.className = "wait-state";
+    stateLabel.dataset.state = stateName;
+    stateLabel.textContent = stateName;
+    const detail = document.createElement("span");
+    detail.textContent =
+      `${formatInteger(cooldownKeys)} keys · ${formatInteger(capacityWaiters + cooldownWaiters)} waiting · ` +
+      `${formatInteger(probeKeys)} probes · ${remaining > 0 ? formatDuration(remaining) : "ready"}`;
+    const history = document.createElement("small");
+    const cancellations =
+      Number(model.capacityWaitCancellations || 0) +
+      Number(model.cooldownWaitCancellations || 0);
+    history.textContent =
+      `${formatInteger(cancellations)} cancelled · ${formatInteger(model.cooldownReleases || 0)} released`;
+    element.append(stateLabel, detail, history);
+    return element;
+  }
+
+  function actionCell(model, controlsEnabled) {
+    const element = cell("", "model-actions control-column");
+    if (!controlsEnabled) {
+      element.hidden = true;
+      return element;
+    }
+    const aggregate = model.model === "other";
+    const waiters = Number(model.capacityWaiters || 0) + Number(model.cooldownWaiters || 0);
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.dataset.action = "cancel-waits";
+    cancel.dataset.model = model.model;
+    cancel.textContent = "Cancel waits";
+    cancel.disabled = aggregate || waiters === 0;
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.dataset.action = "retry-now";
+    retry.dataset.model = model.model;
+    retry.textContent = "Retry now";
+    retry.disabled = aggregate || Number(model.cooldownKeys || 0) === 0;
+    element.append(cancel, retry);
+    return element;
+  }
+
+  function modelState(model) {
+    const waiters = Number(model.capacityWaiters || 0) + Number(model.cooldownWaiters || 0);
+    if (waiters > 0) {
+      return "waiting";
+    }
+    if (Number(model.probeKeys || 0) > 0) {
+      return "probing";
+    }
+    if (Number(model.maxRemainingCooldownMs || 0) > 0) {
+      return "cooldown";
+    }
+    if ((model.limiter || "inactive") !== "inactive") {
+      return "enforced";
+    }
+    return "idle";
+  }
+
+  function modelSortValue(model, field) {
+    if (field === "model") {
+      return model.model.toLocaleLowerCase();
+    }
+    if (field === "tokens") {
+      return Number(model.inputTokens || 0) + Number(model.outputTokens || 0);
+    }
+    if (field === "averageQueueMs") {
+      return Number(model.queueWaitMs || 0) / Math.max(1, Number(model.requests || 0));
+    }
+    if (field === "waiters") {
+      return Number(model.capacityWaiters || 0) + Number(model.cooldownWaiters || 0);
+    }
+    return Number(model[field] || 0);
+  }
+
+  function sortModels(models) {
+    const direction = state.modelSortDirection === "asc" ? 1 : -1;
+    return [...models].sort((left, right) => {
+      const leftValue = modelSortValue(left, state.modelSort);
+      const rightValue = modelSortValue(right, state.modelSort);
+      const comparison =
+        typeof leftValue === "string"
+          ? leftValue.localeCompare(rightValue)
+          : leftValue - rightValue;
+      return comparison * direction || left.model.localeCompare(right.model);
+    });
+  }
+
   function renderReasoning(snapshot, selectedModel) {
     const levels = selectedModel?.reasoningLevels ?? snapshot.reasoningLevels ?? [];
     const total = levels.reduce((sum, level) => sum + Number(level.requests || 0), 0);
@@ -734,21 +862,37 @@
       state.model === "all"
         ? snapshot.models
         : snapshot.models.filter((model) => model.model === state.model);
-    if (state.outcome === "errors") {
+    const search = state.modelSearch.trim().toLocaleLowerCase();
+    if (search) {
+      models = models.filter((model) => model.model.toLocaleLowerCase().includes(search));
+    }
+    if (state.modelState !== "all") {
+      models = models.filter((model) => modelState(model) === state.modelState);
+    }
+    if (state.modelOutcome === "errors") {
       models = models.filter((model) => Number(model.errors || 0) > 0);
-    } else if (state.outcome === "rate-limited") {
+    } else if (state.modelOutcome === "rate-limited") {
       models = models.filter((model) => Number(model.rateLimited || 0) > 0);
-    } else if (state.outcome === "success") {
+    } else if (state.modelOutcome === "success") {
       models = models.filter(
         (model) => Number(model.requests || 0) > Number(model.errors || 0),
       );
     }
+    models = sortModels(models);
+    document.querySelectorAll(".control-column").forEach((element) => {
+      element.hidden = !snapshot.controlsEnabled;
+    });
+    document.querySelectorAll(".sort-control").forEach((button) => {
+      const active = button.dataset.sort === state.modelSort;
+      button.dataset.direction = active ? state.modelSortDirection : "";
+      button.setAttribute("aria-sort", active ? state.modelSortDirection : "none");
+    });
     const body = document.querySelector("#models-body");
     body.replaceChildren();
     if (!models.length) {
       const row = document.createElement("tr");
-      const empty = cell("Waiting for model traffic", "empty");
-      empty.colSpan = 14;
+      const empty = cell("No models match the current filters", "empty");
+      empty.colSpan = snapshot.controlsEnabled ? 16 : 15;
       row.append(empty);
       body.append(row);
     } else {
@@ -769,6 +913,8 @@
           cell(formatInteger(model.queueDepthMax || 0)),
           cell(dominantReasoning(model.reasoningLevels), "reasoning-setting"),
           capacityCell(model),
+          waitStateCell(model),
+          actionCell(model, snapshot.controlsEnabled),
         );
         body.append(row);
       });
@@ -856,10 +1002,117 @@
     notice.textContent = "";
   }
 
+  function authSelectionValue(selection) {
+    return selection?.kind === "profile" ? `profile:${selection.profile}` : "ambient";
+  }
+
+  function renderAuth() {
+    const runtime = state.auth?.runtime;
+    const selected = authSelectionValue(runtime?.selection);
+    authProfile.replaceChildren();
+    const ambient = document.createElement("option");
+    ambient.value = "ambient";
+    ambient.textContent = "Ambient authentication";
+    authProfile.append(ambient);
+    state.profiles.forEach((profile) => {
+      const option = document.createElement("option");
+      option.value = `profile:${profile.name}`;
+      const metadata = [profile.host, profile.authKind].filter(Boolean).join(" · ");
+      option.textContent = metadata ? `${profile.name} (${metadata})` : profile.name;
+      authProfile.append(option);
+    });
+    authProfile.value = selected;
+    if (!authProfile.value) {
+      authProfile.value = "ambient";
+    }
+    const persistence = runtime?.persistence ?? "memory";
+    authStatus.textContent = runtime
+      ? `${runtime.host} · ${runtime.authKind} · generation ${runtime.generation} · ${persistence}`
+      : "Authentication unavailable";
+    authStatus.title = authStatus.textContent;
+    authProfile.disabled = !state.auth?.controlsEnabled;
+    authSwitch.disabled =
+      !state.auth?.controlsEnabled || authProfile.value === selected;
+  }
+
+  async function responseError(response, fallback) {
+    try {
+      const payload = await response.json();
+      return payload?.error?.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function loadAuth(refresh = false) {
+    const [statusResponse, profilesResponse] = await Promise.all([
+      fetch(API_ENDPOINTS.auth, {
+        headers: { accept: "application/json" },
+        cache: "no-store",
+      }),
+      fetch(`${API_ENDPOINTS.authProfiles}${refresh ? "?refresh=true" : ""}`, {
+        headers: { accept: "application/json" },
+        cache: "no-store",
+      }),
+    ]);
+    if (statusResponse.status === 404) {
+      authControl.hidden = true;
+      return;
+    }
+    if (!statusResponse.ok) {
+      throw new Error(await responseError(statusResponse, "Authentication status failed."));
+    }
+    if (!profilesResponse.ok) {
+      throw new Error(await responseError(profilesResponse, "Profile discovery failed."));
+    }
+    state.auth = await statusResponse.json();
+    state.profiles = (await profilesResponse.json()).profiles ?? [];
+    authControl.hidden = false;
+    renderAuth();
+  }
+
+  async function switchAuth() {
+    const previous = authSelectionValue(state.auth?.runtime?.selection);
+    const value = authProfile.value;
+    const selection =
+      value === "ambient"
+        ? { kind: "ambient" }
+        : { kind: "profile", profile: value.slice("profile:".length) };
+    authProfile.disabled = true;
+    authSwitch.disabled = true;
+    authStatus.textContent = "Validating Databricks profile";
+    try {
+      const response = await fetch(API_ENDPOINTS.auth, {
+        method: "PUT",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-model-proxy-control": "1",
+        },
+        cache: "no-store",
+        body: JSON.stringify(selection),
+      });
+      if (!response.ok) {
+        throw new Error(await responseError(response, "Profile switch failed."));
+      }
+      const payload = await response.json();
+      state.auth = {
+        controlsEnabled: state.auth.controlsEnabled,
+        runtime: payload.runtime,
+      };
+      renderAuth();
+      await loadSnapshot();
+    } catch (error) {
+      authProfile.value = previous;
+      renderAuth();
+      notice.textContent = error instanceof Error ? error.message : "Profile switch failed.";
+    }
+  }
+
   async function loadSnapshot() {
     const request = ++state.snapshotRequest;
     const query = state.model === "all" ? "" : `?model=${encodeURIComponent(state.model)}`;
-    const response = await fetch(`/metrics/snapshot${query}`, {
+    const response = await fetch(`${API_ENDPOINTS.snapshot}${query}`, {
       headers: { accept: "application/json" },
       cache: "no-store",
     });
@@ -869,6 +1122,40 @@
     const snapshot = await response.json();
     if (request === state.snapshotRequest) {
       render(snapshot);
+    }
+  }
+
+  async function invokeModelControl(action, model, button) {
+    const endpoint =
+      action === "cancel-waits"
+        ? API_ENDPOINTS.cancelWaits(model)
+        : API_ENDPOINTS.retryNow(model);
+    button.disabled = true;
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "x-model-proxy-control": "1",
+        },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(
+          await responseError(response, `Model control request failed with ${response.status}`),
+        );
+      }
+      notice.textContent =
+        action === "cancel-waits"
+          ? `Cancelled current waits for ${model}.`
+          : `Released the current cooldown for ${model}.`;
+      await loadSnapshot();
+    } catch (error) {
+      notice.textContent = error instanceof Error ? error.message : "Model control request failed.";
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+      }
     }
   }
 
@@ -889,7 +1176,7 @@
     if (state.eventSource) {
       state.eventSource.close();
     }
-    const source = new EventSource("/metrics/events");
+    const source = new EventSource(API_ENDPOINTS.events);
     state.eventSource = source;
     source.addEventListener("open", () => {
       state.reconnectAttempt = 0;
@@ -899,9 +1186,13 @@
       try {
         const snapshot = JSON.parse(event.data);
         updateModelOptions(snapshot.models);
-        loadSnapshot().catch(() => {
-          notice.textContent = "Live model capacity could not be refreshed.";
-        });
+        if (state.model === "all") {
+          render(snapshot);
+        } else {
+          loadSnapshot().catch(() => {
+            notice.textContent = "Live model detail could not be refreshed.";
+          });
+        }
       } catch {
         notice.textContent = "A metrics update could not be decoded.";
       }
@@ -949,6 +1240,68 @@
     }
   });
 
+  authProfile.addEventListener("change", () => {
+    authSwitch.disabled =
+      !state.auth?.controlsEnabled ||
+      authProfile.value === authSelectionValue(state.auth?.runtime?.selection);
+    const profile = state.profiles.find(
+      (candidate) => `profile:${candidate.name}` === authProfile.value,
+    );
+    if (profile) {
+      authStatus.textContent = [profile.host, profile.authKind, profile.target]
+        .filter(Boolean)
+        .join(" · ");
+    } else if (authProfile.value === "ambient") {
+      authStatus.textContent = "Resolve the normal ambient Databricks authentication chain";
+    }
+  });
+
+  authSwitch.addEventListener("click", switchAuth);
+
+  modelSearch.addEventListener("input", () => {
+    state.modelSearch = modelSearch.value;
+    if (state.snapshot) {
+      render(state.snapshot);
+    }
+  });
+
+  modelStateFilter.addEventListener("change", () => {
+    state.modelState = modelStateFilter.value;
+    if (state.snapshot) {
+      render(state.snapshot);
+    }
+  });
+
+  modelOutcomeFilter.addEventListener("change", () => {
+    state.modelOutcome = modelOutcomeFilter.value;
+    if (state.snapshot) {
+      render(state.snapshot);
+    }
+  });
+
+  document.querySelectorAll(".sort-control").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = button.dataset.sort;
+      if (state.modelSort === field) {
+        state.modelSortDirection = state.modelSortDirection === "asc" ? "desc" : "asc";
+      } else {
+        state.modelSort = field;
+        state.modelSortDirection = field === "model" ? "asc" : "desc";
+      }
+      if (state.snapshot) {
+        render(state.snapshot);
+      }
+    });
+  });
+
+  document.querySelector("#models-body").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action][data-model]");
+    if (!button || button.disabled || button.dataset.model === "other") {
+      return;
+    }
+    invokeModelControl(button.dataset.action, button.dataset.model, button);
+  });
+
   document.addEventListener("visibilitychange", () => {
     state.hidden = document.hidden;
     if (!state.hidden && state.snapshot) {
@@ -956,7 +1309,7 @@
     }
   });
 
-  loadSnapshot()
+  Promise.all([loadSnapshot(), loadAuth()])
     .then(connectEvents)
     .catch((error) => {
       notice.textContent = error.message;

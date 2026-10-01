@@ -3,7 +3,8 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use dbx_tools_core::{
-    platform_cache_root, DatabricksClient, DatabricksClientError, FileCache, FileCacheError,
+    platform_cache_root, DatabricksClient, DatabricksClientError, DatabricksIdentity, FileCache,
+    FileCacheError,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -23,7 +24,7 @@ use crate::{
 
 /// Default lifetime for cached Model Serving endpoint metadata.
 pub const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
-const MODEL_CACHE_VERSION: u8 = 3;
+const MODEL_CACHE_VERSION: u8 = 4;
 
 /// Client for discovering, caching, and resolving Databricks Model Serving endpoints.
 #[derive(Clone)]
@@ -45,7 +46,7 @@ impl ModelClient {
         cache_ttl: Duration,
     ) -> Result<Self, ModelError> {
         assert!(!cache_ttl.is_zero(), "model cache TTL must be positive");
-        let key = format!("{:x}", Sha256::digest(client.host().as_bytes()));
+        let key = model_cache_key(&client.identity());
         let cache = FileCache::new(
             platform_cache_root()?
                 .join("dbx-tools")
@@ -92,6 +93,15 @@ impl ModelClient {
         } else {
             self.cache.get_or_try_init(|| self.fetch_models()).await
         }
+    }
+
+    /// Perform uncached endpoint discovery without refreshing documentation caches.
+    pub async fn validate_live_endpoints(&self) -> Result<Vec<ServingEndpointSummary>, ModelError> {
+        let value = self
+            .client
+            .request("/api/2.0/serving-endpoints", None, None)
+            .await?;
+        endpoints_from_response(&value)
     }
 
     /// Resolve a loose model name to a serving endpoint name.
@@ -149,6 +159,10 @@ impl ModelClient {
         let retired = self.status.retired_model_names().await?;
         endpoints_from_response_with_retired(&value, &retired)
     }
+}
+
+fn model_cache_key(identity: &DatabricksIdentity) -> String {
+    format!("{:x}", Sha256::digest(identity.cache_key().as_bytes()))
 }
 
 fn resolve_from_endpoints(endpoints: &[ServingEndpointSummary], requested: &str) -> String {
@@ -445,4 +459,37 @@ pub enum EndpointNormalizationError {
     /// The payload did not contain a valid serving-endpoints response.
     #[error("invalid Databricks model response: {0}")]
     InvalidResponse(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_cache_keys_include_workspace_and_principal_identity() {
+        let identity = DatabricksIdentity {
+            host: "https://workspace.example".into(),
+            workspace_id: Some("workspace-a".into()),
+            principal: "principal-a".into(),
+        };
+        let same = model_cache_key(&identity);
+        assert_eq!(same, model_cache_key(&identity));
+
+        for different in [
+            DatabricksIdentity {
+                host: "https://other.example".into(),
+                ..identity.clone()
+            },
+            DatabricksIdentity {
+                workspace_id: Some("workspace-b".into()),
+                ..identity.clone()
+            },
+            DatabricksIdentity {
+                principal: "principal-b".into(),
+                ..identity.clone()
+            },
+        ] {
+            assert_ne!(same, model_cache_key(&different));
+        }
+    }
 }

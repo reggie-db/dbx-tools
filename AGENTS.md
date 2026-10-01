@@ -200,7 +200,11 @@ Primary package areas:
   File-backed refresh locks preserve unrelated entries in
   `~/.databricks/token-cache.json`.
   Profile files are parsed once per absolute path, including missing files and
-  parse errors.
+  parse errors. Secret-free profile enumeration reuses that parser and returns
+  the profile name, host, account/workspace identifiers, inferred target, and
+  inferred auth kind without returning tokens or client secrets. Normal calls
+  preserve the parsed cache; callers use the explicit refresh or invalidation
+  surface after an external CLI login changes the file.
   `DatabricksClient` is a thin `reqwest-middleware` client. It defaults its base
   URL from resolved authentication, accepts an explicit host override, strips
   caller-supplied authorization, adds a current header only for the credential
@@ -233,6 +237,9 @@ Primary package areas:
   discovery, file-backed catalogue caching, model-name parsing, classification,
   fuzzy ranking, native inference-protocol selection, and model-specific Chat
   tool reasoning policy.
+  Endpoint catalogue cache files are keyed by normalized host, workspace ID,
+  and non-secret principal so profiles sharing a host cannot read one another's
+  cached catalogue.
   The generated UniFFI bindings expose pure catalogue ranking, routing, family parsing,
   reasoning-effort wire values, and capability policy;
   `@dbx-tools/model` and `@dbx-tools/appkit-mastra` consume those bindings
@@ -353,15 +360,15 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   resolved model. Prefer trusted forwarded user ID/email, then unverified
   identity claims decoded from an already-present bearer JWT, then the in-memory
   client ID/profile captured by `DatabricksClient`. Principal resolution must
-  not call an identity API. Keep the gate map unbounded by default; the caller
-  owns connection scope and process lifetime. Treat the `Retry-After` response
+  not call an identity API. Keep the gate map bounded through idle eviction so
+  forwarded identity partitioning cannot retain keys forever. Treat the `Retry-After` response
   header, then the documented Foundation Model API `error.retry_after` body
   value, as an upper recovery horizon divided across the remaining attempts
   instead of one immediate sleep. An input-token 429 without either uses the
   local token-window delay as the same horizon, or a conservative 60-second
   horizon when local history cannot explain the workspace limit. Other 429s use
   BackON jittered exponential delay from one second to one minute. Exhaustion
-  logs no future unslept delay. `/healthz` exposes process-local activation,
+  logs no future unslept delay. `/api/healthz` exposes process-local activation,
   tightening, relaxation, deactivation, reactivation, active key, wait,
   oversized, post-admission 429, retry-reacquisition, and fallback-delay
   counters. Metrics snapshots and Prometheus expose each bounded model label's
@@ -399,22 +406,44 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   stream connected with 200. Local oversized-input and wait-budget rejections
   also contribute to the dashboard's rate-limit totals. Forwarded headers and
   JWT claims partition the gate only; they do
-  not replace the upstream credential held by the startup
-  `DatabricksClient`. The binary resolves one client at startup, so an App uses
-  App SP unless a host integration explicitly constructs request-scoped OBO
-  clients.
+  not replace the upstream credential held by the captured runtime generation.
+  `RuntimeManager` captures one immutable `Arc` generation at request entry and
+  uses it for discovery, upstream calls, retries, fallback, throttling, and
+  completion. A profile switch accepts only ambient resolution or one exact
+  named profile, disables implicit login during bounded live validation, and
+  commits only after validation and settings persistence succeed. Old
+  generations drain naturally. Throttle state is reused through a bounded pool
+  keyed by host and workspace ID, while the principal-aware cooldown gate
+  remains process-wide with bounded idle eviction. Installed service mode
+  persists only the successful non-secret selection through
+  `dbx-tools-service`; direct CLI mode keeps it in memory. Switching is disabled
+  in Databricks Apps, and one global App OBO runtime is prohibited. `GET
+/api/auth`, `GET /api/auth/profiles?refresh=true`, and `PUT /api/auth` expose
+  status, secret-free profile discovery, and ambient or exact-profile switching.
+  `POST /api/rate-limits/models/:model/cancel-waits` cancels both token-capacity
+  and cooldown waits; `retry-now` releases current cooldowns. A cancelled retry
+  loop returns its latest original upstream 429 when one exists, otherwise a
+  structured local 429.
   The normal release binary enables the `metrics-ui` Cargo feature and defaults
-  `METRICS` / `--metrics` to `ui`. `collect` retains bounded JSON, SSE, and
+  `METRICS` / `--metrics` to `auto`. Auto resolves to `off` in a Databricks App,
+  `ui` in a normal metrics-ui build, `collect` in a metrics-only build, and
+  `off` when metrics are not compiled. `collect` retains bounded JSON, SSE, and
   Prometheus machine endpoints without UI routes; `off` / `false` removes
   collection and routes; `true` selects the fullest compiled mode. Mount
-  `/metrics`, `/metrics/snapshot`, `/metrics/events`, and
-  `/metrics/prometheus` on the existing Axum listener only. A non-loopback bind
+  `/metrics`, `/api/metrics/snapshot`, `/api/metrics/events`, and
+  `/api/metrics/prometheus` on the existing Axum listener only. A non-loopback bind
   returns 404 for metrics routes unless `METRICS_PUBLIC=true` or
   `--metrics-public` explicitly acknowledges exposure. Forwarded headers never
   bypass this guard. Retain five-second buckets for one hour, one-minute
   rollups for 24 hours, 32 named model series plus `other`, and at most 16 MiB
-  in process memory. Do not retain request events or identities and do not write
-  history to disk. The embedded vanilla dashboard uses snapshot JSON plus SSE,
+  in process memory. Installed service mode stores only aggregate buckets and
+  model snapshots in the shared `service.sqlite3`, keyed by a SHA-256 digest of
+  stable non-secret runtime identity. Never store request events, identities,
+  payloads, tokens, or secrets. `METRICS_STORE_MAX_BYTES` /
+  `--metrics-store-max-bytes` defaults to 134217728; zero disables metric
+  persistence while settings remain enabled. Prune oldest metric rows before
+  writes and restore the current runtime's aggregates on startup. The embedded
+  vanilla dashboard uses snapshot JSON plus SSE,
   canonical generated brand tokens, model and outcome filters, request, token,
   and latency line graphs. Each model's rate-limit capacity cell renders the
   live process-local input-window use against its effective budget, adaptive
@@ -424,21 +453,68 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   deactivation cannot turn the displayed limiter back on. GridStack owns drag-and-drop placement and widget resizing; do not
   restore a separate compact/full-detail mode or hand-roll grid interactions.
   SSE carries aggregate summaries only; model selection fetches
-  `/metrics/snapshot?model=<resolved-model>` so one bounded model history does
+  `/api/metrics/snapshot?model=<resolved-model>` so one bounded model history does
   not multiply every five-second event by all retained models.
   Persist only bounded widget geometry in browser `localStorage` and synchronize
   it across tabs; the icon-only reset control restores and persists the canonical
   layout. Never put metric history or request data there. A proxy owns one
-  startup workspace, so never add a workspace selector to this process-local UI.
+  active runtime generation at a time; the profile control replaces that
+  generation and never presents simultaneous workspace aggregation.
+  The profile selector is limited to ambient authentication and secret-free named
+  profile metadata from `/api/auth`; it never accepts credentials or arbitrary
+  hosts. Mutations exist only on loopback and require same-origin plus
+  `X-Model-Proxy-Control: 1`, with no CORS.
   Committed assets are validated by
   `bun run model-proxy:metrics-assets`. Rust release rows embed those assets
   without Bun. Only content-addressed assets use immutable caching; `app.js` and
   every other stable-name asset revalidate. `metrics` and `metrics-ui` remain additive optional features; a
   metrics-free build contains no recorder, histogram, exporter, or UI assets.
-  Persistence remains a later optional phase and must not be added to the
-  default release without operational evidence.
+  Direct CLI runs remain memory-only by default; installed service mode enables
+  the bounded aggregate SQLite store unless persistence is explicitly disabled.
   `dbx model-proxy` downloads and runs the release asset matching the installed
-  `@dbx-tools/cli` version and host platform.
+  `@dbx-tools/cli` version and host platform. `dbx model-proxy service` exposes
+  the per-user background lifecycle supplied by `packages/rs/service`. macOS
+  and Linux register through
+  `service-manager` at `ServiceLevel::User`; Windows uses `auto-launcher` for
+  current-user login startup and `sysinfo` plus the stored exact executable path
+  for functional start, stop, and restart without shell parsing. Service installs
+  capture only non-secret server
+  options, retain `~/.dbx-tools/model-proxy` unless uninstall receives
+  `--purge`, and accept `--config-dir` to replace that default. Systray policy
+  is `auto` by default, `always`, or `never`. Auto registers the hidden
+  `dbx-model-proxy-desktop` companion only when its tray-icon capability probe
+  succeeds; always fails when the probe does not, and never disables companion
+  startup. Every lifecycle command rejects Databricks App execution before
+  touching service or SQLite state.
+  The companion uses `tray-icon`, opens the local metrics UI, and reports
+  `/api/healthz`; macOS and Windows render Wry native webviews, while Linux uses
+  tray-icon's KSNI backend and the default browser so release builds do not
+  require WebKitGTK. It is a second binary target in the model-proxy crate,
+  gated behind the `desktop` feature so the headless proxy does not link tray
+  or WebView dependencies. The generated release registry keeps it hidden from
+  root help while allowing service installation through
+  `@dbx-tools/rust-binary`. tray-icon's KSNI backend sets the Rust workspace
+  compatibility floor to 1.90.
+- `packages/rs/service` is the source-only Rust service lifecycle crate. It
+  owns per-user service registration, `~/.dbx-tools/<service>` defaults,
+  SQLite opening and migrations, persisted non-secret launch configuration,
+  reusable `--config-dir`, `--persistence auto|memory|sqlite`, installed-service
+  detection, non-secret settings, aggregate storage, health status, typed Clap
+  lifecycle commands, and companion autostart policy. Direct auto mode uses
+  memory; installed auto mode uses the one shared SQLite connection. Install
+  injects the stable config directory and service marker into launched argv.
+  Its optional `desktop` feature owns the generic tray-icon event loop,
+  lifecycle/status menus, Wry system WebView on macOS/Windows, Linux default-
+  browser fallback, desktop capability probe, and callback-based health/open
+  customization. Consumer companion binaries supply identity, title, icon,
+  health URL, and open URL only; their served UI remains consumer-owned.
+  Consumers primarily provide a service name, port, executable behavior, and
+  invalid-runtime detector. It has no UniFFI surface or generated Node/Python
+  binding packages. Model proxy consumes it; lakebase proxy remains unchanged
+  until it adopts the lifecycle deliberately. Its hidden machine-readable
+  requirements command owns install argv parsing and companion capability
+  preflight; JavaScript release wrappers forward the returned argv and do not
+  duplicate lifecycle options, defaults, validation, or help.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
   pgwire proxy for Databricks Lakebase. A startup user selects a Databricks
   profile only when that profile exists; otherwise standard Databricks auth
@@ -455,8 +531,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   lifetime. Auth sessions and discovery metadata use bounded `mini-moka`
   caches. Individual connections log at `debug`; one-minute aggregate
   connection statistics log at `info`. The package stays private and out of
-  public package lists, and every Windows release row excludes it. pgwire
-  0.41.0 sets the Rust workspace compatibility floor to 1.89.
+  public package lists, and every Windows release row excludes it.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search

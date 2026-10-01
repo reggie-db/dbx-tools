@@ -24,7 +24,7 @@
       "name": "Health",
       "request": {
         "method": "GET",
-        "url": "{{baseUrl}}/healthz"
+        "url": "{{baseUrl}}/api/healthz"
       }
     },
     {

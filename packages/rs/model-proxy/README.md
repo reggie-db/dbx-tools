@@ -22,6 +22,42 @@ cargo install dbx-tools-model-proxy
 Release builds also publish `dbx-model-proxy` as a GitHub release asset for
 each configured platform.
 
+## Per-User Service
+
+Install the proxy for the current user with its default local metrics companion:
+
+```sh
+dbx model-proxy service install --systray auto -- --profile PROFILE
+dbx model-proxy service status
+```
+
+The lifecycle also provides `start`, `stop`, `restart`, and `uninstall`, with
+`remove` as an uninstall alias. Configuration defaults to
+`~/.dbx-tools/model-proxy`; pass `--config-dir` to replace it. Uninstall retains
+that directory and its SQLite configuration unless `--purge` is explicit.
+Service installation injects the stable configuration directory and service
+mode into the launched arguments. `--persistence=auto` uses memory for a direct
+CLI run and `service.sqlite3` for an installed service. Explicit `memory` and
+`sqlite` values override that selection. The same SQLite connection owns
+non-secret settings and aggregate metric snapshots.
+
+The systray policy is `auto`, `always`, or `never`. Auto is the default and
+registers the companion only when its tray-icon capability probe succeeds.
+Always turns an unsupported desktop session into an error. Never disables
+companion autostart. Every lifecycle command fails inside a Databricks App,
+where host OS service management is unavailable.
+
+The companion is the `dbx-model-proxy-desktop` binary target in this crate. It
+requires the `desktop` Cargo feature, which enables the generic desktop runtime
+from `dbx-tools-service` while keeping tray-icon, Wry, and platform WebView
+dependencies out of the headless `dbx-model-proxy` executable. The adapter
+supplies model-proxy identity, icon, health endpoint, and Metrics URL; the
+metrics HTML, CSS, JavaScript, and APIs remain served by model-proxy.
+
+macOS and Linux use the native user-level service manager. Windows uses
+current-user login startup and reports `start`, `stop`, and `restart` as
+unsupported because auto-launcher does not supervise a running process.
+
 The proxy uses `aigw-openai` and `aigw-anthropic` as protocol adapters.
 OpenAI Chat Completions and Anthropic Messages requests can target either
 Databricks Chat Completions or Responses. Native Responses input currently
@@ -36,14 +72,17 @@ For example, `"model": "gpt"` selects the highest-ranked deployed GPT model.
 
 ## Authentication And Rate-Limit Identity
 
-The binary creates one `DatabricksClient` at startup. That client owns upstream
-authentication, while each incoming request supplies the principal used to
-partition reactive rate-limit cooldowns. Identity selection never calls a
-Databricks API:
+`RuntimeManager` owns one atomically replaceable authentication generation.
+Each request captures one `Arc` generation before model discovery and retains
+it through upstream calls, retries, fallback, throttling, and response
+completion. A committed generation owns upstream authentication, while each
+incoming request supplies the principal used to partition reactive rate-limit
+cooldowns. Identity selection never calls a Databricks API:
 
 - With `dbx model-proxy --profile PROFILE`, `dbx-tools-core` resolves that
-  profile and uses its normal cached token lifecycle. U2M profiles use the
-  Databricks CLI when available and may invoke login when renewal requires it.
+  exact profile without ambient credential overrides and uses its normal cached
+  token lifecycle. U2M profiles use the Databricks CLI when available and may
+  invoke login when renewal requires it.
   PAT and U2M requests key cooldowns by the profile name; the token itself is
   never part of the key.
 - M2M profiles key cooldowns by OAuth client ID. Token refreshes can replace the
@@ -57,16 +96,34 @@ Databricks API:
   `oid`, `client_id`, `azp`, `email`, or `preferred_username` from an incoming
   bearer JWT without verifying it. This decode is only a local rate-limit
   partitioning hint and never authenticates the request.
-- Forwarded OBO identity does not replace the startup client's upstream
+- Forwarded OBO identity does not replace the captured generation's upstream
   credential. The standalone binary has no request-scoped AppKit context, so
-  automatic App startup normally resolves App SP. A host that needs true OBO
-  upstream calls must construct request-scoped clients and pass the request
-  headers through `DatabricksAuthOptions`.
+  automatic App startup resolves App SP. A global App OBO generation is
+  prohibited.
 
 The resulting key is `[normalized Databricks host, current principal, resolved
 model]`. Different users, service principals, hosts, or serving endpoints never
-share a cooldown. Keys are stored only in process memory, have no default count
-limit, and disappear when the proxy exits.
+share a cooldown. Keys are stored only in process memory, retain at most 1,024
+idle entries, expire after one idle hour, and disappear when the proxy exits.
+
+The manager control contract exposes secret-free profile enumeration, current
+status, and switching to ambient resolution or one exact named profile.
+Switching refreshes the profile file cache, disables implicit login during a
+15-second live endpoint validation, persists the non-secret selection only when
+service SQLite is active, and commits the complete generation only after every
+step succeeds. Direct CLI mode keeps the selection in process memory. Old
+generations drain after their captured requests finish. Profile switching is
+disabled inside Databricks Apps. `GET /api/auth` returns the current secret-free
+generation, `GET /api/auth/profiles?refresh=true` refreshes and lists secret-free
+profile metadata, and `PUT /api/auth` accepts only ambient selection or one
+exact profile name.
+
+Token throttle windows are pooled separately by normalized host and workspace
+ID. This lets two authentication generations for the same workspace reuse
+bounded congestion state without sharing it with another workspace. Model
+catalogue cache files add the non-secret principal to that workspace identity.
+The pool retains at most 16 inactive workspace entries and removes entries
+after 30 idle minutes.
 
 ## Run
 
@@ -130,11 +187,21 @@ Supported routes:
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
 - `POST /v1/messages`
-- `GET /healthz`
+- `GET /api/healthz`
 - `GET /metrics`
-- `GET /metrics/snapshot`
-- `GET /metrics/events`
-- `GET /metrics/prometheus`
+- `GET /api/metrics/snapshot`
+- `GET /api/metrics/events`
+- `GET /api/metrics/prometheus`
+- `GET /api/auth`
+- `GET /api/auth/profiles`
+- `PUT /api/auth`
+- `POST /api/rate-limits/models/:model/cancel-waits`
+- `POST /api/rate-limits/models/:model/retry-now`
+
+Control mutations are mounted only for a loopback listener. They require an
+exact same-origin request with `X-Model-Proxy-Control: 1`, and the server emits
+no CORS policy. Profile inputs never accept tokens, client secrets, arbitrary
+hosts, or manual credentials.
 
 `GET /v1/models` reads the cached live serving-endpoint catalogue. Standard
 requests receive an OpenAI `object` / `data` envelope. An `originator` header
@@ -339,16 +406,18 @@ Use `INPUT_TOKENS_PER_MINUTE` / `--input-tokens-per-minute` and
 published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
 `--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
 Databricks because process-local tracking cannot coordinate a workspace across
-proxy replicas. `/healthz` exposes aggregate process-local counters for
+proxy replicas. `/api/healthz` exposes aggregate process-local counters for
 automatic activation, tightening, relaxation, deactivation, reactivation,
 admission waits, oversized rejections, post-admission input 429s,
 retry reacquisition, and fallback full-window delays.
 
 ## Metrics And Dashboard
 
-Metrics use the existing proxy listener and are enabled by default. The normal
-release binary defaults to `--metrics=ui`:
+Metrics use the existing proxy listener. The default is `--metrics=auto`:
 
+- `auto` resolves to `off` inside a Databricks App, `ui` in a normal
+  `metrics-ui` build, `collect` in a metrics-only build, and `off` when metrics
+  are not compiled;
 - `ui` collects metrics and serves all metrics routes, including the dashboard;
 - `collect` collects metrics and serves JSON, SSE, and Prometheus without UI
   routes;
@@ -362,24 +431,27 @@ returns 404 from every metrics route unless `--metrics-public` or
 headers do not bypass this safeguard. Put an operator-owned authenticated proxy
 in front before exposing model names, traffic rates, and limit pressure.
 
-`/metrics/snapshot` returns the bounded dashboard payload. Pass
+`/api/metrics/snapshot` returns the bounded dashboard payload. Pass
 `?model=<resolved-model>` to include the selected model's bounded history;
 ordinary snapshots and SSE retain only aggregate model summaries.
-`/metrics/events` streams five-second snapshot events with SSE.
-`/metrics/prometheus` returns Prometheus text from the in-process recorder.
+`/api/metrics/events` streams five-second snapshot events with SSE.
+`/api/metrics/prometheus` returns Prometheus text from the in-process recorder.
 `/metrics` serves the static dashboard embedded in the normal release binary.
 The dashboard provides 1h, 6h, and 24h ranges, model and outcome filters,
 request, token, and latency line graphs, model latency and error summaries, the
 current per-model limiter phase, penalty, and effective input budget, the
 adaptive rate-limit timeline, and process-wide retention status. Prometheus
 exports the current penalty basis points, effective input budget, and fallback
-count for each bounded model label. GridStack
+count for each bounded model label. On loopback, the dashboard also lists
+ambient and named profiles with secret-free host and authentication metadata,
+shows the current generation and persistence mode, validates a selected profile
+before switching, and exposes cancel-wait and retry-now model controls.
+GridStack
 provides drag-and-drop placement and widget resizing without a runtime CDN or
 framework server. The bounded widget geometry is stored in browser
 `localStorage`, restored after reloads and proxy restarts, and synchronized
-across open tabs. Metric history remains process-local and is never stored in
-the browser. The reset-layout icon restores and persists the canonical widget
-geometry.
+across open tabs. Metric history is never stored in the browser. The
+reset-layout icon restores and persists the canonical widget geometry.
 
 The model table renders three compact capacity meters:
 
@@ -394,7 +466,7 @@ depth is sampled when the metrics snapshot is requested. Limiter transitions
 remain authoritative between snapshots so a request completing after full
 recovery cannot make an inactive limiter appear enforced again.
 
-History remains in process memory:
+History remains bounded in process memory:
 
 - five-second buckets retain the latest hour;
 - one-minute rollups retain the latest 24 hours;
@@ -403,6 +475,16 @@ History remains in process memory:
 - aggregate history targets and caps retained data at 16 MiB;
 - no request events, bodies, identities, peers, credentials, or model traffic
   are written to disk.
+
+Installed service mode also stores aggregate buckets and model snapshots in the
+same `service.sqlite3` used for non-secret service settings. Rows are keyed by a
+SHA-256 digest of the stable runtime identity, so the database does not contain
+the host, profile, client ID, or user identity. The current runtime's latest
+hour of five-second detail and 24 hours of minute rollups are restored after a
+restart. `--metrics-store-max-bytes` and `METRICS_STORE_MAX_BYTES` cap aggregate
+metric storage at 134217728 bytes by default. Zero disables metric persistence
+without disabling SQLite settings. Old runtime snapshots are pruned before a
+write and settings remain writable.
 
 The dashboard follows the approved
 [Figma frame](https://www.figma.com/design/0qI0u23Tx4jzasligbW6PD?node-id=1-294)
@@ -423,13 +505,10 @@ keeps collection and machine endpoints without dashboard assets:
 cargo build -p dbx-tools-model-proxy --no-default-features --features metrics
 ```
 
-A metrics-free build accepts only `--metrics=false` and excludes the recorder,
+A metrics-free build resolves `--metrics=auto` to `off`, accepts explicit
+`--metrics=false`, and excludes the recorder,
 histograms, Prometheus exporter, embedded assets, and metrics routes:
 
 ```sh
 cargo build -p dbx-tools-model-proxy --no-default-features
 ```
-
-Metrics persistence is deliberately not implemented. Process-local memory is
-the only supported retention layer until operational evidence justifies the
-separate optional SQLite phase.

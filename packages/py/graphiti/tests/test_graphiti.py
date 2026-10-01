@@ -196,7 +196,7 @@ def test_model_settings_default_to_managed_databricks_models() -> None:
     assert settings.embedder_model == "databricks-gte-large-en"
     assert settings.embedder_dimensions == 1024
     assert settings.profile == "DEFAULT"
-    assert settings.health_url == "http://127.0.0.1:4000/healthz"
+    assert settings.health_url == "http://127.0.0.1:4000/api/healthz"
 
 
 def test_model_settings_delegate_default_profile_resolution() -> None:
@@ -279,7 +279,7 @@ def test_status_uses_model_proxy_health(monkeypatch, tmp_path: Path) -> None:
     status = runtime.status()
 
     assert status["model_proxy"] == "running"
-    assert health_urls == ["http://127.0.0.1:4000/healthz"]
+    assert health_urls == ["http://127.0.0.1:4000/api/healthz"]
 
 
 def test_uv_python_honors_explicit_override(monkeypatch) -> None:
