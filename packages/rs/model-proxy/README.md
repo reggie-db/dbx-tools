@@ -326,9 +326,11 @@ in front before exposing model names, traffic rates, and limit pressure.
 `/metrics/events` streams five-second snapshot events with SSE.
 `/metrics/prometheus` returns Prometheus text from the in-process recorder.
 `/metrics` serves the static dashboard embedded in the normal release binary.
-The dashboard provides 1h, 6h, and 24h ranges, model filtering, live
-pause/resume, compact/full detail, traffic and token charts, model latency and
-error summaries, and the adaptive rate-limit timeline.
+The dashboard provides 1h, 6h, and 24h ranges, model and outcome filters,
+request, token, and latency line graphs, model latency and error summaries, the
+adaptive rate-limit timeline, and process-wide retention status. GridStack
+provides drag-and-drop placement and widget resizing without a runtime CDN or
+framework server.
 
 History remains in process memory:
 

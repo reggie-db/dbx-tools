@@ -67,7 +67,8 @@ The isolated implementation now includes:
   `other`, JSON, SSE, and Prometheus routes;
 - a static dashboard based on the approved Figma frame, embedded by
   `metrics-ui`, with deterministic canonical brand and Figma status-asset
-  validation;
+  validation, model and outcome filters, and request, token, and latency line
+  graphs;
 - desktop and narrow fixture renders with no browser console errors and
   Lighthouse accessibility, best-practices, and SEO scores of 100;
 - additive `metrics` and `metrics-ui` Cargo features with compiling headless and
@@ -491,7 +492,8 @@ The main view includes:
   queue wait, and current rate-limit state;
 - a rate-limit timeline showing activation, tightening, recovery, probation,
   and deactivation;
-- controls for time range, model selection, live pause, and compact/full detail;
+- controls for time range, model selection, and outcome selection;
+- draggable and resizable widgets through GridStack;
 - clear process-start and retention boundaries so users do not mistake local
   history for workspace-wide history.
 
@@ -499,6 +501,10 @@ The main view includes:
 
 Build a static frontend that consumes only snapshot JSON and SSE. It must not
 require a Node server, package manager, or network CDN at runtime.
+
+Use GridStack for dashboard placement and resizing. Embed its reviewed
+JavaScript, CSS, and license with the dashboard assets. Do not maintain a second
+compact/full-detail mode or custom drag-and-resize implementation.
 
 Commit deterministic generated assets that Rust release rows can embed without
 installing Bun. Keep focused asset generation and freshness validation in the

@@ -5,15 +5,15 @@
   const liveStatus = document.querySelector("#live-status");
   const liveLabel = liveStatus.querySelector("span");
   const liveIcon = liveStatus.querySelector("img");
-  const pauseToggle = document.querySelector("#pause-toggle");
-  const detailToggle = document.querySelector("#detail-toggle");
   const modelFilter = document.querySelector("#model-filter");
+  const outcomeFilter = document.querySelector("#outcome-filter");
   const notice = document.querySelector("#notice");
+  const widgetTooltip = document.querySelector("#widget-tooltip");
 
   const state = {
     rangeHours: 6,
     model: "all",
-    paused: false,
+    outcome: "all",
     hidden: document.hidden,
     snapshot: null,
     reconnectAttempt: 0,
@@ -23,16 +23,60 @@
 
   const statusAssets = {
     live: "/metrics/assets/status-live-8.svg",
-    paused: "/metrics/assets/status-warning-8.svg",
     reconnecting: "/metrics/assets/status-danger-8.svg",
   };
+
+  const grid = window.GridStack?.init({
+    column: 12,
+    cellHeight: 68,
+    margin: 5,
+    animate: true,
+    float: false,
+    alwaysShowResizeHandle: "mobile",
+    columnOpts: {
+      breakpoints: [
+        { w: 700, c: 1, layout: "list" },
+        { w: 1100, c: 6, layout: "moveScale" },
+      ],
+    },
+  });
+  if (!grid) {
+    notice.textContent = "Dashboard layout controls could not be loaded.";
+  }
 
   function setLiveState(value, label) {
     liveStatus.dataset.state = value;
     liveIcon.src = statusAssets[value];
     liveLabel.textContent = label;
-    document.querySelector("#timeline-status").textContent = label;
+    liveStatus.title = value === "live" ? "Metrics stream connected" : "Metrics stream disconnected";
+    liveStatus.setAttribute("aria-label", liveStatus.title);
   }
+
+  function showWidgetTooltip(widget) {
+    widgetTooltip.textContent = widget.dataset.tooltip;
+    widgetTooltip.hidden = false;
+    const widgetRect = widget.getBoundingClientRect();
+    const tooltipRect = widgetTooltip.getBoundingClientRect();
+    const left = Math.min(
+      window.innerWidth - tooltipRect.width - 12,
+      Math.max(12, widgetRect.left + (widgetRect.width - tooltipRect.width) / 2),
+    );
+    const above = widgetRect.top - tooltipRect.height - 10;
+    widgetTooltip.style.left = `${left}px`;
+    widgetTooltip.style.top = `${above >= 12 ? above : widgetRect.bottom + 10}px`;
+  }
+
+  function hideWidgetTooltip() {
+    widgetTooltip.hidden = true;
+  }
+
+  document.querySelectorAll("[data-tooltip]").forEach((widget) => {
+    widget.addEventListener("pointerenter", () => showWidgetTooltip(widget));
+    widget.addEventListener("pointerleave", hideWidgetTooltip);
+    widget.addEventListener("focus", () => showWidgetTooltip(widget));
+    widget.addEventListener("blur", hideWidgetTooltip);
+  });
+  grid?.on("dragstart resizestart", hideWidgetTooltip);
 
   function formatNumber(value) {
     return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(
@@ -70,30 +114,76 @@
     return buckets.reduce((total, bucket) => total + Number(bucket[field] || 0), 0);
   }
 
-  function drawBars(element, buckets, value, color) {
+  function chartColor(variable, fallback) {
+    return getComputedStyle(document.documentElement).getPropertyValue(variable).trim() || fallback;
+  }
+
+  function drawLines(element, buckets, series) {
     const width = 720;
     const height = 190;
-    const values = buckets.map(value);
+    const padding = 8;
+    const values = series.flatMap((item) => buckets.map(item.value));
     const maximum = Math.max(1, ...values);
-    const gap = 3;
-    const barWidth = Math.max(1, (width - gap * Math.max(values.length - 1, 0)) / values.length);
     element.replaceChildren();
     element.setAttribute("viewBox", `0 0 ${width} ${height}`);
     element.setAttribute("preserveAspectRatio", "none");
-    values.forEach((amount, index) => {
-      const barHeight = Math.max(amount > 0 ? 2 : 0, (amount / maximum) * (height - 12));
-      const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      bar.setAttribute("x", String(index * (barWidth + gap)));
-      bar.setAttribute("y", String(height - barHeight));
-      bar.setAttribute("width", String(barWidth));
-      bar.setAttribute("height", String(barHeight));
-      bar.setAttribute("rx", "2");
-      bar.setAttribute("fill", color);
-      bar.setAttribute("opacity", String(0.35 + (index / Math.max(values.length - 1, 1)) * 0.65));
-      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = formatInteger(amount);
-      bar.append(title);
-      element.append(bar);
+
+    [0.25, 0.5, 0.75].forEach((ratio) => {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.classList.add("chart-grid");
+      line.setAttribute("x1", String(padding));
+      line.setAttribute("x2", String(width - padding));
+      line.setAttribute("y1", String(height - padding - ratio * (height - padding * 2)));
+      line.setAttribute("y2", String(height - padding - ratio * (height - padding * 2)));
+      element.append(line);
+    });
+
+    series.forEach((item, seriesIndex) => {
+      const amounts = buckets.map(item.value);
+      if (!amounts.length) {
+        return;
+      }
+      const points = amounts.map((amount, index) => {
+        const x =
+          padding + (index / Math.max(amounts.length - 1, 1)) * (width - padding * 2);
+        const y = height - padding - (amount / maximum) * (height - padding * 2);
+        return [x, y];
+      });
+      const pathData = points
+        .map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`)
+        .join(" ");
+      if (seriesIndex === 0) {
+        const area = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        area.classList.add("chart-area");
+        area.setAttribute(
+          "d",
+          `${pathData} L${points.at(-1)[0].toFixed(2)} ${height - padding} L${points[0][0].toFixed(2)} ${height - padding} Z`,
+        );
+        area.setAttribute("fill", item.color);
+        element.append(area);
+      }
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.classList.add("chart-line");
+      path.setAttribute("d", pathData);
+      path.setAttribute("stroke", item.color);
+      element.append(path);
+
+      const pointStep = Math.max(1, Math.ceil(points.length / 18));
+      points.forEach(([x, y], index) => {
+        if (index % pointStep !== 0 && index !== points.length - 1) {
+          return;
+        }
+        const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        point.classList.add("chart-point");
+        point.setAttribute("cx", x.toFixed(2));
+        point.setAttribute("cy", y.toFixed(2));
+        point.setAttribute("r", "3");
+        point.setAttribute("stroke", item.color);
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = `${item.label}: ${formatInteger(amounts[index])}`;
+        point.append(title);
+        element.append(point);
+      });
     });
   }
 
@@ -129,28 +219,65 @@
   function renderCharts(snapshot, buckets) {
     const requestRate = snapshot.summary.requestsPerMinute;
     const tokenRate = snapshot.summary.tokensPerMinute;
+    const blue = chartColor("--brand-primary-hover", "#0E538B");
+    const green = chartColor("--brand-accent", "#00A972");
+    const muted = chartColor("--brand-muted", "#618794");
+    const warning = chartColor("--dashboard-warning", "#955100");
+    const requestValue = (bucket) => {
+      if (state.outcome === "errors") {
+        return Number(bucket.errors || 0);
+      }
+      if (state.outcome === "rate-limited") {
+        return Number(bucket.rateLimited || 0);
+      }
+      if (state.outcome === "success") {
+        return Math.max(
+          0,
+          Number(bucket.requests || 0) -
+            Number(bucket.errors || 0) -
+            Number(bucket.rateLimited || 0),
+        );
+      }
+      return Number(bucket.requests || 0);
+    };
     document.querySelector("#request-chart-value").textContent = `${formatInteger(requestRate)} rpm`;
+    document.querySelector("#request-chart-subtitle").textContent =
+      `${outcomeFilter.options[outcomeFilter.selectedIndex].text.toLowerCase()} · 429 highlighted`;
     document.querySelector("#token-chart-value").textContent = `${formatNumber(tokenRate)} tpm`;
     document.querySelector("#latency-chart-value").textContent =
       `p95 ${formatDuration(snapshot.summary.p95LatencyMs)}`;
-    drawBars(
-      document.querySelector("#request-chart"),
-      buckets,
-      (bucket) => Number(bucket.requests || 0),
-      "#0E538B",
-    );
-    drawBars(
-      document.querySelector("#token-chart"),
-      buckets,
-      (bucket) => Number(bucket.inputTokens || 0) + Number(bucket.outputTokens || 0),
-      "#00A972",
-    );
-    drawBars(
-      document.querySelector("#latency-chart"),
-      buckets,
-      (bucket) => Number(bucket.averageLatencyMs || 0),
-      "#618794",
-    );
+    drawLines(document.querySelector("#request-chart"), buckets, [
+      { label: state.outcome, value: requestValue, color: blue },
+      {
+        label: "429",
+        value: (bucket) => Number(bucket.rateLimited || 0),
+        color: warning,
+      },
+    ]);
+    drawLines(document.querySelector("#token-chart"), buckets, [
+      {
+        label: "input tokens",
+        value: (bucket) => Number(bucket.inputTokens || 0),
+        color: green,
+      },
+      {
+        label: "output tokens",
+        value: (bucket) => Number(bucket.outputTokens || 0),
+        color: blue,
+      },
+    ]);
+    drawLines(document.querySelector("#latency-chart"), buckets, [
+      {
+        label: "average latency",
+        value: (bucket) => Number(bucket.averageLatencyMs || 0),
+        color: muted,
+      },
+      {
+        label: "maximum latency",
+        value: (bucket) => Number(bucket.maximumLatencyMs || 0),
+        color: warning,
+      },
+    ]);
   }
 
   function updateModelOptions(models) {
@@ -184,10 +311,21 @@
 
   function renderModels(snapshot) {
     updateModelOptions(snapshot.models);
-    const models =
+    let models =
       state.model === "all"
         ? snapshot.models
         : snapshot.models.filter((model) => model.model === state.model);
+    if (state.outcome === "errors") {
+      models = models.filter((model) => Number(model.errors || 0) > 0);
+    } else if (state.outcome === "rate-limited") {
+      models = models.filter((model) => Number(model.rateLimited || 0) > 0);
+    } else if (state.outcome === "success") {
+      models = models.filter(
+        (model) =>
+          Number(model.requests || 0) >
+          Number(model.errors || 0) + Number(model.rateLimited || 0),
+      );
+    }
     const body = document.querySelector("#models-body");
     body.replaceChildren();
     if (!models.length) {
@@ -263,15 +401,16 @@
   function renderFooter(snapshot) {
     const retained = snapshot.retention.estimatedBytes / (1024 * 1024);
     const target = snapshot.retention.targetBytes / (1024 * 1024);
+    const workspace = snapshot.workspace?.id ? `workspace ${snapshot.workspace.id} · ` : "";
     document.querySelector("#retention-status").textContent =
       `Collecting · process uptime ${formatUptime(snapshot.uptimeSeconds)} · memory ${retained.toFixed(1)} MiB / ${target.toFixed(0)} MiB`;
     document.querySelector("#retention-detail").textContent =
-      `${snapshot.retention.detailedResolutionSeconds}s resolution · 1h detail · 24h rollup · process-local`;
+      `${workspace}${snapshot.retention.detailedResolutionSeconds}s resolution · 1h detail · 24h rollup`;
   }
 
   function render(snapshot) {
     state.snapshot = snapshot;
-    if (state.paused || state.hidden) {
+    if (state.hidden) {
       return;
     }
     const buckets = selectedBuckets(snapshot);
@@ -320,7 +459,7 @@
     state.eventSource = source;
     source.addEventListener("open", () => {
       state.reconnectAttempt = 0;
-      setLiveState(state.paused ? "paused" : "live", state.paused ? "Paused" : "Live");
+      setLiveState("live", "Live");
     });
     source.addEventListener("snapshot", (event) => {
       try {
@@ -357,26 +496,16 @@
     }
   });
 
-  pauseToggle.addEventListener("click", () => {
-    state.paused = !state.paused;
-    pauseToggle.setAttribute("aria-pressed", String(state.paused));
-    pauseToggle.textContent = state.paused ? "Resume live" : "Pause live";
-    setLiveState(state.paused ? "paused" : "live", state.paused ? "Paused" : "Live");
-    if (!state.paused && state.snapshot) {
+  outcomeFilter.addEventListener("change", () => {
+    state.outcome = outcomeFilter.value;
+    if (state.snapshot) {
       render(state.snapshot);
     }
   });
 
-  detailToggle.addEventListener("click", () => {
-    const compact = dashboard.dataset.detail !== "compact";
-    dashboard.dataset.detail = compact ? "compact" : "full";
-    detailToggle.setAttribute("aria-pressed", String(compact));
-    detailToggle.textContent = compact ? "Full detail" : "Compact";
-  });
-
   document.addEventListener("visibilitychange", () => {
     state.hidden = document.hidden;
-    if (!state.hidden && state.snapshot && !state.paused) {
+    if (!state.hidden && state.snapshot) {
       render(state.snapshot);
     }
   });

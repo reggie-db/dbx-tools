@@ -358,7 +358,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   rollups for 24 hours, 32 named model series plus `other`, and at most 16 MiB
   in process memory. Do not retain request events or identities and do not write
   history to disk. The embedded vanilla dashboard uses snapshot JSON plus SSE,
-  canonical generated brand tokens, and committed assets validated by
+  canonical generated brand tokens, model and outcome filters, request, token,
+  and latency line graphs. GridStack owns drag-and-drop placement and widget resizing; do not
+  restore a separate compact/full-detail mode or hand-roll grid interactions. A
+  proxy owns one startup workspace, so never add a workspace selector to this
+  process-local UI. Committed assets are validated by
   `bun run model-proxy:metrics-assets`. Rust release rows embed those assets
   without Bun. `metrics` and `metrics-ui` remain additive optional features; a
   metrics-free build contains no recorder, histogram, exporter, or UI assets.

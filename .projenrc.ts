@@ -260,6 +260,7 @@ const root = new projenProject.DBXToolsNodeProject({
     "@dbx-tools/projen@workspace:^",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
+    "gridstack@^12.3.3",
     "zod@catalog:",
   ],
 });
