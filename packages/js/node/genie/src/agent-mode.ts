@@ -11,7 +11,7 @@
 
 import type { WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
-import { error, json, log, object } from "@dbx-tools/shared-core";
+import { errorUtils, json, log, object } from "@dbx-tools/shared-core";
 import {
   agentMode as agentModeWire,
   type GenieAgentModeEvent,
@@ -91,7 +91,7 @@ export async function* genieAgentModeChat(
 
 /** Return whether Agent Mode is disabled or its preview toggle is unavailable. */
 export function isAgentModeUnavailable(value: unknown): boolean {
-  const context = error.errorContext(value);
+  const context = errorUtils.errorContext(value);
   return context.hasMessage("feature", "disabled") || context.hasMessage("preview", "toggle");
 }
 
@@ -125,7 +125,7 @@ async function cancelResponse(
       agentId,
       conversationId,
       responseId,
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
   } finally {
     clearTimeout(timeout);

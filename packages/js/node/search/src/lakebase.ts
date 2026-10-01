@@ -24,7 +24,7 @@
  */
 
 import { ExecutionError } from "@databricks/appkit";
-import { log, object, string } from "@dbx-tools/shared-core";
+import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import type {
   SearchDocument,
   SearchHit,
@@ -61,7 +61,10 @@ const RESERVED_COLUMNS = new Set(["id", "search_text", "document", "search_vecto
  */
 export function toSearchTerms(query: string): string[] {
   return [
-    ...string.tokenizeWithOptions({ lowerCase: true, camelCase: false, distinct: true }, query),
+    ...stringUtils.tokenizeWithOptions(
+      { lowerCase: true, camelCase: false, distinct: true },
+      query,
+    ),
   ];
 }
 
@@ -175,7 +178,7 @@ export class LakebaseSearchBackend {
     query: string,
     options: LakebaseSearchOptions = {},
   ): Promise<SearchResult> {
-    const text = string.trimToEmpty(query);
+    const text = stringUtils.trimToEmpty(query);
     const table = this.tableFor(index);
     const limit = options.limit ?? 10;
     const pool = await this.getPool();
@@ -355,7 +358,7 @@ export class LakebaseSearchBackend {
     signal?: AbortSignal,
   ): Promise<void> {
     for (const doc of documents) {
-      const id = string.trimToNull(String(doc.id ?? doc.ID ?? "")) ?? undefined;
+      const id = stringUtils.trimToNull(String(doc.id ?? doc.ID ?? "")) ?? undefined;
       if (id === undefined) {
         throw new ExecutionError("search (lakebase): a document is missing an `id`", {
           context: { operation: "addDocuments" },
@@ -376,7 +379,7 @@ export class LakebaseSearchBackend {
 
   /** The text a row is indexed by: the text column first, then any other string field. */
   private searchText(doc: SearchDocument, textColumn: string): string {
-    const primary = string.trimToEmpty(String(doc[textColumn] ?? ""));
+    const primary = stringUtils.trimToEmpty(String(doc[textColumn] ?? ""));
     const rest = Object.entries(doc)
       .filter(([key, value]) => key !== textColumn && key !== "id" && typeof value === "string")
       .map(([, value]) => value as string);
@@ -425,7 +428,7 @@ export class LakebaseSearchBackend {
   /** A safe bare table name derived from an index reference. */
   private bareName(reference: string): string {
     const last = reference.split(".").filter(Boolean).pop() ?? reference;
-    const slug = string.toSlug(last).replace(/-/g, "_");
+    const slug = stringUtils.toSlug(last).replace(/-/g, "_");
     return slug.length > 0 ? slug : "documents";
   }
 

@@ -135,7 +135,7 @@ await appkit.createApp({
 
 Two pieces, one process: `tunnelInterceptor()` runs the selected tunnel clients
 (children bound to the app), and `authGate()` is the in-app gate. Portr remains
-the default. Set `transport: "frp"` or `DBX_TOOLS_TUNNEL_TRANSPORT=frp`; use `both` with
+the default. Set `transport: "frp"` or `TUNNEL_TRANSPORT=frp`; use `both` with
 separate `TUNNEL_PUBLIC_DOMAIN` and `TUNNEL_FRP_PUBLIC_DOMAIN` hosts.
 See [Use The Gate](#use-the-gate) for the gate on its own.
 
@@ -157,7 +157,7 @@ without touching code.
 | `TUNNEL_AUTH_LOGOUT_REDIRECT` | `/` (show login again)       |
 | `TUNNEL_PUBLIC_DOMAIN`        | - (no tunnel when unset)     |
 | `TUNNEL_FRP_PUBLIC_DOMAIN`    | - (no FRP tunnel when unset) |
-| `DBX_TOOLS_TUNNEL_TRANSPORT`  | `portr`                      |
+| `TUNNEL_TRANSPORT`            | `portr`                      |
 | `PORTR_SSH_URL`               | Portr host on port `4444`    |
 | `FRP_SERVER`                  | FRP public domain            |
 | `FRP_SERVER_PORT`             | `443`                        |
@@ -169,13 +169,9 @@ without touching code.
 | `TUNNEL_FORWARD_HEADERS`      | the built-in `x-` allow-list |
 | `TUNNEL_AUTH_JWT_SECRET`      | an ephemeral per-process key |
 
-Every variable is `TUNNEL_`-prefixed because the tunnel shares one environment
-with the app it fronts, so a generic name is one the app may already be using.
-The earlier unprefixed spellings - `AUTH_SUBJECT`, `AUTH_BRAND_NAME`,
-`AUTH_MESSAGE`, `AUTH_SESSION_TTL`, `AUTH_CODE_TTL`, `AUTH_JWT_SECRET`,
-`EMAIL_AUTH_ALLOW`, `PUBLIC_DOMAIN`, plus `TUNNEL_AUTH_SESSION_EPOCH` from before
-the cutoff rename - are still read as deprecated aliases, with the `TUNNEL_` name
-winning when both are set, so an existing deployment needs no coordinated rename.
+Every tunnel-owned variable is `TUNNEL_`-prefixed because the tunnel shares one
+environment with the app it fronts, so a generic name may already belong to the
+app. Only the names listed above are read.
 `PORTR_*` and `FRP_*` keep their names: those namespaces belong to the clients
 itself, as does `DATABRICKS_APP_PORT`, which the platform sets and the tunnel
 honours.
@@ -412,7 +408,7 @@ upstream binary is otherwise terminated by the platform loader.
 - `rate-limit` - the in-memory fixed-window limiter (single-instance only; not
   distributed).
 - `portr` - portr install, config rendering, and child launch.
-- `env` - the environment-variable names, each with its deprecated aliases.
+- `_config` - exact environment-only lookup for canonical `TUNNEL_*` names.
 
 Browser-safe gate contracts live in
 [`@dbx-tools/shared-auth`](../../shared/auth); the passkey-first React login and

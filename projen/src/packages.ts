@@ -25,14 +25,14 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { extname, relative, resolve, sep } from "node:path";
-import { project as coreProject } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
-import { json, object, string } from "@dbx-tools/shared-core";
+import { json, object, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 
 /** Resolve the nearest package/projenrc root at call time. */
 export function resolveRepoRoot(cwd: string = process.cwd()): string {
-  return coreProject.root(cwd) ?? cwd;
+  return projectUtils.root(cwd) ?? cwd;
 }
 
 /** Current-process repository root for executable task entrypoints. */
@@ -47,11 +47,11 @@ export const DEFAULT_PACKAGE_ROOTS = ["packages"] as const;
 /**
  * A project name: the root `package.json` name, else the git remote's repo
  * name, else the root folder name. Delegates to `@dbx-tools/core`'s
- * {@link coreProject.name}, which is also what a consuming repo's own tooling
+ * {@link projectUtils.name}, which is also what a consuming repo's own tooling
  * sees, so the engine and its host agree on the name.
  */
 export function projectName(projectRoot: string = resolveRepoRoot()): string {
-  return coreProject.name(projectRoot);
+  return projectUtils.name(projectRoot);
 }
 
 const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
@@ -65,7 +65,7 @@ export function toPosix(p: string): string {
 
 /**
  * Cumulative nesting tags from a package's path segments relative to its discovery
- * root. Each segment is kebab-cased with {@link string.toSlug} (`coolDude` ->
+ * root. Each segment is kebab-cased with {@link stringUtils.toSlug} (`coolDude` ->
  * `cool-dude`). The leaf folder (the package name) is excluded when there are two
  * or more segments; a lone segment tags itself.
  */
@@ -75,7 +75,7 @@ function nestingTagsFromSegments(segments: readonly string[]): string[] {
   const out: string[] = [];
   let acc = "";
   for (const segment of prefix) {
-    const token = string.toSlug(segment);
+    const token = stringUtils.toSlug(segment);
     if (!token) continue;
     acc = acc ? `${acc}-${token}` : token;
     out.push(acc);
@@ -288,7 +288,7 @@ function readManifestTags(dir: string): string[] | undefined {
  */
 export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): string[] {
   const paths = readDbxToolsConfig(projectRoot)?.syncResynthPaths;
-  return Array.isArray(paths) ? string.parseList(paths.map((p) => String(p))) : [];
+  return Array.isArray(paths) ? stringUtils.parseList(paths.map((p) => String(p))) : [];
 }
 
 /**
@@ -322,7 +322,7 @@ export function recordedPackages(projectRoot: string = resolveRepoRoot()): Recor
 export function recordedRoots(projectRoot: string = resolveRepoRoot()): string[] {
   const configured = readDbxToolsConfig(projectRoot)?.packageRoots;
   if (Array.isArray(configured)) {
-    const roots = string.parseList(configured.map((root) => String(root)));
+    const roots = stringUtils.parseList(configured.map((root) => String(root)));
     if (roots.length) return roots;
   }
   const roots = new Set<string>(DEFAULT_PACKAGE_ROOTS);

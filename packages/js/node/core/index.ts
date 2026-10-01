@@ -3,22 +3,22 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/core";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as bin from "./src/bin.ts";
-export * as brand from "./src/brand.ts";
+export * as brandFiles from "./src/brand-files.ts";
 export * as bundle from "./src/bundle.ts";
-export * as config from "./src/config.ts";
+export * as configUtils from "./src/config-utils.ts";
 export * as exec from "./src/exec.ts";
 export * as file from "./src/file.ts";
 export * as fileLock from "./src/file-lock.ts";
 export * as processLock from "./src/process-lock.ts";
-export * as project from "./src/project.ts";
+export * as projectUtils from "./src/project-utils.ts";
 export type { BinContext, BinSelectionContext, BinSelector, BinVersionOutput, BinVersionParser, BinOptions, BinUrl } from "./src/bin.ts";
-export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt } from "./src/brand.ts";
-export type { BrandContext, BrandContextInput } from "./src/brand.ts";
-export { MAX_TCP_PORT, ENV_ONLY, valueSchema, bundleResourceSchema, bundleEnvEntrySchema, bundleAppSchema, appEnvEntrySchema, appSchema } from "./src/config.ts";
-export type { ConfigMapValue, ConfigData, ConfigSource, ConfigOptions, ConfigFile } from "./src/config.ts";
+export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt } from "./src/brand-files.ts";
+export type { BrandContext, BrandContextInput } from "./src/brand-files.ts";
+export { MAX_TCP_PORT, ENV_ONLY, valueSchema, bundleResourceSchema, bundleEnvEntrySchema, bundleAppSchema, appEnvEntrySchema, appSchema } from "./src/config-utils.ts";
+export type { ConfigMapValue, ConfigData, ConfigSource, ConfigOptions, ConfigFile } from "./src/config-utils.ts";
 export { COMMAND_NOT_FOUND_EXIT_CODE } from "./src/exec.ts";
 export type { ExecStdio, LineHandler, StdioOption, ExecResult, ChildProcessResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
 export type { FileLockBackend, FileLockAcquisition, FileLockOptions } from "./src/file-lock.ts";
-export type { ProjectContext } from "./src/project.ts";
+export type { ProjectContext } from "./src/project-utils.ts";

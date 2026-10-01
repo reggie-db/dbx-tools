@@ -10,6 +10,21 @@
 
 import { z } from "zod";
 
+import { AUTH_BASE_PATH } from "./_route.ts";
+
+export { AUTH_BASE_PATH };
+
+/**
+ * True only for the auth mount itself or one of its descendants.
+ *
+ * Segment-aware matching prevents lookalike application routes such as
+ * `/api/email/authz` from being treated as public authentication endpoints.
+ */
+export function isAuthPath(path: string): boolean {
+  const pathname = path.split("?", 1)[0] ?? path;
+  return pathname === AUTH_BASE_PATH || pathname.startsWith(`${AUTH_BASE_PATH}/`);
+}
+
 export const SESSION_COOKIE_NAME = "dbx-tools-auth";
 
 export const authRequestSchema = z.object({

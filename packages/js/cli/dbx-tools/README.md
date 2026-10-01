@@ -141,7 +141,6 @@ should run the `dbx` bin.
 - `bootstrap` - empty-workspace bootstrap, toolchain seeding, and the initial synth.
 - `root` - workspace-root detection and bootstrap/install checks.
 - `bun` - bun discovery, workspace install, registry forcing, and projen delegation.
-- `rust-binary` - compatibility re-export of `@dbx-tools/rust-binary`.
 
 The reusable project classes and generators live in
 [`@dbx-tools/projen`](../../../../projen).

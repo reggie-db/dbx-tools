@@ -30,6 +30,7 @@
     "@databricks/appkit": "catalog:"
   },
   "dependencies": {
+    "@dbx-tools/core-rs": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "pg": "^8.22.0"
   },
@@ -47,7 +48,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.5",
+  "version": "0.9.6",
   "types": "index.ts",
   "type": "module",
   "exports": {

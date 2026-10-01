@@ -5,7 +5,7 @@
  */
 
 import type { DriveResult, EvalDriver } from "@databricks/appkit/beta";
-import { error, hash, object } from "@dbx-tools/shared-core";
+import { errorUtils, hash, object } from "@dbx-tools/shared-core";
 import type { Agent } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 
@@ -60,7 +60,7 @@ export function createMastraEvalDriver(
         };
       } catch (caught) {
         return {
-          reply: error.errorMessage(caught),
+          reply: errorUtils.errorMessage(caught),
           toolCalls: [],
           toolCallDetails: [],
           succeeded: false,

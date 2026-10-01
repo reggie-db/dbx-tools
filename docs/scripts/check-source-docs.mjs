@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import ts from "typescript";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
+import { posix, walk } from "./repository-docs.mjs";
 
 const DEFAULT_BASELINE = "docs/source-doc-baseline.json";
 const GENERATED_PATHS = [
@@ -11,24 +12,11 @@ const GENERATED_PATHS = [
   /\/src\/_bindings(?:-ffi)?\.ts$/,
   /\/src\/bindings\.ts$/,
   /\/src\/dashboards\.ts$/,
-  /\/src\/_rust-release-binaries\.ts$/,
+  /\/src\/_release-binaries\.ts$/,
 ];
 
-const posix = (value) => value.split(path.sep).join("/");
-
-function walk(directory, files = []) {
-  if (!fs.existsSync(directory)) return files;
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if ([".git", "dist", "lib", "node_modules"].includes(entry.name)) continue;
-    const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) walk(file, files);
-    else files.push(file);
-  }
-  return files;
-}
-
 function discoverPackages(root) {
-  return walk(path.join(root, "packages", "js"))
+  return walk(path.join(root, "packages", "js"), [], ["dist", "lib"])
     .filter((file) => path.basename(file) === "package.json")
     .map((manifest) => ({ manifest, value: JSON.parse(fs.readFileSync(manifest, "utf8")) }))
     .filter(({ value }) => value.private !== true)

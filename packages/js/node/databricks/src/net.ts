@@ -8,14 +8,14 @@
  */
 
 import { lookup } from "node:dns/promises";
-import { functionModule, http, net } from "@dbx-tools/shared-core";
+import { functionUtils, http, net } from "@dbx-tools/shared-core";
 
 /**
  * This process's outbound public IP, cached for 5 minutes. Asks Cloudflare's
  * `cdn-cgi/trace` first and falls back to ipify. Useful for allowlisting or for
  * reasoning about egress from a Databricks App.
  */
-export const getPublicIp = functionModule.memoize(
+export const getPublicIp = functionUtils.memoize(
   async () => {
     const cloudflareResponse = await fetch("https://cloudflare.com/cdn-cgi/trace");
     if (cloudflareResponse.ok) {

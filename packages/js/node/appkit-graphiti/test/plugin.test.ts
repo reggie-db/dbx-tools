@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { createMockRouter } from "@databricks/appkit/testing";
+import { GRAPHITI_PYTHON_VERSION } from "../src/_python-runtime.ts";
 import { GraphitiPlugin, ensureGraphitiModelProxy, ensureGraphitiPython } from "../src/plugin.ts";
 
 const SCOPED_TOOL_NAMES = [
@@ -82,7 +83,7 @@ describe("GraphitiPlugin routes", () => {
     assert.match(calls[0]?.args[1] ?? "", /importlib\.metadata\.version/);
     assert.deepEqual(calls[1], { file: "python3", args: ["-m", "pip", "--version"] });
     assert.ok(calls[2]?.args.includes("--upgrade"));
-    assert.match(calls[2]?.args.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
+    assert.equal(calls[2]?.args.at(-1), `dbx-tools-graphiti==${GRAPHITI_PYTHON_VERSION}`);
   });
 
   it("bootstraps pip when the App Python omits it", async () => {
@@ -93,7 +94,7 @@ describe("GraphitiPlugin routes", () => {
     });
 
     assert.match(calls[2]?.[1] ?? "", /urllib\.request/);
-    assert.match(calls[3]?.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
+    assert.equal(calls[3]?.at(-1), `dbx-tools-graphiti==${GRAPHITI_PYTHON_VERSION}`);
   });
 
   it("installs the registered model proxy binary by absolute path", async () => {

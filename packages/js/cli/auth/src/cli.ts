@@ -8,7 +8,7 @@
  */
 
 import * as databricks from "@dbx-tools/core-rs";
-import { string as sharedString } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 
 type StorageName = "auto" | "memory" | "file";
@@ -64,7 +64,7 @@ const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
 
 /** Collect comma-separated and repeated scope values into one ordered list. */
 function collectScopes(value: string, previous: string[] = []): string[] {
-  return [...previous, ...sharedString.parseList(value)];
+  return [...previous, ...stringUtils.parseList(value)];
 }
 
 /** Parse a decimal integer while preserving the full UniFFI integer range. */

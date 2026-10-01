@@ -5,27 +5,27 @@
  * token, the service principal can't list, or the workspace is unreachable -
  * the resolver still has to name *some* endpoint. This module holds that floor:
  * a small, hard-coded set of well-known Foundation Model API endpoint names,
- * each bucketed into a chat {@link ModelClass} by the shared
- * {@link classify.classifyByFamily} heuristic (no classes are hard-coded here)
+ * each bucketed into a chat {@link ModelClass} by the Rust family policy
  * and ordered best-first.
  *
  * This is deliberately *server-only*. A browser client never talks to
  * Databricks directly - it always goes through this server - so it has nothing
  * to fall back to and must not assume a stale, baked-in model list; it consumes
- * the live `/models` response instead. The pure classifier
- * ({@link classify.classifyEndpoints}) is what the client shares.
+ * the classified live `/models` response instead.
  *
  * @module
  */
 
-import { classify, model, type FamilyClass } from "@dbx-tools/shared-model";
+import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+
+import { rankEndpoints } from "./_native.ts";
 
 type ModelClass = model.ModelClass;
 const { ModelClass } = model;
 
 /**
  * Small, last-resort set of well-known Foundation Model API endpoint names,
- * ordered best-first within each class by {@link classify.classifyByFamily}.
+ * ordered best-first within each class by the Rust model ranker.
  * Used only as the floor when the live `/serving-endpoints` catalogue can't be
  * read at resolve time; the live, score-driven classification supersedes it
  * whenever the workspace listing is available. Classes are not hard-coded here
@@ -43,19 +43,23 @@ const FALLBACK_MODEL_NAMES: readonly string[] = [
   "databricks-meta-llama-3-1-8b-instruct",
 ];
 
+const FALLBACK_ENDPOINTS: readonly ServingEndpointSummary[] = FALLBACK_MODEL_NAMES.map((name) => ({
+  name,
+  task: "llm/v1/chat",
+}));
+
 /**
  * Static fallback model ids for a chat class, drawn from the small built-in
  * {@link FALLBACK_MODEL_NAMES} list and ordered best-first by family rank. Sync
  * and workspace-independent: this is the *fallback opinion* used to seed default
  * lists or when the live catalogue is unreachable - live resolution prefers
- * {@link classify.classifyEndpoints}. Returns `[]` for
+ * the Rust-classified workspace catalogue. Returns `[]` for
  * {@link ModelClass.Embedding} (the floor is chat-only).
  */
 export function modelsForClass(cls: ModelClass): readonly string[] {
-  return FALLBACK_MODEL_NAMES.map((name) => ({ name, c: classify.classifyByFamily(name) }))
-    .filter((x): x is { name: string; c: FamilyClass } => x.c !== null && x.c.class === cls)
-    .sort((a, b) => b.c.rank - a.c.rank)
-    .map((x) => x.name);
+  return rankEndpoints(FALLBACK_ENDPOINTS, { modelClass: cls })
+    .filter((ranked) => ranked.modelClass === cls)
+    .map((ranked) => ranked.endpoint.name);
 }
 
 /** Top static fallback model id for a chat class. */

@@ -3,17 +3,17 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as classes from "./src/classes.ts";
 export * as fallback from "./src/fallback.ts";
 export * as invoke from "./src/invoke.ts";
+export * as modelCatalog from "./src/model-catalog.ts";
 export * as policy from "./src/policy.ts";
 export * as resolve from "./src/resolve.ts";
-export * as serving from "./src/serving.ts";
 export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./src/classes.ts";
 export { FALLBACK_MODEL_IDS } from "./src/fallback.ts";
 export { INVOCATIONS_SUFFIX, RESPONSES_PATH, OPEN_RESPONSES_PATH, CHAT_COMPLETIONS_PATH } from "./src/invoke.ts";
 export type { AuthenticatingClientLike } from "./src/invoke.ts";
+export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "./src/model-catalog.ts";
+export type { WorkspaceClientLike, ListServingEndpointsOptions, ResolvedModel, ResolveModelOptions, ScoredEndpoint } from "./src/model-catalog.ts";
 export type { ResolveModelInput, ResolvedModelSelection, SelectModelInput, SearchModelsInput } from "./src/resolve.ts";
-export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "./src/serving.ts";
-export type { WorkspaceClientLike, ListServingEndpointsOptions, ResolvedModel, ResolveModelOptions, ScoredEndpoint } from "./src/serving.ts";

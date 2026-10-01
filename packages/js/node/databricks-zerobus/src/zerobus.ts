@@ -5,14 +5,14 @@ import {
   type TableProperties,
   type ZerobusStream,
 } from "@databricks/zerobus-ingest-sdk";
-import { workspace, cloud } from "@dbx-tools/databricks";
+import { workspaceClient, cloud } from "@dbx-tools/databricks";
 
 export async function createSdk(): Promise<ZerobusSdk> {
-  const workspaceUrl = await workspace.getWorkspaceUrl();
+  const workspaceUrl = await workspaceClient.getWorkspaceUrl();
   if (!workspaceUrl) {
     throw new Error("Workspace URL not found");
   }
-  const workspaceId = await workspace.getWorkspaceId();
+  const workspaceId = await workspaceClient.getWorkspaceId();
   if (!workspaceId) {
     throw new Error(`Workspace ID not found: workspaceUrl=${workspaceUrl.toString()}`);
   }

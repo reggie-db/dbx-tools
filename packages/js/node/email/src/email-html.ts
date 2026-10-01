@@ -1,11 +1,11 @@
 /** Node rendering adapters for the shared React Email document. @module */
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { EmailDocument, type EmailDocumentProps } from "@dbx-tools/shared-email-template";
 import { render } from "@react-email/render";
 import { createElement } from "react";
 
 /** Escape HTML-significant characters (re-exported from shared-core). */
-export const escapeHtml = string.escapeHtml;
+export const escapeHtml = stringUtils.escapeHtml;
 
 /** Options accepted by the shared React Email document. */
 export type EmailHtmlOptions = EmailDocumentProps;

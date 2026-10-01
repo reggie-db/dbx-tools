@@ -1,12 +1,12 @@
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import { dbxToolsAssetDataUrls } from "./generated/assets.ts";
 
 const builtInAssets = new Map<string, string>([
-  [brand.DEFAULT_BRAND_ASSETS.icon.light, dbxToolsAssetDataUrls.iconLight],
-  [brand.DEFAULT_BRAND_ASSETS.icon.dark, dbxToolsAssetDataUrls.iconDark],
-  [brand.DEFAULT_BRAND_ASSETS.logo.light, dbxToolsAssetDataUrls.logoLight],
-  [brand.DEFAULT_BRAND_ASSETS.logo.dark, dbxToolsAssetDataUrls.logoDark],
-  [brand.DEFAULT_BRAND_ASSETS.favicon, dbxToolsAssetDataUrls.iconLight],
+  [brandUtils.DEFAULT_BRAND_ASSETS.icon.light, dbxToolsAssetDataUrls.iconLight],
+  [brandUtils.DEFAULT_BRAND_ASSETS.icon.dark, dbxToolsAssetDataUrls.iconDark],
+  [brandUtils.DEFAULT_BRAND_ASSETS.logo.light, dbxToolsAssetDataUrls.logoLight],
+  [brandUtils.DEFAULT_BRAND_ASSETS.logo.dark, dbxToolsAssetDataUrls.logoDark],
+  [brandUtils.DEFAULT_BRAND_ASSETS.favicon, dbxToolsAssetDataUrls.iconLight],
 ]);
 
 export type BrandAssetResolver = (source: string) => string;
@@ -16,7 +16,7 @@ export const resolveBrandAsset: BrandAssetResolver = (source) =>
   builtInAssets.get(source) ?? source;
 
 /** Convert a validated context to CSS custom properties. */
-export function brandCssVariables(context: brand.BrandContext): Record<string, string> {
+export function brandCssVariables(context: brandUtils.BrandContext): Record<string, string> {
   return {
     "--brand-color-primary": context.colors.primary,
     "--brand-color-primary-hover": context.colors.primaryHover,
@@ -41,7 +41,7 @@ export interface ApplyBrandContextOptions {
 
 /** Apply tokens and optional page metadata to a browser document. */
 export function applyBrandContext(
-  context: brand.BrandContext,
+  context: brandUtils.BrandContext,
   options: ApplyBrandContextOptions = {},
 ): void {
   const documentRef = options.document ?? globalThis.document;

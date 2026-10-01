@@ -25,7 +25,7 @@
  */
 
 import { hostname } from "node:os";
-import { async as sharedAsync, error, hash, json, object, string } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, hash, json, object, stringUtils } from "@dbx-tools/shared-core";
 import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
@@ -234,7 +234,7 @@ function definedMetadata(values: Record<string, SerializableValue | undefined>):
 function machineMetadata(): TopicMetadata {
   return definedMetadata({
     project:
-      string.firstNonEmpty([
+      stringUtils.firstNonEmpty([
         process.env.DATABRICKS_APP_NAME,
         process.env.DATABRICKS_BUNDLE_NAME,
         process.env.PROJECT_NAME,
@@ -242,10 +242,10 @@ function machineMetadata(): TopicMetadata {
       ]) ?? undefined,
     hostname: hostname(),
     platform: process.platform,
-    environment: string.trimToNull(process.env.NODE_ENV) ?? undefined,
-    appName: string.trimToNull(process.env.DATABRICKS_APP_NAME) ?? undefined,
-    deploymentId: string.trimToNull(process.env.DATABRICKS_APP_DEPLOYMENT_ID) ?? undefined,
-    databricksHost: string.trimToNull(process.env.DATABRICKS_HOST) ?? undefined,
+    environment: stringUtils.trimToNull(process.env.NODE_ENV) ?? undefined,
+    appName: stringUtils.trimToNull(process.env.DATABRICKS_APP_NAME) ?? undefined,
+    deploymentId: stringUtils.trimToNull(process.env.DATABRICKS_APP_DEPLOYMENT_ID) ?? undefined,
+    databricksHost: stringUtils.trimToNull(process.env.DATABRICKS_HOST) ?? undefined,
   });
 }
 
@@ -268,9 +268,9 @@ async function senderMetadata(): Promise<TopicMetadata> {
   try {
     const context = appkit.getExecutionContext();
     return definedMetadata({
-      senderId: string.trimToNull(context.userId) ?? undefined,
-      senderName: string.trimToNull(context.userName) ?? undefined,
-      senderEmail: string.trimToNull(context.userEmail) ?? undefined,
+      senderId: stringUtils.trimToNull(context.userId) ?? undefined,
+      senderName: stringUtils.trimToNull(context.userName) ?? undefined,
+      senderEmail: stringUtils.trimToNull(context.userEmail) ?? undefined,
     });
   } catch {
     return {};
@@ -321,7 +321,7 @@ export function channelName(value: unknown): string {
   // token longer than the budget, turning one long name into the bare fallback and
   // making every long name look alike. The hash still separates them, but the
   // channel is unreadable in a log.
-  const body = string
+  const body = stringUtils
     .toIdentifierWithOptions({ delimiter: "_" }, ...labelled)
     .slice(0, MAX_CHANNEL_LENGTH - suffix.length - 1)
     .replace(/_+$/, "");
@@ -489,7 +489,7 @@ export class PostgresTopicBus {
     try {
       encoded = JSON.stringify(message);
     } catch (cause) {
-      throw new TypeError(`Message must be JSON serializable: ${error.errorMessage(cause)}`);
+      throw new TypeError(`Message must be JSON serializable: ${errorUtils.errorMessage(cause)}`);
     }
     if (!decode(encoded)) {
       throw new TypeError("Message type, metadata, and body must be JSON serializable");
@@ -624,7 +624,7 @@ export class PostgresTopicBus {
     try {
       await client.query(`UNLISTEN ${quoteIdentifier(this.channelName)}`);
     } catch (cause) {
-      releaseError = error.toError(cause);
+      releaseError = errorUtils.toError(cause);
     }
     client.release(releaseError);
   }
@@ -649,7 +649,7 @@ export class PostgresTopicBus {
     } catch (cause) {
       client.removeListener("notification", this.handleNotification);
       client.removeListener("error", this.handleClientError);
-      client.release(error.toError(cause));
+      client.release(errorUtils.toError(cause));
       throw cause;
     }
   }
@@ -728,7 +728,7 @@ export class PostgresTopicBus {
     while (!this.closed && this.listeners.size > 0) {
       if (delay > 0) {
         try {
-          await sharedAsync.sleep(delay, this.reconnectAbort.signal);
+          await asyncUtils.sleep(delay, this.reconnectAbort.signal);
         } catch {
           return;
         }

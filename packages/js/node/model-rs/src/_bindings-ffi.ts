@@ -285,6 +285,11 @@ const DEFINITIONS = {
       ret: FfiType.RustBuffer,
       hasRustCallStatus: true,
     },
+    "uniffi_dbx_tools_model_fn_func_normalize_serving_endpoints_json": {
+      args: [FfiType.RustBuffer],
+      ret: FfiType.RustBuffer,
+      hasRustCallStatus: true,
+    },
     "uniffi_dbx_tools_model_fn_func_rank_models": {
       args: [FfiType.RustBuffer, FfiType.RustBuffer],
       ret: FfiType.RustBuffer,
@@ -326,6 +331,11 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_model_checksum_func_model_serving_api": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_model_checksum_func_normalize_serving_endpoints_json": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -424,6 +434,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_model_fn_func_is_responses_only(value: Uint8Array, uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_model_fn_func_model_family(value: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_model_serving_api(value: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
+    uniffi_dbx_tools_model_fn_func_normalize_serving_endpoints_json(value: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_rank_models(endpoints: Uint8Array, query: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_reasoning_effort_names_by_family(name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_model_fn_func_reasoning_efforts_by_family(name: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
@@ -433,6 +444,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_model_checksum_func_is_responses_only(): number;
     uniffi_dbx_tools_model_checksum_func_model_family(): number;
     uniffi_dbx_tools_model_checksum_func_model_serving_api(): number;
+    uniffi_dbx_tools_model_checksum_func_normalize_serving_endpoints_json(): number;
     uniffi_dbx_tools_model_checksum_func_rank_models(): number;
     uniffi_dbx_tools_model_checksum_func_reasoning_effort_names_by_family(): number;
     uniffi_dbx_tools_model_checksum_func_reasoning_efforts_by_family(): number;

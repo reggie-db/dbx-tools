@@ -38,7 +38,7 @@ import {
   type Worker,
   type WorkerOptions,
 } from "node:worker_threads";
-import { error, hash, object } from "@dbx-tools/shared-core";
+import { errorUtils, hash, object } from "@dbx-tools/shared-core";
 
 /**
  * `workerData` slot carrying the coordinator port into a worker, and the
@@ -251,7 +251,7 @@ class LockClient {
           this.port.postMessage({ type: "acquire", requestId, key } satisfies LockRequest);
         } catch (cause) {
           this.pending.delete(requestId);
-          reject(error.toError(cause));
+          reject(errorUtils.toError(cause));
         }
       });
     } catch (cause) {

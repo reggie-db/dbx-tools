@@ -25,6 +25,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/core-rs": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "extract-zip": "^2.0.1",
     "proper-lockfile": "^4.1.2",
@@ -43,14 +44,29 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./bin": {
+        "types": "./lib/src/bin.d.ts",
+        "default": "./lib/src/bin.js"
+      },
+      "./exec": {
+        "types": "./lib/src/exec.d.ts",
+        "default": "./lib/src/exec.js"
+      },
+      "./project-utils": {
+        "types": "./lib/src/project-utils.d.ts",
+        "default": "./lib/src/project-utils.js"
+      },
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.5",
+  "version": "0.9.6",
   "types": "index.ts",
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./bin": "./src/bin.ts",
+    "./exec": "./src/exec.ts",
+    "./project-utils": "./src/project-utils.ts",
     "./package.json": "./package.json"
   },
   "files": [

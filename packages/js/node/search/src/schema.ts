@@ -7,11 +7,11 @@
  * @module
  */
 
-import { string } from "@dbx-tools/shared-core";
-import { search } from "@dbx-tools/shared-search";
+import { stringUtils } from "@dbx-tools/shared-core";
+import { searchSchemas } from "@dbx-tools/shared-search";
 
 /** Description the model reads for the `search` tool. */
-export const SEARCH_TOOL_DESCRIPTION = string.toDescription(`
+export const SEARCH_TOOL_DESCRIPTION = stringUtils.toDescription(`
   Search a Databricks AI Search (Vector Search) index for the documents most
   relevant to a query. Pass a natural-language question or keywords; hybrid
   matching combines semantic similarity with keyword ranking, so exact terms
@@ -22,7 +22,7 @@ export const SEARCH_TOOL_DESCRIPTION = string.toDescription(`
 `);
 
 /** Description the model reads for the `universal_search` tool. */
-export const UNIVERSAL_SEARCH_TOOL_DESCRIPTION = string.toDescription(`
+export const UNIVERSAL_SEARCH_TOOL_DESCRIPTION = stringUtils.toDescription(`
   Search across every configured AI Search index at once and return the best
   matches from all of them, merged and ranked. Use it when the right index
   isn't known in advance or when an answer may live in any of several
@@ -30,7 +30,7 @@ export const UNIVERSAL_SEARCH_TOOL_DESCRIPTION = string.toDescription(`
 `);
 
 /** Description the model reads for the `add_documents` tool. */
-export const ADD_DOCUMENTS_TOOL_DESCRIPTION = string.toDescription(`
+export const ADD_DOCUMENTS_TOOL_DESCRIPTION = stringUtils.toDescription(`
   Add or update documents in a direct-access AI Search index. Pass an array of
   documents as JSON objects; each MUST include the index's primary-key column.
   Only available when the app enables the write surface. Use it to index new
@@ -38,7 +38,7 @@ export const ADD_DOCUMENTS_TOOL_DESCRIPTION = string.toDescription(`
 `);
 
 /** Description the model reads for the `create_index` tool. */
-export const CREATE_INDEX_TOOL_DESCRIPTION = string.toDescription(`
+export const CREATE_INDEX_TOOL_DESCRIPTION = stringUtils.toDescription(`
   Create a Databricks AI Search (Vector Search) index. For the common case pass
   a Delta source table (catalog.schema.table): Databricks computes embeddings
   from its text column and keeps the index synced. To create a direct-access
@@ -50,26 +50,26 @@ export const CREATE_INDEX_TOOL_DESCRIPTION = string.toDescription(`
 `);
 
 /** Description the model reads for the `sync_index` tool. */
-export const SYNC_INDEX_TOOL_DESCRIPTION = string.toDescription(`
+export const SYNC_INDEX_TOOL_DESCRIPTION = stringUtils.toDescription(`
   Refresh a Delta Sync AI Search index from its source table so newly added or
   changed rows become searchable. Optionally name the index (defaults to the
   app's default index). Only available when the app enables the write surface.
 `);
 
 /** Schema for the `search` tool input (the shared request schema). */
-export const searchToolSchema = search.searchRequestSchema;
+export const searchToolSchema = searchSchemas.searchRequestSchema;
 
 /** Schema for the `universal_search` tool input. */
-export const universalSearchToolSchema = search.universalSearchRequestSchema;
+export const universalSearchToolSchema = searchSchemas.universalSearchRequestSchema;
 
 /** Schema for the `search` / `universal_search` tool output. */
-export const searchResultSchema = search.searchResultSchema;
+export const searchResultSchema = searchSchemas.searchResultSchema;
 
 /** Schema for the `create_index` tool input. */
-export const createIndexToolSchema = search.createIndexRequestSchema;
+export const createIndexToolSchema = searchSchemas.createIndexRequestSchema;
 
 /** Schema for the `create_index` tool output (a resolved index definition). */
-export const indexInfoSchema = search.indexInfoSchema;
+export const indexInfoSchema = searchSchemas.indexInfoSchema;
 
 /** Schema for the `sync_index` tool input. */
-export const syncIndexToolSchema = search.syncIndexRequestSchema;
+export const syncIndexToolSchema = searchSchemas.syncIndexRequestSchema;

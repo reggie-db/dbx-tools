@@ -29,7 +29,7 @@
  */
 
 import { ValidationError, type BasePluginConfig } from "@databricks/appkit";
-import { config as coreConfig } from "@dbx-tools/core";
+import { configUtils } from "@dbx-tools/core";
 import { object } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import type { JSONSchema7 } from "json-schema";
@@ -199,9 +199,13 @@ export const TEAMS_CONFIG_SCHEMA: JSONSchema7 = {
  */
 export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeamsConfig {
   const cardVersion =
-    coreConfig.string(overrides?.cardVersion, CARD_VERSION_ENV, coreConfig.ENV_ONLY) ??
+    configUtils.string(overrides?.cardVersion, CARD_VERSION_ENV, configUtils.ENV_ONLY) ??
     card.ADAPTIVE_CARD_VERSION;
-  const webhookUrl = coreConfig.string(overrides?.webhookUrl, WEBHOOK_URL_ENV, coreConfig.ENV_ONLY);
+  const webhookUrl = configUtils.string(
+    overrides?.webhookUrl,
+    WEBHOOK_URL_ENV,
+    configUtils.ENV_ONLY,
+  );
   if (webhookUrl !== undefined && !isHttpsUrl(webhookUrl)) {
     throw ValidationError.invalidValue(
       WEBHOOK_URL_ENV,
@@ -210,15 +214,15 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
     );
   }
   const agentPlugin =
-    coreConfig.string(overrides?.agentPlugin, AGENT_PLUGIN_ENV, coreConfig.ENV_ONLY) ??
+    configUtils.string(overrides?.agentPlugin, AGENT_PLUGIN_ENV, configUtils.ENV_ONLY) ??
     DEFAULT_AGENT_PLUGIN;
   // Two independent conditions must BOTH hold: the operator asked for it, and
   // this is a development build. Gating on `NODE_ENV` as well means a stray
   // variable in a production environment cannot silently expose the endpoint.
-  const requested = coreConfig.boolean(
+  const requested = configUtils.boolean(
     overrides?.allowUnauthenticated,
     ALLOW_UNAUTHENTICATED_ENV,
-    coreConfig.ENV_ONLY,
+    configUtils.ENV_ONLY,
   );
   const allowUnauthenticated = requested === true && process.env.NODE_ENV === "development";
   return {
@@ -228,15 +232,15 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
     ...object.optional("webhookUrl", webhookUrl),
     ...object.optional(
       "appId",
-      coreConfig.string(overrides?.appId, APP_ID_ENVS, coreConfig.ENV_ONLY),
+      configUtils.string(overrides?.appId, APP_ID_ENVS, configUtils.ENV_ONLY),
     ),
     ...object.optional(
       "appPassword",
-      coreConfig.string(overrides?.appPassword, APP_PASSWORD_ENVS, coreConfig.ENV_ONLY),
+      configUtils.string(overrides?.appPassword, APP_PASSWORD_ENVS, configUtils.ENV_ONLY),
     ),
     ...object.optional(
       "appTenantId",
-      coreConfig.string(overrides?.appTenantId, APP_TENANT_ENVS, coreConfig.ENV_ONLY),
+      configUtils.string(overrides?.appTenantId, APP_TENANT_ENVS, configUtils.ENV_ONLY),
     ),
   };
 }

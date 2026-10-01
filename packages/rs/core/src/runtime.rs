@@ -8,11 +8,12 @@ const APP_PORT: &str = "DATABRICKS_APP_PORT";
 /// Detect whether the current process is running as a Databricks App.
 #[uniffi::export]
 pub fn is_databricks_app() -> bool {
-    is_databricks_app_environment(&std::env::vars().collect())
+    is_databricks_app_environment(std::env::vars().collect())
 }
 
 /// Detect a Databricks App from a supplied environment map.
-pub fn is_databricks_app_environment(environment: &HashMap<String, String>) -> bool {
+#[uniffi::export]
+pub fn is_databricks_app_environment(environment: HashMap<String, String>) -> bool {
     if let Some(override_value) = environment
         .get(APP_ENV_OVERRIDE)
         .and_then(|value| parse_boolean(value))
@@ -74,11 +75,17 @@ fn contains_interpolation(value: &str) -> bool {
 
 fn valid_http_url(value: &str) -> bool {
     valid_value(value)
-        && url::Url::parse(value.trim()).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
+        && url::Url::parse(value.trim()).is_ok_and(|url| {
+            matches!(url.scheme(), "http" | "https")
+                && url.host_str().is_some_and(|host| !host.is_empty())
+        })
 }
 
 fn valid_port(value: &str) -> bool {
-    value.trim().parse::<u16>().is_ok_and(|port| port > 0)
+    let value = value.trim();
+    !value.is_empty()
+        && value.bytes().all(|byte| byte.is_ascii_digit())
+        && value.parse::<u16>().is_ok_and(|port| port > 0)
 }
 
 #[cfg(test)]
@@ -98,25 +105,25 @@ mod tests {
 
     #[test]
     fn detects_valid_databricks_app_environment() {
-        assert!(is_databricks_app_environment(&app_environment()));
+        assert!(is_databricks_app_environment(app_environment()));
     }
 
     #[test]
     fn recognized_override_takes_precedence() {
         let mut environment = app_environment();
         environment.insert(APP_ENV_OVERRIDE.into(), "off".into());
-        assert!(!is_databricks_app_environment(&environment));
+        assert!(!is_databricks_app_environment(environment));
 
-        environment.clear();
+        let mut environment = HashMap::new();
         environment.insert(APP_ENV_OVERRIDE.into(), "yes".into());
-        assert!(is_databricks_app_environment(&environment));
+        assert!(is_databricks_app_environment(environment));
     }
 
     #[test]
     fn invalid_override_falls_back_to_structural_detection() {
         let mut environment = app_environment();
         environment.insert(APP_ENV_OVERRIDE.into(), "automatic".into());
-        assert!(is_databricks_app_environment(&environment));
+        assert!(is_databricks_app_environment(environment));
     }
 
     #[test]
@@ -131,7 +138,30 @@ mod tests {
         ] {
             let mut environment = app_environment();
             environment.insert(key.into(), value.into());
-            assert!(!is_databricks_app_environment(&environment));
+            assert!(!is_databricks_app_environment(environment));
+        }
+    }
+
+    #[test]
+    fn matches_shared_runtime_fixtures() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            name: String,
+            environment: HashMap<String, String>,
+            detected: bool,
+        }
+
+        let fixtures: Vec<Fixture> = serde_json::from_str(include_str!(
+            "../../../test/fixtures/config/databricks-app-environments.json"
+        ))
+        .unwrap();
+        for fixture in fixtures {
+            assert_eq!(
+                is_databricks_app_environment(fixture.environment),
+                fixture.detected,
+                "{}",
+                fixture.name
+            );
         }
     }
 }

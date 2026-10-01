@@ -18,7 +18,7 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { log, string } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { email } from "@dbx-tools/shared-email";
 import { createTool, type ToolAction } from "@mastra/core/tools";
 import { resolveSenderAddress } from "./sender.ts";
@@ -31,7 +31,7 @@ const logger = log.logger("email/tool/send-email");
  * {@link emailTool} and the AppKit `email.send` tool so both agents get the
  * same guidance about approval and scope.
  */
-export const SEND_EMAIL_DESCRIPTION = string.toDescription(`
+export const SEND_EMAIL_DESCRIPTION = stringUtils.toDescription(`
   Send an email on the user's behalf. Pass one or more recipient
   addresses (with optional cc / bcc and file attachments), a subject,
   and a body; the configured approval policy runs before it goes out.

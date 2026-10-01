@@ -1,4 +1,4 @@
-import { error as sharedError, log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { UIMessage } from "ai";
 import { useCallback, useRef } from "react";
 import type { ThreadSessionUpdater } from "./chat-sessions.ts";
@@ -51,7 +51,7 @@ export function useChatFeedback({
       } catch (error) {
         logger.error("feedback error", {
           traceId,
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
       }
     },

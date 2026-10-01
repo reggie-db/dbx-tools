@@ -1,5 +1,4 @@
 #!/usr/bin/env -S bun
-import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { arch, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -7,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { log } from "@dbx-tools/shared-core";
 import { parse, stringify } from "smol-toml";
+import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import type { RustBindingMapping, RustWorkspaceMapping } from "../src/project-rs.ts";
 
@@ -22,17 +22,13 @@ const parsed = parseArgs({
 });
 
 function run(command: string, args: string[], capture = false): string {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: capture ? "utf8" : undefined,
-    stdio: capture ? "pipe" : "inherit",
-  });
-  if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
-  return capture ? String(result.stdout).trim() : "";
+  if (capture) return captureTaskCommand(repoRoot, command, args, { check: true });
+  runTaskCommand(repoRoot, command, args);
+  return "";
 }
 
 function commandAvailable(command: string): boolean {
-  return spawnSync(command, ["--version"], { stdio: "ignore" }).status === 0;
+  return taskCommandSucceeds(repoRoot, command, ["--version"]);
 }
 
 function rustHost(): string {
@@ -90,12 +86,12 @@ function artifacts(directory: string, suffix: string): string[] {
 }
 
 function cargoVersionExists(crateName: string, version: string, registry: string): boolean {
-  return (
-    spawnSync("cargo", ["info", `${crateName}@${version}`, "--registry", registry], {
-      cwd: repoRoot,
-      stdio: "ignore",
-    }).status === 0
-  );
+  return taskCommandSucceeds(repoRoot, "cargo", [
+    "info",
+    `${crateName}@${version}`,
+    "--registry",
+    registry,
+  ]);
 }
 
 function publishCargo(config: RustWorkspaceMapping, registry: string, version: string): void {

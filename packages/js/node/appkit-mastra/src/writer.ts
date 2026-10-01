@@ -10,7 +10,7 @@
  * @module
  */
 
-import { error, log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { GENIE_PROGRESS_PART_TYPE, type GenieWriterEvent } from "@dbx-tools/shared-mastra";
 import type { ToolExecutionContext } from "@mastra/core/tools";
 
@@ -44,7 +44,7 @@ export async function safeWriteProgress(
   } catch (err) {
     log.warn("writer:error", {
       ...context,
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
   }
 }

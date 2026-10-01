@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { async as asyncTools, type Logger } from "@dbx-tools/shared-core";
+import { asyncUtils, type Logger } from "@dbx-tools/shared-core";
 
 const STABLE_CONNECTION_MS = 60_000;
 const DEFAULT_SHUTDOWN_GRACE_MS = 10_000;
@@ -82,10 +82,10 @@ export function superviseProcessForever(options: ProcessSupervisorOptions): Proc
       }
       if (controller.signal.aborted) return;
       if (Date.now() - startedAt >= STABLE_CONNECTION_MS) failures = 0;
-      const delayMs = asyncTools.boundedRetryDelay(failures++, options.retryDelaysMs);
+      const delayMs = asyncUtils.boundedRetryDelay(failures++, options.retryDelaysMs);
       options.logger.warn(`${options.name} stopped; retrying`, { ...outcome, delayMs });
       try {
-        await asyncTools.sleep(delayMs, controller.signal);
+        await asyncUtils.sleep(delayMs, controller.signal);
       } catch {
         return;
       }

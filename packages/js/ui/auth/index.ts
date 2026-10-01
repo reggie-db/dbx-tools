@@ -3,11 +3,9 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-auth";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as reactAuthClient from "./src/react/auth-client.ts";
 export * as reactAuthGate from "./src/react/auth-gate.tsx";
 export * as reactPasskeyManager from "./src/react/passkey-manager.tsx";
-export { AUTH_BASE } from "./src/react/auth-client.ts";
-export type { PasskeySummary } from "./src/react/auth-client.ts";
 export type { AuthGateProps } from "./src/react/auth-gate.tsx";
 export type { PasskeyManagerProps } from "./src/react/passkey-manager.tsx";

@@ -26,7 +26,7 @@
 import { getExecutionContext } from "@databricks/appkit";
 import { classes, invoke, resolve } from "@dbx-tools/model";
 import { ModelServingApi, modelServingApi } from "@dbx-tools/model-rs";
-import { functionModule, json, log, net } from "@dbx-tools/shared-core";
+import { functionUtils, json, log, net } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
@@ -193,12 +193,12 @@ const CHAT_COMPLETIONS_PATH = `/${invoke.CHAT_COMPLETIONS_PATH}`;
  *      `choices[].message.content` or `choices[].delta.content` as a parts
  *      array that the AI SDK's OpenAI schema rejects.
  *
- * Safe to call from any hot path: {@link functionModule.memoize} ensures
+ * Safe to call from any hot path: {@link functionUtils.memoize} ensures
  * the wrapper is installed at most once per process, so subsequent
  * calls are a no-op even when {@link buildModel} fires on every agent
  * step.
  */
-const setupFetchInterceptor = functionModule.memoize((): void => {
+const setupFetchInterceptor = functionUtils.memoize((): void => {
   globalThis.fetch = createServingFetchInterceptor(globalThis.fetch.bind(globalThis));
 });
 

@@ -6,7 +6,20 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { generateBarrels } from "../src/barrels.ts";
 import { DBXToolsNodeProject } from "../src/project.ts";
-import { resolveNextVersion, writeWorkspaceVersion } from "../src/workspace-version.ts";
+import {
+  parseSemver,
+  resolveNextVersion,
+  writeWorkspaceVersion,
+} from "../src/workspace-version.ts";
+
+describe("stable version parsing", () => {
+  it("accepts only an exact stable semantic version", () => {
+    assert.deepEqual(parseSemver("1.2.3"), [1, 2, 3]);
+    for (const value of ["bad1.2.3", "v1.2.3", "1.2.3-rc.1", "1.2.3+build", "01.2.3"]) {
+      assert.equal(parseSemver(value), undefined, value);
+    }
+  });
+});
 
 describe("workspace version synthesis", () => {
   it("synchronizes extra-member manifests before generating barrels", () => {

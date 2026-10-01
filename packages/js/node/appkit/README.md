@@ -167,16 +167,16 @@ Its default precedence is constant config, process env, `.env`, bundle
 `config.env`, then `app.yaml` / `app.yml`.
 
 ```ts
-import { config } from "@dbx-tools/core";
+import { configUtils } from "@dbx-tools/core";
 
-const warehouseId = config.resolveValue("DATABRICKS_WAREHOUSE_ID", {
+const warehouseId = configUtils.resolveValue("DATABRICKS_WAREHOUSE_ID", {
   data: { DATABRICKS_WAREHOUSE_ID: flags.warehouse },
 });
 ```
 
 Use this in CLIs and setup scripts that should behave the same locally and in a
-Databricks App deployment. `config.bundleFile()` exposes validated bundle
-output, while `config.appFile()` exposes parsed App YAML. Both cache successful,
+Databricks App deployment. `configUtils.bundleFile()` exposes validated bundle
+output, while `configUtils.appFile()` exposes parsed App YAML. Both cache successful,
 missing, and invalid results for the process lifetime.
 
 ## Parse Lakebase Addresses
@@ -233,18 +233,18 @@ await client.apiClient.request(
 
 ## Look Up Sibling Plugins
 
-AppKit's plugin map is intentionally generic. `plugin.data()`,
-`plugin.instance()`, and `plugin.require()` keep lookups typed and produce better
+AppKit's plugin map is intentionally generic. `pluginRegistry.data()`,
+`pluginRegistry.instance()`, and `pluginRegistry.require()` keep lookups typed and produce better
 errors when a required plugin is missing.
 
 ```ts
 import { lakebase } from "@databricks/appkit";
-import { plugin } from "@dbx-tools/appkit";
+import { pluginRegistry } from "@dbx-tools/appkit";
 
-const lake = plugin.instance(this.context, lakebase);
+const lake = pluginRegistry.instance(this.context, lakebase);
 const pool = lake?.exports().pool;
 
-const required = plugin.require(this.context, lakebase, "my-plugin").exports();
+const required = pluginRegistry.require(this.context, lakebase, "my-plugin").exports();
 ```
 
 Use this in AppKit plugins that depend on sibling plugin exports but should not

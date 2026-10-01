@@ -11,8 +11,8 @@
  * @module
  */
 
-import { serving as modelServing } from "@dbx-tools/model";
-import { string } from "@dbx-tools/shared-core";
+import { modelCatalog } from "@dbx-tools/model";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { override } from "@dbx-tools/shared-mastra";
 
 import type { MastraPluginConfig } from "./config.ts";
@@ -52,20 +52,20 @@ export interface ModelOverrideRequest {
 export function extractModelOverride(req: ModelOverrideRequest): string | null {
   const headers = req.headers;
   if (headers) {
-    const headerVal = string.firstNonEmpty(
+    const headerVal = stringUtils.firstNonEmpty(
       headers[override.MODEL_OVERRIDE_HEADER] ??
         headers[override.MODEL_OVERRIDE_HEADER.toLowerCase()],
     );
     if (headerVal) return headerVal;
   }
   if (req.query) {
-    const queryVal = string.firstNonEmpty(req.query[override.MODEL_OVERRIDE_QUERY]);
+    const queryVal = stringUtils.firstNonEmpty(req.query[override.MODEL_OVERRIDE_QUERY]);
     if (queryVal) return queryVal;
   }
   if (req.body && typeof req.body === "object") {
     const record = req.body as Record<string, unknown>;
     for (const field of override.MODEL_OVERRIDE_BODY_FIELDS) {
-      const bodyVal = string.firstNonEmpty(record[field]);
+      const bodyVal = stringUtils.firstNonEmpty(record[field]);
       if (bodyVal) return bodyVal;
     }
   }
@@ -90,8 +90,8 @@ export function resolveServingConfig(config: MastraPluginConfig): {
   fallbacks: readonly string[];
 } {
   return {
-    ttlMs: config.modelCacheTtlMs ?? modelServing.DEFAULT_MODEL_CACHE_TTL_MS,
-    threshold: config.modelFuzzyThreshold ?? modelServing.DEFAULT_FUZZY_THRESHOLD,
+    ttlMs: config.modelCacheTtlMs ?? modelCatalog.DEFAULT_MODEL_CACHE_TTL_MS,
+    threshold: config.modelFuzzyThreshold ?? modelCatalog.DEFAULT_FUZZY_THRESHOLD,
     fuzzy: config.modelFuzzyMatch !== false,
     allowOverride: config.modelOverride !== false,
     fallbacks: config.defaultModelFallbacks ?? [],

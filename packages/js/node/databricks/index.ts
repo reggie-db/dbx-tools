@@ -3,12 +3,12 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/databricks";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as cloud from "./src/cloud.ts";
 export * as databricksFS from "./src/databricks-fs.ts";
 export * as databricksPath from "./src/databricks-path.ts";
 export * as net from "./src/net.ts";
-export * as workspace from "./src/workspace.ts";
+export * as workspaceClient from "./src/workspace-client.ts";
 export { RANGE_CACHE_TTL_MS, CloudProvider } from "./src/cloud.ts";
 export type { CloudLocation } from "./src/cloud.ts";
 export { DatabricksFileSystem } from "./src/databricks-fs.ts";
@@ -16,4 +16,4 @@ export type { DatabricksFileSystemOptions } from "./src/databricks-fs.ts";
 export { isHomeRelativePath } from "./src/databricks-path.ts";
 export type { DatabricksFilesBackend, NormalizeDatabricksRootOptions, ResolveDatabricksRootOptions } from "./src/databricks-path.ts";
 export { getPublicIp } from "./src/net.ts";
-export type { WorkspaceClient } from "./src/workspace.ts";
+export type { WorkspaceClient } from "./src/workspace-client.ts";

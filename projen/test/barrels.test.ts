@@ -61,6 +61,19 @@ describe("generateBarrels", () => {
     assert.equal(barrelStat(dir)[0], 0o444);
   });
 
+  it("derives compound namespaces from source filenames", () => {
+    for (const module of ["config-tools", "config_tools"]) {
+      const dir = fixturePackage(`compound-${module}`);
+      writeFileSync(join(dir, "src", `${module}.ts`), 'export const configValue = "configured";\n');
+
+      generateBarrels({ dirs: [dir] });
+      assert.match(
+        readFileSync(join(dir, "index.ts"), "utf8"),
+        new RegExp(`export \\* as configTools from "\\.\\/src\\/${module}\\.ts";`),
+      );
+    }
+  });
+
   it("reserves PACKAGE_IDENTIFIER for generated package identity", () => {
     const dir = fixturePackage("identity");
     writeFileSync(

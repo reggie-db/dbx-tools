@@ -2,23 +2,11 @@
 /** Validate built internal routes and fragments directly from the static dist tree. */
 import fs from "node:fs";
 import path from "node:path";
+import { escapeRegExp, posix, walk } from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
 const distRoot = path.resolve(process.argv[2] ?? ".docs-build/dist");
 const { base } = docsSiteConfig();
-
-function walk(directory, files = []) {
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) walk(file, files);
-    else files.push(file);
-  }
-  return files;
-}
-
-function posix(file) {
-  return file.split(path.sep).join("/");
-}
 
 function sourceRoute(file) {
   const relative = posix(path.relative(distRoot, file));
@@ -54,10 +42,6 @@ function links(html) {
 function fragmentExists(html, fragment) {
   const decoded = decodeURIComponent(fragment);
   return new RegExp(`\\b(?:id|name)=["']${escapeRegExp(decoded)}["']`).test(html);
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function main() {

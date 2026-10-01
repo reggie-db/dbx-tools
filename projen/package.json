@@ -2,6 +2,7 @@
   "name": "@dbx-tools/projen",
   "scripts": {
     "build": "projen build",
+    "bundle:rust-release": "projen bundle:rust-release",
     "clobber": "projen clobber",
     "compile": "projen compile",
     "default": "projen default",
@@ -20,9 +21,12 @@
     "@types/node": "^24.6.0",
     "@types/semver": "^7.7.1",
     "constructs": "^10.0.0",
-    "projen": "^0.101.6",
+    "projen": "0.103.27",
     "tsoa": "^6.6.0",
     "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "projen": "^0.103.27"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
@@ -35,7 +39,6 @@
     "is-identifier": "^1",
     "openapi-typescript": "^7.13.0",
     "oxc-parser": "^0.90.0",
-    "projen": "^0.101.16",
     "release-please": "17.11.2",
     "semver": "^7.7.3",
     "smol-toml": "1.8.0",
@@ -50,7 +53,7 @@
   },
   "main": "index.ts",
   "license": "Apache-2.0",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "types": "index.ts",
   "type": "module",
   "exports": {

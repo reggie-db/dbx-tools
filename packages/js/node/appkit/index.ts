@@ -3,18 +3,21 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as appkit from "./src/appkit.ts";
-export * as brand from "./src/brand.ts";
+export * as brandContext from "./src/brand-context.ts";
 export * as bundle from "./src/bundle.ts";
 export * as databricks from "./src/databricks.ts";
 export * as identity from "./src/identity.ts";
 export * as interceptor from "./src/interceptor.ts";
 export * as lakebaseResolver from "./src/lakebase-resolver.ts";
+export * as migration from "./src/migration.ts";
 export * as pgaddress from "./src/pgaddress.ts";
-export * as plugin from "./src/plugin.ts";
+export * as pluginExecution from "./src/plugin-execution.ts";
+export * as pluginRegistry from "./src/plugin-registry.ts";
 export * as provision from "./src/provision.ts";
-export * as toolkit from "./src/toolkit.ts";
+export * as toolProvider from "./src/tool-provider.ts";
+export * as toolkitEntries from "./src/toolkit-entries.ts";
 export type { AutoConfigureMode, CreateAppConfig, ExecutionContextLike, WorkspaceClientLike } from "./src/appkit.ts";
 export { bundleAppResourceSchema, flattenAppYamlEnv, flattenAppEnv, getBundlePath } from "./src/bundle.ts";
 export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, ResolveConfigValueOptions } from "./src/bundle.ts";
@@ -24,6 +27,9 @@ export type { IdentityMode, HeaderBearing } from "./src/identity.ts";
 export { LifecycleBridgePlugin, lifecycleBridge } from "./src/interceptor.ts";
 export type { LifecycleEvent, LifecycleHandler, ResolvedAppEnv, BindableProcess, InterceptorContext, Interceptor, InterceptorRuntime } from "./src/interceptor.ts";
 export type { LakebaseResolverInputs, LakebaseConnection } from "./src/lakebase-resolver.ts";
+export type { OwnershipMigrationErrorOptions } from "./src/migration.ts";
 export { SSL_MODES } from "./src/pgaddress.ts";
-export type { SslMode, LakebaseConnectionInputs, ParsedAddress } from "./src/pgaddress.ts";
-export type { PluginContextLike } from "./src/plugin.ts";
+export type { SslMode, ParsedAddress, LakebaseConnectionInputs } from "./src/pgaddress.ts";
+export type { RunPluginExecutionOptions } from "./src/plugin-execution.ts";
+export type { PluginContextLike } from "./src/plugin-registry.ts";
+export { ToolRegistryPlugin } from "./src/tool-provider.ts";

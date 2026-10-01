@@ -16,8 +16,8 @@
  * @module
  */
 
-import { project } from "@dbx-tools/core";
-import { functionModule, object, type Sequence } from "@dbx-tools/shared-core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
+import { functionUtils, object, type Sequence } from "@dbx-tools/shared-core";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match.ts";
 import { directoryNamePattern, fileExtensionPattern } from "./pattern.ts";
 
@@ -58,8 +58,8 @@ const PUBLIC_NPM_REGISTRY_HOST = "registry.npmjs.org";
  * registry - a lockfile produced against a private mirror pins URLs that other
  * machines cannot reach, so it should not be committed.
  */
-const lockIgnoreMatchersAutoEnabled = functionModule.memoize(() => {
-  const registry = project.npmRegistry();
+const lockIgnoreMatchersAutoEnabled = functionUtils.memoize(() => {
+  const registry = projectUtils.npmRegistry();
   return registry !== undefined && registry.hostname !== PUBLIC_NPM_REGISTRY_HOST;
 });
 

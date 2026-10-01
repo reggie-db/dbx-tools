@@ -24,7 +24,7 @@
  * @module
  */
 
-import { error, log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 
 /**
@@ -326,7 +326,7 @@ export const isAllowedServiceUrl = (serviceUrl: string, tokenServiceUrl?: string
       (allowed) => host === allowed || host.endsWith(`.${allowed}`),
     );
   } catch (err) {
-    logger.debug("rejecting unparseable serviceUrl", { error: error.errorMessage(err) });
+    logger.debug("rejecting unparseable serviceUrl", { error: errorUtils.errorMessage(err) });
     return false;
   }
 };

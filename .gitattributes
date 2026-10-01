@@ -16,6 +16,7 @@
 /.projen/deps.json linguist-generated
 /.projen/files.json linguist-generated
 /.projen/pypi-trusted-publisher-instructions.mjs linguist-generated
+/.projen/rust-release.mjs linguist-generated
 /.projen/smol-toml.cjs linguist-generated
 /.projen/smol-toml.LICENSE linguist-generated
 /.projen/tasks.json linguist-generated
@@ -32,8 +33,9 @@
 /packages/example/**/index.ts linguist-generated
 /packages/example/openapi/** linguist-generated
 /packages/js/**/index.ts linguist-generated
-/packages/js/node/rust-binary/src/_rust-release-binaries.ts linguist-generated
+/packages/js/node/rust-binary/src/_release-binaries.ts linguist-generated
 /packages/js/openapi/** linguist-generated
+/packages/js/shared/model/src/generated/** linguist-generated
 /packages/py/core-rs/pyproject.toml linguist-generated
 /packages/py/core/pyproject.toml linguist-generated
 /packages/py/google-rs/pyproject.toml linguist-generated

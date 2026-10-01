@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
 from dbx_tools.core import to_stable_key
+from dbx_tools.core_rs import advisory_lock_id as native_advisory_lock_id
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -43,8 +43,7 @@ def advisory_lock_id(key: object) -> int:
     if isinstance(key, ExplicitAdvisoryLockId):
         return _signed_64(key.value)
     parts = key if isinstance(key, (list, tuple)) else [key]
-    canonical = "\0".join(to_stable_key(part) for part in parts)
-    return int.from_bytes(hashlib.sha256(canonical.encode()).digest()[:8], "big", signed=True)
+    return native_advisory_lock_id([to_stable_key(part) for part in parts])
 
 
 def explicit_advisory_lock_id(value: int) -> ExplicitAdvisoryLockId:

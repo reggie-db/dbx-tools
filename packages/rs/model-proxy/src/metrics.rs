@@ -32,7 +32,10 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-use crate::{adaptive::AutoTransition, request_log::RequestOutcome};
+use crate::{
+    adaptive::AutoTransition,
+    request_log::{ReasoningSetting, RequestOutcome},
+};
 
 const MODEL_SERIES_LIMIT: usize = 32;
 #[cfg(feature = "metrics")]
@@ -487,6 +490,7 @@ pub(crate) struct MetricsSnapshot {
     pub(crate) history: Vec<BucketSnapshot>,
     pub(crate) rollup_history: Vec<BucketSnapshot>,
     pub(crate) models: Vec<ModelSnapshot>,
+    pub(crate) reasoning_levels: Vec<ReasoningLevelSnapshot>,
     pub(crate) rate_limit_events: Vec<RateLimitEvent>,
     pub(crate) retention: RetentionSnapshot,
 }
@@ -501,6 +505,7 @@ impl MetricsSnapshot {
             history: Vec::new(),
             rollup_history: Vec::new(),
             models: Vec::new(),
+            reasoning_levels: Vec::new(),
             rate_limit_events: Vec::new(),
             retention: RetentionSnapshot {
                 detailed_resolution_seconds: 5,
@@ -548,6 +553,13 @@ pub(crate) struct BucketSnapshot {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct ReasoningLevelSnapshot {
+    pub(crate) level: String,
+    pub(crate) requests: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ModelSnapshot {
     pub(crate) model: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -568,6 +580,7 @@ pub(crate) struct ModelSnapshot {
     pub(crate) p99_latency_ms: u64,
     pub(crate) limiter: String,
     pub(crate) effective_input_budget: Option<u64>,
+    pub(crate) reasoning_levels: Vec<ReasoningLevelSnapshot>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -644,6 +657,13 @@ impl MetricsInner {
             "target_protocol" => target,
         )
         .increment(1);
+        if let Some(reasoning_setting) = outcome.reasoning_setting {
+            ::metrics::counter!(
+                "dbx_model_proxy_reasoning_requests_total",
+                "reasoning_level" => reasoning_setting.label()
+            )
+            .increment(1);
+        }
         ::metrics::counter!(
             "dbx_model_proxy_input_bytes_total",
             "model" => model_label.clone()
@@ -785,6 +805,33 @@ fn prometheus_handle() -> Result<PrometheusHandle, MetricsError> {
 }
 
 #[cfg(feature = "metrics")]
+#[derive(Clone, Debug, Default)]
+struct ReasoningCounts {
+    requests: [u64; ReasoningSetting::COUNT],
+}
+
+#[cfg(feature = "metrics")]
+impl ReasoningCounts {
+    fn record(&mut self, setting: ReasoningSetting) {
+        let index = setting.index();
+        self.requests[index] = self.requests[index].saturating_add(1);
+    }
+
+    fn snapshot(&self) -> Vec<ReasoningLevelSnapshot> {
+        ReasoningSetting::ALL
+            .into_iter()
+            .filter_map(|setting| {
+                let requests = self.requests[setting.index()];
+                (requests > 0).then(|| ReasoningLevelSnapshot {
+                    level: setting.label().to_owned(),
+                    requests,
+                })
+            })
+            .collect()
+    }
+}
+
+#[cfg(feature = "metrics")]
 #[derive(Debug)]
 struct MetricsStore {
     total_requests: u64,
@@ -796,6 +843,7 @@ struct MetricsStore {
     rollup_current: Bucket,
     models: HashMap<String, ModelMetrics>,
     other: ModelMetrics,
+    reasoning: ReasoningCounts,
     rate_limit_events: VecDeque<RateLimitEvent>,
 }
 
@@ -812,6 +860,7 @@ impl MetricsStore {
             rollup_current: Bucket::default(),
             models: HashMap::with_capacity(MODEL_SERIES_LIMIT),
             other: ModelMetrics::new("other"),
+            reasoning: ReasoningCounts::default(),
             rate_limit_events: VecDeque::with_capacity(RATE_LIMIT_EVENT_LIMIT),
         }
     }
@@ -822,6 +871,9 @@ impl MetricsStore {
         let _ = self.latency.record(outcome.duration_ms);
         self.detailed_current.record(outcome);
         self.rollup_current.record(outcome);
+        if let Some(reasoning_setting) = outcome.reasoning_setting {
+            self.reasoning.record(reasoning_setting);
+        }
 
         let model_label = if self.models.contains_key(&outcome.resolved_model)
             || self.models.len() < MODEL_SERIES_LIMIT
@@ -1011,6 +1063,7 @@ impl MetricsStore {
             history,
             rollup_history,
             models,
+            reasoning_levels: self.reasoning.snapshot(),
             rate_limit_events: self.rate_limit_events.iter().cloned().collect(),
             retention: RetentionSnapshot {
                 detailed_resolution_seconds: 5,
@@ -1099,6 +1152,7 @@ struct ModelMetrics {
     latency: Histogram<u64>,
     limiter: String,
     effective_input_budget: Option<u64>,
+    reasoning: ReasoningCounts,
 }
 
 #[cfg(feature = "metrics")]
@@ -1122,6 +1176,7 @@ impl ModelMetrics {
             latency: latency_histogram(),
             limiter: "inactive".to_owned(),
             effective_input_budget: None,
+            reasoning: ReasoningCounts::default(),
         }
     }
 
@@ -1152,6 +1207,9 @@ impl ModelMetrics {
             .queue_wait_ms
             .saturating_add(outcome.throttle.wait.as_millis().min(u128::from(u64::MAX)) as u64);
         self.queue_depth_max = self.queue_depth_max.max(outcome.throttle.queue_depth);
+        if let Some(reasoning_setting) = outcome.reasoning_setting {
+            self.reasoning.record(reasoning_setting);
+        }
         let _ = self.latency.record(outcome.duration_ms);
         if outcome.throttle.active && self.limiter == "inactive" {
             self.limiter = if outcome.throttle.penalty_basis_points == 0 {
@@ -1224,6 +1282,7 @@ impl ModelMetrics {
             p99_latency_ms: quantile(&self.latency, 0.99),
             limiter: self.limiter.clone(),
             effective_input_budget: self.effective_input_budget,
+            reasoning_levels: self.reasoning.snapshot(),
         }
     }
 }
@@ -1420,6 +1479,9 @@ mod tests {
         assert!(snapshot.models[0].history.is_empty());
         assert_eq!(snapshot.models[0].rate_limited, 1);
         assert_eq!(snapshot.models[0].oversized_rejections, 1);
+        assert_eq!(snapshot.reasoning_levels[0].level, "high");
+        assert_eq!(snapshot.reasoning_levels[0].requests, 1);
+        assert_eq!(snapshot.models[0].reasoning_levels[0].level, "high");
         let model_snapshot = runtime.snapshot_for_model("model");
         assert!(!model_snapshot.models[0].history.is_empty());
         assert!(runtime
@@ -1462,7 +1524,7 @@ mod tests {
         assert!(index.contains("Model proxy metrics"));
         assert!(index.contains("app.js"));
         assert!(!dashboard_asset("app.js").unwrap().immutable);
-        assert!(dashboard_asset("app.9f4c1e2a.css").unwrap().immutable);
+        assert!(dashboard_asset("app.20cfdf0a.css").unwrap().immutable);
         assert!(dashboard_asset("assets/status-live-8.svg").is_some());
         assert!(dashboard_asset("missing.js").is_none());
     }
@@ -1486,6 +1548,9 @@ mod tests {
             client_wire: None,
             target: None,
             streaming: false,
+            reasoning_setting: Some(ReasoningSetting::Effort(
+                dbx_tools_model::ReasoningEffort::High,
+            )),
             status: StatusCode::OK,
             usage: Default::default(),
             throttle: ThrottleAcquisition::test_fixture(),

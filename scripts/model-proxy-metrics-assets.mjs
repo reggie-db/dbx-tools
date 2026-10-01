@@ -12,6 +12,7 @@ const FAVICON_PATH = join(ROOT, "branding/assets/icon-light.svg");
 const LOGO_LIGHT_PATH = join(ROOT, "branding/assets/logo-light.svg");
 const LOGO_DARK_PATH = join(ROOT, "branding/assets/logo-dark.svg");
 const GRIDSTACK_ROOT = join(ROOT, "node_modules/gridstack");
+const UPLOT_ROOT = join(ROOT, "node_modules/uplot");
 const DIST = join(ROOT, "packages/rs/model-proxy/metrics-ui/dist");
 const BRAND_OUTPUT = join(DIST, "brand.0b7222df.css");
 const WRITE = process.argv.includes("--write");
@@ -55,6 +56,11 @@ function renderStatusAsset(size, color) {
 `;
 }
 
+/** Remove the package-home banner; the license is vendored beside the runtime. */
+function renderUplotJavaScript(source) {
+  return source.replace(/^\/\*![^\n]*\*\/\n?/, "");
+}
+
 /** Write or compare one deterministic embedded asset. */
 function verify(path, expected) {
   if (WRITE) {
@@ -85,17 +91,29 @@ verify(
   join(DIST, "vendor/gridstack.LICENSE"),
   readFileSync(join(GRIDSTACK_ROOT, "LICENSE"), "utf8"),
 );
+verify(
+  join(DIST, "vendor/uPlot.iife.min.js"),
+  renderUplotJavaScript(readFileSync(join(UPLOT_ROOT, "dist/uPlot.iife.min.js"), "utf8")),
+);
+verify(
+  join(DIST, "vendor/uPlot.min.css"),
+  readFileSync(join(UPLOT_ROOT, "dist/uPlot.min.css"), "utf8"),
+);
+verify(join(DIST, "vendor/uPlot.LICENSE"), readFileSync(join(UPLOT_ROOT, "LICENSE"), "utf8"));
 for (const [relativePath, [size, color]] of Object.entries(FIGMA_ASSETS)) {
   verify(join(DIST, relativePath), renderStatusAsset(size, color));
 }
 
 for (const file of [
   "index.html",
-  "app.9f4c1e2a.css",
+  "app.20cfdf0a.css",
   "app.js",
   "vendor/gridstack-all.js",
   "vendor/gridstack.min.css",
   "vendor/gridstack.LICENSE",
+  "vendor/uPlot.iife.min.js",
+  "vendor/uPlot.min.css",
+  "vendor/uPlot.LICENSE",
 ]) {
   if (!existsSync(join(DIST, file))) {
     throw new Error(`Missing embedded dashboard asset: ${file}`);
@@ -104,10 +122,12 @@ for (const file of [
 
 const runtimeAssets = [
   "index.html",
-  "app.9f4c1e2a.css",
+  "app.20cfdf0a.css",
   "app.js",
   "vendor/gridstack-all.js",
   "vendor/gridstack.min.css",
+  "vendor/uPlot.iife.min.js",
+  "vendor/uPlot.min.css",
 ]
   .map((file) => readFileSync(join(DIST, file), "utf8"))
   .join("\n");

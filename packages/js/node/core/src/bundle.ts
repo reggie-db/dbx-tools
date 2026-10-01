@@ -11,10 +11,10 @@
 
 import { opendir, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { json, object, string } from "@dbx-tools/shared-core";
+import { json, object, stringUtils } from "@dbx-tools/shared-core";
 import { spawn } from "./exec.ts";
-import { resolveWorkingDirectory } from "./project.ts";
-import { project } from "../index.ts";
+import { resolveWorkingDirectory } from "./project-utils.ts";
+import { projectUtils } from "../index.ts";
 
 const BUNDLE_FILE_NAMES = new Set(["databricks.yml", "databricks.yaml"]);
 const IGNORED_DIRECTORIES = [
@@ -166,7 +166,7 @@ async function validateBundle(
     stdout: "capture",
     stderr: "capture",
   });
-  const detail = string.trimToNull(result.stderr) ?? string.trimToNull(result.stdout);
+  const detail = stringUtils.trimToNull(result.stderr) ?? stringUtils.trimToNull(result.stdout);
   const bundleFailure =
     result.exitCode === 0
       ? undefined
@@ -205,7 +205,7 @@ function isWithinOrEqual(candidate: string, parent: string): boolean {
 if (import.meta.main) {
   const path = process.argv[2];
   if (!path) throw new Error("Usage: bun bundle.ts <path>");
-  for await (const resource of appResources(project.root()!, path)) {
+  for await (const resource of appResources(projectUtils.root()!, path)) {
     console.dir(resource, { depth: null });
   }
 }

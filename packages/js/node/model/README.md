@@ -103,12 +103,12 @@ class policy.
 ## Work With A Held Catalogue
 
 When you already have endpoint summaries, use the pure resolver functions from
-`resolve` and `serving` without another workspace call:
+`resolve` and `modelCatalog` without another workspace call:
 
 ```ts
-import { resolve, serving } from "@dbx-tools/model";
+import { modelCatalog, resolve } from "@dbx-tools/model";
 
-const endpoints = await serving.listServingEndpoints(client, host);
+const endpoints = await modelCatalog.listServingEndpoints(client, host);
 const ranked = resolve.lookupModels(endpoints, { search: "sonnet", limit: 3 });
 const picked = resolve.resolveModel(endpoints, {
   explicit: "claude sonnet",
@@ -124,14 +124,14 @@ when the requested class is `embedding`.
 ## List And Cache Serving Endpoints
 
 ```ts
-import { serving } from "@dbx-tools/model";
+import { modelCatalog } from "@dbx-tools/model";
 
-const endpoints = await serving.listServingEndpoints(client, host, {
+const endpoints = await modelCatalog.listServingEndpoints(client, host, {
   ttlMs: 5 * 60_000,
 });
 
-const raw = await serving.listServingEndpointsUncached(client);
-await serving.clearServingEndpointsCache(host);
+const raw = await modelCatalog.listServingEndpointsUncached(client);
+await modelCatalog.clearServingEndpointsCache(host);
 ```
 
 `listServingEndpoints()` uses AppKit's `CacheManager`, enriches endpoints with

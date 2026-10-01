@@ -1,0 +1,320 @@
+/**
+ * Cancellation-aware async primitives: an abortable {@link sleep}, an
+ * {@link AbortController} linker ({@link tieAbortSignal}), and a periodic
+ * {@link poll} generator. Dependency-free; `poll`'s `"distinct"` filter
+ * uses the local {@link deepEqual}.
+ *
+ * @module
+ */
+import { deepEqual } from "./object.ts";
+
+const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000] as const;
+
+/** Controls how {@link mapConcurrent} reacts when a worker rejects. */
+export type ConcurrentErrorMode = "fail-fast" | "settle";
+
+/** Bounded-worker settings for {@link mapConcurrent}. */
+export interface MapConcurrentOptions {
+  /** Maximum number of callbacks running at once. */
+  concurrency: number;
+  /**
+   * `"fail-fast"` stops claiming new work after the first rejection.
+   * `"settle"` attempts every value and throws an `AggregateError` afterward.
+   */
+  errorMode?: ConcurrentErrorMode;
+}
+
+/**
+ * Map values through a bounded worker pool while preserving input order.
+ *
+ * Active callbacks are always allowed to settle. In fail-fast mode no new
+ * callback starts after the first observed rejection. Settle mode attempts
+ * every value and reports all failures in input order through `AggregateError`.
+ */
+export async function mapConcurrent<T, R>(
+  values: readonly T[],
+  callback: (value: T, index: number) => R | PromiseLike<R>,
+  options: MapConcurrentOptions,
+): Promise<R[]> {
+  const { concurrency, errorMode = "fail-fast" } = options;
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
+    throw new RangeError(`concurrency must be a positive integer, got ${String(concurrency)}`);
+  }
+  if (values.length === 0) return [];
+
+  const results = new Array<R>(values.length);
+  const failures: Array<{ index: number; reason: unknown }> = [];
+  let next = 0;
+  let failed = false;
+
+  const worker = async (): Promise<void> => {
+    while (next < values.length && !(failed && errorMode === "fail-fast")) {
+      const index = next++;
+      try {
+        results[index] = await callback(values[index]!, index);
+      } catch (reason) {
+        failures.push({ index, reason });
+        failed = true;
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()));
+  if (failures.length === 0) return results;
+
+  failures.sort((left, right) => left.index - right.index);
+  if (errorMode === "settle") {
+    throw new AggregateError(
+      failures.map(({ reason }) => reason),
+      `${failures.length} concurrent operation${failures.length === 1 ? "" : "s"} failed`,
+    );
+  }
+  throw failures[0]!.reason;
+}
+
+export function boundedRetryDelay(
+  attempt: number,
+  delaysMs: readonly number[] = DEFAULT_RETRY_DELAYS_MS,
+): number {
+  if (!delaysMs.length) return 0;
+  return delaysMs[Math.min(Math.max(0, attempt), delaysMs.length - 1)]!;
+}
+
+/**
+ * Per-iteration context handed to {@link PollProducer} and the
+ * predicate on each step of a {@link poll} loop. Bundles the
+ * iteration metadata so the call signatures stay stable as `poll`
+ * grows additional fields.
+ *
+ * `signal` is owned by `poll`: it tracks the external
+ * `PollOptions.signal` (when supplied) and also fires when the
+ * consumer breaks out of the loop, so producers can forward it to
+ * any in-flight work (`fetch`, SDK calls, etc.) and have a single
+ * cancellation source tear down both the request and the loop.
+ *
+ * `attributes` is a mutable scratchpad shared across every
+ * iteration of a single `poll` run. The same object reference is
+ * passed each call so writes from one iteration are visible to the
+ * next - useful for stashing per-loop state (retry counters, start
+ * timestamps, anything you'd otherwise close over via a let).
+ * Generic `A` lets callers type the bag; defaults to
+ * `Record<string, unknown>`.
+ */
+export interface PollContext<T, A = Record<string, unknown>> {
+  /** Zero-based iteration index (`0` on the first call). */
+  attempt: number;
+  /** Value yielded on the prior iteration; `undefined` on the first. */
+  previous: T | undefined;
+  /** Cancellation handle. Always defined; forward to in-flight work. */
+  signal: AbortSignal;
+  /** Per-run mutable scratchpad shared across iterations. */
+  attributes: A;
+}
+
+/** One step of a {@link poll} loop. See {@link PollContext}. */
+export type PollProducer<T, A = Record<string, unknown>> = (
+  ctx: PollContext<T, A>,
+) => T | PromiseLike<T>;
+
+/**
+ * Controls poll cadence, filtering, termination, cancellation, timeout, and
+ * the mutable per-run attributes exposed through {@link PollContext}.
+ */
+export interface PollOptions<T, A = Record<string, unknown>> {
+  /** Milliseconds to wait between polls. */
+  intervalMs: number;
+  /**
+   * Predicate evaluated against each yielded value: return `true` to
+   * keep it, `false` to skip it (without stopping the loop). May be
+   * sync or async - a `PromiseLike<boolean>` is awaited before the
+   * decision is made. Receives the same {@link PollContext} as the
+   * producer (same `signal`, same `attributes` bag). The special
+   * value `"distinct"` skips a value that deep-equals the previous
+   * one.
+   */
+  filter?: ((value: T, ctx: PollContext<T, A>) => boolean | PromiseLike<boolean>) | "distinct";
+  /**
+   * Predicate evaluated against each yielded value: return `true` to
+   * keep polling, `false` to stop. May be sync or async. Omit to poll
+   * forever (the consumer stops by breaking out of the loop or by
+   * aborting `signal`).
+   */
+  predicate?: (value: T, ctx: PollContext<T, A>) => boolean | PromiseLike<boolean>;
+  /**
+   * External cancellation handle. Tied into the internal signal that
+   * `poll` hands to `producer`, so aborting it tears down both the
+   * in-flight request and the inter-poll sleep.
+   */
+  signal?: AbortSignal;
+  /**
+   * Hard upper bound on the total lifetime of the poll loop, in
+   * milliseconds. When the budget elapses, `poll` aborts its internal
+   * signal so the in-flight producer and inter-poll sleep both tear
+   * down promptly, and the loop throws the `TimeoutError`
+   * `DOMException` produced by `AbortSignal.timeout(timeoutMs)`. The
+   * budget starts ticking the moment the generator is created.
+   */
+  timeoutMs?: number;
+  /**
+   * Initial value for `ctx.attributes`. Defaults to `{}`. The same
+   * object is reused across iterations, so callers can pre-populate
+   * fields (timers, retry counters, etc.) and the producer /
+   * predicate can mutate them in place.
+   */
+  attributes?: A;
+}
+
+/**
+ * Async iterable that drives a periodic poll. Each iteration:
+ *
+ *   1. Builds a {@link PollContext} (`attempt`, `previous`, `signal`,
+ *      shared `attributes`) and calls `producer(ctx)`; yields the
+ *      resolved value (subject to `filter`).
+ *   2. Evaluates `options.predicate(value, ctx)`; stops when it
+ *      returns (or resolves to) `false`.
+ *   3. Sleeps `options.intervalMs` before the next attempt.
+ *
+ * The first call runs immediately (no leading sleep) so the consumer
+ * sees a value without waiting an interval. Errors thrown by
+ * `producer` propagate through the generator.
+ *
+ * `poll` always creates an internal `AbortController` and exposes
+ * `internal.signal` as `ctx.signal`, so producers can rely on a
+ * defined signal without a nullish check. The external
+ * `options.signal` is tied in, and a `try/finally` aborts the
+ * internal signal when the consumer breaks out of the `for await`
+ * (or the loop throws), so any producer work still holding the
+ * signal sees the cancellation too.
+ *
+ * @example
+ * for await (const msg of poll(
+ *   async ({ signal }) =>
+ *     client.genie.getMessage({ ... }, { abortSignal: signal }),
+ *   {
+ *     intervalMs: 250,
+ *     predicate: (m) => !TERMINAL_STATUSES.has(m.status),
+ *     signal: controller.signal,
+ *   },
+ * )) {
+ *   render(msg);
+ * }
+ */
+export async function* poll<T, A = Record<string, unknown>>(
+  producer: PollProducer<T, A>,
+  options: PollOptions<T, A>,
+): AsyncGenerator<T, void, void> {
+  const { intervalMs, predicate, signal, attributes, timeoutMs } = options;
+  const controller = new AbortController();
+  if (signal) tieAbortSignal(controller, signal);
+  if (timeoutMs !== undefined) {
+    tieAbortSignal(controller, AbortSignal.timeout(timeoutMs));
+  }
+  // Single shared attributes object so writes from one iteration are
+  // visible on the next. `{} as A` is safe because either the caller
+  // supplied `attributes` (typed) or `A` defaulted to the unknown
+  // record shape (in which case `{}` satisfies it).
+  const sharedAttributes = attributes ?? ({} as A);
+  try {
+    let previous: T | undefined;
+    for (let attempt = 0; ; attempt++) {
+      controller.signal.throwIfAborted();
+      const ctx: PollContext<T, A> = {
+        attempt,
+        previous,
+        signal: controller.signal,
+        attributes: sharedAttributes,
+      };
+      const value = await producer(ctx);
+      if (options.filter) {
+        if (options.filter === "distinct") {
+          if (deepEqual(previous, value)) {
+            await sleep(intervalMs, controller.signal);
+            continue;
+          }
+        } else if (!(await options.filter(value, ctx))) {
+          await sleep(intervalMs, controller.signal);
+          continue;
+        }
+      }
+      yield value;
+      if (predicate && !(await predicate(value, ctx))) return;
+      await sleep(intervalMs, controller.signal);
+      previous = value;
+    }
+  } finally {
+    controller.abort();
+  }
+}
+
+/**
+ * Tie a child `AbortController` to a parent signal. The child aborts
+ * whenever the parent aborts; aborting the child does not affect the
+ * parent (so a fetch-level cancel doesn't tear down the main poll loop).
+ */
+export function tieAbortSignal(child: AbortController, parent?: AbortSignal): void {
+  if (!parent) {
+    return;
+  } else if (parent.aborted) {
+    child.abort(parent.reason);
+    return;
+  }
+  parent.addEventListener("abort", () => child.abort(parent.reason), {
+    once: true,
+  });
+}
+
+/**
+ * Combine several optional cancellation sources into one signal that aborts
+ * as soon as any of them does.
+ *
+ * The usual caller is an operation that has to honor more than one source at
+ * once - a caller's own signal (a closed connection, an agent run being
+ * cancelled) plus one derived from a timeout - where the awaited I/O accepts
+ * only a single signal. Absent sources are ignored, and a lone signal is
+ * returned as-is so the common path allocates nothing. Returns `undefined`
+ * only when every input is absent, which callers can pass straight through
+ * to an optional `signal` parameter.
+ *
+ * Aborting an input aborts the result (carrying that input's `reason`);
+ * nothing propagates back the other way.
+ *
+ * @example
+ * await fetch(url, { signal: combineAbortSignals(req.signal, timeout.signal) });
+ */
+export function combineAbortSignals(
+  ...signals: (AbortSignal | undefined)[]
+): AbortSignal | undefined {
+  const present = signals.filter((signal): signal is AbortSignal => signal !== undefined);
+  if (present.length <= 1) return present[0];
+  return AbortSignal.any(present);
+}
+
+/**
+ * Promisified `setTimeout` that wakes up early (and rejects with
+ * `signal.reason`) when `signal` aborts mid-wait. Short-circuits to a
+ * rejected promise when the signal is already aborted on entry, so the
+ * abort path is consistent regardless of whether the wait actually
+ * started.
+ *
+ * Use as the building block for any "wait, but cancel cleanly" pattern -
+ * inter-poll backoff, pacing loops, retry timers, long-poll budgets - so
+ * cancellation always rejects with the caller's `signal.reason` rather
+ * than silently resolving after the timer expires.
+ *
+ * @example
+ * await sleep(250, req.signal);
+ */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(signal!.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}

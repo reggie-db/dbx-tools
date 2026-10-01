@@ -16,21 +16,14 @@
  */
 
 import {
-  Plugin,
   ResourceType,
   toPlugin,
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import {
-  defineTool,
-  executeFromRegistry,
-  toolsFromRegistry,
-  type AgentToolDefinition,
-  type ToolProvider,
-  type ToolRegistry,
-} from "@databricks/appkit/beta";
-import { log, string } from "@dbx-tools/shared-core";
+import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
+import { ToolRegistryPlugin } from "@dbx-tools/appkit";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import {
   MODEL_ENV,
   SERVING_ENDPOINT_ENV,
@@ -90,12 +83,12 @@ const SERVING_ENDPOINT_RESOURCE = {
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as webSearchPlugin } from "@dbx-tools/appkit-web-search";
+ * import { webSearch } from "@dbx-tools/appkit-web-search";
  *
  * await createApp({
  *   plugins: [
  *     server(),
- *     webSearchPlugin.webSearch({
+ *     webSearch({
  *       model: "gemini",
  *       urlPolicy: "allowlist",
  *       allowedUrls: ["*.databricks.com"],
@@ -104,7 +97,7 @@ const SERVING_ENDPOINT_RESOURCE = {
  * });
  * ```
  */
-export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements ToolProvider {
+export class WebSearchPlugin extends ToolRegistryPlugin<WebSearchPluginConfig> {
   static manifest = {
     name: "web-search",
     displayName: "Web Search",
@@ -133,9 +126,9 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
    */
   static getResourceRequirements(config: WebSearchPluginConfig): ResourceRequirement[] {
     const pinned =
-      string.trimToNull(config.model) ??
-      string.trimToNull(process.env[MODEL_ENV]) ??
-      string.trimToNull(process.env[SERVING_ENDPOINT_ENV]);
+      stringUtils.trimToNull(config.model) ??
+      stringUtils.trimToNull(process.env[MODEL_ENV]) ??
+      stringUtils.trimToNull(process.env[SERVING_ENDPOINT_ENV]);
     return pinned === null ? [] : [{ ...SERVING_ENDPOINT_RESOURCE, required: true }];
   }
 
@@ -153,7 +146,7 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
    * against the same schema first, but re-parsing is what gives the body typed
    * arguments instead of `unknown`.
    */
-  private readonly tools: ToolRegistry = {
+  protected readonly toolRegistry: ToolRegistry = {
     web_search: defineTool({
       description: WEB_SEARCH_TOOL_DESCRIPTION,
       schema: webSearchRequestSchema,
@@ -202,20 +195,6 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
     super.abortActiveOperations();
   }
 
-  /** AppKit `ToolProvider`: the tool definitions offered to an agent. */
-  getAgentTools(): AgentToolDefinition[] {
-    return toolsFromRegistry(this.tools);
-  }
-
-  /**
-   * AppKit `ToolProvider`: run one tool call. Arguments are validated against
-   * the tool's schema first, and a validation failure comes back as an
-   * LLM-friendly string so the model can correct itself on the next turn.
-   */
-  async executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
-    return executeFromRegistry(this.tools, name, args, signal);
-  }
-
   override exports() {
     return {
       /**
@@ -249,8 +228,8 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as webSearchPlugin } from "@dbx-tools/appkit-web-search";
- * import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+ * import { webSearch } from "@dbx-tools/appkit-web-search";
+ * import { agents, mastra } from "@dbx-tools/appkit-mastra";
  *
  * const researcher = agents.createAgent({
  *   instructions: "Research questions with web_search, then read sources with web_fetch.",
@@ -262,8 +241,8 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> implements To
  * await createApp({
  *   plugins: [
  *     server(),
- *     webSearchPlugin.webSearch({ model: "gemini" }),
- *     mastraPlugin.mastra({ agents: researcher }),
+ *     webSearch({ model: "gemini" }),
+ *     mastra({ agents: researcher }),
  *   ],
  * });
  * ```

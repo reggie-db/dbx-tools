@@ -7,7 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { intro, outro } from "@clack/prompts";
-import { exec, project } from "@dbx-tools/core";
+import { exec, projectUtils } from "@dbx-tools/core";
 import { json, log } from "@dbx-tools/shared-core";
 import { childEnv, resolveBunArgv, runBun } from "./bun.ts";
 import { rootLabel } from "./root.ts";
@@ -93,10 +93,10 @@ export function ensureEngineCurrent(root: string): void {
 // flat, but every engine ever published exports the namespace, and this template
 // is resolved against `@latest` - a flat import dies on an older one with
 // "does not provide an export named 'DBXToolsNodeProject'".
-const PROJENRC_TEMPLATE = `import { project as projenProject } from "@dbx-tools/projen";
+const PROJENRC_TEMPLATE = `import { project } from "@dbx-tools/projen";
 
-const project = new projenProject.DBXToolsNodeProject();
-project.synth();
+const rootProject = new project.DBXToolsNodeProject();
+rootProject.synth();
 `;
 
 /**
@@ -185,7 +185,9 @@ export function seedToolchain(
  * and never overwrites an existing `.npmrc` (the developer's own wins).
  */
 function seedRegistry(root: string): void {
-  const registry = project.npmRegistry(null, { overrideOnly: true, envVars: true })?.toString();
+  const registry = projectUtils
+    .npmRegistry(null, { overrideOnly: true, envVars: true })
+    ?.toString();
   if (!registry) return;
   const npmrc = join(root, ".npmrc");
   if (existsSync(npmrc)) return;

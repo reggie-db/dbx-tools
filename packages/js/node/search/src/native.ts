@@ -11,9 +11,9 @@ import type {
   SearchRequest as AppKitSearchRequest,
   SearchResponse as AppKitSearchResponse,
 } from "@databricks/appkit/beta";
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import {
-  search as sharedSearch,
+  searchSchemas,
   type SearchDocument,
   type SearchHit,
   type SearchRequest as ExtensionSearchRequest,
@@ -61,7 +61,7 @@ function hitId(
 }
 
 function aliasFor(index: string, config: ResolvedSearchConfig): string {
-  const alias = indexConfigFor(config, index)?.alias ?? string.trimToNull(index);
+  const alias = indexConfigFor(config, index)?.alias ?? stringUtils.trimToNull(index);
   if (!alias) throw new ValidationError("AI Search requires a configured index alias");
   return alias;
 }
@@ -77,7 +77,7 @@ export function nativeAiSearchBackend(
       options.signal?.throwIfAborted();
       const known = indexConfigFor(config, index);
       const alias = aliasFor(index, config);
-      const resolvedQueryType = sharedSearch.toAiSearchQueryType(options.mode);
+      const resolvedQueryType = searchSchemas.toAiSearchQueryType(options.mode);
       const resolvedFilters = filters(options.filter);
       const response = await provider.query(alias, {
         queryText: query,

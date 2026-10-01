@@ -69,6 +69,7 @@ describe("optional release summary providers", () => {
     const root = mkdtempSync(join(tmpdir(), "release-summary-"));
     const output = join(root, releaseSummaryFile("1.2.3"));
     try {
+      writeFileSync(join(root, "package.json"), '{"name":"consumer-project"}\n');
       const content = await generateReleaseSummary({
         root,
         version: "1.2.3",
@@ -93,7 +94,7 @@ describe("optional release summary providers", () => {
       assert.equal(
         fallback,
         "# Release 1.2.4\n\n" +
-          "dbx-tools 1.2.4 contains the reviewed changes listed below.\n\n" +
+          "consumer-project 1.2.4 contains the reviewed changes listed below.\n\n" +
           "## Changes\n" +
           "- Release metadata updated.\n",
       );
@@ -108,6 +109,7 @@ describe("optional release summary providers", () => {
     const root = mkdtempSync(join(tmpdir(), "release-summary-custom-"));
     let providers = 0;
     try {
+      writeFileSync(join(root, "package.json"), '{"name":"consumer-project"}\n');
       const content = await generateReleaseSummary({
         root,
         component: "node-appkit",

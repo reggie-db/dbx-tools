@@ -1,4 +1,4 @@
-import { error as sharedError } from "@dbx-tools/shared-core";
+import { errorUtils } from "@dbx-tools/shared-core";
 import {
   feedback,
   override,
@@ -606,7 +606,7 @@ export const useMastraModels = (
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
-        setError(sharedError.toError(e));
+        setError(errorUtils.toError(e));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -765,7 +765,7 @@ export const useMastraThreads = (
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted || (e as { name?: string }).name === "AbortError") return;
-        setError(sharedError.toError(e));
+        setError(errorUtils.toError(e));
         setThreads([]);
       })
       .finally(() => {
@@ -930,7 +930,7 @@ function useByIdFetch<T>(
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setError(sharedError.toError(e));
+        setError(errorUtils.toError(e));
         setLoading(false);
       });
 

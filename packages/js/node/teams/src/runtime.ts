@@ -9,6 +9,7 @@
  */
 
 import { ExecutionError, type ExecutionResult } from "@databricks/appkit";
+import { pluginExecution } from "@dbx-tools/appkit";
 import { execution, log } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import { buildCardResult } from "./builder.ts";
@@ -52,43 +53,9 @@ export function createTeamsRuntime(
   return { config: resolveTeamsConfig(overrides), execute };
 }
 
-/**
- * Build an isolated standalone runtime.
- *
- * @deprecated Use {@link createTeamsRuntime}. This compatibility helper
- * returns a new runtime on every call and never reads or updates plugin state.
- */
-export function getTeamsRuntime(overrides?: TeamsPluginConfig): TeamsRuntime {
-  return createTeamsRuntime(overrides);
-}
-
 /** Install an executor on an explicit runtime. */
-export function setTeamsExecutor(runtime: TeamsRuntime, execute: TeamsExecutor): void;
-/**
- * @deprecated Process-global executor registration is no longer supported.
- * Pass a runtime as the first argument or provide the executor to
- * {@link createTeamsRuntime}.
- */
-export function setTeamsExecutor(execute: TeamsExecutor): never;
-export function setTeamsExecutor(
-  runtimeOrExecute: TeamsRuntime | TeamsExecutor,
-  execute?: TeamsExecutor,
-): void {
-  if (typeof runtimeOrExecute === "function") {
-    throw new TypeError(
-      "setTeamsExecutor requires an explicit runtime; use createTeamsRuntime(config, executor)",
-    );
-  }
-  if (!execute) throw new TypeError("setTeamsExecutor requires an executor");
-  runtimeOrExecute.execute = execute;
-}
-
-/**
- * @deprecated Plugin runtimes are instance-owned and need no global reset.
- * This compatibility helper is intentionally a no-op.
- */
-export function resetTeamsRuntime(): void {
-  return;
+export function setTeamsExecutor(runtime: TeamsRuntime, execute: TeamsExecutor): void {
+  runtime.execute = execute;
 }
 
 /**
@@ -106,23 +73,14 @@ async function run<T>(
   fn: (signal?: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  return execution.run({
+  return pluginExecution.runPluginExecution({
+    plugin: "teams",
+    logger,
     operation,
     settings,
     execute: runtime.execute,
     fn,
     signal,
-    canceled: ExecutionError.canceled,
-    failed: (failure) => {
-      logger.warn("execution-failed", {
-        operation: failure.operation,
-        status: failure.status,
-        error: failure.message,
-      });
-      return new ExecutionError(`teams: ${failure.operation} failed`, {
-        context: { operation: failure.operation, status: failure.status },
-      });
-    },
   });
 }
 

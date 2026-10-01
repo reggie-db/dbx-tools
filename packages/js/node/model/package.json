@@ -28,8 +28,7 @@
     "@dbx-tools/appkit": "workspace:^",
     "@dbx-tools/model-rs": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "@dbx-tools/shared-model": "workspace:^",
-    "fuse.js": "^7.4.2"
+    "@dbx-tools/shared-model": "workspace:^"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -45,7 +44,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.5",
+  "version": "0.9.6",
   "types": "index.ts",
   "type": "module",
   "exports": {

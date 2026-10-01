@@ -11,11 +11,11 @@
  * @module
  */
 
-import { string } from "@dbx-tools/shared-core";
-import type { SendCodeOptions } from "./plugin.ts";
+import type { AuthEmailCopy } from "@dbx-tools/auth-gate";
+import { stringUtils } from "@dbx-tools/shared-core";
 
-/** The parts of {@link SendCodeOptions} the code email's copy is built from. */
-export type CodeCopy = Pick<SendCodeOptions, "message" | "codeTtlSeconds">;
+/** Authentication email metadata accepted by the copy builders. */
+export type CodeCopy = AuthEmailCopy;
 
 /** The reassurance line closing both parts. */
 const IGNORE_LINE = "If you did not request this code, you can ignore this email.";
@@ -29,8 +29,8 @@ const IGNORE_LINE = "If you did not request this code, you can ignore this email
  */
 export function expiresIn(seconds: number): string {
   return seconds >= 60 && seconds % 60 === 0
-    ? string.pluralize(seconds / 60, "minute")
-    : string.pluralize(seconds, "second");
+    ? stringUtils.pluralize(seconds / 60, "minute")
+    : stringUtils.pluralize(seconds, "second");
 }
 
 /**

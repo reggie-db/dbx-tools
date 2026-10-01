@@ -2,7 +2,7 @@
  * Inputs for `pnpm-workspace.yaml`, which projen's NATIVE
  * `javascript.PnpmWorkspaceYaml` owns.
  *
- * projen (>= 0.101.16) writes this file itself: every pnpm `NodeProject` gets a
+ * projen writes this file itself: every pnpm `NodeProject` gets a
  * `PnpmWorkspaceYaml` component typed by `PnpmWorkspaceYamlSchema`, fed from
  * `pnpmOptions.workspaceYamlOptions`. Nothing here writes a file; this only
  * supplies the options object it renders, so the whole pnpm schema (`overrides`,

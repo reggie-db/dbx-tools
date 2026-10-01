@@ -63,22 +63,35 @@
       },
       "steps": [
         {
-          "exec": "git checkout -b scratch",
+          "execArgs": [
+            "git",
+            "checkout",
+            "-b",
+            "scratch"
+          ],
           "name": "save current HEAD in \"scratch\" branch"
         },
         {
-          "exec": "git checkout $BRANCH"
+          "exec": "git checkout \"$BRANCH\""
         },
         {
-          "exec": "git fetch origin",
+          "execArgs": [
+            "git",
+            "fetch",
+            "origin"
+          ],
           "name": "fetch latest changes from origin"
         },
         {
-          "exec": "git reset --hard origin/$BRANCH",
+          "exec": "git reset --hard \"origin/$BRANCH\"",
           "name": "hard reset to origin commit"
         },
         {
-          "exec": "git clean -fdx",
+          "execArgs": [
+            "git",
+            "clean",
+            "-fdx"
+          ],
           "name": "clean all untracked files"
         },
         {
@@ -184,7 +197,17 @@
       },
       "steps": [
         {
-          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern $@ packages/js packages/test packages/example projen",
+          "execArgs": [
+            "eslint",
+            "--ext",
+            ".ts,.tsx",
+            "--no-error-on-unmatched-pattern",
+            "$@",
+            "packages/js",
+            "packages/test",
+            "packages/example",
+            "projen"
+          ],
           "receiveArgs": true
         }
       ]
@@ -234,6 +257,15 @@
         }
       ]
     },
+    "model:contracts": {
+      "name": "model:contracts",
+      "description": "Generate browser-safe TypeScript and Zod model contracts from Rust",
+      "steps": [
+        {
+          "exec": "cargo run --quiet -p dbx-tools-model --features contract-generation --example generate-model-contracts -- packages/js/shared/model/src/generated/_contracts.ts && bunx ts-to-zod packages/js/shared/model/src/generated/_contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments"
+        }
+      ]
+    },
     "model:metadata": {
       "name": "model:metadata",
       "description": "Refresh committed model retirement, capability, and rate-limit snapshots",
@@ -273,7 +305,12 @@
     },
     "pre-compile": {
       "name": "pre-compile",
-      "description": "Prepare the project for compilation"
+      "description": "Prepare the project for compilation",
+      "steps": [
+        {
+          "spawn": "model:contracts"
+        }
+      ]
     },
     "py:build": {
       "name": "py:build",
@@ -378,7 +415,7 @@
       "description": "Write the version-independent Rust release build manifest",
       "steps": [
         {
-          "exec": "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\" --portable"
+          "exec": "node .projen/rust-release.mjs fingerprint --root . --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\" --source \"packages/rs\" --portable"
         }
       ]
     },

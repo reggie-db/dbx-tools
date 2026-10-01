@@ -6,7 +6,7 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { hash, http, log, object, string, token } from "@dbx-tools/shared-core";
+import { hash, http, log, object, stringUtils, token } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
@@ -311,7 +311,7 @@ export class MastraServer extends ExpressMastraServer {
       return;
     }
     const cookies = http.parseCookies(req.headers.cookie);
-    const cookieName = string.toIdentifierWithOptions(
+    const cookieName = stringUtils.toIdentifierWithOptions(
       { delimiter: "_", distinct: true },
       "appkit",
       this.config.name!,
@@ -340,8 +340,8 @@ export class MastraServer extends ExpressMastraServer {
     const headerValue = req.headers[thread.THREAD_ID_HEADER];
     const queryValue = req.query[thread.THREAD_ID_QUERY];
     return (
-      string.trimToNull(Array.isArray(headerValue) ? headerValue[0] : headerValue) ??
-      string.trimToNull(Array.isArray(queryValue) ? queryValue[0] : queryValue)
+      stringUtils.trimToNull(Array.isArray(headerValue) ? headerValue[0] : headerValue) ??
+      stringUtils.trimToNull(Array.isArray(queryValue) ? queryValue[0] : queryValue)
     );
   }
 

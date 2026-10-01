@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { marker } from "@dbx-tools/shared-mastra";
+import { markers } from "@dbx-tools/shared-mastra";
 import { z } from "zod";
 
 import { chartPlanSchema, chartToolOutputSchema, planToEchartsOption } from "../src/chart.ts";
@@ -80,7 +80,7 @@ describe("chart tool output", () => {
     const chartId = "62aefc66-beda-4107-815c-b93fbf2c20f3";
     const output = chartToolOutputSchema.parse({
       chartId,
-      marker: marker.formatMarker("chart", chartId),
+      marker: markers.formatMarker("chart", chartId),
     });
     assert.deepEqual(output, {
       chartId,

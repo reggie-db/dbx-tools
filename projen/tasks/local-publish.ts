@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exec, project } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log, net } from "@dbx-tools/shared-core";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
 import { readDbxToolsConfig } from "../src/packages.ts";
@@ -18,13 +19,15 @@ export interface LocalPublishOptions {
   readonly localPypi: string;
   readonly pythonRoot?: string;
   readonly localCargo: boolean;
+  /** Reuse the root TypeScript compile that immediately preceded local publication. */
+  readonly reuseValidatedNodeCompile?: boolean;
 }
 
 function resolveLocalRegistry(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed || trimmed.toLowerCase() === "false") return undefined;
   if (trimmed.toLowerCase() === "auto") {
-    const registry = project.npmRegistry();
+    const registry = projectUtils.npmRegistry();
     return registry && net.isLoopbackHost(registry) ? registry.href : undefined;
   }
   return trimmed;
@@ -43,6 +46,21 @@ function localCargoRegistry(): string | undefined {
     if (index && net.isLoopbackHost(index.replace(/^sparse\+/, ""))) return section[1];
   }
   return undefined;
+}
+
+/** Arguments for the workspace npm publisher used by local release preflight. */
+export function localNodePublishArguments(
+  publishScript: string,
+  options: Pick<LocalPublishOptions, "version" | "reuseValidatedNodeCompile">,
+  registry: string,
+): string[] {
+  return [
+    publishScript,
+    options.version,
+    "--registry",
+    registry,
+    ...(options.reuseValidatedNodeCompile ? ["--skip-compile"] : []),
+  ];
 }
 
 /** Publish the exact release candidate to local npm, PyPI, and Cargo mirrors. */
@@ -68,7 +86,7 @@ export async function publishLocalRelease(options: LocalPublishOptions): Promise
     logger.info(`publishing ${options.version} to local registry ${localRegistry}`);
     localPublishes.push(
       exec
-        .spawn(process.execPath, [publishScript, options.version, "--registry", localRegistry], {
+        .spawn(process.execPath, localNodePublishArguments(publishScript, options, localRegistry), {
           cwd: options.root,
           stdout: "inherit",
           stderr: "inherit",

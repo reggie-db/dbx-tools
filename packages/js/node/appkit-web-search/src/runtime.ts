@@ -8,7 +8,8 @@
  * @module
  */
 
-import { ExecutionError, type ExecutionResult } from "@databricks/appkit";
+import type { ExecutionResult } from "@databricks/appkit";
+import { pluginExecution } from "@dbx-tools/appkit";
 import { execution, log } from "@dbx-tools/shared-core";
 import {
   resolveWebSearchConfig,
@@ -66,43 +67,9 @@ export function toWebSearchRuntime(input: WebSearchRuntimeInput): WebSearchRunti
   return "execute" in input ? input : createResolvedWebSearchRuntime(input);
 }
 
-/**
- * Build an isolated standalone runtime.
- *
- * @deprecated Use {@link createWebSearchRuntime}. This compatibility helper
- * returns a new runtime on every call and never reads or updates plugin state.
- */
-export function getWebSearchRuntime(overrides?: WebSearchPluginConfig): WebSearchRuntime {
-  return createWebSearchRuntime(overrides);
-}
-
 /** Install an executor on an explicit runtime. */
-export function setWebSearchExecutor(runtime: WebSearchRuntime, execute: WebSearchExecutor): void;
-/**
- * @deprecated Process-global executor registration is no longer supported.
- * Pass a runtime as the first argument or provide the executor to
- * {@link createWebSearchRuntime}.
- */
-export function setWebSearchExecutor(execute: WebSearchExecutor): never;
-export function setWebSearchExecutor(
-  runtimeOrExecute: WebSearchRuntime | WebSearchExecutor,
-  execute?: WebSearchExecutor,
-): void {
-  if (typeof runtimeOrExecute === "function") {
-    throw new TypeError(
-      "setWebSearchExecutor requires an explicit runtime; use createWebSearchRuntime(config, executor)",
-    );
-  }
-  if (!execute) throw new TypeError("setWebSearchExecutor requires an executor");
-  runtimeOrExecute.execute = execute;
-}
-
-/**
- * @deprecated Plugin runtimes are instance-owned and need no global reset.
- * This compatibility helper is intentionally a no-op.
- */
-export function resetWebSearchRuntime(): void {
-  return;
+export function setWebSearchExecutor(runtime: WebSearchRuntime, execute: WebSearchExecutor): void {
+  runtime.execute = execute;
 }
 
 /**
@@ -122,22 +89,13 @@ export async function executeRead<T>(
   fn: (signal?: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  return execution.run({
+  return pluginExecution.runPluginExecution({
+    plugin: "web-search",
+    logger,
     operation,
     settings,
     execute: runtime.execute,
     fn,
     signal,
-    canceled: ExecutionError.canceled,
-    failed: (failure) => {
-      logger.warn("execution-failed", {
-        operation: failure.operation,
-        status: failure.status,
-        error: failure.message,
-      });
-      return new ExecutionError(`web-search: ${failure.operation} failed`, {
-        context: { operation: failure.operation, status: failure.status },
-      });
-    },
   });
 }

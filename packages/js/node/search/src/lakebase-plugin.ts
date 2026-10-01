@@ -14,8 +14,8 @@ import {
   type PluginManifest,
 } from "@databricks/appkit";
 import type { IndexConfig, SearchRequest, SearchResponse } from "@databricks/appkit/beta";
-import { plugin as appkitPlugin } from "@dbx-tools/appkit";
-import { log, object, string } from "@dbx-tools/shared-core";
+import { pluginRegistry } from "@dbx-tools/appkit";
+import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import type { SearchDocument } from "@dbx-tools/shared-search";
 import type express from "express";
 import type { JSONSchema7 } from "json-schema";
@@ -94,10 +94,10 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
   override async setup(): Promise<void> {
     const indexes = this.indexes();
     for (const index of indexes) this.validateAuth(index);
-    const lake = appkitPlugin.require(this.context, lakebase, this);
+    const lake = pluginRegistry.require(this.context, lakebase, this);
     this.backend = new LakebaseSearchBackend(
       { managedPool: () => lake.exports().pool },
-      string.trimToNull(this.config.schema) ?? "public",
+      stringUtils.trimToNull(this.config.schema) ?? "public",
     );
     for (const index of indexes) {
       await this.backend.provision(index.indexName, {
@@ -107,7 +107,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
     }
     logger.info("ready", {
       indexes: this.indexes().map((index) => index.alias),
-      schema: string.trimToNull(this.config.schema) ?? "public",
+      schema: stringUtils.trimToNull(this.config.schema) ?? "public",
     });
   }
 
@@ -237,7 +237,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
   private indexes(): ResolvedLakebaseIndex[] {
     return Object.entries(this.config.indexes ?? {}).map(([alias, config]) => ({
       alias,
-      indexName: string.trimToNull(config.indexName) ?? alias,
+      indexName: stringUtils.trimToNull(config.indexName) ?? alias,
       config,
     }));
   }

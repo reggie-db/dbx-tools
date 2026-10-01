@@ -110,7 +110,9 @@ describe("unified release workflow", () => {
     assert.ok(verify.run?.includes('RELEASE_VERSION="$(tr -d'));
     assert.ok(verify.run?.includes('PREVIOUS_VERSION="$(git show'));
     assert.ok(verify.run?.includes('test "$PREVIOUS_VERSION" != "$RELEASE_VERSION"'));
-    assert.ok(verify.run?.includes("LATEST_VERSION"));
+    assert.ok(verify.run?.includes("tasks/release-version.ts"));
+    assert.ok(verify.run?.includes("--assert-next"));
+    assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
     assert.ok(verify.run?.includes('git tag -a "$RELEASE_TAG"'));
     assert.ok(verify.run?.includes('git push origin "refs/tags/$RELEASE_TAG"'));
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
@@ -275,6 +277,9 @@ describe("release task contracts", () => {
     );
     assert.match(driver, /import \{ delimiter,/);
     assert.doesNotMatch(driver, /split\(":"\)/);
+    assert.match(driver, /\["publish",[\s\S]*archive\]/);
+    assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
+    assert.match(driver, /\["--access", access\]/);
   });
 
   it("keeps bump pure and lets release preparation own git and local publication", () => {

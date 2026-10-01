@@ -52,8 +52,8 @@ tool pair plus an AppKit plugin.
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
-import { plugin as webSearchPlugin } from "@dbx-tools/appkit-web-search";
-import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import { webSearch } from "@dbx-tools/appkit-web-search";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
 
 const researcher = agents.createAgent({
   instructions: "Research questions using web_search, then read sources with web_fetch.",
@@ -66,11 +66,11 @@ await createApp({
   plugins: [
     server(),
     lakebase(),
-    webSearchPlugin.webSearch({
+    webSearch({
       model: "gemini", // defaults to Gemini, then GPT, when omitted
       allowedUrls: ["*.databricks.com", "docs.example.com"],
     }),
-    mastraPlugin.mastra({ agents: researcher, storage: true }),
+    mastra({ agents: researcher, storage: true }),
   ],
 });
 ```
@@ -218,10 +218,8 @@ const tools = {
 };
 ```
 
-`getWebSearchRuntime()` remains as a deprecated compatibility constructor and
-returns a new isolated runtime on every call. Process-global
-`setWebSearchExecutor(executor)` registration is no longer supported; pass the
-runtime explicitly or provide the executor to `createWebSearchRuntime`.
+Pass the runtime explicitly or provide the executor to
+`createWebSearchRuntime`.
 
 ## Restrict Which URLs Are Reachable
 
@@ -364,7 +362,7 @@ the [Databricks docs](https://docs.databricks.com/aws/en/machine-learning/model-
   `fetch` and the DuckDuckGo scrape fallback.
 - `runtime` - isolated runtime construction and execution:
   `createWebSearchRuntime()`, `createResolvedWebSearchRuntime()`,
-  `executeRead()`, plus deprecated global-era compatibility names.
+  and `executeRead()`.
 - `config` - config types, JSON schema, `resolveWebSearchConfig()`, URL policy
   and approval helpers.
 - `allowlist` - URL allow-list parsing/compiling on top of `@dbx-tools/path`.

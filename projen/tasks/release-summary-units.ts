@@ -3,10 +3,10 @@
 
 import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { generateReleaseSummary } from "./release-summary.ts";
+import { captureTaskCommand } from "../src/_task-command.ts";
 import type { ReleaseUnitGraph } from "../src/release-catalog.ts";
 import type { ReleasePlan } from "../src/release-plan.ts";
 
@@ -71,12 +71,5 @@ function requestNotes(root: string): { summary?: string; paths: string[] } {
 }
 
 function gitCapture(root: string, args: string[]): string {
-  const result = exec.spawnSync("git", args, {
-    cwd: root,
-    stdout: "capture",
-    stderr: "ignore",
-    stdin: "ignore",
-    check: false,
-  });
-  return result.exitCode === 0 ? (result.stdout?.trim() ?? "") : "";
+  return captureTaskCommand(root, "git", args);
 }

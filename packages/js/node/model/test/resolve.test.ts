@@ -4,13 +4,15 @@ import { CacheManager } from "@databricks/appkit";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
-import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
 import {
+  clearServingEndpointsCache,
+  listServingEndpoints,
   listServingEndpointsUncached,
   resolveModelId,
   searchServingEndpoints,
   type WorkspaceClientLike,
-} from "../src/serving.ts";
+} from "../src/model-catalog.ts";
+import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
 
 const { ModelClass } = model;
 
@@ -62,6 +64,22 @@ describe("searchServingEndpoints / resolveModelId", () => {
     assert.equal(result.modelId, SONNET);
   });
 
+  it("uses the same version-aware Rust ranking as lookupModels", () => {
+    const versions = [chat(OPUS_6), chat(OPUS_8), chat(OPUS_7)];
+    assert.equal(resolveModelId("claude opus", versions).modelId, OPUS_8);
+    assert.equal(
+      lookupModels(versions, { search: "claude opus", limit: 1 })[0]?.endpoint.name,
+      OPUS_8,
+    );
+  });
+
+  it("searches explicit custom endpoint records through the Rust ranker", () => {
+    const custom = { name: "approved-custom-endpoint" };
+    assert.deepEqual(searchServingEndpoints("approved custom", [custom]), [
+      { endpoint: custom, score: 0 },
+    ]);
+  });
+
   it("returns the input verbatim when nothing matches", () => {
     const result = resolveModelId("zzz-no-such-model", endpoints);
     assert.equal(result.matched, false);
@@ -80,6 +98,22 @@ describe("listServingEndpointsUncached model policy", () => {
         async *list() {
           yield { name: "databricks-gpt-5-3-codex", task: CHAT_TASK };
           yield { name: "databricks-gemini-3-5-flash", task: CHAT_TASK };
+          yield {
+            name: "databricks-gemini-2-5-pro",
+            task: CHAT_TASK,
+            tags: [{ key: "display_name", value: "Gemini Pro" }],
+            config: {
+              served_entities: [
+                {
+                  entity_name: "databricks-gemini-2-5-pro",
+                  foundation_model: {
+                    name: "system.ai.gemini-2-5-pro",
+                    ai_gateway_model_profile: { quality: 5, speed: 3, cost: 2 },
+                  },
+                },
+              ],
+            },
+          };
         },
       },
     } as unknown as WorkspaceClientLike;
@@ -105,8 +139,78 @@ describe("listServingEndpointsUncached model policy", () => {
           reasoningEfforts: ["minimal", "low", "medium", "high"],
           supportsTools: false,
         },
+        {
+          name: "databricks-gemini-2-5-pro",
+          family: "gemini",
+          reasoningEfforts: ["minimal", "low", "medium", "high"],
+          supportsTools: false,
+        },
       ],
     );
+    assert.deepEqual(endpoints[2], {
+      name: "databricks-gemini-2-5-pro",
+      displayName: "Gemini Pro",
+      family: "gemini",
+      task: CHAT_TASK,
+      supportsTools: false,
+      profile: { quality: 5, speed: 3, cost: 2 },
+      class: ModelClass.ChatThinking,
+      serviceNames: { google: "gemini-2.5-pro" },
+      modelServiceName: "system.ai.gemini-2-5-pro",
+      reasoningEfforts: ["minimal", "low", "medium", "high"],
+      status: { deprecated: true },
+    });
+  });
+});
+
+describe("listServingEndpoints cache identity", () => {
+  function catalogue(name: string, calls: { value: number }): WorkspaceClientLike {
+    return {
+      servingEndpoints: {
+        async *list() {
+          calls.value += 1;
+          yield { name, task: CHAT_TASK };
+        },
+      },
+    } as WorkspaceClientLike;
+  }
+
+  it("isolates principals, coalesces one identity, and bypasses when identity is unknown", async () => {
+    await CacheManager.getInstance();
+    const host = `https://identity-${Date.now()}.example.com`;
+    const callsA = { value: 0 };
+    const callsB = { value: 0 };
+    const clientA = catalogue("principal-a-private", callsA);
+    const clientB = catalogue("principal-b-private", callsB);
+
+    const firstA = await listServingEndpoints(clientA, host, { cacheIdentity: "principal-a" });
+    const secondA = await listServingEndpoints(clientA, host, { cacheIdentity: "principal-a" });
+    const firstB = await listServingEndpoints(clientB, host, { cacheIdentity: "principal-b" });
+
+    assert.deepEqual(
+      firstA.map((endpoint) => endpoint.name),
+      ["principal-a-private"],
+    );
+    assert.deepEqual(
+      secondA.map((endpoint) => endpoint.name),
+      ["principal-a-private"],
+    );
+    assert.deepEqual(
+      firstB.map((endpoint) => endpoint.name),
+      ["principal-b-private"],
+    );
+    assert.equal(callsA.value, 1);
+    assert.equal(callsB.value, 1);
+
+    await listServingEndpoints(clientA, host);
+    await listServingEndpoints(clientA, host);
+    assert.equal(callsA.value, 3);
+
+    await clearServingEndpointsCache(host, "principal-a");
+    await listServingEndpoints(clientA, host, { cacheIdentity: "principal-a" });
+    await listServingEndpoints(clientB, host, { cacheIdentity: "principal-b" });
+    assert.equal(callsA.value, 4);
+    assert.equal(callsB.value, 1);
   });
 });
 

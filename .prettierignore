@@ -62,6 +62,7 @@ packages/py/graphiti/pyproject.toml
 .projen/deps.json
 .projen/files.json
 .projen/pypi-trusted-publisher-instructions.mjs
+.projen/rust-release.mjs
 .projen/smol-toml.cjs
 .projen/smol-toml.LICENSE
 .projen/tasks.json
@@ -73,7 +74,7 @@ packages/py/graphiti/pyproject.toml
 bunfig.toml
 Cargo.toml
 LICENSE
-packages/js/node/rust-binary/src/_rust-release-binaries.ts
+packages/js/node/rust-binary/src/_release-binaries.ts
 pyproject.toml
 tsconfig.base.json
 tsconfig.json
@@ -83,6 +84,7 @@ dev.ts
 package.json
 test/tsconfig.json
 src/_python-runtime.ts
+assets/tsconfig.json
 uniffi-bindgen.rs
 uniffi.toml
 **/src/generated/**

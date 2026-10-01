@@ -23,8 +23,8 @@
  * @module
  */
 
-import { string } from "@dbx-tools/shared-core";
-import { marker as sharedMarkers, type Chart, type StatementData } from "@dbx-tools/shared-mastra";
+import { stringUtils } from "@dbx-tools/shared-core";
+import { markers, type Chart, type StatementData } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import type { EChartsCoreOption } from "echarts";
 import { normalizeChartOption } from "./chart-option.ts";
@@ -197,11 +197,11 @@ type Segment =
 function splitSegments(text: string): Segment[] {
   const segments: Segment[] = [];
   let last = 0;
-  for (const marker of sharedMarkers.parseMarkers(text)) {
+  for (const marker of markers.parseMarkers(text)) {
     if (marker.start > last) {
       segments.push({ kind: "text", text: text.slice(last, marker.start) });
     }
-    if (sharedMarkers.isUuid(marker.id) && (marker.type === "chart" || marker.type === "data")) {
+    if (markers.isUuid(marker.id) && (marker.type === "chart" || marker.type === "data")) {
       segments.push({ kind: marker.type, id: marker.id });
     }
     last = marker.end;
@@ -226,7 +226,7 @@ function messageText(message: UIMessage): string {
 function roleLabel(role: UIMessage["role"], userLabel: string): string {
   if (role === "user") return userLabel;
   if (role === "assistant") return "Assistant";
-  return string.capitalize(role);
+  return stringUtils.capitalize(role);
 }
 
 /* --------------------------------- HTML ---------------------------------- */
@@ -335,7 +335,7 @@ async function chartSvg(resolver: EmbedResolver, id: string): Promise<string | n
 async function dataTableHtml(resolver: EmbedResolver, id: string): Promise<string | null> {
   const data = await safeStatement(resolver, id);
   if (!data || data.rows.length === 0) return null;
-  const head = data.columns.map((c) => `<th>${escapeHtml(string.toLabel(c))}</th>`).join("");
+  const head = data.columns.map((c) => `<th>${escapeHtml(stringUtils.toLabel(c))}</th>`).join("");
   const body = data.rows
     .map(
       (row) =>
@@ -403,7 +403,7 @@ function chartTitle(chart: Chart): string {
 async function dataTableMarkdown(resolver: EmbedResolver, id: string): Promise<string | null> {
   const data = await safeStatement(resolver, id);
   if (!data || data.rows.length === 0) return null;
-  const header = `| ${data.columns.map((c) => mdCell(string.toLabel(c))).join(" | ")} |`;
+  const header = `| ${data.columns.map((c) => mdCell(stringUtils.toLabel(c))).join(" | ")} |`;
   const sep = `| ${data.columns.map(() => "---").join(" | ")} |`;
   const rows = data.rows.map(
     (row) => `| ${data.columns.map((c) => mdCell(cellText(row[c]))).join(" | ")} |`,
@@ -448,11 +448,11 @@ function mdCell(value: string): string {
 }
 
 /** Escape HTML-significant characters (from the shared string utils). */
-const escapeHtml = string.escapeHtml;
+const escapeHtml = stringUtils.escapeHtml;
 
 /** Turn a title into a safe, lowercase filename stem. */
 function slugify(value: string): string {
-  return string.toSlugWithOptions({ maxLength: 60 }, value) || "conversation";
+  return stringUtils.toSlugWithOptions({ maxLength: 60 }, value) || "conversation";
 }
 
 /**

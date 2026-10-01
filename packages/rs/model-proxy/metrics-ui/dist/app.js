@@ -11,23 +11,25 @@
   const widgetTooltip = document.querySelector("#widget-tooltip");
 
   const state = {
-    rangeHours: 6,
+    rangeHours: 1,
     model: "all",
     outcome: "all",
     hidden: document.hidden,
     snapshot: null,
+    epochOffsetMs: Date.now(),
     reconnectAttempt: 0,
     reconnectTimer: null,
     eventSource: null,
     snapshotRequest: 0,
   };
+  const charts = new Map();
 
   const statusAssets = {
     live: "/metrics/assets/status-live-8.svg",
     reconnecting: "/metrics/assets/status-danger-8.svg",
   };
 
-  const layoutStorageKey = "dbx-tools.model-proxy.metrics-layout.v2";
+  const layoutStorageKey = "dbx-tools.model-proxy.metrics-layout.v4";
   const defaultLayout = Array.from(document.querySelectorAll(".grid-stack-item[gs-id]"), (item) => ({
     id: item.getAttribute("gs-id"),
     x: Number(item.getAttribute("gs-x")),
@@ -268,7 +270,7 @@
 
   function selectedBuckets(snapshot, selectedModel) {
     const source =
-      state.rangeHours === 1
+      state.rangeHours <= 1
         ? (selectedModel?.history ?? snapshot.history)
         : (selectedModel?.rollupHistory ?? snapshot.rollupHistory);
     const boundary = Math.max(0, snapshot.generatedAtMs - state.rangeHours * 60 * 60 * 1000);
@@ -283,73 +285,164 @@
     return getComputedStyle(document.documentElement).getPropertyValue(variable).trim() || fallback;
   }
 
-  function drawLines(element, buckets, series) {
-    const width = 720;
-    const height = 190;
-    const padding = 8;
-    const values = series.flatMap((item) => buckets.map(item.value));
+  function formatAxisTime(seconds) {
+    const date = new Date(seconds * 1000);
+    if (state.rangeHours >= 24) {
+      return new Intl.DateTimeFormat([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
+    }
+    return new Intl.DateTimeFormat([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(state.rangeHours <= 0.25 ? { second: "2-digit" } : {}),
+    }).format(date);
+  }
+
+  function chartBounds() {
+    const maximum = Date.now() / 1000;
+    return { min: maximum - state.rangeHours * 60 * 60, max: maximum };
+  }
+
+  function chartDimensions(element) {
+    return {
+      width: Math.max(280, Math.floor(element.clientWidth || 720)),
+      height: Math.max(140, Math.floor(element.clientHeight || 190)),
+    };
+  }
+
+  function createChart(id, series, valueFormatter) {
+    const element = document.querySelector(`#${id}`);
+    if (!element || typeof window.uPlot !== "function") {
+      return null;
+    }
+    const foreground = chartColor("--dashboard-muted", "#496A75");
+    const border = chartColor("--brand-border", "#E4E2DD");
+    const font = `10px ${chartColor("--brand-font-sans", "sans-serif")}`;
+    const options = {
+      ...chartDimensions(element),
+      padding: [10, 12, 0, 0],
+      legend: { show: false },
+      cursor: {
+        drag: { setScale: false, x: false, y: false },
+        points: { size: 8, width: 2 },
+      },
+      scales: {
+        x: { time: true, auto: false },
+        y: { auto: false },
+      },
+      axes: [
+        {
+          stroke: foreground,
+          font,
+          gap: 8,
+          size: 42,
+          grid: { stroke: border, width: 1 },
+          ticks: { stroke: border, width: 1 },
+          values: (_chart, values) => values.map(formatAxisTime),
+        },
+        {
+          stroke: foreground,
+          font,
+          gap: 8,
+          size: 66,
+          grid: { stroke: border, width: 1 },
+          ticks: { stroke: border, width: 1 },
+          values: (_chart, values) => values.map(valueFormatter),
+        },
+      ],
+      series: [
+        {},
+        ...series.map((item) => ({
+          label: item.label,
+          stroke: item.color,
+          width: 2,
+          points: { show: false },
+          value: (_chart, value) => (value == null ? "—" : valueFormatter(value)),
+        })),
+      ],
+    };
+    const chart = new window.uPlot(options, [[], ...series.map(() => [])], element);
+    const resize = () => {
+      const size = chartDimensions(element);
+      if (chart.width !== size.width || chart.height !== size.height) {
+        chart.setSize(size);
+      }
+    };
+    const observer = new ResizeObserver(() => window.requestAnimationFrame(resize));
+    observer.observe(element);
+    const record = { chart, observer, element };
+    charts.set(id, record);
+    return record;
+  }
+
+  function ensureCharts() {
+    if (typeof window.uPlot !== "function") {
+      notice.textContent = "Time-series charts could not be loaded.";
+      return false;
+    }
+    const blue = chartColor("--brand-primary-hover", "#0E538B");
+    const green = chartColor("--brand-accent", "#00A972");
+    const muted = chartColor("--brand-muted", "#618794");
+    const warning = chartColor("--dashboard-warning", "#955100");
+    if (!charts.has("request-chart")) {
+      createChart(
+        "request-chart",
+        [
+          { label: "Requests", color: blue },
+          { label: "Upstream 429s", color: warning },
+        ],
+        (value) => formatNumber(value),
+      );
+    }
+    if (!charts.has("token-chart")) {
+      createChart(
+        "token-chart",
+        [
+          { label: "Input tokens", color: green },
+          { label: "Output tokens", color: blue },
+        ],
+        (value) => formatNumber(value),
+      );
+    }
+    if (!charts.has("latency-chart")) {
+      createChart(
+        "latency-chart",
+        [
+          { label: "Average", color: muted },
+          { label: "Maximum", color: warning },
+        ],
+        formatDuration,
+      );
+    }
+    return charts.size === 3;
+  }
+
+  function updateChart(id, data) {
+    const record = charts.get(id);
+    if (!record) {
+      return;
+    }
+    const values = data.slice(1).flatMap((series) => series.filter((value) => value != null));
     const maximum = Math.max(1, ...values);
-    element.replaceChildren();
-    element.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    element.setAttribute("preserveAspectRatio", "none");
-
-    [0.25, 0.5, 0.75].forEach((ratio) => {
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.classList.add("chart-grid");
-      line.setAttribute("x1", String(padding));
-      line.setAttribute("x2", String(width - padding));
-      line.setAttribute("y1", String(height - padding - ratio * (height - padding * 2)));
-      line.setAttribute("y2", String(height - padding - ratio * (height - padding * 2)));
-      element.append(line);
+    record.chart.batch(() => {
+      record.chart.setData(data, false);
+      record.chart.setScale("y", { min: 0, max: maximum * 1.08 });
+      record.chart.setScale("x", chartBounds());
     });
+  }
 
-    series.forEach((item, seriesIndex) => {
-      const amounts = buckets.map(item.value);
-      if (!amounts.length) {
-        return;
-      }
-      const points = amounts.map((amount, index) => {
-        const x =
-          padding + (index / Math.max(amounts.length - 1, 1)) * (width - padding * 2);
-        const y = height - padding - (amount / maximum) * (height - padding * 2);
-        return [x, y];
-      });
-      const pathData = points
-        .map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`)
-        .join(" ");
-      if (seriesIndex === 0) {
-        const area = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        area.classList.add("chart-area");
-        area.setAttribute(
-          "d",
-          `${pathData} L${points.at(-1)[0].toFixed(2)} ${height - padding} L${points[0][0].toFixed(2)} ${height - padding} Z`,
-        );
-        area.setAttribute("fill", item.color);
-        element.append(area);
-      }
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.classList.add("chart-line");
-      path.setAttribute("d", pathData);
-      path.setAttribute("stroke", item.color);
-      element.append(path);
+  function bucketResolutionSeconds(snapshot) {
+    return state.rangeHours <= 1
+      ? snapshot.retention.detailedResolutionSeconds
+      : snapshot.retention.rollupResolutionSeconds;
+  }
 
-      const pointStep = Math.max(1, Math.ceil(points.length / 18));
-      points.forEach(([x, y], index) => {
-        if (index % pointStep !== 0 && index !== points.length - 1) {
-          return;
-        }
-        const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        point.classList.add("chart-point");
-        point.setAttribute("cx", x.toFixed(2));
-        point.setAttribute("cy", y.toFixed(2));
-        point.setAttribute("r", "3");
-        point.setAttribute("stroke", item.color);
-        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-        title.textContent = `${item.label}: ${formatInteger(amounts[index])}`;
-        point.append(title);
-        element.append(point);
-      });
-    });
+  function bucketRate(bucket, field, resolutionSeconds) {
+    return (Number(bucket[field] || 0) * 60) / Math.max(1, resolutionSeconds);
   }
 
   function renderSummary(snapshot, buckets, selectedModel) {
@@ -359,15 +452,18 @@
     );
     const requestCount = sumBuckets(buckets, "requests");
     const rateLimited = sumBuckets(buckets, "rateLimited");
-    const ratePercent = requestCount ? (rateLimited * 100) / requestCount : 0;
-    document.querySelector("#connections").textContent = formatInteger(summary.connections);
+    const errors = sumBuckets(buckets, "errors");
+    const errorPercent = requestCount ? (errors * 100) / requestCount : 0;
+    const minuteRateLimited = sumBuckets(minuteBuckets, "rateLimited");
     document.querySelector("#active-requests").textContent =
-      `${formatInteger(summary.activeRequests)} active requests`;
+      formatInteger(summary.activeRequests);
+    document.querySelector("#connection-detail").textContent =
+      `${formatInteger(summary.connections)} open sockets · ${formatInteger(summary.activeStreams)} streams`;
     document.querySelector("#requests-minute").textContent = formatInteger(
       selectedModel ? sumBuckets(minuteBuckets, "requests") : summary.requestsPerMinute,
     );
     document.querySelector("#total-requests").textContent =
-      `${formatInteger(summary.totalRequests)} since process start`;
+      `${formatInteger(selectedModel?.requests ?? summary.totalRequests)} since process start`;
     document.querySelector("#tokens-minute").textContent = formatNumber(
       selectedModel
         ? sumBuckets(minuteBuckets, "inputTokens") + sumBuckets(minuteBuckets, "outputTokens")
@@ -377,81 +473,78 @@
       selectedModel ? selectedModel.p95LatencyMs : summary.p95LatencyMs,
     );
     document.querySelector("#p50-latency").textContent =
-      `p50 ${formatDuration(selectedModel ? selectedModel.p50LatencyMs : summary.p50LatencyMs)}`;
-    document.querySelector("#rate-429").textContent = `${ratePercent.toFixed(2)}%`;
+      `p50 ${formatDuration(selectedModel ? selectedModel.p50LatencyMs : summary.p50LatencyMs)} · p99 ${formatDuration(selectedModel ? selectedModel.p99LatencyMs : summary.p99LatencyMs)}`;
+    document.querySelector("#rate-429").textContent = `${formatInteger(minuteRateLimited)}/min`;
     document.querySelector("#rate-429-count").textContent =
       `${formatInteger(rateLimited)} in selected range`;
-    document.querySelector("#active-models").textContent = formatInteger(summary.activeModels);
+    document.querySelector("#error-rate").textContent = `${errorPercent.toFixed(2)}%`;
+    document.querySelector("#error-count").textContent =
+      `${formatInteger(errors)} errors in selected range`;
   }
 
   function renderCharts(snapshot, buckets, selectedModel) {
+    if (!ensureCharts()) {
+      return;
+    }
     const minuteBuckets = buckets.filter(
       (bucket) => bucket.startedAtMs >= snapshot.generatedAtMs - 60_000,
     );
-    const requestRate = selectedModel
-      ? sumBuckets(minuteBuckets, "requests")
-      : snapshot.summary.requestsPerMinute;
+    const resolutionSeconds = bucketResolutionSeconds(snapshot);
+    const requestField =
+      state.outcome === "errors"
+        ? "errors"
+        : state.outcome === "rate-limited"
+          ? "rateLimited"
+          : "requests";
+    const requestValue = (bucket) => {
+      if (state.outcome === "success") {
+        return Math.max(0, Number(bucket.requests || 0) - Number(bucket.errors || 0));
+      }
+      return Number(bucket[requestField] || 0);
+    };
+    const requestRate =
+      state.outcome === "success"
+        ? Math.max(0, sumBuckets(minuteBuckets, "requests") - sumBuckets(minuteBuckets, "errors"))
+        : sumBuckets(minuteBuckets, requestField);
     const tokenRate = selectedModel
       ? sumBuckets(minuteBuckets, "inputTokens") + sumBuckets(minuteBuckets, "outputTokens")
       : snapshot.summary.tokensPerMinute;
-    const blue = chartColor("--brand-primary-hover", "#0E538B");
-    const green = chartColor("--brand-accent", "#00A972");
-    const muted = chartColor("--brand-muted", "#618794");
-    const warning = chartColor("--dashboard-warning", "#955100");
-    const requestValue = (bucket) => {
-      if (state.outcome === "errors") {
-        return Number(bucket.errors || 0);
-      }
-      if (state.outcome === "rate-limited") {
-        return Number(bucket.rateLimited || 0);
-      }
-      if (state.outcome === "success") {
-        return Math.max(
-          0,
-          Number(bucket.requests || 0) -
-            Number(bucket.errors || 0) -
-            Number(bucket.rateLimited || 0),
-        );
-      }
-      return Number(bucket.requests || 0);
+    const requestLabels = {
+      all: "All requests",
+      success: "Successful requests",
+      errors: "Failed requests",
+      "rate-limited": "Upstream 429s",
     };
-    document.querySelector("#request-chart-value").textContent = `${formatInteger(requestRate)} rpm`;
-    document.querySelector("#request-chart-subtitle").textContent =
-      `${outcomeFilter.options[outcomeFilter.selectedIndex].text.toLowerCase()} · 429 highlighted`;
+    document.querySelector("#request-chart-value").textContent =
+      state.outcome === "rate-limited"
+        ? `${formatInteger(requestRate)} signals/min`
+        : `${formatInteger(requestRate)} rpm`;
+    document.querySelector("#request-series-label").textContent = requestLabels[state.outcome];
+    document.querySelector("#request-429-legend").hidden = state.outcome === "rate-limited";
     document.querySelector("#token-chart-value").textContent = `${formatNumber(tokenRate)} tpm`;
     document.querySelector("#latency-chart-value").textContent =
       `p95 ${formatDuration(selectedModel?.p95LatencyMs ?? snapshot.summary.p95LatencyMs)}`;
-    drawLines(document.querySelector("#request-chart"), buckets, [
-      { label: state.outcome, value: requestValue, color: blue },
-      {
-        label: "429",
-        value: (bucket) => Number(bucket.rateLimited || 0),
-        color: warning,
-      },
+    const timestamps = buckets.map(
+      (bucket) => (state.epochOffsetMs + Number(bucket.startedAtMs || 0)) / 1000,
+    );
+    updateChart("request-chart", [
+      timestamps,
+      buckets.map((bucket) => (requestValue(bucket) * 60) / Math.max(1, resolutionSeconds)),
+      buckets.map((bucket) =>
+        state.outcome === "rate-limited"
+          ? null
+          : bucketRate(bucket, "rateLimited", resolutionSeconds),
+      ),
     ]);
-    drawLines(document.querySelector("#token-chart"), buckets, [
-      {
-        label: "input tokens",
-        value: (bucket) => Number(bucket.inputTokens || 0),
-        color: green,
-      },
-      {
-        label: "output tokens",
-        value: (bucket) => Number(bucket.outputTokens || 0),
-        color: blue,
-      },
+    updateChart("token-chart", [
+      timestamps,
+      buckets.map((bucket) => bucketRate(bucket, "inputTokens", resolutionSeconds)),
+      buckets.map((bucket) => bucketRate(bucket, "outputTokens", resolutionSeconds)),
     ]);
-    drawLines(document.querySelector("#latency-chart"), buckets, [
-      {
-        label: "average latency",
-        value: (bucket) => Number(bucket.averageLatencyMs || 0),
-        color: muted,
-      },
-      {
-        label: "maximum latency",
-        value: (bucket) => Number(bucket.maximumLatencyMs || 0),
-        color: warning,
-      },
+    updateChart("latency-chart", [
+      timestamps,
+      buckets.map((bucket) => Number(bucket.averageLatencyMs || 0)),
+      buckets.map((bucket) => Number(bucket.maximumLatencyMs || 0)),
     ]);
   }
 
@@ -484,6 +577,74 @@
     return element;
   }
 
+  const reasoningLabels = {
+    default: "Provider default",
+    none: "Reasoning off",
+    minimal: "Minimal",
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    xhigh: "Extra high",
+    max: "Maximum",
+    adaptive: "Adaptive",
+    enabled: "Enabled (provider-defined)",
+  };
+
+  function reasoningLabel(level) {
+    return reasoningLabels[level] ?? level;
+  }
+
+  function dominantReasoning(levels) {
+    if (!levels?.length) {
+      return "—";
+    }
+    const dominant = levels.reduce((current, candidate) =>
+      Number(candidate.requests || 0) > Number(current.requests || 0) ? candidate : current,
+    );
+    return reasoningLabel(dominant.level);
+  }
+
+  function renderReasoning(snapshot, selectedModel) {
+    const levels = selectedModel?.reasoningLevels ?? snapshot.reasoningLevels ?? [];
+    const total = levels.reduce((sum, level) => sum + Number(level.requests || 0), 0);
+    const list = document.querySelector("#reasoning-levels");
+    list.replaceChildren();
+    if (!total) {
+      const empty = document.createElement("li");
+      empty.className = "empty";
+      empty.textContent = "Waiting for model traffic";
+      list.append(empty);
+      document.querySelector("#reasoning-total").textContent = "No model requests";
+      return;
+    }
+    [...levels]
+      .sort(
+        (left, right) =>
+          Number(right.requests || 0) - Number(left.requests || 0) ||
+          reasoningLabel(left.level).localeCompare(reasoningLabel(right.level)),
+      )
+      .forEach((level) => {
+        const requests = Number(level.requests || 0);
+        const percent = (requests * 100) / total;
+        const row = document.createElement("li");
+        const heading = document.createElement("div");
+        const label = document.createElement("span");
+        label.textContent = reasoningLabel(level.level);
+        const value = document.createElement("strong");
+        value.textContent = `${formatInteger(requests)} · ${percent.toFixed(percent >= 10 ? 0 : 1)}%`;
+        heading.append(label, value);
+        const track = document.createElement("div");
+        track.className = "reasoning-track";
+        const fill = document.createElement("span");
+        fill.style.width = `${Math.max(1, percent)}%`;
+        track.append(fill);
+        row.append(heading, track);
+        list.append(row);
+      });
+    document.querySelector("#reasoning-total").textContent =
+      `${formatInteger(total)} classified requests`;
+  }
+
   function renderModels(snapshot) {
     updateModelOptions(snapshot.models);
     let models =
@@ -496,9 +657,7 @@
       models = models.filter((model) => Number(model.rateLimited || 0) > 0);
     } else if (state.outcome === "success") {
       models = models.filter(
-        (model) =>
-          Number(model.requests || 0) >
-          Number(model.errors || 0) + Number(model.rateLimited || 0),
+        (model) => Number(model.requests || 0) > Number(model.errors || 0),
       );
     }
     const body = document.querySelector("#models-body");
@@ -506,7 +665,7 @@
     if (!models.length) {
       const row = document.createElement("tr");
       const empty = cell("Waiting for model traffic", "empty");
-      empty.colSpan = 10;
+      empty.colSpan = 13;
       row.append(empty);
       body.append(row);
     } else {
@@ -520,15 +679,18 @@
           cell(formatDuration(model.p99LatencyMs)),
           cell(formatNumber(model.inputTokens + model.outputTokens)),
           cell(formatInteger(model.errors)),
+          cell(formatInteger(model.rateLimited)),
           cell(formatInteger(model.retries)),
-          cell(`${formatDuration(model.queueWaitMs)} / ${formatInteger(model.queueDepthMax || 0)}`),
+          cell(formatDuration(Number(model.queueWaitMs || 0) / Math.max(1, model.requests || 0))),
+          cell(formatInteger(model.queueDepthMax || 0)),
+          cell(dominantReasoning(model.reasoningLevels), "reasoning-setting"),
           cell(model.limiter, "limiter", model.limiter),
         );
         body.append(row);
       });
     }
     document.querySelector("#model-count").textContent =
-      `${formatInteger(models.length)} shown · ${formatInteger(snapshot.models.length)} active`;
+      `${formatInteger(models.length)} shown · ${formatInteger(snapshot.models.length)} tracked`;
   }
 
   function transitionAsset(kind) {
@@ -561,7 +723,7 @@
       icon.alt = "";
       const detail = document.createElement("div");
       const title = document.createElement("strong");
-      const timestamp = new Date(Date.now() - snapshot.generatedAtMs + event.atMs);
+      const timestamp = new Date(state.epochOffsetMs + event.atMs);
       title.textContent =
         `${timestamp.toLocaleTimeString([], { hour12: false })}  ${event.transition.kind}`;
       const description = document.createElement("span");
@@ -577,14 +739,20 @@
     const retained = snapshot.retention.estimatedBytes / (1024 * 1024);
     const target = snapshot.retention.targetBytes / (1024 * 1024);
     const workspace = snapshot.workspace?.id ? `workspace ${snapshot.workspace.id} · ` : "";
+    const updatedAt = new Date(state.epochOffsetMs + snapshot.generatedAtMs).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
     document.querySelector("#retention-status").textContent =
       `Collecting · process uptime ${formatUptime(snapshot.uptimeSeconds)} · memory ${retained.toFixed(1)} MiB / ${target.toFixed(0)} MiB`;
     document.querySelector("#retention-detail").textContent =
-      `${workspace}${snapshot.retention.detailedResolutionSeconds}s resolution · 1h detail · 24h rollup`;
+      `${workspace}${snapshot.retention.detailedResolutionSeconds}s detail · ${snapshot.retention.rollupResolutionSeconds}s rollup · updated ${updatedAt}`;
   }
 
   function render(snapshot) {
     state.snapshot = snapshot;
+    state.epochOffsetMs = Date.now() - Number(snapshot.generatedAtMs || 0);
     if (state.hidden) {
       return;
     }
@@ -596,6 +764,7 @@
     renderSummary(snapshot, buckets, selectedModel);
     renderCharts(snapshot, buckets, selectedModel);
     renderModels(snapshot);
+    renderReasoning(snapshot, selectedModel);
     renderTimeline(snapshot);
     renderFooter(snapshot);
     dashboard.setAttribute("aria-busy", "false");
@@ -661,6 +830,14 @@
       scheduleReconnect();
     });
   }
+
+  window.setInterval(() => {
+    if (state.hidden) {
+      return;
+    }
+    const bounds = chartBounds();
+    charts.forEach(({ chart }) => chart.setScale("x", bounds));
+  }, 1_000);
 
   document.querySelectorAll("[data-range]").forEach((button) => {
     button.addEventListener("click", () => {

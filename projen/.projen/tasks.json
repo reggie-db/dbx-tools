@@ -28,6 +28,15 @@
         }
       ]
     },
+    "bundle:rust-release": {
+      "name": "bundle:rust-release",
+      "description": "Bundle the standalone Node Rust release helper",
+      "steps": [
+        {
+          "exec": "bun tasks/build-rust-release.ts"
+        }
+      ]
+    },
     "clobber": {
       "name": "clobber",
       "description": "hard resets to HEAD of origin and cleans the local repo",
@@ -36,22 +45,35 @@
       },
       "steps": [
         {
-          "exec": "git checkout -b scratch",
+          "execArgs": [
+            "git",
+            "checkout",
+            "-b",
+            "scratch"
+          ],
           "name": "save current HEAD in \"scratch\" branch"
         },
         {
-          "exec": "git checkout $BRANCH"
+          "exec": "git checkout \"$BRANCH\""
         },
         {
-          "exec": "git fetch origin",
+          "execArgs": [
+            "git",
+            "fetch",
+            "origin"
+          ],
           "name": "fetch latest changes from origin"
         },
         {
-          "exec": "git reset --hard origin/$BRANCH",
+          "exec": "git reset --hard \"origin/$BRANCH\"",
           "name": "hard reset to origin commit"
         },
         {
-          "exec": "git clean -fdx",
+          "execArgs": [
+            "git",
+            "clean",
+            "-fdx"
+          ],
           "name": "clean all untracked files"
         },
         {
@@ -64,6 +86,9 @@
       "name": "compile",
       "description": "Only compile",
       "steps": [
+        {
+          "spawn": "bundle:rust-release"
+        },
         {
           "execArgs": [
             "tsc",
@@ -149,6 +174,9 @@
       "description": "Run tests",
       "steps": [
         {
+          "spawn": "bundle:rust-release"
+        },
+        {
           "exec": "bun test test"
         }
       ]
@@ -169,18 +197,6 @@
         "CI": "0"
       },
       "steps": [
-        {
-          "execArgs": [
-            "bunx",
-            "npm-check-updates@20",
-            "--upgrade",
-            "--target=minor",
-            "--peer",
-            "--no-deprecated",
-            "--dep=dev,prod,peer,optional",
-            "--filter=projen"
-          ]
-        },
         {
           "exec": "bun install"
         },

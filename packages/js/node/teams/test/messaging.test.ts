@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { activity as sharedActivity } from "@dbx-tools/shared-teams";
+import { teamsActivity } from "@dbx-tools/shared-teams";
 import { isAllowedServiceUrl } from "../src/auth.ts";
 import { resolveTeamsConfig } from "../src/config.ts";
 import { resolveServiceUrl } from "../src/messaging.ts";
 
 /** An inbound activity as a channel would send it, with a `serviceUrl`. */
-const inbound = (serviceUrl?: string): sharedActivity.Activity =>
-  sharedActivity.activitySchema.parse({
+const inbound = (serviceUrl?: string): teamsActivity.Activity =>
+  teamsActivity.activitySchema.parse({
     type: "message",
     text: "status?",
     from: { id: "user-1" },

@@ -62,8 +62,8 @@ the Lakebase full-text implementation of the AppKit AI Search contract.
 ```ts
 import { createApp, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
-import { plugin as searchPlugin } from "@dbx-tools/search";
-import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import { search } from "@dbx-tools/search";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Answer from the docs; use `search` to find them.",
@@ -83,11 +83,11 @@ await createApp({
         },
       },
     }),
-    searchPlugin.search({
+    search({
       index: "main.support.docs",
       indexes: [{ name: "main.support.docs", alias: "docs" }],
     }),
-    mastraPlugin.mastra({ agents: support }),
+    mastra({ agents: support }),
   ],
 });
 ```
@@ -106,10 +106,6 @@ const searchRuntime = runtime.createSearchRuntime({
 });
 const search = tool.searchTool({ runtime: searchRuntime });
 ```
-
-`getSearchRuntime()` remains as a deprecated compatibility constructor and
-returns a new isolated runtime on every call. It does not discover a registered
-plugin or provider.
 
 Use Lakebase full-text search without changing the AppKit UI hook:
 
@@ -315,8 +311,7 @@ default.
   full-text provider.
 - `lakebase` - `LakebaseSearchBackend`, the provider's `tsvector` runtime.
 - `query` - `toDocumentArray`, shared by write routes and tools.
-- `runtime` - `createSearchRuntime` / `setSearchReadBackend` for isolated
-  clients, plus deprecated global-era compatibility names.
+- `runtime` - `createSearchRuntime` / `setSearchReadBackend` for isolated clients.
 - `schema` - the tool descriptions and re-exported request schemas.
 
 Browser-safe schemas live in

@@ -3,6 +3,8 @@
 use std::{net::SocketAddr, time::Instant};
 
 use axum::http::StatusCode;
+use dbx_tools_model::ReasoningEffort;
+use serde_json::Value;
 
 use crate::{
     metrics::MetricsRuntime,
@@ -23,6 +25,7 @@ pub(crate) struct RequestOutcome {
     pub(crate) client_wire: Option<ClientWire>,
     pub(crate) target: Option<TargetWire>,
     pub(crate) streaming: bool,
+    pub(crate) reasoning_setting: Option<ReasoningSetting>,
     pub(crate) status: StatusCode,
     pub(crate) usage: ResponseTokenUsage,
     pub(crate) throttle: ThrottleAcquisition,
@@ -39,6 +42,7 @@ pub(crate) struct RequestLogContext {
     peer: SocketAddr,
     request_bytes: usize,
     started: Instant,
+    reasoning_setting: Option<ReasoningSetting>,
     throttle: ThrottleAcquisition,
     upstream_attempt: u32,
     metrics: MetricsRuntime,
@@ -52,6 +56,132 @@ pub(crate) struct RequestLogMetadata {
     pub(crate) peer: SocketAddr,
     pub(crate) request_bytes: usize,
     pub(crate) started: Instant,
+    pub(crate) reasoning_setting: Option<ReasoningSetting>,
+}
+
+/// Bounded reasoning classification retained by logs and aggregate metrics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ReasoningSetting {
+    Default,
+    Effort(ReasoningEffort),
+    Adaptive,
+    Enabled,
+}
+
+impl ReasoningSetting {
+    pub(crate) const COUNT: usize = 10;
+    pub(crate) const ALL: [Self; Self::COUNT] = [
+        Self::Default,
+        Self::Effort(ReasoningEffort::None),
+        Self::Effort(ReasoningEffort::Minimal),
+        Self::Effort(ReasoningEffort::Low),
+        Self::Effort(ReasoningEffort::Medium),
+        Self::Effort(ReasoningEffort::High),
+        Self::Effort(ReasoningEffort::Xhigh),
+        Self::Effort(ReasoningEffort::Max),
+        Self::Adaptive,
+        Self::Enabled,
+    ];
+
+    pub(crate) fn from_request(input: &Value) -> Self {
+        let effort = [
+            input.get("reasoning_effort"),
+            input.pointer("/reasoning/effort"),
+            input.pointer("/thinking/effort"),
+            input.pointer("/thinking_config/thinking_level"),
+            input.pointer("/thinkingConfig/thinkingLevel"),
+        ]
+        .into_iter()
+        .flatten()
+        .find_map(Value::as_str);
+        if let Some(effort) = effort {
+            return Self::from_wire(effort).unwrap_or(Self::Enabled);
+        }
+
+        let mode = [
+            input.pointer("/thinking/type"),
+            input.pointer("/reasoning/type"),
+        ]
+        .into_iter()
+        .flatten()
+        .find_map(Value::as_str)
+        .map(str::to_ascii_lowercase);
+        match mode.as_deref() {
+            Some("adaptive") => return Self::Adaptive,
+            Some("disabled" | "none") => return Self::Effort(ReasoningEffort::None),
+            Some("enabled") => return Self::Enabled,
+            _ => {}
+        }
+
+        for pointer in [
+            "/thinking_config/thinking_budget",
+            "/thinkingConfig/thinkingBudget",
+            "/thinking/budget_tokens",
+        ] {
+            if let Some(budget) = input.pointer(pointer).and_then(Value::as_i64) {
+                return if budget <= 0 {
+                    Self::Effort(ReasoningEffort::None)
+                } else {
+                    Self::Enabled
+                };
+            }
+        }
+
+        if input.pointer("/reasoning/enabled").and_then(Value::as_bool) == Some(false) {
+            return Self::Effort(ReasoningEffort::None);
+        }
+        if input.get("reasoning").is_some_and(|value| !value.is_null())
+            || input.get("thinking").is_some_and(|value| !value.is_null())
+            || input
+                .get("thinking_config")
+                .or_else(|| input.get("thinkingConfig"))
+                .is_some_and(|value| !value.is_null())
+        {
+            return Self::Enabled;
+        }
+        Self::Default
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Effort(effort) => effort.as_str(),
+            Self::Adaptive => "adaptive",
+            Self::Enabled => "enabled",
+        }
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        match self {
+            Self::Default => 0,
+            Self::Effort(ReasoningEffort::None) => 1,
+            Self::Effort(ReasoningEffort::Minimal) => 2,
+            Self::Effort(ReasoningEffort::Low) => 3,
+            Self::Effort(ReasoningEffort::Medium) => 4,
+            Self::Effort(ReasoningEffort::High) => 5,
+            Self::Effort(ReasoningEffort::Xhigh) => 6,
+            Self::Effort(ReasoningEffort::Max) => 7,
+            Self::Adaptive => 8,
+            Self::Enabled => 9,
+        }
+    }
+
+    fn from_wire(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "none" | "disabled" => Some(Self::Effort(ReasoningEffort::None)),
+            "minimal" => Some(Self::Effort(ReasoningEffort::Minimal)),
+            "low" => Some(Self::Effort(ReasoningEffort::Low)),
+            "medium" => Some(Self::Effort(ReasoningEffort::Medium)),
+            "high" => Some(Self::Effort(ReasoningEffort::High)),
+            "xhigh" | "x-high" | "extra_high" | "extra-high" => {
+                Some(Self::Effort(ReasoningEffort::Xhigh))
+            }
+            "max" | "maximum" => Some(Self::Effort(ReasoningEffort::Max)),
+            "adaptive" => Some(Self::Adaptive),
+            "enabled" => Some(Self::Enabled),
+            _ => None,
+        }
+    }
 }
 
 impl RequestLogContext {
@@ -68,6 +198,7 @@ impl RequestLogContext {
             peer,
             request_bytes,
             started,
+            reasoning_setting,
         } = metadata;
         Self {
             requested_model,
@@ -75,6 +206,7 @@ impl RequestLogContext {
             peer,
             request_bytes,
             started,
+            reasoning_setting,
             throttle,
             upstream_attempt,
             metrics,
@@ -211,6 +343,7 @@ impl RequestLogContext {
             client_wire,
             target,
             streaming,
+            reasoning_setting: self.reasoning_setting,
             status,
             usage,
             throttle: self.throttle.clone(),
@@ -257,6 +390,7 @@ fn emit_request_outcome(outcome: RequestOutcome) {
         route = outcome.route,
         client_wire = ?outcome.client_wire,
         target = ?outcome.target,
+        reasoning_setting = outcome.reasoning_setting.map(ReasoningSetting::label).unwrap_or("not-applicable"),
         streaming = outcome.streaming,
         status = outcome.status.as_u16(),
         duration_ms = outcome.duration_ms,
@@ -319,6 +453,7 @@ mod tests {
             client_wire: None,
             target: None,
             streaming: !finished,
+            reasoning_setting: Some(ReasoningSetting::Default),
             status,
             usage: ResponseTokenUsage::default(),
             throttle: ThrottleAcquisition::test_fixture(),
@@ -349,6 +484,36 @@ mod tests {
         assert_eq!(
             completion_level(&outcome(StatusCode::OK, true, false)),
             CompletionLevel::Warn
+        );
+    }
+
+    #[test]
+    fn reasoning_settings_are_bounded_across_supported_request_shapes() {
+        use serde_json::json;
+
+        assert_eq!(
+            ReasoningSetting::from_request(&json!({"reasoning_effort": "high"})),
+            ReasoningSetting::Effort(ReasoningEffort::High)
+        );
+        assert_eq!(
+            ReasoningSetting::from_request(&json!({"reasoning": {"effort": "x-high"}})),
+            ReasoningSetting::Effort(ReasoningEffort::Xhigh)
+        );
+        assert_eq!(
+            ReasoningSetting::from_request(&json!({"thinking": {"type": "adaptive"}})),
+            ReasoningSetting::Adaptive
+        );
+        assert_eq!(
+            ReasoningSetting::from_request(&json!({"thinkingConfig": {"thinkingBudget": 0}})),
+            ReasoningSetting::Effort(ReasoningEffort::None)
+        );
+        assert_eq!(
+            ReasoningSetting::from_request(&json!({"reasoning": {"effort": "provider-new"}})),
+            ReasoningSetting::Enabled
+        );
+        assert_eq!(
+            ReasoningSetting::from_request(&json!({"model": "example"})),
+            ReasoningSetting::Default
         );
     }
 }

@@ -1,4 +1,4 @@
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import {
   Button,
   DropdownMenu,
@@ -82,8 +82,8 @@ export function renderDataCell(value: unknown): React.ReactNode {
  * column id, accessor key, and CSV header, so only the on-screen label
  * is prettified.
  */
-export function humanizeLabel(value: string, options?: string.TokenizeOptions): string {
-  return string.toLabel(value, options);
+export function humanizeLabel(value: string, options?: stringUtils.TokenizeOptions): string {
+  return stringUtils.toLabel(value, options);
 }
 
 /**

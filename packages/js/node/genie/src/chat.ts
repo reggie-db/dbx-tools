@@ -31,7 +31,7 @@ import {
   type WorkspaceClient,
 } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
-import { async, error, log, type PollContext } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log, type PollContext } from "@dbx-tools/shared-core";
 import { event, genieModel, type GenieChatEvent, type GenieMessage } from "@dbx-tools/shared-genie";
 
 import { genieAgentModeChat, isAgentModeUnavailable } from "./agent-mode.ts";
@@ -157,7 +157,7 @@ export async function* genieChat(
         if (yielded || !isAgentModeUnavailable(err)) throw err;
         logger.warn("agent-mode:unavailable, falling back to polling", {
           space_id,
-          error: error.errorMessage(err),
+          error: errorUtils.errorMessage(err),
         });
       }
     }
@@ -202,7 +202,7 @@ export async function* genieChat(
       );
     };
 
-    yield* async.poll(
+    yield* asyncUtils.poll(
       async (pollCtx: PollContext<GenieMessage>) => validateMessage(await pollProducer(pollCtx)),
       {
         intervalMs: options?.pollIntervalMs ?? 500,

@@ -5,18 +5,13 @@ members = [
   "packages/rs/google",
   "packages/rs/lakebase-proxy",
   "packages/rs/model",
-  "packages/rs/model-proxy",
-  "packages/rs/release-tools"
+  "packages/rs/model-proxy"
 ]
-default-members = [
-  "packages/rs/lakebase-proxy",
-  "packages/rs/model-proxy",
-  "packages/rs/release-tools"
-]
+default-members = [ "packages/rs/lakebase-proxy", "packages/rs/model-proxy" ]
 resolver = "2"
 
   [workspace.package]
-  version = "0.9.5"
+  version = "0.9.6"
   edition = "2021"
   rust-version = "1.89"
   license = "Apache-2.0"
@@ -52,6 +47,7 @@ resolver = "2"
   tokio-postgres = "0.7"
   tokio-rustls = "0.26"
   tracing = "0.1"
+  ts-rs = "=12.0.1"
   webpki-roots = "1"
   wiremock = "0.6"
 
@@ -72,11 +68,6 @@ resolver = "2"
     [workspace.dependencies.metrics-exporter-prometheus]
     version = "0.17"
     default-features = false
-
-    [workspace.dependencies.object]
-    version = "0.37"
-    default-features = false
-    features = [ "read" ]
 
     [workspace.dependencies.oauth2]
     version = "5"

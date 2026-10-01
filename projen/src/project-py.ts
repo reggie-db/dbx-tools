@@ -1,6 +1,6 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
-import { project as coreProject } from "@dbx-tools/core";
-import { string } from "@dbx-tools/shared-core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, javascript, python, vscode } from "projen";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
@@ -237,12 +237,12 @@ export class DBXToolsPythonWorkspace extends Component {
   constructor(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions) {
     super(project);
     const scope = isDBXToolsJavaScriptProject()(project)
-      ? string.toSlug(project.scope)
-      : string.toSlug(project.name).replace(/-root$/, "");
+      ? stringUtils.toSlug(project.scope)
+      : stringUtils.toSlug(project.name).replace(/-root$/, "");
     const repositoryUrl =
       options.repository?.url ??
       projectRepositoryUrl(project) ??
-      coreProject.repositoryUrl(project.outdir);
+      projectUtils.repositoryUrl(project.outdir);
     if (!repositoryUrl) {
       throw new Error("Python workspace repository URL was not configured or detected");
     }
@@ -253,7 +253,7 @@ export class DBXToolsPythonWorkspace extends Component {
     };
     const packageIdentities: ResolvedPythonPackageOptions[] = options.packages.map((pkg) => ({
       ...pkg,
-      name: pkg.name ?? `${scope}-${string.toSlug(pkg.directory)}`,
+      name: pkg.name ?? `${scope}-${stringUtils.toSlug(pkg.directory)}`,
       module: pkg.module ?? pythonModuleName(scope, pkg.directory),
     }));
     const packagesByDirectory = new Map(packageIdentities.map((pkg) => [pkg.directory, pkg]));

@@ -1,8 +1,10 @@
 {
   "files": [
+    ".gitignore",
     ".projen/deps.json",
     ".projen/files.json",
     ".projen/tasks.json",
+    "assets/tsconfig.json",
     "LICENSE",
     "package.json",
     "test/tsconfig.json",

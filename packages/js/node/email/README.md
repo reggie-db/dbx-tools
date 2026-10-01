@@ -35,23 +35,23 @@ presentation lives in
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
-import { plugin as emailPlugin, tool as emailTool } from "@dbx-tools/email";
-import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import { email, emailTool } from "@dbx-tools/email";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Draft emails, but wait for approval before sending.",
-  tools: () => ({ send_email: emailTool.emailTool() }),
+  tools: () => ({ send_email: emailTool() }),
 });
 
 await createApp({
   plugins: [
     server(),
     lakebase(),
-    emailPlugin.email({
+    email({
       smtp: { host: "smtp.example.com", user: "apikey", password: process.env.SMTP_KEY },
       domain: "mail.example.com",
     }),
-    mastraPlugin.mastra({ agents: support, storage: true }),
+    mastra({ agents: support, storage: true }),
   ],
 });
 ```
@@ -209,7 +209,7 @@ The plugin export is equivalent and resolves the sender for you when the caller
 is a Databricks user:
 
 ```ts
-const appkit = await createApp({ plugins: [server(), emailPlugin.email()] });
+const appkit = await createApp({ plugins: [server(), email()] });
 await appkit.email.sendEmail(message, "reports@example.com");
 ```
 
@@ -267,13 +267,13 @@ only by wiring it explicitly.
 
 | Tool         | Runtime | Wiring                                                                   |
 | ------------ | ------- | ------------------------------------------------------------------------ |
-| `send_email` | Mastra  | `tools: () => ({ send_email: emailTool.emailTool() })`                   |
+| `send_email` | Mastra  | `tools: () => ({ send_email: emailTool() })`                             |
 | `email.send` | AppKit  | `plugins.email.toolkit()` in code, or a `plugin:email` frontmatter entry |
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
 import { agents, createAgent } from "@databricks/appkit/beta";
-import { plugin as emailPlugin } from "@dbx-tools/email";
+import { email } from "@dbx-tools/email";
 
 const support = createAgent({
   instructions: "Draft emails, but wait for approval before sending.",
@@ -281,7 +281,7 @@ const support = createAgent({
 });
 
 await createApp({
-  plugins: [server(), emailPlugin.email(), agents({ agents: { support } })],
+  plugins: [server(), email(), agents({ agents: { support } })],
 });
 ```
 
@@ -374,17 +374,17 @@ to the plugin or renderer only when the consuming application needs its own
 identity.
 
 ```ts
-import { brand, plugin } from "@dbx-tools/email";
+import { defaultEmailBrand, email, emailBrandFromContext } from "@dbx-tools/email";
 
 // Explicitly select the same brand used by default:
-plugin.email({ brand: brand.defaultEmailBrand });
+email({ brand: defaultEmailBrand });
 
 // Or derive from any shared BrandContext:
-import { brand as coreBrand } from "@dbx-tools/shared-core";
-plugin.email({ brand: brand.emailBrandFromContext(coreBrand.defaultBrandContext) });
+import { brandUtils } from "@dbx-tools/shared-core";
+email({ brand: emailBrandFromContext(brandUtils.defaultBrandContext) });
 
 // Or hand-build the small email-safe slice:
-plugin.email({
+email({
   brand: {
     accent: "#FF3621",
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",

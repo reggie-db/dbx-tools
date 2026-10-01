@@ -2,22 +2,22 @@ import path from "node:path";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
-import { plugin as graphitiPlugin } from "@dbx-tools/appkit-graphiti";
+import { graphiti } from "@dbx-tools/appkit-graphiti";
 import {
   agents,
   genie as appkitMastraGenie,
-  plugin as appkitMastraPlugin,
+  mastra,
   type MastraAgentDefinition,
   type MastraPlugins,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
-import { plugin as appkitWebSearchPlugin } from "@dbx-tools/appkit-web-search";
-import { config, project as coreProject } from "@dbx-tools/core";
-import { brand as emailBrand, plugin as emailPlugin, tool as emailToolApi } from "@dbx-tools/email";
-import { lakebaseAiSearch, plugin as searchPlugin } from "@dbx-tools/search";
-import { brand as sharedBrand } from "@dbx-tools/shared-core";
-import { plugin as teamsPlugin } from "@dbx-tools/teams";
-import { interceptor as tunnelInterceptorApi, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
+import { webSearch } from "@dbx-tools/appkit-web-search";
+import { configUtils, projectUtils } from "@dbx-tools/core";
+import { defaultEmailBrand, email, emailTool } from "@dbx-tools/email";
+import { lakebaseAiSearch, search } from "@dbx-tools/search";
+import { brandUtils } from "@dbx-tools/shared-core";
+import { teams } from "@dbx-tools/teams";
+import { authGate, tunnelInterceptor } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
 import { configureStaticDelivery } from "./_static-delivery.ts";
@@ -61,26 +61,18 @@ const SEARCH_DOCUMENTS = [
   },
 ];
 
-const { email } = emailPlugin;
-const { defaultEmailBrand } = emailBrand;
-const { emailTool } = emailToolApi;
 const { createAgent, createTool, tool } = agents;
 const { buildGenieTools, GENIE_INSTRUCTIONS } = appkitMastraGenie;
-const { mastra } = appkitMastraPlugin;
-const { webSearch } = appkitWebSearchPlugin;
-const { graphiti } = graphitiPlugin;
-const { teams } = teamsPlugin;
-const { search } = searchPlugin;
-const { defaultBrandContext } = sharedBrand;
-const mastraStorage = config.boolean(undefined, "MASTRA_STORAGE", config.ENV_ONLY) ?? true;
-const mastraMemory = config.boolean(undefined, "MASTRA_MEMORY", config.ENV_ONLY) ?? true;
-const graphitiEnabled = config.boolean(undefined, "GRAPHITI_ENABLED", config.ENV_ONLY) ?? true;
-const busEnabled = config.boolean(undefined, "BUS_ENABLED", config.ENV_ONLY) ?? true;
+const { defaultBrandContext } = brandUtils;
+const mastraStorage =
+  configUtils.boolean(undefined, "MASTRA_STORAGE", configUtils.ENV_ONLY) ?? true;
+const mastraMemory = configUtils.boolean(undefined, "MASTRA_MEMORY", configUtils.ENV_ONLY) ?? true;
+const graphitiEnabled =
+  configUtils.boolean(undefined, "GRAPHITI_ENABLED", configUtils.ENV_ONLY) ?? true;
+const busEnabled = configUtils.boolean(undefined, "BUS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const remoteSkillsEnabled =
-  config.boolean(undefined, "REMOTE_SKILLS_ENABLED", config.ENV_ONLY) ?? true;
+  configUtils.boolean(undefined, "REMOTE_SKILLS_ENABLED", configUtils.ENV_ONLY) ?? true;
 const localDevelopment = process.env.NODE_ENV === "development";
-const { tunnelInterceptor } = tunnelInterceptorApi;
-const { authGate } = tunnelPlugin;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
 // `server({ staticPath })` serves it on the same port as the API. Locally the
@@ -89,7 +81,7 @@ const { authGate } = tunnelPlugin;
 // sibling path does not exist in the deployed tree.
 const clientDist =
   process.env.CLIENT_DIST ??
-  path.resolve(coreProject.root() ?? process.cwd(), "packages/example/app/appkit-demo/dist");
+  path.resolve(projectUtils.root() ?? process.cwd(), "packages/example/app/appkit-demo/dist");
 
 // AppKit demo wiring for `@dbx-tools/appkit-mastra`.
 //

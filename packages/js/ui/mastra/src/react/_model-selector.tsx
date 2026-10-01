@@ -1,4 +1,5 @@
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
+import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import {
   Button,
   DropdownMenu,
@@ -36,7 +37,7 @@ interface ModelSelectorProps {
 
 /** Convert a normalized family token into a compact menu label. */
 function familyLabel(family: string): string {
-  return family.length <= 3 ? family.toUpperCase() : string.toLabel(family);
+  return family.length <= 3 ? family.toUpperCase() : stringUtils.toLabel(family);
 }
 
 /** Resolve the label shown for a model endpoint. */
@@ -50,12 +51,12 @@ const ReasoningControl = ({
   value,
   onChange,
 }: {
-  efforts: string[];
+  efforts: ReasoningEffort[];
   value: ChatViewProps["reasoningEffort"];
   onChange: NonNullable<ChatViewProps["onReasoningEffortChange"]>;
 }) => {
   const selectedIndex = value === undefined ? 0 : Math.max(0, efforts.indexOf(value) + 1);
-  const selectedLabel = value === undefined ? "Auto" : string.toLabel(value);
+  const selectedLabel = value === undefined ? "Auto" : stringUtils.toLabel(value);
 
   return (
     <div className="space-y-2 px-2 py-1.5">

@@ -96,10 +96,10 @@ import { EmailCard } from "@dbx-tools/shared-email-template";
 ## Apply A Brand
 
 ```ts
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import { emailBrandFromContext } from "@dbx-tools/shared-email-template";
 
-const emailBrand = emailBrandFromContext(brand.defaultBrandContext);
+const emailBrand = emailBrandFromContext(brandUtils.defaultBrandContext);
 ```
 
 Omitting `brand` uses the dbx-tools brand. A consumer may supply its own colors,

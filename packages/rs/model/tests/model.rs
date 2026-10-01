@@ -14,11 +14,12 @@ use dbx_tools_core::{DatabricksAuthOptions, DatabricksClient, FileCache};
 use dbx_tools_model::{
     chat_tool_reasoning_effort, endpoints_from_response, is_responses_only, lookup_models,
     model_family, model_search_query, model_service_names, model_serving_api, models_payload,
-    models_payload_with_capabilities, parse_model_capabilities, parse_model_name,
-    parse_model_rate_limits, parse_retired_models, rank_model_id, reasoning_effort_names_by_family,
-    reasoning_efforts_by_family, status_from_names, version_tuple, ModelCapabilitiesResolver,
-    ModelClass, ModelClient, ModelFamily, ModelQuery, ModelRateLimitsResolver, ModelServingApi,
-    ModelStatus, ModelStatusResolver, ParsedModelName, ReasoningEffort, ServingEndpointSummary,
+    models_payload_with_capabilities, normalize_serving_endpoints_json, parse_model_capabilities,
+    parse_model_name, parse_model_rate_limits, parse_retired_models, rank_model_id,
+    reasoning_effort_names_by_family, reasoning_efforts_by_family, status_from_names,
+    version_tuple, ModelCapabilitiesResolver, ModelClass, ModelClient, ModelFamily, ModelQuery,
+    ModelRateLimitsResolver, ModelServingApi, ModelStatus, ModelStatusResolver, ParsedModelName,
+    ReasoningEffort, ServingEndpointSummary,
 };
 use serde_json::json;
 use wiremock::{
@@ -123,6 +124,23 @@ fn gpt_search_returns_the_highest_version_and_excludes_gpt_oss() {
 
     assert!(resolved.matched);
     assert_eq!(resolved.model_id, "databricks-gpt-5-6-sol");
+}
+
+#[test]
+fn ranking_honors_an_owner_supplied_class_for_custom_endpoints() {
+    let custom = endpoint("approved-custom-endpoint", ModelClass::ChatBalanced);
+    let ranked = lookup_models(
+        &[custom],
+        &ModelQuery {
+            search: Some("approved custom".to_owned()),
+            ..Default::default()
+        },
+    );
+
+    assert_eq!(ranked.len(), 1);
+    assert_eq!(ranked[0].endpoint.name, "approved-custom-endpoint");
+    assert_eq!(ranked[0].model_class, ModelClass::ChatBalanced);
+    assert_eq!(ranked[0].score, Some(0.0));
 }
 
 #[test]
@@ -536,7 +554,7 @@ fn lookup_can_include_deprecated_models() {
     let including = lookup_models(
         &endpoints,
         &ModelQuery {
-            include_deprecated: true,
+            include_deprecated: Some(true),
             ..Default::default()
         },
     );
@@ -592,6 +610,44 @@ fn discovery_extracts_profiles_and_classifies_models() {
         endpoints[0].model_service_name.as_deref(),
         Some("system.ai.claude-sonnet-4-6")
     );
+}
+
+#[test]
+fn serialized_normalization_uses_generated_retirement_and_complete_metadata() {
+    let response = json!({
+        "endpoints": [{
+            "name": "databricks-gemini-2-5-pro",
+            "task": "llm/v1/chat",
+            "tags": [{"key": "display_name", "value": "Gemini Pro"}],
+            "config": {"served_entities": [{
+                "entity_name": "databricks-gemini-2-5-pro",
+                "foundation_model": {
+                    "name": "system.ai.gemini-2-5-pro",
+                    "ai_gateway_model_profile": {"quality": 5, "speed": 3, "cost": 2}
+                }
+            }]}
+        }]
+    });
+
+    let endpoints = normalize_serving_endpoints_json(&response.to_string()).unwrap();
+    let endpoint = &endpoints[0];
+
+    assert_eq!(endpoint.display_name.as_deref(), Some("Gemini Pro"));
+    assert_eq!(endpoint.family.as_deref(), Some("gemini"));
+    assert_eq!(endpoint.model_class, Some(ModelClass::ChatThinking));
+    assert_eq!(
+        endpoint.model_service_name.as_deref(),
+        Some("system.ai.gemini-2-5-pro")
+    );
+    assert_eq!(
+        endpoint.service_names.get("google").map(String::as_str),
+        Some("gemini-2.5-pro")
+    );
+    assert_eq!(
+        endpoint.reasoning_efforts,
+        reasoning_efforts_by_family("gemini-2-5-pro")
+    );
+    assert!(endpoint.status.deprecated);
 }
 
 #[tokio::test]
@@ -826,6 +882,7 @@ fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {
     ServingEndpointSummary {
         name: name.to_owned(),
         display_name: None,
+        family: None,
         task: Some("llm/v1/chat".to_owned()),
         state: None,
         description: None,
@@ -836,6 +893,7 @@ fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {
         model_service_name: None,
         reasoning_efforts: Vec::new(),
         status: ModelStatus::default(),
+        dimension: None,
     }
 }
 

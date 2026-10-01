@@ -1,5 +1,5 @@
 #!/usr/bin/env -S bun
-import { log, string } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { generateBarrels } from "../src/barrels.ts";
 import { generateOpenapi, isTsoaController } from "../src/openapi.ts";
 import { runSynth } from "../src/scaffold.ts";
@@ -16,7 +16,7 @@ if (process.argv.includes("--watch")) {
     const dirs = await generateOpenapi();
     if (dirs.length) {
       generateBarrels({ dirs });
-      logger.success(`regenerated openapi (${string.pluralize(dirs.length, "package")})`);
+      logger.success(`regenerated openapi (${stringUtils.pluralize(dirs.length, "package")})`);
     }
   });
 } else {

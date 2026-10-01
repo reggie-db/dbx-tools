@@ -45,7 +45,16 @@
       "description": "Install dependencies and update lockfile",
       "steps": [
         {
-          "exec": "uv sync && uv lock"
+          "execArgs": [
+            "uv",
+            "sync"
+          ]
+        },
+        {
+          "execArgs": [
+            "uv",
+            "lock"
+          ]
         }
       ]
     },

@@ -77,8 +77,7 @@ async function handleAuthRoute(
   gate: AuthGateApi,
   brandName: string,
 ): Promise<boolean> {
-  const prefix = tunnelGate.AUTH_PREFIX;
-  if (!path.startsWith(prefix)) return false;
+  if (!tunnelGate.isAuthPath(path)) return false;
   if (tunnelGate.wantsHostedLogin(request)) {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     response.end(
@@ -89,15 +88,8 @@ async function handleAuthRoute(
     );
     return true;
   }
-  const result = await gate.handler(await tunnelGate.webRequest(request));
-  const headers: Record<string, string | string[]> = {};
-  for (const [name, value] of result.headers.entries()) {
-    if (name.toLowerCase() !== "set-cookie") headers[name] = value;
-  }
-  const cookies = result.headers.getSetCookie();
-  if (cookies.length) headers["set-cookie"] = cookies;
-  response.writeHead(result.status, headers);
-  response.end(Buffer.from(await result.arrayBuffer()));
+  const result = await gate.handler(tunnelGate.webRequest(request));
+  await tunnelGate.sendWebResponse(response, result);
   return true;
 }
 
@@ -163,6 +155,11 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
   const onUpgrade = (request: IncomingMessage, socket: Socket, head: Buffer): void => {
     const upgradeSocket = socket as UpgradeSocket;
     upgradeSocket.destroySoon ??= () => upgradeSocket.end();
+    const path = (request.url ?? "/").split("?", 1)[0] ?? "/";
+    if (tunnelGate.isAuthPath(path)) {
+      upgradeSocket.destroy();
+      return;
+    }
     void decide(request)
       .then((action) => {
         if (action === "deny") upgradeSocket.destroy();

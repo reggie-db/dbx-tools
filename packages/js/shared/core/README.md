@@ -8,16 +8,16 @@ namespaces so call sites stay explicit:
 
 ```ts
 import {
-  async,
-  brand,
-  error,
+  asyncUtils,
+  brandUtils,
+  errorUtils,
   hash,
   http,
   json,
   log,
   net,
   object,
-  string,
+  stringUtils,
 } from "@dbx-tools/shared-core";
 ```
 
@@ -46,11 +46,11 @@ Key features:
 ## Brand Context
 
 ```ts
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 
-const context = brand.parseBrandContext({ name: "Acme Data" });
-const jsonSchema = brand.brandContextJsonSchema();
-const instructions = brand.brandContextPrompt(context);
+const context = brandUtils.parseBrandContext({ name: "Acme Data" });
+const jsonSchema = brandUtils.brandContextJsonSchema();
+const instructions = brandUtils.brandContextPrompt(context);
 ```
 
 `BrandContextSchema` validates identity, theme-aware assets, colors,
@@ -62,7 +62,7 @@ to discover and read YAML/JSON files, and
 ## Async Control
 
 ```ts
-for await (const status of async.poll(fetchStatus, {
+for await (const status of asyncUtils.poll(fetchStatus, {
   intervalMs: 250,
   timeoutMs: 30_000,
   predicate: (s) => s !== "READY",
@@ -70,11 +70,11 @@ for await (const status of async.poll(fetchStatus, {
   render(status);
 }
 
-await async.sleep(500, abortSignal);
+await asyncUtils.sleep(500, abortSignal);
 ```
 
-`async.poll()` is useful for Databricks APIs that expose long-running state.
-`async.tieAbortSignal()` and `async.sleep()` let route handlers connect caller
+`asyncUtils.poll()` is useful for Databricks APIs that expose long-running state.
+`asyncUtils.tieAbortSignal()` and `asyncUtils.sleep()` let route handlers connect caller
 cancellation to background work.
 
 ## Error Handling
@@ -83,14 +83,14 @@ cancellation to background work.
 try {
   await run();
 } catch (err) {
-  logger.warn("run failed", { error: error.errorMessage(err) });
-  const ctx = error.errorContext(err);
+  logger.warn("run failed", { error: errorUtils.errorMessage(err) });
+  const ctx = errorUtils.errorContext(err);
   return Response.json({ message: ctx.message }, { status: ctx.status ?? 500 });
 }
 ```
 
-`error.toError()`, `error.errorMessage()`, `error.errorMessages()`, and
-`error.errorNodes()` normalize unknown thrown values. `error.errorContext()`
+`errorUtils.toError()`, `errorUtils.errorMessage()`, `errorUtils.errorMessages()`, and
+`errorUtils.errorNodes()` normalize unknown thrown values. `errorUtils.errorContext()`
 extracts HTTP-ish status/message detail from nested errors.
 
 ## Hashes And Ids
@@ -127,26 +127,26 @@ reading a file this repo generated itself.
 ## Strings And Descriptions
 
 ```ts
-const slug = string.toSlug("My Cool Project!");
-const id = string.toIdentifierWithOptions({ delimiter: "_" }, "Model Name");
-const unique = string.toUniqueSlug("Send Email", { fallbackPrefix: "tool" });
-const description = string.toDescription([
+const slug = stringUtils.toSlug("My Cool Project!");
+const id = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, "Model Name");
+const unique = stringUtils.toUniqueSlug("Send Email", { fallbackPrefix: "tool" });
+const description = stringUtils.toDescription([
   "Answer with SQL first.",
   { "When data is missing": "Say what is missing." },
 ]);
 ```
 
-`string.tokenize()`, `toSlug()`, and `toIdentifier()` keep package names, tool
+`stringUtils.tokenize()`, `toSlug()`, and `toIdentifier()` keep package names, tool
 ids, schema ids, and generated labels consistent. `toDescription()` turns nested
 description data into prompt/tool text without hand-concatenating paragraphs.
 
 Three helpers exist so call sites stop re-implementing them:
 
 ```ts
-const label = string.toLabel("web_search"); // "Web Search"
-const name = string.capitalize(segment); // no charAt(0).toUpperCase() idiom
-const host = string.trimToEmpty(parsed.host); // unknown JSON field -> string
-const allowed = string.parseList(process.env.ALLOWED_URLS);
+const label = stringUtils.toLabel("web_search"); // "Web Search"
+const name = stringUtils.capitalize(segment); // no charAt(0).toUpperCase() idiom
+const host = stringUtils.trimToEmpty(parsed.host); // unknown JSON field -> string
+const allowed = stringUtils.parseList(process.env.ALLOWED_URLS);
 ```
 
 `toLabel()` and `capitalize()` are the humanizers for identifiers and path
@@ -325,7 +325,7 @@ parse IPv4 and IPv6 into a shared bigint comparison model.
 ## Allow-List Patterns
 
 ```ts
-// One matcher from a config array OR a delimited env string.
+// One matcher from a config array OR a delimited env stringUtils.
 const forwardable = pattern.toPatternMatcher(["x-mastra-*", "/^x-trace-/", "x-tenant"]);
 
 forwardable("x-mastra-model"); // true  (glob)
@@ -337,7 +337,7 @@ forwardable("x-forwarded-user"); // false
 Every configurable allow-list in this repo takes the same three shapes, so the
 compilation lives here once: a `/regex/` literal (with optional flags), a
 shell-style glob (`*`, `?`, anchored at both ends, all other characters escaped),
-or a literal compared whole-string. Matching is case-insensitive by default -
+or a literal compared whole-stringUtils. Matching is case-insensitive by default -
 what HTTP header names and email addresses both want - and `caseSensitive` opts
 out.
 
@@ -366,12 +366,12 @@ the request.
 ## Memoization
 
 ```ts
-const getRanges = functionModule.memoize(fetchRanges, {
+const getRanges = functionUtils.memoize(fetchRanges, {
   ttlMs: 24 * 60 * 60 * 1000,
 });
 ```
 
-`functionModule.memoize()` caches sync or async factories, evicts rejected
+`functionUtils.memoize()` caches sync or async factories, evicts rejected
 promises, and supports TTL-based refresh. It is useful for public metadata feeds,
 SDK catalogues, and expensive computed constants.
 
@@ -397,11 +397,11 @@ when disabled.
 
 ## Modules
 
-- `async` - polling, sleep, and abort-signal wiring.
-- `error` - unknown-error normalization and HTTP-ish error context.
+- `asyncUtils` - polling, sleep, and abort-signal wiring.
+- `errorUtils` - unknown-error normalization and HTTP-ish error context.
 - `hash` - ids, FNV hashes, and base32 encoding.
 - `json` - non-throwing `parse()` and record-narrowing `parseRecord()`.
-- `string` - tokenization, slugs, identifiers, human labels, string coercion,
+- `stringUtils` - tokenization, slugs, identifiers, human labels, string coercion,
   config lists, descriptions, pluralization, and HTML escaping.
 - `object` - record checks, number/boolean/date/duration coercion, present-only
   field spreading, deep equality, JSON-round-trip guards
@@ -414,6 +414,6 @@ when disabled.
 - `execution` - direct executor fallback, cancellation merging, and result unwrapping.
 - `net` - URL building, email parsing, path matching, IP/CIDR helpers.
 - `token` - JWT payload and scope readers.
-- `functionModule` - memoization.
+- `functionUtils` - memoization.
 - `log` - tagged leveled logging.
-- `brand` - Zod schema, defaults, JSON Schema, and LLM prompt serialization.
+- `brandUtils` - Zod schema, defaults, JSON Schema, and LLM prompt serialization.

@@ -23,7 +23,7 @@
  */
 
 import { log } from "@dbx-tools/shared-core";
-import type { activity as sharedActivity } from "@dbx-tools/shared-teams";
+import type { teamsActivity } from "@dbx-tools/shared-teams";
 
 const logger = log.logger("teams:connector");
 
@@ -62,7 +62,7 @@ const activitiesUrl = (target: ConnectorTarget): string => {
  * sees in the channel.
  */
 export const sendActivity = async (
-  activity: sharedActivity.Activity,
+  activity: teamsActivity.Activity,
   target: ConnectorTarget,
 ): Promise<string | undefined> => {
   const response = await fetch(activitiesUrl(target), {

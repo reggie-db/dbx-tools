@@ -4,19 +4,9 @@
  * @module
  */
 import { existsSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
-import { functionModule } from "@dbx-tools/shared-core";
-
-async function gitToplevel(): Promise<string | undefined> {
-  const { exitCode, stdout } = await exec.spawn("git", ["rev-parse", "--show-toplevel"], {
-    stdout: "capture",
-    stderr: "ignore",
-    stdin: "ignore",
-  });
-  if (exitCode !== 0) return undefined;
-  return stdout || undefined;
-}
+import { basename, join, resolve } from "node:path";
+import { projectUtils } from "@dbx-tools/core";
+import { functionUtils } from "@dbx-tools/shared-core";
 
 /**
  * Walk upward from `startDir` for `.projenrc.ts`. If none is found, try git
@@ -24,17 +14,8 @@ async function gitToplevel(): Promise<string | undefined> {
  * `resolve(startDir)` (which may not be a workspace root).
  */
 export async function findWorkspaceRoot(startDir: string = process.cwd()): Promise<string> {
-  let dir = resolve(startDir);
-  while (true) {
-    if (existsSync(join(dir, ".projenrc.ts"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-
-  const fromGit = await gitToplevel();
-  if (fromGit && existsSync(join(fromGit, ".projenrc.ts"))) return fromGit;
-
+  const discovered = projectUtils.root(startDir);
+  if (discovered && existsSync(join(discovered, ".projenrc.ts"))) return discovered;
   return resolve(startDir);
 }
 
@@ -71,7 +52,7 @@ export function needsToolchain(root: string): boolean {
 }
 
 /** Async, memoized root lookup from the process cwd at first use. */
-export const workspaceRoot = functionModule.memoize(() => findWorkspaceRoot());
+export const workspaceRoot = functionUtils.memoize(() => findWorkspaceRoot());
 
 /** Short label for log output (`basename` of the resolved root). */
 export function rootLabel(root: string): string {

@@ -1,4 +1,4 @@
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import {
   Badge,
   BrandPicker,
@@ -17,7 +17,7 @@ const SITE_PRESETS: readonly BrandPreset[] = [
     id: "dbx-tools",
     label: "dbx tools",
     description: "Navy with green accent",
-    context: brand.defaultBrandContext,
+    context: brandUtils.defaultBrandContext,
   },
   {
     id: "lakehouse",
@@ -131,8 +131,8 @@ const campaignBrand = {
 };
 
 interface BrandPageProps {
-  value: brand.BrandContext;
-  onChange: (value: brand.BrandContext) => void;
+  value: brandUtils.BrandContext;
+  onChange: (value: brandUtils.BrandContext) => void;
 }
 
 const BrandPage = ({ value, onChange }: BrandPageProps) => {

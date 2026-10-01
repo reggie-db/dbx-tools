@@ -1,8 +1,8 @@
 #!/usr/bin/env -S bun
 /**
- * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run]`
+ * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]`
  * - verify every workspace member and the Bun lock carry the release version,
- * then publish each package owned by the standard Node release with `bun publish`.
+ * then pack and publish each package owned by the standard Node release.
  *
  * Bun has no `pnpm -r publish`, so this loop is the recursive-publish stand-in.
  * It leans on native bun for everything bun already does:
@@ -26,14 +26,15 @@
  *     its `#!/usr/bin/env node` shebang, node chokes on the `.ts`
  *     (ERR_UNKNOWN_FILE_EXTENSION). We merge `publishConfig` onto the top-level
  *     manifest before packing so the tarball advertises the compiled `lib/` tree;
- *   - **compiled output** is emitted once, before publishing, by one root-level
+ *   - **compiled output** is emitted once, before packing, by one root-level
  *     filtered `bun run` that fans out to every publishable member in parallel.
- *     The later `bun publish --ignore-scripts` calls therefore pack the already
- *     compiled `lib/` trees instead of serially repeating each member's
- *     `prepack`. Packages retain their `prepack` task for standalone publishes.
- *   - **release recovery** packs each exact version before upload and compares
- *     its integrity and repository identity with registry metadata. A matching
- *     immutable version is skipped, while any mismatch fails the retry.
+ *     Every package is then packed once with lifecycle scripts disabled. The
+ *     exact validated archive is passed to `bun publish`, so upload never
+ *     repacks or repeats a member's `prepack`. Packages retain `prepack` for
+ *     standalone publishes.
+ *   - **release recovery** compares each packed archive's integrity and
+ *     repository identity with registry metadata. A matching immutable version
+ *     is skipped, while any mismatch fails the retry.
  *
  * `--dry-run` forwards to `bun publish`: it packs + validates
  * but uploads nothing, so the `release` workflow is testable end-to-end via a
@@ -63,8 +64,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
-import { log } from "@dbx-tools/shared-core";
+import { asyncUtils, log } from "@dbx-tools/shared-core";
 import ts from "typescript";
 import { parse } from "yaml";
 import {
@@ -73,9 +73,11 @@ import {
   publishedNpmRelease,
   readNpmArchiveIdentity,
 } from "./publish-npm.ts";
+import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
+import { toPosix } from "../src/packages.ts";
 import type { ReleasePlan } from "../src/release-plan.ts";
 
-const logger = log.logger("dbx-tools:publish");
+const logger = log.logger("projen:publish");
 
 /** A manifest's on-disk bytes + mode, captured before this task edits it. */
 interface ManifestBackup {
@@ -115,7 +117,7 @@ function manifestsMatchVersions(
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
       version?: string;
     };
-    const path = dir.slice(resolve(root).length + 1).replaceAll("\\", "/");
+    const path = toPosix(dir.slice(resolve(root).length + 1));
     return pkg.version === expected.get(path);
   });
 }
@@ -134,60 +136,12 @@ function lockfileMatchesManifestVersions(root: string, members: readonly string[
       const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
         version?: string;
       };
-      const relative = dir
-        .slice(resolve(root).length + 1)
-        .split("\\")
-        .join("/");
+      const relative = toPosix(dir.slice(resolve(root).length + 1));
       return lock.workspaces?.[relative]?.version === manifest.version;
     });
   } catch {
     return false;
   }
-}
-
-/** Spawn `command` in `cwd` with `PATH` overridden, failing the task on non-zero. */
-function run(cwd: string, command: string, args: string[], path: string): void {
-  const executable = command === "bun" && process.versions.bun ? process.execPath : command;
-  exec.spawnSync(executable, args, {
-    cwd,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "ignore",
-    check: true,
-    env: { ...process.env, PATH: path },
-  });
-}
-
-/** Asynchronous counterpart used for bounded parallel stamping and publishing. */
-async function runAsync(cwd: string, command: string, args: string[], path: string): Promise<void> {
-  const executable = command === "bun" && process.versions.bun ? process.execPath : command;
-  await exec.spawn(executable, args, {
-    cwd,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "ignore",
-    check: true,
-    env: { ...process.env, PATH: path },
-  });
-}
-
-/** Run independent jobs with a small fixed worker pool. */
-async function runConcurrent<T>(
-  values: readonly T[],
-  concurrency: number,
-  worker: (value: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  const results = await Promise.allSettled(
-    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-      while (next < values.length) {
-        const value = values[next++];
-        await worker(value);
-      }
-    }),
-  );
-  const failure = results.find((result) => result.status === "rejected");
-  if (failure?.status === "rejected") throw failure.reason;
 }
 
 /**
@@ -227,6 +181,14 @@ function restoreManifests(): void {
 
 /** Entry-point fields projen writes as `.ts` source in-repo and rewrites to `lib/` for publish. */
 const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const;
+
+/** Compiled files referenced by a publishConfig entry-point tree. */
+function compiledPublishTargets(value: unknown): string[] {
+  if (typeof value === "string") return value.startsWith("./lib/") ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap(compiledPublishTargets);
+  if (!value || typeof value !== "object") return [];
+  return Object.values(value).flatMap(compiledPublishTargets);
+}
 
 /**
  * Fold a package's `publishConfig` entry-point fields onto the top-level manifest,
@@ -272,13 +234,14 @@ const plan =
     : undefined;
 if (!version && !plan) {
   logger.error(
-    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run]",
+    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]",
   );
   process.exit(1);
 }
 const registryIdx = rest.indexOf("--registry");
 const registry = registryIdx >= 0 ? rest[registryIdx + 1] : undefined;
 const dryRun = rest.includes("--dry-run");
+const skipCompile = rest.includes("--skip-compile");
 const concurrencyIdx = rest.indexOf("--concurrency");
 const parsedConcurrency = Number(concurrencyIdx >= 0 ? rest[concurrencyIdx + 1] : 4);
 if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
@@ -302,15 +265,10 @@ const allMembers = workspaceMembers(root)
 const expectedVersions = new Map(
   plan
     ? plan.nodePackages.map((pkg) => [pkg.path, pkg.version] as const)
-    : allMembers.map((dir) => [
-        dir.slice(resolve(root).length + 1).replaceAll("\\", "/"),
-        version!,
-      ]),
+    : allMembers.map((dir) => [toPosix(dir.slice(resolve(root).length + 1)), version!]),
 );
 const members = plan
-  ? allMembers.filter((dir) =>
-      expectedVersions.has(dir.slice(resolve(root).length + 1).replaceAll("\\", "/")),
-    )
+  ? allMembers.filter((dir) => expectedVersions.has(toPosix(dir.slice(resolve(root).length + 1))))
   : allMembers;
 
 if (!manifestsMatchVersions(root, members, expectedVersions)) {
@@ -328,12 +286,10 @@ if (lockfileMatchesManifestVersions(root, allMembers)) {
 } else {
   if (existsSync(lockfile)) rmSync(lockfile);
   logger.info("refreshing lockfile so workspace deps resolve to the release version");
-  run(root, "bun", ["install"], path);
+  runTaskCommand(root, "bun", ["install"], { env: { ...process.env, PATH: path } });
 }
 
 const publishArgs = [
-  "--access",
-  "public",
   "--ignore-scripts",
   ...(registry ? ["--registry", registry] : []),
   ...(dryRun ? ["--dry-run"] : []),
@@ -343,6 +299,8 @@ const publishable: Array<{
   name: string;
   version: string;
   compile: boolean;
+  compiledTargets: string[];
+  access?: "public" | "restricted";
 }> = [];
 for (const dir of members) {
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
@@ -350,7 +308,7 @@ for (const dir of members) {
     version?: string;
     private?: boolean;
     dbxToolsConfig?: { uniffi?: boolean };
-    scripts?: Record<string, string>;
+    publishConfig?: { access?: unknown };
   };
   if (pkg.private) {
     logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
@@ -361,18 +319,46 @@ for (const dir of members) {
     continue;
   }
   if (!pkg.version) throw new Error(`Missing package version for ${pkg.name ?? dirname(dir)}`);
+  const access = pkg.publishConfig?.access;
+  if (access !== undefined && access !== "public" && access !== "restricted") {
+    throw new Error(
+      `${pkg.name ?? dirname(dir)} has invalid publishConfig.access ${String(access)}`,
+    );
+  }
+  const compiledTargets = [...new Set(compiledPublishTargets(pkg.publishConfig))];
   publishable.push({
     dir,
     name: pkg.name ?? dirname(dir),
     version: pkg.version,
-    compile: Boolean(pkg.scripts && typeof pkg.scripts === "object" && "prepack" in pkg.scripts),
+    compile: compiledTargets.length > 0,
+    compiledTargets,
+    ...(access ? { access } : {}),
   });
 }
 
 const compiled = publishable.filter((pkg) => pkg.compile);
 if (compiled.length > 0) {
-  logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
-  run(root, "bun", ["run", ...compiled.flatMap((pkg) => ["--filter", pkg.name]), "compile"], path);
+  if (skipCompile) {
+    const missing = compiled.flatMap((pkg) =>
+      pkg.compiledTargets
+        .filter((target) => !existsSync(resolve(pkg.dir, target)))
+        .map((target) => `${pkg.name}:${target}`),
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `--skip-compile requires validated compiled output; missing ${missing.join(", ")}`,
+      );
+    }
+    logger.info(`reusing validated compiled output for ${compiled.length} publishable packages`);
+  } else {
+    logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
+    runTaskCommand(
+      root,
+      "bun",
+      ["run", ...compiled.flatMap((pkg) => ["--filter", pkg.name]), "compile"],
+      { env: { ...process.env, PATH: path } },
+    );
+  }
 }
 
 // Compile against workspace source exports first. Switching manifests to their
@@ -387,9 +373,10 @@ for (const { dir } of publishable) {
 logger.info(
   `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
-await runConcurrent(publishable, concurrency, async ({ dir, name, version: packageVersion }) => {
-  if (!dryRun) {
-    const packed = mkdtempSync(join(tmpdir(), "dbx-tools-npm-release-"));
+await asyncUtils.mapConcurrent(
+  publishable,
+  async ({ dir, name, version: packageVersion, access }) => {
+    const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));
     try {
       const archive = packNpmPackage(dir, packed, path);
       const local = readNpmArchiveIdentity(archive);
@@ -398,16 +385,29 @@ await runConcurrent(publishable, concurrency, async ({ dir, name, version: packa
           `Packed npm identity ${local.name}@${local.version} does not match ${name}@${packageVersion}`,
         );
       }
-      const published = await publishedNpmRelease(local.name, local.version, registry);
-      if (npmReleaseMatches(local, published)) {
-        logger.info(`skip published ${name} @ ${packageVersion}`);
-        return;
+      if (local.access !== access) {
+        throw new Error(
+          `Packed npm access ${String(local.access)} does not match ${String(access)} for ${name}`,
+        );
       }
+      if (!dryRun) {
+        const published = await publishedNpmRelease(local.name, local.version, registry);
+        if (npmReleaseMatches(local, published)) {
+          logger.info(`skip published ${name} @ ${packageVersion}`);
+          return;
+        }
+      }
+      logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
+      await runTaskCommandAsync(
+        dir,
+        "bun",
+        ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
+        { env: { ...process.env, PATH: path } },
+      );
     } finally {
       rmSync(packed, { recursive: true, force: true });
     }
-  }
-  logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
-  await runAsync(dir, "bun", ["publish", ...publishArgs], path);
-});
+  },
+  { concurrency, errorMode: "settle" },
+);
 logger.success(`${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages`);

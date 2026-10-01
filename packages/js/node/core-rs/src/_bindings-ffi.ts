@@ -310,6 +310,11 @@ const DEFINITIONS = {
       ret: FfiType.Void,
       hasRustCallStatus: false,
     },
+    "uniffi_dbx_tools_core_fn_func_advisory_lock_id": {
+      args: [FfiType.RustBuffer],
+      ret: FfiType.Int64,
+      hasRustCallStatus: true,
+    },
     "uniffi_dbx_tools_core_fn_func_canonical_scopes": {
       args: [FfiType.RustBuffer],
       ret: FfiType.RustBuffer,
@@ -352,6 +357,11 @@ const DEFINITIONS = {
     },
     "uniffi_dbx_tools_core_fn_func_is_databricks_app": {
       args: [],
+      ret: FfiType.Int8,
+      hasRustCallStatus: true,
+    },
+    "uniffi_dbx_tools_core_fn_func_is_databricks_app_environment": {
+      args: [FfiType.RustBuffer],
       ret: FfiType.Int8,
       hasRustCallStatus: true,
     },
@@ -460,6 +470,11 @@ const DEFINITIONS = {
       ret: FfiType.UInt32,
       hasRustCallStatus: false,
     },
+    "uniffi_dbx_tools_core_checksum_func_advisory_lock_id": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
     "uniffi_dbx_tools_core_checksum_func_canonical_scopes": {
       args: [],
       ret: FfiType.UInt16,
@@ -501,6 +516,11 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_core_checksum_func_is_databricks_app": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -764,6 +784,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_core_fn_clone_storagehandle(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): bigint;
     uniffi_dbx_tools_core_fn_free_storagehandle(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     uniffi_dbx_tools_core_fn_init_callback_vtable_storageadapter(vtable: UniffiVTableCallbackInterfaceDbxToolsCoreStorageAdapter): void;
+    uniffi_dbx_tools_core_fn_func_advisory_lock_id(canonicalParts: Uint8Array, uniffi_out_err: UniffiRustCallStatus): bigint;
     uniffi_dbx_tools_core_fn_func_canonical_scopes(scopes: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_func_create_persistent_auth(options: Uint8Array, storage: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_func_create_persistent_auth_with_storage(options: Uint8Array, storage: bigint): bigint;
@@ -773,6 +794,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_core_fn_func_credential_key(provider: Uint8Array, profile: Uint8Array, scopes: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_func_databricks_cli_available(uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_core_fn_func_is_databricks_app(uniffi_out_err: UniffiRustCallStatus): number;
+    uniffi_dbx_tools_core_fn_func_is_databricks_app_environment(environment: Uint8Array, uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_core_fn_func_parse_address(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_func_parse_resource_path(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_method_persistentauth_authorization_header_for_url(uniffiSelf: bigint, requestUrl: Uint8Array, login: Uint8Array): bigint;
@@ -794,6 +816,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_core_fn_method_storageadapter_release_lock(uniffiSelf: bigint, lease: Uint8Array): bigint;
     uniffi_dbx_tools_core_fn_method_storageadapter_name(uniffiSelf: bigint, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ffi_dbx_tools_core_uniffi_contract_version(): number;
+    uniffi_dbx_tools_core_checksum_func_advisory_lock_id(): number;
     uniffi_dbx_tools_core_checksum_func_canonical_scopes(): number;
     uniffi_dbx_tools_core_checksum_func_create_persistent_auth(): number;
     uniffi_dbx_tools_core_checksum_func_create_persistent_auth_with_storage(): number;
@@ -803,6 +826,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_core_checksum_func_credential_key(): number;
     uniffi_dbx_tools_core_checksum_func_databricks_cli_available(): number;
     uniffi_dbx_tools_core_checksum_func_is_databricks_app(): number;
+    uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment(): number;
     uniffi_dbx_tools_core_checksum_func_parse_address(): number;
     uniffi_dbx_tools_core_checksum_func_parse_resource_path(): number;
     uniffi_dbx_tools_core_checksum_method_persistentauth_authorization_header_for_url(): number;

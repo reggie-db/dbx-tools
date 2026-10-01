@@ -6,8 +6,10 @@
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { exec } from "@dbx-tools/core";
-import { json, log, object, string } from "@dbx-tools/shared-core";
+import * as exec from "@dbx-tools/core/exec";
+import * as projectUtils from "@dbx-tools/core/project-utils";
+import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { captureTaskCommand } from "../src/_task-command.ts";
 import {
   RELEASE_SUMMARY_PROVIDER_NAMES,
   releaseSummaryFile,
@@ -84,30 +86,23 @@ export type ReleaseSummaryRunner = (
 ) => string | undefined | Promise<string | undefined>;
 
 function capture(root: string, command: string, args: string[]): string {
-  const result = exec.spawnSync(command, args, {
-    cwd: root,
-    stdout: "capture",
-    stderr: "ignore",
-    stdin: "ignore",
-    check: false,
-  });
-  return result.exitCode === 0 ? (result.stdout?.trim() ?? "") : "";
+  return captureTaskCommand(root, command, args);
 }
 
 function contentText(value: unknown): string | undefined {
-  if (typeof value === "string") return string.trimToNull(value) ?? undefined;
+  if (typeof value === "string") return stringUtils.trimToNull(value) ?? undefined;
   if (!Array.isArray(value)) return undefined;
   const text = value
     .flatMap((item) => (object.isRecord(item) && typeof item.text === "string" ? [item.text] : []))
     .join("");
-  return string.trimToNull(text) ?? undefined;
+  return stringUtils.trimToNull(text) ?? undefined;
 }
 
 function eventText(event: Record<string, unknown>): string | undefined {
-  if (typeof event.result === "string") return string.trimToNull(event.result) ?? undefined;
+  if (typeof event.result === "string") return stringUtils.trimToNull(event.result) ?? undefined;
   const item = object.isRecord(event.item) ? event.item : undefined;
   if (item?.type === "agent_message" && typeof item.text === "string") {
-    return string.trimToNull(item.text) ?? undefined;
+    return stringUtils.trimToNull(item.text) ?? undefined;
   }
   const message = object.isRecord(event.message) ? event.message : undefined;
   return contentText(message?.content);
@@ -121,7 +116,7 @@ function eventType(event: Record<string, unknown>): string {
 function eventDetail(event: Record<string, unknown>): string | undefined {
   const item = object.isRecord(event.item) ? event.item : undefined;
   for (const value of [item?.message, event.message, event.error]) {
-    if (typeof value === "string") return string.trimToNull(value) ?? undefined;
+    if (typeof value === "string") return stringUtils.trimToNull(value) ?? undefined;
   }
   return undefined;
 }
@@ -129,7 +124,7 @@ function eventDetail(event: Record<string, unknown>): string | undefined {
 function eventToolName(event: Record<string, unknown>): string | undefined {
   const item = object.isRecord(event.item) ? event.item : undefined;
   for (const value of [event.tool_name, event.toolName, event.name, item?.tool_name, item?.name]) {
-    if (typeof value === "string") return string.trimToNull(value) ?? undefined;
+    if (typeof value === "string") return stringUtils.trimToNull(value) ?? undefined;
   }
   const toolCall = object.isRecord(event.tool_call)
     ? event.tool_call
@@ -185,7 +180,7 @@ async function runProvider(
       (line) => {
         const event = json.parseRecord(line);
         if (!event) {
-          const text = string.trimToNull(line);
+          const text = stringUtils.trimToNull(line);
           if (text) {
             textOutput.push(text);
             logEvent({ type: "text", text });
@@ -198,7 +193,7 @@ async function runProvider(
       },
     ],
     stderr: (line) => {
-      const message = string.trimToNull(line);
+      const message = stringUtils.trimToNull(line);
       if (message) logger.warn("provider-stderr", { provider: provider.name, message });
     },
     stdin: "ignore",
@@ -243,6 +238,7 @@ export async function selectReleaseSummary(
 }
 
 function summaryPrompt(
+  projectName: string,
   version: string,
   fromRef: string | undefined,
   commits: string,
@@ -250,7 +246,7 @@ function summaryPrompt(
   diffStat: string,
 ): string {
   return [
-    `Write a concise user-facing Markdown release summary for dbx-tools ${version}.`,
+    `Write a concise user-facing Markdown release summary for ${projectName} ${version}.`,
     "Use only the supplied Git context. Do not run commands, edit files, speculate,",
     "mention commit hashes, use emojis, or use em/en dashes.",
     "Return no title and no fenced block. Start with one short paragraph, then",
@@ -270,7 +266,12 @@ function summaryPrompt(
 }
 
 /** Deterministic fallback when every configured AI provider is unavailable. */
-function gitSummary(version: string, commits: string, changedFiles: string): string {
+function gitSummary(
+  projectName: string,
+  version: string,
+  commits: string,
+  changedFiles: string,
+): string {
   const subjects = commits
     .split("\n")
     .map((line) => line.trim())
@@ -290,7 +291,7 @@ function gitSummary(version: string, commits: string, changedFiles: string): str
     .slice(0, 12);
   const bullets = subjects.length ? subjects : areas.map((area) => `Updated ${area}`);
   return [
-    `dbx-tools ${version} contains the reviewed changes listed below.`,
+    `${projectName} ${version} contains the reviewed changes listed below.`,
     "",
     "## Changes",
     ...(bullets.length ? bullets.map((item) => `- ${item}`) : ["- Release metadata updated."]),
@@ -310,6 +311,7 @@ export async function generateReleaseSummary(options: {
   readonly providers?: readonly ReleaseSummaryProviderName[];
   readonly runner?: ReleaseSummaryRunner;
 }): Promise<string | undefined> {
+  const projectName = projectUtils.name(options.root);
   const relativeOutput =
     options.outputFile ?? releaseSummaryFile(options.version, options.component);
   const output = join(options.root, relativeOutput);
@@ -347,17 +349,26 @@ export async function generateReleaseSummary(options: {
     ...scopedPaths,
     `:(exclude)${relativeOutput}`,
   ]);
-  const customSummary = string.trimToNull(options.customSummary);
+  const customSummary = stringUtils.trimToNull(options.customSummary);
   const result = customSummary
     ? undefined
     : await selectReleaseSummary(
         options.root,
-        summaryPrompt(options.version, options.fromRef, commits, changedFiles, diffStat),
+        summaryPrompt(
+          projectName,
+          options.version,
+          options.fromRef,
+          commits,
+          changedFiles,
+          diffStat,
+        ),
         options.runner,
         options.providers,
       );
   const summary =
-    customSummary ?? result?.summary ?? gitSummary(options.version, commits, changedFiles);
+    customSummary ??
+    result?.summary ??
+    gitSummary(projectName, options.version, commits, changedFiles);
   const provider = customSummary ? "custom" : (result?.provider ?? "git");
   if (!customSummary && !result) {
     logger.info("AI providers unavailable; using Git release summary");

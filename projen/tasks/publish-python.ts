@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
 import { Command } from "commander";
 import { parse, stringify } from "smol-toml";
 import { pythonProjectInfo, stampPythonProject } from "./uniffi-python.js";
@@ -111,7 +111,7 @@ export function publishPythonProjects(options: {
   readonly plan?: ReleasePlan;
 }): void {
   const root = resolve(options.root);
-  const output = mkdtempSync(join(tmpdir(), "dbx-tools-python-publish-"));
+  const output = mkdtempSync(join(tmpdir(), "projen-python-publish-"));
   const planned = new Map(
     options.plan?.pythonPackages.map((pkg) => [pkg.path.replace(/^.*\//, ""), pkg.version]) ?? [],
   );

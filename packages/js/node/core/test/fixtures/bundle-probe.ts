@@ -7,7 +7,7 @@
  * handed to the spawn does. The parent supplies that env, so the stub is what
  * `bundleFile` actually runs.
  */
-import { bundleFile, text } from "../../src/config.ts";
+import { bundleFile, text } from "../../src/config-utils.ts";
 
 const root = process.argv[2]!;
 const keys = process.argv.slice(3);

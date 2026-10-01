@@ -29,15 +29,15 @@ const KEYS = [
   "FRP_TOKEN",
   "FRP_PROXY_NAME",
   "TUNNEL_TOKEN",
-  "DBX_TOOLS_TUNNEL_TRANSPORT",
-  "DBX_TOOLS_TUNNEL_FRP_PUBLIC_DOMAIN",
-  "DBX_TOOLS_TUNNEL_APP_PORT",
-  "DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN",
-  "DBX_TOOLS_TUNNEL_AUTH_ALLOW",
-  "DBX_TOOLS_TUNNEL_AUTH_SUBJECT",
-  "DBX_TOOLS_TUNNEL_AUTH_SESSION_TTL",
-  "DBX_TOOLS_TUNNEL_INSECURE",
-  "DBX_TOOLS_TUNNEL_FORWARD_HEADERS",
+  "TUNNEL_TRANSPORT",
+  "TUNNEL_FRP_PUBLIC_DOMAIN",
+  "TUNNEL_APP_PORT",
+  "TUNNEL_PUBLIC_DOMAIN",
+  "TUNNEL_AUTH_ALLOW",
+  "TUNNEL_AUTH_SUBJECT",
+  "TUNNEL_AUTH_SESSION_TTL",
+  "TUNNEL_INSECURE",
+  "TUNNEL_FORWARD_HEADERS",
 ];
 
 let saved: Record<string, string | undefined> = {};
@@ -69,7 +69,7 @@ describe("resolveTunnelOptions", () => {
 
   it("leaves appPort unset unless asked, so a free port is chosen at run time", () => {
     assert.equal(resolveTunnelOptions({}).appPort, undefined);
-    process.env.DBX_TOOLS_TUNNEL_APP_PORT = "4100";
+    process.env.TUNNEL_APP_PORT = "4100";
     assert.equal(resolveTunnelOptions({}).appPort, 4100);
     assert.equal(resolveTunnelOptions({ appPort: "4200" }).appPort, 4200);
   });
@@ -87,8 +87,8 @@ describe("resolveTunnelOptions", () => {
   });
 
   it("resolves gate settings from the environment when no flag is given", () => {
-    process.env.DBX_TOOLS_TUNNEL_AUTH_SUBJECT = "Env subject";
-    process.env.DBX_TOOLS_TUNNEL_AUTH_SESSION_TTL = "60";
+    process.env.TUNNEL_AUTH_SUBJECT = "Env subject";
+    process.env.TUNNEL_AUTH_SESSION_TTL = "60";
     const fromEnv = resolveTunnelOptions({});
     assert.equal(fromEnv.gate.subject, "Env subject");
     assert.equal(fromEnv.gate.sessionTtlSeconds, 60);
@@ -97,7 +97,7 @@ describe("resolveTunnelOptions", () => {
   });
 
   it("unions the allow-list across the flag and the environment", () => {
-    process.env.DBX_TOOLS_TUNNEL_AUTH_ALLOW = "ops@example.com";
+    process.env.TUNNEL_AUTH_ALLOW = "ops@example.com";
     const resolved = resolveTunnelOptions({ allow: ["databricks.com"] });
     // Deliberately a union, not an override: a deployment-wide allow-list and a
     // per-invocation `--allow` should both grant access.
@@ -106,11 +106,11 @@ describe("resolveTunnelOptions", () => {
 
   it("resolves insecure and forward-headers through the same layering", () => {
     assert.equal(resolveTunnelOptions({}).gate.insecure, false);
-    process.env.DBX_TOOLS_TUNNEL_INSECURE = "true";
+    process.env.TUNNEL_INSECURE = "true";
     assert.equal(resolveTunnelOptions({}).gate.insecure, true);
     assert.equal(resolveTunnelOptions({ insecure: true }).gate.insecure, true);
 
-    process.env.DBX_TOOLS_TUNNEL_FORWARD_HEADERS = "x-env-header";
+    process.env.TUNNEL_FORWARD_HEADERS = "x-env-header";
     const headers = resolveTunnelOptions({ forwardHeaders: ["x-flag-header"] }).gate.forwardHeaders;
     assert.deepEqual([...headers].toSorted(), ["x-env-header", "x-flag-header"]);
   });

@@ -27,12 +27,12 @@ import type {
 import {
   appkit as dbxAppkit,
   identity as appkitIdentity,
-  plugin as appkitPlugin,
-  toolkit as appkitToolkit,
+  pluginRegistry,
+  toolkitEntries,
 } from "@dbx-tools/appkit";
-import { config as coreConfig } from "@dbx-tools/core";
-import { ensureRustReleaseBinary, rustReleaseBinaryCommand } from "@dbx-tools/rust-binary";
-import { async as asyncModule, log, object } from "@dbx-tools/shared-core";
+import { configUtils } from "@dbx-tools/core";
+import { ensureReleaseBinary, releaseBinaryCommand } from "@dbx-tools/rust-binary";
+import { asyncUtils, log, object } from "@dbx-tools/shared-core";
 import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";
 import concurrently, { type Command, type ConcurrentlyResult } from "concurrently";
@@ -45,8 +45,8 @@ import {
   type ResolvedGraphitiPluginConfig,
 } from "./config.ts";
 
-const LAKEBASE_MANIFEST = appkitPlugin.data(lakebase).plugin.manifest;
-const MODEL_PROXY_RELEASE_BINARY = rustReleaseBinaryCommand("model-proxy");
+const LAKEBASE_MANIFEST = pluginRegistry.data(lakebase).plugin.manifest;
+const MODEL_PROXY_RELEASE_BINARY = releaseBinaryCommand("model-proxy");
 const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
@@ -127,7 +127,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
   private async startSidecars(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
     const [graphitiPort, modelProxyPort, proxyPort] = await distinctPorts(
-      coreConfig.port(undefined, "DATABRICKS_APP_PORT", 8000, coreConfig.ENV_ONLY),
+      configUtils.port(undefined, "DATABRICKS_APP_PORT", 8000, configUtils.ENV_ONLY),
       configured.graphitiPort,
       configured.modelProxyPort,
       configured.proxyPort,
@@ -220,7 +220,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
 
   async toolkit(options?: ToolkitOptions): Promise<Record<string, ToolkitEntry>> {
     await this.ensureMcpTools();
-    return appkitToolkit.entries("graphiti", this.getAgentTools(), options);
+    return toolkitEntries.entries("graphiti", this.getAgentTools(), options);
   }
 
   getAgentTools(): AgentToolDefinition[] {
@@ -303,7 +303,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
         return;
       } catch (error) {
         lastError = error;
-        await asyncModule.sleep(MCP_TOOL_DISCOVERY_RETRY_MS);
+        await asyncUtils.sleep(MCP_TOOL_DISCOVERY_RETRY_MS);
       }
     }
     if (this.stopping) throw new Error("Graphiti stopped before MCP tools were ready");
@@ -361,7 +361,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     ]);
     const completed = await Promise.race([
       cleanup.then(() => true),
-      asyncModule.sleep(SIDECAR_SHUTDOWN_GRACE_MS).then(() => false),
+      asyncUtils.sleep(SIDECAR_SHUTDOWN_GRACE_MS).then(() => false),
     ]);
     if (!completed) {
       this.logger.warn("sidecars ignored SIGTERM; escalating to SIGKILL");
@@ -426,7 +426,7 @@ export async function ensureGraphitiPython(
 
 /** Install the model proxy release binary used by the Python sidecar. */
 export async function ensureGraphitiModelProxy(
-  install: typeof ensureRustReleaseBinary = ensureRustReleaseBinary,
+  install: typeof ensureReleaseBinary = ensureReleaseBinary,
 ): Promise<string> {
   const installed = await install(MODEL_PROXY_RELEASE_BINARY);
   return resolvePath(installed.path);

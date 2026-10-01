@@ -22,6 +22,7 @@ import {
   addExplicitInterfaceReexports,
   addTypeScriptExtensionsToBindingImports,
   makeDefaultedInterfaceParametersOptional,
+  removeObsoleteInterfaceAliases,
 } from "../src/uniffi.ts";
 
 const { values } = parseArgs({
@@ -204,7 +205,12 @@ if (values.node) {
     ),
   );
   for (const file of generatedFiles) {
-    writeFileSync(file, makeDefaultedInterfaceParametersOptional(readFileSync(file, "utf8")));
+    writeFileSync(
+      file,
+      removeObsoleteInterfaceAliases(
+        makeDefaultedInterfaceParametersOptional(readFileSync(file, "utf8")),
+      ),
+    );
   }
   writeFileSync(
     nodeBindings,

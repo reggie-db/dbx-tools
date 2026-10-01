@@ -25,6 +25,25 @@ function run(command: string, args: string[], cwd: string): void {
   });
 }
 
+function pack(directory: string, archives: string): string {
+  const existing = new Set(readdirSync(archives));
+  const manifestPath = join(directory, "package.json");
+  const manifest = readFileSync(manifestPath);
+  const manifestMode = statSync(manifestPath).mode;
+  chmodSync(manifestPath, 0o644);
+  try {
+    run(bun, ["pm", "pack", "--ignore-scripts", "--destination", archives], directory);
+  } finally {
+    writeFileSync(manifestPath, manifest);
+    chmodSync(manifestPath, manifestMode);
+  }
+  const created = readdirSync(archives).filter(
+    (file) => file.endsWith(".tgz") && !existing.has(file),
+  );
+  assert.equal(created.length, 1, `expected one archive from ${directory}`);
+  return join(archives, created[0]!);
+}
+
 it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 }, () => {
   const temporaryRoot = mkdtempSync(join(tmpdir(), "dbx-tools-appkit-consumer-"));
   const archives = join(temporaryRoot, "archives");
@@ -34,19 +53,14 @@ it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 
 
   try {
     run(bun, ["run", "compile"], packageRoot);
-    const manifestPath = join(packageRoot, "package.json");
-    const manifest = readFileSync(manifestPath);
-    const manifestMode = statSync(manifestPath).mode;
-    chmodSync(manifestPath, 0o644);
-    try {
-      run(bun, ["pm", "pack", "--ignore-scripts", "--destination", archives], packageRoot);
-    } finally {
-      writeFileSync(manifestPath, manifest);
-      chmodSync(manifestPath, manifestMode);
-    }
-    const archive = join(
-      archives,
-      readdirSync(archives).find((file) => file.endsWith(".tgz"))!,
+    const packageArchives = {
+      "@dbx-tools/core-rs": pack(resolve(packageRoot, "../core-rs"), archives),
+      "@dbx-tools/shared-core": pack(resolve(packageRoot, "../../shared/core"), archives),
+      "@dbx-tools/core": pack(resolve(packageRoot, "../core"), archives),
+      "@dbx-tools/appkit": pack(packageRoot, archives),
+    };
+    const internalDependencies = Object.fromEntries(
+      Object.entries(packageArchives).map(([name, archive]) => [name, `file:${archive}`]),
     );
     writeFileSync(
       join(consumer, "package.json"),
@@ -58,13 +72,17 @@ it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 
           dependencies: {
             "@databricks/appkit": "0.81.0",
             "@databricks/appkit-ui": "0.81.0",
-            "@dbx-tools/appkit": `file:${archive}`,
+            ...internalDependencies,
             react: "~19.2.4",
             "react-dom": "~19.2.4",
             vitest: "^3.2.4",
           },
+          overrides: Object.fromEntries(
+            Object.entries(internalDependencies).filter(([name]) => name !== "@dbx-tools/appkit"),
+          ),
           devDependencies: {
             "@types/bun": "1.3.14",
+            "@types/proper-lockfile": "^4.1.4",
             "@types/react": "^19.2.2",
             "@types/react-dom": "^19.2.2",
             tailwindcss: "^4.3.2",

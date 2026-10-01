@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -19,7 +19,6 @@ export * as mlflow from "./src/mlflow.ts";
 export * as model from "./src/model.ts";
 export * as montySandbox from "./src/monty-sandbox.ts";
 export * as observability from "./src/observability.ts";
-export * as pagination from "./src/pagination.ts";
 export * as plugin from "./src/plugin.ts";
 export * as processors from "./src/processors.ts";
 export * as remoteSkills from "./src/remote-skills.ts";
@@ -59,7 +58,6 @@ export type { BuildModelOverrides } from "./src/model.ts";
 export { MontySandbox } from "./src/monty-sandbox.ts";
 export type { MontySandboxOptions } from "./src/monty-sandbox.ts";
 export type { BuildObservabilityOptions } from "./src/observability.ts";
-export type { PerPageBounds } from "./src/pagination.ts";
 export { MastraPlugin, mastra } from "./src/plugin.ts";
 export { stripStaleChartsProcessor } from "./src/processors.ts";
 export { AITOOLS_SOURCE } from "./src/remote-skills.ts";

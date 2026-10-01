@@ -1,4 +1,4 @@
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import type { BundledLanguage, BundledTheme } from "shiki";
 import type { HighlighterCore } from "shiki/core";
 import type { CodeHighlighterPlugin } from "streamdown";
@@ -59,7 +59,7 @@ function highlightTokens(h: HighlighterCore, code: string, language: BundledLang
 }
 
 /** Escape HTML-significant characters (from the shared string utils). */
-const escapeHtml = string.escapeHtml;
+const escapeHtml = stringUtils.escapeHtml;
 
 /**
  * Highlight `code` into minimal inline HTML: one colored `<span>` per

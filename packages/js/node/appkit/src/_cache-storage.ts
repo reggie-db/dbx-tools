@@ -17,22 +17,10 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createLakebasePool, getWorkspaceClient, type CacheConfig } from "@databricks/appkit";
-import { error, hash, log } from "@dbx-tools/shared-core";
+import { errorUtils, hash, log } from "@dbx-tools/shared-core";
+import { handleOwnershipMigrationError } from "./migration.ts";
 
 const logger = log.logger("cache-storage");
-
-/** Process-wide dedupe for soft migration warnings. */
-const loggedMigrationErrors = new Set<string>();
-
-/** Whether `LOG_LEVEL` is currently at or below debug. */
-function isDebugEnabled(): boolean {
-  return log.isLevelEnabled("debug");
-}
-
-/** Whether a migration failed only because this role does not own an existing object. */
-function isOwnershipMigrationError(err: unknown): boolean {
-  return error.errorContext(err).hasMessage("must be owner");
-}
 
 type LakebasePool = ReturnType<typeof createLakebasePool>;
 type CacheStorage = NonNullable<CacheConfig["storage"]>;
@@ -77,7 +65,7 @@ export function loadPersistentStorage(): PersistentStorageConstructor | undefine
     return loaded;
   } catch (err) {
     logger.debug("soft persistent cache skipped (PersistentStorage unavailable)", {
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
     persistentStorageCtor = undefined;
     return undefined;
@@ -125,15 +113,14 @@ export function softenInitialize(
       try {
         if (!(await skipMigrations?.())) await originalInitialize();
       } catch (err) {
-        if (!isOwnershipMigrationError(err)) throw err;
-        const message = error.errorMessage(err);
-        if (!loggedMigrationErrors.has(message)) {
-          loggedMigrationErrors.add(message);
-          if (isDebugEnabled()) {
-            logger.error("persistent cache migration failed", err);
-          } else {
-            logger.warn("persistent cache migration failed", { error: message });
-          }
+        if (
+          !handleOwnershipMigrationError(err, {
+            scope: "cache-storage",
+            logger,
+            event: "persistent cache migration failed",
+          })
+        ) {
+          throw err;
         }
       }
     })();
@@ -189,7 +176,7 @@ export async function createSoftPersistentStorage(
     return storage;
   } catch (err) {
     logger.debug("soft persistent cache unavailable", {
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
     if (pool) {
       await pool.end().catch(() => {});

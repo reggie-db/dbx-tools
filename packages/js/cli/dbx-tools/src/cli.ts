@@ -12,6 +12,11 @@
  * @module
  */
 import { basename } from "node:path";
+import {
+  runReleaseBinary,
+  releaseBinaryCommands,
+  type ReleaseBinaryCommand,
+} from "@dbx-tools/rust-binary";
 import { Command } from "commander";
 import {
   bootstrapWorkspace,
@@ -21,11 +26,6 @@ import {
 } from "./bootstrap.ts";
 import { ensureWorkspaceReady, runBun, runProjen } from "./bun.ts";
 import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root.ts";
-import {
-  runRustReleaseBinary,
-  rustReleaseBinaryCommands,
-  type RustReleaseBinaryCommand,
-} from "./rust-binary.ts";
 
 /** Commands the bin exposes, and the names help is rendered under. */
 const PROGRAM_NAMES = ["dbx", "dbx-tools"] as const;
@@ -86,7 +86,7 @@ function addForwardedCommand(
     });
 }
 
-function addRustReleaseCommand(program: Command, command: RustReleaseBinaryCommand): void {
+function addReleaseCommand(program: Command, command: ReleaseBinaryCommand): void {
   program
     .command(command.command)
     .description(command.description)
@@ -95,7 +95,7 @@ function addRustReleaseCommand(program: Command, command: RustReleaseBinaryComma
     .allowExcessArguments()
     .helpOption(false)
     .action(async (args: string[]) => {
-      process.exitCode = await runRustReleaseBinary(command, args);
+      process.exitCode = await runReleaseBinary(command, args);
     });
 }
 
@@ -141,8 +141,8 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
   );
 
-  for (const command of rustReleaseBinaryCommands()) {
-    addRustReleaseCommand(program, command);
+  for (const command of releaseBinaryCommands()) {
+    addReleaseCommand(program, command);
   }
 
   return program;

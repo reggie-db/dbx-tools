@@ -11,9 +11,11 @@
     <title>Model proxy metrics</title>
     <link rel="icon" href="/metrics/assets/favicon.svg" />
     <link rel="stylesheet" href="/metrics/vendor/gridstack.min.css" />
+    <link rel="stylesheet" href="/metrics/vendor/uPlot.min.css" />
     <link rel="stylesheet" href="/metrics/brand.0b7222df.css" />
-    <link rel="stylesheet" href="/metrics/app.9f4c1e2a.css" />
+    <link rel="stylesheet" href="/metrics/app.20cfdf0a.css" />
     <script src="/metrics/vendor/gridstack-all.js" defer></script>
+    <script src="/metrics/vendor/uPlot.iife.min.js" defer></script>
     <script src="/metrics/app.js" defer></script>
   </head>
   <body>
@@ -47,8 +49,9 @@
             </select>
           </label>
           <div class="range-control" role="group" aria-label="Time range">
-            <button type="button" data-range="1">1h</button>
-            <button type="button" data-range="6" aria-pressed="true">6h</button>
+            <button type="button" data-range="0.25">15m</button>
+            <button type="button" data-range="1" aria-pressed="true">1h</button>
+            <button type="button" data-range="6">6h</button>
             <button type="button" data-range="24">24h</button>
           </div>
           <button
@@ -78,13 +81,13 @@
 
       <section class="grid-stack" id="metrics-grid" aria-label="Resizable metrics widgets">
         <div class="grid-stack-item" gs-id="connections" gs-x="0" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
-          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Open TCP connections and HTTP requests currently executing in this proxy process.">
-            <span>Connections</span>
+          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="HTTP requests currently executing. Open sockets include keep-alive and dashboard event-stream connections, so they are shown as supporting context rather than active work.">
+            <span>Active requests</span>
             <div class="metric-value">
-              <strong id="connections">0</strong>
+              <strong id="active-requests">0</strong>
               <img src="/metrics/assets/status-success-7.svg" alt="" />
             </div>
-            <small id="active-requests">0 active requests</small>
+            <small id="connection-detail">0 open sockets · 0 streams</small>
           </article>
         </div>
         <div class="grid-stack-item" gs-id="requests" gs-x="2" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
@@ -118,37 +121,39 @@
           </article>
         </div>
         <div class="grid-stack-item" gs-id="rate-limit-summary" gs-x="8" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
-          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Upstream HTTP 429 responses as a percentage of requests in the selected time range.">
-            <span>429 rate</span>
+          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Upstream HTTP 429 signals observed across every attempt, including attempts later recovered by a retry.">
+            <span>Upstream 429s</span>
             <div class="metric-value">
-              <strong id="rate-429">0.00%</strong>
+              <strong id="rate-429">0</strong>
               <img src="/metrics/assets/status-warning-7.svg" alt="" />
             </div>
-            <small id="rate-429-count">0 in range</small>
+            <small id="rate-429-count">0/min · selected range</small>
           </article>
         </div>
-        <div class="grid-stack-item" gs-id="active-models" gs-x="10" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
-          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Resolved models observed by this process, capped at 32 named series plus other.">
-            <span>Active models</span>
+        <div class="grid-stack-item" gs-id="error-rate" gs-x="10" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
+          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Completed requests recorded as failed or returned with an upstream server error in the selected time range.">
+            <span>Error rate</span>
             <div class="metric-value">
-              <strong id="active-models">0</strong>
-              <img src="/metrics/assets/status-muted-7.svg" alt="" />
+              <strong id="error-rate">0.00%</strong>
+              <img src="/metrics/assets/status-danger-8.svg" alt="" />
             </div>
-            <small>32-series limit</small>
+            <small id="error-count">0 errors in range</small>
           </article>
         </div>
 
         <div class="grid-stack-item" gs-id="request-chart" gs-x="0" gs-y="2" gs-w="6" gs-h="5" gs-min-w="4">
-          <article class="grid-stack-item-content panel chart-panel" tabindex="0" data-tooltip="Request volume over time. The primary line follows the selected outcome and amber highlights rate limiting.">
+          <article class="grid-stack-item-content panel chart-panel" tabindex="0" data-tooltip="Completed requests per minute over time. Upstream 429 signals are shown separately because a retry can recover them.">
             <div class="panel-heading">
               <div>
                 <h2>Request throughput</h2>
-                <p id="request-chart-subtitle">all outcomes · 429 highlighted</p>
+                <div class="chart-legend" aria-label="Request throughput legend">
+                  <span><i class="legend-swatch legend-primary"></i><span id="request-series-label">All requests</span></span>
+                  <span id="request-429-legend"><i class="legend-swatch legend-warning"></i>Upstream 429s</span>
+                </div>
               </div>
               <strong id="request-chart-value">0 rpm</strong>
             </div>
-            <svg id="request-chart" role="img" aria-label="Request throughput over time"></svg>
-            <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
+            <div id="request-chart" class="chart" role="img" aria-label="Request throughput over time"></div>
           </article>
         </div>
         <div class="grid-stack-item" gs-id="token-chart" gs-x="6" gs-y="2" gs-w="6" gs-h="5" gs-min-w="4">
@@ -156,12 +161,14 @@
             <div class="panel-heading">
               <div>
                 <h2>Token throughput</h2>
-                <p>input green · output blue</p>
+                <div class="chart-legend" aria-label="Token throughput legend">
+                  <span><i class="legend-swatch legend-success"></i>Input tokens</span>
+                  <span><i class="legend-swatch legend-primary"></i>Output tokens</span>
+                </div>
               </div>
               <strong id="token-chart-value">0 tpm</strong>
             </div>
-            <svg id="token-chart" role="img" aria-label="Token throughput over time"></svg>
-            <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
+            <div id="token-chart" class="chart" role="img" aria-label="Token throughput over time"></div>
           </article>
         </div>
         <div class="grid-stack-item" gs-id="latency-chart" gs-x="0" gs-y="7" gs-w="12" gs-h="5" gs-min-w="6">
@@ -169,17 +176,19 @@
             <div class="panel-heading">
               <div>
                 <h2>Latency</h2>
-                <p>average slate · maximum amber</p>
+                <div class="chart-legend" aria-label="Latency legend">
+                  <span><i class="legend-swatch legend-muted"></i>Average</span>
+                  <span><i class="legend-swatch legend-warning"></i>Maximum</span>
+                </div>
               </div>
               <strong id="latency-chart-value">p95 0ms</strong>
             </div>
-            <svg id="latency-chart" role="img" aria-label="Request latency over time"></svg>
-            <div class="axis"><span>start</span><span>midpoint</span><span>now</span></div>
+            <div id="latency-chart" class="chart" role="img" aria-label="Request latency over time"></div>
           </article>
         </div>
 
-        <div class="grid-stack-item" gs-id="models-table" gs-x="0" gs-y="12" gs-w="8" gs-h="6" gs-min-w="6">
-          <article class="grid-stack-item-content panel models-panel" tabindex="0" data-tooltip="Per-model request, token, latency, error, retry, queue, and adaptive limiter metrics.">
+        <div class="grid-stack-item" gs-id="models-table" gs-x="0" gs-y="12" gs-w="12" gs-h="6" gs-min-w="6">
+          <article class="grid-stack-item-content panel models-panel" tabindex="0" data-tooltip="Per-model request, token, latency, error, retry, queue, reasoning, and adaptive limiter metrics.">
             <div class="panel-heading">
               <h2>Model performance</h2>
               <p id="model-count">No active models</p>
@@ -195,19 +204,33 @@
                     <th>p99</th>
                     <th>Tokens</th>
                     <th>Errors</th>
+                    <th>429s</th>
                     <th>Retries</th>
-                    <th>Queue wait / max</th>
+                    <th>Avg queue</th>
+                    <th>Max depth</th>
+                    <th>Reasoning</th>
                     <th>Limiter</th>
                   </tr>
                 </thead>
                 <tbody id="models-body">
-                  <tr><td colspan="10" class="empty">Waiting for model traffic</td></tr>
+                  <tr><td colspan="13" class="empty">Waiting for model traffic</td></tr>
                 </tbody>
               </table>
             </div>
           </article>
         </div>
-        <div class="grid-stack-item" gs-id="rate-limit-timeline" gs-x="8" gs-y="12" gs-w="4" gs-h="6" gs-min-w="3">
+        <div class="grid-stack-item" gs-id="reasoning-levels" gs-x="0" gs-y="18" gs-w="6" gs-h="5" gs-min-w="4">
+          <article class="grid-stack-item-content panel reasoning-panel" tabindex="0" data-tooltip="Distribution of explicit reasoning or thinking settings detected in model requests. Provider defaults are counted separately from explicitly disabled or enabled reasoning.">
+            <div class="panel-heading">
+              <h2>Reasoning levels</h2>
+              <p id="reasoning-total">No model requests</p>
+            </div>
+            <ol id="reasoning-levels" class="reasoning-levels">
+              <li class="empty">Waiting for model traffic</li>
+            </ol>
+          </article>
+        </div>
+        <div class="grid-stack-item" gs-id="rate-limit-timeline" gs-x="6" gs-y="18" gs-w="6" gs-h="5" gs-min-w="4">
           <article class="grid-stack-item-content panel timeline-panel" tabindex="0" data-tooltip="Recent adaptive rate-limit activation, tightening, recovery, probation, and deactivation events.">
             <div class="panel-heading">
               <h2>Rate-limit timeline</h2>

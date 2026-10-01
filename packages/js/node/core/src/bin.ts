@@ -20,7 +20,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
-import { error, log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import extractZip from "extract-zip";
 import { x as extractTar } from "tar";
 
@@ -193,7 +193,7 @@ async function isValidBin(path: string, options: BinOptions): Promise<boolean> {
   } catch (cause) {
     logger.debug("binary version command failed", {
       path,
-      error: error.errorMessage(cause),
+      error: errorUtils.errorMessage(cause),
     });
     return false;
   }

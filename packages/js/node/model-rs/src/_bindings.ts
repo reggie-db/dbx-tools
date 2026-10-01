@@ -9,7 +9,7 @@
 import nativeModule from "./_bindings-ffi.ts";
 import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct,
 } from "./_bindings-ffi.ts";
-import { type UniffiByteArray, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterFloat64, FfiConverterMap, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt8, RustBuffer, UniffiEnum, UniffiInternalError, UniffiRustCaller, uniffiCreateFfiConverterString, uniffiCreateRecord,
+import { type UniffiByteArray, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterFloat64, FfiConverterMap, FfiConverterOptional, FfiConverterUInt32, FfiConverterUInt8, RustBuffer, UniffiEnum, UniffiError, UniffiInternalError, UniffiRustCaller, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiTypeNameSymbol, variantOrdinalSymbol,
 } from "@ubjs/core";
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
@@ -88,6 +88,27 @@ export function modelServingApi(value: string): ModelServingApi {
     );
     try {
         return FfiConverterTypeModelServingApi.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
+ * Normalize a serialized Databricks serving-endpoints response through the
+ * Rust-owned endpoint, classification, reasoning, and retirement policy.
+ */
+export function normalizeServingEndpointsJson(value: string): Array<ServingEndpointSummary> /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeEndpointNormalizationError.lift.bind(FfiConverterTypeEndpointNormalizationError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_model_fn_func_normalize_serving_endpoints_json(
+        FfiConverterString.lower(value, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceTypeServingEndpointSummary.lift(__rb);
     } finally {
         nativeModule().rustbuffer_free(__rb);
     }
@@ -309,17 +330,22 @@ export type ModelQuery = {
     /**
      * Whether candidates must support tool calling.
      */
-    requiresTools: boolean,
+    requiresTools?: boolean,
     /**
      * Whether retired models remain eligible.
      */
-    includeDeprecated: boolean,
+    includeDeprecated?: boolean,
     /**
      * Maximum number of results.
+     *
+     * @schema number().int().min(1).max(50).optional()
      */
     limit?: number,
     /**
      * Maximum fuzzy-match distance.
+     *
+     * @minimum 0
+     * @maximum 1
      */
     threshold?: number
 }
@@ -347,8 +373,8 @@ const FfiConverterTypeModelQuery = (() => {
             return {
                 search: FfiConverterOptionalString.readFromCursor(c),
                 modelClass: FfiConverterOptionalTypeModelClass.readFromCursor(c),
-                requiresTools: FfiConverterBool.readFromCursor(c),
-                includeDeprecated: FfiConverterBool.readFromCursor(c),
+                requiresTools: FfiConverterOptionalBoolean.readFromCursor(c),
+                includeDeprecated: FfiConverterOptionalBoolean.readFromCursor(c),
                 limit: FfiConverterOptionalUInt32.readFromCursor(c),
                 threshold: FfiConverterOptionalFloat64.readFromCursor(c)
             };
@@ -356,16 +382,16 @@ const FfiConverterTypeModelQuery = (() => {
         writeIntoCursor(value: TypeName, c: Cursor): void {
             FfiConverterOptionalString.writeIntoCursor(value.search, c);
             FfiConverterOptionalTypeModelClass.writeIntoCursor(value.modelClass, c);
-            FfiConverterBool.writeIntoCursor(value.requiresTools, c);
-            FfiConverterBool.writeIntoCursor(value.includeDeprecated, c);
+            FfiConverterOptionalBoolean.writeIntoCursor(value.requiresTools, c);
+            FfiConverterOptionalBoolean.writeIntoCursor(value.includeDeprecated, c);
             FfiConverterOptionalUInt32.writeIntoCursor(value.limit, c);
             FfiConverterOptionalFloat64.writeIntoCursor(value.threshold, c);
         }
         allocationSize(value: TypeName): number {
             return FfiConverterOptionalString.allocationSize(value.search) +
              FfiConverterOptionalTypeModelClass.allocationSize(value.modelClass) +
-             FfiConverterBool.allocationSize(value.requiresTools) +
-             FfiConverterBool.allocationSize(value.includeDeprecated) +
+             FfiConverterOptionalBoolean.allocationSize(value.requiresTools) +
+             FfiConverterOptionalBoolean.allocationSize(value.includeDeprecated) +
              FfiConverterOptionalUInt32.allocationSize(value.limit) +
              FfiConverterOptionalFloat64.allocationSize(value.threshold);
 
@@ -380,6 +406,8 @@ const FfiConverterTypeModelQuery = (() => {
 export type ModelStatus = {
     /**
      * Whether Databricks lists the model as retired or deprecated.
+     *
+     * @default false
      */
     deprecated: boolean
 }
@@ -499,6 +527,10 @@ export type ServingEndpointSummary = {
      */
     displayName?: string,
     /**
+     * Normalized model family parsed from the endpoint identities.
+     */
+    family?: string,
+    /**
      * Endpoint task, such as chat or embeddings.
      */
     task?: string,
@@ -537,7 +569,11 @@ export type ServingEndpointSummary = {
     /**
      * Retirement status for the served model.
      */
-    status: ModelStatus
+    status: ModelStatus,
+    /**
+     * Embedding vector dimension measured by the caller, when available.
+     */
+    dimension?: number
 }
 
 /**
@@ -563,6 +599,7 @@ const FfiConverterTypeServingEndpointSummary = (() => {
             return {
                 name: FfiConverterString.readFromCursor(c),
                 displayName: FfiConverterOptionalString.readFromCursor(c),
+                family: FfiConverterOptionalString.readFromCursor(c),
                 task: FfiConverterOptionalString.readFromCursor(c),
                 state: FfiConverterOptionalString.readFromCursor(c),
                 description: FfiConverterOptionalString.readFromCursor(c),
@@ -572,12 +609,14 @@ const FfiConverterTypeServingEndpointSummary = (() => {
                 serviceNames: FfiConverterMapStringString.readFromCursor(c),
                 modelServiceName: FfiConverterOptionalString.readFromCursor(c),
                 reasoningEfforts: FfiConverterSequenceTypeReasoningEffort.readFromCursor(c),
-                status: FfiConverterTypeModelStatus.readFromCursor(c)
+                status: FfiConverterTypeModelStatus.readFromCursor(c),
+                dimension: FfiConverterOptionalUInt32.readFromCursor(c)
             };
         }
         writeIntoCursor(value: TypeName, c: Cursor): void {
             FfiConverterString.writeIntoCursor(value.name, c);
             FfiConverterOptionalString.writeIntoCursor(value.displayName, c);
+            FfiConverterOptionalString.writeIntoCursor(value.family, c);
             FfiConverterOptionalString.writeIntoCursor(value.task, c);
             FfiConverterOptionalString.writeIntoCursor(value.state, c);
             FfiConverterOptionalString.writeIntoCursor(value.description, c);
@@ -588,10 +627,12 @@ const FfiConverterTypeServingEndpointSummary = (() => {
             FfiConverterOptionalString.writeIntoCursor(value.modelServiceName, c);
             FfiConverterSequenceTypeReasoningEffort.writeIntoCursor(value.reasoningEfforts, c);
             FfiConverterTypeModelStatus.writeIntoCursor(value.status, c);
+            FfiConverterOptionalUInt32.writeIntoCursor(value.dimension, c);
         }
         allocationSize(value: TypeName): number {
             return FfiConverterString.allocationSize(value.name) +
              FfiConverterOptionalString.allocationSize(value.displayName) +
+             FfiConverterOptionalString.allocationSize(value.family) +
              FfiConverterOptionalString.allocationSize(value.task) +
              FfiConverterOptionalString.allocationSize(value.state) +
              FfiConverterOptionalString.allocationSize(value.description) +
@@ -601,7 +642,8 @@ const FfiConverterTypeServingEndpointSummary = (() => {
              FfiConverterMapStringString.allocationSize(value.serviceNames) +
              FfiConverterOptionalString.allocationSize(value.modelServiceName) +
              FfiConverterSequenceTypeReasoningEffort.allocationSize(value.reasoningEfforts) +
-             FfiConverterTypeModelStatus.allocationSize(value.status);
+             FfiConverterTypeModelStatus.allocationSize(value.status) +
+             FfiConverterOptionalUInt32.allocationSize(value.dimension);
 
         }
     };
@@ -726,6 +768,239 @@ const FfiConverterTypeResolvedModel = (() => {
     return new FFIConverter();
 })();
 
+
+// Error type: EndpointNormalizationError
+export enum EndpointNormalizationError_Tags {
+    InvalidJson = "InvalidJson",
+    InvalidSnapshot = "InvalidSnapshot",
+    InvalidResponse = "InvalidResponse"
+}
+/**
+ * Errors returned by pure serialized endpoint normalization.
+ */
+export const EndpointNormalizationError = (() => {
+
+    type InvalidJson__interface = {
+        tag: EndpointNormalizationError_Tags.InvalidJson;
+        inner:
+Readonly<
+[string
+]>
+    };
+    /**
+     * The supplied serving-endpoints payload was not valid JSON.
+     */
+    class InvalidJson_ extends UniffiError implements InvalidJson__interface {
+        /**
+         * @private
+         * This field is private and should not be used, use `tag` instead.
+         */
+        readonly [uniffiTypeNameSymbol] = "EndpointNormalizationError";
+        readonly tag = EndpointNormalizationError_Tags.InvalidJson;
+        readonly inner:
+Readonly<
+[string
+]>;
+        constructor(v0: string) {
+            super("EndpointNormalizationError", "InvalidJson");
+
+            this.inner = Object.freeze([v0]);
+        }
+        static new(v0: string): InvalidJson_ {
+            return new InvalidJson_(v0);
+        }
+
+        static instanceOf(obj: any): obj is InvalidJson_ {
+            return obj.tag === EndpointNormalizationError_Tags.InvalidJson;
+        }
+        static hasInner(obj: any): obj is InvalidJson_ {
+            return InvalidJson_.instanceOf(obj);
+        }
+
+        static getInner(obj: InvalidJson_):
+Readonly<
+[string
+]> {
+            return obj.inner;
+        }
+
+    }
+
+    type InvalidSnapshot__interface = {
+        tag: EndpointNormalizationError_Tags.InvalidSnapshot;
+        inner:
+Readonly<
+[string
+]>
+    };
+    /**
+     * The embedded retirement snapshot could not be decoded.
+     */
+    class InvalidSnapshot_ extends UniffiError implements InvalidSnapshot__interface {
+        /**
+         * @private
+         * This field is private and should not be used, use `tag` instead.
+         */
+        readonly [uniffiTypeNameSymbol] = "EndpointNormalizationError";
+        readonly tag = EndpointNormalizationError_Tags.InvalidSnapshot;
+        readonly inner:
+Readonly<
+[string
+]>;
+        constructor(v0: string) {
+            super("EndpointNormalizationError", "InvalidSnapshot");
+
+            this.inner = Object.freeze([v0]);
+        }
+        static new(v0: string): InvalidSnapshot_ {
+            return new InvalidSnapshot_(v0);
+        }
+
+        static instanceOf(obj: any): obj is InvalidSnapshot_ {
+            return obj.tag === EndpointNormalizationError_Tags.InvalidSnapshot;
+        }
+        static hasInner(obj: any): obj is InvalidSnapshot_ {
+            return InvalidSnapshot_.instanceOf(obj);
+        }
+
+        static getInner(obj: InvalidSnapshot_):
+Readonly<
+[string
+]> {
+            return obj.inner;
+        }
+
+    }
+
+    type InvalidResponse__interface = {
+        tag: EndpointNormalizationError_Tags.InvalidResponse;
+        inner:
+Readonly<
+[string
+]>
+    };
+    /**
+     * The payload did not contain a valid serving-endpoints response.
+     */
+    class InvalidResponse_ extends UniffiError implements InvalidResponse__interface {
+        /**
+         * @private
+         * This field is private and should not be used, use `tag` instead.
+         */
+        readonly [uniffiTypeNameSymbol] = "EndpointNormalizationError";
+        readonly tag = EndpointNormalizationError_Tags.InvalidResponse;
+        readonly inner:
+Readonly<
+[string
+]>;
+        constructor(v0: string) {
+            super("EndpointNormalizationError", "InvalidResponse");
+
+            this.inner = Object.freeze([v0]);
+        }
+        static new(v0: string): InvalidResponse_ {
+            return new InvalidResponse_(v0);
+        }
+
+        static instanceOf(obj: any): obj is InvalidResponse_ {
+            return obj.tag === EndpointNormalizationError_Tags.InvalidResponse;
+        }
+        static hasInner(obj: any): obj is InvalidResponse_ {
+            return InvalidResponse_.instanceOf(obj);
+        }
+
+        static getInner(obj: InvalidResponse_):
+Readonly<
+[string
+]> {
+            return obj.inner;
+        }
+
+    }
+
+    function instanceOf(obj: any): obj is EndpointNormalizationError {
+        return obj[uniffiTypeNameSymbol] === "EndpointNormalizationError";
+    }
+
+    return Object.freeze({
+        instanceOf,
+  InvalidJson: InvalidJson_,
+  InvalidSnapshot: InvalidSnapshot_,
+  InvalidResponse: InvalidResponse_
+    });
+
+})();
+/**
+ * Errors returned by pure serialized endpoint normalization.
+ */
+export type EndpointNormalizationError = InstanceType<
+    typeof EndpointNormalizationError['InvalidJson' | 'InvalidSnapshot' | 'InvalidResponse']
+>;
+
+// FfiConverter for enum EndpointNormalizationError
+const FfiConverterTypeEndpointNormalizationError = (() => {
+    type TypeName = EndpointNormalizationError;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            switch (c.readI32()) {
+                case 1: return new EndpointNormalizationError.InvalidJson(FfiConverterString.readFromCursor(c));
+                case 2: return new EndpointNormalizationError.InvalidSnapshot(FfiConverterString.readFromCursor(c));
+                case 3: return new EndpointNormalizationError.InvalidResponse(FfiConverterString.readFromCursor(c));
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            switch (value.tag) {
+                case EndpointNormalizationError_Tags.InvalidJson: {
+                    c.writeI32(1);
+                    const inner = value.inner;
+                    FfiConverterString.writeIntoCursor(inner[0], c);
+                    return;
+                }
+                case EndpointNormalizationError_Tags.InvalidSnapshot: {
+                    c.writeI32(2);
+                    const inner = value.inner;
+                    FfiConverterString.writeIntoCursor(inner[0], c);
+                    return;
+                }
+                case EndpointNormalizationError_Tags.InvalidResponse: {
+                    c.writeI32(3);
+                    const inner = value.inner;
+                    FfiConverterString.writeIntoCursor(inner[0], c);
+                    return;
+                }
+                default:
+                    // Throwing from here means that EndpointNormalizationError_Tags hasn't matched an ordinal.
+                    throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        allocationSize(value: TypeName): number {
+            switch (value.tag) {
+                case EndpointNormalizationError_Tags.InvalidJson: {
+                    const inner = value.inner;
+                    let size = 4;
+                    size += FfiConverterString.allocationSize(inner[0]);
+                    return size;
+                }
+                case EndpointNormalizationError_Tags.InvalidSnapshot: {
+                    const inner = value.inner;
+                    let size = 4;
+                    size += FfiConverterString.allocationSize(inner[0]);
+                    return size;
+                }
+                case EndpointNormalizationError_Tags.InvalidResponse: {
+                    const inner = value.inner;
+                    let size = 4;
+                    size += FfiConverterString.allocationSize(inner[0]);
+                    return size;
+                }
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+    }
+    return new FFIConverter();
+})();
+
 /**
  * Databricks inference protocol selected for a model.
  */
@@ -772,11 +1047,11 @@ const FfiConverterOptionalString = new FfiConverterOptional(FfiConverterString);
 // FfiConverter for ModelClass | undefined
 const FfiConverterOptionalTypeModelClass = new FfiConverterOptional(FfiConverterTypeModelClass);
 
-// FfiConverter for number | undefined
-const FfiConverterOptionalUInt32 = new FfiConverterOptional(FfiConverterUInt32);
-
 // FfiConverter for boolean | undefined
 const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
+
+// FfiConverter for number | undefined
+const FfiConverterOptionalUInt32 = new FfiConverterOptional(FfiConverterUInt32);
 
 // FfiConverter for ModelProfile | undefined
 const FfiConverterOptionalTypeModelProfile = new FfiConverterOptional(FfiConverterTypeModelProfile);
@@ -830,6 +1105,9 @@ function uniffiEnsureInitialized() {
     if (nativeModule().uniffi_dbx_tools_model_checksum_func_model_serving_api() !== 54338) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_model_serving_api");
     }
+    if (nativeModule().uniffi_dbx_tools_model_checksum_func_normalize_serving_endpoints_json() !== 18962) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_normalize_serving_endpoints_json");
+    }
     if (nativeModule().uniffi_dbx_tools_model_checksum_func_rank_models() !== 57675) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_model_checksum_func_rank_models");
     }
@@ -848,6 +1126,7 @@ function uniffiEnsureInitialized() {
 export default Object.freeze({
   initialize: uniffiEnsureInitialized,
   converters: {
+    FfiConverterTypeEndpointNormalizationError,
     FfiConverterTypeModelClass,
     FfiConverterTypeModelProfile,
     FfiConverterTypeModelQuery,

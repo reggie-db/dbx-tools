@@ -35,11 +35,11 @@ import {
 // AppKit's root barrel re-exports `PluginData` but not `PluginMap`; the package
 // publishes this subpath for exactly that type.
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
-import { async, log } from "@dbx-tools/shared-core";
+import { asyncUtils, log } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { createSoftPersistentStorage } from "./_cache-storage.ts";
-import { loadBrandContext } from "./brand.ts";
+import { loadBrandContext } from "./brand-context.ts";
 import {
   createInterceptorContext,
   type Interceptor,
@@ -159,8 +159,8 @@ export async function autoConfigure<T extends AppKitPlugins>(
   }
 
   const controller = new AbortController();
-  async.tieAbortSignal(controller, signal);
-  async.tieAbortSignal(controller, AbortSignal.timeout(AUTO_CONFIGURE_TIMEOUT_MS));
+  asyncUtils.tieAbortSignal(controller, signal);
+  asyncUtils.tieAbortSignal(controller, AbortSignal.timeout(AUTO_CONFIGURE_TIMEOUT_MS));
 
   logger.debug("autoConfigure: resolve lakebase", {
     provision: policy.provision,
@@ -414,5 +414,3 @@ export async function ensureInitialized(): Promise<void> {
   await createApp({ plugins: [], autoConfigure: false });
   logger.debug("ensureInitialized: bare AppKit initialization complete");
 }
-
-

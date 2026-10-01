@@ -8,8 +8,12 @@ import {
   discoverPythonPackages,
   discoverRepositoryPackages,
   discoverRustPackages,
+  escapeRegExp,
+  stripLeadingH1,
   summaryText,
+  walk,
   withBasePath,
+  yamlString,
 } from "./repository-docs.mjs";
 
 const fixtures = [];
@@ -75,5 +79,18 @@ describe("repository docs catalogue", () => {
     assert.equal(summaryText("# Title\n\nUse [`Widget`](./widget.md) now."), "Use Widget now.");
     assert.equal(withBasePath("/docs", "/api/widget/"), "/docs/api/widget/");
     assert.equal(withBasePath("/docs", "/docs/api/widget/"), "/docs/api/widget/");
+    assert.equal(stripLeadingH1("# Title\n\nBody\n"), "Body\n");
+    assert.equal(yamlString('A "title"'), '"A \\"title\\""');
+    assert.equal(new RegExp(`^${escapeRegExp("a+b")}$`).test("a+b"), true);
+  });
+
+  it("lets callers skip generated output trees", () => {
+    const root = fixture();
+    mkdirSync(join(root, "packages/js/ui/widget/lib"), { recursive: true });
+    writeFileSync(join(root, "packages/js/ui/widget/lib/index.js"), "generated\n");
+    assert.equal(
+      walk(join(root, "packages/js"), [], ["lib"]).some((file) => file.includes("/lib/")),
+      false,
+    );
   });
 });

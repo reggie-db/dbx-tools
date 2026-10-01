@@ -8,9 +8,9 @@
  */
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { project as coreProject } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { ignore, match } from "@dbx-tools/path";
-import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
+import { object, stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { BuildWorkflow } from "projen/lib/build";
@@ -40,6 +40,7 @@ import {
 } from "./packages.ts";
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
+import { PROJEN_VERSION } from "./projen-version.ts";
 import { applyCompiledPublish } from "./publish.ts";
 import {
   DBXToolsReleaseCatalog,
@@ -120,17 +121,17 @@ export class PackageIdentifier {
    * `@<first>/<rest joined by ->`.
    *
    * The leading segment is the npm `@scope`, kebab-cased with
-   * {@link string.toSlug} so a multi-word scope survives intact
+   * {@link stringUtils.toSlug} so a multi-word scope survives intact
    * (`dbx-tools` -> `dbx-tools`, not `dbx`/`tools`). Every later path
-   * segment is tokenized with {@link string.tokenize}, so nested folders
+   * segment is tokenized with {@link stringUtils.tokenize}, so nested folders
    * split into their own dash-joined name parts.
    */
   static of(...names: OneOrMany<string>): PackageIdentifier {
     const segments = names.flatMap((part) => part.split("/")).filter(Boolean);
-    const scope = segments.length ? string.toSlug(segments[0]!) : "";
+    const scope = segments.length ? stringUtils.toSlug(segments[0]!) : "";
     const nameParts = [
       scope,
-      ...segments.slice(1).flatMap((segment) => [...string.tokenize(segment)]),
+      ...segments.slice(1).flatMap((segment) => [...stringUtils.tokenize(segment)]),
     ].filter(Boolean);
     if (!nameParts.length) throw new Error(`Invalid name: ${names.join(", ")}`);
     if (nameParts.length === 1) return new PackageIdentifier(undefined, nameParts[0]!);
@@ -154,13 +155,13 @@ function configureRootPackage(project: javascript.NodeProject): void {
  * published source (without it, publish fails with E422). A child also carries the
  * monorepo `directory` subpath (its path relative to the root); the root omits it.
  * No-op when no git remote is detected and no `repository` override was supplied.
- * The URL is auto-detected + cached by {@link coreProject.repositoryUrl} (gh, then
+ * The URL is auto-detected + cached by {@link projectUtils.repositoryUrl} (gh, then
  * a normalized git remote), in npm's `git+https://.../repo.git` form.
  */
 function applyRepository(project: javascript.NodeProject, override?: string): void {
   const workspaceRoot = resolve(project.root.outdir);
   const url =
-    override && override.length ? override : coreProject.repositoryUrl(workspaceRoot, "npm");
+    override && override.length ? override : projectUtils.repositoryUrl(workspaceRoot, "npm");
   if (!url) return;
   const directory = toPosix(relative(workspaceRoot, resolve(project.outdir)));
   project.package.addField("repository", {
@@ -278,7 +279,7 @@ export function projectRepositoryUrl(project: javascript.NodeProject): string | 
     typeof repository === "string"
       ? repository
       : object.isRecord(repository)
-        ? (string.trimToNull(repository.url) ?? undefined)
+        ? (stringUtils.trimToNull(repository.url) ?? undefined)
         : undefined;
   return configured?.replace(/^git\+/, "").replace(/\.git$/, "");
 }
@@ -382,14 +383,7 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
   endOfLine: javascript.EndOfLine.LF,
 };
 
-/**
- * The `projen` version every generated manifest pins.
- *
- * Kept as one constant so the root's devDependency and this engine's own
- * dependency can never drift apart - a synth run loads the engine from one copy
- * of projen and the tasks execute against another otherwise.
- */
-export const PROJEN_VERSION = "^0.101.16";
+export { PROJEN_VERSION } from "./projen-version.ts";
 
 /** SPDX license shared by generated JavaScript, Python, and Rust packages. */
 export const DBX_TOOLS_LICENSE = "Apache-2.0";
@@ -412,7 +406,7 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // phase installs with pnpm - so a deployed app keeps its catalog + build
     // allowances even though the local/CI manager is bun.
     packageManager: javascript.NodePackageManager.BUN,
-    // Pinned rather than left to projen's "latest": 0.101.16 is the first release
+    // Pinned rather than left to projen's "latest": this is the co-tested release
     // whose `NodePackage` renders bun's `trustedDependencies` natively. Under bun,
     // projen does NOT create the `pnpm-workspace.yaml` component itself (that call
     // site is gated to pnpm), so the engine constructs it directly ({@link
@@ -750,7 +744,7 @@ export class DBXToolsNodeProject
     const steps = super.renderWorkflowSetup(options);
     if (this.parent) return steps;
     return steps.flatMap((step) => {
-      if (step.uses === "oven-sh/setup-bun@v2") {
+      if (step.uses?.startsWith("oven-sh/setup-bun@")) {
         return [...bunCacheRestoreSteps(this, { ignorePaths: this.workflowCacheIgnorePaths })];
       }
       if (step.run === "bun install") {
@@ -963,7 +957,7 @@ function configureBuildWorkflow(
                 "!**/package.json",
                 "!**/pyproject.toml",
                 "!**/index.ts",
-                "!packages/js/node/rust-binary/src/_rust-release-binaries.ts",
+                "!packages/js/node/rust-binary/src/_release-binaries.ts",
                 "!packages/js/node/appkit-graphiti/src/_python-runtime.ts",
               ],
             },
@@ -1216,7 +1210,7 @@ const DEFAULT_OMIT_RELATIVE_PREFIX = ["node"];
 function resolveOmitRelativePrefix(option: OneOrMany<string> | undefined): string[] {
   const raw = option === undefined ? DEFAULT_OMIT_RELATIVE_PREFIX : option;
   const list = Array.isArray(raw) ? raw : [raw];
-  return list.map((segment) => string.toSlug(segment)).filter(Boolean);
+  return list.map((segment) => stringUtils.toSlug(segment)).filter(Boolean);
 }
 
 /**
@@ -1226,7 +1220,7 @@ function resolveOmitRelativePrefix(option: OneOrMany<string> | undefined): strin
  */
 function packageNameFor(scope: string, relPath: string, omitPrefixes: string[]): string {
   const segments = relPath.split("/").filter(Boolean);
-  if (segments.length > 1 && omitPrefixes.includes(string.toSlug(segments[0]!))) {
+  if (segments.length > 1 && omitPrefixes.includes(stringUtils.toSlug(segments[0]!))) {
     segments.shift();
   }
   return PackageIdentifier.of(scope, segments.join("/")).packageName;
@@ -1267,14 +1261,14 @@ function engineSelfDependency(project: javascript.NodeProject): string | undefin
   const enginePkgJson = join(resolvePkgRoot(), "package.json");
   if (!toPosix(enginePkgJson).includes("/node_modules/")) return undefined;
   const engine = readPackageManifest(dirname(enginePkgJson));
-  const name = string.trimToNull(engine?.name);
+  const name = stringUtils.trimToNull(engine?.name);
   if (!name) return undefined;
-  const version = string.trimToNull(engine?.version);
+  const version = stringUtils.trimToNull(engine?.version);
 
   // No existing consumer manifest (or no entry) falls through to a computed pin.
   const consumer = readPackageManifest(resolve(project.outdir));
   const dependencyOf = (field: unknown): string | undefined =>
-    object.isRecord(field) ? (string.trimToNull(field[name]) ?? undefined) : undefined;
+    object.isRecord(field) ? (stringUtils.trimToNull(field[name]) ?? undefined) : undefined;
   const existing = dependencyOf(consumer?.devDependencies) ?? dependencyOf(consumer?.dependencies);
   if (existing) return `${name}@${existing}`;
   return `${name}@^${version}`;

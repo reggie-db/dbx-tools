@@ -213,10 +213,6 @@ export interface GoogleAuthLike {
  */
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
-/**
- * @deprecated Use `GoogleAuthLike` instead.
- */
-export type GoogleAuthInterface = GoogleAuthLike;
 
 
 /**

@@ -23,8 +23,8 @@ import type {
   ToolkitOptions as AppKitToolkitOptions,
   ToolProvider,
 } from "@databricks/appkit/beta";
-import { plugin, toolkit as appkitToolkit } from "@dbx-tools/appkit";
-import { log, object, string } from "@dbx-tools/shared-core";
+import { pluginRegistry, toolkitEntries } from "@dbx-tools/appkit";
+import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import type {
   AgentConfig,
   AgentExecutionOptions,
@@ -147,7 +147,7 @@ export interface AppKitToolOptions {
  * words don't collide in traces. Stable across runs.
  */
 function deriveToolId(description: string): string {
-  return string.toUniqueSlug(description, { fallbackPrefix: "tool" });
+  return stringUtils.toUniqueSlug(description, { fallbackPrefix: "tool" });
 }
 
 /**
@@ -522,7 +522,7 @@ function defaultAgentDescription(name: string): string {
  */
 export async function buildAgents(opts: {
   config: MastraPluginConfig;
-  context: plugin.PluginContextLike | undefined;
+  context: pluginRegistry.PluginContextLike | undefined;
   memoryBuilder?: MemoryBuilder;
   log: log.Logger;
   /**
@@ -759,7 +759,7 @@ function resolveDefinitions(config: MastraPluginConfig): Record<string, AnyMastr
 /** Derive a registry id from a definition's `name`, with a fallback. */
 function deriveAgentKey(def: AnyMastraAgentDefinition, index?: number): string {
   if (def.name) {
-    const slug = string.toIdentifier(def.name);
+    const slug = stringUtils.toIdentifier(def.name);
     if (slug) return slug;
   }
   return index === undefined ? FALLBACK_AGENT_ID : `agent_${index}`;
@@ -852,7 +852,7 @@ function resolveAgentWorkspace(
  */
 function buildPluginsMap(
   config: MastraPluginConfig,
-  context: plugin.PluginContextLike | undefined,
+  context: pluginRegistry.PluginContextLike | undefined,
 ): MastraPlugins {
   const cache = new Map<string, MastraPluginToolkitProvider | null>();
   return new Proxy({} as MastraPlugins, {
@@ -886,7 +886,7 @@ function buildPluginsMap(
  */
 function resolveProvider(
   config: MastraPluginConfig,
-  context: plugin.PluginContextLike | undefined,
+  context: pluginRegistry.PluginContextLike | undefined,
   propName: string,
 ): MastraPluginToolkitProvider | null {
   if (propName === "genie") {
@@ -952,7 +952,7 @@ function toolkitEntriesFromDefinitions(
   definitions: AgentToolDefinition[],
   options: ToolkitOptions = {},
 ): Record<string, ToolkitEntry> {
-  return appkitToolkit.entries(pluginName, definitions, options);
+  return toolkitEntries.entries(pluginName, definitions, options);
 }
 
 function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {

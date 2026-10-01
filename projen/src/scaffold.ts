@@ -2,7 +2,7 @@
  * Runs a projen re-synth, for the `sync` task and its watchers.
  */
 import { join } from "node:path";
-import { exec } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
 import { repoRoot } from "./packages.ts";
 
 /**

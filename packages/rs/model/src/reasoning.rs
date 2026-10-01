@@ -13,7 +13,9 @@ static O_SERIES: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Reasoning effort accepted by a model endpoint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, uniffi::Enum)]
+#[cfg_attr(feature = "contract-generation", derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "contract-generation", ts(rename_all = "lowercase"))]
 pub enum ReasoningEffort {
     /// Disable explicit reasoning.
     None,
@@ -32,6 +34,17 @@ pub enum ReasoningEffort {
 }
 
 impl ReasoningEffort {
+    /// Every reasoning effort in provider wire order.
+    pub const ALL: [Self; 7] = [
+        Self::None,
+        Self::Minimal,
+        Self::Low,
+        Self::Medium,
+        Self::High,
+        Self::Xhigh,
+        Self::Max,
+    ];
+
     /// Return the provider wire value for this reasoning effort.
     pub fn as_str(self) -> &'static str {
         match self {

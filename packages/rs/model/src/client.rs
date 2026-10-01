@@ -10,10 +10,12 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     classify::{classify_endpoints, supports_tools_by_family},
-    model_status::{status_from_names, ModelStatusError, ModelStatusResolver},
+    model_status::{
+        generated_retired_models, status_from_names, ModelStatusError, ModelStatusResolver,
+    },
     models::{
-        model_search_query, model_service_names, ModelClass, ModelProfile, ModelQuery,
-        ServingEndpointSummary,
+        model_family, model_search_query, model_service_names, ModelClass, ModelProfile,
+        ModelQuery, ServingEndpointSummary,
     },
     reasoning::reasoning_efforts_for_names,
     resolve::{lookup_models, rank_model_id, DEFAULT_FUZZY_THRESHOLD},
@@ -187,6 +189,22 @@ pub fn endpoints_from_response(value: &Value) -> Result<Vec<ServingEndpointSumma
     endpoints_from_response_with_retired(value, &Default::default())
 }
 
+/// Normalize a serialized Databricks serving-endpoints response through the
+/// Rust-owned endpoint, classification, reasoning, and retirement policy.
+#[uniffi::export]
+pub fn normalize_serving_endpoints_json(
+    value: &str,
+) -> Result<Vec<ServingEndpointSummary>, EndpointNormalizationError> {
+    let value = serde_json::from_str(value)
+        .map_err(|error| EndpointNormalizationError::InvalidJson(error.to_string()))?;
+    let retired = generated_retired_models()
+        .map_err(|error| EndpointNormalizationError::InvalidSnapshot(error.to_string()))?
+        .into_iter()
+        .collect();
+    endpoints_from_response_with_retired(&value, &retired)
+        .map_err(|error| EndpointNormalizationError::InvalidResponse(error.to_string()))
+}
+
 fn endpoints_from_response_with_retired(
     value: &Value,
     retired: &std::collections::BTreeSet<String>,
@@ -217,6 +235,9 @@ fn endpoint_summary(
     let identities = model_identities(endpoint, &name);
     Some(ServingEndpointSummary {
         display_name: provided_display_name(endpoint).or_else(|| Some(model_display_name(&name))),
+        family: identities
+            .iter()
+            .find_map(|identity| model_family(identity)),
         task: string_at(endpoint, &["task"]),
         state: string_at(endpoint, &["state", "ready"]),
         description: string_at(endpoint, &["description"]),
@@ -230,6 +251,7 @@ fn endpoint_summary(
         model_service_name: model_service_name(endpoint),
         reasoning_efforts: reasoning_efforts_for_names(identities.iter().map(String::as_str)),
         status: status_from_names(identities.iter().map(String::as_str), retired),
+        dimension: None,
         name,
     })
 }
@@ -409,4 +431,18 @@ pub enum ModelError {
     /// A Databricks API response did not contain the expected endpoint data.
     #[error("invalid Databricks model response: {0}")]
     InvalidResponse(&'static str),
+}
+
+/// Errors returned by pure serialized endpoint normalization.
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum EndpointNormalizationError {
+    /// The supplied serving-endpoints payload was not valid JSON.
+    #[error("invalid Databricks model JSON: {0}")]
+    InvalidJson(String),
+    /// The embedded retirement snapshot could not be decoded.
+    #[error("invalid generated model retirement snapshot: {0}")]
+    InvalidSnapshot(String),
+    /// The payload did not contain a valid serving-endpoints response.
+    #[error("invalid Databricks model response: {0}")]
+    InvalidResponse(String),
 }

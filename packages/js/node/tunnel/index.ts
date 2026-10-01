@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/tunnel";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as allowlist from "./src/allowlist.ts";
 export * as codeEmail from "./src/code-email.ts";
 export * as frp from "./src/frp.ts";
@@ -19,7 +19,7 @@ export * as signingKey from "./src/signing-key.ts";
 export * as supervisor from "./src/supervisor.ts";
 export type { CodeCopy } from "./src/code-email.ts";
 export type { FrpInstallOptions, FrpConfig } from "./src/frp.ts";
-export { AUTH_PREFIX, UNAUTHORIZED_BODY } from "./src/gate.ts";
+export { isAuthPath, UNAUTHORIZED_BODY } from "./src/gate.ts";
 export type { GateOptions, GateAction } from "./src/gate.ts";
 export { PROTECTED_HEADERS, DEFAULT_FORWARD_HEADERS } from "./src/headers.ts";
 export type { HeaderPolicy } from "./src/headers.ts";
@@ -31,3 +31,4 @@ export type { PortrInstallOptions, PortrConfig } from "./src/portr.ts";
 export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
 export type { SigningKey } from "./src/signing-key.ts";
 export type { ProcessSupervisor, ProcessSupervisorOptions } from "./src/supervisor.ts";
+export * from "./exports.ts";

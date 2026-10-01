@@ -72,12 +72,22 @@
     },
     {
       "name": "projen",
-      "version": "^0.101.16",
+      "version": "^0.103.27",
+      "type": "build"
+    },
+    {
+      "name": "ts-to-zod",
+      "version": "5.1.0",
       "type": "build"
     },
     {
       "name": "typescript",
       "version": "^5.9.3",
+      "type": "build"
+    },
+    {
+      "name": "uplot",
+      "version": "^1.6.32",
       "type": "build"
     },
     {

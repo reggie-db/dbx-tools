@@ -17,8 +17,8 @@
  */
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
-import { Component, DependencyType, TextFile } from "projen";
+import { project, projectJs } from "@dbx-tools/projen";
+import { Component, DependencyType, JsonFile, TextFile } from "projen";
 
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
@@ -143,7 +143,7 @@ class BrandPackageAssets extends Component {
 // ---------------------------------------------------------------------------
 // Root construction
 // ---------------------------------------------------------------------------
-const root = new projenProject.DBXToolsNodeProject({
+const root = new project.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   // `packages/js` is the JavaScript product tree; `packages/example` holds the
@@ -261,6 +261,8 @@ const root = new projenProject.DBXToolsNodeProject({
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
     "gridstack@^12.3.3",
+    "ts-to-zod@5.1.0",
+    "uplot@^1.6.32",
     "zod@catalog:",
   ],
 });
@@ -311,6 +313,7 @@ root.gitignore.addPatterns(
   ".astro/",
   ".worktrees/",
   ".home/",
+  ".kanna/",
   "**/.logs/",
 );
 // Rust release rows embed reviewed dashboard assets and do not build them.
@@ -328,21 +331,23 @@ root.pnpmWorkspace?.addCatalog("@react-email/components", "^1.0.12");
 root.pnpmWorkspace?.addCatalog("@react-email/render", "^2.1.0");
 root.pnpmWorkspace?.addCatalog("@mastra/core", "1.71.0");
 root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.10.5");
-root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.14");
+root.pnpmWorkspace?.addCatalog("@mastra/express", "1.5.15");
 root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.3.2");
 root.pnpmWorkspace?.addCatalog("@mastra/mcp", "2.1.0");
 root.pnpmWorkspace?.addCatalog("@modelcontextprotocol/sdk", "^1.29.0");
 root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.32.1");
-root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.18.0");
-root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.10");
+root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.18.1");
+root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.11");
 root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.27.1");
 root.pnpmWorkspace?.addCatalog("@pydantic/monty", "0.0.23");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
 // pulls it, but the pin belongs with the other add-on runtime deps.
 root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
-root.pnpmWorkspace?.addCatalog("better-auth", "1.7.3");
-root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.3");
+root.pnpmWorkspace?.addCatalog("better-auth", "1.7.6");
+root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.6");
+root.pnpmWorkspace?.addCatalog("@simplewebauthn/browser", "13.3.0");
+root.pnpmWorkspace?.addCatalog("better-call", "1.4.0");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
@@ -430,7 +435,13 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // belongs here because `config.ts` owns both
 // bundle and app.yaml config-source parsing.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
+  projectJs.addExports(p, {
+    "./bin": "./src/bin.ts",
+    "./exec": "./src/exec.ts",
+    "./project-utils": "./src/project-utils.ts",
+  });
   p.addDeps(
+    "@dbx-tools/core-rs@workspace:^",
     "extract-zip@^2.0.1",
     "proper-lockfile@^4.1.2",
     "tar@^7.5.22",
@@ -450,6 +461,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
 project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/core-rs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
     "zod@catalog:",
   );
@@ -494,7 +506,6 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/model-rs@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
-    "fuse.js@^7.4.2",
   );
 });
 
@@ -529,6 +540,7 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
 // `email` plugin. Consumes the browser-safe shared-email contract. AppKit +
 // Mastra are runtime deps.
 project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
+  projectJs.addPackageFiles(p, "exports.ts");
   p.addDeps(
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
@@ -555,6 +567,7 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
 // exposing both Mastra tools. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/path@workspace:^",
     "@dbx-tools/model@workspace:^",
@@ -600,7 +613,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "vitest@catalog:");
 });
 
-// node-rust-binary: narrow runtime owner for generated Rust release metadata,
+// node-rust-binary: narrow runtime owner for generated native release metadata,
 // atomic installation, and process/signal forwarding.
 project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (p) => {
   p.addDeps("@dbx-tools/core@workspace:^");
@@ -610,7 +623,7 @@ project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (
 // node-postgres: connection-correct Postgres utilities shared by packages.
 // Advisory locks reserve one PoolClient for the full protected callback.
 project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) => {
-  p.addDeps("pg@^8.22.0");
+  p.addDeps("@dbx-tools/core-rs@workspace:^", "pg@^8.22.0");
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
   p.addDevDeps("@types/pg@^8");
 });
@@ -623,6 +636,7 @@ project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) 
 // AppKit + Mastra are runtime deps. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-teams@workspace:^",
     "@databricks/appkit@catalog:",
@@ -871,6 +885,7 @@ project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p)
 // email transport and native Lakebase or SQLite storage, then registers one
 // handler + gating middleware on the app's OWN Express server.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
+  projectJs.addPackageFiles(p, "exports.ts");
   p.addDeps(
     "@dbx-tools/auth-gate@workspace:^",
     "@dbx-tools/appkit@workspace:^",
@@ -878,8 +893,21 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "@dbx-tools/shared-auth@workspace:^",
     "@databricks/appkit@catalog:",
     "@types/express@catalog:",
+    "better-call@catalog:",
     "http-proxy-3@catalog:",
   );
+  p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
+  new JsonFile(p, "assets/tsconfig.json", {
+    marker: false,
+    obj: {
+      extends: "../tsconfig.json",
+      compilerOptions: {
+        lib: ["ES2022", "DOM", "DOM.Iterable"],
+        noEmit: true,
+      },
+      include: ["*.ts"],
+    },
+  });
   // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
   // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
   // `--insecure` mode) needs no mail transport, so it is an optional peer rather
@@ -910,7 +938,7 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
 // and React bindings over shared-core's BrandContext. The root branding folder
 // is canonical; pre-compile regenerates the package copies and data URLs.
 project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p) => {
-  projenProject.addExports(p, {
+  project.addExports(p, {
     "./browser": "./src/browser.ts",
     // The brand->AppKit token bridge stylesheet. `ui-appkit/styles.css`
     // `@import`s it so it travels with every feature UI package; scoped to
@@ -947,7 +975,13 @@ project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) =>
 
 // shared-auth: browser-safe compatibility and status schemas for passwordless auth.
 project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" }, (p) => {
-  p.addDeps("zod@catalog:");
+  projectJs.addExports(p, { "./client": "./src/_client.ts" });
+  p.addDeps(
+    "@better-auth/passkey@catalog:",
+    "@simplewebauthn/browser@catalog:",
+    "better-auth@catalog:",
+    "zod@catalog:",
+  );
 });
 
 // ui-auth: Better Auth React client, passkey-first gate, and credential manager.
@@ -957,11 +991,9 @@ project.applyToProjects(root, { identifierName: "ui-auth", tags: "ui" }, (p) => 
     "./package.json": "./package.json",
   });
   p.addDeps(
-    "@better-auth/passkey@catalog:",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/ui-appkit@workspace:^",
     "@dbx-tools/ui-branding@workspace:^",
-    "better-auth@catalog:",
   );
 });
 
@@ -1114,9 +1146,9 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // ---------------------------------------------------------------------------
 // Rust Cargo workspace
 // ---------------------------------------------------------------------------
-const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
+const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
   rustVersion: "1.89",
-  cliRegistryPath: "packages/js/node/rust-binary/src/_rust-release-binaries.ts",
+  cliRegistryPath: "packages/js/node/rust-binary/src/_release-binaries.ts",
   pythonRoot: PYTHON_ROOT,
   workspaceDependencies: {
     "async-trait": "0.1",
@@ -1142,7 +1174,6 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     metrics: "0.24",
     "metrics-exporter-prometheus": { version: "0.17", defaultFeatures: false },
     "mime_guess": "2",
-    object: { version: "0.37", defaultFeatures: false, features: ["read"] },
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
     "percent-encoding": "2",
@@ -1174,6 +1205,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     "tokio-rustls": "0.26",
     tracing: "0.1",
     "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
+    "ts-rs": "=12.0.1",
     uniffi: { version: "=0.31", features: ["cli", "tokio"] },
     url: { version: "2", features: ["serde"] },
     uuid: { version: "1", features: ["v4"] },
@@ -1181,17 +1213,6 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     wiremock: "0.6",
   },
   packages: {
-    "release-tools": {
-      description: "Private content-addressed Rust release fingerprint and binary stamping tools",
-      private: true,
-      dependencies: {
-        clap: { workspace: true },
-        object: { workspace: true },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        sha2: { workspace: true },
-      },
-    },
     core: {
       description:
         "Databricks authentication, flexible API requests, Lakebase parsing, caching, and filesystem primitives",
@@ -1235,6 +1256,16 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     model: {
       description: "Databricks model discovery, caching, classification, and fuzzy resolution",
       bindings: ["node"],
+      features: {
+        "contract-generation": ["dep:ts-rs"],
+      },
+      examples: [
+        {
+          name: "generate-model-contracts",
+          path: "examples/generate-model-contracts.rs",
+          requiredFeatures: ["contract-generation"],
+        },
+      ],
       dependencies: {
         [`${root.scope}-core`]: { path: "../core" },
         "difflib-fast": { workspace: true },
@@ -1248,6 +1279,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         thiserror: { workspace: true },
         tokio: { workspace: true },
         tracing: { workspace: true },
+        "ts-rs": { workspace: true, optional: true },
         uniffi: { workspace: true },
       },
       devDependencies: {
@@ -1333,19 +1365,16 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   },
 });
 
-project.applyToProjects(root, { identifierName: "core-rs", tags: "node" }, (p) => {
-  p.addDevDeps("@dbx-tools/core@workspace:^");
-});
-
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
-const pythonPackages: projenProject.PythonPackageOptions[] = [
+const pythonPackages: project.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
     directory: "core",
     description:
-      "Dependency-free configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
+      "Configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
+    internalDependencies: ["core-rs"],
     dependencies: [],
   },
   {
@@ -1377,7 +1406,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
   },
 ];
 
-new projenProject.DBXToolsPythonWorkspace(root, {
+new project.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
@@ -1410,6 +1439,7 @@ for (const binary of ["dbx-tools-model-proxy", "dbx-tools-lakebase-proxy"]) {
 }
 root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
+root.annotateGenerated("/packages/js/shared/model/src/generated/**");
 new BrandPackageAssets(root);
 root.addTask("model:metadata", {
   exec: [
@@ -1420,6 +1450,14 @@ root.addTask("model:metadata", {
   ].join(" "),
   description: "Refresh committed model retirement, capability, and rate-limit snapshots",
 });
+const modelContractsTask = root.addTask("model:contracts", {
+  exec: [
+    "cargo run --quiet -p dbx-tools-model --features contract-generation --example generate-model-contracts -- packages/js/shared/model/src/generated/_contracts.ts",
+    "bunx ts-to-zod packages/js/shared/model/src/generated/_contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments",
+  ].join(" && "),
+  description: "Generate browser-safe TypeScript and Zod model contracts from Rust",
+});
+root.tasks.tryFind("pre-compile")?.spawn(modelContractsTask);
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",
   description: "Emit local Python hello-world messages onto the demo bus",

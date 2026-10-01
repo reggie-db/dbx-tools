@@ -24,8 +24,8 @@
  * @module
  */
 
-import { error, log } from "@dbx-tools/shared-core";
-import { activity as sharedActivity } from "@dbx-tools/shared-teams";
+import { errorUtils, log } from "@dbx-tools/shared-core";
+import { teamsActivity } from "@dbx-tools/shared-teams";
 import { connectorToken, isAllowedServiceUrl } from "./auth.ts";
 import { sendActivity, sendTyping } from "./connector.ts";
 import { runCardTurn, type CardAgentLike, type CardContextFactory } from "./conversation.ts";
@@ -56,7 +56,7 @@ export interface DeliverTurnOptions {
   /** The agent that composes the card. */
   agent: CardAgentLike;
   /** The validated inbound activity. */
-  activity: sharedActivity.Activity;
+  activity: teamsActivity.Activity;
   /** Bot credentials used to fetch the outbound Connector token. */
   credentials: BotCredentials;
   /**
@@ -82,7 +82,7 @@ export interface DeliverTurnOptions {
  * authenticated is sent there.
  */
 export const resolveServiceUrl = (
-  activity: sharedActivity.Activity,
+  activity: teamsActivity.Activity,
   tokenServiceUrl?: string,
 ): string | null => {
   const raw = (activity as { serviceUrl?: unknown }).serviceUrl;
@@ -124,7 +124,7 @@ export const deliverTurn = async (options: DeliverTurnOptions): Promise<void> =>
   } catch (err) {
     // No token means nothing can be delivered - not even the apology - so this
     // is the one failure that can only be logged.
-    logger.error("could not obtain a connector token", { error: error.errorMessage(err) });
+    logger.error("could not obtain a connector token", { error: errorUtils.errorMessage(err) });
     return;
   }
 
@@ -143,12 +143,15 @@ export const deliverTurn = async (options: DeliverTurnOptions): Promise<void> =>
     }
     logger.info("turn delivered", { conversation: conversationId, replies: activities.length });
   } catch (err) {
-    logger.error("turn failed", { conversation: conversationId, error: error.errorMessage(err) });
+    logger.error("turn failed", {
+      conversation: conversationId,
+      error: errorUtils.errorMessage(err),
+    });
     try {
       await sendActivity({ type: "message", text: FAILURE_TEXT }, target);
     } catch (postErr) {
       logger.error("could not report the failure to the channel", {
-        error: error.errorMessage(postErr),
+        error: errorUtils.errorMessage(postErr),
       });
     }
   }

@@ -15,6 +15,7 @@
 import { fileURLToPath } from "node:url";
 import { javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
+import { PROJEN_VERSION } from "./src/projen-version.ts";
 import { readReleaseUnitVersion } from "./src/release-catalog.ts";
 
 const PACKAGE_VERSION = readReleaseUnitVersion(
@@ -28,6 +29,7 @@ const project = new typescript.TypeScriptProject({
   // A member of the single bun workspace. No nested `pnpm-workspace.yaml` marker is
   // needed - bun resolves the `workspace:^` sibling deps from the root install.
   packageManager: NodePackageManager.BUN,
+  projenVersion: PROJEN_VERSION,
   // The projenrc runner is reset to `bun` below (bun runs `.ts` directly). This
   // package is `type: module` and `.projenrc.ts` does a directory import
   // (`projen/lib/javascript`); bun resolves it fine.
@@ -53,7 +55,7 @@ const project = new typescript.TypeScriptProject({
       target: "ES2022",
       lib: ["ES2022"],
       skipLibCheck: true,
-      // This package ships SOURCE (run through tsx), so it never emits - but its
+      // This package ships SOURCE (run directly by Bun), so it never emits - but its
       // own modules carry the same explicit `.ts` specifiers the packages use,
       // which the compiler only accepts with this on.
       noEmit: true,
@@ -79,13 +81,13 @@ const project = new typescript.TypeScriptProject({
     "is-identifier@^1",
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
-    "projen@^0.101.16",
     "release-please@17.11.2",
     "semver@^7.7.3",
     "smol-toml@1.8.0",
     "ts-to-zod@^5.1.0",
     "yaml@^2.9.0",
   ],
+  peerDeps: [`projen@${PROJEN_VERSION}`],
   devDeps: [
     "@types/node@^24.6.0",
     "@types/semver@^7.7.1",
@@ -117,11 +119,11 @@ project.package.addField("exports", {
 });
 
 // This package ships SOURCE (its `main`/`exports`/task scripts all point at
-// `.ts`, run via tsx), so the published tarball must contain the TypeScript, not
+// `.ts`, run directly by Bun), so the published tarball must contain the TypeScript, not
 // the compiled `lib/`. A `files` allowlist is the idiomatic, self-contained way
 // to say exactly that - it takes precedence over projen's generated `.npmignore`
 // (which excludes `/src/`), so `index.ts` (re-exports `./src/*`), the `src/`
-// modules, and the `tasks/` scripts a consumer runs as `tsx <engine>/tasks/*.ts`
+// modules, and the `tasks/` scripts a consumer runs as `bun <engine>/tasks/*.ts`
 // are all present. Without it the published `index.ts` imports a missing
 // `./src/barrels` and synth dies with ERR_MODULE_NOT_FOUND.
 project.package.addField("files", ["index.ts", "src", "tasks"]);
@@ -137,5 +139,11 @@ project.addTask("test:external-consumer", {
   description: "Pack the engine and validate an isolated consumer lifecycle",
   exec: "bun test test/packed-consumer.test.ts",
 });
+const rustReleaseBundle = project.addTask("bundle:rust-release", {
+  description: "Bundle the standalone Node Rust release helper",
+  exec: "bun tasks/build-rust-release.ts",
+});
+project.compileTask.prependSpawn(rustReleaseBundle);
+project.testTask.prependSpawn(rustReleaseBundle);
 project.testTask.exec("bun test test");
 project.synth();

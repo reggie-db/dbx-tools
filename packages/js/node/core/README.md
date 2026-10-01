@@ -69,9 +69,9 @@ archive extraction, and selection.
 ## Load Brand Context
 
 ```ts
-import { brand } from "@dbx-tools/core";
+import { brandFiles } from "@dbx-tools/core";
 
-const context = await brand.loadBrandContext();
+const context = await brandFiles.loadBrandContext();
 ```
 
 `loadBrandContext()` searches known npm/git project roots for
@@ -83,12 +83,12 @@ files fail validation. Use `loadBrandContextFile(path)` for an explicit file and
 ## Resolve Configuration
 
 ```ts
-import { config } from "@dbx-tools/core";
+import { configUtils } from "@dbx-tools/core";
 
-const publicDomain = config.string(undefined, "PUBLIC_DOMAIN", {
+const publicDomain = configUtils.string(undefined, "PUBLIC_DOMAIN", {
   prefix: "TUNNEL",
 });
-const timeoutMs = config.positiveInt(undefined, "TIMEOUT_MS", 30_000, {
+const timeoutMs = configUtils.positiveInt(undefined, "TIMEOUT_MS", 30_000, {
   prefix: "SEARCH",
 });
 ```
@@ -303,17 +303,17 @@ locks when multiple app replicas need one arbiter.
 ## Discover Project Roots
 
 ```ts
-import { project } from "@dbx-tools/core";
+import { projectUtils } from "@dbx-tools/core";
 
-const root = project.root();
-const name = project.name();
-const origins = [...project.resolveProjectRoots(process.cwd())];
-const cwd = project.resolveWorkingDirectory("");
+const root = projectUtils.root();
+const name = projectUtils.name();
+const origins = [...projectUtils.resolveProjectRoots(process.cwd())];
+const cwd = projectUtils.resolveWorkingDirectory("");
 ```
 
-`project.root()` checks npm/pnpm workspace roots, git top-level, and cwd.
-`project.name()` prefers package metadata, then git remote name, then directory
-basename. `project.resolveWorkingDirectory()` normalizes blank, null, omitted,
+`projectUtils.root()` checks npm/pnpm workspace roots, git top-level, and cwd.
+`projectUtils.name()` prefers package metadata, then git remote name, then directory
+basename. `projectUtils.resolveWorkingDirectory()` normalizes blank, null, omitted,
 relative, and absolute cwd values for cache decisions. Project subprocess probes
 share a command/argument result cache only when that resolved path is the live
 process cwd; another directory executes directly. Empty command results are

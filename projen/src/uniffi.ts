@@ -31,6 +31,13 @@ export const makeDefaultedInterfaceParametersOptional = (source: string): string
   );
 };
 
+/** Remove UBRN's obsolete `*Interface` aliases once the `*Like` owner exists. */
+export const removeObsoleteInterfaceAliases = (source: string): string =>
+  source.replace(
+    /\n\/\*\*\n \* @deprecated Use `\w+Like` instead\.\n \*\/\nexport type \w+Interface = \w+Like;\n/g,
+    "\n",
+  );
+
 export interface TypeScriptBindingModule {
   readonly specifier: string;
   readonly source: string;

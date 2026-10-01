@@ -23,10 +23,10 @@ import {
   type IAppRouter,
   type PluginManifest,
 } from "@databricks/appkit";
-import { plugin as appkitPlugin } from "@dbx-tools/appkit";
+import { pluginRegistry } from "@dbx-tools/appkit";
 import { net as databricksNet } from "@dbx-tools/databricks";
 import { PostgresTopicBus, type TopicMessage, type TopicMetadata } from "@dbx-tools/postgres";
-import { error, log, object } from "@dbx-tools/shared-core";
+import { errorUtils, log, object } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 /**
@@ -75,7 +75,7 @@ function resolveEnvironmentMetadata(): Promise<Record<string, string>> {
     try {
       metadata.publicIp = await databricksNet.getPublicIp();
     } catch (cause) {
-      logger.warn("public IP unavailable", { error: error.errorMessage(cause) });
+      logger.warn("public IP unavailable", { error: errorUtils.errorMessage(cause) });
     }
     return metadata;
   })();
@@ -102,11 +102,11 @@ class BusDemoPlugin extends Plugin {
 
   override async setup(): Promise<void> {
     this.context?.onLifecycle("setup:complete", async () => {
-      const lake = appkitPlugin.require(this.context, lakebase, "bus-demo");
+      const lake = pluginRegistry.require(this.context, lakebase, "bus-demo");
       this.bus = new PostgresTopicBus(lake.exports().pool, {
         metadata: resolveEnvironmentMetadata,
         onError: (cause) =>
-          logger.error("topic listener failed", { error: error.errorMessage(cause) }),
+          logger.error("topic listener failed", { error: errorUtils.errorMessage(cause) }),
         persist: { ttl: "7 days" },
       });
       await this.bus.start();

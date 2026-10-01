@@ -75,8 +75,8 @@ export interface ChatMessage {
  * in the case of `parallel_tool_calls` - a real setting Databricks has no way
  * to accept, so dropping it is the only way the request can succeed at all.
  *
- * Callers that translate a request field-by-field (an allowlist, as
- * `openaiResponses.responsesToChat` does) never need this; it exists for the
+ * Callers that translate a request field-by-field through an allowlist never
+ * need this; it exists for the
  * paths that forward a client body largely as-is.
  */
 export const UNSUPPORTED_CHAT_FIELDS: readonly string[] = [

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun
 import { relative } from "node:path";
-import { log, string } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean.ts";
 import { repoRoot, toPosix } from "../src/packages.ts";
 
@@ -24,7 +24,7 @@ const regenHint = (removedNodeModules: boolean): string =>
 if (yes) {
   const n = removePaths(targets);
   logger.success(
-    `removed ${string.pluralize(n, "path")} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
+    `removed ${stringUtils.pluralize(n, "path")} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
   );
   process.exit(0);
 }
@@ -64,4 +64,4 @@ if (picked.length === 0) {
 
 const removedNodeModules = picked.some((p) => nodeModules.includes(p));
 const n = removePaths(picked);
-clack.outro(`removed ${string.pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);
+clack.outro(`removed ${stringUtils.pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);

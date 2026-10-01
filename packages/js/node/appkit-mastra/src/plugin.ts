@@ -56,9 +56,9 @@ import {
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import { plugin } from "@dbx-tools/appkit";
-import { serving as modelServing } from "@dbx-tools/model";
-import { async, error, log, object, string } from "@dbx-tools/shared-core";
+import { pluginRegistry } from "@dbx-tools/appkit";
+import { modelCatalog } from "@dbx-tools/model";
+import { asyncUtils, errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import {
   feedback,
   routes,
@@ -77,7 +77,12 @@ import type { Pool } from "pg";
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
 import { fetchChart } from "./chart.ts";
 import { agentChatRoutes } from "./chat.ts";
-import { attributedUserId, MASTRA_CONFIG_SCHEMA, type MastraPluginConfig } from "./config.ts";
+import {
+  attributedUserId,
+  executionContextUserId,
+  MASTRA_CONFIG_SCHEMA,
+  type MastraPluginConfig,
+} from "./config.ts";
 import {
   chartFetchDefaults,
   feedbackWriteDefaults,
@@ -109,8 +114,8 @@ import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
 import { attachChatTurnTraceIo } from "./trace-io.ts";
 import { invalidFields } from "./validation.ts";
 
-const GENIE_MANIFEST = plugin.data(genie).plugin.manifest;
-const LAKEBASE_MANIFEST = plugin.data(lakebase).plugin.manifest;
+const GENIE_MANIFEST = pluginRegistry.data(genie).plugin.manifest;
+const LAKEBASE_MANIFEST = pluginRegistry.data(lakebase).plugin.manifest;
 
 /**
  * Budget for draining the memory service-principal pool on shutdown. Well
@@ -278,7 +283,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * already in the registry by the time this fires.
    */
   private applyLakebaseAutoDefaults(): void {
-    const hasLakebase = plugin.instance(this.context, lakebase) !== undefined;
+    const hasLakebase = pluginRegistry.instance(this.context, lakebase) !== undefined;
     if (!hasLakebase) return;
     if (this.config.storage === undefined) this.config.storage = true;
     if (this.config.memory === undefined) this.config.memory = true;
@@ -300,10 +305,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // early cannot hold the event loop open for the rest of the window.
     const budget = new AbortController();
     try {
-      await Promise.race([pool.end(), async.sleep(POOL_DRAIN_TIMEOUT_MS, budget.signal)]);
+      await Promise.race([pool.end(), asyncUtils.sleep(POOL_DRAIN_TIMEOUT_MS, budget.signal)]);
     } catch (err) {
       this.logger.error("error closing memory SP pool", {
-        error: error.errorMessage(err),
+        error: errorUtils.errorMessage(err),
       });
     } finally {
       budget.abort();
@@ -411,7 +416,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
        * Returns the underlying `CacheManager.delete`/`clear` promise.
        */
       clearModelsCache: (host?: string): Promise<void> =>
-        modelServing.clearServingEndpointsCache(host),
+        modelCatalog.clearServingEndpointsCache(host),
     };
   }
 
@@ -517,7 +522,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       req: express.Request,
       res: express.Response,
     ): Promise<void> => {
-      const requested = string.firstNonEmpty(req.params.agentId);
+      const requested = stringUtils.firstNonEmpty(req.params.agentId);
       if (requested !== null && !this.built?.agents[requested]) {
         res.status(404).json({ error: this.unknownAgentMessage(requested) });
         return;
@@ -611,8 +616,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       method: "get",
       path: `${routes.MASTRA_ROUTES.embed}/:type/:id`,
       handler: async (req, res) => {
-        const type = string.firstNonEmpty(req.params.type) ?? "";
-        const id = string.firstNonEmpty(req.params.id);
+        const type = stringUtils.firstNonEmpty(req.params.type) ?? "";
+        const id = stringUtils.firstNonEmpty(req.params.id);
         const resolve = embedResolvers[type];
         if (!resolve) {
           this.logger.warn("embed:unsupported", {
@@ -874,7 +879,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     if (Object.keys(spaces).length === 0) return { ok: true, data: [] };
     const client = getExecutionContext().client;
     return this.execute((executeSignal) => {
-      const combined = async.combineAbortSignals(signal, executeSignal);
+      const combined = asyncUtils.combineAbortSignals(signal, executeSignal);
       return collectSpaceSuggestions({
         spaces,
         client,
@@ -931,7 +936,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const limit = Math.min(options.limit ?? STATEMENT_ROW_CAP, STATEMENT_ROW_CAP);
     return this.execute(
       async (executeSignal) => {
-        const combined = async.combineAbortSignals(options.signal, executeSignal);
+        const combined = asyncUtils.combineAbortSignals(options.signal, executeSignal);
         try {
           const data = await fetchStatementData(client, statementId, {
             limit,
@@ -946,7 +951,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         } catch (err) {
           // The Databricks SDK throws on 404; surface as `undefined`
           // so the route maps to a clean HTTP 404 instead of a 500.
-          if (error.errorContext(err).notAccessible) return undefined;
+          if (errorUtils.errorContext(err).notAccessible) return undefined;
           throw err;
         }
       },
@@ -990,7 +995,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         fetchChart(chartId, {
           userKey,
           ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
-          signal: async.combineAbortSignals(options.signal, executeSignal) ?? options.signal,
+          signal: asyncUtils.combineAbortSignals(options.signal, executeSignal) ?? options.signal,
         }),
       chartFetchDefaults,
     );
@@ -1003,10 +1008,15 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    */
   private async listModelsResult(): Promise<ExecutionResult<ServingEndpointSummary[]>> {
     return this.execute(async () => {
-      const client = getExecutionContext().client;
+      const context = getExecutionContext();
+      const client = context.client;
+      const cacheIdentity = executionContextUserId(context);
       const host = (await client.config.getHost()).toString();
       const serving = resolveServingConfig(this.config);
-      return modelServing.listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+      return modelCatalog.listServingEndpoints(client, host, {
+        ttlMs: serving.ttlMs,
+        cacheIdentity,
+      });
     }, modelCatalogueDefaults);
   }
 
@@ -1037,7 +1047,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // `PgVector` singleton so registering N agents stays cheap. See
     // `./memory.js`.
     if (needsLakebase(this.config)) {
-      const spPgConfig = plugin
+      const spPgConfig = pluginRegistry
         .require(this.context, lakebase, this.config)
         .exports()
         .getPgConfig();

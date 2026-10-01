@@ -35,7 +35,7 @@ import {
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { bin } from "@dbx-tools/core";
+import * as bin from "@dbx-tools/core/bin";
 import { find } from "@dbx-tools/path";
 import { log } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";

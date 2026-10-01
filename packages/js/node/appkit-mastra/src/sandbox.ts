@@ -11,7 +11,7 @@
 
 import type { WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
-import { async, error, log, string } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import type { RequestContext } from "@mastra/core/request-context";
 import type {
   CommandResult,
@@ -113,7 +113,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
   private startPromise?: Promise<void>;
 
   constructor(options: DatabricksSandboxOptions) {
-    const id = string.trimToNull(options.sandboxId.replace(/^sandboxes\//, ""));
+    const id = stringUtils.trimToNull(options.sandboxId.replace(/^sandboxes\//, ""));
     if (!id) throw new TypeError("Databricks sandbox id must not be blank");
     this.id = id;
     this.name = options.displayName?.trim() || `Mastra sandbox ${id}`;
@@ -177,7 +177,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
         logger.warn("Databricks Sandbox unavailable; using fallback", {
           sandboxId: this.id,
           fallback: fallback.provider,
-          error: error.errorMessage(caught),
+          error: errorUtils.errorMessage(caught),
         });
         await fallback.start?.();
         this.activeFallback = fallback;
@@ -186,7 +186,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
         return;
       }
       this.status = "error";
-      this.error = error.errorMessage(caught);
+      this.error = errorUtils.errorMessage(caught);
       throw caught;
     }
   }
@@ -218,7 +218,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
         return;
       }
       this.status = "error";
-      this.error = error.errorMessage(caught);
+      this.error = errorUtils.errorMessage(caught);
       throw caught;
     }
   }
@@ -241,7 +241,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
         return;
       }
       this.status = "error";
-      this.error = error.errorMessage(caught);
+      this.error = errorUtils.errorMessage(caught);
       throw caught;
     }
   }
@@ -416,7 +416,7 @@ export class DatabricksSandbox implements WorkspaceSandbox {
     while (Date.now() < deadline) {
       const sandbox = await this.get(signal);
       if (sandbox.status?.state === expected) return sandbox;
-      await async.sleep(SANDBOX_POLL_INTERVAL_MS, signal);
+      await asyncUtils.sleep(SANDBOX_POLL_INTERVAL_MS, signal);
     }
     throw new Error(
       `Databricks sandbox ${this.id} did not reach ${expected} within ${this.startupTimeoutMs}ms`,
@@ -475,7 +475,7 @@ function definedEnvironment(input: NodeJS.ProcessEnv | undefined): Record<string
 }
 
 function isStatus(caught: unknown, status: number): boolean {
-  return error.errorContext(caught).statusCode === status;
+  return errorUtils.errorContext(caught).statusCode === status;
 }
 
 function remoteStatus(sandbox: z.infer<typeof SandboxResponseSchema>): ProviderStatus {
@@ -503,7 +503,7 @@ function resolveFallback(
 }
 
 function isDatabricksSandboxUnavailable(caught: unknown): boolean {
-  const context = error.errorContext(caught);
+  const context = errorUtils.errorContext(caught);
   return (
     context.statusCode === 404 ||
     context.hasMessage("feature", "disabled") ||

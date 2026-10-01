@@ -8,7 +8,7 @@
  * @module
  */
 
-import { createHash } from "node:crypto";
+import { advisoryLockId as nativeAdvisoryLockId } from "@dbx-tools/core-rs";
 import { object } from "@dbx-tools/shared-core";
 import type { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 
@@ -51,10 +51,7 @@ type UnlockRow = QueryResultRow & { unlocked: boolean };
 export function advisoryLockId(key: AdvisoryLockKey): bigint {
   if (typeof key === "bigint") return BigInt.asIntN(SIGNED_BIGINT_BITS, key);
   const parts = object.toOneOrMany(key);
-  const digest = createHash("sha256")
-    .update(parts.map((part) => object.toStableKey(part)).join("\u0000"))
-    .digest();
-  return digest.readBigInt64BE(0);
+  return nativeAdvisoryLockId(parts.map((part) => object.toStableKey(part)));
 }
 
 async function acquire(client: PgQueryable, id: bigint, transaction: boolean): Promise<void> {

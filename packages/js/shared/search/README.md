@@ -24,9 +24,9 @@ Key features:
 ## Validate A Search Request
 
 ```ts
-import { search, type SearchRequest } from "@dbx-tools/shared-search";
+import { searchSchemas, type SearchRequest } from "@dbx-tools/shared-search";
 
-const request: SearchRequest = search.searchRequestSchema.parse({
+const request: SearchRequest = searchSchemas.searchRequestSchema.parse({
   query: "reset my password",
   index: "main.support.docs",
   limit: 5,

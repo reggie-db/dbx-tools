@@ -22,13 +22,8 @@
  */
 
 import { chatToolReasoningEffort, ReasoningEffort } from "@dbx-tools/model-rs";
-import { json, string } from "@dbx-tools/shared-core";
-import {
-  type ChatMessage,
-  type ChatRole,
-  openaiChat,
-  openaiResponses,
-} from "@dbx-tools/shared-model";
+import { json, stringUtils } from "@dbx-tools/shared-core";
+import { type ChatMessage, type ChatRole, openaiChat } from "@dbx-tools/shared-model";
 
 /**
  * A chat message as it arrives on the serving wire, plus the extended-thinking
@@ -43,9 +38,12 @@ export interface ServingChatMessage extends ChatMessage {
   reasoning_content?: unknown;
 }
 
-// Shared with the Responses sanitize path so both wire surfaces agree on what
-// counts as a signed reasoning block.
-const REASONING_PART_TYPES = openaiResponses.REASONING_TYPES;
+/** Signed Claude reasoning blocks that cannot be replayed after mutation. */
+const REASONING_PART_TYPES: ReadonlySet<string> = new Set([
+  "reasoning",
+  "thinking",
+  "redacted_thinking",
+]);
 
 /**
  * Parse, sanitize, and re-serialize a `/serving-endpoints/...` POST
@@ -114,7 +112,7 @@ export function applyToolReasoningCompatibility(body: Record<string, unknown>): 
   if (!Array.isArray(body.tools) || body.tools.length === 0) {
     return false;
   }
-  const model = string.trimToNull(body.model);
+  const model = stringUtils.trimToNull(body.model);
   if (!model) return false;
   if (chatToolReasoningEffort(model) !== ReasoningEffort.None) return false;
   if (body.reasoning_effort === "none") return false;
@@ -212,8 +210,8 @@ export function repairAssistantPrefill(messages: ServingChatMessage[]): boolean 
   }
 
   const merged = [
-    string.trimToNull(textFromServingContent(opener.content)),
-    string.trimToNull(textFromServingContent(last.content)),
+    stringUtils.trimToNull(textFromServingContent(opener.content)),
+    stringUtils.trimToNull(textFromServingContent(last.content)),
   ]
     .filter((s): s is string => s !== null)
     .join("\n\n");

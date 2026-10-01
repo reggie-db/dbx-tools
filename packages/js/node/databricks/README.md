@@ -63,13 +63,13 @@ recursion, encoding, error mapping) is shared with `LocalFileSystem` /
 ## Resolve Workspace Identity
 
 ```ts
-import { workspace } from "@dbx-tools/databricks";
+import { workspaceClient } from "@dbx-tools/databricks";
 
-const url = await workspace.getWorkspaceUrl();
-const id = await workspace.getWorkspaceId();
+const url = await workspaceClient.getWorkspaceUrl();
+const id = await workspaceClient.getWorkspaceId();
 ```
 
-`workspace.getWorkspaceUrl()` checks the active AppKit execution context when
+`workspaceClient.getWorkspaceUrl()` checks the active AppKit execution context when
 present, then a default Databricks SDK client, then environment/config. Use it in
 libraries that should work inside an AppKit request and from a standalone
 script.

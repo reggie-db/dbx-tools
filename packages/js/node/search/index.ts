@@ -3,10 +3,10 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/search";
-export const PACKAGE_VERSION = "0.9.5";
+export const PACKAGE_VERSION = "0.9.6";
 export * as client from "./src/client.ts";
 export * as config from "./src/config.ts";
-export * as indexTools from "./src/index-tools.ts";
+export * as indexOptions from "./src/index-options.ts";
 export * as lakebase from "./src/lakebase.ts";
 export * as lakebasePlugin from "./src/lakebase-plugin.ts";
 export * as native from "./src/native.ts";

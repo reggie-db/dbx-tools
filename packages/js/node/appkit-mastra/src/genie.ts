@@ -44,9 +44,9 @@ import {
   ValidationError,
 } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
-import { plugin } from "@dbx-tools/appkit";
+import { pluginRegistry } from "@dbx-tools/appkit";
 import { chat, space as genieSpace } from "@dbx-tools/genie";
-import { error, log, string } from "@dbx-tools/shared-core";
+import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
 import type { StartedEvent } from "@dbx-tools/shared-mastra";
 import type { RequestContext } from "@mastra/core/request-context";
@@ -245,7 +245,7 @@ async function readCachedConversationId(cacheKey: string | undefined): Promise<s
     return v ?? undefined;
   } catch (err) {
     logger.warn("conversation-cache:read-error", {
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
     return undefined;
   }
@@ -269,7 +269,7 @@ async function saveCachedConversationId(
     });
   } catch (err) {
     logger.warn("conversation-cache:write-error", {
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
   }
 }
@@ -281,7 +281,7 @@ async function evictCachedConversationId(cacheKey: string | undefined): Promise<
     await CacheManager.getInstanceSync().delete(cacheKey);
   } catch (err) {
     logger.warn("conversation-cache:delete-error", {
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
   }
 }
@@ -324,7 +324,7 @@ const prepareChartRequestSchema = chartPlannerRequestSchema
       .string()
       .min(1, "statement_id is required")
       .describe(
-        string.toDescription(`
+        stringUtils.toDescription(`
           Genie \`statement_id\` to chart. Read from
           \`message.query_result.statement_id\` or
           \`message.attachments[*].query.statement_id\` returned by
@@ -345,7 +345,7 @@ const prepareChartRequestSchema = chartPlannerRequestSchema
  */
 function aliasSuffix(alias: string): string {
   if (alias === DEFAULT_GENIE_ALIAS) return "";
-  const slug = string.toIdentifier(alias);
+  const slug = stringUtils.toIdentifier(alias);
   return slug ? `_${slug}` : "";
 }
 
@@ -381,7 +381,7 @@ function buildAskGenieTool(opts: {
   const hintLine = hint ? ` (${hint})` : "";
   return createTool({
     id: toolId,
-    description: string.toDescription(`
+    description: stringUtils.toDescription(`
       Ask the Genie space "${alias}"${hintLine} ONE focused
       natural-language sub-question and wait for the turn to
       complete. Genie answers best when each call covers a
@@ -414,7 +414,7 @@ function buildAskGenieTool(opts: {
         .string()
         .min(1, "question is required")
         .describe(
-          string.toDescription(`
+          stringUtils.toDescription(`
             ONE focused natural-language question about the data in this
             space, covering a single metric / dimension / time window
             (e.g. "What was Q3 revenue by region?"). Decompose a
@@ -507,11 +507,11 @@ function buildAskGenieTool(opts: {
           // A rejected conversation id is stale or inaccessible. Reset this
           // lane and retry once with a fresh Genie conversation.
           const rejectedConversationId = conversationId;
-          if (rejectedConversationId && error.errorContext(err).notAccessible) {
+          if (rejectedConversationId && errorUtils.errorContext(err).notAccessible) {
             logger.warn("conversation-cache:stale, resetting", {
               spaceId,
               conversationId: rejectedConversationId,
-              error: error.errorMessage(err),
+              error: errorUtils.errorMessage(err),
             });
             if (ownsReusableConversation) {
               await evictCachedConversationId(cacheKey);
@@ -541,7 +541,7 @@ function buildSpaceDescriptionTool(opts: { spaceId: string; alias: string }) {
   const toolId = `get_space_description${aliasSuffix(alias)}`;
   return createTool({
     id: toolId,
-    description: string.toDescription(`
+    description: stringUtils.toDescription(`
       Return the Genie space "${alias}"'s title, description, and
       warehouse id. Cheap (single REST call, no LLM round-trip).
       Call this FIRST on any user turn that's going to touch
@@ -586,7 +586,7 @@ function buildSpaceSerializedTool(opts: { spaceId: string; alias: string }) {
   const toolId = `get_space_serialized${aliasSuffix(alias)}`;
   return createTool({
     id: toolId,
-    description: string.toDescription(`
+    description: stringUtils.toDescription(`
       Return the full \`GenieSpace\` JSON for the "${alias}" space.
       Use only when you need exact column / table identifiers
       \`get_space_description\` doesn't expose. Larger payload, so
@@ -625,7 +625,7 @@ function buildGetStatementTool() {
   const toolId = "get_statement";
   return createTool({
     id: toolId,
-    description: string.toDescription(`
+    description: stringUtils.toDescription(`
       Fetch the rows of a Genie statement by its \`statement_id\` (the
       value at \`message.query_result.statement_id\` or
       \`message.attachments[*].query.statement_id\` returned from
@@ -645,7 +645,7 @@ function buildGetStatementTool() {
         .string()
         .min(1, "statement_id is required")
         .describe(
-          string.toDescription(`
+          stringUtils.toDescription(`
             Genie \`statement_id\` whose rows to read. Take it from
             \`message.query_result.statement_id\` or
             \`message.attachments[*].query.statement_id\` on an
@@ -710,7 +710,7 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
   const toolId = "prepare_chart";
   return createTool({
     id: toolId,
-    description: string.toDescription([
+    description: stringUtils.toDescription([
       `
         Queue a chart for the rows of a Genie statement. Mints a
         \`chartId\` plus its complete \`marker\` synchronously and
@@ -782,7 +782,7 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
  * variant that names the suffixed per-space tools
  * (e.g. `ask_genie_sales`).
  */
-export const GENIE_INSTRUCTIONS = string.toDescription([
+export const GENIE_INSTRUCTIONS = stringUtils.toDescription([
   "Genie orchestration. For every user question that needs SQL-backed data:",
   {
     numbered: [
@@ -975,7 +975,7 @@ type AppKitGenieConfig = NonNullable<Parameters<typeof genie>[0]>;
  */
 export function resolveGenieSpaces(
   config: MastraPluginConfig,
-  context: plugin.PluginContextLike | undefined,
+  context: pluginRegistry.PluginContextLike | undefined,
 ): Record<string, GenieSpaceConfig> {
   const merged: Record<string, GenieSpaceConfig> = {};
 
@@ -988,7 +988,7 @@ export function resolveGenieSpaces(
   // Source 2: AppKit `genie()` plugin instance config. Use a
   // structural cast - `Plugin.config` is `protected` in TS only,
   // and the runtime layout is plain object property access.
-  const geniePlugin = plugin.instance(context, genie);
+  const geniePlugin = pluginRegistry.instance(context, genie);
   if (geniePlugin) {
     const pluginSpaces = (geniePlugin as unknown as { config?: AppKitGenieConfig }).config?.spaces;
     if (pluginSpaces) {
@@ -1142,7 +1142,7 @@ export async function collectSpaceSuggestions(opts: {
       } catch (err) {
         logger.warn("suggestions:fetch-error", {
           spaceId,
-          error: error.errorMessage(err),
+          error: errorUtils.errorMessage(err),
         });
         questions = [];
       }

@@ -27,8 +27,16 @@ crate-type = [ "lib", "cdylib" ]
 name = "dbx-tools-model-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
 
+[features]
+contract-generation = [ "dep:ts-rs" ]
+
+[[example]]
+name = "generate-model-contracts"
+path = "examples/generate-model-contracts.rs"
+required-features = [ "contract-generation" ]
+
 [dependencies.dbx-tools-core]
-version = "0.9.5"
+version = "0.9.6"
 path = "../core"
 
 [dependencies.difflib-fast]
@@ -63,6 +71,10 @@ workspace = true
 
 [dependencies.tracing]
 workspace = true
+
+[dependencies.ts-rs]
+workspace = true
+optional = true
 
 [dependencies.uniffi]
 workspace = true

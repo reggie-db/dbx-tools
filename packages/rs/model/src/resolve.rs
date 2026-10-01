@@ -62,7 +62,7 @@ pub fn search_serving_endpoints(
 pub fn lookup_models(endpoints: &[ServingEndpointSummary], query: &ModelQuery) -> Vec<RankedModel> {
     let summaries = endpoints
         .iter()
-        .filter(|endpoint| query.include_deprecated || !endpoint.status.deprecated)
+        .filter(|endpoint| query.include_deprecated.unwrap_or(false) || !endpoint.status.deprecated)
         .cloned()
         .collect::<Vec<_>>();
     let eligible = eligible_classes(query.model_class);
@@ -70,7 +70,7 @@ pub fn lookup_models(endpoints: &[ServingEndpointSummary], query: &ModelQuery) -
         .into_iter()
         .filter(|(model_class, endpoint)| {
             eligible.contains(model_class)
-                && (!query.requires_tools || endpoint_supports_tools(endpoint))
+                && (!query.requires_tools.unwrap_or(false) || endpoint_supports_tools(endpoint))
         })
         .map(|(model_class, endpoint)| RankedModel {
             endpoint,

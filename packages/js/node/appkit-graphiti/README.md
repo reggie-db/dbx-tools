@@ -40,10 +40,10 @@ plugin:
 ```ts
 import { server } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { plugin as graphitiPlugin } from "@dbx-tools/appkit-graphiti";
+import { graphiti } from "@dbx-tools/appkit-graphiti";
 
 await appkit.createApp({
-  plugins: [server(), graphitiPlugin.graphiti()],
+  plugins: [server(), graphiti()],
 });
 ```
 

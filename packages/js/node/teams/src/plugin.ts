@@ -36,22 +36,15 @@
  */
 
 import {
-  Plugin,
   toPlugin,
   type ExecutionResult,
   type IAppRouter,
   type PluginManifest,
 } from "@databricks/appkit";
-import {
-  defineTool,
-  executeFromRegistry,
-  toolsFromRegistry,
-  type AgentToolDefinition,
-  type ToolProvider,
-  type ToolRegistry,
-} from "@databricks/appkit/beta";
-import { error, log, object, string } from "@dbx-tools/shared-core";
-import { activity as sharedActivity, card } from "@dbx-tools/shared-teams";
+import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
+import { ToolRegistryPlugin } from "@dbx-tools/appkit";
+import { errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { teamsActivity, card } from "@dbx-tools/shared-teams";
 import { verifyBotToken } from "./auth.ts";
 import { TEAMS_CONFIG_SCHEMA, type TeamsPluginConfig } from "./config.ts";
 import {
@@ -101,17 +94,17 @@ const logger = log.logger("teams");
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as teamsPlugin } from "@dbx-tools/teams";
+ * import { teams } from "@dbx-tools/teams";
  *
  * await createApp({
  *   plugins: [
  *     server(),
- *     teamsPlugin.teams({ webhookUrl: process.env.TEAMS_WEBHOOK_URL }),
+ *     teams({ webhookUrl: process.env.TEAMS_WEBHOOK_URL }),
  *   ],
  * });
  * ```
  */
-export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvider {
+export class TeamsPlugin extends ToolRegistryPlugin<TeamsPluginConfig> {
   static manifest = {
     name: "teams",
     displayName: "Teams",
@@ -143,7 +136,7 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
    * against the same schema first, but re-parsing is what gives the body typed
    * arguments instead of `unknown`.
    */
-  private readonly tools: ToolRegistry = {
+  protected readonly toolRegistry: ToolRegistry = {
     [CREATE_TOOL]: defineTool({
       description: CREATE_CARD_DESCRIPTION,
       schema: card.cardSpecSchema,
@@ -270,20 +263,6 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
     };
   }
 
-  /** AppKit `ToolProvider`: the tool definitions offered to an agent. */
-  getAgentTools(): AgentToolDefinition[] {
-    return toolsFromRegistry(this.tools);
-  }
-
-  /**
-   * AppKit `ToolProvider`: run one tool call. Arguments are validated against
-   * the tool's schema first, and a validation failure comes back as an
-   * LLM-friendly string so the model can correct itself on the next turn.
-   */
-  async executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
-    return executeFromRegistry(this.tools, name, args, signal);
-  }
-
   /**
    * Handle one inbound request from Azure Bot Service on `POST /messages`.
    *
@@ -356,12 +335,12 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
     } catch (err) {
       // Deliberately terse: a caller failing authentication learns only that it
       // failed, while the reason goes to the logs.
-      logger.warn("rejected an unauthenticated request", { error: error.errorMessage(err) });
+      logger.warn("rejected an unauthenticated request", { error: errorUtils.errorMessage(err) });
       res.status(401).json({ error: "unauthorized" });
       return;
     }
 
-    const parsed = sharedActivity.activitySchema.safeParse(req.body);
+    const parsed = teamsActivity.activitySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
@@ -433,8 +412,8 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
    */
   private async executeTurn(
     body: unknown,
-  ): Promise<ExecutionResult<sharedActivity.ActivityResponse>> {
-    const parsed = sharedActivity.activityRequestSchema.safeParse(body);
+  ): Promise<ExecutionResult<teamsActivity.ActivityResponse>> {
+    const parsed = teamsActivity.activityRequestSchema.safeParse(body);
     if (!parsed.success) {
       return { ok: false, status: 400, message: parsed.error.message };
     }
@@ -488,10 +467,10 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as teamsPlugin } from "@dbx-tools/teams";
+ * import { teams } from "@dbx-tools/teams";
  *
  * await createApp({
- *   plugins: [server(), teamsPlugin.teams()],
+ *   plugins: [server(), teams()],
  * });
  * ```
  */
@@ -507,5 +486,5 @@ export const teams = toPlugin(TeamsPlugin);
 function readHeader(headers: Record<string, unknown>, name: string): string | undefined {
   const direct = headers[name] ?? headers[name.toLowerCase()];
   const value = Array.isArray(direct) ? direct[0] : direct;
-  return typeof value === "string" ? (string.trimToNull(value) ?? undefined) : undefined;
+  return typeof value === "string" ? (stringUtils.trimToNull(value) ?? undefined) : undefined;
 }

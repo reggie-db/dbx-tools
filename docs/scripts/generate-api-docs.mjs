@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
+import { asyncUtils } from "@dbx-tools/shared-core";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
   discoverJavaScriptPackages,
@@ -10,9 +11,11 @@ import {
   discoverRustPackages,
   groupTitle,
   posix,
+  stripLeadingH1,
   summaryText,
   walk,
   withBasePath,
+  yamlString,
 } from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
@@ -46,21 +49,6 @@ function packageBinary(packageName, binaryName) {
   return path.resolve(packageRoot, relative);
 }
 
-/** Map values through a bounded number of asynchronous workers while preserving order. */
-async function mapConcurrent(values, limit, callback) {
-  const results = new Array(values.length);
-  let next = 0;
-  async function worker() {
-    while (next < values.length) {
-      const index = next;
-      next += 1;
-      results[index] = await callback(values[index], index);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, () => worker()));
-  return results;
-}
-
 /**
  * Every PUBLISHED package under `packages/js/` that has a TypeScript export.
  *
@@ -84,14 +72,6 @@ function titleFromMarkdown(markdown, fallback) {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/~~|[*_`]/g, "")
     .trim();
-}
-
-function stripLeadingH1(markdown) {
-  return markdown.replace(/^#\s+.+?(?:\r?\n)+/, "");
-}
-
-function yamlString(value) {
-  return JSON.stringify(value ?? "");
 }
 
 /**
@@ -589,11 +569,15 @@ async function main() {
   fs.mkdirSync(apiRoot, { recursive: true });
 
   const [typescriptGenerated, pythonGenerated, rustGenerated] = await Promise.all([
-    mapConcurrent(typescriptPackages, typedocWorkers, async (pkg) =>
-      (await generatePackageApi(pkg, typedocBin)) ? pkg : undefined,
+    asyncUtils.mapConcurrent(
+      typescriptPackages,
+      async (pkg) => ((await generatePackageApi(pkg, typedocBin)) ? pkg : undefined),
+      { concurrency: typedocWorkers },
     ),
-    mapConcurrent(pythonPackages, 5, async (pkg) =>
-      (await generatePythonPackageApi(pkg)) ? pkg : undefined,
+    asyncUtils.mapConcurrent(
+      pythonPackages,
+      async (pkg) => ((await generatePythonPackageApi(pkg)) ? pkg : undefined),
+      { concurrency: 5 },
     ),
     generateRustApis(rustPackages),
   ]);

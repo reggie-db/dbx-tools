@@ -11,16 +11,32 @@ export function withBasePath(base, sitePath) {
   return `${base}${sitePath}`;
 }
 
-/** Recursively collect files while skipping dependency and Git metadata trees. */
-export function walk(dir, files = []) {
+/** Recursively collect files while skipping dependency, Git, and caller-named trees. */
+export function walk(dir, files = [], skip = []) {
   if (!fs.existsSync(dir)) return files;
+  const skipped = new Set(["node_modules", ".git", ...skip]);
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.name === ".git") continue;
+    if (skipped.has(entry.name)) continue;
     const target = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(target, files);
+    if (entry.isDirectory()) walk(target, files, skip);
     else files.push(target);
   }
   return files;
+}
+
+/** Escape a literal string for interpolation into a regular expression. */
+export function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Remove one leading Markdown H1 and its following blank space. */
+export function stripLeadingH1(markdown) {
+  return markdown.replace(/^#\s+.+?(?:\r?\n)+/, "");
+}
+
+/** Quote a scalar safely for the generated YAML frontmatter subset. */
+export function yamlString(value) {
+  return JSON.stringify(value ?? "");
 }
 
 /** Stable docs route slug for an npm-style package name. */
@@ -79,7 +95,7 @@ function read(file) {
 }
 
 function tomlSection(manifest, name, array = false) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegExp(name);
   const header = array ? `\\[\\[${escaped}\\]\\]` : `\\[${escaped}\\]`;
   return (
     read(manifest).match(
@@ -89,7 +105,7 @@ function tomlSection(manifest, name, array = false) {
 }
 
 function tomlString(section, key) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegExp(key);
   return section.match(new RegExp(`^\\s*${escaped}\\s*=\\s*["']([^"']+)["']`, "m"))?.[1];
 }
 

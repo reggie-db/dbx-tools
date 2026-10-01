@@ -25,7 +25,10 @@ pub use capabilities::{
 pub use classify::{
     classify_by_family, classify_endpoints, supports_tools_by_family, CHAT_TASK, EMBEDDING_TASK,
 };
-pub use client::{endpoints_from_response, ModelClient, ModelError, DEFAULT_MODEL_CACHE_TTL};
+pub use client::{
+    endpoints_from_response, normalize_serving_endpoints_json, EndpointNormalizationError,
+    ModelClient, ModelError, DEFAULT_MODEL_CACHE_TTL,
+};
 pub use limits::{
     parse_model_rate_limits, refresh_generated_model_rate_limits, ModelRateLimitCatalogue,
     ModelRateLimits, ModelRateLimitsError, ModelRateLimitsResolver, MODEL_RATE_LIMITS_TTL,

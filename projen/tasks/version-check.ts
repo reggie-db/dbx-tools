@@ -2,11 +2,12 @@
 /** Verify that every committed package version matches its owning release unit. */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { exec, project } from "@dbx-tools/core";
+import * as exec from "@dbx-tools/core/exec";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
 import { json, log, object } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
-import { recordedPackages } from "../src/packages.ts";
+import { recordedPackages, toPosix } from "../src/packages.ts";
 import type { ReleaseUnitGraph } from "../src/release-catalog.ts";
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
@@ -53,14 +54,14 @@ function cargoVersions(root: string): Array<{ name: string; version: string; pat
       {
         name: candidate.name,
         version: candidate.version,
-        path: relative(root, dirname(candidate.manifest_path)).replaceAll("\\", "/") || ".",
+        path: toPosix(relative(root, dirname(candidate.manifest_path))) || ".",
       },
     ];
   });
 }
 
 function main(): void {
-  const root = project.root() ?? process.cwd();
+  const root = projectUtils.root() ?? process.cwd();
   const fixedVersion = readWorkspaceVersion(root);
   const graphPath = join(root, ".projen/release-units.json");
   const graph = existsSync(graphPath)
@@ -94,7 +95,7 @@ function main(): void {
   }
 
   for (const path of find.findFiles("**/pyproject.toml", { cwd: root })) {
-    check(path, dirname(path).replaceAll("\\", "/"), pythonVersion(join(root, path)));
+    check(path, toPosix(dirname(path)), pythonVersion(join(root, path)));
   }
   for (const pkg of cargoVersions(root)) {
     check(`Cargo package ${pkg.name}`, pkg.path, pkg.version);

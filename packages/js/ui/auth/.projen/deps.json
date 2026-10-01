@@ -45,11 +45,6 @@
       "type": "peer"
     },
     {
-      "name": "@better-auth/passkey",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/shared-auth",
       "version": "workspace:^",
       "type": "runtime"
@@ -67,11 +62,6 @@
     {
       "name": "@dbx-tools/ui-branding",
       "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
-      "name": "better-auth",
-      "version": "catalog:",
       "type": "runtime"
     }
   ],
