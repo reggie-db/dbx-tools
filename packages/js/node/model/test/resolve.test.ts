@@ -98,6 +98,22 @@ describe("listServingEndpointsUncached model policy", () => {
         async *list() {
           yield { name: "databricks-gpt-5-3-codex", task: CHAT_TASK };
           yield { name: "databricks-gemini-3-5-flash", task: CHAT_TASK };
+          yield {
+            name: "databricks-gemini-2-5-pro",
+            task: CHAT_TASK,
+            tags: [{ key: "display_name", value: "Gemini Pro" }],
+            config: {
+              served_entities: [
+                {
+                  entity_name: "databricks-gemini-2-5-pro",
+                  foundation_model: {
+                    name: "system.ai.gemini-2-5-pro",
+                    ai_gateway_model_profile: { quality: 5, speed: 3, cost: 2 },
+                  },
+                },
+              ],
+            },
+          };
         },
       },
     } as unknown as WorkspaceClientLike;
@@ -123,8 +139,27 @@ describe("listServingEndpointsUncached model policy", () => {
           reasoningEfforts: ["minimal", "low", "medium", "high"],
           supportsTools: false,
         },
+        {
+          name: "databricks-gemini-2-5-pro",
+          family: "gemini",
+          reasoningEfforts: ["minimal", "low", "medium", "high"],
+          supportsTools: false,
+        },
       ],
     );
+    assert.deepEqual(endpoints[2], {
+      name: "databricks-gemini-2-5-pro",
+      displayName: "Gemini Pro",
+      family: "gemini",
+      task: CHAT_TASK,
+      supportsTools: false,
+      profile: { quality: 5, speed: 3, cost: 2 },
+      class: ModelClass.ChatThinking,
+      serviceNames: { google: "gemini-2.5-pro" },
+      modelServiceName: "system.ai.gemini-2-5-pro",
+      reasoningEfforts: ["minimal", "low", "medium", "high"],
+      status: { deprecated: true },
+    });
   });
 });
 

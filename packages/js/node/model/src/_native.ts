@@ -1,5 +1,7 @@
 import {
   ModelClass as NativeModelClass,
+  ReasoningEffort as NativeReasoningEffort,
+  normalizeServingEndpointsJson,
   rankModels as rankModelsWithRust,
   type ModelQuery as NativeModelQuery,
   type ServingEndpointSummary as NativeServingEndpointSummary,
@@ -8,6 +10,7 @@ import {
   model,
   type ModelQuery,
   type RankedModel,
+  type ReasoningEffort,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
@@ -18,6 +21,26 @@ const MODEL_CLASS_TO_NATIVE: Readonly<Record<ModelClass, NativeModelClass>> = {
   [model.ModelClass.ChatBalanced]: NativeModelClass.ChatBalanced,
   [model.ModelClass.ChatFast]: NativeModelClass.ChatFast,
   [model.ModelClass.Embedding]: NativeModelClass.Embedding,
+};
+
+const REASONING_EFFORT_TO_NATIVE: Readonly<Record<string, NativeReasoningEffort>> = {
+  none: NativeReasoningEffort.None,
+  minimal: NativeReasoningEffort.Minimal,
+  low: NativeReasoningEffort.Low,
+  medium: NativeReasoningEffort.Medium,
+  high: NativeReasoningEffort.High,
+  xhigh: NativeReasoningEffort.Xhigh,
+  max: NativeReasoningEffort.Max,
+};
+
+const REASONING_EFFORT_FROM_NATIVE: Readonly<Record<NativeReasoningEffort, ReasoningEffort>> = {
+  [NativeReasoningEffort.None]: "none",
+  [NativeReasoningEffort.Minimal]: "minimal",
+  [NativeReasoningEffort.Low]: "low",
+  [NativeReasoningEffort.Medium]: "medium",
+  [NativeReasoningEffort.High]: "high",
+  [NativeReasoningEffort.Xhigh]: "xhigh",
+  [NativeReasoningEffort.Max]: "max",
 };
 
 interface NativeRankingOptions {
@@ -64,13 +87,18 @@ export function classifyEndpointClassesWithRust(
   );
 }
 
+/** Normalize serialized SDK endpoint records through the Rust-owned catalogue policy. */
+export function normalizeEndpointsWithRust(endpoints: readonly unknown[]): ServingEndpointSummary[] {
+  return normalizeServingEndpointsJson(JSON.stringify({ endpoints })).map(fromNativeEndpoint);
+}
+
 function toNativeQuery(query: ModelQuery, includeDeprecated: boolean): NativeModelQuery {
   return {
     search: query.search,
     modelClass:
       query.modelClass === undefined ? undefined : MODEL_CLASS_TO_NATIVE[query.modelClass],
-    requiresTools: query.requiresTools ?? false,
-    includeDeprecated,
+    requiresTools: query.requiresTools,
+    includeDeprecated: includeDeprecated || undefined,
     limit: query.limit,
     threshold: query.threshold,
   };
@@ -84,6 +112,7 @@ function toNativeEndpoint(
   return {
     name: endpoint.name,
     displayName: endpoint.displayName,
+    family: endpoint.family,
     task: options.task ?? endpoint.task,
     state: endpoint.state,
     description: endpoint.description,
@@ -92,8 +121,42 @@ function toNativeEndpoint(
     modelClass: modelClass === undefined ? undefined : MODEL_CLASS_TO_NATIVE[modelClass],
     serviceNames: new Map(Object.entries(endpoint.serviceNames ?? {})),
     modelServiceName: endpoint.modelServiceName,
-    reasoningEfforts: [],
+    reasoningEfforts: (endpoint.reasoningEfforts ?? []).map((effort) => {
+      const native = REASONING_EFFORT_TO_NATIVE[effort];
+      if (native === undefined) throw new Error(`Unknown reasoning effort "${effort}"`);
+      return native;
+    }),
     status: { deprecated: endpoint.status?.deprecated ?? false },
+    dimension: endpoint.dimension,
+  };
+}
+
+function fromNativeEndpoint(endpoint: NativeServingEndpointSummary): ServingEndpointSummary {
+  return {
+    name: endpoint.name,
+    ...(endpoint.displayName !== undefined ? { displayName: endpoint.displayName } : {}),
+    ...(endpoint.family !== undefined ? { family: endpoint.family } : {}),
+    ...(endpoint.task !== undefined ? { task: endpoint.task } : {}),
+    ...(endpoint.state !== undefined ? { state: endpoint.state } : {}),
+    ...(endpoint.description !== undefined ? { description: endpoint.description } : {}),
+    ...(endpoint.supportsTools !== undefined ? { supportsTools: endpoint.supportsTools } : {}),
+    ...(endpoint.profile !== undefined ? { profile: endpoint.profile } : {}),
+    ...(endpoint.modelClass !== undefined ? { class: fromNativeClass(endpoint.modelClass) } : {}),
+    ...(endpoint.serviceNames.size > 0
+      ? { serviceNames: Object.fromEntries(endpoint.serviceNames) }
+      : {}),
+    ...(endpoint.modelServiceName !== undefined
+      ? { modelServiceName: endpoint.modelServiceName }
+      : {}),
+    ...(endpoint.reasoningEfforts.length > 0
+      ? {
+          reasoningEfforts: endpoint.reasoningEfforts.map(
+            (effort) => REASONING_EFFORT_FROM_NATIVE[effort],
+          ),
+        }
+      : {}),
+    status: { deprecated: endpoint.status.deprecated },
+    ...(endpoint.dimension !== undefined ? { dimension: endpoint.dimension } : {}),
   };
 }
 

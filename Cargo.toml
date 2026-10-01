@@ -47,6 +47,7 @@ resolver = "2"
   tokio-postgres = "0.7"
   tokio-rustls = "0.26"
   tracing = "0.1"
+  ts-rs = "=12.0.1"
   webpki-roots = "1"
   wiremock = "0.6"
 

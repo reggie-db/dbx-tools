@@ -443,36 +443,6 @@
       "source": "packages/js/shared/fs/src/posix-path.ts"
     },
     {
-      "package": "@dbx-tools/shared-model",
-      "name": "ModelClassSchema",
-      "source": "packages/js/shared/model/src/model.ts"
-    },
-    {
-      "package": "@dbx-tools/shared-model",
-      "name": "ModelProfile",
-      "source": "packages/js/shared/model/src/model.ts"
-    },
-    {
-      "package": "@dbx-tools/shared-model",
-      "name": "ModelQuery",
-      "source": "packages/js/shared/model/src/model.ts"
-    },
-    {
-      "package": "@dbx-tools/shared-model",
-      "name": "ModelStatus",
-      "source": "packages/js/shared/model/src/model.ts"
-    },
-    {
-      "package": "@dbx-tools/shared-model",
-      "name": "RankedModel",
-      "source": "packages/js/shared/model/src/model.ts"
-    },
-    {
-      "package": "@dbx-tools/shared-model",
-      "name": "ServingEndpointSummary",
-      "source": "packages/js/shared/model/src/model.ts"
-    },
-    {
       "package": "@dbx-tools/tunnel",
       "name": "LoginPageOptions",
       "source": "packages/js/node/tunnel/src/login-page.ts"

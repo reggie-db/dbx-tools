@@ -202,7 +202,7 @@ async fn load_retired_models(
     parse_retired_models(&html)
 }
 
-fn generated_retired_models() -> Result<Vec<String>, ModelStatusError> {
+pub(crate) fn generated_retired_models() -> Result<Vec<String>, ModelStatusError> {
     serde_json::from_str::<GeneratedRetiredModels>(GENERATED_RETIRED_MODELS)
         .map(|snapshot| snapshot.models)
         .map_err(ModelStatusError::GeneratedSnapshot)

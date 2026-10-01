@@ -24,16 +24,14 @@
 import { createHash } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { error, log, string } from "@dbx-tools/shared-core";
-import {
-  display,
-  model,
-  type ModelProfile,
-  type ServingEndpointSummary,
-} from "@dbx-tools/shared-model";
+import { error, log } from "@dbx-tools/shared-core";
+import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import { classifyEndpointClassesWithRust, rankEndpointsWithRust } from "./_native.ts";
-import { modelFamily, modelReasoningEfforts, modelSupportsTools } from "./policy.ts";
+import {
+  classifyEndpointClassesWithRust,
+  normalizeEndpointsWithRust,
+  rankEndpointsWithRust,
+} from "./_native.ts";
 
 const { ModelClass } = model;
 
@@ -126,51 +124,11 @@ export async function listServingEndpoints(
 export async function listServingEndpointsUncached(
   client: WorkspaceClientLike,
 ): Promise<ServingEndpointSummary[]> {
-  const out: ServingEndpointSummary[] = [];
+  const endpoints: unknown[] = [];
   for await (const ep of client.servingEndpoints.list()) {
-    if (!ep.name) continue;
-    const profile = extractProfile(ep);
-    const family = modelFamily(ep.name);
-    const reasoningEfforts = modelReasoningEfforts(ep.name);
-    out.push({
-      name: ep.name,
-      // Prefer a Databricks-provided human name (a display-name tag or an
-      // external-model name); else derive a title-cased label from the id.
-      displayName: display.toModelDisplayName(ep.name, providedDisplayName(ep)),
-      ...(family !== undefined ? { family } : {}),
-      ...(ep.task !== undefined ? { task: ep.task } : {}),
-      ...(ep.state?.ready !== undefined ? { state: String(ep.state.ready) } : {}),
-      ...(ep.description !== undefined ? { description: ep.description } : {}),
-      supportsTools: modelSupportsTools(ep.name),
-      ...(profile ? { profile } : {}),
-      ...(reasoningEfforts.length > 0 ? { reasoningEfforts } : {}),
-    });
+    endpoints.push(ep);
   }
-  return out;
-}
-
-/**
- * Pull a Databricks-provided human name off a serving endpoint, if any:
- * a `display_name` / `displayName` / `name` tag first, then an
- * external-model `name` from the served-entity config. Returns `null`
- * when the endpoint carries no explicit name (the common case for
- * Foundation Model API endpoints), so the caller falls back to deriving
- * one from the id.
- */
-function providedDisplayName(ep: {
-  tags?: Array<{ key: string; value?: string }>;
-  config?: { served_entities?: Array<{ external_model?: { name?: string } }> };
-}): string | null {
-  const tag = ep.tags?.find(
-    (t) => t.key === "display_name" || t.key === "displayName" || t.key === "name",
-  );
-  const fromTag = string.trimToNull(tag?.value);
-  if (fromTag) return fromTag;
-  for (const entity of ep.config?.served_entities ?? []) {
-    const external = string.trimToNull(entity.external_model?.name);
-    if (external) return external;
-  }
-  return null;
+  return normalizeEndpointsWithRust(endpoints);
 }
 
 async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpointSummary[]> {
@@ -238,45 +196,6 @@ async function pingEmbeddingDimension(
     logger.warn("embedding ping failed", { name, error: error.errorMessage(err) });
     return undefined;
   }
-}
-
-/**
- * Pull the Foundation Model API `quality` / `speed` / `cost` scores off a
- * serving-endpoint listing entry. Databricks returns these under
- * `config.served_entities[].foundation_model.ai_gateway_model_profile`
- * (snake_case at the wire level, preserved verbatim by the SDK), but the field
- * is newer than the typed `FoundationModel` interface, so we read it through a
- * structural cast. Returns `undefined` when no served entity carries a profile
- * (custom models, embeddings, and brand-new endpoints that Databricks has not
- * scored yet).
- */
-function extractProfile(ep: unknown): ModelProfile | undefined {
-  const entities = (
-    ep as {
-      config?: {
-        served_entities?: Array<{
-          foundation_model?: {
-            ai_gateway_model_profile?: {
-              quality?: number;
-              speed?: number;
-              cost?: number;
-            };
-          };
-        }>;
-      };
-    }
-  ).config?.served_entities;
-  if (!entities) return undefined;
-  for (const entity of entities) {
-    const raw = entity.foundation_model?.ai_gateway_model_profile;
-    if (!raw) continue;
-    const profile: ModelProfile = {};
-    if (Number.isFinite(raw.quality)) profile.quality = raw.quality;
-    if (Number.isFinite(raw.speed)) profile.speed = raw.speed;
-    if (Number.isFinite(raw.cost)) profile.cost = raw.cost;
-    if (Object.keys(profile).length > 0) return profile;
-  }
-  return undefined;
 }
 
 /**

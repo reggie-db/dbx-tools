@@ -9,7 +9,12 @@ import {
   reasoningEffortNamesByFamily,
   supportsToolsByFamily as supportsToolsByFamilyWithRust,
 } from "@dbx-tools/model-rs";
-import { model, type ReasoningEffort, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import {
+  model,
+  ReasoningEffortSchema,
+  type ReasoningEffort,
+  type ServingEndpointSummary,
+} from "@dbx-tools/shared-model";
 
 /** Return the normalized family parsed by the Rust model-name policy. */
 export function modelFamily(name: string): string | undefined {
@@ -18,7 +23,7 @@ export function modelFamily(name: string): string | undefined {
 
 /** Return the reasoning efforts accepted by a model family. */
 export function modelReasoningEfforts(name: string): ReasoningEffort[] {
-  return reasoningEffortNamesByFamily(name);
+  return ReasoningEffortSchema.array().parse(reasoningEffortNamesByFamily(name));
 }
 
 /** Return whether Rust policy verifies a complete tool-calling round trip. */

@@ -261,6 +261,7 @@ const root = new projenProject.DBXToolsNodeProject({
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
     "gridstack@^12.3.3",
+    "ts-to-zod@5.1.0",
     "uplot@^1.6.32",
     "zod@catalog:",
   ],
@@ -1184,6 +1185,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     "tokio-rustls": "0.26",
     tracing: "0.1",
     "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
+    "ts-rs": "=12.0.1",
     uniffi: { version: "=0.31", features: ["cli", "tokio"] },
     url: { version: "2", features: ["serde"] },
     uuid: { version: "1", features: ["v4"] },
@@ -1234,6 +1236,9 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     model: {
       description: "Databricks model discovery, caching, classification, and fuzzy resolution",
       bindings: ["node"],
+      features: {
+        "contract-generation": ["dep:ts-rs"],
+      },
       dependencies: {
         [`${root.scope}-core`]: { path: "../core" },
         "difflib-fast": { workspace: true },
@@ -1247,6 +1252,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         thiserror: { workspace: true },
         tokio: { workspace: true },
         tracing: { workspace: true },
+        "ts-rs": { workspace: true, optional: true },
         uniffi: { workspace: true },
       },
       devDependencies: {
@@ -1409,6 +1415,7 @@ for (const binary of ["dbx-tools-model-proxy", "dbx-tools-lakebase-proxy"]) {
 }
 root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
+root.annotateGenerated("/packages/js/shared/model/src/generated/**");
 new BrandPackageAssets(root);
 root.addTask("model:metadata", {
   exec: [
@@ -1419,6 +1426,14 @@ root.addTask("model:metadata", {
   ].join(" "),
   description: "Refresh committed model retirement, capability, and rate-limit snapshots",
 });
+const modelContractsTask = root.addTask("model:contracts", {
+  exec: [
+    "cargo run --quiet -p dbx-tools-model --features contract-generation --example generate-model-contracts -- packages/js/shared/model/src/generated/_contracts.ts",
+    "bunx ts-to-zod packages/js/shared/model/src/generated/_contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments",
+  ].join(" && "),
+  description: "Generate browser-safe TypeScript and Zod model contracts from Rust",
+});
+root.tasks.tryFind("pre-compile")?.spawn(modelContractsTask);
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",
   description: "Emit local Python hello-world messages onto the demo bus",

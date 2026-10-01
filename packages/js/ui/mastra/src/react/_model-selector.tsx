@@ -1,4 +1,5 @@
 import { string } from "@dbx-tools/shared-core";
+import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import {
   Button,
   DropdownMenu,
@@ -50,7 +51,7 @@ const ReasoningControl = ({
   value,
   onChange,
 }: {
-  efforts: string[];
+  efforts: ReasoningEffort[];
   value: ChatViewProps["reasoningEffort"];
   onChange: NonNullable<ChatViewProps["onReasoningEffortChange"]>;
 }) => {

@@ -79,7 +79,9 @@ impl ModelFamily {
 #[derive(
     Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize, uniffi::Enum,
 )]
+#[cfg_attr(feature = "contract-generation", derive(ts_rs::TS))]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "contract-generation", ts(rename_all = "kebab-case"))]
 pub enum ModelClass {
     /// Higher-quality chat models suited to deliberate reasoning.
     ChatThinking,
@@ -134,7 +136,12 @@ pub struct ParsedModelName {
 
 /// Databricks AI Gateway profile scores for an endpoint.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[cfg_attr(feature = "contract-generation", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "contract-generation",
+    ts(rename_all = "camelCase", optional_fields)
+)]
 pub struct ModelProfile {
     /// Relative model quality score.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -149,22 +156,34 @@ pub struct ModelProfile {
 
 /// Lifecycle status associated with a model.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[cfg_attr(feature = "contract-generation", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "contract-generation", ts(rename_all = "camelCase"))]
 pub struct ModelStatus {
     /// Whether Databricks lists the model as retired or deprecated.
+    ///
+    /// @default false
     #[serde(default)]
     pub deprecated: bool,
 }
 
 /// Normalized metadata for a Databricks Model Serving endpoint.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[cfg_attr(feature = "contract-generation", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "contract-generation",
+    ts(rename_all = "camelCase", optional_fields)
+)]
 pub struct ServingEndpointSummary {
     /// Model Serving endpoint name used for invocation.
     pub name: String,
     /// Human-readable endpoint or model name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// Normalized model family parsed from the endpoint identities.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
     /// Endpoint task, such as chat or embeddings.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task: Option<String>,
@@ -182,40 +201,64 @@ pub struct ServingEndpointSummary {
     pub profile: Option<ModelProfile>,
     /// Intent-oriented endpoint class.
     #[serde(rename = "class", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "contract-generation", ts(rename = "class"))]
     pub model_class: Option<ModelClass>,
     /// Provider names mapped to provider-specific model names.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    #[cfg_attr(feature = "contract-generation", ts(as = "Option<_>", optional))]
     pub service_names: HashMap<String, String>,
     /// Foundation model name reported by the served entity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_service_name: Option<String>,
     /// Reasoning effort values accepted by the endpoint.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "contract-generation", ts(as = "Option<_>", optional))]
     pub reasoning_efforts: Vec<ReasoningEffort>,
     /// Retirement status for the served model.
     #[serde(default)]
+    #[cfg_attr(feature = "contract-generation", ts(as = "Option<_>", optional))]
     pub status: ModelStatus,
+    /// Embedding vector dimension measured by the caller, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dimension: Option<u32>,
 }
 
 /// Filters and ranking controls for a model catalogue query.
-#[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[cfg_attr(feature = "contract-generation", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "contract-generation",
+    ts(rename_all = "camelCase", optional_fields)
+)]
 pub struct ModelQuery {
     /// Optional fuzzy model-name search.
     pub search: Option<String>,
     /// Requested model-class ceiling, or the exact embedding class.
     pub model_class: Option<ModelClass>,
     /// Whether candidates must support tool calling.
-    pub requires_tools: bool,
+    pub requires_tools: Option<bool>,
     /// Whether retired models remain eligible.
-    pub include_deprecated: bool,
+    pub include_deprecated: Option<bool>,
     /// Maximum number of results.
+    ///
+    /// @schema number().int().min(1).max(50).optional()
     pub limit: Option<u32>,
     /// Maximum fuzzy-match distance.
+    ///
+    /// @minimum 0
+    /// @maximum 1
     pub threshold: Option<f64>,
 }
 
 /// Model Serving endpoint plus its classification and search score.
-#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[cfg_attr(feature = "contract-generation", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "contract-generation",
+    ts(rename_all = "camelCase", optional_fields)
+)]
 pub struct RankedModel {
     /// Matching endpoint metadata.
     pub endpoint: ServingEndpointSummary,
