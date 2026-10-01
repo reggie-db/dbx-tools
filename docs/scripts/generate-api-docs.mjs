@@ -11,9 +11,11 @@ import {
   discoverRustPackages,
   groupTitle,
   posix,
+  stripLeadingH1,
   summaryText,
   walk,
   withBasePath,
+  yamlString,
 } from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
@@ -70,14 +72,6 @@ function titleFromMarkdown(markdown, fallback) {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/~~|[*_`]/g, "")
     .trim();
-}
-
-function stripLeadingH1(markdown) {
-  return markdown.replace(/^#\s+.+?(?:\r?\n)+/, "");
-}
-
-function yamlString(value) {
-  return JSON.stringify(value ?? "");
 }
 
 /**

@@ -1,12 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { posix } from "./repository-docs.mjs";
 
 const TYPESCRIPT_EXPORT = /\.(?:[cm]?ts|tsx)$/i;
 const CONDITION_PRIORITY = ["types", "bun", "browser", "node", "import", "default", "require"];
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-const posix = (value) => value.split(path.sep).join("/");
-
 function orderedConditions(value) {
   const priority = new Map(CONDITION_PRIORITY.map((condition, index) => [condition, index]));
   return Object.entries(value).sort(([left], [right]) => {

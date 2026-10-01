@@ -7,8 +7,10 @@ import {
   discoverRepositoryPackages,
   groupTitle,
   posix,
+  stripLeadingH1,
   summaryText,
   withBasePath,
+  yamlString,
 } from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
 
@@ -91,14 +93,6 @@ function plainTitle(value) {
 function pageTitle(markdown, fallback) {
   const match = markdown.match(/^#\s+(.+?)\s*$/m);
   return plainTitle(match?.[1] ?? fallback) || fallback;
-}
-
-function stripLeadingH1(markdown) {
-  return markdown.replace(/^#\s+.+?(?:\r?\n)+/, "");
-}
-
-function yamlString(value) {
-  return JSON.stringify(value ?? "");
 }
 
 function frontmatter({ title, description, sourcePath }) {
