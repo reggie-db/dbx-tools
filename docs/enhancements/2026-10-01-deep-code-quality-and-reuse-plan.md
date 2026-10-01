@@ -58,7 +58,11 @@ Before each implementation phase, re-inspect the active diff and preserve concur
   string-mode API through a generated-type projection. SSL validation also
   delegates to the native parser. TypeScript/Python parity, the complete AppKit
   suite, and an isolated packed consumer pass without requiring an unpublished
-  native binding revision.
+  native binding revision. Node model lookup and the compatibility
+  `resolveModelId`/`searchServingEndpoints` APIs now share the Rust fuzzy ranker;
+  `fuse.js` is removed from `@dbx-tools/model`, custom endpoints remain
+  searchable, and Rust ranking honors an owner-supplied model class. The Node
+  model and Rust model suites pass with identical newest-version selection.
 
 ## Comparison with the Kanna implementation
 

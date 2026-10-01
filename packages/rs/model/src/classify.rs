@@ -78,6 +78,22 @@ pub fn classify_endpoints(
     let mut classified = endpoints
         .iter()
         .filter_map(|endpoint| {
+            if let Some(model_class) = endpoint.model_class {
+                let profile = endpoint.profile.as_ref();
+                return Some((
+                    model_class,
+                    SortKey {
+                        source: u8::from(profile.and_then(|value| value.quality).is_none()),
+                        rank: profile.and_then(|value| value.quality).unwrap_or(0.0),
+                        cost: profile
+                            .and_then(|value| value.cost)
+                            .unwrap_or(f64::INFINITY),
+                        speed: profile.and_then(|value| value.speed).unwrap_or(0.0),
+                        version: version_tuple(&endpoint.name),
+                    },
+                    endpoint.clone(),
+                ));
+            }
             if endpoint.task.as_deref() == Some(EMBEDDING_TASK) {
                 return Some((
                     ModelClass::Embedding,

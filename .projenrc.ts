@@ -498,7 +498,6 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/model-rs@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
-    "fuse.js@^7.4.2",
   );
 });
 

@@ -126,6 +126,23 @@ fn gpt_search_returns_the_highest_version_and_excludes_gpt_oss() {
 }
 
 #[test]
+fn ranking_honors_an_owner_supplied_class_for_custom_endpoints() {
+    let custom = endpoint("approved-custom-endpoint", ModelClass::ChatBalanced);
+    let ranked = lookup_models(
+        &[custom],
+        &ModelQuery {
+            search: Some("approved custom".to_owned()),
+            ..Default::default()
+        },
+    );
+
+    assert_eq!(ranked.len(), 1);
+    assert_eq!(ranked[0].endpoint.name, "approved-custom-endpoint");
+    assert_eq!(ranked[0].model_class, ModelClass::ChatBalanced);
+    assert_eq!(ranked[0].score, Some(0.0));
+}
+
+#[test]
 fn model_listing_uses_openai_format_and_stable_lookup_ordering() {
     let mut sol = endpoint("databricks-gpt-5-6-sol", ModelClass::ChatBalanced);
     sol.display_name = Some("GPT 5.6 Sol".to_owned());

@@ -20,12 +20,6 @@
  * @module
  */
 
-import {
-  ModelClass as ModelRsModelClass,
-  rankModels as rankModelsWithRust,
-  type ModelQuery as ModelRsModelQuery,
-  type ServingEndpointSummary as ModelRsServingEndpointSummary,
-} from "@dbx-tools/model-rs";
 import { object } from "@dbx-tools/shared-core";
 import {
   classify,
@@ -36,9 +30,9 @@ import {
 } from "@dbx-tools/shared-model";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
+import { rankEndpointsWithRust } from "./_native.ts";
 import {
   listServingEndpoints,
-  searchServingEndpoints,
   type ResolvedModel,
   type ResolveModelOptions,
   type WorkspaceClientLike,
@@ -48,13 +42,6 @@ type ModelClass = model.ModelClass;
 
 /** Preferred live family for an unconfigured general-purpose chat default. */
 const DEFAULT_MODEL_FAMILY_SEARCH = "gpt";
-
-const MODEL_CLASS_TO_RS: Readonly<Record<ModelClass, ModelRsModelClass>> = {
-  [model.ModelClass.ChatThinking]: ModelRsModelClass.ChatThinking,
-  [model.ModelClass.ChatBalanced]: ModelRsModelClass.ChatBalanced,
-  [model.ModelClass.ChatFast]: ModelRsModelClass.ChatFast,
-  [model.ModelClass.Embedding]: ModelRsModelClass.Embedding,
-};
 
 /** Caller intent passed to {@link resolveModel}. */
 export interface ResolveModelInput {
@@ -70,7 +57,7 @@ export interface ResolveModelInput {
    * doesn't exist).
    */
   fuzzy?: boolean;
-  /** Fuse.js threshold forwarded to the fuzzy `search` match ({@link searchServingEndpoints}). */
+  /** Rust fuzzy-distance threshold forwarded to the search match. */
   threshold?: number;
   /** Require a model that supports a complete function-tool round-trip. */
   requiresTools?: boolean;
@@ -129,64 +116,7 @@ export function lookupModels(
   endpoints: readonly ServingEndpointSummary[],
   query: ModelQuery = {},
 ): RankedModel[] {
-  const endpointsByName = new Map(endpoints.map((endpoint) => [endpoint.name, endpoint]));
-  return rankModelsWithRust(endpoints.map(toModelRsEndpoint), toModelRsQuery(query)).map(
-    (ranked) => {
-      const endpoint = endpointsByName.get(ranked.endpoint.name);
-      if (!endpoint) {
-        throw new Error(`Rust model ranking returned unknown endpoint "${ranked.endpoint.name}"`);
-      }
-      return {
-        endpoint,
-        modelClass: fromModelRsClass(ranked.modelClass),
-        ...(ranked.score !== undefined ? { score: ranked.score } : {}),
-      };
-    },
-  );
-}
-
-/** Convert a public model query to the generated Rust ranking contract. */
-function toModelRsQuery(query: ModelQuery): ModelRsModelQuery {
-  return {
-    search: query.search,
-    modelClass: query.modelClass === undefined ? undefined : MODEL_CLASS_TO_RS[query.modelClass],
-    requiresTools: query.requiresTools ?? false,
-    includeDeprecated: false,
-    limit: query.limit,
-    threshold: query.threshold,
-  };
-}
-
-/** Convert a discovered endpoint to the generated Rust ranking contract. */
-function toModelRsEndpoint(endpoint: ServingEndpointSummary): ModelRsServingEndpointSummary {
-  return {
-    name: endpoint.name,
-    displayName: endpoint.displayName,
-    task: endpoint.task,
-    state: endpoint.state,
-    description: endpoint.description,
-    supportsTools: endpoint.supportsTools,
-    profile: endpoint.profile,
-    modelClass: endpoint.class === undefined ? undefined : MODEL_CLASS_TO_RS[endpoint.class],
-    serviceNames: new Map(Object.entries(endpoint.serviceNames ?? {})),
-    modelServiceName: endpoint.modelServiceName,
-    reasoningEfforts: [],
-    status: { deprecated: endpoint.status?.deprecated ?? false },
-  };
-}
-
-/** Convert a generated Rust class to the browser-safe public enum. */
-function fromModelRsClass(modelClass: ModelRsModelClass): ModelClass {
-  switch (modelClass) {
-    case ModelRsModelClass.ChatThinking:
-      return model.ModelClass.ChatThinking;
-    case ModelRsModelClass.ChatBalanced:
-      return model.ModelClass.ChatBalanced;
-    case ModelRsModelClass.ChatFast:
-      return model.ModelClass.ChatFast;
-    case ModelRsModelClass.Embedding:
-      return model.ModelClass.Embedding;
-  }
+  return rankEndpointsWithRust(endpoints, query);
 }
 
 /**
@@ -194,10 +124,10 @@ function fromModelRsClass(modelClass: ModelRsModelClass): ModelClass {
  * in a catalogue snapshot, or the input verbatim when nothing scores within the
  * threshold.
  *
- * The rank-based counterpart to the Fuse-only {@link resolveModelId}: equal
+ * The ranked counterpart to {@link resolveModelId}: equal
  * match scores are broken by class and then within-class version, so a loose
  * `"opus"` prefers `opus-5` over `opus-4-7` instead of picking whichever
- * sibling Fuse happened to order first. Returning the input unmatched (rather
+ * sibling appeared first. Returning the input unmatched (rather
  * than a near neighbour) is deliberate - a deliberate endpoint id is never
  * silently rewritten, and Databricks surfaces a clean 404.
  */
@@ -255,14 +185,10 @@ export async function searchModels(
   host: string,
   input: SearchModelsInput = {},
 ): Promise<RankedModel[]> {
-  const endpoints = await listServingEndpoints(
-    client,
-    host,
-    {
-      ...(input.ttlMs !== undefined ? { ttlMs: input.ttlMs } : {}),
-      ...(input.cacheIdentity !== undefined ? { cacheIdentity: input.cacheIdentity } : {}),
-    },
-  );
+  const endpoints = await listServingEndpoints(client, host, {
+    ...(input.ttlMs !== undefined ? { ttlMs: input.ttlMs } : {}),
+    ...(input.cacheIdentity !== undefined ? { cacheIdentity: input.cacheIdentity } : {}),
+  });
   return lookupModels(endpoints, input);
 }
 

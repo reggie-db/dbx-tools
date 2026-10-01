@@ -64,6 +64,22 @@ describe("searchServingEndpoints / resolveModelId", () => {
     assert.equal(result.modelId, SONNET);
   });
 
+  it("uses the same version-aware Rust ranking as lookupModels", () => {
+    const versions = [chat(OPUS_6), chat(OPUS_8), chat(OPUS_7)];
+    assert.equal(resolveModelId("claude opus", versions).modelId, OPUS_8);
+    assert.equal(
+      lookupModels(versions, { search: "claude opus", limit: 1 })[0]?.endpoint.name,
+      OPUS_8,
+    );
+  });
+
+  it("searches explicit custom endpoint records through the Rust ranker", () => {
+    const custom = { name: "approved-custom-endpoint" };
+    assert.deepEqual(searchServingEndpoints("approved custom", [custom]), [
+      { endpoint: custom, score: 0 },
+    ]);
+  });
+
   it("returns the input verbatim when nothing matches", () => {
     const result = resolveModelId("zzz-no-such-model", endpoints);
     assert.equal(result.matched, false);
@@ -136,9 +152,18 @@ describe("listServingEndpoints cache identity", () => {
     const secondA = await listServingEndpoints(clientA, host, { cacheIdentity: "principal-a" });
     const firstB = await listServingEndpoints(clientB, host, { cacheIdentity: "principal-b" });
 
-    assert.deepEqual(firstA.map((endpoint) => endpoint.name), ["principal-a-private"]);
-    assert.deepEqual(secondA.map((endpoint) => endpoint.name), ["principal-a-private"]);
-    assert.deepEqual(firstB.map((endpoint) => endpoint.name), ["principal-b-private"]);
+    assert.deepEqual(
+      firstA.map((endpoint) => endpoint.name),
+      ["principal-a-private"],
+    );
+    assert.deepEqual(
+      secondA.map((endpoint) => endpoint.name),
+      ["principal-a-private"],
+    );
+    assert.deepEqual(
+      firstB.map((endpoint) => endpoint.name),
+      ["principal-b-private"],
+    );
     assert.equal(callsA.value, 1);
     assert.equal(callsB.value, 1);
 

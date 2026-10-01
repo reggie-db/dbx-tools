@@ -9,7 +9,7 @@
  * `quality` / `speed` / `cost` profile when present, the classified
  * {@link ModelClass}, and (for embedding endpoints) the measured vector
  * `dimension` - and snaps loose, human-typed names to real endpoint ids
- * through `fuse.js` extended search so tokens like `"claude sonnet"` resolve to
+ * through the Rust model ranker so tokens like `"claude sonnet"` resolve to
  * `databricks-claude-sonnet-4-6`.
  *
  * The class stamp and embedding dimension are computed once per cache load:
@@ -32,8 +32,8 @@ import {
   type ModelProfile,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
-import Fuse from "fuse.js";
 
+import { rankEndpointsWithRust } from "./_native.ts";
 import { MODEL_CLASS_ORDER } from "./classes.ts";
 import { modelFamily, modelReasoningEfforts } from "./policy.ts";
 
@@ -51,7 +51,7 @@ export type WorkspaceClientLike = Pick<appkit.WorkspaceClientLike, "servingEndpo
 /** Default TTL for the in-memory endpoint cache. Matches the Databricks SDK's session lifetime budget. */
 export const DEFAULT_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 
-/** Default Fuse.js score threshold below which a fuzzy match is accepted. */
+/** Default Rust distance threshold below which a fuzzy match is accepted. */
 export const DEFAULT_FUZZY_THRESHOLD = 0.4;
 
 /** Cache key parts under which endpoint listings are stored. */
@@ -306,7 +306,7 @@ export async function clearServingEndpointsCache(
 
 /**
  * Result of fuzzy-resolving a user-supplied model name against the live
- * endpoint list. `score` is Fuse.js's distance (`0` is exact, `1` is no match);
+ * endpoint list. `score` is the Rust ranker's distance (`0` is exact, `1` is no match);
  * `matched` is `false` when the score exceeds the configured threshold so
  * callers can fall back to the original input (Databricks will then return a
  * clean 404).
@@ -319,7 +319,7 @@ export interface ResolvedModel {
 
 /** Options accepted by {@link resolveModelId} / {@link searchServingEndpoints}. */
 export interface ResolveModelOptions {
-  /** Fuse.js threshold (0 = exact, 1 = anything). Default `0.4`. */
+  /** Fuzzy distance threshold (0 = exact, 1 = anything). Default `0.4`. */
   threshold?: number;
   /** Require a model verified for a complete function-tool round-trip. */
   requiresTools?: boolean;
@@ -328,7 +328,7 @@ export interface ResolveModelOptions {
 /** A serving endpoint paired with its fuzzy-match distance for a query. */
 export interface ScoredEndpoint {
   endpoint: ServingEndpointSummary;
-  /** Fuse.js distance: `0` is exact, `1` is no match. */
+  /** Fuzzy distance: `0` is exact, `1` is no match. */
   score: number;
 }
 
@@ -337,11 +337,8 @@ export interface ScoredEndpoint {
  * (lowest score) first, keeping only those within `threshold`:
  *
  * 1. An exact name match short-circuits to a single `score: 0` result.
- * 2. Otherwise the input is tokenized (dashes / underscores / spaces become
- *    separators) and fed through Fuse.js extended search, which AND-s each
- *    token with fuzzy matching enabled - the "tokenized fuzzy match" a caller
- *    reaches for when they type `"claude sonnet"` instead of the full endpoint
- *    name.
+ * 2. Otherwise Rust tokenizes the input and scores every endpoint through the
+ *    same fuzzy-distance policy used by {@link lookupModels}.
  *
  * Returns `[]` for an empty endpoint list or when `input` tokenizes to nothing,
  * so callers fall back to the raw input and let Databricks surface a clean 404.
@@ -353,30 +350,20 @@ export function searchServingEndpoints(
   endpoints: readonly ServingEndpointSummary[],
   options: ResolveModelOptions = {},
 ): ScoredEndpoint[] {
-  if (endpoints.length === 0) return [];
-  for (const ep of endpoints) {
-    if (ep.name === input) return [{ endpoint: ep, score: 0 }];
-  }
-  const threshold = options.threshold ?? DEFAULT_FUZZY_THRESHOLD;
-  // Fuse 7.3 has no built-in tokenize hook; in extended search, space-separated
-  // tokens are AND-ed with fuzzy matching enabled. We lean on the shared
-  // tokenizer so the splitting rules stay consistent with the rest of the toolkit.
-  const query = Array.from(
-    string.tokenizeWithOptions({ lowerCase: true, camelCase: false }, input),
-  ).join(" ");
-  if (!query) return [];
-  const fuse = new Fuse(endpoints, {
-    keys: ["name"],
-    threshold,
-    ignoreLocation: true,
-    includeScore: true,
-    useExtendedSearch: true,
-    isCaseSensitive: false,
-  });
-  return fuse
-    .search(query)
-    .filter((r) => (r.score ?? 0) <= threshold)
-    .map((r) => ({ endpoint: r.item, score: r.score ?? 0 }));
+  if (endpoints.length === 0 || !input.trim()) return [];
+  return rankEndpointsWithRust(
+    endpoints,
+    {
+      search: input,
+      ...(options.requiresTools !== undefined ? { requiresTools: options.requiresTools } : {}),
+      threshold: options.threshold ?? DEFAULT_FUZZY_THRESHOLD,
+    },
+    {
+      includeDeprecated: true,
+      modelClass: model.ModelClass.ChatBalanced,
+      task: "llm/v1/chat",
+    },
+  ).map((ranked) => ({ endpoint: ranked.endpoint, score: ranked.score ?? 0 }));
 }
 
 /**
