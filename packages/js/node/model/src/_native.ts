@@ -49,6 +49,21 @@ export function rankEndpointsWithRust(
   });
 }
 
+/** Classify chat and embedding endpoints through the Rust-owned policy. */
+export function classifyEndpointClassesWithRust(
+  endpoints: readonly ServingEndpointSummary[],
+): ReadonlyMap<string, ModelClass> {
+  const chat = rankEndpointsWithRust(endpoints, {}, { includeDeprecated: true });
+  const embeddings = rankEndpointsWithRust(
+    endpoints,
+    { modelClass: model.ModelClass.Embedding },
+    { includeDeprecated: true },
+  );
+  return new Map(
+    [...chat, ...embeddings].map((ranked) => [ranked.endpoint.name, ranked.modelClass]),
+  );
+}
+
 function toNativeQuery(query: ModelQuery, includeDeprecated: boolean): NativeModelQuery {
   return {
     search: query.search,

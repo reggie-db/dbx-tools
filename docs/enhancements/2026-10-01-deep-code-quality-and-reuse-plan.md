@@ -63,6 +63,10 @@ Before each implementation phase, re-inspect the active diff and preserve concur
   `fuse.js` is removed from `@dbx-tools/model`, custom endpoints remain
   searchable, and Rust ranking honors an owner-supplied model class. The Node
   model and Rust model suites pass with identical newest-version selection.
+  Cached catalogue classification, tool policy, endpoint capability checks,
+  and the static fallback ordering also run through the Rust owner. The
+  browser-safe handwritten classification helpers are deprecated for removal
+  at the next major release; clients consume the classified `/models` response.
 
 ## Comparison with the Kanna implementation
 

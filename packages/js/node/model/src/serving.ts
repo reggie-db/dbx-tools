@@ -26,16 +26,14 @@ import { CacheManager } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { error, log, string } from "@dbx-tools/shared-core";
 import {
-  classify,
   display,
   model,
   type ModelProfile,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { rankEndpointsWithRust } from "./_native.ts";
-import { MODEL_CLASS_ORDER } from "./classes.ts";
-import { modelFamily, modelReasoningEfforts } from "./policy.ts";
+import { classifyEndpointClassesWithRust, rankEndpointsWithRust } from "./_native.ts";
+import { modelFamily, modelReasoningEfforts, modelSupportsTools } from "./policy.ts";
 
 const { ModelClass } = model;
 
@@ -143,7 +141,7 @@ export async function listServingEndpointsUncached(
       ...(ep.task !== undefined ? { task: ep.task } : {}),
       ...(ep.state?.ready !== undefined ? { state: String(ep.state.ready) } : {}),
       ...(ep.description !== undefined ? { description: ep.description } : {}),
-      supportsTools: classify.supportsToolsByFamily(ep.name),
+      supportsTools: modelSupportsTools(ep.name),
       ...(profile ? { profile } : {}),
       ...(reasoningEfforts.length > 0 ? { reasoningEfforts } : {}),
     });
@@ -191,11 +189,7 @@ async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpo
  * class.
  */
 function stampModelClasses(summaries: ServingEndpointSummary[]): void {
-  const buckets = classify.classifyEndpoints(summaries);
-  const classOf = new Map<string, model.ModelClass>();
-  for (const cls of MODEL_CLASS_ORDER) {
-    for (const ep of buckets[cls]) classOf.set(ep.name, cls);
-  }
+  const classOf = classifyEndpointClassesWithRust(summaries);
   for (const summary of summaries) {
     const cls = classOf.get(summary.name);
     if (cls !== undefined) summary.class = cls;

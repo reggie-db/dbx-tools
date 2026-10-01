@@ -63,7 +63,10 @@ function parsedFamily(name: string): ParsedFamily | undefined {
   };
 }
 
-/** What an endpoint can be asked to do, as derived by {@link endpointCapabilities}. */
+/**
+ * What an endpoint can be asked to do, as derived by {@link endpointCapabilities}.
+ * @deprecated Consume the capability stamps in the server's `/models` response.
+ */
 export interface EndpointCapabilities {
   /** OpenAI chat/completions + Responses: the surface a chat agent needs. */
   chat: boolean;
@@ -82,6 +85,8 @@ export interface EndpointCapabilities {
  * verified. Gemini is excluded because it emits a call but Open Responses
  * cannot replay the required thought signature; GPT-OSS rejects Responses
  * passthrough entirely.
+ *
+ * @deprecated Consume the capability stamps in the server's `/models` response.
  */
 export function supportsToolsByFamily(name: string): boolean {
   const parsed = parsedFamily(name);
@@ -99,6 +104,8 @@ export function supportsToolsByFamily(name: string): boolean {
  * and the class covers endpoints Databricks left untasked but the classifier
  * recognized. Embedding wins over chat when both point at it, since the two are
  * not interchangeable.
+ *
+ * @deprecated Consume the capability stamps in the server's `/models` response.
  */
 export function endpointCapabilities(endpoint: ServingEndpointSummary): EndpointCapabilities {
   const embedding = endpoint.task === EMBEDDING_TASK || endpoint.class === ModelClass.Embedding;
@@ -109,7 +116,10 @@ export function endpointCapabilities(endpoint: ServingEndpointSummary): Endpoint
   return { chat, embedding, tools };
 }
 
-/** Family-heuristic classification of a single endpoint name. */
+/**
+ * Family-heuristic classification of a single endpoint name.
+ * @deprecated Use `@dbx-tools/model`, whose policy is owned by Rust.
+ */
 export interface FamilyClass {
   /** Chat capability band the family maps to (never embedding). */
   class: ModelClass;
@@ -132,6 +142,7 @@ export interface FamilyClass {
  * Component-wise comparison (not a decimal collapse) so `4.10` beats
  * `4.8` - the bug a `major + minor/10` score would hit.
  */
+/** @deprecated Use `@dbx-tools/model`, whose version policy is owned by Rust. */
 export function versionTuple(name: string): [number, number, number] {
   const start = name.search(/\d/);
   if (start < 0) return [0, 0, 0];
@@ -175,6 +186,7 @@ function versionScore(name: string): number {
  * within a class. Only ever returns a chat band - embedding endpoints
  * are classified by task, not name.
  */
+/** @deprecated Use `@dbx-tools/model`, whose family policy is owned by Rust. */
 export function classifyByFamily(name: string): FamilyClass | null {
   const n = name.toLowerCase();
   const parsed = parsedFamily(n);
@@ -283,6 +295,7 @@ function rankOrder(a: Ranked, b: Ranked): number {
  * tie-break ({@link versionTuple}) is what separates point releases
  * that share a score profile (e.g. `opus-4-8` ahead of `opus-4-7`).
  */
+/** @deprecated Consume the classified server response or use `@dbx-tools/model`. */
 export function classifyEndpoints(
   endpoints: readonly ServingEndpointSummary[],
 ): Record<ModelClass, ServingEndpointSummary[]> {

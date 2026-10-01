@@ -22,7 +22,6 @@
 
 import { object } from "@dbx-tools/shared-core";
 import {
-  classify,
   model,
   type ModelQuery,
   type RankedModel,
@@ -31,6 +30,7 @@ import {
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import { rankEndpointsWithRust } from "./_native.ts";
+import { endpointSupportsTools } from "./policy.ts";
 import {
   listServingEndpoints,
   type ResolvedModel,
@@ -255,7 +255,7 @@ export function resolveModel(
   if (input.modelClass === undefined && input.fallbacks && input.fallbacks.length > 0) {
     const present = new Set(
       endpoints
-        .filter((endpoint) => !input.requiresTools || classify.endpointCapabilities(endpoint).tools)
+        .filter((endpoint) => !input.requiresTools || endpointSupportsTools(endpoint))
         .map((endpoint) => endpoint.name),
     );
     const pinned = input.fallbacks.find((id) => present.has(id));
@@ -280,9 +280,7 @@ export function resolveModel(
   const floor = object.sequence(floorSource).concat(FALLBACK_MODEL_IDS).distinct().toArray();
   if (input.requiresTools) {
     const available = new Set(
-      endpoints
-        .filter((endpoint) => classify.endpointCapabilities(endpoint).tools)
-        .map((endpoint) => endpoint.name),
+      endpoints.filter(endpointSupportsTools).map((endpoint) => endpoint.name),
     );
     const selected = floor.find((id) => available.has(id));
     if (!selected) throw new Error("No tool-capable model is available");
@@ -305,7 +303,7 @@ function buildQuery(input: ResolveModelInput, search: string | undefined): Model
 /** Throw when an explicit id is absent or not verified for function tools. */
 function assertToolSupport(endpoints: readonly ServingEndpointSummary[], modelId: string): void {
   const endpoint = endpoints.find((candidate) => candidate.name === modelId);
-  if (!endpoint || !classify.endpointCapabilities(endpoint).tools) {
+  if (!endpoint || !endpointSupportsTools(endpoint)) {
     throw new Error(`Model "${modelId}" does not support function tools`);
   }
 }
