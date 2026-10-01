@@ -61,6 +61,44 @@ describe("workspace version synthesis", () => {
     }
   });
 
+  it("increments from historical component tags when they exceed repository tags", () => {
+    const outdir = mkdtempSync(join(tmpdir(), "workspace-component-version-"));
+    try {
+      writeWorkspaceVersion(outdir, "0.6.230");
+      execFileSync("git", ["init", "-b", "main"], { cwd: outdir, stdio: "ignore" });
+      execFileSync("git", ["config", "user.name", "Version Test"], {
+        cwd: outdir,
+        stdio: "ignore",
+      });
+      execFileSync("git", ["config", "user.email", "version@example.com"], {
+        cwd: outdir,
+        stdio: "ignore",
+      });
+      execFileSync("git", ["add", "VERSION"], { cwd: outdir, stdio: "ignore" });
+      execFileSync("git", ["commit", "-m", "initial"], { cwd: outdir, stdio: "ignore" });
+      execFileSync("git", ["tag", "v0.6.230"], { cwd: outdir, stdio: "ignore" });
+      execFileSync("git", ["tag", "projen-cli-v0.9.2"], { cwd: outdir, stdio: "ignore" });
+      assert.deepEqual(resolveNextVersion(outdir, ["v"], "patch", { fetch: false }), {
+        base: "0.9.2",
+        version: "0.9.3",
+        source: "remote",
+      });
+      assert.deepEqual(
+        resolveNextVersion(outdir, ["v"], "patch", {
+          fetch: false,
+          includeComponentTags: false,
+        }),
+        {
+          base: "0.6.230",
+          version: "0.6.231",
+          source: "remote",
+        },
+      );
+    } finally {
+      rmSync(outdir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps the bump task free of git and publication side effects", () => {
     const outdir = mkdtempSync(join(tmpdir(), "workspace-bump-"));
     try {

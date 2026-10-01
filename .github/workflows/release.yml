@@ -82,11 +82,10 @@ jobs:
             else
               git fetch --force --tags origin
               LATEST_VERSION=""
-              for TAG in $(git tag --sort=-version:refname --list 'v*'); do
-                CANDIDATE="${TAG#v}"
+              for TAG in $(git tag --list 'v*' '*-v*'); do
+                if [[ "$TAG" == v* ]]; then CANDIDATE="${TAG#v}"; else CANDIDATE="${TAG##*-v}"; fi
                 if [[ "$CANDIDATE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                  LATEST_VERSION="$CANDIDATE"
-                  break
+                  if [ -z "$LATEST_VERSION" ] || node -e 'const a=process.argv[1].split(".").map(Number); const b=process.argv[2].split(".").map(Number); process.exit(b[0]>a[0] || b[0]===a[0] && (b[1]>a[1] || b[1]===a[1] && b[2]>a[2]) ? 0 : 1)' "$LATEST_VERSION" "$CANDIDATE"; then LATEST_VERSION="$CANDIDATE"; fi
                 fi
               done
               if [ -n "$LATEST_VERSION" ]; then

@@ -2014,6 +2014,9 @@ workflow to finish. Pass `--no-approve` to leave that PR for a human merge or
 repository tests/compile, while `--no-local-publish` skips all local registry
 preflight; both are explicit recovery shortcuts and are never defaults.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
+Version resolution scans both repository `v<version>` tags and historical
+`<component>-v<version>` tags, so the first singular release automatically starts
+above every independently published component version.
 Repository owner and host come from the configured Git remote. When several
 GitHub CLI accounts exist on that host, release preparation probes them in
 active-first order and uses the first token with write access to that repository;

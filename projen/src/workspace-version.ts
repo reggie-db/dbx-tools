@@ -137,22 +137,53 @@ export function latestTagVersion(cwd: string, prefix: string): Semver | undefine
   return undefined;
 }
 
+/** Highest historical `<component>-<prefix><semver>` tag, or `undefined`. */
+export function latestComponentTagVersion(cwd: string, prefix: string): Semver | undefined {
+  const marker = `-${prefix}`;
+  const out = gitCapture(cwd, [
+    "-c",
+    "versionsort.suffix=-",
+    "tag",
+    "--sort=-version:refname",
+    "--list",
+    `*${marker}*`,
+  ]);
+  let best: Semver | undefined;
+  for (const tag of out.split("\n")) {
+    const index = tag.lastIndexOf(marker);
+    const raw = index >= 0 ? tag.slice(index + marker.length) : "";
+    if (!/^\d+\.\d+\.\d+$/.test(raw)) continue;
+    const version = parseSemver(raw);
+    if (version && (!best || compareSemver(version, best) > 0)) best = version;
+  }
+  return best;
+}
+
 /**
- * Highest published version across every tag prefix, or `undefined` when the
- * remote is unreachable or no matching tag exists. Fetches tags first (best
- * effort) so a release made elsewhere is respected; a fetch failure just means
- * the local tag list is used, and callers fall back to the `VERSION` file.
+ * Highest published version across repository and historical component tags,
+ * or `undefined` when the remote is unreachable or no matching tag exists.
+ * Fetches tags first (best effort) so a release made elsewhere is respected; a
+ * fetch failure just means the local tag list is used, and callers fall back to
+ * the `VERSION` file.
  */
 export function resolveRemoteVersion(
   cwd: string,
   prefixes: readonly string[],
-  { fetch = true }: { fetch?: boolean } = {},
+  {
+    fetch = true,
+    includeComponentTags = true,
+  }: { fetch?: boolean; includeComponentTags?: boolean } = {},
 ): string | undefined {
   if (fetch) gitCapture(cwd, ["fetch", "--tags", "--quiet"]);
   let best: Semver | undefined;
   for (const prefix of prefixes) {
-    const v = latestTagVersion(cwd, prefix);
-    if (v && (!best || compareSemver(v, best) > 0)) best = v;
+    const versions = [
+      latestTagVersion(cwd, prefix),
+      ...(includeComponentTags ? [latestComponentTagVersion(cwd, prefix)] : []),
+    ];
+    for (const version of versions) {
+      if (version && (!best || compareSemver(version, best) > 0)) best = version;
+    }
   }
   return best ? best.join(".") : undefined;
 }
@@ -165,7 +196,7 @@ export function resolveRemoteVersion(
 export function resolveBaseVersion(
   root: string,
   prefixes: readonly string[],
-  options: { fetch?: boolean } = {},
+  options: { fetch?: boolean; includeComponentTags?: boolean } = {},
 ): { version: string; source: "remote" | "local" } {
   const remote = resolveRemoteVersion(root, prefixes, options);
   if (remote) return { version: remote, source: "remote" };
@@ -177,7 +208,7 @@ export function resolveNextVersion(
   root: string,
   prefixes: readonly string[],
   level: VersionLevel,
-  options: { fetch?: boolean } = {},
+  options: { fetch?: boolean; includeComponentTags?: boolean } = {},
 ): { base: string; version: string; source: "remote" | "local" } {
   const base = resolveBaseVersion(root, prefixes, options);
   const parsed = parseSemver(base.version) ?? [0, 0, 1];

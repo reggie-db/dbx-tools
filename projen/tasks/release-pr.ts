@@ -36,7 +36,11 @@ import {
   RELEASE_SUMMARY_PROVIDER_NAMES,
   type ReleaseSummaryProviderName,
 } from "../src/release-dispatch.ts";
-import { readWorkspaceVersion, resolveNextVersion } from "../src/workspace-version.ts";
+import {
+  readWorkspaceVersion,
+  resolveBaseVersion,
+  resolveNextVersion,
+} from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
 
@@ -398,6 +402,10 @@ program
       if (!currentBranch) throw new Error("Release preparation requires a local branch");
       const account = githubAccount(root);
       git(root, ["fetch", "--tags", "origin", opts.base]);
+      const comparisonBase = resolveBaseVersion(root, [opts.prefix], {
+        fetch: false,
+        includeComponentTags: false,
+      }).version;
       const next = resolveNextVersion(root, [opts.prefix], opts.level, { fetch: false });
       const releaseTag = `${opts.prefix}${next.version}`;
       const releaseBranch = `release/${releaseTag}`;
@@ -509,7 +517,7 @@ program
         ? await generateReleaseSummary({
             root: releaseRoot,
             version: next.version,
-            fromRef: `${opts.prefix}${next.base}`,
+            fromRef: `${opts.prefix}${comparisonBase}`,
             providers: releaseSummaryProviders(opts.releaseSummaryProviders),
           })
         : undefined;

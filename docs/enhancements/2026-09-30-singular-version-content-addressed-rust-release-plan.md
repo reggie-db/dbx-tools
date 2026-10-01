@@ -131,7 +131,8 @@ bun run release --patch
 The command:
 
 1. verifies the current integration branch and pushes pending source commits;
-2. resolves the next singular semantic version;
+2. resolves the next singular semantic version above both repository `v*` tags
+   and historical `<component>-v*` tags;
 3. creates `release/v<version>` from the integration branch;
 4. writes `VERSION` and regenerates every owned version surface;
 5. invokes the private Rust release tool to write the normalized Rust build
@@ -152,7 +153,8 @@ Merging `release/v<version>` is the only operation that moves release source to
 The workflow verifies that:
 
 - the checkout is exactly the merged `main` commit;
-- `VERSION` is valid and greater than the latest `v*` tag;
+- `VERSION` is valid and greater than every repository or historical component
+  release tag;
 - all generated Node, Python, Cargo, binding, and registry versions match
   `VERSION`;
 - the committed Rust build manifest is reproducible from the merged source.
