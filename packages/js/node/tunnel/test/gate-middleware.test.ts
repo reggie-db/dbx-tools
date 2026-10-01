@@ -26,6 +26,7 @@ describe("isTunnelHost", () => {
 /** A gate API double: every session is valid iff a cookie value is present. */
 function fakeGate(overrides: Partial<AuthGateApi> = {}): AuthGateApi {
   return {
+    basePath: AUTH_PREFIX,
     passkeysEnabled: true,
     handler: async () => new globalThis.Response("{}", { status: 200 }),
     session: async (headers) =>
@@ -293,8 +294,9 @@ describe("gate middleware", () => {
     assert.equal(nexted, false);
     assert.equal(res.statusCode, 401);
     assert.match(String(res.sentBody), /Sign in — Databricks App/);
-    assert.match(String(res.sentBody), /var RETURN_TO = "\/"/);
-    assert.match(String(res.sentBody), /window\.location\.replace\(RETURN_TO\)/);
+    assert.match(String(res.sentBody), /data-return-to="\/"/);
+    assert.match(String(res.sentBody), /autocomplete="email webauthn"/);
+    assert.match(String(res.sentBody), />Sign in with a passkey</);
   });
 
   it("preserves a deep navigation path through hosted login", async () => {
@@ -310,7 +312,7 @@ describe("gate middleware", () => {
     );
 
     assert.equal(res.statusCode, 401);
-    assert.match(String(res.sentBody), /var RETURN_TO = "\/reports\/weekly\?team=data"/);
+    assert.match(String(res.sentBody), /data-return-to="\/reports\/weekly\?team=data"/);
   });
 
   it("serves a dedicated login URL with a validated return path", async () => {
@@ -325,7 +327,7 @@ describe("gate middleware", () => {
     await Promise.resolve(authMiddleware(req, res, () => {}));
 
     assert.equal(res.statusCode, 200);
-    assert.match(String(res.sentBody), /var RETURN_TO = "\/reports\/weekly\?team=data"/);
+    assert.match(String(res.sentBody), /data-return-to="\/reports\/weekly\?team=data"/);
   });
 
   it("escapes a return path before embedding it in the login script", async () => {
@@ -339,8 +341,8 @@ describe("gate middleware", () => {
 
     await Promise.resolve(authMiddleware(req, res, () => {}));
 
-    assert.doesNotMatch(String(res.sentBody), /var RETURN_TO = "\/<\/script>/);
-    assert.match(String(res.sentBody), /var RETURN_TO = "\/%3C/);
+    assert.doesNotMatch(String(res.sentBody), /data-return-to="\/<\/script>/);
+    assert.match(String(res.sentBody), /data-return-to="\/%3C/);
   });
 
   it("without gatePaths, static still passes (self-protecting SPA model)", async () => {
@@ -411,8 +413,8 @@ describe("login return paths", () => {
       brandName: "Example",
       returnTo: "/</script><script>alert(1)</script>",
     });
-    assert.doesNotMatch(html, /var RETURN_TO = "\/<\/script>/);
-    assert.match(html, /var RETURN_TO = "\/\\u003c/);
+    assert.doesNotMatch(html, /data-return-to="\/<\/script>/);
+    assert.match(html, /data-return-to="\/&lt;\/script&gt;/);
   });
 });
 

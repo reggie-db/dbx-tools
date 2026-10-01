@@ -1,79 +1,21 @@
-import { passkeyClient } from "@better-auth/passkey/client";
-import {
-  AUTH_BASE_PATH,
-  authLogoutResultSchema,
-  authStatusSchema,
-  type AuthStatus,
-} from "@dbx-tools/shared-auth";
-import { createAuthClient } from "better-auth/client";
-import { emailOTPClient } from "better-auth/client/plugins";
+/**
+ * Compatibility exports for the browser client now owned by
+ * `@dbx-tools/shared-auth/client`.
+ */
 
-/** @deprecated Import `AUTH_BASE_PATH` from `@dbx-tools/shared-auth`. */
-export const AUTH_BASE = AUTH_BASE_PATH;
-
-const client = createAuthClient({
-  baseURL:
-    typeof window === "undefined"
-      ? `http://localhost${AUTH_BASE}`
-      : `${window.location.origin}${AUTH_BASE}`,
-  plugins: [emailOTPClient(), passkeyClient()],
-});
-
-export interface PasskeySummary {
-  id: string;
-  name?: string | null;
-  createdAt?: Date | string | null;
-  deviceType?: string | null;
-}
-
-export async function getAuthStatus(): Promise<AuthStatus> {
-  const response = await fetch(`${AUTH_BASE}/status`, { credentials: "include" });
-  if (!response.ok) throw new Error(`Auth status failed with ${response.status}`);
-  return authStatusSchema.parse(await response.json());
-}
-
-export async function logout(): Promise<boolean> {
-  const response = await fetch(`${AUTH_BASE}/logout`, {
-    method: "POST",
-    credentials: "include",
-  });
-  const parsed = authLogoutResultSchema.safeParse(await response.json());
-  if (!response.ok || !parsed.success || !parsed.data.ok) return false;
-  if (typeof window !== "undefined") window.location.assign(parsed.data.redirectTo);
-  return true;
-}
-
-export async function requestEmailOtp(email: string): Promise<boolean> {
-  const result = await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-  return result.error === null;
-}
-
-export async function verifyEmailOtp(email: string, otp: string, name: string): Promise<boolean> {
-  const result = await client.signIn.emailOtp({ email, otp, name });
-  return result.error === null;
-}
-
-export async function signInPasskey(autoFill = false): Promise<boolean> {
-  const result = await client.signIn.passkey({ autoFill });
-  return result.error === null;
-}
-
-export async function addPasskey(name?: string): Promise<boolean> {
-  const result = await client.passkey.addPasskey(name ? { name } : undefined);
-  return result.error === null;
-}
-
-export async function listPasskeys(): Promise<PasskeySummary[]> {
-  const result = await client.passkey.listUserPasskeys();
-  return result.data ?? [];
-}
-
-export async function renamePasskey(id: string, name: string): Promise<boolean> {
-  const result = await client.passkey.updatePasskey({ id, name });
-  return result.error === null;
-}
-
-export async function removePasskey(id: string): Promise<boolean> {
-  const result = await client.passkey.deletePasskey({ id });
-  return result.error === null;
-}
+export {
+  AUTH_BASE,
+  addPasskey,
+  beginPasskeyEnrollment,
+  beginPasskeySignIn,
+  cancelPasskeyOperation,
+  getAuthStatus,
+  listPasskeys,
+  logout,
+  removePasskey,
+  renamePasskey,
+  requestEmailOtp,
+  signInPasskey,
+  verifyEmailOtp,
+} from "@dbx-tools/shared-auth/client";
+export type { PasskeyOperation, PasskeySummary } from "@dbx-tools/shared-auth/client";

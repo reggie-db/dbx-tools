@@ -1,18 +1,18 @@
 import { net } from "@dbx-tools/shared-core";
 import { Button, Input } from "@dbx-tools/ui-appkit/react";
 import { BrandIcon, useBrand } from "@dbx-tools/ui-branding/react";
-import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  addPasskey,
+  beginPasskeyEnrollment,
+  beginPasskeySignIn,
   getAuthStatus,
   requestEmailOtp,
-  signInPasskey,
+  type PasskeyOperation,
   verifyEmailOtp,
 } from "./auth-client.ts";
 
 type Phase = "loading" | "email" | "code" | "enroll" | "authed" | "open";
-type ConditionalMediation = "checking" | "available" | "unavailable";
 
 export interface AuthGateProps {
   children: ReactNode;
@@ -29,8 +29,15 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [passkeysEnabled, setPasskeysEnabled] = useState(false);
-  const [conditionalMediation, setConditionalMediation] =
-    useState<ConditionalMediation>("checking");
+  const passkeyOperation = useRef<PasskeyOperation | undefined>(undefined);
+
+  const cancelPasskey = useCallback(() => {
+    const operation = passkeyOperation.current;
+    passkeyOperation.current = undefined;
+    operation?.cancel();
+  }, []);
+
+  useEffect(() => cancelPasskey, [cancelPasskey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,37 +57,41 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
 
   useEffect(() => {
     if (!passkeysEnabled || phase !== "email") {
+      cancelPasskey();
       return;
     }
     if (
       typeof PublicKeyCredential === "undefined" ||
       typeof PublicKeyCredential.isConditionalMediationAvailable !== "function"
     ) {
-      setConditionalMediation("unavailable");
       return;
     }
     let cancelled = false;
+    let ownedOperation: PasskeyOperation | undefined;
     // Conditional mediation cannot reveal whether a credential exists. It lets
     // the browser offer one immediately on the focused `webauthn` input without
     // showing an empty modal to users who have no passkey.
     void PublicKeyCredential.isConditionalMediationAvailable()
       .then(async (available) => {
         if (cancelled) return;
-        setConditionalMediation(available ? "available" : "unavailable");
         if (!available) return;
-        if (await signInPasskey(true)) {
-          if (!cancelled) setPhase("authed");
-        } else if (!cancelled) {
-          setConditionalMediation("unavailable");
+        cancelPasskey();
+        const operation = beginPasskeySignIn(true);
+        ownedOperation = operation;
+        passkeyOperation.current = operation;
+        const authenticated = await operation.result;
+        if (passkeyOperation.current === operation) {
+          passkeyOperation.current = undefined;
+          if (!cancelled && authenticated) setPhase("authed");
         }
       })
-      .catch(() => {
-        if (!cancelled) setConditionalMediation("unavailable");
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
+      ownedOperation?.cancel();
+      if (passkeyOperation.current === ownedOperation) passkeyOperation.current = undefined;
     };
-  }, [passkeysEnabled, phase]);
+  }, [cancelPasskey, passkeysEnabled, phase]);
 
   const requestCode = useCallback(
     async (event: FormEvent) => {
@@ -92,6 +103,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
         setNotice("Enter a valid email address.");
         return;
       }
+      cancelPasskey();
       setBusy(true);
       setNotice(null);
       setEmail(address);
@@ -105,7 +117,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
         setBusy(false);
       }
     },
-    [busy, email],
+    [busy, cancelPasskey, email],
   );
 
   const verifyCode = useCallback(
@@ -129,30 +141,50 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
   );
 
   const usePasskey = useCallback(async () => {
+    cancelPasskey();
+    const operation = beginPasskeySignIn();
+    passkeyOperation.current = operation;
     setBusy(true);
     setNotice(null);
     try {
-      if (!(await signInPasskey())) throw new Error("Passkey authentication failed");
+      if (!(await operation.result)) throw new Error("Passkey authentication failed");
+      if (passkeyOperation.current !== operation) return;
+      passkeyOperation.current = undefined;
       setPhase("authed");
     } catch {
-      setNotice("Unable to sign in with a passkey. Use email recovery instead.");
+      if (passkeyOperation.current === operation) {
+        setNotice("Unable to sign in with a passkey. Use email recovery instead.");
+      }
     } finally {
-      setBusy(false);
+      if (passkeyOperation.current === operation) {
+        passkeyOperation.current = undefined;
+        setBusy(false);
+      }
     }
-  }, []);
+  }, [cancelPasskey]);
 
   const enroll = useCallback(async () => {
+    cancelPasskey();
+    const operation = beginPasskeyEnrollment("Primary passkey");
+    passkeyOperation.current = operation;
     setBusy(true);
     setNotice(null);
     try {
-      if (!(await addPasskey("Primary passkey"))) throw new Error("Passkey enrollment failed");
+      if (!(await operation.result)) throw new Error("Passkey enrollment failed");
+      if (passkeyOperation.current !== operation) return;
+      passkeyOperation.current = undefined;
       setPhase("authed");
     } catch {
-      setNotice("Unable to create a passkey. You can continue with email recovery.");
+      if (passkeyOperation.current === operation) {
+        setNotice("Unable to create a passkey. You can continue with email recovery.");
+      }
     } finally {
-      setBusy(false);
+      if (passkeyOperation.current === operation) {
+        passkeyOperation.current = undefined;
+        setBusy(false);
+      }
     }
-  }, []);
+  }, [cancelPasskey]);
 
   if (phase === "authed" || phase === "open") return <>{children}</>;
   if (phase === "loading") return null;
@@ -188,7 +220,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
             <Button type="submit" disabled={busy} className="w-full">
               Sign in with email OTP
             </Button>
-            {passkeysEnabled && conditionalMediation === "unavailable" ? (
+            {passkeysEnabled ? (
               <Button
                 type="button"
                 variant="outline"
@@ -226,7 +258,11 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
               type="button"
               variant="ghost"
               className="w-full"
-              onClick={() => setPhase("authed")}
+              onClick={() => {
+                cancelPasskey();
+                setBusy(false);
+                setPhase("authed");
+              }}
             >
               Not now
             </Button>

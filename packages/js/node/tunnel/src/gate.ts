@@ -22,20 +22,16 @@
  * @module
  */
 
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { AUTH_BASE_PATH, auth as sharedAuth } from "@dbx-tools/shared-auth";
 import { log, token } from "@dbx-tools/shared-core";
-import type { RequestHandler, Response } from "express";
+import { getRequest, setResponse } from "better-call/node";
+import type { RequestHandler } from "express";
 import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
 import { loginPageHtml } from "./login-page.ts";
 import type { AuthGateApi } from "./plugin.ts";
 
 const logger = log.logger("tunnel:gate");
-
-type WebRequestInput = IncomingMessage & {
-  body?: unknown;
-  originalUrl?: string;
-};
 
 /** @deprecated Import `AUTH_BASE_PATH` from `@dbx-tools/shared-auth`. */
 export const AUTH_PREFIX = AUTH_BASE_PATH;
@@ -133,21 +129,6 @@ function injectIdentity(req: IncomingMessage, email: string): void {
   req.headers[token.USER_EMAIL_HEADER] = email;
 }
 
-/** Read the raw request body as text (AppKit parses JSON, but the gate routes
- * are mounted before that runs for tunnel traffic, so read defensively). */
-function readBody(req: WebRequestInput): Promise<string> {
-  // AppKit's json body-parser may have already populated req.body; prefer it.
-  if (req.body !== undefined && req.body !== null) {
-    return Promise.resolve(typeof req.body === "string" ? req.body : JSON.stringify(req.body));
-  }
-  return new Promise((resolve) => {
-    let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => resolve(data));
-    req.on("error", () => resolve(data));
-  });
-}
-
 export function webHeaders(req: IncomingMessage): Headers {
   const headers = new Headers();
   for (const [name, value] of Object.entries(req.headers)) {
@@ -161,27 +142,19 @@ export function webHeaders(req: IncomingMessage): Headers {
   return headers;
 }
 
-export async function webRequest(req: WebRequestInput): Promise<globalThis.Request> {
+export function webRequest(req: IncomingMessage): globalThis.Request {
   const host = req.headers.host ?? "localhost";
   const hostname = host.split(":")[0]?.toLowerCase();
   const protocol = hostname === "localhost" || hostname === "127.0.0.1" ? "http" : "https";
-  const method = (req.method ?? "GET").toUpperCase();
-  const body = method === "GET" || method === "HEAD" ? undefined : await readBody(req);
-  return new globalThis.Request(`${protocol}://${host}${req.originalUrl || req.url}`, {
-    method,
-    headers: webHeaders(req),
-    ...(body ? { body } : {}),
-  });
+  req.headers["x-real-ip"] = clientIp(req);
+  return getRequest({ request: req, base: `${protocol}://${host}` });
 }
 
-export async function sendWebResponse(res: Response, response: globalThis.Response): Promise<void> {
-  for (const [name, value] of response.headers.entries()) {
-    if (name.toLowerCase() !== "set-cookie") res.setHeader(name, value);
-  }
-  const cookies = response.headers.getSetCookie();
-  if (cookies.length) res.setHeader("set-cookie", cookies);
-  const body = Buffer.from(await response.arrayBuffer());
-  res.status(response.status).send(body);
+export async function sendWebResponse(
+  res: ServerResponse,
+  response: globalThis.Response,
+): Promise<void> {
+  await setResponse(res, response);
 }
 
 /**
@@ -380,7 +353,7 @@ export function mountGate(
         );
       return;
     }
-    await sendWebResponse(res, await gate.handler(await webRequest(req)));
+    await sendWebResponse(res, await gate.handler(webRequest(req)));
   }) as RequestHandler;
   addMiddleware(AUTH_PREFIX, authHandler);
 

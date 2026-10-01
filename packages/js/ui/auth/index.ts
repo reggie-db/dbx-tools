@@ -7,7 +7,5 @@ export const PACKAGE_VERSION = "0.9.4";
 export * as reactAuthClient from "./src/react/auth-client.ts";
 export * as reactAuthGate from "./src/react/auth-gate.tsx";
 export * as reactPasskeyManager from "./src/react/passkey-manager.tsx";
-export { AUTH_BASE } from "./src/react/auth-client.ts";
-export type { PasskeySummary } from "./src/react/auth-client.ts";
 export type { AuthGateProps } from "./src/react/auth-gate.tsx";
 export type { PasskeyManagerProps } from "./src/react/passkey-manager.tsx";

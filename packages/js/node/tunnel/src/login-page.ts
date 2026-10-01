@@ -1,20 +1,14 @@
 /**
- * A self-contained HTML login page the tunnel serves in front of an app that
- * does not embed the `<AuthGate>` React component (e.g. a WebSocket app fronted
- * by the CLI proxy).
- *
- * It speaks the same compatibility endpoints under {@link AUTH_PREFIX} that the
- * React client uses — `POST /request` to email a code, `POST /verify` to
- * exchange it for the `dbx-tools-auth` session cookie — with plain `fetch`, no
- * build step and no dependency. Passkeys are intentionally omitted: the WebAuthn
- * ceremony needs the better-auth client library, so passkey enrollment happens
- * inside the app after this email-OTP sign-in. On success the page reloads, and
- * the now-authenticated request reaches the app.
+ * Self-contained login document for applications that do not embed the React
+ * AuthGate. The packaged browser client uses the same Better Auth operations as
+ * the React surface for conditional and manual passkeys plus email OTP.
  *
  * @module
  */
 
 import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
+import { string } from "@dbx-tools/shared-core";
+import { LOGIN_CLIENT_SOURCE } from "./generated/_login-client.ts";
 
 export interface LoginPageOptions {
   /** Product/brand name shown in the heading. */
@@ -25,9 +19,8 @@ export interface LoginPageOptions {
 
 /** The login page HTML for a `text/html` request to a gated path with no session. */
 export function loginPageHtml(options: LoginPageOptions): string {
-  const brand = escapeHtml(options.brandName);
-  const prefix = jsonForInlineScript(AUTH_BASE_PATH);
-  const returnTo = jsonForInlineScript(options.returnTo);
+  const brand = string.escapeHtml(options.brandName);
+  const returnTo = string.escapeHtml(options.returnTo);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -70,28 +63,30 @@ export function loginPageHtml(options: LoginPageOptions): string {
     font-weight: 600; border: 0; border-radius: 9px; background: var(--accent);
     color: var(--accent-fg); cursor: pointer;
   }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
   button:disabled { opacity: 0.6; cursor: default; }
+  button[hidden] { display: none; }
   .msg { margin-top: 14px; font-size: 13px; min-height: 18px; }
   .msg.error { color: var(--error); }
   .hidden { display: none; }
   .back { background: none; color: var(--muted); font-weight: 400; margin-top: 8px; }
 </style>
 </head>
-<body>
+<body data-return-to="${returnTo}" data-auth-base="${AUTH_BASE_PATH}">
   <main class="card">
-    <!-- dbx.tools pixel-brick "stache" mark (Lava palette), matching the Kanna UI logo. -->
     <svg class="logo" viewBox="0 0 64 64" role="img" aria-label="${brand}" shape-rendering="crispEdges">
       <rect x="19" y="20" width="8" height="8" rx="1" fill="#FF3621"/><rect x="37" y="20" width="8" height="8" rx="1" fill="#FF3621"/>
       <rect x="1" y="29" width="8" height="8" rx="1" fill="#D92D18"/><rect x="10" y="29" width="8" height="8" rx="1" fill="#FF3621"/><rect x="19" y="29" width="8" height="8" rx="1" fill="#FF5A46"/><rect x="28" y="29" width="8" height="8" rx="1" fill="#FF8974"/><rect x="37" y="29" width="8" height="8" rx="1" fill="#FF5A46"/><rect x="46" y="29" width="8" height="8" rx="1" fill="#FF3621"/><rect x="55" y="29" width="8" height="8" rx="1" fill="#D92D18"/>
       <rect x="10" y="38" width="8" height="8" rx="1" fill="#FF3621"/><rect x="46" y="38" width="8" height="8" rx="1" fill="#FF3621"/>
     </svg>
     <h1>Sign in to ${brand}</h1>
-    <p class="sub">Enter your email to receive a one-time code.</p>
+    <p class="sub">Use a passkey or receive a one-time code by email.</p>
 
     <form id="email-form">
       <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="email" required autofocus>
+      <input id="email" name="email" type="email" autocomplete="email webauthn" required autofocus>
       <button id="email-submit" type="submit">Send code</button>
+      <button id="passkey-submit" class="secondary" type="button" hidden>Sign in with a passkey</button>
     </form>
 
     <form id="code-form" class="hidden">
@@ -103,130 +98,7 @@ export function loginPageHtml(options: LoginPageOptions): string {
 
     <div id="msg" class="msg" role="status" aria-live="polite"></div>
   </main>
-
-<script>
-(function () {
-  var PREFIX = ${prefix};
-  var RETURN_TO = ${returnTo};
-  // An in-place login can preserve browser-only hash state that never reached the server.
-  if (window.location.pathname !== PREFIX) {
-    RETURN_TO = window.location.pathname + window.location.search + window.location.hash;
-  }
-  var emailForm = document.getElementById("email-form");
-  var codeForm = document.getElementById("code-form");
-  var emailInput = document.getElementById("email");
-  var codeInput = document.getElementById("code");
-  var back = document.getElementById("back");
-  var msg = document.getElementById("msg");
-  var email = "";
-
-  function say(text, isError) {
-    msg.textContent = text || "";
-    msg.className = "msg" + (isError ? " error" : "");
-  }
-
-  async function post(path, body) {
-    var res = await fetch(PREFIX + path, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    var data = {};
-    try { data = await res.json(); } catch (_e) { /* non-JSON */ }
-    return { ok: res.ok, status: res.status, data: data };
-  }
-
-  function errorText(data, fallback) {
-    // better-auth error shape: { message } or { error: { message } }.
-    if (data && data.error && data.error.message) return data.error.message;
-    if (data && data.message) return data.message;
-    return fallback;
-  }
-
-  emailForm.addEventListener("submit", async function (e) {
-    e.preventDefault();
-    email = emailInput.value.trim();
-    if (!email) return;
-    var submit = document.getElementById("email-submit");
-    submit.disabled = true;
-    say("Sending…");
-    try {
-      // better-auth emailOTP native endpoint.
-      var r = await post("/email-otp/send-verification-otp", { email: email, type: "sign-in" });
-      if (r.ok) {
-        emailForm.classList.add("hidden");
-        codeForm.classList.remove("hidden");
-        codeInput.focus();
-        say("We emailed a code to " + email + ".");
-      } else {
-        say(errorText(r.data, "Could not send a code. Check the address and try again."), true);
-      }
-    } catch (_e) {
-      say("Network error. Try again.", true);
-    } finally {
-      submit.disabled = false;
-    }
-  });
-
-  codeForm.addEventListener("submit", async function (e) {
-    e.preventDefault();
-    var code = codeInput.value.trim();
-    if (!code) return;
-    var submit = document.getElementById("code-submit");
-    submit.disabled = true;
-    say("Verifying…");
-    try {
-      // better-auth sign-in with the OTP; sets the session cookie on success.
-      var r = await post("/sign-in/email-otp", {
-        email: email,
-        otp: code,
-        name: email.split("@")[0],
-      });
-      if (r.ok) {
-        say("Signed in. Loading…");
-        window.location.replace(RETURN_TO);
-      } else {
-        say(errorText(r.data, "That code was not accepted. Try again."), true);
-        submit.disabled = false;
-      }
-    } catch (_e) {
-      say("Network error. Try again.", true);
-      submit.disabled = false;
-    }
-  });
-
-  back.addEventListener("click", function () {
-    codeForm.classList.add("hidden");
-    emailForm.classList.remove("hidden");
-    codeInput.value = "";
-    say("");
-    emailInput.focus();
-  });
-})();
-</script>
+<script>${LOGIN_CLIENT_SOURCE}</script>
 </body>
 </html>`;
-}
-
-const HTML_ESCAPES: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch] ?? ch);
-}
-
-/** Encode a string literal without allowing it to terminate the surrounding script. */
-function jsonForInlineScript(value: string): string {
-  return JSON.stringify(value)
-    .replaceAll("<", "\\u003c")
-    .replaceAll(">", "\\u003e")
-    .replaceAll("&", "\\u0026")
-    .replaceAll("\u2028", "\\u2028")
-    .replaceAll("\u2029", "\\u2029");
 }

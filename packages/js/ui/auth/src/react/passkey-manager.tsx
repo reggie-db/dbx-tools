@@ -1,9 +1,10 @@
 import { Button, Input } from "@dbx-tools/ui-appkit/react";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  addPasskey,
+  beginPasskeyEnrollment,
   listPasskeys,
+  type PasskeyOperation,
   type PasskeySummary,
   removePasskey,
   renamePasskey,
@@ -18,12 +19,24 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
   const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const enrollment = useRef<PasskeyOperation | undefined>(undefined);
+
+  const cancelEnrollment = useCallback(() => {
+    const operation = enrollment.current;
+    enrollment.current = undefined;
+    operation?.cancel();
+  }, []);
+
+  useEffect(() => cancelEnrollment, [cancelEnrollment]);
 
   const refresh = useCallback(async () => {
     const values = await listPasskeys();
     setPasskeys(values);
     setNames(Object.fromEntries(values.map((passkey) => [passkey.id, passkey.name ?? "Passkey"])));
+    setLoaded(true);
+    setNotice(null);
   }, []);
 
   useEffect(() => {
@@ -31,17 +44,24 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
   }, [refresh]);
 
   const add = useCallback(async () => {
+    cancelEnrollment();
+    const operation = beginPasskeyEnrollment();
+    enrollment.current = operation;
     setBusy(true);
     setNotice(null);
     try {
-      if (!(await addPasskey())) throw new Error("Passkey enrollment failed");
+      if (!(await operation.result)) throw new Error("Passkey enrollment failed");
+      if (enrollment.current !== operation) return;
       await refresh();
     } catch {
-      setNotice("Unable to add a passkey.");
+      if (enrollment.current === operation) setNotice("Unable to add a passkey.");
     } finally {
-      setBusy(false);
+      if (enrollment.current === operation) {
+        enrollment.current = undefined;
+        setBusy(false);
+      }
     }
-  }, [refresh]);
+  }, [cancelEnrollment, refresh]);
 
   const rename = useCallback(
     async (id: string) => {
@@ -116,8 +136,11 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
             </Button>
           </div>
         ))}
-        {passkeys.length === 0 ? (
+        {loaded && passkeys.length === 0 ? (
           <p className="text-sm text-muted-foreground">No passkeys enrolled.</p>
+        ) : null}
+        {!loaded && !notice ? (
+          <p className="text-sm text-muted-foreground">Loading passkeys.</p>
         ) : null}
       </div>
       {notice ? (

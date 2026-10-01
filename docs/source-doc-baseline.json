@@ -94,11 +94,6 @@
     },
     {
       "package": "@dbx-tools/auth-gate",
-      "name": "AuthEmailOptions",
-      "source": "packages/js/node/auth-gate/src/auth.ts"
-    },
-    {
-      "package": "@dbx-tools/auth-gate",
       "name": "AuthorizeIdentity",
       "source": "packages/js/node/auth-gate/src/auth.ts"
     },
@@ -486,16 +481,6 @@
       "package": "@dbx-tools/tunnel",
       "name": "ProcessSupervisor",
       "source": "packages/js/node/tunnel/src/supervisor.ts"
-    },
-    {
-      "package": "@dbx-tools/ui-auth",
-      "name": "getAuthStatus",
-      "source": "packages/js/ui/auth/src/react/auth-client.ts"
-    },
-    {
-      "package": "@dbx-tools/ui-auth",
-      "name": "logout",
-      "source": "packages/js/ui/auth/src/react/auth-client.ts"
     },
     {
       "package": "@dbx-tools/ui-auth",

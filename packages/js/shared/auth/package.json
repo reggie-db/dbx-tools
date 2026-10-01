@@ -24,6 +24,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@better-auth/passkey": "catalog:",
+    "@simplewebauthn/browser": "catalog:",
+    "better-auth": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -37,6 +40,10 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./client": {
+        "types": "./lib/src/_client.d.ts",
+        "default": "./lib/src/_client.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -45,6 +52,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./client": "./src/_client.ts",
     "./package.json": "./package.json"
   },
   "files": [

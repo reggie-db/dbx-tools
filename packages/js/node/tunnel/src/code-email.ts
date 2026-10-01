@@ -11,11 +11,11 @@
  * @module
  */
 
+import type { AuthEmailCopy } from "@dbx-tools/auth-gate";
 import { string } from "@dbx-tools/shared-core";
-import type { SendCodeOptions } from "./plugin.ts";
 
-/** The parts of {@link SendCodeOptions} the code email's copy is built from. */
-export type CodeCopy = Pick<SendCodeOptions, "message" | "codeTtlSeconds">;
+/** Authentication email metadata accepted by the copy builders. */
+export type CodeCopy = AuthEmailCopy;
 
 /** The reassurance line closing both parts. */
 const IGNORE_LINE = "If you did not request this code, you can ignore this email.";

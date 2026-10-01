@@ -88,15 +88,8 @@ async function handleAuthRoute(
     );
     return true;
   }
-  const result = await gate.handler(await tunnelGate.webRequest(request));
-  const headers: Record<string, string | string[]> = {};
-  for (const [name, value] of result.headers.entries()) {
-    if (name.toLowerCase() !== "set-cookie") headers[name] = value;
-  }
-  const cookies = result.headers.getSetCookie();
-  if (cookies.length) headers["set-cookie"] = cookies;
-  response.writeHead(result.status, headers);
-  response.end(Buffer.from(await result.arrayBuffer()));
+  const result = await gate.handler(tunnelGate.webRequest(request));
+  await tunnelGate.sendWebResponse(response, result);
   return true;
 }
 

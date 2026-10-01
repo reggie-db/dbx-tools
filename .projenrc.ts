@@ -345,6 +345,8 @@ root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
 root.pnpmWorkspace?.addCatalog("better-auth", "1.7.6");
 root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.6");
+root.pnpmWorkspace?.addCatalog("@simplewebauthn/browser", "13.3.0");
+root.pnpmWorkspace?.addCatalog("better-call", "1.4.0");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
@@ -881,8 +883,10 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "@dbx-tools/shared-auth@workspace:^",
     "@databricks/appkit@catalog:",
     "@types/express@catalog:",
+    "better-call@catalog:",
     "http-proxy-3@catalog:",
   );
+  p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
   // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
   // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
   // `--insecure` mode) needs no mail transport, so it is an optional peer rather
@@ -950,7 +954,13 @@ project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) =>
 
 // shared-auth: browser-safe compatibility and status schemas for passwordless auth.
 project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" }, (p) => {
-  p.addDeps("zod@catalog:");
+  projectJs.addExports(p, { "./client": "./src/_client.ts" });
+  p.addDeps(
+    "@better-auth/passkey@catalog:",
+    "@simplewebauthn/browser@catalog:",
+    "better-auth@catalog:",
+    "zod@catalog:",
+  );
 });
 
 // ui-auth: Better Auth React client, passkey-first gate, and credential manager.
@@ -960,11 +970,9 @@ project.applyToProjects(root, { identifierName: "ui-auth", tags: "ui" }, (p) => 
     "./package.json": "./package.json",
   });
   p.addDeps(
-    "@better-auth/passkey@catalog:",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/ui-appkit@workspace:^",
     "@dbx-tools/ui-branding@workspace:^",
-    "better-auth@catalog:",
   );
 });
 

@@ -20,7 +20,11 @@
  * @module
  */
 
-import { ConfigurationError } from "@databricks/appkit";
+import {
+  ConfigurationError,
+  type PluginData,
+  type ToPlugin,
+} from "@databricks/appkit";
 import { log, type NameLike } from "@dbx-tools/shared-core";
 
 const logger = log.logger("plugin");
@@ -35,23 +39,20 @@ export interface PluginContextLike {
   getPlugins(): ReadonlyMap<string, unknown>;
 }
 
-type PluginData = {
-  plugin: abstract new (...args: never[]) => unknown;
-  name: string;
-};
-
 /**
  * Structural shape of an AppKit plugin factory (the result of
  * `toPlugin(SomePluginClass)`). Calling it returns a `PluginData` tuple whose
  * `plugin` field is the *class constructor* and whose `name` field carries the
  * registered plugin name as a literal string.
  *
- * Defined structurally so we don't pull `@databricks/appkit` into this as a
- * type dependency for the bound. Any function returning the same shape (e.g.
- * `lakebase`, `serving`, `genie`, or a user-defined `toPlugin(MyPlugin)`)
- * satisfies it.
+ * Uses AppKit's public factory contract so changes to the upstream descriptor
+ * remain visible here.
  */
-type PluginDataFactory = (...args: never[]) => PluginData;
+type PluginConstructor = abstract new (...args: never[]) => unknown;
+// `any` deliberately erases the factory-specific config while AppKit's public
+// `ToPlugin` and `PluginData` still own the descriptor shape.
+type PluginDataFactory = ToPlugin<PluginConstructor, any, string>;
+type ErasedPluginData = PluginData<PluginConstructor, any, string>;
 
 /**
  * Maps a plugin factory back to the *instance* type of its plugin class.
@@ -66,7 +67,7 @@ type PluginInstanceOf<F extends PluginDataFactory> = InstanceType<ReturnType<F>[
  * `factory()` on every sibling lookup (which would allocate a fresh descriptor
  * tuple each time).
  */
-const dataCache = new WeakMap<PluginDataFactory, PluginData>();
+const dataCache = new WeakMap<PluginDataFactory, ErasedPluginData>();
 
 /**
  * Returns the static `{ plugin, name }` descriptor for an AppKit plugin
@@ -75,7 +76,7 @@ const dataCache = new WeakMap<PluginDataFactory, PluginData>();
 export function data<F extends PluginDataFactory, D extends ReturnType<F>>(factory: F): D {
   const cached = dataCache.get(factory);
   // The cache is keyed by the erased `PluginDataFactory` bound, so `WeakMap`
-  // hands back the widened `PluginData`; only the caller's `F` knows the exact
+  // hands back the widened descriptor; only the caller's `F` knows the exact
   // descriptor type.
   if (cached !== undefined) {
     return cached as D;

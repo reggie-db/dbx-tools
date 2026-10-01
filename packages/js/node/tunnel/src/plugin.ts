@@ -29,12 +29,13 @@ import {
   auth as passwordlessAuth,
   storage as authStorage,
   type AuthorizeIdentity,
+  type AuthEmailOptions,
   type AuthStorageConfig,
   type AuthStorageMode,
   type PasswordlessAuthRuntime,
 } from "@dbx-tools/auth-gate";
 import { config as coreConfig } from "@dbx-tools/core";
-import type { AuthStatus } from "@dbx-tools/shared-auth";
+import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
 import { brand, log, string } from "@dbx-tools/shared-core";
 import type { RequestHandler } from "express";
 import { TUNNEL_CONFIG } from "./_config.ts";
@@ -188,19 +189,8 @@ export interface AuthGateConfig extends BasePluginConfig, AuthStorageConfig {
   insecure?: boolean;
 }
 
-/** Branding/messaging passed to {@link AuthGateConfig.sendCode}. */
-export interface SendCodeOptions {
-  subject: string;
-  brandName: string;
-  message: string;
-  /**
-   * Lifetime of the code being sent, in seconds - the RESOLVED
-   * {@link AuthGateConfig.codeTtlSeconds}, so the email can state the real
-   * expiry ("This code expires in 10 minutes") instead of a vague "shortly"
-   * that drifts from the configured TTL.
-   */
-  codeTtlSeconds: number;
-}
+/** Branding and expiry metadata passed to {@link AuthGateConfig.sendCode}. */
+export type SendCodeOptions = AuthEmailOptions;
 
 /** Resolved gate config with env fallbacks + defaults applied. */
 export interface ResolvedAuthGateConfig {
@@ -308,19 +298,8 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
   };
 }
 
-/** The handlers the gate middleware calls in-process (returned by {@link AuthGatePlugin.exports}). */
-export interface AuthGateApi {
-  /** Better Auth and compatibility routes under `/api/email/auth/*`. */
-  handler(request: Request): Promise<Response>;
-  /** Resolve the authorized email for request headers, or undefined. */
-  session(headers: Headers): Promise<string | undefined>;
-  /** The gate status payload. */
-  status(headers: Headers): Promise<AuthStatus>;
-  /** Whether the runtime exposes passkey enrollment and authentication. */
-  readonly passkeysEnabled: boolean;
-  /** Close auth storage owned by this runtime. */
-  close(): Promise<void>;
-}
+/** The owning passwordless runtime exposed by {@link AuthGatePlugin.exports}. */
+export type AuthGateApi = PasswordlessAuthRuntime;
 
 /**
  * AppKit plugin adapting `@dbx-tools/auth-gate` to tunnel traffic. On `setup()` it registers the login
@@ -399,7 +378,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
             storage,
             baseURL: origin,
             trustedOrigins: [origin],
-            basePath: "/api/email/auth",
+            basePath: AUTH_BASE_PATH,
             appName: this.resolved.brandName,
             secret: Buffer.from(key).toString("base64url"),
             sessionTtlSeconds: this.resolved.sessionTtlSeconds,
@@ -485,6 +464,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       return this.runtimes.get(host) ?? this.runtimes.values().next().value;
     };
     return {
+      basePath: AUTH_BASE_PATH,
       passkeysEnabled: [...this.runtimes.values()].some((entry) => entry.passkeysEnabled),
       handler: (request) =>
         runtime(request.headers, request)?.handler(request) ??

@@ -10,8 +10,9 @@
 
 import { z } from "zod";
 
-/** Canonical mount for Better Auth and the dbx-tools compatibility routes. */
-export const AUTH_BASE_PATH = "/api/email/auth";
+import { AUTH_BASE_PATH } from "./_route.ts";
+
+export { AUTH_BASE_PATH };
 
 /**
  * True only for the auth mount itself or one of its descendants.

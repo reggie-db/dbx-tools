@@ -60,6 +60,11 @@
       "type": "runtime"
     },
     {
+      "name": "better-call",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "http-proxy-3",
       "version": "catalog:",
       "type": "runtime"

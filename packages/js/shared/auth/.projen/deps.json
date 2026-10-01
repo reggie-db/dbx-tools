@@ -15,6 +15,21 @@
       "type": "build"
     },
     {
+      "name": "@better-auth/passkey",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@simplewebauthn/browser",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "better-auth",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

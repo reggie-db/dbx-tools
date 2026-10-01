@@ -22,11 +22,16 @@ const logger = log.logger("auth");
 
 export type AuthorizeIdentity = (email: string) => boolean | Promise<boolean>;
 
-export interface AuthEmailOptions {
-  subject: string;
-  brandName: string;
+/** Copy and expiry metadata shared by authentication email renderers. */
+export interface AuthEmailCopy {
   message: string;
   codeTtlSeconds: number;
+}
+
+/** Complete branding and copy metadata passed to authentication email delivery. */
+export interface AuthEmailOptions extends AuthEmailCopy {
+  subject: string;
+  brandName: string;
 }
 
 export interface PasswordlessAuthOptions {
