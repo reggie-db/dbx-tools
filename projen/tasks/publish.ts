@@ -341,8 +341,6 @@ if (lockfileMatchesManifestVersions(root, allMembers)) {
 }
 
 const publishArgs = [
-  "--access",
-  "public",
   "--ignore-scripts",
   ...(registry ? ["--registry", registry] : []),
   ...(dryRun ? ["--dry-run"] : []),
@@ -353,6 +351,7 @@ const publishable: Array<{
   version: string;
   compile: boolean;
   compiledTargets: string[];
+  access?: "public" | "restricted";
 }> = [];
 for (const dir of members) {
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
@@ -360,7 +359,7 @@ for (const dir of members) {
     version?: string;
     private?: boolean;
     dbxToolsConfig?: { uniffi?: boolean };
-    publishConfig?: unknown;
+    publishConfig?: { access?: unknown };
   };
   if (pkg.private) {
     logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
@@ -371,6 +370,12 @@ for (const dir of members) {
     continue;
   }
   if (!pkg.version) throw new Error(`Missing package version for ${pkg.name ?? dirname(dir)}`);
+  const access = pkg.publishConfig?.access;
+  if (access !== undefined && access !== "public" && access !== "restricted") {
+    throw new Error(
+      `${pkg.name ?? dirname(dir)} has invalid publishConfig.access ${String(access)}`,
+    );
+  }
   const compiledTargets = [...new Set(compiledPublishTargets(pkg.publishConfig))];
   publishable.push({
     dir,
@@ -378,6 +383,7 @@ for (const dir of members) {
     version: pkg.version,
     compile: compiledTargets.length > 0,
     compiledTargets,
+    ...(access ? { access } : {}),
   });
 }
 
@@ -418,8 +424,10 @@ for (const { dir } of publishable) {
 logger.info(
   `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
-await runConcurrent(publishable, concurrency, async ({ dir, name, version: packageVersion }) => {
-  if (!dryRun) {
+await runConcurrent(
+  publishable,
+  concurrency,
+  async ({ dir, name, version: packageVersion, access }) => {
     const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));
     try {
       const archive = packNpmPackage(dir, packed, path);
@@ -429,16 +437,28 @@ await runConcurrent(publishable, concurrency, async ({ dir, name, version: packa
           `Packed npm identity ${local.name}@${local.version} does not match ${name}@${packageVersion}`,
         );
       }
-      const published = await publishedNpmRelease(local.name, local.version, registry);
-      if (npmReleaseMatches(local, published)) {
-        logger.info(`skip published ${name} @ ${packageVersion}`);
-        return;
+      if (local.access !== access) {
+        throw new Error(
+          `Packed npm access ${String(local.access)} does not match ${String(access)} for ${name}`,
+        );
       }
+      if (!dryRun) {
+        const published = await publishedNpmRelease(local.name, local.version, registry);
+        if (npmReleaseMatches(local, published)) {
+          logger.info(`skip published ${name} @ ${packageVersion}`);
+          return;
+        }
+      }
+      logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
+      await runAsync(
+        dir,
+        "bun",
+        ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
+        path,
+      );
     } finally {
       rmSync(packed, { recursive: true, force: true });
     }
-  }
-  logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
-  await runAsync(dir, "bun", ["publish", ...publishArgs], path);
-});
+  },
+);
 logger.success(`${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages`);

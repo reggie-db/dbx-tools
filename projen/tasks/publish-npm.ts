@@ -20,6 +20,7 @@ const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const logger = log.logger("projen:publish-npm");
 
 export interface NpmReleaseIdentity {
+  readonly access?: "public" | "restricted";
   readonly contentDigest?: string;
   readonly integrity?: string;
   readonly name: string;
@@ -132,13 +133,19 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
   }
   const manifest = JSON.parse(result.stdout) as {
     name?: string;
+    publishConfig?: { access?: unknown };
     repository?: unknown;
     version?: string;
   };
   if (!manifest.name || !manifest.version) {
     throw new Error(`npm archive has no package name or version: ${path}`);
   }
+  const access = manifest.publishConfig?.access;
+  if (access !== undefined && access !== "public" && access !== "restricted") {
+    throw new Error(`npm archive has invalid publishConfig.access: ${String(access)}`);
+  }
   return {
+    ...(access ? { access } : {}),
     contentDigest: npmArchiveContentDigest(path),
     integrity: `sha512-${createHash("sha512").update(readFileSync(path)).digest("base64")}`,
     name: manifest.name,
@@ -237,8 +244,7 @@ export async function publishNpmArchives(options: {
       [
         "publish",
         archive,
-        "--access",
-        "public",
+        ...(local.access ? ["--access", local.access] : []),
         ...(options.registry ? ["--registry", options.registry] : []),
         ...(options.dryRun ? ["--dry-run"] : []),
       ],

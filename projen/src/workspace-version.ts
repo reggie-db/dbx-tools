@@ -18,6 +18,7 @@
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { exec } from "@dbx-tools/core";
+import { parse as parseVersion } from "semver";
 
 /** Name of the repo-root file holding the workspace version. */
 export const VERSION_FILE = "VERSION";
@@ -33,10 +34,20 @@ export type Semver = [number, number, number];
 /** Supported semantic release increments. */
 export type VersionLevel = "patch" | "minor" | "major";
 
-/** Parse `x.y.z` (ignoring any leading `v`/prefix), or `undefined` when it does not match. */
+/** Parse an exact stable `x.y.z`, or `undefined` for prefixes, prereleases, or embedded versions. */
 export function parseSemver(raw: string): Semver | undefined {
-  const m = /(\d+)\.(\d+)\.(\d+)/.exec(raw.trim());
-  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : undefined;
+  const value = raw.trim();
+  if (!SEMVER.test(value)) return undefined;
+  const parsed = parseVersion(value);
+  if (
+    !parsed ||
+    parsed.version !== value ||
+    parsed.prerelease.length > 0 ||
+    parsed.build.length > 0
+  ) {
+    return undefined;
+  }
+  return [parsed.major, parsed.minor, parsed.patch];
 }
 
 /** Ordering comparator: negative when `a < b`, positive when `a > b`, zero when equal. */
@@ -66,7 +77,7 @@ export function readWorkspaceVersion(root: string): string {
   const path = versionPath(root);
   if (!existsSync(path)) return DEFAULT_VERSION;
   const raw = readFileSync(path, "utf8").trim();
-  if (!SEMVER.test(raw)) {
+  if (!parseSemver(raw)) {
     throw new Error(`${VERSION_FILE} must contain an x.y.z version, got ${JSON.stringify(raw)}`);
   }
   return raw;
@@ -74,7 +85,7 @@ export function readWorkspaceVersion(root: string): string {
 
 /** Write the workspace version to `<root>/VERSION`. Only `bump` and bootstrap call this. */
 export function writeWorkspaceVersion(root: string, version: string): void {
-  if (!SEMVER.test(version)) {
+  if (!parseSemver(version)) {
     throw new Error(`workspace version must be x.y.z, got ${JSON.stringify(version)}`);
   }
   writeFileSync(versionPath(root), `${version}\n`);
@@ -131,7 +142,8 @@ export function latestTagVersion(cwd: string, prefix: string): Semver | undefine
     `${prefix}*`,
   ]);
   for (const tag of out.split("\n")) {
-    const v = parseSemver(tag.replace(prefix, ""));
+    if (!tag.startsWith(prefix)) continue;
+    const v = parseSemver(tag.slice(prefix.length));
     if (v) return v;
   }
   return undefined;

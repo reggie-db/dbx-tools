@@ -27,6 +27,7 @@ before(() => {
       name: "@fixture/native",
       version: "1.2.3",
       repository: "git+https://github.com/example/fixture.git",
+      publishConfig: { access: "restricted" },
     })}\n`,
   );
   archive = join(outdir, "fixture.tgz");
@@ -43,6 +44,7 @@ describe("npm release recovery", () => {
   it("reads and matches an exact staged archive", () => {
     assert.equal(identity.name, "@fixture/native");
     assert.equal(identity.version, "1.2.3");
+    assert.equal(identity.access, "restricted");
     assert.match(identity.integrity!, /^sha512-/);
     assert.equal(
       npmReleaseMatches(identity, {

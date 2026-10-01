@@ -397,6 +397,15 @@ program
         includeComponentTags: false,
       }).version;
       const next = resolveNextVersion(root, [opts.prefix], opts.level, { fetch: false });
+      const releaseVersionScript = fileURLToPath(new URL("./release-version.ts", import.meta.url));
+      run(root, process.execPath, [
+        releaseVersionScript,
+        "--version",
+        next.version,
+        "--prefix",
+        opts.prefix,
+        "--assert-next",
+      ]);
       const releaseTag = `${opts.prefix}${next.version}`;
       const releaseBranch = `release/${releaseTag}`;
       const releaseRoot = join(root, ".worktrees", releaseTag);

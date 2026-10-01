@@ -19,6 +19,13 @@ Before each implementation phase, re-inspect the active diff and preserve concur
   identity before cache use, isolates OBO and service-principal entries, supports
   scoped eviction, and bypasses shared caching when identity is unknown. AppKit
   Mastra and web search supply their trusted execution-context identity.
+- **Phase 4 completed on 2026-10-01.** Local validation and publication reuse a
+  single TypeScript compile, package access follows each manifest, every package
+  is packed once, and publication uploads the exact archive whose identity and
+  content were validated. Stable release versions now use one strict `semver`
+  parser; local release preparation and the generated release workflow invoke
+  the same validator and reject prefixes, embedded versions, prereleases, build
+  metadata, and non-increasing tags.
 
 ## Comparison with the Kanna implementation
 
