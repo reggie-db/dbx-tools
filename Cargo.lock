@@ -1371,7 +1371,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-tools-service"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "auto-launcher",
  "clap",

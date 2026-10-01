@@ -2313,7 +2313,10 @@ Inside an established workspace the CLI only forwards, so prefer the
   `tasks/barrels.ts --watch` (a source edit rebuilds just that package's barrel), and
   `tasks/openapi.ts --watch` (a changed tsoa controller regenerates the openapi
   packages). The concern-specific glue lives in the task; `watch.ts` only owns the
-  shared debounce/serialize/ignore-generated/SIGINT machinery. Touch `.projenrc.ts`
+  shared debounce/serialize/ignore-generated/SIGINT machinery. Every watcher
+  mutation and release preparation share one repository-scoped cross-process
+  file lock, so an active watcher waits instead of rewriting generated files
+  during a release merge. Touch `.projenrc.ts`
   (or a listed `syncResynthPaths` file) to force a re-synth for a structural change
   it doesn't spell out (e.g. a new package folder). Stock `projen --watch` is
   deliberately NOT used: it `fs.watch`es the whole repo recursively and re-synths

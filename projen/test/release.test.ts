@@ -293,6 +293,7 @@ describe("release task contracts", () => {
       join(import.meta.dirname, "..", "tasks", "release-pr.ts"),
       "utf8",
     );
+    assert.ok(releasePr.includes("await withWorkspaceMutationLock(root, async () =>"));
     assert.ok(
       releasePr.indexOf('git(root, ["commit", "-m", opts.message])') <
         releasePr.indexOf("pushCurrentBranch(root, currentBranch)"),

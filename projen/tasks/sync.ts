@@ -4,6 +4,7 @@ import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
+import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
 const logger = log.logger("projen:sync");
 
@@ -39,7 +40,7 @@ if (!process.argv.includes("--watch")) {
   // One-shot: full synth (+install + barrels via the post-synth component). This is
   // the scriptable path, so a failed synth stays a failed exit code.
   logger.start("synthesizing");
-  runSynth({ post: true });
+  await withWorkspaceMutationLock(repoRoot, () => runSynth({ post: true }));
   logger.success("synced");
 } else {
   // Watch: one initial full synth to bring the tree up to date, then focused
@@ -52,7 +53,7 @@ if (!process.argv.includes("--watch")) {
   // fatal: errors are logged and retried, and only a stop signal ends the task.
   logger.start("initial sync");
   try {
-    runSynth({ post: true });
+    await withWorkspaceMutationLock(repoRoot, () => runSynth({ post: true }));
     logger.success("synced - watching (Ctrl-C to stop)");
   } catch (err) {
     // A tree that doesn't synth is precisely when the watcher is most useful: the edit

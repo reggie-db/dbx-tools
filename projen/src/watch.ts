@@ -19,6 +19,7 @@ import { isAbsolute, resolve } from "node:path";
 import { watch as pathWatch } from "@dbx-tools/path";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./packages.ts";
+import { withWorkspaceMutationLock } from "./workspace-lock.ts";
 
 const logger = log.logger("projen:watch");
 const DEBOUNCE_MS = 250;
@@ -103,7 +104,9 @@ export function watchLoop(
       .filter((p) => !ignoredPath(p));
     pending.clear();
     try {
-      if (relevant.length) await onBatch(relevant);
+      if (relevant.length) {
+        await withWorkspaceMutationLock(repoRoot, () => onBatch(relevant));
+      }
     } catch (err) {
       logger.error(`${tag} cycle failed:`, err instanceof Error ? err.message : err);
     } finally {

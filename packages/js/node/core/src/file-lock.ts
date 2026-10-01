@@ -73,6 +73,8 @@ export interface FileLockOptions {
   timeoutMs?: number;
   /** Invoked once the backend for this call has been chosen. */
   onAcquire?: (acquisition: FileLockAcquisition) => void;
+  /** Invoked once when the selected lock is already held by another process. */
+  onWait?: (acquisition: FileLockAcquisition) => void;
 }
 
 type FlockFn = (fd: number, operation: number) => number;
@@ -119,14 +121,16 @@ export async function withFileLock<T>(
           continue;
         }
         logger.debug("acquiring lock", { backend, key: id, path: lockPath });
-        options.onAcquire?.({ backend });
-        return holdFlock(lockPath, flock, deadline, fn);
+        const acquisition = { backend } as const;
+        options.onAcquire?.(acquisition);
+        return holdFlock(lockPath, flock, deadline, fn, () => options.onWait?.(acquisition));
       }
       case "file": {
         const lockPath = join(dir, id);
         logger.debug("acquiring lock", { backend, key: id, path: lockPath });
-        options.onAcquire?.({ backend });
-        return holdLockDirectory(lockPath, deadline, fn);
+        const acquisition = { backend } as const;
+        options.onAcquire?.(acquisition);
+        return holdLockDirectory(lockPath, deadline, fn, () => options.onWait?.(acquisition));
       }
       default: {
         const _exhaustive: never = backend;
@@ -182,11 +186,12 @@ async function holdFlock<T>(
   flock: FlockFn,
   deadline: number | undefined,
   fn: () => T | Promise<T>,
+  onWait: () => void,
 ): Promise<T> {
   await ensureParentDir(lockPath);
   const handle = await open(lockPath, "a+");
   try {
-    await waitForFlock(handle.fd, flock, lockPath, deadline);
+    await waitForFlock(handle.fd, flock, lockPath, deadline, onWait);
     try {
       return await fn();
     } finally {
@@ -202,10 +207,16 @@ async function waitForFlock(
   flock: FlockFn,
   lockPath: string,
   deadline: number | undefined,
+  onWait: () => void,
 ): Promise<void> {
+  let waiting = false;
   for (;;) {
     const rc = flock(fd, LOCK_EX | LOCK_NB);
     if (rc === 0) return;
+    if (!waiting) {
+      waiting = true;
+      onWait();
+    }
     assertBeforeDeadline(lockPath, deadline);
     await asyncUtils.sleep(POLL_MS);
   }
@@ -218,9 +229,10 @@ async function holdLockDirectory<T>(
   lockPath: string,
   deadline: number | undefined,
   fn: () => T | Promise<T>,
+  onWait: () => void,
 ): Promise<T> {
   await ensureParentDir(lockPath);
-  const release = await acquireLockDirectory(lockPath, deadline);
+  const release = await acquireLockDirectory(lockPath, deadline, onWait);
   try {
     return await fn();
   } finally {
@@ -231,7 +243,9 @@ async function holdLockDirectory<T>(
 async function acquireLockDirectory(
   lockPath: string,
   deadline: number | undefined,
+  onWait: () => void,
 ): Promise<() => Promise<void>> {
+  let waiting = false;
   for (;;) {
     try {
       return await lockfile.lock(lockPath, {
@@ -243,6 +257,10 @@ async function acquireLockDirectory(
     } catch (cause) {
       const err = cause as NodeJS.ErrnoException;
       if (err.code !== "ELOCKED") throw errorUtils.toError(cause);
+      if (!waiting) {
+        waiting = true;
+        onWait();
+      }
       assertBeforeDeadline(lockPath, deadline);
       await asyncUtils.sleep(POLL_MS);
     }

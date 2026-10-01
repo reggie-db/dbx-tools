@@ -31,7 +31,7 @@ pub fn is_databricks_app_environment(environment: HashMap<String, String>) -> bo
             .is_some_and(|value| valid_port(value))
 }
 
-/// Wait for the process to receive Ctrl-C or, on Unix, SIGTERM.
+/// Wait for Ctrl-C or the platform's service-style termination signal.
 pub async fn shutdown_signal() {
     let interrupt = async {
         tokio::signal::ctrl_c()
@@ -45,7 +45,18 @@ pub async fn shutdown_signal() {
             .recv()
             .await;
     };
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    let terminate = async {
+        let mut close =
+            tokio::signal::windows::ctrl_close().expect("failed to install console close handler");
+        let mut shutdown =
+            tokio::signal::windows::ctrl_shutdown().expect("failed to install shutdown handler");
+        tokio::select! {
+            _ = close.recv() => {}
+            _ = shutdown.recv() => {}
+        }
+    };
+    #[cfg(not(any(unix, windows)))]
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
