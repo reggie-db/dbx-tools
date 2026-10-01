@@ -14,9 +14,9 @@ Reusable Rust lifecycle support for per-user dbx-tools background services.
 - opens and migrates a service-owned SQLite database through `rusqlite` and
   `rusqlite_migration`;
 - persists non-secret executable arguments and companion configuration;
-- copies the service executable into `<config-dir>/bin` before registration so
-  Cargo builds and versioned download caches can change without mutating a
-  launching executable;
+- copies service and companion executables into `<config-dir>/bin` before
+  registration so Cargo builds and versioned download caches can change without
+  mutating a launching executable;
 - supplies reusable `--config-dir`, `--persistence auto|memory|sqlite`, and
   installed-service runtime options;
 - supplies `SettingsStore` with process-local memory and shared service-owned
@@ -34,7 +34,8 @@ Reusable Rust lifecycle support for per-user dbx-tools background services.
 - provides an optional `desktop` feature with the shared tray-icon runtime,
   native Wry window on macOS and Windows, Linux browser fallback, lifecycle
   menu actions, health status, and callback-based health/open overrides;
-- reports registration, local health, metrics URL, and systray status.
+- reports registration, local health, metrics URL, systray autostart
+  registration, and current systray process status.
 
 ## Use
 

@@ -301,7 +301,9 @@ pub fn run_desktop(cli: DesktopCli, mut config: DesktopConfig) -> Result<()> {
         probe = cli.probe,
         "service desktop starting"
     );
-    run(config, cli.probe)
+    let result = run(config, cli.probe);
+    tracing::info!("service desktop stopped");
+    result
 }
 
 #[cfg(test)]

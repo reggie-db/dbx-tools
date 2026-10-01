@@ -508,6 +508,7 @@ pub struct LifecycleStatus {
     pub registration: String,
     pub healthy: bool,
     pub systray: bool,
+    pub systray_registered: bool,
     pub config_dir: PathBuf,
     pub logs_dir: PathBuf,
     pub health_url: String,
@@ -871,9 +872,15 @@ impl ServiceLifecycle {
             resolve_companion_policy(&install, self.config.companion_support_detector)?;
         let store = ServiceStore::open(&self.config)?;
         let existing = store.load()?;
-        unregister_service(&self.config, existing.as_ref())?;
+        stop_companion_process(&self.config, existing.as_ref())?;
+        if registration_status(&self.config)? == "running" {
+            stop_service(&self.config)?;
+        }
         let mut install = install;
         install.program = install_managed_executable(&self.config, &install.program)?;
+        if let Some(companion) = install.companion.as_mut() {
+            companion.program = install_managed_executable(&self.config, &companion.program)?;
+        }
         register_service(&self.config, &install)?;
         configure_companion(&self.config, &install, existing.as_ref(), companion_enabled)?;
         store.save(&self.config, &install)?;
@@ -883,6 +890,7 @@ impl ServiceLifecycle {
     pub fn start(&self) -> Result<LifecycleStatus> {
         self.guard_runtime()?;
         start_service(&self.config)?;
+        start_registered_companion(&self.config)?;
         self.await_healthy_status()
     }
 
@@ -896,6 +904,7 @@ impl ServiceLifecycle {
         self.guard_runtime()?;
         stop_service(&self.config)?;
         start_service(&self.config)?;
+        start_registered_companion(&self.config)?;
         self.await_healthy_status()
     }
 
@@ -929,6 +938,7 @@ impl ServiceLifecycle {
             registration,
             healthy,
             systray,
+            systray_registered,
             config_dir: effective.config_dir.clone(),
             logs_dir: effective.logs_dir(),
             health_url: effective.health_url(),
@@ -955,6 +965,9 @@ impl ServiceLifecycle {
         unregister_service(&self.config, stored.as_ref())?;
         if let Some(stored) = &stored {
             remove_managed_executable(&self.config, Path::new(&stored.program))?;
+            if let Some(companion) = configured_companion(stored) {
+                remove_managed_executable(&self.config, companion)?;
+            }
         }
         if purge && self.config.config_dir.exists() {
             fs::remove_dir_all(&self.config.config_dir)?;
@@ -1098,14 +1111,6 @@ fn user_manager() -> Result<Box<dyn ServiceManager>> {
 #[cfg(not(target_os = "windows"))]
 fn register_service(config: &ServiceConfig, install: &InstallConfig) -> Result<()> {
     let manager = user_manager()?;
-    let status = manager.status(ServiceStatusCtx {
-        label: config.label.clone(),
-    })?;
-    if status != ServiceStatus::NotInstalled {
-        manager.uninstall(ServiceUninstallCtx {
-            label: config.label.clone(),
-        })?;
-    }
     manager.install(ServiceInstallCtx {
         label: config.label.clone(),
         program: install.program.clone(),
@@ -1395,6 +1400,40 @@ fn start_companion_process(config: &ServiceConfig, companion: &CompanionConfig) 
         .stderr(Stdio::from(stderr))
         .spawn()?;
     storage.set(COMPANION_PROCESS_ID_SETTING, &child.id().to_string())?;
+    Ok(())
+}
+
+fn stored_companion(stored: &StoredConfiguration) -> Option<CompanionConfig> {
+    Some(CompanionConfig {
+        program: PathBuf::from(stored.companion_program.as_ref()?),
+        args: stored
+            .companion_arguments
+            .as_ref()?
+            .iter()
+            .map(OsString::from)
+            .collect(),
+    })
+}
+
+fn start_registered_companion(config: &ServiceConfig) -> Result<()> {
+    if !config.database_path().exists() {
+        return Ok(());
+    }
+    let stored = ServiceStore::open(config)?.load()?;
+    let Some(stored) = stored else {
+        return Ok(());
+    };
+    let Some(companion) = stored_companion(&stored) else {
+        return Ok(());
+    };
+    let auto = companion_launch(
+        &config.name,
+        &companion.program,
+        &os_strings(&companion.args)?,
+    )?;
+    if auto.is_enabled()? {
+        start_companion_process(config, &companion)?;
+    }
     Ok(())
 }
 
