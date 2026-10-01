@@ -3,10 +3,11 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { exec, project } from "@dbx-tools/core";
+import { project } from "@dbx-tools/core";
 import { log, string } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { selectReleaseSummary } from "./release-summary.ts";
+import { captureTaskCommand, runTaskCommand } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:release-request");
 
@@ -33,13 +34,7 @@ export async function prepareReleaseRequest(
   }
   const baseRef = options.push === false ? options.baseBranch : `origin/${options.baseBranch}`;
   if (options.synthesize !== false) {
-    exec.spawnSync(process.execPath, ["x", "projen"], {
-      cwd: root,
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: true,
-    });
+    runTaskCommand(root, process.execPath, ["x", "projen"]);
   }
   const dirty = capture(root, ["status", "--porcelain"]);
   if (dirty) {
@@ -130,27 +125,11 @@ async function generateRequestNotes(root: string, range: string): Promise<string
 }
 
 function capture(root: string, args: string[]): string {
-  return (
-    exec
-      .spawnSync("git", args, {
-        cwd: root,
-        stdout: "capture",
-        stderr: "inherit",
-        stdin: "ignore",
-        check: true,
-      })
-      .stdout?.trim() ?? ""
-  );
+  return captureTaskCommand(root, "git", args, { check: true, stderr: "inherit" });
 }
 
 function run(root: string, args: string[]): void {
-  exec.spawnSync("git", args, {
-    cwd: root,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "ignore",
-    check: true,
-  });
+  runTaskCommand(root, "git", args);
 }
 
 /** Restore option text after Projen forwards task arguments without shell quoting. */

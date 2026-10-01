@@ -63,7 +63,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { exec } from "@dbx-tools/core";
 import { async as asyncTools, log } from "@dbx-tools/shared-core";
 import ts from "typescript";
 import { parse } from "yaml";
@@ -73,6 +72,7 @@ import {
   publishedNpmRelease,
   readNpmArchiveIdentity,
 } from "./publish-npm.ts";
+import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
 import type { ReleasePlan } from "../src/release-plan.ts";
 
 const logger = log.logger("projen:publish");
@@ -143,32 +143,6 @@ function lockfileMatchesManifestVersions(root: string, members: readonly string[
   } catch {
     return false;
   }
-}
-
-/** Spawn `command` in `cwd` with `PATH` overridden, failing the task on non-zero. */
-function run(cwd: string, command: string, args: string[], path: string): void {
-  const executable = command === "bun" && process.versions.bun ? process.execPath : command;
-  exec.spawnSync(executable, args, {
-    cwd,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "ignore",
-    check: true,
-    env: { ...process.env, PATH: path },
-  });
-}
-
-/** Asynchronous counterpart used for bounded parallel stamping and publishing. */
-async function runAsync(cwd: string, command: string, args: string[], path: string): Promise<void> {
-  const executable = command === "bun" && process.versions.bun ? process.execPath : command;
-  await exec.spawn(executable, args, {
-    cwd,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "ignore",
-    check: true,
-    env: { ...process.env, PATH: path },
-  });
 }
 
 /**
@@ -318,7 +292,7 @@ if (lockfileMatchesManifestVersions(root, allMembers)) {
 } else {
   if (existsSync(lockfile)) rmSync(lockfile);
   logger.info("refreshing lockfile so workspace deps resolve to the release version");
-  run(root, "bun", ["install"], path);
+  runTaskCommand(root, "bun", ["install"], { env: { ...process.env, PATH: path } });
 }
 
 const publishArgs = [
@@ -384,11 +358,11 @@ if (compiled.length > 0) {
     logger.info(`reusing validated compiled output for ${compiled.length} publishable packages`);
   } else {
     logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
-    run(
+    runTaskCommand(
       root,
       "bun",
       ["run", ...compiled.flatMap((pkg) => ["--filter", pkg.name]), "compile"],
-      path,
+      { env: { ...process.env, PATH: path } },
     );
   }
 }
@@ -430,11 +404,11 @@ await asyncTools.mapConcurrent(
         }
       }
       logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
-      await runAsync(
+      await runTaskCommandAsync(
         dir,
         "bun",
         ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
-        path,
+        { env: { ...process.env, PATH: path } },
       );
     } finally {
       rmSync(packed, { recursive: true, force: true });

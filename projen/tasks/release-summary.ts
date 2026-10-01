@@ -13,6 +13,7 @@ import {
   releaseSummaryFile,
   type ReleaseSummaryProviderName,
 } from "../src/release-dispatch.ts";
+import { captureTaskCommand } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:release-summary");
 const PROVIDER_TIMEOUT_MS = 60_000;
@@ -84,14 +85,7 @@ export type ReleaseSummaryRunner = (
 ) => string | undefined | Promise<string | undefined>;
 
 function capture(root: string, command: string, args: string[]): string {
-  const result = exec.spawnSync(command, args, {
-    cwd: root,
-    stdout: "capture",
-    stderr: "ignore",
-    stdin: "ignore",
-    check: false,
-  });
-  return result.exitCode === 0 ? (result.stdout?.trim() ?? "") : "";
+  return captureTaskCommand(root, command, args);
 }
 
 function contentText(value: unknown): string | undefined {

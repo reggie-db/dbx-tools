@@ -17,8 +17,8 @@
  */
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { exec } from "@dbx-tools/core";
 import { parse as parseVersion } from "semver";
+import { captureTaskCommand } from "./_task-command.ts";
 
 /** Name of the repo-root file holding the workspace version. */
 export const VERSION_FILE = "VERSION";
@@ -118,14 +118,7 @@ export function syncWorkspaceManifestVersion(manifestPath: string, version: stri
 /** Run git in `cwd`, capturing stdout and swallowing failure (offline, no repo). */
 function gitCapture(cwd: string, args: string[]): string {
   try {
-    const res = exec.spawnSync("git", args, {
-      cwd,
-      stdout: "capture",
-      stderr: "ignore",
-      stdin: "ignore",
-      check: false,
-    });
-    return res.stdout?.trim() ?? "";
+    return captureTaskCommand(cwd, "git", args);
   } catch {
     return "";
   }

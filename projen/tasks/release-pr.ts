@@ -28,6 +28,12 @@ import {
   type ReleaseSummaryProviderName,
 } from "../src/release-dispatch.ts";
 import {
+  captureTaskCommand,
+  runTaskCommand,
+  runTaskCommandAsync,
+  taskCommandSucceeds,
+} from "../src/_task-command.ts";
+import {
   githubAccountSupportsWorkflowChanges,
   githubAuthenticatedAccounts,
   githubRepositoryApiPath,
@@ -49,14 +55,9 @@ function git(
   args: string[],
   { capture = false, check = true }: { capture?: boolean; check?: boolean } = {},
 ): string {
-  const result = exec.spawnSync("git", args, {
-    cwd: root,
-    stdout: capture ? "capture" : "inherit",
-    stderr: capture ? "ignore" : "inherit",
-    stdin: "ignore",
-    check,
-  });
-  return result.stdout?.trim() ?? "";
+  if (capture) return captureTaskCommand(root, "git", args, { check });
+  runTaskCommand(root, "git", args);
+  return "";
 }
 
 function pushCurrentBranch(root: string, branch: string): void {
@@ -68,84 +69,7 @@ function pushCurrentBranch(root: string, branch: string): void {
 }
 
 function gitSucceeds(root: string, args: string[]): boolean {
-  return (
-    exec.spawnSync("git", args, {
-      cwd: root,
-      stdout: "ignore",
-      stderr: "ignore",
-      stdin: "ignore",
-      check: false,
-    }).exitCode === 0
-  );
-}
-
-function commandSucceeds(
-  root: string,
-  command: string,
-  args: string[],
-  env?: NodeJS.ProcessEnv,
-): boolean {
-  return (
-    exec.spawnSync(command, args, {
-      cwd: root,
-      env,
-      stdout: "ignore",
-      stderr: "ignore",
-      stdin: "ignore",
-      check: false,
-    }).exitCode === 0
-  );
-}
-
-function run(root: string, command: string, args: string[], env?: NodeJS.ProcessEnv): void {
-  exec.spawnSync(command, args, {
-    cwd: root,
-    env,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "ignore",
-    check: true,
-  });
-}
-
-/** Run one release command with inherited output and a hard timeout. */
-async function runWithTimeout(
-  root: string,
-  command: string,
-  args: string[],
-  env: NodeJS.ProcessEnv,
-  timeoutMs: number,
-): Promise<void> {
-  await exec.spawn(command, args, {
-    cwd: root,
-    env,
-    stdout: "inherit",
-    stderr: "inherit",
-    stdin: "ignore",
-    signal: AbortSignal.timeout(timeoutMs),
-    check: true,
-  });
-}
-
-/** Capture one non-interactive command without throwing on a nonzero exit. */
-function captureCommand(
-  root: string,
-  command: string,
-  args: string[],
-  env: NodeJS.ProcessEnv,
-): string {
-  return (
-    exec
-      .spawnSync(command, args, {
-        cwd: root,
-        env,
-        stdout: "capture",
-        stderr: "ignore",
-        stdin: "ignore",
-        check: false,
-      })
-      .stdout?.trim() ?? ""
-  );
+  return taskCommandSucceeds(root, "git", args);
 }
 
 /** Wait for required checks and return the merged pull request commit. */
@@ -155,16 +79,15 @@ async function waitForPullRequestMerge(
   env: NodeJS.ProcessEnv,
   timeoutMs: number,
 ): Promise<string> {
-  await runWithTimeout(
+  await runTaskCommandAsync(
     root,
     "gh",
     ["pr", "checks", releaseBranch, "--watch", "--fail-fast", "--required", "--interval", "10"],
-    env,
-    timeoutMs,
+    { env, signal: AbortSignal.timeout(timeoutMs) },
   );
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = captureCommand(
+    const state = captureTaskCommand(
       root,
       "gh",
       [
@@ -176,7 +99,7 @@ async function waitForPullRequestMerge(
         "--jq",
         '[.state, (.mergeCommit.oid // "")] | @tsv',
       ],
-      env,
+      { env },
     );
     const [status, mergeSha] = state.split("\t");
     if (status === "MERGED" && mergeSha) return mergeSha;
@@ -197,7 +120,7 @@ async function waitForReleaseWorkflow(
   const deadline = Date.now() + timeoutMs;
   let runId = "";
   while (Date.now() < deadline) {
-    runId = captureCommand(
+    runId = captureTaskCommand(
       root,
       "gh",
       [
@@ -218,13 +141,16 @@ async function waitForReleaseWorkflow(
         "--jq",
         ".[0].databaseId // empty",
       ],
-      env,
+      { env },
     );
     if (runId) break;
     await asyncModule.sleep(5_000);
   }
   if (!runId) throw new Error(`Release workflow did not start within ${timeoutMs}ms`);
-  await runWithTimeout(root, "gh", ["run", "watch", runId, "--exit-status"], env, timeoutMs);
+  await runTaskCommandAsync(root, "gh", ["run", "watch", runId, "--exit-status"], {
+    env,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
 }
 
 function githubAccount(root: string): {
@@ -398,7 +324,7 @@ program
       }).version;
       const next = resolveNextVersion(root, [opts.prefix], opts.level, { fetch: false });
       const releaseVersionScript = fileURLToPath(new URL("./release-version.ts", import.meta.url));
-      run(root, process.execPath, [
+      runTaskCommand(root, process.execPath, [
         releaseVersionScript,
         "--version",
         next.version,
@@ -463,11 +389,11 @@ program
         }
         logger.info(`resuming ${releaseBranch} in ${releaseRoot}`);
       }
-      run(releaseRoot, process.execPath, ["install"]);
+      runTaskCommand(releaseRoot, process.execPath, ["install"]);
 
       const bumpScript = fileURLToPath(new URL("./bump.ts", import.meta.url));
       const versionCheckScript = fileURLToPath(new URL("./version-check.ts", import.meta.url));
-      run(releaseRoot, process.execPath, [
+      runTaskCommand(releaseRoot, process.execPath, [
         bumpScript,
         "--level",
         opts.level,
@@ -480,19 +406,19 @@ program
         throw new Error(`Release preparation did not produce ${next.version}`);
       }
 
-      run(releaseRoot, process.execPath, [versionCheckScript]);
+      runTaskCommand(releaseRoot, process.execPath, [versionCheckScript]);
       if (opts.validate) {
         for (const task of opts.validateTask) {
-          run(releaseRoot, process.execPath, ["run", task]);
+          runTaskCommand(releaseRoot, process.execPath, ["run", task]);
         }
         if (existsSync(join(releaseRoot, "Cargo.toml"))) {
-          run(releaseRoot, "cargo", [
+          runTaskCommand(releaseRoot, "cargo", [
             "test",
             "--workspace",
             ...(existsSync(join(releaseRoot, "Cargo.lock")) ? ["--locked"] : []),
           ]);
         }
-        run(releaseRoot, process.execPath, ["run", "compile"]);
+        runTaskCommand(releaseRoot, process.execPath, ["run", "compile"]);
       } else {
         logger.warn("release validation skipped by --no-validate");
       }
@@ -509,7 +435,7 @@ program
       } else {
         logger.info("local publication skipped by --no-local-publish");
       }
-      run(releaseRoot, process.execPath, [versionCheckScript]);
+      runTaskCommand(releaseRoot, process.execPath, [versionCheckScript]);
       const releaseSummary = opts.releaseSummary
         ? await generateReleaseSummary({
             root: releaseRoot,
@@ -547,8 +473,14 @@ program
         [githubTokenEnvironmentName(account.hostname)]: account.token,
       };
       const ensurePullRequest = (): void => {
-        if (commandSucceeds(root, "gh", ["pr", "view", releaseBranch], githubEnvironment)) return;
-        run(
+        if (
+          taskCommandSucceeds(root, "gh", ["pr", "view", releaseBranch], {
+            env: githubEnvironment,
+          })
+        ) {
+          return;
+        }
+        runTaskCommand(
           root,
           "gh",
           [
@@ -563,12 +495,14 @@ program
             "--body",
             body,
           ],
-          githubEnvironment,
+          { env: githubEnvironment },
         );
       };
       ensurePullRequest();
       if (opts.approve) {
-        run(root, "gh", ["pr", "merge", releaseBranch, "--auto", "--merge"], githubEnvironment);
+        runTaskCommand(root, "gh", ["pr", "merge", releaseBranch, "--auto", "--merge"], {
+          env: githubEnvironment,
+        });
       }
       git(root, ["worktree", "remove", "--force", releaseRoot]);
       git(root, ["branch", "--delete", "--force", releaseBranch]);
