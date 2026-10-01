@@ -81,7 +81,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.230",
+  "version": "0.9.3",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -246,8 +246,8 @@
           "binaryName": "dbx-lakebase-proxy",
           "unit": "rs-lakebase-proxy",
           "component": "rs-lakebase-proxy",
-          "version": "0.6.230",
-          "tag": "rs-lakebase-proxy-v0.6.230",
+          "version": "0.9.3",
+          "tag": "rs-lakebase-proxy-v0.9.3",
           "repository": "https://github.com/reggie-db/dbx-tools",
           "assets": [
             {
@@ -278,8 +278,8 @@
           "binaryName": "dbx-model-proxy",
           "unit": "rs-model-proxy",
           "component": "rs-model-proxy",
-          "version": "0.6.230",
-          "tag": "rs-model-proxy-v0.6.230",
+          "version": "0.9.3",
+          "tag": "rs-model-proxy-v0.9.3",
           "repository": "https://github.com/reggie-db/dbx-tools",
           "assets": [
             {
