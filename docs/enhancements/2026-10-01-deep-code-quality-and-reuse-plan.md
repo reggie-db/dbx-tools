@@ -1,0 +1,155 @@
+# Deep Code Quality, Ownership, and Release Reliability Plan
+
+**Target:** `docs/enhancements/2026-10-01-deep-code-quality-and-reuse-plan.md`  
+**Status:** In progress; Kanna baseline committed as `5221d41a`
+
+## Summary
+
+Prioritize two verified isolation defects, then consolidate Rust release tooling into `@dbx-tools/projen`, make Rust projects first-class Projen projects, remove duplicated model policy, reuse framework-owned contracts, and correct documentation drift.
+
+Before each implementation phase, re-inspect the active diff and preserve concurrent work. Treat the current Projen, Mastra, Better Auth, and compile-reuse edits as work to integrate and validate.
+
+## Comparison with the Kanna implementation
+
+The Kanna chat completed and its independently validated changes were committed
+and pushed before this plan was applied. That baseline completed the model-proxy
+metrics work, stable dependency upgrades, conditional passkey initiation, root
+publication compile reuse, removal of the private Rust release crate, an
+options-object Rust member constructor, and conversion of the Rust workspace to
+a Projen `Component`.
+
+The baseline only partially satisfies this plan. The generated Node release
+helper still parses TOML with line/regex logic, fingerprints only Rust/TOML
+files, discovers version records by scanning unrestricted binary bytes, and has
+no LLVM section tooling. The Rust project class still assumes a Node parent and
+workspace-owned metadata and does not own the full standalone crate task model.
+Publication still forces public access, repacks after validation, and uses a
+different local version parser from CI. Neither isolation defect, model-policy
+consolidation, hosted passkeys, passkey cancellation/error propagation,
+framework-owned auth contracts, or native Node request adapter reuse was
+implemented.
+
+## Confirmed DRY and ownership violations
+
+These findings were verified against production source. Generated UniFFI files,
+generated barrels, test fixtures, and small test-local command wrappers are not
+counted as violations.
+
+| Area | Repeated implementation | Disposition |
+| --- | --- | --- |
+| Repository/process helpers | `projen/tasks/rust-release.mjs` shells out to `git rev-parse` despite canonical `coreProject.root`; release tasks separately define `run`, `capture`, and `gitCapture` around `@dbx-tools/core.exec`. | Use one Projen task command utility and pass an explicit root into the generated standalone helper. |
+| Lakebase address contracts | AppKit handwrites `SslMode`, `ParsedAddress`, URL/resource parsing, and validation already owned by `packages/rs/core` and generated in `@dbx-tools/core-rs`. | Consume the generated owner and retain compatibility re-exports only. |
+| Model policy/contracts | Shared TypeScript repeats Rust model classes, profiles, status, queries, family classification, quantiles, capabilities, normalization, and fuzzy resolution; Node also retains Fuse. | Complete the generated browser-contract and Rust binding migration in phase 5. |
+| Auth contracts | The auth base path is repeated in tunnel and UI; `SendCodeOptions`, `AuthGateApi`, `PasskeySummary`, and AppKit `PluginData` weaken or copy owning types. | Move the browser-safe route contract to shared auth and alias/re-export owner types. |
+| Node/Fetch bridging | Tunnel and CLI copy request buffering, response headers, cookies, and bodies; input errors currently resolve partial bodies successfully. | Use Better Call's Node adapters with one trusted-origin policy shim. |
+| Common primitives | Tunnel duplicates `shared-core` HTML escaping and email validation; Projen and docs repeat POSIX conversion; docs repeat walkers, heading stripping, YAML quoting, and base-path wrappers. | Import the canonical shared primitive or move docs-only logic into `repository-docs.mjs`. |
+| Plugin execution | Email, Teams, web search, and search repeat registry-backed `ToolProvider` methods; email/Teams/web search repeat the same `execution.run` failure adapter. | Add small AppKit/shared-core adapters where the behavior is identical; keep product-specific messages/configuration as inputs. |
+| Storage migration handling | AppKit cache and AppKit Mastra memory repeat debug checks, ownership-error classification, and warning de-duplication. | Own the common classification/log policy in AppKit and reuse it from Mastra. |
+| Documentation utilities | Multiple docs scripts separately implement file walking, POSIX paths, Markdown H1 removal, YAML string quoting, regex escaping, and package discovery. | Consolidate dependency-free utilities without pulling the Projen runtime into docs validation. |
+| Bounded concurrency | Projen publication, remote-skill staging, and API docs each implement a cursor/worker pool with small semantic differences. | Add one shared async map primitive with explicit ordered-result and settle/fail-fast behavior. |
+
+Similar names that are not violations remain separate: uppercase polling Genie
+statuses versus lowercase Agent Mode terminal statuses; Rust-source UniFFI
+detection versus generated-binding-file detection; language-native database
+adapters; generated bindings; and standalone bootstrap code whose generated
+artifact has one owning source.
+
+## Implementation plan
+
+### 1. Fix verified isolation defects first
+
+- Replace tunnel authentication’s raw prefix matching with one shared, segment-aware predicate: exact auth path or auth path followed by `/`.
+- Apply it consistently to Express requests, CLI proxy requests, login-page decisions, and WebSocket upgrades. Reject upgrades to auth endpoints and strip spoofable identity headers before forwarding any non-auth request.
+- Add trusted `cacheIdentity` support to model catalogue/default-model resolution. Key caches by host and opaque credential identity; never log the identity. AppKit supplies its trusted user scope for OBO and a stable plugin-instance scope for service-principal clients. Calls without an identity bypass shared caching.
+- Make catalogue eviction identity-aware.
+
+### 2. Move Rust release tooling into `@dbx-tools/projen`
+
+- Replace `packages/rs/release-tools` with TypeScript source inside `@dbx-tools/projen`. Bundle that source into one generated, standalone Node-compatible `.mjs` helper for release jobs; repository development continues to use Bun.
+- Install `llvm-tools-preview` in native release jobs. Resolve `llvm-objcopy`, require exactly one recognized version section (`.dbxversion`, `.dbxver`, or `__dbxver`), validate the fixed 128-byte record, and update it with `--update-section`. Preserve file modes and apply ad-hoc signing after Mach-O changes. Do not scan binaries for unrestricted magic-byte matches.
+- Rebuild fingerprinting with Node crypto, `smol-toml`, and `cargo metadata`:
+  - discover actual workspace members without package-name conventions;
+  - hash all relevant files beneath configured crate roots, including embedded JSON, CSS, JavaScript, and other assets;
+  - exclude build caches and platform-native output;
+  - normalize only workspace-owned versions in Cargo manifests and lock entries;
+  - include toolchain, target, features, profiles, binding configuration, and explicit extra build-input globs.
+- Remove the private Rust helper only after parity and external-consumer tests pass.
+
+### 3. Make Rust a first-class Projen project type
+
+- Evolve the existing `DBXToolsRustProject`; do not introduce a competing abstraction.
+- Add `DBXToolsRustProjectOptions` with `name`, `outdir`, optional `parent`, Cargo metadata, dependencies, features, targets, binary/CLI settings, bindings, UniFFI configuration, release settings, and standalone version/edition/rust-version/license/repository values.
+- Support:
+  - `new DBXToolsRustProject(options)`;
+  - a deprecated positional constructor forwarding to the new options model until the next major release.
+- Give every crate project native compile, test, package, lint, format, and format-check tasks. Standalone crates emit concrete package metadata; workspace members inherit only metadata owned by their workspace.
+- Convert `DBXToolsRustWorkspace` into a Projen `Component`. It discovers and composes ordinary `DBXToolsRustProject` instances while retaining aggregate workspace tasks, binding orchestration, and release matrices.
+- Keep `RustPackageOptions` as a deprecated compatibility alias rather than maintaining a second Cargo schema.
+- Split the oversized Rust Projen implementation by project, workspace, release workflow, and release-helper responsibilities while preserving its public barrel.
+
+### 4. Correct release and publication behavior
+
+- Validate the concurrent compile-reuse work so a locally validated release compiles TypeScript once. Direct publication still compiles, and separate clean CI jobs retain independent compilation.
+- Respect each package’s resolved npm access setting instead of forcing public access. Continue skipping private packages.
+- Pack each selected package once, validate that archive, and publish the same bytes with `bun publish ./archive.tgz`.
+- Replace loose version extraction with one strict stable-semver parser using the existing `semver` dependency. Invoke the same Projen validation task from local preparation and generated CI.
+- Preserve manifest restoration, modes, provenance, bounded publication concurrency, catalog resolution, and standalone `prepack` behavior.
+
+### 5. Restore single ownership for model policy and contracts
+
+- Keep AppKit’s request-scoped SDK client for transport and OBO identity, but move catalogue normalization, classification, capability policy, ranking, and fuzzy resolution to `packages/rs/model`.
+- Export the missing pure operations through `@dbx-tools/model-rs`; route existing Node lookup and resolution APIs through them and remove the remaining Fuse-based implementation.
+- Extend binding/code generation so Rust-owned records and enums produce committed, target-independent browser contract/schema modules. Browser packages must not initialize native bindings.
+- Return fully classified and capability-stamped `/models` payloads. Retain only presentation predicates and Zod validation in browser-safe packages.
+- Deprecate handwritten public classification helpers now and remove them at the next major release.
+- Keep the dependency-free Node/Python App-environment detectors, but align them with Rust’s strict semantics through shared golden fixtures: reject interpolated names, require an HTTP(S) URL with a host, and accept only base-10 `u16` ports.
+
+### 6. Reuse authentication and framework-owned surfaces
+
+- Keep React conditional passkey mediation and its manual fallback. Add operation ownership and cancellation for challenge requests, WebAuthn ceremonies, phase changes, explicit authentication, completion, and unmounting.
+- Add the same conditional/manual passkey path to the hosted tunnel login through a packaged browser bundle built from the existing Better Auth client logic. Preserve OTP and normalized `returnTo`; add no CDN dependency.
+- Propagate passkey-list failures instead of converting them to empty lists. Preserve the last successful list when refresh fails.
+- Use a browser-only auth client entry shared by React and the hosted login. Import Better Auth’s `Passkey` type instead of weakening it locally.
+- Move the auth route constant and predicate into the browser-safe shared auth package and re-export current public names for compatibility.
+- Replace handwritten `SendCodeOptions`, `AuthGateApi`, AppKit `PluginData`, and plugin factory shapes with their owning exports or compatible aliases. Preserve `PluginContextLike`, because AppKit does not publicly export its owner type.
+- Replace custom request/response buffering with declared `better-call/node` adapters, supplying the repository’s normalized trusted base URL and origin/IP policy. Interrupted or truncated bodies must fail rather than reaching Better Auth as complete requests.
+
+### 7. Refresh documentation and dependency state
+
+- Update `AGENTS.md` first for Rust project ownership, release-helper placement, model-policy ownership, compatibility periods, and justified dependency-free detector exceptions.
+- Update `projen/README.md` and source comments from pnpm/tsx language to current Bun behavior. Correct the documented Projen version and release-stage ownership.
+- Correct stale package documentation, including the AppKit Mastra installation command, tunnel login behavior, and claims that TypeScript protocol translation is still used by the Rust model proxy.
+- Recheck concurrent stable dependency upgrades before changing manifests. Keep AppKit `0.81.0`, stable Mastra releases, Better Auth/passkey `1.7.6`, and Projen `0.103.27` unless a newer stable compatible release exists. Do not follow Mastra alpha `latest` tags.
+- Keep the root README focused on Databricks developer value and continue generating the site from canonical READMEs.
+
+## Public API and compatibility changes
+
+- Add `DBXToolsRustProjectOptions`; make the options-object constructor canonical.
+- Change `DBXToolsRustWorkspace` to extend `Component`.
+- Deprecate the positional Rust constructor and `RustPackageOptions` compatibility surface until the next major release.
+- Add opaque `cacheIdentity` to catalogue/default-model operations; absent identity disables shared caching.
+- Re-export framework-owned types under existing public names where required.
+- Deprecate shared TypeScript model classification helpers until the next major release.
+- Preserve wire field names and serialized enum values during generated-contract migration.
+
+## Validation and acceptance
+
+- **Tunnel:** test exact auth routes, nested auth routes, similar prefixes, spoofed forwarded headers, HTTP requests, and WebSocket upgrades through both Express and CLI transports.
+- **Model cache:** cover A→B, B→A, concurrent A/B misses, same-identity coalescing, OBO separation, service-principal sharing, separate hosts, scoped eviction, and no-identity bypass through `/models` and `/default-model`.
+- **Rust release tooling:** exercise ELF, Mach-O, and PE section updates; malformed/missing/duplicate sections; mode preservation; Mach-O signing; unrelated crate names; custom roots; embedded-asset invalidation; version-only reuse; and toolchain/target/feature invalidation.
+- **Projen consumers:** synthesize standalone libraries, binaries, discovered and explicit workspace members, custom names/roots, aliases, UniFFI crates, and release-enabled packed external consumers without access to this repository’s private crates.
+- **Publication:** assert one compile for validated local releases, one pack per package, exact-archive publication, public/restricted/private access behavior, retry identity checks, restoration after failure, and identical local/CI semver decisions.
+- **Model ownership:** run shared golden fixtures across Rust and Node for aliases, retirement data, GPT variants, Qwen versions, embeddings, custom endpoints, missing scores, ties, and exact IDs. Add a browser bundle check proving shared contracts load no native FFI.
+- **Authentication:** test conditional and manual passkeys, unsupported browsers, capability rejection, cancellation, Strict Mode, hosted non-React login, OTP fallback, preserved navigation, list 401/500/network failures, interrupted request bodies, cookies, redirects, and disconnects. Include one browser test with a virtual authenticator.
+- Run targeted Projen tasks through Bun, Rust tests through Cargo, packed-consumer tests, generated-file checks, README synchronization, link checks, and API documentation generation.
+
+## Explicit non-targets
+
+- Keep the manual passkey control as a fallback; browsers cannot reveal whether a credential exists.
+- Keep shared, Node, UI, Rust, and Python package boundaries where they isolate real runtime or dependency concerns.
+- Treat generated UniFFI bindings as generated artifacts, not handwritten duplication.
+- Keep language-native database adapters and dependency-free bootstrap helpers where native installation would be disproportionate.
+- Preserve AppKit/Mastra lifecycle, identity, sandbox, and async toolkit extensions that have no equivalent installed native surface.
+- Avoid speculative package merging or large-file rewrites beyond the concrete ownership extractions above.
+
+Update this enhancement document in place as findings are completed, and move it to `docs/archived/enhancements` only when the tracked work is completed or intentionally abandoned.

@@ -61,6 +61,14 @@ When you update docs, README positioning, or agent instructions:
   types directly. When generated types are inconvenient, fix the generator or
   generated export surface instead of adding a handwritten wrapper, mirror,
   `Pick`, or compatibility interface.
+- Small infrastructure helpers follow the same ownership rule. Projen tasks use
+  `@dbx-tools/core` for repository discovery and subprocess execution, and share
+  task-specific command policies from one task utility rather than adding local
+  `repositoryRoot`, `run`, `capture`, or `gitCapture` wrappers. Documentation
+  scripts share repository walking, POSIX-path, Markdown-frontmatter, and regex
+  helpers through `docs/scripts/repository-docs.mjs`. Standalone generated
+  helpers are emitted from the owning Projen source; their generated copy is not
+  a second handwritten implementation.
 - Never expose generated bindings through a `nodeExports` subpath. Generated
   bindings use the standard package-root barrel and export map. Keep the
   target-independent generated source committed and read-only; ignore only the
@@ -193,7 +201,9 @@ Primary package areas:
   `lakebase_address` in core parses PostgreSQL URLs, canonical resource paths,
   hosts, and project ids. `lakebase-proxy` owns resource discovery and database
   credentials and uses the core client for API requests. Do not create a
-  separate Lakebase parser or client crate.
+  separate Lakebase parser or client crate. Node and Python consumers import the
+  generated `core-rs` address records, enums, and parser functions; AppKit must
+  not maintain handwritten `SslMode`, `ParsedAddress`, or parsing logic.
 - `packages/rs/google`, `packages/js/node/google-rs`, and
   `packages/py/google-rs`
   contain Google integrations. The current surface is Google Application
@@ -213,6 +223,10 @@ Primary package areas:
   reasoning-effort wire values, and capability policy;
   `@dbx-tools/model` and `@dbx-tools/appkit-mastra` consume those bindings
   rather than reimplementing version or effort rules in TypeScript.
+  Rust also owns catalogue normalization, classification, fuzzy resolution, and
+  the model records/enums that cross runtime boundaries. Generate a committed,
+  browser-safe contract projection from those owning definitions; do not retain
+  a handwritten shared-model mirror or a second Fuse-based resolver.
   `difflib-fast` supplies stable short-string similarity. The model proxy
   resolves loose names such as `gpt` through this crate before selecting an
   inference route. Across TypeScript and Rust, a GPT family search sorts by
@@ -429,6 +443,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   detected Databricks App additionally accepts HTTPS
   `*.databricksapps.com` front-door origins; WebAuthn still uses the configured
   base origin.
+  `@dbx-tools/shared-auth` owns the browser-safe auth base path and its
+  segment-aware path predicate. Express, CLI proxy, hosted-login, React, and
+  WebSocket paths consume that one contract. Node request/response bridging uses
+  the supported Better Auth / Better Call Node adapters with the repository's
+  trusted base-URL policy; do not buffer an `IncomingMessage` into a second
+  handwritten Fetch adapter.
 - `packages/js/node/tunnel` and `packages/js/cli/tunnel` - tunnel Host
   detection, protected-header stripping, branded email delivery, identity
   injection, and AppKit/CLI transport adapters over `@dbx-tools/auth-gate`. Both
@@ -570,11 +590,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
 - `packages/py/postgres` — Python Lakebase/Postgres address parsing and
   WorkspaceClient-backed connection resolution, sync/async advisory locks, and
   the async topic bus. It is the port of ONE Node package
-  (`packages/js/node/postgres`, plus that package's address helper in
-  `packages/js/node/appkit`), so everything Node keeps in `node/postgres` stays
+  (`packages/js/node/postgres`, plus the generated address contract owned by
+  `packages/rs/core`), so everything Node keeps in `node/postgres` stays
   here rather than fanning out into a Python package per module. Keep its
   accepted address shapes aligned with
-  `packages/js/node/appkit/src/pgaddress.ts`, and keep advisory-lock ids aligned
+  `packages/rs/core/src/lakebase_address.rs`, and keep advisory-lock ids aligned
   with `packages/js/node/postgres/src/advisory-lock.ts` through colocated polyglot tests.
   Its `topic_bus` module's public lifecycle and wire envelope mirror
   `packages/js/node/postgres`'s `PostgresTopicBus` so Node and Python services
@@ -2122,6 +2142,17 @@ Hard rules:
   release; listing `dist/rust-raw/*` without that download leaves an empty glob
   and silently defeats future reuse.
 - Never patch arbitrary binary strings or use `sed` against executables.
+- `@dbx-tools/projen` owns the Rust release helper as Node source and emits one
+  standalone generated `.mjs` file for release runners. It discovers Cargo
+  members through structured manifests and `cargo metadata`, fingerprints every
+  declared build input including embedded assets, and updates exactly one
+  recognized version section through `llvm-objcopy`. Do not restore a private
+  Rust helper crate, regex TOML parsing, or magic-byte scanning.
+- `DBXToolsRustProject` is the single Projen project type for standalone crates
+  and workspace members. Its options-object constructor owns Cargo metadata,
+  dependency aliases, features, binary settings, bindings, and crate tasks;
+  `DBXToolsRustWorkspace` composes those projects as a `Component` and retains
+  only aggregate workspace, binding, and release coordination.
 
 ## The `dbx` CLI
 
