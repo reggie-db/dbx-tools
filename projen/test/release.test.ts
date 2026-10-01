@@ -319,6 +319,12 @@ describe("release task contracts", () => {
       releasePr.indexOf("await publishLocalRelease") <
         releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),
     );
+    const localCargo = readFileSync(
+      join(import.meta.dirname, "..", "tasks", "publish-uniffi-local.ts"),
+      "utf8",
+    );
+    assert.match(localCargo, /"metadata", "--format-version", "1", "--no-deps", "--locked"/);
+    assert.ok(localCargo.includes("if (workspaceDependency) visit(workspaceDependency)"));
     assert.ok(
       releasePr.indexOf("generateReleaseSummary({") <
         releasePr.indexOf('git(releaseRoot, ["add", "-A"])'),

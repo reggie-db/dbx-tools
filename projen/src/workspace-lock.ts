@@ -16,6 +16,7 @@ export function withWorkspaceMutationLock<T>(
 ): Promise<T> {
   const repository = resolve(root);
   return fileLock.withFileLock([MUTATION_LOCK_SCOPE, repository], callback, {
+    backends: process.platform === "win32" ? ["file"] : ["flock", "file"],
     onWait: () => logger.info("waiting for workspace mutation lock", { repository }),
   });
 }

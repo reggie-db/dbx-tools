@@ -233,10 +233,23 @@ async function holdLockDirectory<T>(
 ): Promise<T> {
   await ensureParentDir(lockPath);
   const release = await acquireLockDirectory(lockPath, deadline, onWait);
+  let callbackError: unknown;
   try {
     return await fn();
+  } catch (error) {
+    callbackError = error;
+    throw error;
   } finally {
-    await release();
+    try {
+      await release();
+    } catch (cause) {
+      if (callbackError === undefined || (cause as NodeJS.ErrnoException).code !== "ERELEASED") {
+        throw cause;
+      }
+      logger.warn("lock release was already completed after callback failure", {
+        path: lockPath,
+      });
+    }
   }
 }
 
