@@ -2060,6 +2060,9 @@ Hard rules:
 - Rust build reuse must be content-addressed and version-independent. Reuse only
   an exact target-key match from a previously successful GitHub Release, verify
   checksums and provenance, then stamp the dedicated structured version section.
+  The committed manifest uses portable target keys for review; each target runner
+  validates the committed source hash and derives the reusable asset key with its
+  actual compiler identity.
 - Never patch arbitrary binary strings or use `sed` against executables.
 
 ## The `dbx` CLI

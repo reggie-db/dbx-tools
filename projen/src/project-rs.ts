@@ -1153,10 +1153,12 @@ function configureRustReleaseTask(project: javascript.NodeProject, plan: RustRel
     description: "Write the version-independent Rust release build manifest",
     exec: [
       "cargo run --quiet --package dbx-tools-release-tools -- fingerprint",
-      ...plan.targets.map((target) =>
-        `--target ${JSON.stringify(`${String(target.cargo)}|${String(target.cargoExcludes ?? "")}`)}`,
+      ...plan.targets.map(
+        (target) =>
+          `--target ${JSON.stringify(`${String(target.cargo)}|${String(target.cargoExcludes ?? "")}`)}`,
       ),
       `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
+      "--portable",
     ].join(" "),
   });
 }
@@ -1341,13 +1343,32 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
       },
       {
         name: "Verify Rust build fingerprint",
-        if: independentSetup ? undefined : "${{ github.event_name == 'push' || inputs.stage == 'all' }}",
+        if: independentSetup
+          ? undefined
+          : "${{ github.event_name == 'push' || inputs.stage == 'all' }}",
+        ...(!independentSetup ? { id: "rust-fingerprint" } : {}),
         shell: "bash",
-        run: [
-          "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --check",
-          '--target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}"',
-          `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
-        ].join(" "),
+        run: independentSetup
+          ? [
+              "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --check",
+              '--target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}"',
+              `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
+              "--portable",
+            ].join(" ")
+          : [
+              'RUNTIME_MANIFEST="dist/rust-raw/rust-build-${{ matrix.node }}.json"',
+              'mkdir -p "$(dirname "$RUNTIME_MANIFEST")"',
+              [
+                "cargo run --quiet --package dbx-tools-release-tools -- fingerprint",
+                '--output "$RUNTIME_MANIFEST"',
+                '--target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}"',
+                `--toolchain ${JSON.stringify(plan.releaseRustVersion)}`,
+              ].join(" "),
+              'test "$(jq -r .rustSourceHash "$RUNTIME_MANIFEST")" = "$(jq -r .rustSourceHash .release/rust-build.json)"',
+              'KEY="$(jq -r --arg target "${{ matrix.cargo }}" \'.targets[$target] // empty\' "$RUNTIME_MANIFEST")"',
+              'test -n "$KEY"',
+              'echo "key=$KEY" >> "$GITHUB_OUTPUT"',
+            ].join("\n"),
       },
       ...(!independentSetup
         ? [
@@ -1357,26 +1378,26 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
               shell: "bash",
               env: { GH_TOKEN: "${{ github.token }}" },
               run: [
-                'KEY="$(jq -r --arg target "${{ matrix.cargo }}" \'.targets[$target] // empty\' .release/rust-build.json)"',
+                'KEY="${{ steps.rust-fingerprint.outputs.key }}"',
                 'test -n "$KEY"',
                 'ASSET="rust-raw-${{ matrix.node }}-$KEY.tar.gz"',
-                'mkdir -p dist/rust-raw',
+                "mkdir -p dist/rust-raw",
                 'MATCH="$(gh api --paginate "repos/${{ github.repository }}/releases?per_page=100" --jq \'.[] | select(.draft == false) | . as $release | .assets[] | select(.name == "\'"$ASSET"\'") | [$release.tag_name, .url] | @tsv\' | head -n 1)"',
                 'if [ -n "$MATCH" ]; then',
-                '  TAG="${MATCH%%$\'\\t\'*}"',
-                '  URL="${MATCH#*$\'\\t\'}"',
+                "  TAG=\"${MATCH%%$'\\t'*}\"",
+                "  URL=\"${MATCH#*$'\\t'}\"",
                 '  CHECKSUM_URL="$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq \'.assets[] | select(.name == "\'"$ASSET.sha256"\'") | .url\')"',
                 '  rm -rf "target/${{ matrix.cargo }}/release"',
                 '  if test -n "$CHECKSUM_URL" && gh api "$URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET" && gh api "$CHECKSUM_URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET.sha256" && (cd dist/rust-raw && sha256sum --check "$ASSET.sha256") && tar -xzf "dist/rust-raw/$ASSET"; then',
                 '    echo "hit=true" >> "$GITHUB_OUTPUT"',
-                '  else',
+                "  else",
                 '    rm -rf "target/${{ matrix.cargo }}/release" "dist/rust-raw/$ASSET" "dist/rust-raw/$ASSET.sha256"',
                 '    echo "::warning::matching raw Rust bundle failed validation; rebuilding"',
                 '    echo "hit=false" >> "$GITHUB_OUTPUT"',
-                '  fi',
-                'else',
+                "  fi",
+                "else",
                 '  echo "hit=false" >> "$GITHUB_OUTPUT"',
-                'fi',
+                "fi",
                 'echo "asset=$ASSET" >> "$GITHUB_OUTPUT"',
               ].join("\n"),
             },
@@ -1425,7 +1446,7 @@ function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep
               if: "${{ steps.raw-native.outputs.hit != 'true' }}",
               shell: "bash",
               run: [
-                'mkdir -p dist/rust-raw',
+                "mkdir -p dist/rust-raw",
                 'tar -czf "dist/rust-raw/${{ steps.raw-native.outputs.asset }}" "target/${{ matrix.cargo }}/release"',
                 '(cd dist/rust-raw && sha256sum "${{ steps.raw-native.outputs.asset }}" > "${{ steps.raw-native.outputs.asset }}.sha256")',
               ].join("\n"),

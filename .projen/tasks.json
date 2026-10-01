@@ -369,7 +369,7 @@
       "description": "Write the version-independent Rust release build manifest",
       "steps": [
         {
-          "exec": "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\""
+          "exec": "cargo run --quiet --package dbx-tools-release-tools -- fingerprint --target \"x86_64-unknown-linux-gnu|\" --target \"aarch64-unknown-linux-gnu|\" --target \"x86_64-apple-darwin|\" --target \"aarch64-apple-darwin|\" --target \"x86_64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --target \"aarch64-pc-windows-msvc|--exclude dbx-tools-lakebase-proxy\" --toolchain \"stable\" --portable"
         }
       ]
     },

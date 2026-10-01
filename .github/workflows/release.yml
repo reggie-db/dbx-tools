@@ -404,16 +404,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes libdbus-1-dev pkg-config
       - name: Verify Rust build fingerprint
-        id: verify_rust_build_fingerprint
+        id: rust-fingerprint
         if: ${{ github.event_name == 'push' || inputs.stage == 'all' }}
-        run: cargo run --quiet --package dbx-tools-release-tools -- fingerprint --check --target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}" --toolchain "stable"
+        run: |-
+          RUNTIME_MANIFEST="dist/rust-raw/rust-build-${{ matrix.node }}.json"
+          mkdir -p "$(dirname "$RUNTIME_MANIFEST")"
+          cargo run --quiet --package dbx-tools-release-tools -- fingerprint --output "$RUNTIME_MANIFEST" --target "${{ matrix.cargo }}|${{ matrix.cargoExcludes }}" --toolchain "stable"
+          test "$(jq -r .rustSourceHash "$RUNTIME_MANIFEST")" = "$(jq -r .rustSourceHash .release/rust-build.json)"
+          KEY="$(jq -r --arg target "${{ matrix.cargo }}" '.targets[$target] // empty' "$RUNTIME_MANIFEST")"
+          test -n "$KEY"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
         shell: bash
       - name: Reuse matching raw Rust outputs
         id: raw-native
         env:
           GH_TOKEN: ${{ github.token }}
         run: |-
-          KEY="$(jq -r --arg target "${{ matrix.cargo }}" '.targets[$target] // empty' .release/rust-build.json)"
+          KEY="${{ steps.rust-fingerprint.outputs.key }}"
           test -n "$KEY"
           ASSET="rust-raw-${{ matrix.node }}-$KEY.tar.gz"
           mkdir -p dist/rust-raw
