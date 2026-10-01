@@ -12,6 +12,7 @@ use std::{
     process::{Command, Stdio},
     str::FromStr,
     sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 use auto_launcher::{
@@ -59,6 +60,9 @@ const MIGRATIONS_SLICE: &[M<'_>] = &[
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATIONS_SLICE);
 const DATABASE_NAME: &str = "service.sqlite3";
+const STARTUP_HEALTH_TIMEOUT: Duration = Duration::from_secs(10);
+const STARTUP_HEALTH_POLL: Duration = Duration::from_millis(250);
+const COMPANION_PROCESS_ID_SETTING: &str = "service.companion-process-id";
 #[cfg(target_os = "windows")]
 const WINDOWS_PROCESS_ID_SETTING: &str = "service.windows-process-id";
 
@@ -151,6 +155,10 @@ impl ServiceConfig {
 
     pub fn database_path(&self) -> PathBuf {
         self.config_dir.join(DATABASE_NAME)
+    }
+
+    pub fn logs_dir(&self) -> PathBuf {
+        self.config_dir.join("logs")
     }
 
     pub fn with_invalid_runtime_detector(mut self, detector: fn() -> bool) -> Self {
@@ -359,6 +367,14 @@ pub struct ServiceRequirements {
 }
 
 impl ServiceCli {
+    /// Whether this command requests automatic or required desktop integration.
+    pub fn companion_requested(&self) -> bool {
+        matches!(
+            &self.command,
+            ServiceCommand::Install(command) if command.systray != SystrayMode::Never
+        )
+    }
+
     pub fn requirements(
         &self,
         definition: &ServiceDefinition,
@@ -493,6 +509,7 @@ pub struct LifecycleStatus {
     pub healthy: bool,
     pub systray: bool,
     pub config_dir: PathBuf,
+    pub logs_dir: PathBuf,
     pub health_url: String,
     pub metrics_url: String,
 }
@@ -705,6 +722,15 @@ struct StoredConfiguration {
     port: u16,
 }
 
+fn effective_config(config: &ServiceConfig, stored: Option<&StoredConfiguration>) -> ServiceConfig {
+    let mut effective = config.clone();
+    if let Some(stored) = stored {
+        effective.host.clone_from(&stored.host);
+        effective.port = stored.port;
+    }
+    effective
+}
+
 pub struct ServiceStore {
     connection: Connection,
 }
@@ -845,16 +871,19 @@ impl ServiceLifecycle {
             resolve_companion_policy(&install, self.config.companion_support_detector)?;
         let store = ServiceStore::open(&self.config)?;
         let existing = store.load()?;
+        unregister_service(&self.config, existing.as_ref())?;
+        let mut install = install;
+        install.program = install_managed_executable(&self.config, &install.program)?;
         register_service(&self.config, &install)?;
         configure_companion(&self.config, &install, existing.as_ref(), companion_enabled)?;
         store.save(&self.config, &install)?;
-        self.status()
+        self.await_healthy_status()
     }
 
     pub fn start(&self) -> Result<LifecycleStatus> {
         self.guard_runtime()?;
         start_service(&self.config)?;
-        self.status()
+        self.await_healthy_status()
     }
 
     pub fn stop(&self) -> Result<LifecycleStatus> {
@@ -867,7 +896,7 @@ impl ServiceLifecycle {
         self.guard_runtime()?;
         stop_service(&self.config)?;
         start_service(&self.config)?;
-        self.status()
+        self.await_healthy_status()
     }
 
     pub fn status(&self) -> Result<LifecycleStatus> {
@@ -878,16 +907,21 @@ impl ServiceLifecycle {
         } else {
             None
         };
-        let systray = stored
+        let effective = effective_config(&self.config, stored.as_ref());
+        let systray_registered = stored
             .as_ref()
             .and_then(|stored| companion_auto_launch(&self.config.name, stored))
             .map(|auto| auto.is_enabled())
             .transpose()?
             .unwrap_or(false);
+        let systray = systray_registered
+            && stored
+                .as_ref()
+                .is_some_and(|stored| companion_process(configured_companion(stored)).is_some());
         let healthy = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(2))
             .build()?
-            .get(self.config.health_url())
+            .get(effective.health_url())
             .send()
             .map(|response| response.status().is_success())
             .unwrap_or(false);
@@ -895,9 +929,10 @@ impl ServiceLifecycle {
             registration,
             healthy,
             systray,
-            config_dir: self.config.config_dir.clone(),
-            health_url: self.config.health_url(),
-            metrics_url: self.config.metrics_url(),
+            config_dir: effective.config_dir.clone(),
+            logs_dir: effective.logs_dir(),
+            health_url: effective.health_url(),
+            metrics_url: effective.metrics_url(),
         })
     }
 
@@ -908,6 +943,7 @@ impl ServiceLifecycle {
         } else {
             None
         };
+        stop_companion_process(&self.config, stored.as_ref())?;
         if let Some(auto) = stored
             .as_ref()
             .and_then(|stored| companion_auto_launch(&self.config.name, stored))
@@ -917,6 +953,9 @@ impl ServiceLifecycle {
             }
         }
         unregister_service(&self.config, stored.as_ref())?;
+        if let Some(stored) = &stored {
+            remove_managed_executable(&self.config, Path::new(&stored.program))?;
+        }
         if purge && self.config.config_dir.exists() {
             fs::remove_dir_all(&self.config.config_dir)?;
         }
@@ -925,6 +964,17 @@ impl ServiceLifecycle {
 
     fn guard_runtime(&self) -> Result<()> {
         self.config.ensure_runtime()
+    }
+
+    fn await_healthy_status(&self) -> Result<LifecycleStatus> {
+        let deadline = Instant::now() + STARTUP_HEALTH_TIMEOUT;
+        loop {
+            let status = self.status()?;
+            if status.healthy || Instant::now() >= deadline {
+                return Ok(status);
+            }
+            std::thread::sleep(STARTUP_HEALTH_POLL);
+        }
     }
 }
 
@@ -982,6 +1032,47 @@ fn to_sql_error(error: serde_json::Error) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
 }
 
+fn install_managed_executable(config: &ServiceConfig, source: &Path) -> Result<PathBuf> {
+    let name = source
+        .file_name()
+        .ok_or_else(|| format!("service executable has no file name: {}", source.display()))?;
+    let directory = config.config_dir.join("bin");
+    let destination = directory.join(name);
+    if source == destination {
+        return Ok(destination);
+    }
+    fs::create_dir_all(&directory)?;
+    let staged = directory.join(format!(
+        ".{}.{}.tmp",
+        name.to_string_lossy(),
+        std::process::id()
+    ));
+    if staged.exists() {
+        fs::remove_file(&staged)?;
+    }
+    fs::copy(source, &staged)?;
+    #[cfg(target_os = "windows")]
+    if destination.exists() {
+        fs::remove_file(&destination)?;
+    }
+    fs::rename(&staged, &destination)?;
+    Ok(destination)
+}
+
+fn remove_managed_executable(config: &ServiceConfig, executable: &Path) -> Result<()> {
+    let directory = config.config_dir.join("bin");
+    if executable.parent() == Some(directory.as_path()) && executable.exists() {
+        fs::remove_file(executable)?;
+    }
+    if directory
+        .read_dir()
+        .is_ok_and(|mut entries| entries.next().is_none())
+    {
+        fs::remove_dir(directory)?;
+    }
+    Ok(())
+}
+
 fn require_absolute_existing(path: &Path, description: &str) -> Result<()> {
     if !path.is_absolute() {
         return Err(format!(
@@ -1011,11 +1102,6 @@ fn register_service(config: &ServiceConfig, install: &InstallConfig) -> Result<(
         label: config.label.clone(),
     })?;
     if status != ServiceStatus::NotInstalled {
-        if status == ServiceStatus::Running {
-            manager.stop(ServiceStopCtx {
-                label: config.label.clone(),
-            })?;
-        }
         manager.uninstall(ServiceUninstallCtx {
             label: config.label.clone(),
         })?;
@@ -1029,11 +1115,7 @@ fn register_service(config: &ServiceConfig, install: &InstallConfig) -> Result<(
         working_directory: Some(config.config_dir.clone()),
         environment: None,
         autostart: true,
-        restart_policy: RestartPolicy::OnFailure {
-            delay_secs: Some(5),
-            max_retries: None,
-            reset_after_secs: None,
-        },
+        restart_policy: RestartPolicy::Never,
     })?;
     manager.start(ServiceStartCtx {
         label: config.label.clone(),
@@ -1151,7 +1233,7 @@ fn registration_status(config: &ServiceConfig) -> Result<String> {
     let running = storage
         .get(WINDOWS_PROCESS_ID_SETTING)?
         .and_then(|value| value.parse::<u32>().ok())
-        .is_some_and(|pid| windows_process_matches(pid, Path::new(&stored.program)));
+        .is_some_and(|pid| process_matches(pid, Path::new(&stored.program)));
     Ok(if auto.is_enabled()? && running {
         "running".to_string()
     } else if auto.is_enabled()? {
@@ -1167,11 +1249,6 @@ fn unregister_service(config: &ServiceConfig, _stored: Option<&StoredConfigurati
     let status = manager.status(ServiceStatusCtx {
         label: config.label.clone(),
     })?;
-    if status == ServiceStatus::Running {
-        manager.stop(ServiceStopCtx {
-            label: config.label.clone(),
-        })?;
-    }
     if status != ServiceStatus::NotInstalled {
         manager.uninstall(ServiceUninstallCtx {
             label: config.label.clone(),
@@ -1210,7 +1287,7 @@ fn start_stored_process(config: &ServiceConfig, program: &Path, args: &[OsString
     if storage
         .get(WINDOWS_PROCESS_ID_SETTING)?
         .and_then(|value| value.parse::<u32>().ok())
-        .is_some_and(|pid| windows_process_matches(pid, program))
+        .is_some_and(|pid| process_matches(pid, program))
     {
         return Ok(());
     }
@@ -1238,8 +1315,7 @@ fn start_stored_process(config: &ServiceConfig, program: &Path, args: &[OsString
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-fn windows_process_matches(pid: u32, program: &Path) -> bool {
+fn process_matches(pid: u32, program: &Path) -> bool {
     use sysinfo::{Pid, ProcessesToUpdate, System};
 
     let pid = Pid::from_u32(pid);
@@ -1253,9 +1329,73 @@ fn windows_process_matches(pid: u32, program: &Path) -> bool {
         .is_some_and(|executable| executable == expected)
 }
 
-#[cfg(target_os = "windows")]
 fn normalized_process_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn stop_companion_process(
+    config: &ServiceConfig,
+    companion: Option<&StoredConfiguration>,
+) -> Result<()> {
+    use sysinfo::{Pid, ProcessesToUpdate, Signal, System};
+
+    if !config.database_path().exists() {
+        return Ok(());
+    }
+    let storage = ServiceStorage::open(&config.config_dir)?;
+    let expected = companion
+        .and_then(|stored| stored.companion_program.as_deref())
+        .map(Path::new);
+    let Some(expected) = expected else {
+        storage.remove(COMPANION_PROCESS_ID_SETTING)?;
+        return Ok(());
+    };
+    let pid = storage
+        .get(COMPANION_PROCESS_ID_SETTING)?
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|pid| process_matches(*pid, expected))
+        .or_else(|| companion_process(Some(expected)))
+        .map(Pid::from_u32);
+    let Some(pid) = pid else {
+        storage.remove(COMPANION_PROCESS_ID_SETTING)?;
+        return Ok(());
+    };
+    let mut system = System::new();
+    system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+    if let Some(process) = system.process(pid) {
+        let stopped = process.kill_with(Signal::Term).unwrap_or(false) || process.kill();
+        if !stopped {
+            return Err("desktop companion process could not be stopped".into());
+        }
+    }
+    storage.remove(COMPANION_PROCESS_ID_SETTING)?;
+    Ok(())
+}
+
+fn start_companion_process(config: &ServiceConfig, companion: &CompanionConfig) -> Result<()> {
+    let storage = ServiceStorage::open(&config.config_dir)?;
+    if let Some(pid) = companion_process(Some(&companion.program)) {
+        storage.set(COMPANION_PROCESS_ID_SETTING, &pid.to_string())?;
+        return Ok(());
+    }
+    fs::create_dir_all(config.logs_dir())?;
+    let stdout = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config.logs_dir().join("desktop.log"))?;
+    let stderr = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config.logs_dir().join("desktop-error.log"))?;
+    let child = Command::new(&companion.program)
+        .args(&companion.args)
+        .current_dir(&config.config_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr))
+        .spawn()?;
+    storage.set(COMPANION_PROCESS_ID_SETTING, &child.id().to_string())?;
+    Ok(())
 }
 
 fn configure_companion(
@@ -1264,6 +1404,7 @@ fn configure_companion(
     existing: Option<&StoredConfiguration>,
     enabled: bool,
 ) -> Result<()> {
+    stop_companion_process(config, existing)?;
     let Some(companion) = &install.companion else {
         if let Some(auto) = existing.and_then(|stored| companion_auto_launch(&config.name, stored))
         {
@@ -1280,6 +1421,7 @@ fn configure_companion(
     )?;
     if enabled {
         auto.enable()?;
+        start_companion_process(config, companion)?;
     } else if auto.is_enabled().unwrap_or(false) {
         auto.disable()?;
     }
@@ -1317,6 +1459,26 @@ fn companion_auto_launch(name: &str, stored: &StoredConfiguration) -> Option<Aut
         stored.companion_arguments.as_deref().unwrap_or_default(),
     )
     .ok()
+}
+
+fn configured_companion(stored: &StoredConfiguration) -> Option<&Path> {
+    stored.companion_program.as_deref().map(Path::new)
+}
+
+fn companion_process(program: Option<&Path>) -> Option<u32> {
+    use sysinfo::System;
+
+    let expected = normalized_process_path(program?);
+    System::new_all()
+        .processes()
+        .iter()
+        .find_map(|(pid, process)| {
+            process
+                .exe()
+                .map(normalized_process_path)
+                .is_some_and(|executable| executable == expected)
+                .then(|| pid.as_u32())
+        })
 }
 
 fn auto_launch(name: &str, program: &Path, args: &[String]) -> Result<AutoLaunch> {
@@ -1369,6 +1531,50 @@ mod tests {
         let resolved = service_config(&definition, Some(&relative)).unwrap();
         assert!(resolved.config_dir.is_absolute());
         assert!(resolved.config_dir.ends_with(relative));
+    }
+
+    #[test]
+    fn managed_executable_is_copied_out_of_mutable_build_storage() {
+        let root = tempdir().unwrap();
+        let source = root.path().join("target").join("dbx-model-proxy");
+        fs::create_dir_all(source.parent().unwrap()).unwrap();
+        fs::write(&source, b"first").unwrap();
+        let config = ServiceConfig::with_config_root("model-proxy", 4000, root.path()).unwrap();
+
+        let installed = install_managed_executable(&config, &source).unwrap();
+        assert_eq!(
+            installed,
+            root.path().join("model-proxy/bin").join("dbx-model-proxy")
+        );
+        assert_eq!(fs::read(&installed).unwrap(), b"first");
+
+        fs::write(&source, b"second").unwrap();
+        assert_eq!(
+            install_managed_executable(&config, &source).unwrap(),
+            installed
+        );
+        assert_eq!(fs::read(&installed).unwrap(), b"second");
+
+        remove_managed_executable(&config, &installed).unwrap();
+        assert!(!installed.exists());
+    }
+
+    #[test]
+    fn stored_host_and_port_drive_service_status_urls() {
+        let root = tempdir().unwrap();
+        let config = ServiceConfig::with_config_root("fixture", 4100, root.path()).unwrap();
+        let stored = StoredConfiguration {
+            program: "/service".into(),
+            arguments: Vec::new(),
+            companion_program: None,
+            companion_arguments: None,
+            host: "127.0.0.2".into(),
+            port: 4200,
+        };
+        let effective = effective_config(&config, Some(&stored));
+
+        assert_eq!(effective.health_url(), "http://127.0.0.2:4200/api/healthz");
+        assert_eq!(effective.metrics_url(), "http://127.0.0.2:4200/metrics");
     }
 
     #[test]

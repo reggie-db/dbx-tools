@@ -154,7 +154,10 @@ impl Tray {
         if let Some(result) = result {
             match result {
                 Ok(status) => self.set_status(&status.registration),
-                Err(error) => self.set_status(&format!("error: {error}")),
+                Err(error) => {
+                    tracing::warn!(%error, "desktop lifecycle action failed");
+                    self.set_status(&format!("error: {error}"));
+                }
             }
             true
         } else {
@@ -173,6 +176,7 @@ fn default_health_check(url: &str) -> bool {
 }
 
 fn default_open_url(url: &str) -> Result<()> {
+    tracing::info!(%url, "opening service UI");
     open::that(url).map_err(Into::into)
 }
 
@@ -290,6 +294,13 @@ pub fn run_desktop(cli: DesktopCli, mut config: DesktopConfig) -> Result<()> {
     if let Some(health_url) = cli.health_url {
         config.health_url = health_url;
     }
+    tracing::info!(
+        title = %config.title,
+        url = %config.url,
+        health_url = %config.health_url,
+        probe = cli.probe,
+        "service desktop starting"
+    );
     run(config, cli.probe)
 }
 
