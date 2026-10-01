@@ -9,6 +9,8 @@ import { parse } from "yaml";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BRAND_PATH = join(ROOT, "branding/brand.yaml");
 const FAVICON_PATH = join(ROOT, "branding/assets/icon-light.svg");
+const LOGO_LIGHT_PATH = join(ROOT, "branding/assets/logo-light.svg");
+const LOGO_DARK_PATH = join(ROOT, "branding/assets/logo-dark.svg");
 const DIST = join(ROOT, "packages/rs/model-proxy/metrics-ui/dist");
 const BRAND_OUTPUT = join(DIST, "brand.0b7222df.css");
 const WRITE = process.argv.includes("--write");
@@ -67,6 +69,8 @@ function verify(path, expected) {
 const brand = parse(readFileSync(BRAND_PATH, "utf8"));
 verify(BRAND_OUTPUT, renderBrandCss(brand));
 verify(join(DIST, "assets/favicon.svg"), readFileSync(FAVICON_PATH, "utf8"));
+verify(join(DIST, "assets/logo-light.svg"), readFileSync(LOGO_LIGHT_PATH, "utf8"));
+verify(join(DIST, "assets/logo-dark.svg"), readFileSync(LOGO_DARK_PATH, "utf8"));
 for (const [relativePath, [size, color]] of Object.entries(FIGMA_ASSETS)) {
   verify(join(DIST, relativePath), renderStatusAsset(size, color));
 }

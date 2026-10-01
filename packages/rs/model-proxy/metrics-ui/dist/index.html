@@ -18,7 +18,14 @@
     <main class="dashboard" data-detail="full" aria-busy="true">
       <header class="header">
         <div class="brand">
-          <div class="mark" aria-hidden="true">dbx</div>
+          <picture class="brand-logo">
+            <source
+              srcset="/metrics/assets/logo-dark.svg"
+              media="(prefers-color-scheme: dark)"
+            />
+            <img src="/metrics/assets/logo-light.svg" alt="dbx tools" />
+          </picture>
+          <span class="brand-divider" aria-hidden="true"></span>
           <div>
             <h1>Model proxy metrics</h1>
             <p>Real-time process diagnostics · retention 24h</p>
