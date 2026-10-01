@@ -19,7 +19,7 @@
  * @module
  */
 
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { model } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
 import type { MastraModelConfig } from "@mastra/core/llm";
@@ -136,7 +136,7 @@ export async function summarizeText(
   options: SummarizeOptions = {},
 ): Promise<string> {
   const { instructions, maxWords, requestContext, abortSignal } = options;
-  const prompt = string.toDescription({
+  const prompt = stringUtils.toDescription({
     ...(instructions ? { Guidance: instructions } : {}),
     ...(maxWords !== undefined ? { "Max length (words)": String(maxWords) } : {}),
     Text: text,

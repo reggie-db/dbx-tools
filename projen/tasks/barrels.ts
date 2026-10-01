@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 import { sep } from "node:path";
 import { parseArgs } from "node:util";
-import { log, string } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { generateBarrels } from "../src/barrels.ts";
 import { recordedPackages } from "../src/packages.ts";
 import { watchLoop, watchRoots } from "../src/watch.ts";
@@ -43,14 +43,14 @@ if (values.watch) {
     if (dirs.size === 0) {
       if (unowned.length) {
         logger.warn(
-          `no recorded package owns ${string.pluralize(unowned.length, "change")}; ` +
+          `no recorded package owns ${stringUtils.pluralize(unowned.length, "change")}; ` +
             "run `bun run default` (or touch .projenrc.ts) to pick up a new package folder",
         );
       }
       return;
     }
     const n = generateBarrels({ dirs: [...dirs] });
-    if (n) logger.success(`rebuilt ${string.pluralize(n, "barrel")}`);
+    if (n) logger.success(`rebuilt ${stringUtils.pluralize(n, "barrel")}`);
   });
 } else {
   const dirs = Array.isArray(values.dir)
@@ -58,6 +58,6 @@ if (values.watch) {
     : [];
   const n = generateBarrels(dirs.length ? { dirs } : undefined);
   logger.success(
-    n === 0 ? "barrels already up to date" : `updated ${string.pluralize(n, "barrel")}`,
+    n === 0 ? "barrels already up to date" : `updated ${stringUtils.pluralize(n, "barrel")}`,
   );
 }

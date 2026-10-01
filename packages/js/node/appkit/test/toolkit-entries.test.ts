@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { AgentToolDefinition } from "@databricks/appkit/beta";
 
-import { entries, name } from "../src/toolkit.ts";
+import { entries, name } from "../src/toolkit-entries.ts";
 
 const definitions: AgentToolDefinition[] = [
   {

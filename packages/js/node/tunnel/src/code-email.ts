@@ -12,7 +12,7 @@
  */
 
 import type { AuthEmailCopy } from "@dbx-tools/auth-gate";
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 
 /** Authentication email metadata accepted by the copy builders. */
 export type CodeCopy = AuthEmailCopy;
@@ -29,8 +29,8 @@ const IGNORE_LINE = "If you did not request this code, you can ignore this email
  */
 export function expiresIn(seconds: number): string {
   return seconds >= 60 && seconds % 60 === 0
-    ? string.pluralize(seconds / 60, "minute")
-    : string.pluralize(seconds, "second");
+    ? stringUtils.pluralize(seconds / 60, "minute")
+    : stringUtils.pluralize(seconds, "second");
 }
 
 /**

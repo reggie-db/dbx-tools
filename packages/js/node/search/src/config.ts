@@ -23,8 +23,8 @@
  */
 
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
-import { config as coreConfig } from "@dbx-tools/core";
-import { object, string } from "@dbx-tools/shared-core";
+import { configUtils } from "@dbx-tools/core";
+import { object, stringUtils } from "@dbx-tools/shared-core";
 import type { SearchDocument, SearchMode } from "@dbx-tools/shared-search";
 import type { JSONSchema7 } from "json-schema";
 
@@ -226,11 +226,11 @@ export function defaultAlias(name: string): string {
 /** Normalize a config index entry (string or object) into a {@link ResolvedIndexConfig}. */
 function toResolvedIndex(entry: string | SearchIndexConfig): ResolvedIndexConfig | null {
   const raw = typeof entry === "string" ? { name: entry } : entry;
-  const name = string.trimToNull(raw.name);
+  const name = stringUtils.trimToNull(raw.name);
   if (name === null) return null;
   return {
     name,
-    alias: string.trimToNull(raw.alias) ?? defaultAlias(name),
+    alias: stringUtils.trimToNull(raw.alias) ?? defaultAlias(name),
     ...(raw.primaryKey ? { primaryKey: raw.primaryKey } : {}),
     ...(raw.columns && raw.columns.length > 0 ? { columns: [...raw.columns] } : {}),
   };
@@ -238,7 +238,7 @@ function toResolvedIndex(entry: string | SearchIndexConfig): ResolvedIndexConfig
 
 /** Parse and validate a {@link SearchMode} from config or an env var. */
 function resolveMode(configured: SearchMode | undefined): SearchMode {
-  const raw = configured ?? coreConfig.text("SEARCH_MODE", coreConfig.ENV_ONLY);
+  const raw = configured ?? configUtils.text("SEARCH_MODE", configUtils.ENV_ONLY);
   if (raw === undefined) return DEFAULT_MODE;
   if (raw !== "hybrid" && raw !== "vector" && raw !== "keyword") {
     throw new ConfigurationError(
@@ -256,10 +256,10 @@ function resolveMode(configured: SearchMode | undefined): SearchMode {
  * and a bad mode throws a {@link ConfigurationError} naming the field.
  */
 export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSearchConfig {
-  const defaultIndexRaw = coreConfig.string(
+  const defaultIndexRaw = configUtils.string(
     config.index,
     [INDEX_ENV, DATABRICKS_INDEX_ENV],
-    coreConfig.ENV_ONLY,
+    configUtils.ENV_ONLY,
   );
 
   const configured = (config.indexes ?? [])
@@ -268,7 +268,12 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
 
   // Ensure the default index is represented in the known set.
   if (defaultIndexRaw && !configured.some((i) => i.name === defaultIndexRaw)) {
-    const envColumns = coreConfig.list(undefined, "SEARCH_COLUMNS", undefined, coreConfig.ENV_ONLY);
+    const envColumns = configUtils.list(
+      undefined,
+      "SEARCH_COLUMNS",
+      undefined,
+      configUtils.ENV_ONLY,
+    );
     configured.unshift({
       name: defaultIndexRaw,
       alias: defaultAlias(defaultIndexRaw),
@@ -285,35 +290,41 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
   });
 
   const defaultIndex = defaultIndexRaw ?? indexes[0]?.name;
-  const columns = coreConfig.list(config.columns, "SEARCH_COLUMNS", undefined, coreConfig.ENV_ONLY);
+  const columns = configUtils.list(
+    config.columns,
+    "SEARCH_COLUMNS",
+    undefined,
+    configUtils.ENV_ONLY,
+  );
 
   return {
     ...object.optional("defaultIndex", defaultIndex),
     indexes,
     ...object.optional(
       "endpoint",
-      coreConfig.string(config.endpoint, ENDPOINT_ENV, coreConfig.ENV_ONLY),
+      configUtils.string(config.endpoint, ENDPOINT_ENV, configUtils.ENV_ONLY),
     ),
     ...(columns.length > 0 ? { columns } : {}),
-    pageSize: coreConfig.positiveInt(
+    pageSize: configUtils.positiveInt(
       config.pageSize,
       "SEARCH_PAGE_SIZE",
       DEFAULT_PAGE_SIZE,
-      coreConfig.ENV_ONLY,
+      configUtils.ENV_ONLY,
     ),
     mode: resolveMode(config.mode),
     ...object.optional(
       "embeddingModel",
-      coreConfig.string(config.embeddingModel, "SEARCH_EMBEDDING_MODEL", coreConfig.ENV_ONLY),
+      configUtils.string(config.embeddingModel, "SEARCH_EMBEDDING_MODEL", configUtils.ENV_ONLY),
     ),
     basePath: DEFAULT_BASE_PATH,
-    timeoutMs: coreConfig.positiveInt(
+    timeoutMs: configUtils.positiveInt(
       config.timeoutMs,
       "SEARCH_TIMEOUT_MS",
       DEFAULT_TIMEOUT_MS,
-      coreConfig.ENV_ONLY,
+      configUtils.ENV_ONLY,
     ),
-    allowWrite: coreConfig.boolean(config.allowWrite, "SEARCH_WRITE", coreConfig.ENV_ONLY) ?? false,
+    allowWrite:
+      configUtils.boolean(config.allowWrite, "SEARCH_WRITE", configUtils.ENV_ONLY) ?? false,
     ...(config.ensureOnSetup ? { ensureOnSetup: config.ensureOnSetup } : {}),
   };
 }
@@ -328,7 +339,7 @@ export function resolveIndexName(
   config: ResolvedSearchConfig,
   reference: string | undefined,
 ): string | null {
-  const ref = string.trimToNull(reference);
+  const ref = stringUtils.trimToNull(reference);
   if (ref === null) return config.defaultIndex ?? null;
   const byAlias = config.indexes.find((i) => i.alias === ref || i.name === ref);
   if (byAlias) return byAlias.name;

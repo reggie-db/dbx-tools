@@ -5,14 +5,14 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-mastra";
 export const PACKAGE_VERSION = "0.9.4";
 export * as feedback from "./src/feedback.ts";
-export * as marker from "./src/marker.ts";
+export * as markers from "./src/markers.ts";
 export * as override from "./src/override.ts";
 export * as routes from "./src/routes.ts";
 export * as thread from "./src/thread.ts";
 export * as wire from "./src/wire.ts";
 export { MLFLOW_TRACE_ID_HEADER, DEFAULT_FEEDBACK_NAME, DEFAULT_COMMENT_NAME, MastraFeedbackValueSchema, MastraFeedbackRequestSchema, MastraFeedbackResponseSchema } from "./src/feedback.ts";
 export type { MastraFeedbackValue, MastraFeedbackRequest, MastraFeedbackResponse } from "./src/feedback.ts";
-export type { MarkerType, ParsedMarker } from "./src/marker.ts";
+export type { MarkerType, ParsedMarker } from "./src/markers.ts";
 export { MODEL_OVERRIDE_HEADER, MODEL_OVERRIDE_QUERY, MODEL_OVERRIDE_BODY_FIELDS } from "./src/override.ts";
 export { MASTRA_ROUTES } from "./src/routes.ts";
 export { THREAD_ID_HEADER, THREAD_ID_QUERY } from "./src/thread.ts";

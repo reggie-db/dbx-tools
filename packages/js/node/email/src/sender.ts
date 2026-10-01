@@ -28,7 +28,7 @@
  */
 
 import { ConfigurationError, ValidationError } from "@databricks/appkit";
-import { log, net, string } from "@dbx-tools/shared-core";
+import { log, net, stringUtils } from "@dbx-tools/shared-core";
 
 import type { ResolvedEmailConfig, ResolvedSender } from "./config.ts";
 
@@ -132,11 +132,11 @@ type SenderSource = Pick<ResolvedSender, "systemFrom" | "domain" | "from">;
  * result into the sender allow-list before any send happens.
  */
 export function systemSenderAddress(source: SenderSource): string | undefined {
-  const explicit = string.trimToNull(source.systemFrom);
+  const explicit = stringUtils.trimToNull(source.systemFrom);
   if (explicit) return explicit;
-  const domain = string.trimToNull(source.domain);
+  const domain = stringUtils.trimToNull(source.domain);
   if (domain) return `${SYSTEM_SENDER_LOCAL_PART}@${domain}`;
-  return string.trimToNull(source.from) ?? undefined;
+  return stringUtils.trimToNull(source.from) ?? undefined;
 }
 
 /**
@@ -166,7 +166,7 @@ export function resolveSenderAddress(
   config: ResolvedEmailConfig,
   userEmail: string | undefined,
 ): string {
-  const email = string.trimToNull(userEmail);
+  const email = stringUtils.trimToNull(userEmail);
   if (!email) return resolveSystemSenderAddress(config);
   if (config.from) return config.from;
   if (config.domain) return deriveSenderAddress(email, config.domain);

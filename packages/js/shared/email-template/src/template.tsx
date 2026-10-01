@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { brand, type BrandContext } from "@dbx-tools/shared-core";
+import { brandUtils, type BrandContext } from "@dbx-tools/shared-core";
 import {
   Body,
   Column,
@@ -84,7 +84,7 @@ export const emailBrandFromContext = (context: BrandContext): EmailBrand => {
 };
 
 /** The repository brand used by every email unless explicitly overridden. */
-export const defaultEmailBrand: EmailBrand = emailBrandFromContext(brand.defaultBrandContext);
+export const defaultEmailBrand: EmailBrand = emailBrandFromContext(brandUtils.defaultBrandContext);
 
 /** Merge a partial consumer brand over the repository default. */
 export const resolveEmailBrand = (input?: EmailBrand): ResolvedEmailBrand => {
@@ -93,13 +93,13 @@ export const resolveEmailBrand = (input?: EmailBrand): ResolvedEmailBrand => {
     accent: merged.accent,
     onAccent: merged.onAccent ?? "#ffffff",
     fontFamily: merged.fontFamily,
-    name: merged.name ?? brand.defaultBrandContext.name,
-    background: merged.background ?? brand.defaultBrandContext.colors.surface,
-    surface: merged.surface ?? brand.defaultBrandContext.colors.background,
-    foreground: merged.foreground ?? brand.defaultBrandContext.colors.foreground,
-    muted: merged.muted ?? brand.defaultBrandContext.colors.muted,
-    border: merged.border ?? brand.defaultBrandContext.colors.border,
-    tagline: merged.tagline ?? brand.defaultBrandContext.tagline,
+    name: merged.name ?? brandUtils.defaultBrandContext.name,
+    background: merged.background ?? brandUtils.defaultBrandContext.colors.surface,
+    surface: merged.surface ?? brandUtils.defaultBrandContext.colors.background,
+    foreground: merged.foreground ?? brandUtils.defaultBrandContext.colors.foreground,
+    muted: merged.muted ?? brandUtils.defaultBrandContext.colors.muted,
+    border: merged.border ?? brandUtils.defaultBrandContext.colors.border,
+    tagline: merged.tagline ?? brandUtils.defaultBrandContext.tagline,
     ...(merged.logoUrl ? { logoUrl: merged.logoUrl } : {}),
     ...(merged.website ? { website: merged.website } : {}),
   };
@@ -154,7 +154,7 @@ export const EmailBody = ({ body, brand: brandInput }: EmailBodyProps) => {
           backgroundColor: theme.background,
           borderRadius: "5px",
           color: theme.foreground,
-          fontFamily: brand.defaultBrandContext.typography.mono,
+          fontFamily: brandUtils.defaultBrandContext.typography.mono,
           fontSize: "13px",
           padding: "2px 5px",
         },
@@ -162,7 +162,7 @@ export const EmailBody = ({ body, brand: brandInput }: EmailBodyProps) => {
           backgroundColor: theme.foreground,
           borderRadius: "10px",
           color: theme.surface,
-          fontFamily: brand.defaultBrandContext.typography.mono,
+          fontFamily: brandUtils.defaultBrandContext.typography.mono,
           fontSize: "13px",
           lineHeight: "1.55",
           margin: "20px 0",

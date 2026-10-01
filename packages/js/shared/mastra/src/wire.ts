@@ -23,7 +23,7 @@
  *      ({@link GenieAgentResult} and its summary / dataset items).
  *
  * The route segments live in the sibling `routes.ts`
- * ({@link MASTRA_ROUTES}) and the embed-marker grammar in `marker.ts`,
+ * ({@link MASTRA_ROUTES}) and the embed-marker grammar in `markers.ts`,
  * so this file stays purely declarative (schemas + inferred types).
  * The browser client that drives these routes (`MastraPluginClient`)
  * ships from `@dbx-tools/ui-mastra`.

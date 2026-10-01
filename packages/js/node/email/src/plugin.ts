@@ -37,8 +37,8 @@ import {
   type PluginManifest,
 } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
-import { brand as appkitBrand, ToolRegistryPlugin } from "@dbx-tools/appkit";
-import { log, string, token } from "@dbx-tools/shared-core";
+import { brandContext, ToolRegistryPlugin } from "@dbx-tools/appkit";
+import { log, stringUtils, token } from "@dbx-tools/shared-core";
 import {
   email as sharedEmail,
   type EmailMessage,
@@ -74,12 +74,12 @@ const logger = log.logger("email");
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as emailPlugin } from "@dbx-tools/email";
+ * import { email } from "@dbx-tools/email";
  *
  * await createApp({
  *   plugins: [
  *     server(),
- *     emailPlugin.email({
+ *     email({
  *       smtp: { host: "smtp.example.com", user: "apikey", password: process.env.SMTP_KEY },
  *       domain: "mail.example.com",
  *     }),
@@ -138,7 +138,7 @@ export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
   override async setup(): Promise<void> {
     const { transporter, config } = getEmailRuntime({
       ...this.config,
-      brand: this.config.brand ?? emailBrandFromContext(appkitBrand.getBrandContext()),
+      brand: this.config.brand ?? emailBrandFromContext(brandContext.getBrandContext()),
     });
     setEmailExecutor((fn, settings) => this.execute(fn, settings));
     const policy = {
@@ -222,7 +222,7 @@ export class EmailPlugin extends ToolRegistryPlugin<EmailPluginConfig> {
       method: "get",
       path: SENDERS_ROUTE,
       handler: async (req, res) => {
-        const oboToken = string.trimToNull(req.header(token.ACCESS_TOKEN_HEADER));
+        const oboToken = stringUtils.trimToNull(req.header(token.ACCESS_TOKEN_HEADER));
         const scoped = oboToken === null ? this : this.asUser(req);
         const result = await scoped.executeListSenders();
         if (!result.ok) {
@@ -340,15 +340,15 @@ function unwrap<T>(result: ExecutionResult<T>): T {
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { brand, plugin as emailPlugin } from "@dbx-tools/email";
+ * import { defaultEmailBrand, email } from "@dbx-tools/email";
  *
  * await createApp({
  *   plugins: [
  *     server(),
- *     emailPlugin.email({
+ *     email({
  *       domain: "mail.example.com",
  *       allowedSenders: ["*@mail.example.com"],
- *       brand: brand.defaultEmailBrand,
+ *       brand: defaultEmailBrand,
  *     }),
  *   ],
  * });

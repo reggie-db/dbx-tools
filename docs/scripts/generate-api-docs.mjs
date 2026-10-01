@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
-import { async as asyncTools } from "@dbx-tools/shared-core";
+import { asyncUtils } from "@dbx-tools/shared-core";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
   discoverJavaScriptPackages,
@@ -569,12 +569,12 @@ async function main() {
   fs.mkdirSync(apiRoot, { recursive: true });
 
   const [typescriptGenerated, pythonGenerated, rustGenerated] = await Promise.all([
-    asyncTools.mapConcurrent(
+    asyncUtils.mapConcurrent(
       typescriptPackages,
       async (pkg) => ((await generatePackageApi(pkg, typedocBin)) ? pkg : undefined),
       { concurrency: typedocWorkers },
     ),
-    asyncTools.mapConcurrent(
+    asyncUtils.mapConcurrent(
       pythonPackages,
       async (pkg) => ((await generatePythonPackageApi(pkg)) ? pkg : undefined),
       { concurrency: 5 },

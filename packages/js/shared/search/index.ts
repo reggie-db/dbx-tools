@@ -4,6 +4,6 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-search";
 export const PACKAGE_VERSION = "0.9.4";
-export * as search from "./src/search.ts";
-export { searchModeSchema, searchRequestSchema, searchHitSchema, searchResultSchema, universalSearchRequestSchema, searchDocumentSchema, upsertResultSchema, searchIndexInfoSchema, searchClientConfigSchema, createIndexRequestSchema, syncIndexRequestSchema, indexInfoSchema } from "./src/search.ts";
-export type { SearchMode, AiSearchQueryType, SearchRequest, SearchHit, SearchResult, UniversalSearchRequest, SearchDocument, UpsertResult, SearchIndexInfo, SearchClientConfig, CreateIndexRequest, SyncIndexRequest, IndexInfo } from "./src/search.ts";
+export * as searchSchemas from "./src/search-schemas.ts";
+export { searchModeSchema, searchRequestSchema, searchHitSchema, searchResultSchema, universalSearchRequestSchema, searchDocumentSchema, upsertResultSchema, searchIndexInfoSchema, searchClientConfigSchema, createIndexRequestSchema, syncIndexRequestSchema, indexInfoSchema } from "./src/search-schemas.ts";
+export type { SearchMode, AiSearchQueryType, SearchRequest, SearchHit, SearchResult, UniversalSearchRequest, SearchDocument, UpsertResult, SearchIndexInfo, SearchClientConfig, CreateIndexRequest, SyncIndexRequest, IndexInfo } from "./src/search-schemas.ts";

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { json, net, string } from "@dbx-tools/shared-core";
+import { json, net, stringUtils } from "@dbx-tools/shared-core";
 import { statSync as fileStatSync } from "./file.ts";
 
 const ROOT_MARKERS = [
@@ -14,7 +14,7 @@ const ROOT_MARKERS = [
 
 /** Resolve a blank, null, omitted, relative, or absolute cwd to an absolute path. */
 export function resolveWorkingDirectory(cwd?: string | null): string {
-  return resolve(string.trimToNull(cwd) ?? process.cwd());
+  return resolve(stringUtils.trimToNull(cwd) ?? process.cwd());
 }
 
 /** A command's stdout, classified as a filesystem path and/or a URL. */
@@ -211,7 +211,7 @@ export function name(cwd?: string): string {
  */
 function repositoryUrlFromGh(cwd?: string): string | undefined {
   const out = projectContextCommand("gh", ["repo", "view", "--json", "url"], cwd).output;
-  return string.trimToNull(json.parseRecord(out)?.url) ?? undefined;
+  return stringUtils.trimToNull(json.parseRecord(out)?.url) ?? undefined;
 }
 
 /** Resolve an ssh host alias (`~/.ssh/config`) to its effective `hostname` via `ssh -G`. */
@@ -327,7 +327,7 @@ function resolveNpmRegistry(
 
 function readPackageName(pkgPath: string): string | undefined {
   if (!fileStatSync(pkgPath)?.isFile()) return undefined;
-  return string.trimToNull(json.parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
+  return stringUtils.trimToNull(json.parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
 }
 
 if (import.meta.main) {

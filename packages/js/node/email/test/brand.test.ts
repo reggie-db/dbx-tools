@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import { defaultEmailBrand, emailBrandFromContext } from "../src/brand.ts";
 import { renderEmailHtml, renderEmailText } from "../src/email-html.ts";
 
 describe("email brand", () => {
   it("derives accent, font, and name from a brand context", () => {
-    const b = emailBrandFromContext(brand.defaultBrandContext);
-    assert.equal(b.accent, brand.defaultBrandContext.colors.primary);
-    assert.equal(b.fontFamily, brand.defaultBrandContext.typography.sans);
-    assert.equal(b.name, brand.defaultBrandContext.name);
+    const b = emailBrandFromContext(brandUtils.defaultBrandContext);
+    assert.equal(b.accent, brandUtils.defaultBrandContext.colors.primary);
+    assert.equal(b.fontFamily, brandUtils.defaultBrandContext.typography.sans);
+    assert.equal(b.name, brandUtils.defaultBrandContext.name);
   });
 
   it("drops a logo that is not a fetchable URL (package-export path)", () => {
@@ -19,7 +19,7 @@ describe("email brand", () => {
   });
 
   it("keeps an http(s) or data URL logo", () => {
-    const ctx = brand.parseBrandContext({
+    const ctx = brandUtils.parseBrandContext({
       assets: { logo: { light: "https://ex.com/l.svg", dark: "https://ex.com/d.svg" } },
     });
     // Dark logo wins - the header band is dark.

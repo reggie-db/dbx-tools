@@ -12,7 +12,7 @@
  */
 
 import { posixPath } from "@dbx-tools/shared-fs";
-import { getCurrentUserName, type WorkspaceClient } from "./workspace.ts";
+import { getCurrentUserName, type WorkspaceClient } from "./workspace-client.ts";
 
 /** Which Databricks Files API serves an absolute path. */
 export type DatabricksFilesBackend = "workspace" | "volumes" | "dbfs";

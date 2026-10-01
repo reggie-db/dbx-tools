@@ -12,7 +12,7 @@
 
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
-import { async } from "@dbx-tools/shared-core";
+import { asyncUtils } from "@dbx-tools/shared-core";
 
 /** Either an SDK `Context` or a WHATWG `AbortSignal`. */
 export type ContextLike = Context | AbortSignal;
@@ -54,7 +54,7 @@ export function toContext(source: AbortController | ContextLike, input?: Context
     return new Context({ cancellationToken: signalToCancellationToken(source) });
   }
   if (input instanceof AbortSignal) {
-    async.tieAbortSignal(source, input);
+    asyncUtils.tieAbortSignal(source, input);
   } else if (input instanceof Context) {
     const token = input.cancellationToken;
     if (token) tieCancellationToken(source, token);

@@ -1,8 +1,8 @@
 /** Projen-native standalone and workspace-owned Rust project implementation. */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { project as coreProject } from "@dbx-tools/core";
-import { string } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { License, Project, TextFile, TomlFile, javascript, type Task } from "projen";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import type { RustReleaseOs } from "./project-rs.ts";
@@ -168,7 +168,7 @@ function resolveRustProjectOptions(
     options.directory ??
     (options.outdir && options.outdir !== "."
       ? basename(options.outdir)
-      : string.toSlug(options.name));
+      : stringUtils.toSlug(options.name));
   return {
     ...options,
     directory,
@@ -223,7 +223,7 @@ export class RustProject extends Project implements DBXToolsProject {
     super({ parent: options.parent, outdir: options.outdir, name: options.name });
     this.crateName = options.name;
     this.workspaceRoot = options.workspaceRoot;
-    this.scope = string.toSlug(options.scope ?? options.name.split("-")[0]!);
+    this.scope = stringUtils.toSlug(options.scope ?? options.name.split("-")[0]!);
     this.packageOptions = packageOptions(options);
     this.uniffi = hasUniFFIBindings(this.outdir);
     const library = existsSync(join(this.outdir, "src/lib.rs"));
@@ -237,7 +237,7 @@ export class RustProject extends Project implements DBXToolsProject {
       options.repository ??
       (options.parent instanceof javascript.NodeProject
         ? projectRepositoryUrl(options.parent)
-        : coreProject.repositoryUrl(projectDirectory));
+        : projectUtils.repositoryUrl(projectDirectory));
     const dependencyVersion =
       options.version ?? (options.parent ? readWorkspaceVersion(options.parent.outdir) : "0.1.0");
     const manifest: Record<string, unknown> = {

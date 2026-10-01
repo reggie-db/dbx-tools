@@ -30,13 +30,13 @@ import {
 
 import { rankEndpoints } from "./_native.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
-import { endpointSupportsTools } from "./policy.ts";
 import {
   listServingEndpoints,
   type ResolvedModel,
   type ResolveModelOptions,
   type WorkspaceClientLike,
-} from "./serving.ts";
+} from "./model-catalog.ts";
+import { endpointSupportsTools } from "./policy.ts";
 
 type ModelClass = model.ModelClass;
 

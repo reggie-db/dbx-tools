@@ -94,6 +94,31 @@
     },
     {
       "package": "@dbx-tools/auth-gate",
+      "name": "AuthDatabase",
+      "source": "packages/js/node/auth-gate/src/auth-storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthStorage",
+      "source": "packages/js/node/auth-gate/src/auth-storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthStorageConfig",
+      "source": "packages/js/node/auth-gate/src/auth-storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "AuthStorageMode",
+      "source": "packages/js/node/auth-gate/src/auth-storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
+      "name": "ResolvedAuthStorageConfig",
+      "source": "packages/js/node/auth-gate/src/auth-storage.ts"
+    },
+    {
+      "package": "@dbx-tools/auth-gate",
       "name": "AuthorizeIdentity",
       "source": "packages/js/node/auth-gate/src/auth.ts"
     },
@@ -106,31 +131,6 @@
       "package": "@dbx-tools/auth-gate",
       "name": "PasswordlessAuthRuntime",
       "source": "packages/js/node/auth-gate/src/auth.ts"
-    },
-    {
-      "package": "@dbx-tools/auth-gate",
-      "name": "AuthDatabase",
-      "source": "packages/js/node/auth-gate/src/storage.ts"
-    },
-    {
-      "package": "@dbx-tools/auth-gate",
-      "name": "AuthStorage",
-      "source": "packages/js/node/auth-gate/src/storage.ts"
-    },
-    {
-      "package": "@dbx-tools/auth-gate",
-      "name": "AuthStorageConfig",
-      "source": "packages/js/node/auth-gate/src/storage.ts"
-    },
-    {
-      "package": "@dbx-tools/auth-gate",
-      "name": "AuthStorageMode",
-      "source": "packages/js/node/auth-gate/src/storage.ts"
-    },
-    {
-      "package": "@dbx-tools/auth-gate",
-      "name": "ResolvedAuthStorageConfig",
-      "source": "packages/js/node/auth-gate/src/storage.ts"
     },
     {
       "package": "@dbx-tools/cli-appkit-env",
@@ -155,77 +155,77 @@
     {
       "package": "@dbx-tools/core",
       "name": "BrandContext",
-      "source": "packages/js/node/core/src/brand.ts"
+      "source": "packages/js/node/core/src/brand-files.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "BrandContextInput",
-      "source": "packages/js/node/core/src/brand.ts"
+      "source": "packages/js/node/core/src/brand-files.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "brandContextJsonSchema",
-      "source": "packages/js/node/core/src/brand.ts"
+      "source": "packages/js/node/core/src/brand-files.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "brandContextPrompt",
-      "source": "packages/js/node/core/src/brand.ts"
+      "source": "packages/js/node/core/src/brand-files.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "BrandContextSchema",
-      "source": "packages/js/node/core/src/brand.ts"
+      "source": "packages/js/node/core/src/brand-files.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "defaultBrandContext",
-      "source": "packages/js/node/core/src/brand.ts"
+      "source": "packages/js/node/core/src/brand-files.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "parseBrandContext",
-      "source": "packages/js/node/core/src/brand.ts"
+      "source": "packages/js/node/core/src/brand-files.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "appEnvEntrySchema",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "appSchema",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "bundleAppSchema",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "bundleEnvEntrySchema",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "ConfigData",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "ConfigMapValue",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "ConfigOptions",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",
       "name": "valueSchema",
-      "source": "packages/js/node/core/src/config.ts"
+      "source": "packages/js/node/core/src/config-utils.ts"
     },
     {
       "package": "@dbx-tools/core",

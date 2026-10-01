@@ -13,7 +13,7 @@
  * @module
  */
 
-import { error, functionModule, hash, object, type OneOrMany } from "@dbx-tools/shared-core";
+import { errorUtils, functionUtils, hash, object, type OneOrMany } from "@dbx-tools/shared-core";
 import type {
   CopyOptions,
   FileContent,
@@ -153,7 +153,7 @@ export class FileSystemError extends Error {
   ) {
     super(
       message,
-      options?.cause !== undefined ? { cause: error.toError(options.cause) } : undefined,
+      options?.cause !== undefined ? { cause: errorUtils.toError(options.cause) } : undefined,
     );
   }
 }
@@ -166,7 +166,7 @@ export class FileSystemError extends Error {
  * "not found" / "already exists" checks. Returns undefined when nothing matches.
  */
 export function inferFileSystemErrorCode(err: unknown): FileSystemErrorCode | undefined {
-  const ctx = error.errorContext(err);
+  const ctx = errorUtils.errorContext(err);
   if (ctx.hasStatusCode(404) || ctx.hasMessage("not", "found") || ctx.hasMessage("not", "exist")) {
     return "NOT_FOUND";
   }
@@ -209,12 +209,12 @@ export function mapFileSystemError(
   codeOf?: (err: unknown) => FileSystemErrorCode | undefined,
 ): FileSystemError {
   if (err instanceof FileSystemError) return err;
-  const message = error.errorMessage(err);
+  const message = errorUtils.errorMessage(err);
   return new FileSystemError(
     codeOf?.(err) ?? inferFileSystemErrorCode(err) ?? "IO_ERROR",
     message || `Filesystem operation failed: ${filePath}`,
     filePath,
-    { cause: error.toError(err) },
+    { cause: errorUtils.toError(err) },
   );
 }
 
@@ -288,7 +288,7 @@ export abstract class BaseFileSystem<
   /* ------------------------------------------------------------------ */
 
   private createInit(): () => Promise<void> {
-    return functionModule.memoize(async () => {
+    return functionUtils.memoize(async () => {
       this.initStarted = true;
       if (this.createRoot) {
         await this.guard(this.root, () => this.createRootDirectory());

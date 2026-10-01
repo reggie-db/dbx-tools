@@ -24,15 +24,15 @@ Key features:
 ## Define A Workspace Root
 
 ```ts
-import { project as projenProject } from "@dbx-tools/projen";
+import { project } from "@dbx-tools/projen";
 
-const project = new projenProject.DBXToolsNodeProject({
+const rootProject = new project.DBXToolsNodeProject({
   name: "my-apps",
   scope: "my-apps",
   packageRoots: ["packages", "examples"],
 });
 
-project.synth();
+rootProject.synth();
 ```
 
 Every `src`-bearing folder under the configured roots becomes a
@@ -151,9 +151,9 @@ Each discovered member is a native Projen `Project`, exposed as
 the flat object-style options used by the Node and Python project classes:
 
 ```ts
-import { project as projenProject } from "@dbx-tools/projen";
+import { project } from "@dbx-tools/projen";
 
-new projenProject.DBXToolsRustProject({
+new project.DBXToolsRustProject({
   name: "my-apps-core",
   outdir: "native/core",
   version: "0.1.0",
@@ -303,15 +303,15 @@ multiplying `tsc --build` across the monorepo release flow.
 ## Customize Packages With Mixins
 
 ```ts
-import { project as projenProject } from "@dbx-tools/projen";
+import { project } from "@dbx-tools/projen";
 
-const project = new projenProject.DBXToolsNodeProject();
+const rootProject = new project.DBXToolsNodeProject();
 
-projenProject.applyToProjects(project, { tags: "shared" }, (pkg) => {
+project.applyToProjects(rootProject, { tags: "shared" }, (pkg) => {
   pkg.addDeps("zod@catalog:");
 });
 
-project.synth();
+rootProject.synth();
 ```
 
 Use `projectJs.addOptionalPeer(pkg, specifier)` for an optional peer that must

@@ -17,7 +17,7 @@ import { Transform } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 import { promisify } from "node:util";
 
-import { bin, config } from "@dbx-tools/core";
+import { bin, configUtils } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
@@ -78,8 +78,8 @@ export function resolvePortrConfig(opts: {
   port: number;
 }): PortrConfig | undefined {
   // PORTR_* is upstream portr's own namespace, so it keeps its name.
-  const token = config.string(opts.token, "PORTR_TOKEN");
-  const domain = config.string(opts.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const token = configUtils.string(opts.token, "PORTR_TOKEN");
+  const domain = configUtils.string(opts.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   if (!token) return undefined;
   let subdomain = opts.subdomain;
   let server: string | undefined;
@@ -87,9 +87,9 @@ export function resolvePortrConfig(opts: {
     subdomain ??= domain.split(".")[0];
     server = domain.slice(domain.indexOf(".") + 1);
   }
-  server ??= config.text("PORTR_SERVER");
+  server ??= configUtils.text("PORTR_SERVER");
   if (!subdomain || !server || server === domain) return undefined;
-  const sshUrl = config.string(opts.sshUrl, "PORTR_SSH_URL") ?? `${server}:4444`;
+  const sshUrl = configUtils.string(opts.sshUrl, "PORTR_SSH_URL") ?? `${server}:4444`;
   return { subdomain, server, sshUrl, token, port: opts.port };
 }
 

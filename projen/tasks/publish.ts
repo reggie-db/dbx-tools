@@ -64,7 +64,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { async as asyncTools, log } from "@dbx-tools/shared-core";
+import { asyncUtils, log } from "@dbx-tools/shared-core";
 import ts from "typescript";
 import { parse } from "yaml";
 import {
@@ -373,7 +373,7 @@ for (const { dir } of publishable) {
 logger.info(
   `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
-await asyncTools.mapConcurrent(
+await asyncUtils.mapConcurrent(
   publishable,
   async ({ dir, name, version: packageVersion, access }) => {
     const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));

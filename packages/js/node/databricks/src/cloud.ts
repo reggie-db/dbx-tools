@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { file } from "@dbx-tools/core";
-import { error, functionModule, hash, http, json, log, net } from "@dbx-tools/shared-core";
+import { errorUtils, functionUtils, hash, http, json, log, net } from "@dbx-tools/shared-core";
 import { resolveHostIps } from "./net.ts";
 
 const logger = log.logger("cloud");
@@ -129,8 +129,11 @@ export async function loadProviderRanges(): Promise<ProviderRanges[]> {
   const settled = await Promise.allSettled([loadAwsRanges(), loadAzureRanges(), loadGcpRanges()]);
   const out: ProviderRanges[] = [];
   for (const result of settled) {
-    if (result.status === "fulfilled") out.push(result.value);
-    else logger.warn("provider range load failed", { error: error.errorMessage(result.reason) });
+    if (result.status === "fulfilled") {
+      out.push(result.value);
+    } else {
+      logger.warn("provider range load failed", { error: errorUtils.errorMessage(result.reason) });
+    }
   }
   return out;
 }
@@ -139,9 +142,9 @@ export async function loadProviderRanges(): Promise<ProviderRanges[]> {
 // Per-provider cached loaders
 // ────────────────────────────────────────────────────────────────
 
-const loadAwsRanges = functionModule.memoize(fetchAwsRanges, { ttlMs: RANGE_CACHE_TTL_MS });
-const loadAzureRanges = functionModule.memoize(fetchAzureRanges, { ttlMs: RANGE_CACHE_TTL_MS });
-const loadGcpRanges = functionModule.memoize(fetchGcpRanges, { ttlMs: RANGE_CACHE_TTL_MS });
+const loadAwsRanges = functionUtils.memoize(fetchAwsRanges, { ttlMs: RANGE_CACHE_TTL_MS });
+const loadAzureRanges = functionUtils.memoize(fetchAzureRanges, { ttlMs: RANGE_CACHE_TTL_MS });
+const loadGcpRanges = functionUtils.memoize(fetchGcpRanges, { ttlMs: RANGE_CACHE_TTL_MS });
 
 // ────────────────────────────────────────────────────────────────
 // Provider feed fetch + parse

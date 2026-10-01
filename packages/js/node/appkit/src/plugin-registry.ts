@@ -91,9 +91,9 @@ export function data<F extends PluginDataFactory, D extends ReturnType<F>>(facto
  *
  * @example
  * import { lakebase } from "@databricks/appkit";
- * import { plugin } from "@dbx-tools/appkit";
+ * import { pluginRegistry } from "@dbx-tools/appkit";
  *
- * const lake = plugin.instance(this.context, lakebase);
+ * const lake = pluginRegistry.instance(this.context, lakebase);
  * //    ^^ inferred as LakebasePlugin | undefined
  * lake?.exports().pool;
  */
@@ -118,9 +118,9 @@ export function instance<F extends PluginDataFactory>(
  *
  * @example
  * import { lakebase } from "@databricks/appkit";
- * import { plugin } from "@dbx-tools/appkit";
+ * import { pluginRegistry } from "@dbx-tools/appkit";
  *
- * const pool = plugin.require(this.context, lakebase, "mastra").exports().pool;
+ * const pool = pluginRegistry.require(this.context, lakebase, "mastra").exports().pool;
  */
 export function require<F extends PluginDataFactory>(
   ctx: PluginContextLike | undefined,

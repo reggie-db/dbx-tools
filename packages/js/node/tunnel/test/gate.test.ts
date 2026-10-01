@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
 import {
@@ -47,7 +47,7 @@ describe("cache-backed Better Auth secret", () => {
 describe("gate config and email copy", () => {
   it("uses shared brand and conventional OTP wording", () => {
     const resolved = resolveAuthGateConfig({});
-    assert.equal(resolved.brandName, brand.defaultBrandContext.name);
+    assert.equal(resolved.brandName, brandUtils.defaultBrandContext.name);
     assert.equal(resolved.subject, "Your verification code");
     assert.equal(resolved.message, "Your verification code is:");
     assert.equal(resolved.sessionTtlSeconds, KEY_TTL_SECONDS);

@@ -1,4 +1,4 @@
-import { error as sharedError, log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toChronologicalUiMessages } from "./_history-messages.ts";
@@ -115,7 +115,7 @@ export function useChatHistory({
           .catch((error: unknown) => {
             if ((error as { name?: string }).name === "AbortError") throw error;
             logger.warn("suspended-run discovery error", {
-              error: sharedError.errorMessage(error),
+              error: errorUtils.errorMessage(error),
             });
             return { runs: [], total: 0 };
           });
@@ -137,7 +137,7 @@ export function useChatHistory({
       .catch((error: unknown) => {
         if (cancelled || (error as { name?: string }).name === "AbortError") return;
         logger.error("history load error", {
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
         updateSession(threadId, (current) => ({
           ...current,
@@ -178,7 +178,7 @@ export function useChatHistory({
       .catch((error: unknown) => {
         logger.error("history load-more error", {
           page,
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
         updateSession(threadId, (current) => ({
           ...current,

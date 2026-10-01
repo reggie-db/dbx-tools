@@ -127,7 +127,7 @@ For AppKit apps, the most common entrypoint is the Mastra plugin:
 
 ```ts
 import { analytics, createApp, lakebase, server } from "@databricks/appkit";
-import { agents, genie, plugin } from "@dbx-tools/appkit-mastra";
+import { agents, genie, mastra } from "@dbx-tools/appkit-mastra";
 
 const analyst = agents.createAgent({
   name: "analyst",
@@ -145,7 +145,7 @@ await createApp({
     server(),
     analytics(),
     lakebase(),
-    plugin.mastra({
+    mastra({
       agents: { analyst },
       defaultAgent: "analyst",
       genie: { spaces: { sales: "01ef..." } },
@@ -239,12 +239,12 @@ context and points at the reusable SVG assets beside it. The same schema accepts
 JSON.
 
 ```ts
-import { brand } from "@dbx-tools/core";
+import { brandFiles } from "@dbx-tools/core";
 
-const brandContext = await brand.loadBrandContext();
+const brandContext = await brandFiles.loadBrandContext();
 ```
 
-Use `brand.BrandContextSchema` from `@dbx-tools/shared-core` in browser-safe
+Use `brandUtils.BrandContextSchema` from `@dbx-tools/shared-core` in browser-safe
 code or structured LLM tools. Use `@dbx-tools/ui-branding/react` and
 `@dbx-tools/ui-branding/browser` to render or apply the resulting context.
 
@@ -310,15 +310,16 @@ Use [`@dbx-tools/email`](packages/js/node/email) with
 not send it until a user approves the suspended tool call.
 
 ```ts
-import { plugin as emailPlugin, tool as emailTool } from "@dbx-tools/email";
+import { email, emailTool } from "@dbx-tools/email";
+import { mastra } from "@dbx-tools/appkit-mastra";
 
 const agent = agents.createAgent({
   instructions: "Draft emails, then wait for approval before sending.",
-  tools: () => ({ send_email: emailTool.emailTool() }),
+  tools: () => ({ send_email: emailTool() }),
 });
 
 await createApp({
-  plugins: [server(), lakebase(), emailPlugin.email(), mastraPlugin.mastra({ agents: agent })],
+  plugins: [server(), lakebase(), email(), mastra({ agents: agent })],
 });
 ```
 

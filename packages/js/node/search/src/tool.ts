@@ -15,13 +15,13 @@
  * @module
  */
 
-import { search as sharedSearch, type UpsertResult } from "@dbx-tools/shared-search";
+import { searchSchemas, type UpsertResult } from "@dbx-tools/shared-search";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
 import type { SearchReadBackend } from "./client.ts";
 import type { SearchPluginConfig } from "./config.ts";
-import { toCreateIndexOptions } from "./index-tools.ts";
+import { toCreateIndexOptions } from "./index-options.ts";
 import { toDocumentArray } from "./query.ts";
 import { createSearchRuntime, type SearchRuntime } from "./runtime.ts";
 import {
@@ -117,16 +117,16 @@ export function universalSearchTool(options: SearchToolOptions = {}) {
  */
 export function addDocumentsTool(options: SearchToolOptions = {}) {
   const runtime = toolRuntime(options);
-  const inputSchema = sharedSearch.searchDocumentSchema
+  const inputSchema = searchSchemas.searchDocumentSchema
     .array()
     .describe("Documents to add or update. Each must include the index primary key.");
   return createTool({
     id: options.id ?? "add_documents",
     description: ADD_DOCUMENTS_TOOL_DESCRIPTION,
-    inputSchema: sharedSearch.searchRequestSchema
+    inputSchema: searchSchemas.searchRequestSchema
       .pick({ index: true })
       .extend({ documents: inputSchema }),
-    outputSchema: sharedSearch.upsertResultSchema,
+    outputSchema: searchSchemas.upsertResultSchema,
     execute: async (input, context): Promise<UpsertResult> => {
       const { client, config } = runtime;
       const record = input as { index?: string; documents: unknown };

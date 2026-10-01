@@ -37,8 +37,8 @@
  * @module
  */
 
-import { error, hash, json, log, object, string } from "@dbx-tools/shared-core";
-import { activity as sharedActivity, card } from "@dbx-tools/shared-teams";
+import { errorUtils, hash, json, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { teamsActivity, card } from "@dbx-tools/shared-teams";
 import { buildAdaptiveCard } from "./builder.ts";
 
 const logger = log.logger("teams:conversation");
@@ -125,7 +125,7 @@ const toolCardSpec = (result: AgentResult): card.CardSpec | null => {
 const JSON_PROMPT_INJECTION = "system" as const;
 
 /** The bot's identity on outbound activities when the caller names none. */
-export const BOT_ACCOUNT: sharedActivity.ChannelAccount = {
+export const BOT_ACCOUNT: teamsActivity.ChannelAccount = {
   id: "dbx-tools-teams-bot",
   name: "Databricks Agent",
 };
@@ -269,7 +269,7 @@ export interface CardTurnOptions {
   /** Cancels the agent call with the request. */
   signal?: AbortSignal;
   /** Overrides the bot identity stamped on the reply. */
-  bot?: sharedActivity.ChannelAccount;
+  bot?: teamsActivity.ChannelAccount;
   /**
    * Builds the Mastra `RequestContext` for the turn, from
    * {@link resolveCardContextFactory}. Omitted, the turn still answers, but
@@ -311,8 +311,8 @@ export const resolveCardContextFactory = (
  * payload is only an attachment). Those are not errors - they simply produce no
  * reply - so this returns `null` rather than throwing.
  */
-export const promptOf = (inbound: sharedActivity.Activity): string | null =>
-  inbound.type === "message" ? string.trimToNull(inbound.text ?? "") : null;
+export const promptOf = (inbound: teamsActivity.Activity): string | null =>
+  inbound.type === "message" ? stringUtils.trimToNull(inbound.text ?? "") : null;
 
 /**
  * Build an outbound activity carrying `cards`, addressed back to the sender of
@@ -322,10 +322,10 @@ export const promptOf = (inbound: sharedActivity.Activity): string | null =>
  * asserting the envelope, both need the same construction the turn uses.
  */
 export const toReplyActivity = (
-  inbound: sharedActivity.Activity,
+  inbound: teamsActivity.Activity,
   cards: card.AdaptiveCard[],
-  options: { bot?: sharedActivity.ChannelAccount; text?: string } = {},
-): sharedActivity.Activity => ({
+  options: { bot?: teamsActivity.ChannelAccount; text?: string } = {},
+): teamsActivity.Activity => ({
   type: "message",
   id: hash.id(),
   timestamp: new Date().toISOString(),
@@ -333,7 +333,7 @@ export const toReplyActivity = (
   ...(inbound.from ? { recipient: inbound.from } : {}),
   ...(inbound.conversation ? { conversation: inbound.conversation } : {}),
   ...(options.text ? { text: options.text } : {}),
-  attachments: cards.map((document) => sharedActivity.toCardAttachment(document)),
+  attachments: cards.map((document) => teamsActivity.toCardAttachment(document)),
 });
 
 /**
@@ -360,7 +360,7 @@ export const documentCardSpec = (value: unknown): card.CardSpec | null => {
     for (const element of elements) {
       if (!object.isRecord(element)) continue;
       if (element.type === "TextBlock") {
-        const text = string.trimToNull(typeof element.text === "string" ? element.text : "");
+        const text = stringUtils.trimToNull(typeof element.text === "string" ? element.text : "");
         if (text) texts.push(text);
       } else if (element.type === "FactSet" && Array.isArray(element.facts)) {
         for (const fact of element.facts) {
@@ -458,7 +458,7 @@ const toCardSpec = (result: AgentResult): card.CardSpec => {
   const fromTool = toolCardSpec(result);
   if (fromTool) return fromTool;
 
-  const text = string.trimToNull(result.text ?? "");
+  const text = stringUtils.trimToNull(result.text ?? "");
   if (text) {
     // A fenced or inline JSON object in the prose: the model followed the
     // instructions but the provider did not surface a parsed object.
@@ -481,7 +481,7 @@ const toCardSpec = (result: AgentResult): card.CardSpec => {
       // preamble so the first REAL line is the title.
       .filter((line) => !PREAMBLE_RE.test(line.trim()));
     const [first, ...rest] = lines;
-    const title = string.trimToNull(first ?? "") ?? "Answer";
+    const title = stringUtils.trimToNull(first ?? "") ?? "Answer";
     const body = rest.join("\n").trim();
     return {
       title: toTitle(title),
@@ -566,7 +566,7 @@ const formatAsCard = async (
       }
       logger.warn("card formatting pass failed", {
         attempt: attempt + 1,
-        error: error.errorMessage(err),
+        error: errorUtils.errorMessage(err),
       });
     }
   }
@@ -594,9 +594,9 @@ const formatAsCard = async (
  */
 export const runCardTurn = async (
   agent: CardAgentLike,
-  inbound: sharedActivity.Activity,
+  inbound: teamsActivity.Activity,
   options: CardTurnOptions = {},
-): Promise<sharedActivity.Activity[]> => {
+): Promise<teamsActivity.Activity[]> => {
   const prompt = promptOf(inbound);
   if (!prompt) return [];
 
@@ -628,7 +628,7 @@ export const runCardTurn = async (
   // An agent that composed a card itself has already said it in the right
   // vocabulary; reformatting it would only risk paraphrasing the values.
   const composed = toolCardSpec(answered);
-  const answer = string.trimToNull(stripEmbedMarkers(answered.text ?? ""));
+  const answer = stringUtils.trimToNull(stripEmbedMarkers(answered.text ?? ""));
   const spec =
     composed ??
     (answer ? await formatAsCard(agent, prompt, answer, { ...context, ...signal }) : null);

@@ -23,9 +23,9 @@ passwordless session. A passkey session proves the configured identity only; it
 does not mint a Databricks OBO access token.
 
 ```ts
-import { auth, storage } from "@dbx-tools/auth-gate";
+import { auth, authStorage } from "@dbx-tools/auth-gate";
 
-const database = await storage.createAuthStorage({ storage: "sqlite" });
+const database = await authStorage.createAuthStorage({ storage: "sqlite" });
 const runtime = await auth.createPasswordlessAuth({
   storage: database,
   baseURL: "http://localhost:8000",

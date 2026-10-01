@@ -26,7 +26,7 @@ import { mkdir, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { async, error, functionModule, hash, log, object } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, functionUtils, hash, log, object } from "@dbx-tools/shared-core";
 import lockfile from "proper-lockfile";
 
 const logger = log.logger("core:file-lock");
@@ -157,7 +157,7 @@ function lockId(key: unknown): string {
  * callers fall through to the next backend. A miss is cached too, so a process
  * that cannot flock never retries the load.
  */
-const resolveFlock = functionModule.memoize(async (): Promise<FlockFn | undefined> => {
+const resolveFlock = functionUtils.memoize(async (): Promise<FlockFn | undefined> => {
   if (process.platform === "win32") return undefined;
   if (!process.versions.bun) return undefined;
 
@@ -172,7 +172,7 @@ const resolveFlock = functionModule.memoize(async (): Promise<FlockFn | undefine
     });
     return lib.symbols.flock;
   } catch (cause) {
-    logger.debug("flock FFI unavailable", { error: error.errorMessage(cause) });
+    logger.debug("flock FFI unavailable", { error: errorUtils.errorMessage(cause) });
     return undefined;
   }
 });
@@ -207,7 +207,7 @@ async function waitForFlock(
     const rc = flock(fd, LOCK_EX | LOCK_NB);
     if (rc === 0) return;
     assertBeforeDeadline(lockPath, deadline);
-    await async.sleep(POLL_MS);
+    await asyncUtils.sleep(POLL_MS);
   }
 }
 
@@ -242,9 +242,9 @@ async function acquireLockDirectory(
       });
     } catch (cause) {
       const err = cause as NodeJS.ErrnoException;
-      if (err.code !== "ELOCKED") throw error.toError(cause);
+      if (err.code !== "ELOCKED") throw errorUtils.toError(cause);
       assertBeforeDeadline(lockPath, deadline);
-      await async.sleep(POLL_MS);
+      await asyncUtils.sleep(POLL_MS);
     }
   }
 }

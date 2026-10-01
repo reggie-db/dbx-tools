@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { brand } from "../index.ts";
+import { brandFiles } from "../index.ts";
 
 describe("brand files", () => {
   it("loads YAML and discovers the conventional branding path", async () => {
@@ -17,10 +17,10 @@ describe("brand files", () => {
       );
 
       assert.equal(
-        brand.findBrandContextFile(root),
+        brandFiles.findBrandContextFile(root),
         join(await realpath(root), "branding", "brand.yaml"),
       );
-      const context = await brand.loadBrandContext(root);
+      const context = await brandFiles.loadBrandContext(root);
       assert.equal(context.name, "Fixture");
       assert.equal(context.colors.primary, "#123456");
     } finally {
@@ -33,9 +33,9 @@ describe("brand files", () => {
     try {
       const file = join(root, "brand.json");
       await writeFile(file, '{"name":"JSON Fixture"}\n');
-      assert.equal((await brand.loadBrandContextFile(file)).name, "JSON Fixture");
+      assert.equal((await brandFiles.loadBrandContextFile(file)).name, "JSON Fixture");
       assert.equal(
-        brand.resolveBrandAssetPath(file, "assets/icon.svg"),
+        brandFiles.resolveBrandAssetPath(file, "assets/icon.svg"),
         join(root, "assets", "icon.svg"),
       );
     } finally {

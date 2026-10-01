@@ -24,7 +24,7 @@
 import { createHash } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { error, log } from "@dbx-tools/shared-core";
+import { errorUtils, log } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_native.ts";
@@ -189,7 +189,7 @@ async function pingEmbeddingDimension(
     logger.warn("embedding ping returned no vector", { name });
     return undefined;
   } catch (err) {
-    logger.warn("embedding ping failed", { name, error: error.errorMessage(err) });
+    logger.warn("embedding ping failed", { name, error: errorUtils.errorMessage(err) });
     return undefined;
   }
 }

@@ -1,8 +1,8 @@
 /** Filesystem-discovered Rust workspaces and UniFFI binding package wiring. */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { project as coreProject } from "@dbx-tools/core";
-import { string } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, Project, TextFile, TomlFile, javascript } from "projen";
 import {
   RustProject,
@@ -343,7 +343,7 @@ function resolveRustWorkspaceOptions(
   options: DBXToolsRustWorkspaceOptions,
 ): ResolvedRustWorkspaceOptions {
   const dbxToolsProject = isDBXToolsJavaScriptProject()(project) ? project : undefined;
-  const scope = string.toSlug(options.scope ?? dbxToolsProject?.scope ?? project.name);
+  const scope = stringUtils.toSlug(options.scope ?? dbxToolsProject?.scope ?? project.name);
   return {
     root: options.root ?? "packages/rs",
     nodeRoot: options.nodeRoot ?? "packages/js/node",
@@ -352,7 +352,7 @@ function resolveRustWorkspaceOptions(
     repository:
       options.repository ??
       projectRepositoryUrl(project) ??
-      coreProject.repositoryUrl(project.outdir) ??
+      projectUtils.repositoryUrl(project.outdir) ??
       "",
     nativeTargets: releaseTargets(options),
     pythonModulePrefix: options.pythonModulePrefix ?? scope.replaceAll("-", "_"),
@@ -493,7 +493,7 @@ function planRustBindings(
   const mappings = orderRustBindings(
     bindings.map((pkg) => {
       const targets = pkg.packageOptions.bindings ?? ["node", "python"];
-      const packageDirectory = `${string.toSlug(pkg.packageOptions.directory)}-rs`;
+      const packageDirectory = `${stringUtils.toSlug(pkg.packageOptions.directory)}-rs`;
       const direct = dependencies.get(pkg);
       const dependencyCrates = [
         ...new Set([...(direct?.node ?? []), ...(direct?.python ?? [])]),
@@ -536,7 +536,7 @@ function planPythonBindingPackages(
   return plan.packages
     .filter((pkg) => (pkg.packageOptions.bindings ?? ["node", "python"]).includes("python"))
     .map((pkg) => {
-      const directory = `${string.toSlug(pkg.packageOptions.directory)}-rs`;
+      const directory = `${stringUtils.toSlug(pkg.packageOptions.directory)}-rs`;
       const module = pythonModuleName(resolved.pythonModulePrefix, directory);
       const name = `${resolved.scope}-${directory}`;
       return {
@@ -546,7 +546,7 @@ function planPythonBindingPackages(
         description: `Python bindings for ${pkg.crateName}`,
         uniffi: true,
         internalDependencies: bindingDependencies(plan, pkg, "python").map(
-          (dependency) => `${string.toSlug(dependency.packageOptions.directory)}-rs`,
+          (dependency) => `${stringUtils.toSlug(dependency.packageOptions.directory)}-rs`,
         ),
         generatedSources: [
           `src/${module.replaceAll(".", "/")}/bindings.py`,
@@ -578,7 +578,7 @@ function planNodeBindingPackages(
   return plan.packages
     .filter((pkg) => (pkg.packageOptions.bindings ?? ["node", "python"]).includes("node"))
     .map((binding) => {
-      const directory = `${string.toSlug(binding.packageOptions.directory)}-rs`;
+      const directory = `${stringUtils.toSlug(binding.packageOptions.directory)}-rs`;
       const version = isDBXToolsJavaScriptProject()(project)
         ? project.releaseCatalog.versionFor(binding)
         : readWorkspaceVersion(project.outdir);
@@ -596,7 +596,7 @@ function planNodeBindingPackages(
           : {},
         internalDependencies: bindingDependencies(plan, binding, "node").map(
           (dependency) =>
-            `@${resolved.scope}/${string.toSlug(dependency.packageOptions.directory)}-rs@workspace:*`,
+            `@${resolved.scope}/${stringUtils.toSlug(dependency.packageOptions.directory)}-rs@workspace:*`,
         ),
       };
     });
@@ -667,7 +667,7 @@ function configureRustBindingFiles(
             dependency.crateName.replaceAll("-", "_"),
             `${pythonModuleName(
               resolved.pythonModulePrefix,
-              `${string.toSlug(dependency.packageOptions.directory)}-rs`,
+              `${stringUtils.toSlug(dependency.packageOptions.directory)}-rs`,
             )}.bindings`,
           ]),
         ),

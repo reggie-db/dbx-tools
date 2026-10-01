@@ -15,7 +15,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import type { EmailMessage } from "@dbx-tools/shared-email";
 import type { EmailBrand } from "./brand.ts";
 import { renderEmailHtml, type EmailHtmlOptions } from "./email-html.ts";
@@ -28,7 +28,7 @@ const SUBJECT_SLUG_MAX_LENGTH = 48;
 
 /** Filesystem-safe slug of the subject for the file name. */
 function subjectSlug(subject: string): string {
-  return string.toSlugWithOptions({ maxLength: SUBJECT_SLUG_MAX_LENGTH }, subject) || "email";
+  return stringUtils.toSlugWithOptions({ maxLength: SUBJECT_SLUG_MAX_LENGTH }, subject) || "email";
 }
 
 /** The envelope rows shown above the body in the preview file. */

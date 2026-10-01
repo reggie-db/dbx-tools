@@ -23,12 +23,12 @@
 
 import { toPlugin, type IAppRouter, type PluginManifest } from "@databricks/appkit";
 import { aiSearch, defineTool, type ToolRegistry } from "@databricks/appkit/beta";
-import { plugin as appkitPlugin, ToolRegistryPlugin } from "@dbx-tools/appkit";
-import { error as sharedError, log, string } from "@dbx-tools/shared-core";
-import { search as sharedSearch, type SearchClientConfig } from "@dbx-tools/shared-search";
+import { pluginRegistry, ToolRegistryPlugin } from "@dbx-tools/appkit";
+import { errorUtils, log, stringUtils } from "@dbx-tools/shared-core";
+import { searchSchemas, type SearchClientConfig } from "@dbx-tools/shared-search";
 import { toSearchOptions, toUniversalSearchOptions } from "./_search-options.ts";
 import { SEARCH_CONFIG_SCHEMA, resolveSearchConfig, type SearchPluginConfig } from "./config.ts";
-import { toCreateIndexOptions } from "./index-tools.ts";
+import { toCreateIndexOptions } from "./index-options.ts";
 import { nativeAiSearchBackend } from "./native.ts";
 import { toDocumentArray } from "./query.ts";
 import { createSearchRuntime, setSearchReadBackend, type SearchRuntime } from "./runtime.ts";
@@ -66,7 +66,7 @@ const INDEX_SYNC_ROUTE = "/index/sync";
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
  * import { aiSearch } from "@databricks/appkit/beta";
- * import { plugin as searchPlugin } from "@dbx-tools/search";
+ * import { search } from "@dbx-tools/search";
  *
  * await createApp({
  *   plugins: [
@@ -79,7 +79,7 @@ const INDEX_SYNC_ROUTE = "/index/sync";
  *         },
  *       },
  *     }),
- *     searchPlugin.search({
+ *     search({
  *       index: "main.support.docs",
  *       indexes: [{ name: "main.support.docs", alias: "docs" }],
  *     }),
@@ -122,14 +122,14 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     const registry: ToolRegistry = {
       search: defineTool({
         description: SEARCH_TOOL_DESCRIPTION,
-        schema: sharedSearch.searchRequestSchema,
+        schema: searchSchemas.searchRequestSchema,
         annotations: { effect: "read", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runSearch(args, signal),
       }),
       universal_search: defineTool({
         description: UNIVERSAL_SEARCH_TOOL_DESCRIPTION,
-        schema: sharedSearch.universalSearchRequestSchema,
+        schema: searchSchemas.universalSearchRequestSchema,
         annotations: { effect: "read", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runUniversalSearch(args, signal),
@@ -138,9 +138,9 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     if (config.allowWrite) {
       registry.add_documents = defineTool({
         description: ADD_DOCUMENTS_TOOL_DESCRIPTION,
-        schema: sharedSearch.searchRequestSchema
+        schema: searchSchemas.searchRequestSchema
           .pick({ index: true })
-          .extend({ documents: sharedSearch.searchDocumentSchema.array() }),
+          .extend({ documents: searchSchemas.searchDocumentSchema.array() }),
         annotations: { effect: "write", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runAddDocuments(args, signal),
@@ -148,14 +148,14 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
       if (readBackend?.supportsLifecycle) {
         registry.create_index = defineTool({
           description: CREATE_INDEX_TOOL_DESCRIPTION,
-          schema: sharedSearch.createIndexRequestSchema,
+          schema: searchSchemas.createIndexRequestSchema,
           annotations: { effect: "write", requiresUserContext: true },
           autoInheritable: false,
           execute: async (args, signal) => this.runCreateIndex(args, signal),
         });
         registry.sync_index = defineTool({
           description: SYNC_INDEX_TOOL_DESCRIPTION,
-          schema: sharedSearch.syncIndexRequestSchema,
+          schema: searchSchemas.syncIndexRequestSchema,
           annotations: { effect: "write", requiresUserContext: true },
           autoInheritable: false,
           execute: async (args, signal) => this.runSyncIndex(args, signal),
@@ -191,7 +191,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
 
   /** Resolve the registered AppKit-compatible AI Search provider. */
   private resolveProviderBackend(): ReturnType<typeof nativeAiSearchBackend> {
-    const provider = appkitPlugin.require(this.context, aiSearch, this).exports();
+    const provider = pluginRegistry.require(this.context, aiSearch, this).exports();
     return nativeAiSearchBackend(provider, resolveSearchConfig(this.config));
   }
 
@@ -204,7 +204,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   private async runEnsureOnSetup(config: SearchRuntime["config"]): Promise<void> {
     const spec = config.ensureOnSetup;
     if (!spec) return;
-    const index = string.trimToNull(spec.index) ?? config.defaultIndex;
+    const index = stringUtils.trimToNull(spec.index) ?? config.defaultIndex;
     if (!index) {
       logger.warn("ensure-skipped", {
         reason: "no index name (set `index` or `ensureOnSetup.index`)",
@@ -237,7 +237,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
         rowCount: info.rowCount ?? 0,
       });
     } catch (cause) {
-      logger.warn("ensure-failed", { index, message: sharedError.errorMessage(cause) });
+      logger.warn("ensure-failed", { index, message: errorUtils.errorMessage(cause) });
     }
   }
 
@@ -282,7 +282,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
       path: UNIVERSAL_ROUTE,
       handler: async (req, res) => {
         await this.respond(res, "universalSearch", () => {
-          const request = sharedSearch.universalSearchRequestSchema.parse(req.body ?? {});
+          const request = searchSchemas.universalSearchRequestSchema.parse(req.body ?? {});
           return this.asUser(req).runUniversalSearch(request);
         });
       },
@@ -357,7 +357,7 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
     try {
       res.json(await run());
     } catch (cause) {
-      const message = sharedError.errorMessage(cause);
+      const message = errorUtils.errorMessage(cause);
       logger.warn("route-failed", { operation, message });
       res.status(500).json({ error: message });
     }
@@ -384,31 +384,31 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   override exports() {
     return {
       /** Search one index (default when omitted). Runs as the current context user. */
-      search: (request: sharedSearch.SearchRequest, signal?: AbortSignal) =>
+      search: (request: searchSchemas.SearchRequest, signal?: AbortSignal) =>
         this.runSearch(request, signal),
       /** Search across every configured index and merge the hits. */
-      universalSearch: (request: sharedSearch.UniversalSearchRequest, signal?: AbortSignal) =>
+      universalSearch: (request: searchSchemas.UniversalSearchRequest, signal?: AbortSignal) =>
         this.runUniversalSearch(request, signal),
       /** Add or update documents in a direct-access index (throws when writes are disabled). */
       addDocuments: (request: { index?: string; documents: unknown }, signal?: AbortSignal) =>
         this.runAddDocuments(request, signal),
       /** Create a Vector Search index (throws when writes are disabled). */
-      createIndex: (request: sharedSearch.CreateIndexRequest, signal?: AbortSignal) =>
+      createIndex: (request: searchSchemas.CreateIndexRequest, signal?: AbortSignal) =>
         this.runCreateIndex(request, signal),
       /** Sync a Delta Sync index from its source table (throws when writes are disabled). */
-      syncIndex: (request: sharedSearch.SyncIndexRequest, signal?: AbortSignal) =>
+      syncIndex: (request: searchSchemas.SyncIndexRequest, signal?: AbortSignal) =>
         this.runSyncIndex(request, signal),
     };
   }
 
   private async runSearch(args: unknown, signal?: AbortSignal) {
-    const request = sharedSearch.searchRequestSchema.parse(args);
+    const request = searchSchemas.searchRequestSchema.parse(args);
     const { client } = this.runtime;
     return client.search(request.query, toSearchOptions(request, signal));
   }
 
   private async runUniversalSearch(args: unknown, signal?: AbortSignal) {
-    const request = sharedSearch.universalSearchRequestSchema.parse(args);
+    const request = searchSchemas.universalSearchRequestSchema.parse(args);
     const { client } = this.runtime;
     return client.universalSearch(request.query, toUniversalSearchOptions(request, signal));
   }
@@ -422,13 +422,13 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
   }
 
   private async runCreateIndex(args: unknown, signal?: AbortSignal) {
-    const request = sharedSearch.createIndexRequestSchema.parse(args);
+    const request = searchSchemas.createIndexRequestSchema.parse(args);
     const { client } = this.runtime;
     return client.createIndex(request.name, toCreateIndexOptions(request, signal));
   }
 
   private async runSyncIndex(args: unknown, signal?: AbortSignal) {
-    const request = sharedSearch.syncIndexRequestSchema.parse(args);
+    const request = searchSchemas.syncIndexRequestSchema.parse(args);
     const { client, config } = this.runtime;
     const index = request.index ?? config.defaultIndex ?? "";
     await client.syncIndex(index, signal);
@@ -442,8 +442,8 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as searchPlugin } from "@dbx-tools/search";
- * import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+ * import { search } from "@dbx-tools/search";
+ * import { agents, mastra } from "@dbx-tools/appkit-mastra";
  *
  * const support = agents.createAgent({
  *   instructions: "Answer from the docs; use `search` to find them.",
@@ -455,8 +455,8 @@ export class SearchPlugin extends ToolRegistryPlugin<SearchPluginConfig> {
  * await createApp({
  *   plugins: [
  *     server(),
- *     searchPlugin.search({ index: "main.support.docs" }),
- *     mastraPlugin.mastra({ agents: support }),
+ *     search({ index: "main.support.docs" }),
+ *     mastra({ agents: support }),
  *   ],
  * });
  * ```

@@ -7,7 +7,7 @@
  * @module
  */
 
-import { tokenizeWithOptions } from "./string.ts";
+import { tokenizeWithOptions } from "./string-utils.ts";
 
 /**
  * Normalize any thrown value into an `Error`. Returns `value` unchanged

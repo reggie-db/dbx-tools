@@ -62,6 +62,7 @@
   "files": [
     "index.ts",
     "src",
+    "exports.ts",
     "lib"
   ],
   "peerDependenciesMeta": {

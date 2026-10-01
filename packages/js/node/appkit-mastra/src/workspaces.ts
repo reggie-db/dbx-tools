@@ -21,8 +21,8 @@
 import { createHash } from "node:crypto";
 import { ConfigurationError, createWorkspaceClient } from "@databricks/appkit";
 import type { WorkspaceClient } from "@databricks/appkit";
-import { DatabricksFileSystem, workspace as databricksWorkspace } from "@dbx-tools/databricks";
-import { error, log, object, string, token } from "@dbx-tools/shared-core";
+import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
+import { errorUtils, log, object, stringUtils, token } from "@dbx-tools/shared-core";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
   CompositeFilesystem,
@@ -426,7 +426,7 @@ async function resolveSkillFolderFilesystem(
     });
     return undefined;
   }
-  const root = string.trimToNull(await resolveSkillFolderValue(folder.path, context));
+  const root = stringUtils.trimToNull(await resolveSkillFolderValue(folder.path, context));
   if (!root) return undefined;
   return databricksFilesystem(client, root, folder.writable !== true);
 }
@@ -452,10 +452,10 @@ function resolveWorkspaceIdentity(options: CreateWorkspaceOptions): {
   let id = options.id;
   let name = options.name;
   if (!id) {
-    id = name ? string.toSlug(name) : "workspace";
+    id = name ? stringUtils.toSlug(name) : "workspace";
   }
   if (!name) {
-    name = Array.from(string.tokenize(id)).join(" ");
+    name = Array.from(stringUtils.tokenize(id)).join(" ");
   }
   return { id, name };
 }
@@ -494,7 +494,7 @@ function shouldMountSkillFolders(requestContext: RequestContext): boolean {
 
 /** Read the trimmed OBO user email stamped on {@link MASTRA_USER_EMAIL_KEY}. */
 function resolveScopedEmail(requestContext: RequestContext | undefined): string | undefined {
-  return string.trimToNull(requestContext?.get(MASTRA_USER_EMAIL_KEY)) ?? undefined;
+  return stringUtils.trimToNull(requestContext?.get(MASTRA_USER_EMAIL_KEY)) ?? undefined;
 }
 
 /**
@@ -508,7 +508,7 @@ async function databricksFilesystem(
   readOnly: boolean = true,
 ): Promise<WorkspaceFilesystem> {
   const fs = new DatabricksFileSystem({
-    client: databricksWorkspace.toLegacyWorkspaceClient(client),
+    client: workspaceClient.toLegacyWorkspaceClient(client),
     root,
     readOnly,
     createRoot: !readOnly,
@@ -522,7 +522,7 @@ async function databricksFilesystem(
     logger.debug("databricks-mount:scratch-fallback", {
       root,
       readOnly,
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
   }
   return scratchFilesystem();

@@ -42,7 +42,7 @@
  * @module
  */
 
-import { project } from "@dbx-tools/core";
+import { projectUtils } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Observability } from "@mastra/observability";
 import { OtelBridge } from "@mastra/otel-bridge";
@@ -122,7 +122,7 @@ export async function buildObservability(
     return undefined;
   }
 
-  const serviceName = options?.serviceName ?? (await project.name()) ?? DEFAULT_SERVICE_NAME;
+  const serviceName = options?.serviceName ?? (await projectUtils.name()) ?? DEFAULT_SERVICE_NAME;
   const requestContextKeys = [...(options?.requestContextKeys ?? TRACE_REQUEST_CONTEXT_KEYS)];
 
   // The OTel HTTP exporter treats `OTEL_EXPORTER_OTLP_ENDPOINT` as a

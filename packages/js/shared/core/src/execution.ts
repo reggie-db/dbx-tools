@@ -1,6 +1,6 @@
 /** Generic helpers for AppKit-style intercepted execution. */
-import * as async from "./async.ts";
-import * as error from "./error.ts";
+import * as async from "./async-utils.ts";
+import * as error from "./error-utils.ts";
 import * as object from "./object.ts";
 
 /** Success/failure shape returned by an interceptor-backed executor. */

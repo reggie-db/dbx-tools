@@ -62,8 +62,8 @@ the Lakebase full-text implementation of the AppKit AI Search contract.
 ```ts
 import { createApp, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
-import { plugin as searchPlugin } from "@dbx-tools/search";
-import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import { search } from "@dbx-tools/search";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Answer from the docs; use `search` to find them.",
@@ -83,11 +83,11 @@ await createApp({
         },
       },
     }),
-    searchPlugin.search({
+    search({
       index: "main.support.docs",
       indexes: [{ name: "main.support.docs", alias: "docs" }],
     }),
-    mastraPlugin.mastra({ agents: support }),
+    mastra({ agents: support }),
   ],
 });
 ```

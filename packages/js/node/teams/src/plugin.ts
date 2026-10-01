@@ -43,8 +43,8 @@ import {
 } from "@databricks/appkit";
 import { defineTool, type ToolRegistry } from "@databricks/appkit/beta";
 import { ToolRegistryPlugin } from "@dbx-tools/appkit";
-import { error, log, object, string } from "@dbx-tools/shared-core";
-import { activity as sharedActivity, card } from "@dbx-tools/shared-teams";
+import { errorUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
+import { teamsActivity, card } from "@dbx-tools/shared-teams";
 import { verifyBotToken } from "./auth.ts";
 import { TEAMS_CONFIG_SCHEMA, type TeamsPluginConfig } from "./config.ts";
 import {
@@ -94,12 +94,12 @@ const logger = log.logger("teams");
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as teamsPlugin } from "@dbx-tools/teams";
+ * import { teams } from "@dbx-tools/teams";
  *
  * await createApp({
  *   plugins: [
  *     server(),
- *     teamsPlugin.teams({ webhookUrl: process.env.TEAMS_WEBHOOK_URL }),
+ *     teams({ webhookUrl: process.env.TEAMS_WEBHOOK_URL }),
  *   ],
  * });
  * ```
@@ -335,12 +335,12 @@ export class TeamsPlugin extends ToolRegistryPlugin<TeamsPluginConfig> {
     } catch (err) {
       // Deliberately terse: a caller failing authentication learns only that it
       // failed, while the reason goes to the logs.
-      logger.warn("rejected an unauthenticated request", { error: error.errorMessage(err) });
+      logger.warn("rejected an unauthenticated request", { error: errorUtils.errorMessage(err) });
       res.status(401).json({ error: "unauthorized" });
       return;
     }
 
-    const parsed = sharedActivity.activitySchema.safeParse(req.body);
+    const parsed = teamsActivity.activitySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
@@ -412,8 +412,8 @@ export class TeamsPlugin extends ToolRegistryPlugin<TeamsPluginConfig> {
    */
   private async executeTurn(
     body: unknown,
-  ): Promise<ExecutionResult<sharedActivity.ActivityResponse>> {
-    const parsed = sharedActivity.activityRequestSchema.safeParse(body);
+  ): Promise<ExecutionResult<teamsActivity.ActivityResponse>> {
+    const parsed = teamsActivity.activityRequestSchema.safeParse(body);
     if (!parsed.success) {
       return { ok: false, status: 400, message: parsed.error.message };
     }
@@ -467,10 +467,10 @@ export class TeamsPlugin extends ToolRegistryPlugin<TeamsPluginConfig> {
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as teamsPlugin } from "@dbx-tools/teams";
+ * import { teams } from "@dbx-tools/teams";
  *
  * await createApp({
- *   plugins: [server(), teamsPlugin.teams()],
+ *   plugins: [server(), teams()],
  * });
  * ```
  */
@@ -486,5 +486,5 @@ export const teams = toPlugin(TeamsPlugin);
 function readHeader(headers: Record<string, unknown>, name: string): string | undefined {
   const direct = headers[name] ?? headers[name.toLowerCase()];
   const value = Array.isArray(direct) ? direct[0] : direct;
-  return typeof value === "string" ? (string.trimToNull(value) ?? undefined) : undefined;
+  return typeof value === "string" ? (stringUtils.trimToNull(value) ?? undefined) : undefined;
 }

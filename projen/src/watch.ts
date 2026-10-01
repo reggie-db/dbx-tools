@@ -17,7 +17,7 @@
  */
 import { isAbsolute, resolve } from "node:path";
 import { watch as pathWatch } from "@dbx-tools/path";
-import { async, log } from "@dbx-tools/shared-core";
+import { asyncUtils, log } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./packages.ts";
 
 const logger = log.logger("projen:watch");
@@ -132,7 +132,7 @@ export function watchLoop(
     if (closing) return;
     closing = true;
     clearTimeout(timer);
-    await Promise.race([watcher.close().catch(() => {}), async.sleep(CLOSE_GRACE_MS)]);
+    await Promise.race([watcher.close().catch(() => {}), asyncUtils.sleep(CLOSE_GRACE_MS)]);
     process.exit(code);
   }
 

@@ -12,7 +12,7 @@ clients can use Mastra-compatible chat transports instead of a custom protocol.
 Key features:
 
 - AppKit plugin lifecycle integration: routes, setup, shutdown, sibling plugin
-  access, and AppKit request context are handled inside `plugin.mastra()`.
+  access, and AppKit request context are handled inside `mastra()`.
 - Agent composition: define one or more Mastra agents, give each one local tools,
   AppKit plugin toolkits, workspace skills, model defaults, and approval-gated
   tools.
@@ -57,7 +57,7 @@ Use this package when you specifically want Mastra inside AppKit:
 
 ```ts
 import { analytics, createApp, lakebase, server } from "@databricks/appkit";
-import { agents, genie, plugin } from "@dbx-tools/appkit-mastra";
+import { agents, genie, mastra } from "@dbx-tools/appkit-mastra";
 import { z } from "zod";
 
 const analyst = agents.createAgent({
@@ -87,7 +87,7 @@ await createApp({
     server(),
     analytics(),
     lakebase(),
-    plugin.mastra({
+    mastra({
       agents: { analyst },
       defaultAgent: "analyst",
       genieSpaces: { sales: "01ef..." },
@@ -98,7 +98,7 @@ await createApp({
 
 Benefits of importing the package:
 
-- `plugin.mastra()` registers a full AppKit plugin named `mastra`.
+- `mastra()` registers a full AppKit plugin named `mastra`.
 - `agents.createAgent()` keeps agent definitions typed and applies the default
   Databricks workspace/skill mounts and Databricks Sandbox command execution.
 - `agents.tool()` lets the same AppKit-shaped tool body work in this Mastra
@@ -110,11 +110,11 @@ Benefits of importing the package:
 
 ## Agent Registration
 
-`plugin.mastra({ agents })` accepts a single definition, an array, or a record.
+`mastra({ agents })` accepts a single definition, an array, or a record.
 Records are best when clients need stable agent ids:
 
 ```ts
-plugin.mastra({
+mastra({
   agents: {
     support: agents.createAgent({ instructions: "Answer support questions." }),
     analyst: agents.createAgent({ instructions: "Analyze workspace data." }),
@@ -249,7 +249,7 @@ The `memory` and `storage` config fields can be `false`, `true`, or a concrete
 Mastra Postgres/PgVector config.
 
 ```ts
-plugin.mastra({
+mastra({
   agents: analyst,
   storage: true,
   memory: { id: "analytics_memory", tableName: "agent_memory" },
@@ -356,7 +356,7 @@ chunks. Prefer Python source for commands that must work on both providers.
 The default needs no configuration:
 
 ```ts
-plugin.mastra({
+mastra({
   agents: analyst,
 });
 ```
@@ -364,7 +364,7 @@ plugin.mastra({
 Tune the Databricks lifecycle globally for auto-created workspaces:
 
 ```ts
-plugin.mastra({
+mastra({
   agents: analyst,
   sandbox: {
     inactivityTimeout: "1800s",
@@ -379,8 +379,8 @@ Disable command execution, or explicitly replace Databricks with any Mastra
 sandbox on one agent:
 
 ```ts
-plugin.mastra({ agents: analyst, sandbox: false });
-plugin.mastra({ agents: analyst, sandbox: "monty" });
+mastra({ agents: analyst, sandbox: false });
+mastra({ agents: analyst, sandbox: "monty" });
 
 const localAgent = agents.createAgent({
   instructions: "Run only trusted local commands.",
@@ -644,9 +644,9 @@ Pass a `brand` to the plugin to theme every generated chart with your brand's
 palette and font; omit it for the default Echarts look.
 
 ```ts
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 
-plugin.mastra({ agents, storage: true, brand: brand.defaultBrandContext });
+mastra({ agents, storage: true, brand: brandUtils.defaultBrandContext });
 ```
 
 `brand` is the portable `BrandContext` shared across the UI, email, and
@@ -686,7 +686,7 @@ configured classes or fallback policy, but are never advertised as an available
 automatic default without a catalogue match.
 
 ```ts
-plugin.mastra({
+mastra({
   agents: analyst,
   defaultModel: "claude sonnet",
   modelFuzzyMatch: true,
@@ -766,7 +766,7 @@ the HTTP root span via `traceIo.attachChatTurnTraceIo()` so MLflow's UC
 attributes sit on a child span that view never reads).
 
 ```ts
-plugin.mastra({
+mastra({
   agents: analyst,
   feedback: true,
 });
@@ -841,7 +841,7 @@ Schema names with hyphens need backticks; `attributes` is a `VARIANT`, so use
 AppKit plugin publishes clean aliases under its base path:
 
 ```ts
-plugin.mastra({
+mastra({
   agents: analyst,
   mcp: {
     serverId: "analytics",

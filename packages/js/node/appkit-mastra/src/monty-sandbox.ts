@@ -8,7 +8,7 @@
  * @module
  */
 
-import { error, functionModule } from "@dbx-tools/shared-core";
+import { errorUtils, functionUtils } from "@dbx-tools/shared-core";
 import type {
   CommandResult,
   ExecuteCommandOptions,
@@ -20,8 +20,8 @@ import type { CheckoutOptions, Monty as MontyPool, MontySession } from "@pydanti
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_MEMORY_BYTES = 10_000_000;
 
-const montyModule = functionModule.memoize(() => import("@pydantic/monty/node"));
-const montyPool = functionModule.memoize(async (): Promise<MontyPool> => {
+const montyModule = functionUtils.memoize(() => import("@pydantic/monty/node"));
+const montyPool = functionUtils.memoize(async (): Promise<MontyPool> => {
   const { Monty } = await montyModule();
   return Monty.create({
     minProcesses: 1,
@@ -76,7 +76,7 @@ export class MontySandbox implements WorkspaceSandbox {
       this.status = "running";
     } catch (caught) {
       this.status = "error";
-      this.error = error.errorMessage(caught);
+      this.error = errorUtils.errorMessage(caught);
       throw caught;
     }
   }
@@ -181,7 +181,7 @@ export class MontySandbox implements WorkspaceSandbox {
       if (aborted || options.abortSignal?.aborted) {
         throw abortReason(options.abortSignal);
       }
-      const message = error.errorMessage(caught);
+      const message = errorUtils.errorMessage(caught);
       output.emit("stderr", output.stderr.value ? `\n${message}` : message);
       const { MontyCrashedError } = await montyModule();
       const timedOut = caught instanceof MontyCrashedError && caught.timedOut;

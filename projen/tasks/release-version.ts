@@ -2,7 +2,7 @@
 /** Validate one stable release version against the canonical workspace policy. */
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { project } from "@dbx-tools/core";
+import { projectUtils } from "@dbx-tools/core";
 import { compareSemver, parseSemver, resolveRemoteVersion } from "../src/workspace-version.ts";
 
 export function assertReleaseVersion(
@@ -16,7 +16,7 @@ export function assertReleaseVersion(
     );
   }
   if (!options.assertNext) return;
-  const root = resolve(options.root ?? project.root() ?? process.cwd());
+  const root = resolve(options.root ?? projectUtils.root() ?? process.cwd());
   const prefixes = options.prefixes?.length ? options.prefixes : ["v"];
   const current = resolveRemoteVersion(root, prefixes, { fetch: false });
   const currentParsed = current ? parseSemver(current) : undefined;

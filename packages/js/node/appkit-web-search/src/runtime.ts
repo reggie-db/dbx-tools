@@ -9,7 +9,7 @@
  */
 
 import type { ExecutionResult } from "@databricks/appkit";
-import { execution as appkitExecution } from "@dbx-tools/appkit";
+import { pluginExecution } from "@dbx-tools/appkit";
 import { execution, log } from "@dbx-tools/shared-core";
 import {
   resolveWebSearchConfig,
@@ -89,7 +89,7 @@ export async function executeRead<T>(
   fn: (signal?: AbortSignal) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
-  return appkitExecution.runPluginExecution({
+  return pluginExecution.runPluginExecution({
     plugin: "web-search",
     logger,
     operation,

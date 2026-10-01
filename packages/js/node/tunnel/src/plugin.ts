@@ -24,19 +24,19 @@ import {
   type ResourceRequirement,
   ResourceType,
 } from "@databricks/appkit";
-import { plugin as appkitPlugin, brand as appkitBrand } from "@dbx-tools/appkit";
+import { pluginRegistry, brandContext } from "@dbx-tools/appkit";
 import {
   auth as passwordlessAuth,
-  storage as authStorage,
+  authStorage,
   type AuthorizeIdentity,
   type AuthEmailOptions,
   type AuthStorageConfig,
   type AuthStorageMode,
   type PasswordlessAuthRuntime,
 } from "@dbx-tools/auth-gate";
-import { config as coreConfig } from "@dbx-tools/core";
+import { configUtils } from "@dbx-tools/core";
 import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
-import { brand, log, string } from "@dbx-tools/shared-core";
+import { brandUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import type { RequestHandler } from "express";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
@@ -226,7 +226,7 @@ const DEFAULTS = {
   // same identity the rest of the app presents. A host with its own
   // `branding/brand.yaml` overrides it by passing `brandName`; the shared default
   // is the fallback when nothing is configured.
-  brandName: brand.defaultBrandContext.name,
+  brandName: brandUtils.defaultBrandContext.name,
   message: "Your verification code is:",
   // 30 days, the same window the cache-backed signing key is stored for.
   sessionTtlSeconds: KEY_TTL_SECONDS,
@@ -240,38 +240,38 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
   const storage = authStorage.resolveAuthStorageConfig({
     storage:
       config.storage ??
-      (coreConfig.text("TUNNEL_AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
-    sqlitePath: config.sqlitePath ?? coreConfig.text("TUNNEL_AUTH_SQLITE_PATH", TUNNEL_CONFIG),
+      (configUtils.text("TUNNEL_AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
+    sqlitePath: config.sqlitePath ?? configUtils.text("TUNNEL_AUTH_SQLITE_PATH", TUNNEL_CONFIG),
   });
-  const publicDomain = coreConfig.string(
+  const publicDomain = configUtils.string(
     config.publicDomain,
     "TUNNEL_PUBLIC_DOMAIN",
     TUNNEL_CONFIG,
   );
-  const frpPublicDomain = coreConfig.text("TUNNEL_FRP_PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const frpPublicDomain = configUtils.text("TUNNEL_FRP_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
     // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
     // Hence `parseList` on each rather than `config.list`, which stops at the
     // first source that yields anything.
     allow: [
-      ...string.parseList(config.allow),
-      ...string.parseList(coreConfig.text("TUNNEL_AUTH_ALLOW", TUNNEL_CONFIG)),
+      ...stringUtils.parseList(config.allow),
+      ...stringUtils.parseList(configUtils.text("TUNNEL_AUTH_ALLOW", TUNNEL_CONFIG)),
     ],
     subject:
-      coreConfig.string(config.subject, "TUNNEL_AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
+      configUtils.string(config.subject, "TUNNEL_AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
     brandName:
-      coreConfig.string(config.brandName, "TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG) ??
+      configUtils.string(config.brandName, "TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG) ??
       DEFAULTS.brandName,
     message:
-      coreConfig.string(config.message, "TUNNEL_AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
-    sessionTtlSeconds: coreConfig.positiveInt(
+      configUtils.string(config.message, "TUNNEL_AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
+    sessionTtlSeconds: configUtils.positiveInt(
       config.sessionTtlSeconds,
       "TUNNEL_AUTH_SESSION_TTL",
       DEFAULTS.sessionTtlSeconds,
       TUNNEL_CONFIG,
     ),
-    codeTtlSeconds: coreConfig.positiveInt(
+    codeTtlSeconds: configUtils.positiveInt(
       config.codeTtlSeconds,
       "TUNNEL_AUTH_CODE_TTL",
       DEFAULTS.codeTtlSeconds,
@@ -280,26 +280,26 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
     logoutRedirectPath: passwordlessAuth.normalizeLogoutRedirectPath(
-      coreConfig.string(config.logoutRedirectPath, "TUNNEL_AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
+      configUtils.string(config.logoutRedirectPath, "TUNNEL_AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
         DEFAULTS.logoutRedirectPath,
     ),
     publicDomain,
     publicDomains: [
       ...new Set(
-        [publicDomain, frpPublicDomain, ...string.parseList(config.publicDomains)].filter(
+        [publicDomain, frpPublicDomain, ...stringUtils.parseList(config.publicDomains)].filter(
           (value): value is string => !!value,
         ),
       ),
     ],
     forwardHeaders: [
-      ...string.parseList(config.forwardHeaders),
-      ...string.parseList(coreConfig.text("TUNNEL_FORWARD_HEADERS", TUNNEL_CONFIG)),
+      ...stringUtils.parseList(config.forwardHeaders),
+      ...stringUtils.parseList(configUtils.text("TUNNEL_FORWARD_HEADERS", TUNNEL_CONFIG)),
     ],
     gatePaths: [
-      ...string.parseList(config.gatePaths),
-      ...string.parseList(coreConfig.text("TUNNEL_GATE_PATHS", TUNNEL_CONFIG)),
+      ...stringUtils.parseList(config.gatePaths),
+      ...stringUtils.parseList(configUtils.text("TUNNEL_GATE_PATHS", TUNNEL_CONFIG)),
     ],
-    insecure: coreConfig.boolean(config.insecure, "TUNNEL_INSECURE", TUNNEL_CONFIG) ?? false,
+    insecure: configUtils.boolean(config.insecure, "TUNNEL_INSECURE", TUNNEL_CONFIG) ?? false,
     storage: storage.mode,
     sqlitePath: storage.sqlitePath,
   };
@@ -362,14 +362,14 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
 
   override async setup(): Promise<void> {
     this.resolved = resolveAuthGateConfig(this.config);
-    if (!this.config.brandName && !coreConfig.text("TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG)) {
-      this.resolved.brandName = appkitBrand.getBrandContext().name;
+    if (!this.config.brandName && !configUtils.text("TUNNEL_AUTH_BRAND_NAME", TUNNEL_CONFIG)) {
+      this.resolved.brandName = brandContext.getBrandContext().name;
     }
 
     if (this.resolved.insecure) {
       logger.warn("insecure mode - the tunnel runs OPEN with no auth gate");
     } else {
-      const lakebasePlugin = appkitPlugin.instance(this.context, lakebase);
+      const lakebasePlugin = pluginRegistry.instance(this.context, lakebase);
       const { key } = await signingKey(this.resolved.sessionCutoffMs);
       const origins = this.resolved.publicDomains.length
         ? this.resolved.publicDomains.map(authOrigin)
@@ -486,7 +486,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
 }
 
 function authOrigin(publicDomain?: string): string {
-  const value = string.trimToNull(publicDomain);
+  const value = stringUtils.trimToNull(publicDomain);
   if (!value) return "http://localhost";
   if (/^https?:\/\//i.test(value)) return new URL(value).origin;
   const host = value.split("/")[0]!;

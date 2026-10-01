@@ -59,7 +59,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
-import { json, string } from "@dbx-tools/shared-core";
+import { json, stringUtils } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, isGenerated, makeReadonly, makeWritable, type HeaderOpts } from "./generated.ts";
 import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports.ts";
@@ -125,9 +125,11 @@ const UNIFFI_BINDINGS_FILE = "bindings.ts";
 const UNIFFI_GENERATED_FILE = "_bindings.ts";
 const UNIFFI_FFI_FILE = "_bindings-ffi.ts";
 
-/** `pnpm-workspace` -> `pnpmWorkspace`; `local-fs` -> `localFS` (`fs` -> `FS`). */
-function kebabToCamel(segment: string): string {
-  const tokens = [...string.tokenizeWithOptions({ lowerCase: true, capitalize: true }, segment)];
+/** `config-tools` / `config_tools` -> `configTools`; `local-fs` -> `localFS`. */
+function moduleSegmentToCamel(segment: string): string {
+  const tokens = [
+    ...stringUtils.tokenizeWithOptions({ lowerCase: true, capitalize: true }, segment),
+  ];
   if (tokens.length === 0) return segment;
   const [first, ...rest] = tokens;
   // Standalone acronym modules (`fs`, `ai`) stay lowercase so they match
@@ -145,14 +147,14 @@ function modulePathToNamespace(modulePath: string): string {
   const rel = modulePath.replace(/^\.\/src\//, "").replace(/\.(tsx?|jsx?|mjs|cjs)$/, "");
   const segments = rel.split("/");
   if (segments.at(-1) === "index" && segments.length > 1) segments.pop();
-  const names = segments.map(kebabToCamel);
+  const names = segments.map(moduleSegmentToCamel);
   let name =
     names.length === 1
       ? names[0]!
       : names[0]! +
         names
           .slice(1)
-          .map((s) => string.capitalize(s))
+          .map((s) => stringUtils.capitalize(s))
           .join("");
   if (!isIdentifier(name)) {
     name = `${name}Module`;
@@ -576,7 +578,7 @@ export function generateBarrels(
     const names = failures.map((f) => relative(projectRoot, f.dir) || f.dir);
     throw new AggregateError(
       failures.map((f) => f.err),
-      `${string.pluralize(failures.length, "barrel")} failed: ${names.join(", ")}`,
+      `${stringUtils.pluralize(failures.length, "barrel")} failed: ${names.join(", ")}`,
     );
   }
   return total;

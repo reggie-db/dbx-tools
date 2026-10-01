@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 
 /**
  * Vendor / namespace prefixes stripped from a tokenized endpoint name
@@ -56,7 +56,7 @@ const SEGMENT_SPLIT = /[-_.\s/]+/;
  * toModelDisplayName("x", "Claude 4.6 (Preview)")    // provided wins
  */
 export function toModelDisplayName(name: string, provided?: string | null): string {
-  const providedTrimmed = string.trimToNull(provided);
+  const providedTrimmed = stringUtils.trimToNull(provided);
   if (providedTrimmed) return providedTrimmed;
 
   const segments = name.split(SEGMENT_SPLIT).filter(Boolean);
@@ -97,7 +97,7 @@ export function toModelDisplayName(name: string, provided?: string | null): stri
 
 /** Title-case one name segment, uppercasing acronyms and gluing size units. */
 function renderSegment(segment: string): string {
-  const tokens = [...string.tokenizeWithOptions({ capitalize: true }, segment)];
+  const tokens = [...stringUtils.tokenizeWithOptions({ capitalize: true }, segment)];
   const out: string[] = [];
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!;

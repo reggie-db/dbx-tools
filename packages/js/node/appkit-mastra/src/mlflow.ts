@@ -22,7 +22,7 @@
  */
 
 import { appkit } from "@dbx-tools/appkit";
-import { async, error, log } from "@dbx-tools/shared-core";
+import { asyncUtils, errorUtils, log } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
 import { databricksFetch, readResponseJson, readResponseText } from "./rest.ts";
 
@@ -125,7 +125,7 @@ export async function logFeedback(
     } catch (err) {
       logger.warn("feedback request failed", {
         traceId: params.traceId,
-        error: error.errorMessage(err),
+        error: errorUtils.errorMessage(err),
       });
       return undefined;
     }
@@ -139,7 +139,7 @@ export async function logFeedback(
     // Trace export is async; a fresh trace may not exist yet. Retry a
     // few times with a short backoff before giving up softly.
     if (res.status === 404 && attempt < NOT_FOUND_RETRIES) {
-      await async.sleep(NOT_FOUND_BACKOFF_MS * (attempt + 1));
+      await asyncUtils.sleep(NOT_FOUND_BACKOFF_MS * (attempt + 1));
       continue;
     }
     logger.warn("feedback not recorded", {

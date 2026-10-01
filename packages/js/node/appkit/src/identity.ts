@@ -53,8 +53,8 @@
  */
 
 import { ConfigurationError } from "@databricks/appkit";
-import { config } from "@dbx-tools/core";
-import { string, token } from "@dbx-tools/shared-core";
+import { configUtils } from "@dbx-tools/core";
+import { stringUtils, token } from "@dbx-tools/shared-core";
 
 /**
  * Header the Databricks Apps front door forwards the caller's OBO token on.
@@ -104,7 +104,7 @@ export function resolveIdentityMode(
   envKeys: string | readonly string[],
   field = "identity",
 ): IdentityMode {
-  const raw = config.string(configured, envKeys, config.ENV_ONLY);
+  const raw = configUtils.string(configured, envKeys, configUtils.ENV_ONLY);
   if (raw === undefined) return DEFAULT_IDENTITY_MODE;
   const mode = raw.toLowerCase() as IdentityMode;
   if (!IDENTITY_MODES.includes(mode)) {
@@ -124,17 +124,17 @@ export function resolveIdentityMode(
  * the first Databricks call.
  */
 export function requestAccessToken(req: HeaderBearing | undefined): string | undefined {
-  return string.trimToNull(req?.header(ACCESS_TOKEN_HEADER)) ?? undefined;
+  return stringUtils.trimToNull(req?.header(ACCESS_TOKEN_HEADER)) ?? undefined;
 }
 
 /** The forwarded user id on `req`, or `undefined`. */
 export function requestUserId(req: HeaderBearing | undefined): string | undefined {
-  return string.trimToNull(req?.header(USER_ID_HEADER)) ?? undefined;
+  return stringUtils.trimToNull(req?.header(USER_ID_HEADER)) ?? undefined;
 }
 
 /** The forwarded user email on `req`, or `undefined`. */
 export function requestUserEmail(req: HeaderBearing | undefined): string | undefined {
-  return string.trimToNull(req?.header(USER_EMAIL_HEADER)) ?? undefined;
+  return stringUtils.trimToNull(req?.header(USER_EMAIL_HEADER)) ?? undefined;
 }
 
 /**

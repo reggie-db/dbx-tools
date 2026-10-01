@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { toCreateIndexOptions } from "../src/index-tools.ts";
+import { toCreateIndexOptions } from "../src/index-options.ts";
 import { createIndexTool, syncIndexTool } from "../src/tool.ts";
 
 describe("toCreateIndexOptions", () => {

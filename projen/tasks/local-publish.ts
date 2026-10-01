@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exec, project } from "@dbx-tools/core";
+import { exec, projectUtils } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
 import { readDbxToolsConfig } from "../src/packages.ts";
@@ -26,7 +26,7 @@ function resolveLocalRegistry(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed || trimmed.toLowerCase() === "false") return undefined;
   if (trimmed.toLowerCase() === "auto") {
-    const registry = project.npmRegistry();
+    const registry = projectUtils.npmRegistry();
     return registry && net.isLoopbackHost(registry) ? registry.href : undefined;
   }
   return trimmed;

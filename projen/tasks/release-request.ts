@@ -3,8 +3,8 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { project } from "@dbx-tools/core";
-import { log, string } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { selectReleaseSummary } from "./release-summary.ts";
 import { captureTaskCommand, runTaskCommand } from "../src/_task-command.ts";
@@ -69,7 +69,7 @@ export async function prepareReleaseRequest(
     throw new Error(`Release requests must run from a branch other than ${options.baseBranch}`);
   }
 
-  const customNotes = string.trimToNull(
+  const customNotes = stringUtils.trimToNull(
     options.notesFile ? readFileSync(resolve(root, options.notesFile), "utf8") : options.notes,
   );
   const notes =
@@ -154,7 +154,7 @@ if (import.meta.main) {
           throw new Error("Use --notes or --notes-file, not both");
         }
         await prepareReleaseRequest({
-          root: project.root() ?? process.cwd(),
+          root: projectUtils.root() ?? process.cwd(),
           baseBranch: options.base,
           message: optionText(options.message),
           notes: optionText(options.notes),

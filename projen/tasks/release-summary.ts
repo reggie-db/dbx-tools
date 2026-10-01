@@ -6,8 +6,8 @@
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { exec, project } from "@dbx-tools/core";
-import { json, log, object, string } from "@dbx-tools/shared-core";
+import { exec, projectUtils } from "@dbx-tools/core";
+import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { captureTaskCommand } from "../src/_task-command.ts";
 import {
   RELEASE_SUMMARY_PROVIDER_NAMES,
@@ -89,19 +89,19 @@ function capture(root: string, command: string, args: string[]): string {
 }
 
 function contentText(value: unknown): string | undefined {
-  if (typeof value === "string") return string.trimToNull(value) ?? undefined;
+  if (typeof value === "string") return stringUtils.trimToNull(value) ?? undefined;
   if (!Array.isArray(value)) return undefined;
   const text = value
     .flatMap((item) => (object.isRecord(item) && typeof item.text === "string" ? [item.text] : []))
     .join("");
-  return string.trimToNull(text) ?? undefined;
+  return stringUtils.trimToNull(text) ?? undefined;
 }
 
 function eventText(event: Record<string, unknown>): string | undefined {
-  if (typeof event.result === "string") return string.trimToNull(event.result) ?? undefined;
+  if (typeof event.result === "string") return stringUtils.trimToNull(event.result) ?? undefined;
   const item = object.isRecord(event.item) ? event.item : undefined;
   if (item?.type === "agent_message" && typeof item.text === "string") {
-    return string.trimToNull(item.text) ?? undefined;
+    return stringUtils.trimToNull(item.text) ?? undefined;
   }
   const message = object.isRecord(event.message) ? event.message : undefined;
   return contentText(message?.content);
@@ -115,7 +115,7 @@ function eventType(event: Record<string, unknown>): string {
 function eventDetail(event: Record<string, unknown>): string | undefined {
   const item = object.isRecord(event.item) ? event.item : undefined;
   for (const value of [item?.message, event.message, event.error]) {
-    if (typeof value === "string") return string.trimToNull(value) ?? undefined;
+    if (typeof value === "string") return stringUtils.trimToNull(value) ?? undefined;
   }
   return undefined;
 }
@@ -123,7 +123,7 @@ function eventDetail(event: Record<string, unknown>): string | undefined {
 function eventToolName(event: Record<string, unknown>): string | undefined {
   const item = object.isRecord(event.item) ? event.item : undefined;
   for (const value of [event.tool_name, event.toolName, event.name, item?.tool_name, item?.name]) {
-    if (typeof value === "string") return string.trimToNull(value) ?? undefined;
+    if (typeof value === "string") return stringUtils.trimToNull(value) ?? undefined;
   }
   const toolCall = object.isRecord(event.tool_call)
     ? event.tool_call
@@ -179,7 +179,7 @@ async function runProvider(
       (line) => {
         const event = json.parseRecord(line);
         if (!event) {
-          const text = string.trimToNull(line);
+          const text = stringUtils.trimToNull(line);
           if (text) {
             textOutput.push(text);
             logEvent({ type: "text", text });
@@ -192,7 +192,7 @@ async function runProvider(
       },
     ],
     stderr: (line) => {
-      const message = string.trimToNull(line);
+      const message = stringUtils.trimToNull(line);
       if (message) logger.warn("provider-stderr", { provider: provider.name, message });
     },
     stdin: "ignore",
@@ -310,7 +310,7 @@ export async function generateReleaseSummary(options: {
   readonly providers?: readonly ReleaseSummaryProviderName[];
   readonly runner?: ReleaseSummaryRunner;
 }): Promise<string | undefined> {
-  const projectName = project.name(options.root);
+  const projectName = projectUtils.name(options.root);
   const relativeOutput =
     options.outputFile ?? releaseSummaryFile(options.version, options.component);
   const output = join(options.root, relativeOutput);
@@ -348,7 +348,7 @@ export async function generateReleaseSummary(options: {
     ...scopedPaths,
     `:(exclude)${relativeOutput}`,
   ]);
-  const customSummary = string.trimToNull(options.customSummary);
+  const customSummary = stringUtils.trimToNull(options.customSummary);
   const result = customSummary
     ? undefined
     : await selectReleaseSummary(

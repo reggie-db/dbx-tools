@@ -4,8 +4,8 @@
 // attachments render through the `adaptivecards` renderer, so the transcript
 // looks like a Teams channel where the agent always answers in cards.
 
-import { hash, json, string } from "@dbx-tools/shared-core";
-import { activity as sharedActivity, type Activity } from "@dbx-tools/shared-teams";
+import { hash, json, stringUtils } from "@dbx-tools/shared-core";
+import { teamsActivity, type Activity } from "@dbx-tools/shared-teams";
 import { Avatar, AvatarFallback, Button, Input, Spinner, cn } from "@dbx-tools/ui-appkit/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdaptiveCardView } from "./adaptive-card.tsx";
@@ -88,7 +88,7 @@ export const TeamsChat = ({
 
   const send = useCallback(
     async (text: string) => {
-      const prompt = string.trimToNull(text);
+      const prompt = stringUtils.trimToNull(text);
       if (!prompt || pending) return;
 
       abortRef.current?.abort();
@@ -119,10 +119,11 @@ export const TeamsChat = ({
         const body = json.parseRecord(await response.text());
         if (!response.ok) {
           throw new Error(
-            string.trimToNull(String(body?.error ?? "")) ?? `Request failed (${response.status})`,
+            stringUtils.trimToNull(String(body?.error ?? "")) ??
+              `Request failed (${response.status})`,
           );
         }
-        const parsed = sharedActivity.activityResponseSchema.safeParse(body);
+        const parsed = teamsActivity.activityResponseSchema.safeParse(body);
         if (!parsed.success) throw new Error("The server returned an unexpected reply.");
         setTranscript((current) => [...current, ...parsed.data.activities]);
       } catch (err) {
@@ -198,7 +199,7 @@ export const TeamsChat = ({
           aria-label="Message the agent"
           disabled={pending}
         />
-        <Button type="submit" disabled={pending || string.trimToNull(draft) === null}>
+        <Button type="submit" disabled={pending || stringUtils.trimToNull(draft) === null}>
           Send
         </Button>
       </form>
@@ -212,7 +213,7 @@ export const TeamsChat = ({
  */
 const ActivityBubble = ({ activity, userName }: { activity: Activity; userName: string }) => {
   const fromUser = isFromUser(activity);
-  const cards = sharedActivity.cardsOf(activity);
+  const cards = teamsActivity.cardsOf(activity);
   const label = fromUser ? userName : (activity.from?.name ?? "Agent");
 
   return (

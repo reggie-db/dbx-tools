@@ -1,4 +1,4 @@
-import { error as sharedError, hash, log } from "@dbx-tools/shared-core";
+import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import type { ReasoningEffort } from "@dbx-tools/shared-model";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
@@ -470,11 +470,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (caught) {
         if (getSession(threadId).runToken !== token) return;
         logger.error("stream error", {
-          error: sharedError.errorMessage(caught),
+          error: errorUtils.errorMessage(caught),
         });
         updateSession(threadId, (session) => ({
           ...session,
-          error: sharedError.toError(caught),
+          error: errorUtils.toError(caught),
           status: "error",
           abortController: session.abortController === controller ? null : session.abortController,
           runId: runIdRef.current,
@@ -678,7 +678,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       logger.info("history cleared", { threadId });
     } catch (error) {
       logger.error("history clear error", {
-        error: sharedError.errorMessage(error),
+        error: errorUtils.errorMessage(error),
       });
     }
     resetSession(threadId, true);
@@ -719,7 +719,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("thread delete error", {
           threadId,
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
       }
       removeSession(threadId);
@@ -764,7 +764,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("thread rename error", {
           threadId,
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
         setRenamedThreads((prev) => {
           if (!(threadId in prev)) return prev;
@@ -807,11 +807,11 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       .catch((error: unknown) => {
         logger.error("regenerate cleanup error", {
           threadId,
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
         updateSession(threadId, (session) => ({
           ...session,
-          error: sharedError.toError(error),
+          error: errorUtils.toError(error),
           status: "error",
         }));
       });
@@ -877,7 +877,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("conversation export error", {
           format,
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
       }
     },
@@ -899,7 +899,7 @@ export const useMastraChat = <TValues extends Record<string, unknown> = Record<s
       } catch (error) {
         logger.error("message export error", {
           format,
-          error: sharedError.errorMessage(error),
+          error: errorUtils.errorMessage(error),
         });
       }
     },

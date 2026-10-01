@@ -28,8 +28,8 @@ import {
   getExecutionContext,
   ValidationError,
 } from "@databricks/appkit";
-import { invoke, resolve, serving } from "@dbx-tools/model";
-import { log, object, string } from "@dbx-tools/shared-core";
+import { invoke, resolve, modelCatalog } from "@dbx-tools/model";
+import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import { openaiChat } from "@dbx-tools/shared-model";
 import { MODEL_ENV, SERVING_ENDPOINT_ENV, type ResolvedWebSearchConfig } from "./config.ts";
 import { toCallSettings, webSearchExecuteDefaults } from "./defaults.ts";
@@ -43,10 +43,10 @@ import {
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema.ts";
 import { runScrapeSearch } from "./scrape.ts";
 
-type WorkspaceClientLike = serving.WorkspaceClientLike & invoke.AuthenticatingClientLike;
+type WorkspaceClientLike = modelCatalog.WorkspaceClientLike & invoke.AuthenticatingClientLike;
 const logger = log.logger("web-search/search");
 const { resolveModel } = resolve;
-const { listServingEndpoints } = serving;
+const { listServingEndpoints } = modelCatalog;
 
 /**
  * How deep the grounding-metadata walk descends. Gemini nests its sources a
@@ -234,20 +234,20 @@ function fromResponsesPayload(payload: Record<string, unknown>): {
     if (!parts) continue;
     for (const part of parts) {
       if (!object.isRecord(part)) continue;
-      const text = string.trimToEmpty(part.text);
+      const text = stringUtils.trimToEmpty(part.text);
       if (text) texts.push(text);
       const annotations = Array.isArray(part.annotations) ? part.annotations : [];
       for (const annotation of annotations) {
         if (!object.isRecord(annotation)) continue;
-        const url = string.trimToEmpty(annotation.url);
+        const url = stringUtils.trimToEmpty(annotation.url);
         if (!url || seen.has(url)) continue;
         seen.add(url);
-        const title = string.trimToEmpty(annotation.title);
+        const title = stringUtils.trimToEmpty(annotation.title);
         citations.push({ url, ...(title ? { title } : {}) });
       }
     }
   }
-  const answer = string.trimToEmpty(payload.output_text) || texts.join("\n").trim();
+  const answer = stringUtils.trimToEmpty(payload.output_text) || texts.join("\n").trim();
   return { answer, citations };
 }
 
@@ -270,10 +270,10 @@ function fromChatPayload(payload: Record<string, unknown>): {
   const seen = new Set<string>();
   const visit = (v: unknown, depth: number): void => {
     if (depth > MAX_GROUNDING_WALK_DEPTH || !object.isRecord(v)) return;
-    const url = string.trimToEmpty(v.url) || string.trimToEmpty(v.uri);
+    const url = stringUtils.trimToEmpty(v.url) || stringUtils.trimToEmpty(v.uri);
     if (url && !seen.has(url)) {
       seen.add(url);
-      const title = string.trimToEmpty(v.title);
+      const title = stringUtils.trimToEmpty(v.title);
       citations.push({ url, ...(title ? { title } : {}) });
     }
     for (const val of Object.values(v)) {

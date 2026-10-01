@@ -22,7 +22,7 @@
 import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { config } from "@dbx-tools/core";
+import { configUtils } from "@dbx-tools/core";
 
 /** Databricks Apps container home when {@link config.isDatabricksAppEnv}. */
 export const APP_HOME = "/home/app";
@@ -91,7 +91,7 @@ function resolveHome(env: NodeJS.ProcessEnv, cwd: string, options: ResolveOsPath
     tryCall(options.homeDir ?? homedir),
     env.HOME?.trim(),
     env.USERPROFILE?.trim(),
-    config.isDatabricksAppEnv(env) ? (options.appHome ?? APP_HOME) : undefined,
+    configUtils.isDatabricksAppEnv(env) ? (options.appHome ?? APP_HOME) : undefined,
   ];
 
   for (const candidate of candidates) {

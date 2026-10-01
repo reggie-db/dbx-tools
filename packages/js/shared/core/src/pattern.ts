@@ -38,7 +38,7 @@
 
 import { logger } from "./log.ts";
 import * as predicate from "./predicate.ts";
-import { parseList } from "./string.ts";
+import { parseList } from "./string-utils.ts";
 
 const log = logger("shared/pattern");
 

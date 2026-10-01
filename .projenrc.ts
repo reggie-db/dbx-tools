@@ -17,7 +17,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
+import { project, projectJs } from "@dbx-tools/projen";
 import { Component, DependencyType, JsonFile, TextFile } from "projen";
 
 const SCOPE = "dbx-tools";
@@ -143,7 +143,7 @@ class BrandPackageAssets extends Component {
 // ---------------------------------------------------------------------------
 // Root construction
 // ---------------------------------------------------------------------------
-const root = new projenProject.DBXToolsNodeProject({
+const root = new project.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   // `packages/js` is the JavaScript product tree; `packages/example` holds the
@@ -536,6 +536,7 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
 // `email` plugin. Consumes the browser-safe shared-email contract. AppKit +
 // Mastra are runtime deps.
 project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
+  projectJs.addPackageFiles(p, "exports.ts");
   p.addDeps(
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
@@ -880,6 +881,7 @@ project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p)
 // email transport and native Lakebase or SQLite storage, then registers one
 // handler + gating middleware on the app's OWN Express server.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
+  projectJs.addPackageFiles(p, "exports.ts");
   p.addDeps(
     "@dbx-tools/auth-gate@workspace:^",
     "@dbx-tools/appkit@workspace:^",
@@ -932,7 +934,7 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
 // and React bindings over shared-core's BrandContext. The root branding folder
 // is canonical; pre-compile regenerates the package copies and data URLs.
 project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p) => {
-  projenProject.addExports(p, {
+  project.addExports(p, {
     "./browser": "./src/browser.ts",
     // The brand->AppKit token bridge stylesheet. `ui-appkit/styles.css`
     // `@import`s it so it travels with every feature UI package; scoped to
@@ -1140,7 +1142,7 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // ---------------------------------------------------------------------------
 // Rust Cargo workspace
 // ---------------------------------------------------------------------------
-const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
+const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
   rustVersion: "1.89",
   cliRegistryPath: "packages/js/node/rust-binary/src/_release-binaries.ts",
   pythonRoot: PYTHON_ROOT,
@@ -1362,7 +1364,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
-const pythonPackages: projenProject.PythonPackageOptions[] = [
+const pythonPackages: project.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
     directory: "core",
@@ -1400,7 +1402,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
   },
 ];
 
-new projenProject.DBXToolsPythonWorkspace(root, {
+new project.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],

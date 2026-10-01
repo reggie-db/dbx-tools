@@ -31,11 +31,11 @@ import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseEnv } from "node:util";
 import { isDatabricksAppEnvironment } from "@dbx-tools/core-rs";
-import { json, log, object, string as sharedString } from "@dbx-tools/shared-core";
+import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { cachedRecord, statSync } from "./file.ts";
-import { resolveWorkingDirectory, root as resolveProjectRoot } from "./project.ts";
+import { resolveWorkingDirectory, root as resolveProjectRoot } from "./project-utils.ts";
 
 const logger = log.logger("config");
 const configFileCache = new Map<string, string | undefined>();
@@ -266,7 +266,7 @@ export function environmentKeys(name: string): readonly string[] {
     .sequence(
       trimmed,
       trimmed.toUpperCase(),
-      Array.from(sharedString.tokenize(trimmed)).join("_").toUpperCase(),
+      Array.from(stringUtils.tokenize(trimmed)).join("_").toUpperCase(),
     )
     .filter(Boolean)
     .distinct()
@@ -280,7 +280,7 @@ function keys(
 ): readonly string[] {
   const scopes = object
     .sequence(options.scope ?? DEFAULT_SCOPE)
-    .map(sharedString.trimToEmpty)
+    .map(stringUtils.trimToEmpty)
     .filter(Boolean)
     .distinct()
     .toArray();
@@ -289,13 +289,13 @@ function keys(
       ? []
       : object
           .sequence(options.prefix)
-          .map(sharedString.trimToEmpty)
+          .map(stringUtils.trimToEmpty)
           .filter(Boolean)
           .distinct()
           .toArray();
   return object
     .sequence(input)
-    .map(sharedString.trimToEmpty)
+    .map(stringUtils.trimToEmpty)
     .filter(Boolean)
     .distinct()
     .flatMap((key) => {
@@ -347,12 +347,12 @@ function configSources(options: ConfigOptions): readonly ConfigSource[] {
 function configMapValue(value: ConfigMapValue | unknown): string | null {
   if (Array.isArray(value)) {
     for (const entry of value) {
-      const resolved = sharedString.trimToNull(entry);
+      const resolved = stringUtils.trimToNull(entry);
       if (resolved !== null) return resolved;
     }
     return null;
   }
-  return sharedString.trimToNull(value);
+  return stringUtils.trimToNull(value);
 }
 
 /**
@@ -390,7 +390,7 @@ export function name(
  * Known long and short names are interchangeable; unknown names pass through.
  */
 function nodeEnvNames(nodeEnv: unknown): string[] {
-  const name = sharedString.trimToNull(nodeEnv)?.toLowerCase();
+  const name = stringUtils.trimToNull(nodeEnv)?.toLowerCase();
   if (!name || !/^[a-z0-9_-]+$/.test(name)) return [];
   for (const [canonical, alternatives] of Object.entries(NODE_ENV_ALTERNATIVES)) {
     const names: readonly string[] = alternatives;
@@ -415,7 +415,7 @@ export function string(
   input: ConfigKey,
   options?: ConfigOptions,
 ): string | undefined {
-  return sharedString.trimToNull(configured) ?? text(input, options);
+  return stringUtils.trimToNull(configured) ?? text(input, options);
 }
 
 /**
@@ -481,7 +481,7 @@ export function port(
 }
 
 /**
- * Resolve a list through `string.parseList`, so an array from typed config and a
+ * Resolve a list through `stringUtils.parseList`, so an array from typed config and a
  * `"a, b c"` string normalize identically. `[]` when neither source has entries.
  */
 export function list(
@@ -490,10 +490,10 @@ export function list(
   transform?: (entry: string) => string,
   options?: ConfigOptions,
 ): string[] {
-  const fromConfig = sharedString.parseList(configured, transform);
+  const fromConfig = stringUtils.parseList(configured, transform);
   return fromConfig.length > 0
     ? fromConfig
-    : sharedString.parseList(text(input, options), transform);
+    : stringUtils.parseList(text(input, options), transform);
 }
 
 /**
@@ -517,7 +517,7 @@ export function bundleFile(cwd?: string | null): ConfigFile | undefined {
     return undefined;
   }
   const resolved = resolveWorkingDirectory(cwd);
-  return loadBundleFile(resolved, sharedString.trimToNull(process.env.DATABRICKS_CONFIG_PROFILE));
+  return loadBundleFile(resolved, stringUtils.trimToNull(process.env.DATABRICKS_CONFIG_PROFILE));
 }
 
 /** The parsed `app.yaml` / `app.yml` for `cwd`, when local App config reads are enabled. */
@@ -663,8 +663,8 @@ function loadBundleFile(cwd: string, profile: string | null): ConfigFile | undef
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const output = sharedString.trimToNull(result.stdout);
-    const error = sharedString.trimToNull(result.stderr);
+    const output = stringUtils.trimToNull(result.stdout);
+    const error = stringUtils.trimToNull(result.stderr);
     if (output === null) {
       logger.debug("bundle validate produced no JSON", { path, status: result.status, error });
       return undefined;

@@ -13,7 +13,7 @@
  * @module
  */
 
-import { log, string } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import { createTool } from "@mastra/core/tools";
 import type { TeamsPluginConfig } from "./config.ts";
@@ -26,7 +26,7 @@ const logger = log.logger("teams/tool/create-card");
  * Mastra {@link teamsCardTool} and the AppKit `teams.createCard` tool so both
  * agents get the same guidance about the vocabulary and when to reach for it.
  */
-export const CREATE_CARD_DESCRIPTION = string.toDescription(`
+export const CREATE_CARD_DESCRIPTION = stringUtils.toDescription(`
   Build a Microsoft Teams Adaptive Card from a short structured description.
   Provide a title, an optional subtitle and body text, an optional list of
   key/value facts, and optional link buttons; the tool returns a compiled

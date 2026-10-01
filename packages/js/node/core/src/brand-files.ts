@@ -1,9 +1,9 @@
 /** Node-only discovery and file loading for the shared brand context. */
 import { readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, resolve } from "node:path";
-import { brand as sharedBrand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import { statSync } from "./file.ts";
-import { resolveProjectRoots } from "./project.ts";
+import { resolveProjectRoots } from "./project-utils.ts";
 
 const BRAND_CONTEXT_FILES = [
   "branding/brand.yaml",
@@ -14,13 +14,13 @@ const BRAND_CONTEXT_FILES = [
   "brand.json",
 ] as const;
 
-export type BrandContext = sharedBrand.BrandContext;
-export type BrandContextInput = sharedBrand.BrandContextInput;
-export const BrandContextSchema = sharedBrand.BrandContextSchema;
-export const defaultBrandContext = sharedBrand.defaultBrandContext;
-export const parseBrandContext = sharedBrand.parseBrandContext;
-export const brandContextJsonSchema = sharedBrand.brandContextJsonSchema;
-export const brandContextPrompt = sharedBrand.brandContextPrompt;
+export type BrandContext = brandUtils.BrandContext;
+export type BrandContextInput = brandUtils.BrandContextInput;
+export const BrandContextSchema = brandUtils.BrandContextSchema;
+export const defaultBrandContext = brandUtils.defaultBrandContext;
+export const parseBrandContext = brandUtils.parseBrandContext;
+export const brandContextJsonSchema = brandUtils.brandContextJsonSchema;
+export const brandContextPrompt = brandUtils.brandContextPrompt;
 
 /** Find a conventional YAML or JSON brand file from known project roots. */
 export function findBrandContextFile(cwd: string = process.cwd()): string | undefined {
@@ -48,7 +48,7 @@ export async function loadBrandContextFile(path: string): Promise<BrandContext> 
     throw new Error(`Unsupported brand context format: ${extension || "no extension"}`);
   }
 
-  return sharedBrand.parseBrandContext(input);
+  return brandUtils.parseBrandContext(input);
 }
 
 /**
@@ -57,7 +57,7 @@ export async function loadBrandContextFile(path: string): Promise<BrandContext> 
  */
 export async function loadBrandContext(cwd: string = process.cwd()): Promise<BrandContext> {
   const path = findBrandContextFile(cwd);
-  return path ? loadBrandContextFile(path) : sharedBrand.defaultBrandContext;
+  return path ? loadBrandContextFile(path) : brandUtils.defaultBrandContext;
 }
 
 /** Resolve a relative asset reference against the brand file that declared it. */

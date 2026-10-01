@@ -4,7 +4,6 @@ import { CacheManager } from "@databricks/appkit";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
-import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
 import {
   clearServingEndpointsCache,
   listServingEndpoints,
@@ -12,7 +11,8 @@ import {
   resolveModelId,
   searchServingEndpoints,
   type WorkspaceClientLike,
-} from "../src/serving.ts";
+} from "../src/model-catalog.ts";
+import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
 
 const { ModelClass } = model;
 

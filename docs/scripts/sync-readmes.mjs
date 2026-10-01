@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { brand, project as coreProject } from "../../packages/js/node/core/index.ts";
+import { brandFiles, projectUtils } from "../../packages/js/node/core/index.ts";
 import { loadDocsToolchain } from "./docs-toolchain.mjs";
 import {
   discoverRepositoryPackages,
@@ -18,10 +18,10 @@ const root = process.cwd();
 const sourceRoot = path.join(root, ".docs-build", "site");
 const docsContentRoot = path.join(sourceRoot, "src", "content", "docs");
 const publicRoot = path.join(sourceRoot, "public");
-const repoUrl = coreProject.repositoryUrl(root);
+const repoUrl = projectUtils.repositoryUrl(root);
 if (!repoUrl) throw new Error("Could not resolve the repository URL");
 const brandFile = path.join(root, "branding", "brand.yaml");
-const brandContext = await brand.loadBrandContextFile(brandFile);
+const brandContext = await brandFiles.loadBrandContextFile(brandFile);
 const docsToolchain = loadDocsToolchain(path.join(root, "docs", "toolchain.json"));
 const { base, site } = docsSiteConfig();
 
@@ -283,7 +283,7 @@ function llms(packages, guides) {
 
 function llmsFull(packages, guides, mappings) {
   const parts = [
-    brand.brandContextPrompt(brandContext),
+    brandFiles.brandContextPrompt(brandContext),
     transformLinks(read(path.join(root, "README.md")), root, mappings),
   ];
   for (const guide of guides) {
@@ -395,7 +395,7 @@ a:not([class]) {
 function syncBrandAssets() {
   const assetRoot = path.join(sourceRoot, "src", "assets");
   const copyAsset = (source, destination) => {
-    const resolved = brand.resolveBrandAssetPath(brandFile, source);
+    const resolved = brandFiles.resolveBrandAssetPath(brandFile, source);
     mkdir(path.dirname(destination));
     fs.copyFileSync(resolved, destination);
   };
@@ -410,7 +410,7 @@ function syncBrandAssets() {
   write(path.join(publicRoot, "brand.json"), `${JSON.stringify(brandContext, null, 2)}\n`);
   write(
     path.join(publicRoot, "brand.schema.json"),
-    `${JSON.stringify(brand.brandContextJsonSchema(), null, 2)}\n`,
+    `${JSON.stringify(brandFiles.brandContextJsonSchema(), null, 2)}\n`,
   );
 }
 

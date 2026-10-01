@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import {
   defaultEmailBrand,
   emailBrandFromContext,
@@ -10,9 +10,9 @@ import {
 
 describe("email template brand", () => {
   it("projects the repository brand into email-safe defaults", () => {
-    assert.equal(defaultEmailBrand.accent, brand.defaultBrandContext.colors.primary);
-    assert.equal(defaultEmailBrand.background, brand.defaultBrandContext.colors.surface);
-    assert.equal(defaultEmailBrand.name, brand.defaultBrandContext.name);
+    assert.equal(defaultEmailBrand.accent, brandUtils.defaultBrandContext.colors.primary);
+    assert.equal(defaultEmailBrand.background, brandUtils.defaultBrandContext.colors.surface);
+    assert.equal(defaultEmailBrand.name, brandUtils.defaultBrandContext.name);
   });
 
   it("merges a consumer override over the repository defaults", () => {
@@ -23,11 +23,11 @@ describe("email template brand", () => {
     });
     assert.equal(resolved.accent, "#123456");
     assert.equal(resolved.name, "Acme");
-    assert.equal(resolved.border, brand.defaultBrandContext.colors.border);
+    assert.equal(resolved.border, brandUtils.defaultBrandContext.colors.border);
   });
 
   it("keeps fetchable brand assets and drops package references", () => {
-    const remote = brand.parseBrandContext({
+    const remote = brandUtils.parseBrandContext({
       assets: { logo: { light: "https://example.com/logo.svg" } },
     });
     assert.equal(emailBrandFromContext(remote).logoUrl, "https://example.com/logo.svg");

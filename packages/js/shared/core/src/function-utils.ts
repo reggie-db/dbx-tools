@@ -32,7 +32,7 @@ export interface MemoizeOptions {
  * pending promise until it settles.
  *
  * @example
- * const ranges = functionModule.memoize(fetchIpRanges, { ttlMs: 24 * 60 * 60 * 1000 });
+ * const ranges = functionUtils.memoize(fetchIpRanges, { ttlMs: 24 * 60 * 60 * 1000 });
  * await ranges(); // fetches
  * await ranges(); // cached until 24h later
  */

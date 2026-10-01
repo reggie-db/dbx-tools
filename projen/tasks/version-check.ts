@@ -2,7 +2,7 @@
 /** Verify that every committed package version matches its owning release unit. */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { exec, project } from "@dbx-tools/core";
+import { exec, projectUtils } from "@dbx-tools/core";
 import { find } from "@dbx-tools/path";
 import { json, log, object } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
@@ -60,7 +60,7 @@ function cargoVersions(root: string): Array<{ name: string; version: string; pat
 }
 
 function main(): void {
-  const root = project.root() ?? process.cwd();
+  const root = projectUtils.root() ?? process.cwd();
   const fixedVersion = readWorkspaceVersion(root);
   const graphPath = join(root, ".projen/release-units.json");
   const graph = existsSync(graphPath)

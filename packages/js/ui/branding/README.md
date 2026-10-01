@@ -36,9 +36,9 @@ fields receive the dbx tools defaults defined by the shared Zod schema.
 
 ```ts
 import { applyBrandContext } from "@dbx-tools/ui-branding/browser";
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 
-applyBrandContext(brand.parseBrandContext(input));
+applyBrandContext(brandUtils.parseBrandContext(input));
 ```
 
 Import `@dbx-tools/ui-branding/styles.css` once to expose the default CSS custom

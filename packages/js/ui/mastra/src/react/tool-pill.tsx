@@ -1,4 +1,4 @@
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { genieModel } from "@dbx-tools/shared-genie";
 import {
   Collapsible,
@@ -26,7 +26,7 @@ import type { ToolEvent, ToolProgress } from "./types.ts";
  *   `ask_genie_sales` -> `Ask Genie Sales`
  *   `myCoolTool`    -> `My Cool Tool`
  */
-export const humanizeToolName = (toolName: string): string => string.toLabel(toolName);
+export const humanizeToolName = (toolName: string): string => stringUtils.toLabel(toolName);
 
 /**
  * Track the freshest status label a running tool has published so the
@@ -41,7 +41,7 @@ const runningLabelFor = (event: ToolEvent): string => {
     .reverse()
     .find((p): p is Extract<ToolProgress, { type: "status" }> => p.type === "status");
   return latest
-    ? string.capitalize(genieModel.humanizeStatus(latest.status))
+    ? stringUtils.capitalize(genieModel.humanizeStatus(latest.status))
     : `Calling ${humanizeToolName(event.toolName)}`;
 };
 
@@ -243,7 +243,7 @@ const askGenieQuestion = (event: ToolEvent): string | undefined => {
  *   `THOUGHT_TYPE_UNDERSTANDING`   -> `Understanding`
  */
 const humanizeThoughtType = (kind: string): string =>
-  string.toLabel(kind.replace(/^THOUGHT_TYPE_/i, ""));
+  stringUtils.toLabel(kind.replace(/^THOUGHT_TYPE_/i, ""));
 
 /**
  * Genie attaches one of three payload kinds per attachment slot:

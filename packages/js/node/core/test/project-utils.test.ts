@@ -6,18 +6,18 @@ import { resolve } from "node:path";
 import { cwd } from "node:process";
 import { describe, it } from "node:test";
 
-import { project } from "../index.ts";
+import { projectUtils } from "../index.ts";
 
 describe("resolveWorkingDirectory", () => {
   it("normalizes blank and current-directory values to process.cwd", () => {
     const current = resolve(cwd());
     for (const value of [undefined, null, "", "   ", ".", cwd(), current]) {
-      assert.equal(project.resolveWorkingDirectory(value), current);
+      assert.equal(projectUtils.resolveWorkingDirectory(value), current);
     }
   });
 
   it("resolves another relative directory normally", () => {
-    assert.equal(project.resolveWorkingDirectory(".."), resolve(cwd(), ".."));
+    assert.equal(projectUtils.resolveWorkingDirectory(".."), resolve(cwd(), ".."));
   });
 });
 

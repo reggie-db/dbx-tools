@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
-import { PACKAGE_IDENTIFIER, string } from "../index.ts";
+import { PACKAGE_IDENTIFIER, stringUtils } from "../index.ts";
 
 const identifierContract = {
   toIdentifier(...input: unknown[]): string {
@@ -14,45 +14,45 @@ const identifierContract = {
       typeof (last as { delimiter?: unknown }).delimiter === "string"
         ? (values.pop() as { delimiter: string })
         : {};
-    return string.toIdentifierWithOptions(options, ...values);
+    return stringUtils.toIdentifierWithOptions(options, ...values);
   },
 };
 
-describe("string.trimToEmpty", () => {
+describe("stringUtils.trimToEmpty", () => {
   it("trims a string", () => {
-    assert.equal(string.trimToEmpty("  hi  "), "hi");
+    assert.equal(stringUtils.trimToEmpty("  hi  "), "hi");
   });
 
   it("yields an empty string for a non-string or blank value", () => {
-    assert.equal(string.trimToEmpty(undefined), "");
-    assert.equal(string.trimToEmpty(null), "");
-    assert.equal(string.trimToEmpty(42), "");
-    assert.equal(string.trimToEmpty("   "), "");
+    assert.equal(stringUtils.trimToEmpty(undefined), "");
+    assert.equal(stringUtils.trimToEmpty(null), "");
+    assert.equal(stringUtils.trimToEmpty(42), "");
+    assert.equal(stringUtils.trimToEmpty("   "), "");
   });
 });
 
-describe("string.parseList", () => {
+describe("stringUtils.parseList", () => {
   it("splits a comma / whitespace separated string", () => {
-    assert.deepEqual(string.parseList("a, b  c,d"), ["a", "b", "c", "d"]);
+    assert.deepEqual(stringUtils.parseList("a, b  c,d"), ["a", "b", "c", "d"]);
   });
 
   it("accepts an array and trims its entries", () => {
-    assert.deepEqual(string.parseList([" a ", "b"]), ["a", "b"]);
+    assert.deepEqual(stringUtils.parseList([" a ", "b"]), ["a", "b"]);
   });
 
   it("drops empties and de-duplicates, first occurrence winning", () => {
-    assert.deepEqual(string.parseList("a,,b, a ,b"), ["a", "b"]);
+    assert.deepEqual(stringUtils.parseList("a,,b, a ,b"), ["a", "b"]);
   });
 
   it("returns an empty list for absent input", () => {
-    assert.deepEqual(string.parseList(undefined), []);
-    assert.deepEqual(string.parseList(null), []);
-    assert.deepEqual(string.parseList(""), []);
+    assert.deepEqual(stringUtils.parseList(undefined), []);
+    assert.deepEqual(stringUtils.parseList(null), []);
+    assert.deepEqual(stringUtils.parseList(""), []);
   });
 
   it("applies a transform and de-duplicates on the transformed value", () => {
     assert.deepEqual(
-      string.parseList("A, a, B", (entry) => entry.trim().toLowerCase()),
+      stringUtils.parseList("A, a, B", (entry) => entry.trim().toLowerCase()),
       ["a", "b"],
     );
   });
@@ -62,7 +62,7 @@ await polygotTest(
   async () => ({ PACKAGE_IDENTIFIER, string: identifierContract }),
   "string",
   (implementation, language) => {
-    describe(`string.toIdentifier (${language})`, () => {
+    describe(`stringUtils.toIdentifier (${language})`, () => {
       it("joins multiple values", () => {
         assert.equal(implementation.toIdentifier("billing", "Prod"), "billing-prod");
       });
@@ -87,13 +87,13 @@ await polygotTest(
 describe("string tokenize capitalize overrides", () => {
   it("uppercases ai and fs when capitalizing", () => {
     assert.deepEqual(
-      [...string.tokenizeWithOptions({ lowerCase: true, capitalize: true }, "local-fs")],
+      [...stringUtils.tokenizeWithOptions({ lowerCase: true, capitalize: true }, "local-fs")],
       ["Local", "FS"],
     );
     assert.deepEqual(
-      [...string.tokenizeWithOptions({ lowerCase: true, capitalize: true }, "ai-tools")],
+      [...stringUtils.tokenizeWithOptions({ lowerCase: true, capitalize: true }, "ai-tools")],
       ["AI", "Tools"],
     );
-    assert.equal(string.toLabel("local-fs"), "Local FS");
+    assert.equal(stringUtils.toLabel("local-fs"), "Local FS");
   });
 });

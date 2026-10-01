@@ -67,10 +67,10 @@ conversation and model.
 ## Parse Embed Markers
 
 ```ts
-import { marker } from "@dbx-tools/shared-mastra";
+import { markers } from "@dbx-tools/shared-mastra";
 
-const parts = marker.parseMarkers("Here is the chart:\n[chart:abc123]");
-const safeText = marker.stripIncompleteMarkerTail(streamingText);
+const parts = markers.parseMarkers("Here is the chart:\n[chart:abc123]");
+const safeText = markers.stripIncompleteMarkerTail(streamingText);
 ```
 
 Markers let an agent mention large or delayed artifacts by id, such as

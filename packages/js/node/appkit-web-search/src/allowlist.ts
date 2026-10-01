@@ -31,7 +31,7 @@
 
 import { ValidationError } from "@databricks/appkit";
 import { match, type PathMatcher } from "@dbx-tools/path";
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 
 /** A compiled URL allow-list. Build one with {@link toUrlAllowList}. */
 export interface UrlAllowList {
@@ -65,7 +65,7 @@ export function normalizeUrlPattern(pattern: string): string {
  * identically.
  */
 export function parseAllowedUrls(raw: string | string[] | undefined): string[] {
-  return string.parseList(raw, normalizeUrlPattern);
+  return stringUtils.parseList(raw, normalizeUrlPattern);
 }
 
 /** One compiled entry: which URL slice it tests, and the matcher for it. */

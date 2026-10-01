@@ -17,7 +17,7 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createLakebasePool, getWorkspaceClient, type CacheConfig } from "@databricks/appkit";
-import { error, hash, log } from "@dbx-tools/shared-core";
+import { errorUtils, hash, log } from "@dbx-tools/shared-core";
 import { handleOwnershipMigrationError } from "./migration.ts";
 
 const logger = log.logger("cache-storage");
@@ -65,7 +65,7 @@ export function loadPersistentStorage(): PersistentStorageConstructor | undefine
     return loaded;
   } catch (err) {
     logger.debug("soft persistent cache skipped (PersistentStorage unavailable)", {
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
     persistentStorageCtor = undefined;
     return undefined;
@@ -176,7 +176,7 @@ export async function createSoftPersistentStorage(
     return storage;
   } catch (err) {
     logger.debug("soft persistent cache unavailable", {
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
     if (pool) {
       await pool.end().catch(() => {});

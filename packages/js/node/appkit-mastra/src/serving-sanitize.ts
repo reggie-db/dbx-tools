@@ -22,7 +22,7 @@
  */
 
 import { chatToolReasoningEffort, ReasoningEffort } from "@dbx-tools/model-rs";
-import { json, string } from "@dbx-tools/shared-core";
+import { json, stringUtils } from "@dbx-tools/shared-core";
 import { type ChatMessage, type ChatRole, openaiChat } from "@dbx-tools/shared-model";
 
 /**
@@ -112,7 +112,7 @@ export function applyToolReasoningCompatibility(body: Record<string, unknown>): 
   if (!Array.isArray(body.tools) || body.tools.length === 0) {
     return false;
   }
-  const model = string.trimToNull(body.model);
+  const model = stringUtils.trimToNull(body.model);
   if (!model) return false;
   if (chatToolReasoningEffort(model) !== ReasoningEffort.None) return false;
   if (body.reasoning_effort === "none") return false;
@@ -210,8 +210,8 @@ export function repairAssistantPrefill(messages: ServingChatMessage[]): boolean 
   }
 
   const merged = [
-    string.trimToNull(textFromServingContent(opener.content)),
-    string.trimToNull(textFromServingContent(last.content)),
+    stringUtils.trimToNull(textFromServingContent(opener.content)),
+    stringUtils.trimToNull(textFromServingContent(last.content)),
   ]
     .filter((s): s is string => s !== null)
     .join("\n\n");

@@ -12,7 +12,7 @@ import {
   port,
   resolveValue,
   text,
-} from "../src/config.ts";
+} from "../src/config-utils.ts";
 
 interface AppEnvironmentFixture {
   name: string;

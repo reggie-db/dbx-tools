@@ -7,7 +7,7 @@
  */
 
 import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { LOGIN_CLIENT_SOURCE } from "./generated/_login-client.ts";
 
 export interface LoginPageOptions {
@@ -19,8 +19,8 @@ export interface LoginPageOptions {
 
 /** The login page HTML for a `text/html` request to a gated path with no session. */
 export function loginPageHtml(options: LoginPageOptions): string {
-  const brand = string.escapeHtml(options.brandName);
-  const returnTo = string.escapeHtml(options.returnTo);
+  const brand = stringUtils.escapeHtml(options.brandName);
+  const returnTo = stringUtils.escapeHtml(options.returnTo);
   return `<!doctype html>
 <html lang="en">
 <head>

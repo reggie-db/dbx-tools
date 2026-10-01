@@ -6,8 +6,8 @@
  */
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { project } from "@dbx-tools/core";
-import { functionModule } from "@dbx-tools/shared-core";
+import { projectUtils } from "@dbx-tools/core";
+import { functionUtils } from "@dbx-tools/shared-core";
 
 const ENGINE_PKG = "@dbx-tools/projen";
 
@@ -17,11 +17,11 @@ const ENGINE_PKG = "@dbx-tools/projen";
  * Walks up from this module with shared-core's {@link project.root} (the nearest
  * package bounded by the enclosing npm/git root), so it resolves both in-repo and
  * when installed as a dependency. Memoized with shared-core's
- * {@link functionModule.memoize}, which caches only a successful result - a
+ * {@link functionUtils.memoize}, which caches only a successful result - a
  * throw is retried on the next call.
  */
-export const resolvePkgRoot = functionModule.memoize((): string => {
-  const found = project.root(dirname(fileURLToPath(import.meta.url)));
+export const resolvePkgRoot = functionUtils.memoize((): string => {
+  const found = projectUtils.root(dirname(fileURLToPath(import.meta.url)));
   if (!found) throw new Error(`${ENGINE_PKG} package root not found`);
   return found;
 });

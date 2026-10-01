@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
+import { createAuthStorage, resolveAuthStorageConfig } from "../src/auth-storage.ts";
 import { createPasswordlessAuth } from "../src/auth.ts";
-import { createAuthStorage, resolveAuthStorageConfig } from "../src/storage.ts";
 
 describe("auth storage", () => {
   it("uses a platform data path unless explicitly configured", () => {

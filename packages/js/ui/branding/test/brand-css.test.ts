@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 
 import { brandCssVariables } from "../src/browser.ts";
 
@@ -13,7 +13,7 @@ describe("default brand CSS", () => {
     assert.match(styles, /--brand-color-primary:\s*#1b3139;/);
     assert.match(styles, /--brand-color-primary-hover:\s*#0e538b;/);
     assert.match(styles, /--brand-color-accent:\s*#00a972;/);
-    const variables = brandCssVariables(brand.defaultBrandContext);
+    const variables = brandCssVariables(brandUtils.defaultBrandContext);
     assert.equal(variables["--brand-color-primary"], "#1B3139");
     assert.equal(variables["--brand-color-primary-hover"], "#0E538B");
     assert.equal(variables["--brand-color-accent"], "#00A972");

@@ -13,7 +13,7 @@
  */
 
 import type { AuthStorageMode } from "@dbx-tools/auth-gate";
-import { config } from "@dbx-tools/core";
+import { configUtils } from "@dbx-tools/core";
 import { object } from "@dbx-tools/shared-core";
 import { type AuthGateConfig, frp, interceptor, plugin, portr } from "@dbx-tools/tunnel";
 
@@ -69,8 +69,8 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
   // The Databricks Apps runtime contract: the platform routes to
   // DATABRICKS_APP_PORT, so the WRAPPER claims it and the wrapped app is moved
   // to a private one.
-  const publicPort = config.port(options.port, "DATABRICKS_APP_PORT", 8000);
-  const appPort = config.port(options.appPort, "APP_PORT", 0, { prefix: "TUNNEL" });
+  const publicPort = configUtils.port(options.port, "DATABRICKS_APP_PORT", 8000);
+  const appPort = configUtils.port(options.appPort, "APP_PORT", 0, { prefix: "TUNNEL" });
   const gateConfig: AuthGateConfig = {
     allow: options.allow,
     subject: options.subject,

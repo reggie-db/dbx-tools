@@ -63,6 +63,7 @@
   "files": [
     "index.ts",
     "src",
+    "exports.ts",
     "lib"
   ],
   "dbxToolsConfig": {

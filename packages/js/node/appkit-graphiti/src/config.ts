@@ -4,7 +4,7 @@
  * @module
  */
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
-import { config as coreConfig, project as coreProject } from "@dbx-tools/core";
+import { configUtils, projectUtils } from "@dbx-tools/core";
 import type { JSONSchema7 } from "json-schema";
 
 export interface GraphitiPluginConfig extends BasePluginConfig {
@@ -39,30 +39,30 @@ export const GRAPHITI_CONFIG_SCHEMA = {
 export function resolveGraphitiConfig(
   config: GraphitiPluginConfig = {},
 ): ResolvedGraphitiPluginConfig {
-  const graphitiPort = coreConfig.port(
+  const graphitiPort = configUtils.port(
     config.graphitiPort,
     "GRAPHITI_PORT",
     0,
-    coreConfig.ENV_ONLY,
+    configUtils.ENV_ONLY,
   );
-  const modelProxyPort = coreConfig.port(
+  const modelProxyPort = configUtils.port(
     config.modelProxyPort,
     "MODEL_PROXY_PORT",
     0,
-    coreConfig.ENV_ONLY,
+    configUtils.ENV_ONLY,
   );
-  const proxyPort = coreConfig.port(config.proxyPort, "PROXY_PORT", 0, coreConfig.ENV_ONLY);
+  const proxyPort = configUtils.port(config.proxyPort, "PROXY_PORT", 0, configUtils.ENV_ONLY);
   const configuredPorts = [graphitiPort, modelProxyPort, proxyPort].filter(Boolean);
   if (new Set(configuredPorts).size !== configuredPorts.length) {
     throw new ConfigurationError("Graphiti sidecar ports must be distinct");
   }
   const python =
-    config.python ?? coreConfig.text("PYTHON", coreConfig.ENV_ONLY)?.trim() ?? "python3";
+    config.python ?? configUtils.text("PYTHON", configUtils.ENV_ONLY)?.trim() ?? "python3";
   const journalNamespace =
     config.journalNamespace ??
-    coreConfig.text("JOURNAL_NAMESPACE", coreConfig.ENV_ONLY)?.trim() ??
+    configUtils.text("JOURNAL_NAMESPACE", configUtils.ENV_ONLY)?.trim() ??
     process.env.DATABRICKS_APP_NAME?.trim() ??
-    coreProject.name() ??
+    projectUtils.name() ??
     "default";
   return {
     graphitiPort,

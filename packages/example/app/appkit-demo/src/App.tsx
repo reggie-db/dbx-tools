@@ -1,4 +1,4 @@
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
 import { getAuthStatus, logout as logoutAuth } from "@dbx-tools/ui-auth/react";
 import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui-branding/react";
@@ -183,7 +183,7 @@ const AppShell = ({ routes }: { routes: readonly RouteDef[] }) => {
 };
 
 const App = () => {
-  const [brandContext, setBrandContext] = useState(brand.defaultBrandContext);
+  const [brandContext, setBrandContext] = useState(brandUtils.defaultBrandContext);
   const routes: RouteDef[] = [
     ...BASE_ROUTES,
     {

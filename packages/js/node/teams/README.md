@@ -44,8 +44,8 @@ alternative to a native plugin. The browser-safe card schemas live in
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
-import { plugin as teamsPlugin } from "@dbx-tools/teams";
-import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import { teams } from "@dbx-tools/teams";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Summarize results as Teams cards when asked.",
@@ -57,8 +57,8 @@ const support = agents.createAgent({
 await createApp({
   plugins: [
     server(),
-    teamsPlugin.teams({ webhookUrl: process.env.TEAMS_WEBHOOK_URL }),
-    mastraPlugin.mastra({ agents: support, storage: true }),
+    teams({ webhookUrl: process.env.TEAMS_WEBHOOK_URL }),
+    mastra({ agents: support, storage: true }),
   ],
 });
 ```

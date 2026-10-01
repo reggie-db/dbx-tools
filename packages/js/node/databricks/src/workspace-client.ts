@@ -11,7 +11,7 @@ import {
   type WorkspaceClient as AppKitWorkspaceClient,
 } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { functionModule, net } from "@dbx-tools/shared-core";
+import { functionUtils, net } from "@dbx-tools/shared-core";
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
 const WORKSPACE_ID_REGEX = /\d{10,20}/;
@@ -32,7 +32,7 @@ export function toLegacyWorkspaceClient(
  * construction happens at most once per process. Used only when there's no
  * AppKit execution context to borrow a client from.
  */
-const getDefaultWorkspaceClient = functionModule.memoize(async () =>
+const getDefaultWorkspaceClient = functionUtils.memoize(async () =>
   createWorkspaceClient().toLegacyWorkspaceClient(),
 );
 

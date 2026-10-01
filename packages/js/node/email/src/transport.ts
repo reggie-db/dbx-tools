@@ -23,7 +23,7 @@
  */
 
 import { ConfigurationError, ValidationError, type ExecutionResult } from "@databricks/appkit";
-import { execution as appkitExecution } from "@dbx-tools/appkit";
+import { pluginExecution } from "@dbx-tools/appkit";
 import { execution, log } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
@@ -142,7 +142,7 @@ export async function executeWrite<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const { execute } = getEmailRuntime();
-  return appkitExecution.runPluginExecution({
+  return pluginExecution.runPluginExecution({
     plugin: "email",
     logger,
     operation,

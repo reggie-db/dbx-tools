@@ -57,18 +57,18 @@ import type { WorkspaceClient } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import type { WorkspaceClientLike } from "@dbx-tools/appkit";
 import { exec } from "@dbx-tools/core";
-import { DatabricksFileSystem, workspace as databricksWorkspace } from "@dbx-tools/databricks";
+import { DatabricksFileSystem, workspaceClient } from "@dbx-tools/databricks";
 import { localFS, type LocalFileSystem } from "@dbx-tools/fs";
 import { find } from "@dbx-tools/path";
 import {
-  async as asyncTools,
-  error,
+  asyncUtils,
+  errorUtils,
   hash,
   json,
   log,
   net,
   object,
-  string,
+  stringUtils,
 } from "@dbx-tools/shared-core";
 import type { OneOrMany } from "@dbx-tools/shared-core";
 import type { FileSystem } from "@dbx-tools/shared-fs";
@@ -321,11 +321,11 @@ function isAiToolsSource(source: string): boolean {
  * not what a success produces.
  */
 function cachePolicy(sourceOptions: NormalizedSource): RemoteSkillCacheEntry["policy"] {
-  const skills = string.parseList(sourceOptions.skills);
+  const skills = stringUtils.parseList(sourceOptions.skills);
   const policy = {
     ...(skills.length > 0 ? { skills: [...skills].sort() } : {}),
     ...(sourceOptions.experimental === true ? { experimental: true } : {}),
-    ...(string.trimToNull(sourceOptions.ref) ? { ref: sourceOptions.ref!.trim() } : {}),
+    ...(stringUtils.trimToNull(sourceOptions.ref) ? { ref: sourceOptions.ref!.trim() } : {}),
   };
   return Object.keys(policy).length > 0 ? policy : undefined;
 }
@@ -368,7 +368,7 @@ async function readMetadata(fs: FileSystem): Promise<RemoteSkillsMetadata | unde
     if (!object.isRecord(parsed) || parsed.version !== METADATA_VERSION) return undefined;
     return object.isRecord(parsed.sources) ? parsed : undefined;
   } catch (err) {
-    logger.debug("cache:unreadable", { error: error.errorMessage(err) });
+    logger.debug("cache:unreadable", { error: errorUtils.errorMessage(err) });
     return undefined;
   }
 }
@@ -499,13 +499,13 @@ export async function provisionRemoteSkills(
       } catch (err) {
         if (failOnError) {
           throw new Error(
-            `failed to provision remote skill source "${sourceOptions.source}": ${error.errorMessage(err)}`,
-            { cause: error.toError(err) },
+            `failed to provision remote skill source "${sourceOptions.source}": ${errorUtils.errorMessage(err)}`,
+            { cause: errorUtils.toError(err) },
           );
         }
         logger.warn("source:skipped", {
           source: sourceOptions.source,
-          error: error.errorMessage(err),
+          error: errorUtils.errorMessage(err),
         });
       }
     }
@@ -542,7 +542,7 @@ async function openWritableWorkspace(
   client: WorkspaceClient,
 ): Promise<DatabricksFileSystem | undefined> {
   const fs = new DatabricksFileSystem({
-    client: databricksWorkspace.toLegacyWorkspaceClient(client),
+    client: workspaceClient.toLegacyWorkspaceClient(client),
     root: basePath,
     readOnly: false,
     createRoot: true,
@@ -553,7 +553,7 @@ async function openWritableWorkspace(
   } catch (err) {
     logger.warn("destination:unwritable", {
       destination: basePath,
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
     return undefined;
   }
@@ -568,7 +568,7 @@ function resolveDatabricksBasePath(
 ): string | undefined {
   if (!client) return undefined;
   if (options.databricksBasePath) return options.databricksBasePath.trim() || undefined;
-  const email = string.trimToNull(options.userEmail);
+  const email = stringUtils.trimToNull(options.userEmail);
   // A named user targets their personal Assistant tree (the "save a skill"
   // target); otherwise the shared workspace Assistant tree, which the built-in
   // Assistant-skills mount already scans.
@@ -607,13 +607,13 @@ async function stageAiTools(
   options: ProvisionRemoteSkillsOptions,
 ): Promise<string> {
   const maxBytes = resolveMaxBytes(sourceOptions, options);
-  const ref = string.trimToNull(sourceOptions.ref) ?? AITOOLS_REF;
+  const ref = stringUtils.trimToNull(sourceOptions.ref) ?? AITOOLS_REF;
   const manifest = json.parse(
     (await download(aiToolsRawUrl(ref, "manifest.json"), maxBytes)).toString("utf8"),
     undefined,
   ) as AiToolsManifest | undefined;
 
-  const wanted = new Set(string.parseList(sourceOptions.skills));
+  const wanted = new Set(stringUtils.parseList(sourceOptions.skills));
   const selected = Object.entries(manifest?.skills ?? {}).filter(([name, entry]) =>
     wanted.size > 0
       ? wanted.has(name)
@@ -629,7 +629,7 @@ async function stageAiTools(
       path: join(target, name, ...file.split("/")),
     })),
   );
-  await asyncTools.mapConcurrent(
+  await asyncUtils.mapConcurrent(
     files,
     async (item) => {
       const body = await download(item.url, maxBytes);
@@ -669,10 +669,10 @@ async function stageViaSkillsCli(
     "--copy",
     "-y",
   ];
-  for (const skill of string.parseList(sourceOptions.skills)) {
+  for (const skill of stringUtils.parseList(sourceOptions.skills)) {
     args.push("--skill", skill);
   }
-  if (string.parseList(sourceOptions.skills).length === 0) args.push("--skill", "*");
+  if (stringUtils.parseList(sourceOptions.skills).length === 0) args.push("--skill", "*");
 
   const result = await exec.spawn(cli.command, args, {
     cwd: target,
@@ -721,7 +721,7 @@ async function stageViaFetch(
     );
   }
   const buffer = await download(url.toString(), resolveMaxBytes(sourceOptions, options));
-  const name = string.toSlug(deriveSkillName(url.toString())) || "remote-skill";
+  const name = stringUtils.toSlug(deriveSkillName(url.toString())) || "remote-skill";
   const skillDir = join(target, name);
   await mkdir(skillDir, { recursive: true });
   await writeFile(join(skillDir, "SKILL.md"), buffer);
@@ -741,8 +741,8 @@ async function download(url: string, maxBytes: number): Promise<Buffer> {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS),
   }).catch((err) => {
-    throw new Error(`download failed (${url}): ${error.errorMessage(err)}`, {
-      cause: error.toError(err),
+    throw new Error(`download failed (${url}): ${errorUtils.errorMessage(err)}`, {
+      cause: errorUtils.toError(err),
     });
   });
   if (!response.ok) {

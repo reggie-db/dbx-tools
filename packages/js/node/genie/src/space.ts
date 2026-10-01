@@ -23,7 +23,7 @@
 
 import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
-import { error, json, log, object, string } from "@dbx-tools/shared-core";
+import { errorUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/space");
@@ -93,7 +93,7 @@ export async function getGenieSpace(
     if (!serialized || !isSerializedSpaceForbidden(err)) throw err;
     logger.debug("serialized-space:forbidden", {
       spaceId,
-      error: error.errorMessage(err),
+      error: errorUtils.errorMessage(err),
     });
     raw = await request(false);
   }
@@ -107,7 +107,7 @@ export async function getGenieSpace(
  * SDK surfaces the error code without always carrying a status.
  */
 function isSerializedSpaceForbidden(err: unknown): boolean {
-  const context = error.errorContext(err);
+  const context = errorUtils.errorContext(err);
   return (
     context.hasStatusCode(403) ||
     context.hasMessage("permission denied") ||
@@ -148,7 +148,7 @@ export function genieSampleQuestions(space: GenieSpace): string[] {
   return [
     ...object
       .sequence(sampleQuestions as SerializedSampleQuestion[])
-      .map((entry) => string.firstNonEmpty(entry?.question))
+      .map((entry) => stringUtils.firstNonEmpty(entry?.question))
       .nonNull()
       .distinct(),
   ];

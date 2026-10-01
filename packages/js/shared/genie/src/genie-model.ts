@@ -38,7 +38,7 @@
  * @module
  */
 
-import { string } from "@dbx-tools/shared-core";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { z } from "zod";
 import * as dashboards from "./dashboards.ts";
 
@@ -280,7 +280,7 @@ export function isTerminalStatus(s: MessageStatus | undefined): s is TerminalSta
  * Convert a raw Genie wire status (`FETCHING_METADATA`,
  * `ASKING_AI`, `EXECUTING_QUERY`, ...) into a short, sentence-cased
  * label safe to drop into a UI pill. Known states get a curated
- * label; unknown states fall back to `string.tokenizeWithOptions`
+ * label; unknown states fall back to `stringUtils.tokenizeWithOptions`
  * so new states still render cleanly without code changes.
  *
  * Pure (no Node-only deps), safe for browser bundles. Both the
@@ -306,9 +306,9 @@ export function humanizeStatus(status: MessageStatus): string {
     case "CANCELLED":
       return "Cancelled";
     default:
-      return [...string.tokenizeWithOptions({ capitalize: true, lowerCase: true }, status)].join(
-        " ",
-      );
+      return [
+        ...stringUtils.tokenizeWithOptions({ capitalize: true, lowerCase: true }, status),
+      ].join(" ");
   }
 }
 

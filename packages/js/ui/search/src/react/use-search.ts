@@ -4,7 +4,7 @@
 
 import { useAiSearchQuery, type AiSearchRequest } from "@databricks/appkit-ui/react/beta";
 import {
-  search as sharedSearch,
+  searchSchemas,
   type SearchClientConfig,
   type SearchHit,
   type SearchMode,
@@ -52,7 +52,7 @@ const UNIVERSAL_SEARCH_PATH = "/api/search/universal";
 
 /** Validate one universal-search response with the owning shared schema. */
 export function parseUniversalSearchResult(value: unknown): SearchResult {
-  return sharedSearch.searchResultSchema.parse(value);
+  return searchSchemas.searchResultSchema.parse(value);
 }
 
 function toHits(
@@ -94,7 +94,7 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         return;
       }
       if (!options.universal) {
-        const resolvedQueryType = sharedSearch.toAiSearchQueryType(options.mode);
+        const resolvedQueryType = searchSchemas.toAiSearchQueryType(options.mode);
         const request: AiSearchRequest = {
           queryText: text,
           ...(options.limit ? { numResults: options.limit } : {}),

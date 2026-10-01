@@ -42,8 +42,8 @@ import {
   getWorkspaceClient,
   ValidationError,
 } from "@databricks/appkit";
-import { config as coreConfig, project } from "@dbx-tools/core";
-import { async, log, object, string } from "@dbx-tools/shared-core";
+import { configUtils, projectUtils } from "@dbx-tools/core";
+import { asyncUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import { toContext } from "./databricks.ts";
@@ -195,7 +195,7 @@ const operationSchema = z.object({
 type Operation = z.infer<typeof operationSchema>;
 
 /** `PGPORT` must land inside the TCP port range. */
-const portSchema = z.coerce.number().int().min(1).max(coreConfig.MAX_TCP_PORT);
+const portSchema = z.coerce.number().int().min(1).max(configUtils.MAX_TCP_PORT);
 
 /**
  * Validate a `PGPORT`-shaped value. Returns `undefined` when unset, and throws
@@ -209,7 +209,7 @@ export function parsePort(value: string | number | undefined): number | undefine
     throw ValidationError.invalidValue(
       "PGPORT",
       value,
-      `a TCP port between 1 and ${coreConfig.MAX_TCP_PORT}`,
+      `a TCP port between 1 and ${configUtils.MAX_TCP_PORT}`,
     );
   }
   return parsed.data;
@@ -246,14 +246,14 @@ export function nextPollDelay(attempt: number, baseMs: number): number {
  * instead of finishing its backoff first.
  */
 export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal): Promise<void> {
-  return async.sleep(nextPollDelay(attempt, baseMs), signal);
+  return asyncUtils.sleep(nextPollDelay(attempt, baseMs), signal);
 }
 
 /**
  * Pull resolver inputs from `process.env`, parse the address blob, and
  * layer explicit config on top with this precedence:
  *
- *   `config.<field>` > `coreConfig.resolveValue` (shared config sources) >
+ *   `config.<field>` > `configUtils.resolveValue` (shared config sources) >
  *   whatever {@link parseAddress} recovered from the
  *   `endpoint` / `LAKEBASE_ENDPOINT` blob.
  *
@@ -264,10 +264,10 @@ export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal)
 export async function readLakebaseInputs(
   config?: LakebaseResolverInputs,
 ): Promise<LakebaseResolverInputs> {
-  const rawAddress = config?.endpoint ?? coreConfig.resolveValue("LAKEBASE_ENDPOINT");
+  const rawAddress = config?.endpoint ?? configUtils.resolveValue("LAKEBASE_ENDPOINT");
   const parsed = parseAddress(rawAddress);
-  const portEnv = parsePort(coreConfig.resolveValue("PGPORT"));
-  const sslModeEnv = parseSslMode(coreConfig.resolveValue("PGSSLMODE"));
+  const portEnv = parsePort(configUtils.resolveValue("PGPORT"));
+  const sslModeEnv = parseSslMode(configUtils.resolveValue("PGSSLMODE"));
   const configuredSslMode = parseSslMode(config?.sslMode);
   const parsedSslMode = parseSslMode(parsed.sslMode);
   return {
@@ -277,8 +277,8 @@ export async function readLakebaseInputs(
     // bare hostnames set `host` instead and leave `endpoint` undefined
     // until the REST resolver fills it in.
     endpoint: parsed.endpoint,
-    database: config?.database ?? coreConfig.resolveValue("PGDATABASE") ?? parsed.database,
-    host: config?.host ?? coreConfig.resolveValue("PGHOST") ?? parsed.host,
+    database: config?.database ?? configUtils.resolveValue("PGDATABASE") ?? parsed.database,
+    host: config?.host ?? configUtils.resolveValue("PGHOST") ?? parsed.host,
     port: config?.port ?? portEnv ?? parsed.port,
     sslMode: configuredSslMode ?? sslModeEnv ?? parsedSslMode,
     autoCreate: config?.autoCreate,
@@ -668,8 +668,8 @@ async function pickOrCreateProject(
  * `autoCreate` id in that case.
  */
 async function defaultProjectId(): Promise<string> {
-  const name = project.name();
-  const slug = string.toSlugWithOptions({ maxLength: PROJECT_ID_MAX_LEN }, name);
+  const name = projectUtils.name();
+  const slug = stringUtils.toSlugWithOptions({ maxLength: PROJECT_ID_MAX_LEN }, name);
   if (!slug || !/^[a-z]/.test(slug)) {
     logger.warn("autopg: project name does not slugify to a Lakebase project id", { name });
     throw ConfigurationError.invalidConnection(

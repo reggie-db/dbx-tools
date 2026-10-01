@@ -45,13 +45,13 @@ result back into `BrandProvider` to update AppKit tokens, document metadata,
 brand assets, and brand-aware feature UI together.
 
 ```tsx
-import { brand } from "@dbx-tools/shared-core";
+import { brandUtils } from "@dbx-tools/shared-core";
 import { BrandPicker } from "@dbx-tools/ui-appkit/react";
 import { BrandProvider } from "@dbx-tools/ui-branding/react";
 import { useState } from "react";
 
 export function BrandSettings() {
-  const [context, setContext] = useState(brand.defaultBrandContext);
+  const [context, setContext] = useState(brandUtils.defaultBrandContext);
   return (
     <BrandProvider context={context} applyToDocument>
       <BrandPicker value={context} onChange={setContext} />

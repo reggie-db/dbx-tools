@@ -14,7 +14,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
 
-import { bin, config } from "@dbx-tools/core";
+import { bin, configUtils } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
@@ -72,22 +72,22 @@ export function resolveFrpConfig(opts: {
   targetPort?: number;
 }): FrpConfig | undefined {
   const publicDomain = bareHost(
-    config.string(
+    configUtils.string(
       opts.publicDomain,
       ["TUNNEL_FRP_PUBLIC_DOMAIN", "TUNNEL_PUBLIC_DOMAIN"],
       TUNNEL_CONFIG,
     ),
   );
   if (!publicDomain) return undefined;
-  const server = bareHost(config.string(opts.server, "FRP_SERVER")) ?? publicDomain;
-  const serverPort = config.port(opts.serverPort, "FRP_SERVER_PORT", 443);
-  const protocol = config.string(opts.protocol, "FRP_PROTOCOL") ?? "wss";
-  const token = config.string(opts.token, ["FRP_TOKEN", "TUNNEL_TOKEN"]);
+  const server = bareHost(configUtils.string(opts.server, "FRP_SERVER")) ?? publicDomain;
+  const serverPort = configUtils.port(opts.serverPort, "FRP_SERVER_PORT", 443);
+  const protocol = configUtils.string(opts.protocol, "FRP_PROTOCOL") ?? "wss";
+  const token = configUtils.string(opts.token, ["FRP_TOKEN", "TUNNEL_TOKEN"]);
   const proxyName =
-    config.string(opts.proxyName, "FRP_PROXY_NAME") ?? publicDomain.split(".")[0] ?? "app";
-  const appName = config.string(undefined, "DATABRICKS_APP_NAME") ?? proxyName;
-  const path = normalizePath(config.string(opts.path, "FRP_PATH") ?? appName);
-  const stripPrefix = config.boolean(opts.stripPrefix, "FRP_STRIP_PREFIX") ?? path !== "/";
+    configUtils.string(opts.proxyName, "FRP_PROXY_NAME") ?? publicDomain.split(".")[0] ?? "app";
+  const appName = configUtils.string(undefined, "DATABRICKS_APP_NAME") ?? proxyName;
+  const path = normalizePath(configUtils.string(opts.path, "FRP_PATH") ?? appName);
+  const stripPrefix = configUtils.boolean(opts.stripPrefix, "FRP_STRIP_PREFIX") ?? path !== "/";
   return {
     publicDomain,
     server,

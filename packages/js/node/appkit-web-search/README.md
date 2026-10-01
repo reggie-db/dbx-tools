@@ -52,8 +52,8 @@ tool pair plus an AppKit plugin.
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
-import { plugin as webSearchPlugin } from "@dbx-tools/appkit-web-search";
-import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import { webSearch } from "@dbx-tools/appkit-web-search";
+import { agents, mastra } from "@dbx-tools/appkit-mastra";
 
 const researcher = agents.createAgent({
   instructions: "Research questions using web_search, then read sources with web_fetch.",
@@ -66,11 +66,11 @@ await createApp({
   plugins: [
     server(),
     lakebase(),
-    webSearchPlugin.webSearch({
+    webSearch({
       model: "gemini", // defaults to Gemini, then GPT, when omitted
       allowedUrls: ["*.databricks.com", "docs.example.com"],
     }),
-    mastraPlugin.mastra({ agents: researcher, storage: true }),
+    mastra({ agents: researcher, storage: true }),
   ],
 });
 ```

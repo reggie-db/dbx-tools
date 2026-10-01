@@ -3,7 +3,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { project } from "@dbx-tools/core";
+import { projectUtils } from "@dbx-tools/core";
 import { json, log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import type { ReleaseUnitGraph } from "../src/release-catalog.ts";
@@ -53,7 +53,7 @@ if (import.meta.main) {
   new Command()
     .option("--root <path>", "repository root")
     .action((options: { root?: string }) => {
-      bootstrapReleaseUnits(resolve(options.root ?? project.root() ?? process.cwd()));
+      bootstrapReleaseUnits(resolve(options.root ?? projectUtils.root() ?? process.cwd()));
     })
     .parse();
 }

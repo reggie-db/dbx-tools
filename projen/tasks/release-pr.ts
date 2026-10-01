@@ -10,8 +10,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exec, project } from "@dbx-tools/core";
-import { async as asyncModule, json, log, object } from "@dbx-tools/shared-core";
+import { exec, projectUtils } from "@dbx-tools/core";
+import { asyncUtils, json, log, object } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
 import { generateReleaseSummary } from "./release-summary.ts";
@@ -104,7 +104,7 @@ async function waitForPullRequestMerge(
     const [status, mergeSha] = state.split("\t");
     if (status === "MERGED" && mergeSha) return mergeSha;
     if (status === "CLOSED") throw new Error(`Release pull request closed without merging`);
-    await asyncModule.sleep(2_000);
+    await asyncUtils.sleep(2_000);
   }
   throw new Error(`Release pull request did not merge within ${timeoutMs}ms`);
 }
@@ -144,7 +144,7 @@ async function waitForReleaseWorkflow(
       { env },
     );
     if (runId) break;
-    await asyncModule.sleep(5_000);
+    await asyncUtils.sleep(5_000);
   }
   if (!runId) throw new Error(`Release workflow did not start within ${timeoutMs}ms`);
   await runTaskCommandAsync(root, "gh", ["run", "watch", runId, "--exit-status"], {
@@ -160,7 +160,7 @@ function githubAccount(root: string): {
   login: string;
   token: string;
 } {
-  const repository = project.repositoryUrl(root);
+  const repository = projectUtils.repositoryUrl(root);
   if (!repository) throw new Error("Release preparation requires a GitHub repository");
   const identity = githubRepositoryIdentity(repository);
   const status = exec
@@ -301,7 +301,7 @@ program
       wait: boolean;
       waitTimeoutMinutes: string;
     }) => {
-      const root = project.root() ?? process.cwd();
+      const root = projectUtils.root() ?? process.cwd();
       const waitTimeoutMinutes = object.toNumber(opts.waitTimeoutMinutes, {
         separators: false,
         percent: false,

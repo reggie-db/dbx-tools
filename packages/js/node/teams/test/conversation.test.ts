@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { activity as sharedActivity, card } from "@dbx-tools/shared-teams";
+import { teamsActivity, card } from "@dbx-tools/shared-teams";
 import {
   BOT_ACCOUNT,
   documentCardSpec,
@@ -32,7 +32,7 @@ const stubAgent = (spec: unknown, answer?: AgentResult) => {
   return { agent, calls };
 };
 
-const userMessage = (text: string): sharedActivity.Activity => ({
+const userMessage = (text: string): teamsActivity.Activity => ({
   type: "message",
   text,
   from: { id: "user-1", name: "Reggie" },
@@ -54,12 +54,12 @@ describe("teams conversation turn", () => {
     assert.equal(reply.conversation?.id, "conv-1");
     // The card rides as a Teams-tagged attachment, not a bare body field.
     assert.equal(reply.attachments?.length, 1);
-    assert.equal(reply.attachments?.[0].contentType, sharedActivity.ADAPTIVE_CARD_CONTENT_TYPE);
-    const [document] = sharedActivity.cardsOf(reply);
+    assert.equal(reply.attachments?.[0].contentType, teamsActivity.ADAPTIVE_CARD_CONTENT_TYPE);
+    const [document] = teamsActivity.cardsOf(reply);
     assert.equal(document.type, "AdaptiveCard");
     assert.equal(document.version, card.ADAPTIVE_CARD_VERSION);
     // The whole reply round-trips through the wire contract.
-    sharedActivity.activityResponseSchema.parse({ activities: [reply] });
+    teamsActivity.activityResponseSchema.parse({ activities: [reply] });
   });
 
   it("threads the conversation onto agent memory so a chat continues", async () => {
@@ -113,7 +113,7 @@ describe("teams conversation turn", () => {
     assert.ok(calls[1].prompt.includes(answer), calls[1].prompt);
     assert.equal(calls[1].options.memory, undefined);
     // ...and the values survive into the rendered card.
-    const [document] = sharedActivity.cardsOf(reply);
+    const [document] = teamsActivity.cardsOf(reply);
     assert.ok(
       document.body.some((block) => block.type === "TextBlock" && block.text?.includes("$412.80")),
     );
@@ -176,7 +176,7 @@ describe("teams turn request context", () => {
     const { agent, calls } = stubAgent({ title: "No context" });
     const [reply] = await runCardTurn(agent, userMessage("anything"));
     assert.equal(calls[0].options.requestContext, undefined);
-    assert.equal(sharedActivity.cardsOf(reply).length, 1);
+    assert.equal(teamsActivity.cardsOf(reply).length, 1);
   });
 
   it("reads the factory off the agent plugin, bound to its registry", async () => {
@@ -283,7 +283,7 @@ describe("teams document-shaped card recovery", () => {
       },
     };
     const [reply] = await runCardTurn(agent, userMessage("pspw?"));
-    const [built] = sharedActivity.cardsOf(reply);
+    const [built] = teamsActivity.cardsOf(reply);
     const texts = built.body.filter((block) => block.type === "TextBlock").map((b) => b.text);
     assert.equal(texts[0], "Inside Sales PSPW $48,138, up 7.26% YoY");
     // The FactSet survived, which the prose fallback could never have produced.
@@ -329,7 +329,7 @@ describe("teams agent resolution", () => {
  * answer, so the answer must survive.
  */
 describe("teams turn output recovery", () => {
-  const message = (text: string): sharedActivity.Activity => ({
+  const message = (text: string): teamsActivity.Activity => ({
     type: "message",
     text,
     from: { id: "user-1" },
@@ -337,8 +337,8 @@ describe("teams turn output recovery", () => {
   });
 
   /** Read the compiled card off the first reply activity. */
-  const cardOf = (activities: sharedActivity.Activity[]) =>
-    sharedActivity.cardsOf(activities[0]!)[0]!;
+  const cardOf = (activities: teamsActivity.Activity[]) =>
+    teamsActivity.cardsOf(activities[0]!)[0]!;
 
   /** The text of every `TextBlock` in a compiled card. */
   const textsOf = (document: card.AdaptiveCard) =>
@@ -441,15 +441,15 @@ describe("teams turn output recovery", () => {
  * the title.
  */
 describe("teams turn tool-call recovery", () => {
-  const message = (text: string): sharedActivity.Activity => ({
+  const message = (text: string): teamsActivity.Activity => ({
     type: "message",
     text,
     from: { id: "user-1" },
     conversation: { id: "conv-1" },
   });
 
-  const cardOf = (activities: sharedActivity.Activity[]) =>
-    sharedActivity.cardsOf(activities[0]!)[0]!;
+  const cardOf = (activities: teamsActivity.Activity[]) =>
+    teamsActivity.cardsOf(activities[0]!)[0]!;
 
   const titleOf = (document: card.AdaptiveCard) =>
     document.body.find((block) => block.type === "TextBlock")?.text;

@@ -1,22 +1,22 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { async } from "../index.ts";
+import { asyncUtils } from "../index.ts";
 
-describe("async.boundedRetryDelay", () => {
+describe("asyncUtils.boundedRetryDelay", () => {
   it("caps an infinite retry sequence at the last configured delay", () => {
     assert.deepEqual(
-      [0, 1, 2, 3, 4, 5, 50].map((attempt) => async.boundedRetryDelay(attempt)),
+      [0, 1, 2, 3, 4, 5, 50].map((attempt) => asyncUtils.boundedRetryDelay(attempt)),
       [1_000, 2_000, 5_000, 10_000, 30_000, 30_000, 30_000],
     );
   });
 });
 
-describe("async.mapConcurrent", () => {
+describe("asyncUtils.mapConcurrent", () => {
   it("bounds active callbacks and preserves result order", async () => {
     let active = 0;
     let peak = 0;
-    const results = await async.mapConcurrent(
+    const results = await asyncUtils.mapConcurrent(
       [4, 3, 2, 1],
       async (value) => {
         active += 1;
@@ -34,7 +34,7 @@ describe("async.mapConcurrent", () => {
   it("settles every value and aggregates failures in input order", async () => {
     const attempted: number[] = [];
     await assert.rejects(
-      async.mapConcurrent(
+      asyncUtils.mapConcurrent(
         [0, 1, 2, 3],
         async (value) => {
           attempted.push(value);
@@ -53,7 +53,7 @@ describe("async.mapConcurrent", () => {
 
   it("rejects invalid concurrency", async () => {
     await assert.rejects(
-      async.mapConcurrent([1], async (value) => value, { concurrency: 0 }),
+      asyncUtils.mapConcurrent([1], async (value) => value, { concurrency: 0 }),
       /concurrency must be a positive integer/,
     );
   });
@@ -62,7 +62,7 @@ describe("async.mapConcurrent", () => {
 describe("poll", () => {
   it("waits between values skipped by the distinct filter", async () => {
     let attempts = 0;
-    const values = async.poll(
+    const values = asyncUtils.poll(
       () => {
         attempts += 1;
         return "same";
@@ -83,22 +83,22 @@ describe("poll", () => {
   });
 });
 
-describe("async.combineAbortSignals", () => {
+describe("asyncUtils.combineAbortSignals", () => {
   it("returns undefined when every source is absent", () => {
-    assert.equal(async.combineAbortSignals(), undefined);
-    assert.equal(async.combineAbortSignals(undefined, undefined), undefined);
+    assert.equal(asyncUtils.combineAbortSignals(), undefined);
+    assert.equal(asyncUtils.combineAbortSignals(undefined, undefined), undefined);
   });
 
   it("passes a lone signal through without wrapping it", () => {
     const { signal } = new AbortController();
-    assert.equal(async.combineAbortSignals(signal), signal);
-    assert.equal(async.combineAbortSignals(undefined, signal, undefined), signal);
+    assert.equal(asyncUtils.combineAbortSignals(signal), signal);
+    assert.equal(asyncUtils.combineAbortSignals(undefined, signal, undefined), signal);
   });
 
   it("aborts when any source aborts, carrying that source's reason", () => {
     for (const index of [0, 1, 2]) {
       const controllers = [new AbortController(), new AbortController(), new AbortController()];
-      const combined = async.combineAbortSignals(...controllers.map((c) => c.signal));
+      const combined = asyncUtils.combineAbortSignals(...controllers.map((c) => c.signal));
       assert.equal(combined?.aborted, false);
       controllers[index]!.abort(new Error(`source ${index}`));
       assert.equal(combined?.aborted, true);
@@ -109,7 +109,7 @@ describe("async.combineAbortSignals", () => {
   it("is already aborted when a source aborted before combining", () => {
     const early = new AbortController();
     early.abort(new Error("gone"));
-    const combined = async.combineAbortSignals(early.signal, new AbortController().signal);
+    const combined = asyncUtils.combineAbortSignals(early.signal, new AbortController().signal);
     assert.equal(combined?.aborted, true);
     assert.equal((combined?.reason as Error).message, "gone");
   });
@@ -117,7 +117,7 @@ describe("async.combineAbortSignals", () => {
   it("does not propagate back to the sources", () => {
     const first = new AbortController();
     const second = new AbortController();
-    const combined = async.combineAbortSignals(first.signal, second.signal);
+    const combined = asyncUtils.combineAbortSignals(first.signal, second.signal);
     first.abort();
     assert.equal(combined?.aborted, true);
     assert.equal(second.signal.aborted, false);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ConfigurationError, Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
 import { createTestPlugin, createTestPluginContext } from "@databricks/appkit/testing";
-import { data, instance, require as requirePlugin } from "../src/plugin.ts";
+import { data, instance, require as requirePlugin } from "../src/plugin-registry.ts";
 
 class FakeLakebasePlugin extends Plugin {
   static manifest = {
