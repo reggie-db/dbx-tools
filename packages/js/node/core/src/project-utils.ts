@@ -85,6 +85,7 @@ function gitRoot(cwd?: string): string | undefined {
   return commandRoot("git", ["rev-parse", "--show-toplevel"], resolved);
 }
 
+/** Resolve the nearest project root without walking above its npm or Git boundary. */
 export function root(cwd?: string): string | undefined {
   const resolved = resolveWorkingDirectory(cwd);
   let current = resolved;
