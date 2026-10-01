@@ -2074,7 +2074,10 @@ Hard rules:
   checksums and provenance, then stamp the dedicated structured version section.
   The committed manifest uses portable target keys for review; each target runner
   validates the committed source hash and derives the reusable asset key with its
-  actual compiler identity.
+  actual compiler identity. The GitHub Release job downloads every
+  `*-raw` matrix artifact and attaches its tarball plus checksum to the durable
+  release; listing `dist/rust-raw/*` without that download leaves an empty glob
+  and silently defeats future reuse.
 - Never patch arbitrary binary strings or use `sed` against executables.
 
 ## The `dbx` CLI
