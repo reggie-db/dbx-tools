@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { log } from "@dbx-tools/shared-core";
 import { parse, stringify } from "smol-toml";
+import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import type { RustBindingMapping, RustWorkspaceMapping } from "../src/project-rs.ts";
-import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:publish-uniffi-local");
 

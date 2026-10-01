@@ -1502,8 +1502,9 @@ var SECTION_BY_FORMAT = {
   pe: ".dbxver"
 };
 function binaryFormat(data) {
-  if (data.length >= 4 && data.subarray(0, 4).equals(Buffer.from([127, 69, 76, 70])))
+  if (data.length >= 4 && data.subarray(0, 4).equals(Buffer.from([127, 69, 76, 70]))) {
     return "elf";
+  }
   if (data.length >= 2 && data.subarray(0, 2).toString("ascii") === "MZ")
     return "pe";
   if (data.length >= 4 && MACH_O_MAGICS.has(data.subarray(0, 4).toString("hex")))
@@ -1658,8 +1659,9 @@ function stampCommand(args) {
     },
     strict: true
   });
-  if (!values.binary || values.version === undefined)
+  if (!values.binary || values.version === undefined) {
     throw new Error("stamp requires --binary and --version");
+  }
   if (!stamp(values.binary, values.version, { objcopy: values.objcopy })) {
     throw new Error(`no structured version section found in ${values.binary}`);
   }
@@ -1674,8 +1676,9 @@ function stampTreeCommand(args) {
     },
     strict: true
   });
-  if (!values.root || values.version === undefined)
+  if (!values.root || values.version === undefined) {
     throw new Error("stamp-tree requires --root and --version");
+  }
   stampTree(values.root, values.version, { objcopy: values.objcopy });
 }
 function main(args = process.argv.slice(2)) {

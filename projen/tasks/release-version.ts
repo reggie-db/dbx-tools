@@ -10,10 +10,11 @@ export function assertReleaseVersion(
   options: { root?: string; prefixes?: readonly string[]; assertNext?: boolean } = {},
 ): void {
   const parsed = parseSemver(version);
-  if (!parsed)
+  if (!parsed) {
     throw new Error(
       `release version must be an exact stable x.y.z, got ${JSON.stringify(version)}`,
     );
+  }
   if (!options.assertNext) return;
   const root = resolve(options.root ?? project.root() ?? process.cwd());
   const prefixes = options.prefixes?.length ? options.prefixes : ["v"];

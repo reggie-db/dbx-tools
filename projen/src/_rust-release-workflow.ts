@@ -5,9 +5,15 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TextFile, javascript } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
-import { BUN_VERSION } from "./bun-workflow.ts";
 import type { RustProject } from "./_rust-project.ts";
+import { BUN_VERSION } from "./bun-workflow.ts";
 import type { DBXToolsJavaScriptProject } from "./project-js.ts";
+import type {
+  DBXToolsRustWorkspaceOptions,
+  RustBindingMapping,
+  RustReleaseOs,
+  UniFFIReleaseTarget,
+} from "./project-rs.ts";
 import { defaultReleaseUnitId } from "./release-catalog.ts";
 import {
   RELEASE_SHA,
@@ -23,12 +29,6 @@ import {
   releaseArtifactSteps,
   releaseStageCondition,
 } from "./release.ts";
-import type {
-  DBXToolsRustWorkspaceOptions,
-  RustBindingMapping,
-  RustReleaseOs,
-  UniFFIReleaseTarget,
-} from "./project-rs.ts";
 
 const require = createRequire(import.meta.url);
 

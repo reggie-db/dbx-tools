@@ -88,7 +88,9 @@ export function classifyEndpointClassesWithRust(
 }
 
 /** Normalize serialized SDK endpoint records through the Rust-owned catalogue policy. */
-export function normalizeEndpointsWithRust(endpoints: readonly unknown[]): ServingEndpointSummary[] {
+export function normalizeEndpointsWithRust(
+  endpoints: readonly unknown[],
+): ServingEndpointSummary[] {
   return normalizeServingEndpointsJson(JSON.stringify({ endpoints })).map(fromNativeEndpoint);
 }
 

@@ -49,8 +49,11 @@ function startPasskey(autoFill: boolean): void {
     .then((authenticated) => {
       if (passkeyOperation !== operation) return;
       passkeyOperation = undefined;
-      if (authenticated) redirectAfterSignIn();
-      else if (!autoFill) say("Unable to sign in with a passkey. Use email recovery instead.", true);
+      if (authenticated) {
+        redirectAfterSignIn();
+      } else if (!autoFill) {
+        say("Unable to sign in with a passkey. Use email recovery instead.", true);
+      }
     })
     .catch(() => {
       if (passkeyOperation !== operation) return;

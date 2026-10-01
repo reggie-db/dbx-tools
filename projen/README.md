@@ -1,6 +1,6 @@
 # @dbx-tools/projen
 
-Projen engine for dbx-tools pnpm workspaces.
+Projen engine for Bun-first dbx-tools workspaces.
 
 Import this package from `.projenrc.ts` when a repository should discover
 packages from the filesystem and generate manifests, tsconfigs,
@@ -11,9 +11,10 @@ Key features:
 - Filesystem package discovery: every `src`-bearing folder under configured
   workspace roots becomes a TypeScript package.
 - Tag-driven runtime defaults for shared libraries, Node packages, CLIs,
-  servers, OpenAPI clients, and React/Vite UI packages.
-- Generated package manifests, tsconfigs, package-root barrels, Vite configs,
-  pnpm workspace/catalog files, and VS Code settings.
+  servers, OpenAPI clients, and React/browser UI packages.
+- Generated package manifests, tsconfigs, package-root barrels, Bun app configs,
+  VS Code settings, and a committed `pnpm-workspace.yaml` retained for
+  Databricks Apps deployment.
 - Extensible mixin system so repositories can add deps, tasks, or generated
   files based on package predicates.
 - OpenAPI client generation from tsoa controllers and zod schema generation from
@@ -163,13 +164,15 @@ new projenProject.DBXToolsRustProject({
 The project emits concrete standalone Cargo metadata plus `compile`, `test`,
 `package`, `lint`, `format`, and `format:check` tasks. A nested standalone
 project declares its own empty Cargo workspace so a surrounding repository
-workspace does not absorb it accidentally. `DBXToolsRustWorkspace` constructs
-the same class with workspace-owned metadata and keeps aggregate binding and
-release coordination. `DBXToolsRustWorkspaceOptions.private` supplies the
-default Cargo publication policy for every discovered crate; a package-level
-`private` value overrides it. The positional constructor and nested
-`RustPackageOptions` compatibility shape remain deprecated until the next major
-release.
+workspace does not absorb it accidentally. The `examples` option emits explicit
+Cargo example targets and `required-features`, so an optional code generator is
+excluded from ordinary workspace tests until its feature is enabled.
+`DBXToolsRustWorkspace` constructs the same class with workspace-owned metadata
+and keeps aggregate binding and release coordination.
+`DBXToolsRustWorkspaceOptions.private` supplies the default Cargo publication
+policy for every discovered crate; a package-level `private` value overrides it.
+The positional constructor and nested `RustPackageOptions` compatibility shape
+remain deprecated until the next major release.
 
 Rust dependencies between binding-enabled workspace crates become Node
 `workspace:*` and Python `internalDependencies` automatically. Python generation
@@ -288,11 +291,13 @@ dependencies and metadata to its existing manifest.
 
 The workspace npm publisher owns compilation for normal release publication. It
 selects every publishable package with compiled entry points, invokes one
-root-level filtered compile, then packs each package with lifecycle scripts
-disabled. Local release preparation passes `--skip-compile` only after its
-immediately preceding validation compile and verifies every expected output
-exists before reuse. Package `prepack` tasks remain available for standalone
-publishes without multiplying `tsc --build` across the monorepo release flow.
+root-level filtered compile, then packs each package exactly once with lifecycle
+scripts disabled. It validates the archive identity, configured access,
+integrity, and repository metadata before publishing those same bytes. Local
+release preparation passes `--skip-compile` only after its immediately preceding
+validation compile and verifies every expected output exists before reuse.
+Package `prepack` tasks remain available for standalone publishes without
+multiplying `tsc --build` across the monorepo release flow.
 
 ## Customize Packages With Mixins
 
@@ -523,7 +528,8 @@ invokes, so there is no second place to run the same thing:
   edit/compile loop to one package.
 - `build` / `package` - a complete compile/test/pack lifecycle when invoked in
   one package. Release preparation validates through the root's filtered tasks,
-  and publication uses concurrent `bun publish --ignore-scripts`. The package phase also packs
+  and publication concurrently uploads archives that were each packed and
+  validated once with lifecycle scripts disabled. The package phase also packs
   with `--ignore-scripts` because its build already compiled; `prepack` remains
   available for a standalone publish that did not run `build` first.
 - `install` / `install:ci` / `default` / `pre-compile` / `post-compile` -

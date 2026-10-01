@@ -18,7 +18,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
-import { Component, DependencyType, TextFile } from "projen";
+import { Component, DependencyType, JsonFile, TextFile } from "projen";
 
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
@@ -561,6 +561,7 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
 // exposing both Mastra tools. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/path@workspace:^",
     "@dbx-tools/model@workspace:^",
@@ -629,6 +630,7 @@ project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) 
 // AppKit + Mastra are runtime deps. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-teams@workspace:^",
     "@databricks/appkit@catalog:",
@@ -888,6 +890,17 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "http-proxy-3@catalog:",
   );
   p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
+  new JsonFile(p, "assets/tsconfig.json", {
+    marker: false,
+    obj: {
+      extends: "../tsconfig.json",
+      compilerOptions: {
+        lib: ["ES2022", "DOM", "DOM.Iterable"],
+        noEmit: true,
+      },
+      include: ["*.ts"],
+    },
+  });
   // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
   // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
   // `--insecure` mode) needs no mail transport, so it is an optional peer rather
@@ -1239,6 +1252,13 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       features: {
         "contract-generation": ["dep:ts-rs"],
       },
+      examples: [
+        {
+          name: "generate-model-contracts",
+          path: "examples/generate-model-contracts.rs",
+          requiredFeatures: ["contract-generation"],
+        },
+      ],
       dependencies: {
         [`${root.scope}-core`]: { path: "../core" },
         "difflib-fast": { workspace: true },

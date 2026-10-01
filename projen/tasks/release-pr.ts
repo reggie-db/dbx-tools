@@ -24,15 +24,15 @@ import {
   type VersionLevel,
 } from "../src/_release-platform.ts";
 import {
-  RELEASE_SUMMARY_PROVIDER_NAMES,
-  type ReleaseSummaryProviderName,
-} from "../src/release-dispatch.ts";
-import {
   captureTaskCommand,
   runTaskCommand,
   runTaskCommandAsync,
   taskCommandSucceeds,
 } from "../src/_task-command.ts";
+import {
+  RELEASE_SUMMARY_PROVIDER_NAMES,
+  type ReleaseSummaryProviderName,
+} from "../src/release-dispatch.ts";
 import {
   githubAccountSupportsWorkflowChanges,
   githubAuthenticatedAccounts,

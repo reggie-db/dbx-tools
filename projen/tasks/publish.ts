@@ -2,7 +2,7 @@
 /**
  * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]`
  * - verify every workspace member and the Bun lock carry the release version,
- * then publish each package owned by the standard Node release with `bun publish`.
+ * then pack and publish each package owned by the standard Node release.
  *
  * Bun has no `pnpm -r publish`, so this loop is the recursive-publish stand-in.
  * It leans on native bun for everything bun already does:
@@ -26,14 +26,15 @@
  *     its `#!/usr/bin/env node` shebang, node chokes on the `.ts`
  *     (ERR_UNKNOWN_FILE_EXTENSION). We merge `publishConfig` onto the top-level
  *     manifest before packing so the tarball advertises the compiled `lib/` tree;
- *   - **compiled output** is emitted once, before publishing, by one root-level
+ *   - **compiled output** is emitted once, before packing, by one root-level
  *     filtered `bun run` that fans out to every publishable member in parallel.
- *     The later `bun publish --ignore-scripts` calls therefore pack the already
- *     compiled `lib/` trees instead of serially repeating each member's
- *     `prepack`. Packages retain their `prepack` task for standalone publishes.
- *   - **release recovery** packs each exact version before upload and compares
- *     its integrity and repository identity with registry metadata. A matching
- *     immutable version is skipped, while any mismatch fails the retry.
+ *     Every package is then packed once with lifecycle scripts disabled. The
+ *     exact validated archive is passed to `bun publish`, so upload never
+ *     repacks or repeats a member's `prepack`. Packages retain `prepack` for
+ *     standalone publishes.
+ *   - **release recovery** compares each packed archive's integrity and
+ *     repository identity with registry metadata. A matching immutable version
+ *     is skipped, while any mismatch fails the retry.
  *
  * `--dry-run` forwards to `bun publish`: it packs + validates
  * but uploads nothing, so the `release` workflow is testable end-to-end via a
@@ -73,6 +74,7 @@ import {
   readNpmArchiveIdentity,
 } from "./publish-npm.ts";
 import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
+import { toPosix } from "../src/packages.ts";
 import type { ReleasePlan } from "../src/release-plan.ts";
 
 const logger = log.logger("projen:publish");
@@ -115,7 +117,7 @@ function manifestsMatchVersions(
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
       version?: string;
     };
-    const path = dir.slice(resolve(root).length + 1).replaceAll("\\", "/");
+    const path = toPosix(dir.slice(resolve(root).length + 1));
     return pkg.version === expected.get(path);
   });
 }
@@ -134,10 +136,7 @@ function lockfileMatchesManifestVersions(root: string, members: readonly string[
       const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
         version?: string;
       };
-      const relative = dir
-        .slice(resolve(root).length + 1)
-        .split("\\")
-        .join("/");
+      const relative = toPosix(dir.slice(resolve(root).length + 1));
       return lock.workspaces?.[relative]?.version === manifest.version;
     });
   } catch {
@@ -266,15 +265,10 @@ const allMembers = workspaceMembers(root)
 const expectedVersions = new Map(
   plan
     ? plan.nodePackages.map((pkg) => [pkg.path, pkg.version] as const)
-    : allMembers.map((dir) => [
-        dir.slice(resolve(root).length + 1).replaceAll("\\", "/"),
-        version!,
-      ]),
+    : allMembers.map((dir) => [toPosix(dir.slice(resolve(root).length + 1)), version!]),
 );
 const members = plan
-  ? allMembers.filter((dir) =>
-      expectedVersions.has(dir.slice(resolve(root).length + 1).replaceAll("\\", "/")),
-    )
+  ? allMembers.filter((dir) => expectedVersions.has(toPosix(dir.slice(resolve(root).length + 1))))
   : allMembers;
 
 if (!manifestsMatchVersions(root, members, expectedVersions)) {

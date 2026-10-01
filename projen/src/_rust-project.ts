@@ -6,8 +6,8 @@ import { string } from "@dbx-tools/shared-core";
 import { License, Project, TextFile, TomlFile, javascript, type Task } from "projen";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
-import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import type { RustReleaseOs } from "./project-rs.ts";
+import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 export interface CargoDependencyOptions {
@@ -29,6 +29,15 @@ export interface RustCliOptions {
   readonly description?: string;
 }
 
+/** Explicit Cargo example target and the feature gate required to compile it. */
+export interface CargoExampleOptions {
+  readonly name: string;
+  /** Source path relative to the crate root. Defaults to Cargo's conventional path. */
+  readonly path?: string;
+  /** Features Cargo must enable before compiling this example. */
+  readonly requiredFeatures?: readonly string[];
+}
+
 /** Cargo package, target, binding, and release behavior shared by every Rust project. */
 export interface RustCrateOptions {
   readonly description?: string;
@@ -42,6 +51,8 @@ export interface RustCrateOptions {
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
   readonly features?: Readonly<Record<string, readonly string[]>>;
   readonly defaultFeatures?: readonly string[];
+  /** Explicit example targets, including optional Cargo feature gates. */
+  readonly examples?: readonly CargoExampleOptions[];
   /** Cargo and release executable name. Defaults to the generated package name. */
   readonly binaryName?: string;
   /** Publish this release binary through the generated `dbx` command registry. */
@@ -368,6 +379,17 @@ export class RustProject extends Project implements DBXToolsProject {
               ...(options.defaultFeatures ? { default: [...options.defaultFeatures] } : {}),
               ...options.features,
             },
+          }
+        : {}),
+      ...(options.examples?.length
+        ? {
+            example: options.examples.map((example) => ({
+              name: example.name,
+              ...(example.path ? { path: example.path } : {}),
+              ...(example.requiredFeatures?.length
+                ? { "required-features": [...example.requiredFeatures] }
+                : {}),
+            })),
           }
         : {}),
       ...(options.dependencies

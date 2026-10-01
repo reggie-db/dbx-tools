@@ -28,8 +28,8 @@ import {
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import { rankEndpointsWithRust } from "./_native.ts";
+import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import { endpointSupportsTools } from "./policy.ts";
 import {
   listServingEndpoints,

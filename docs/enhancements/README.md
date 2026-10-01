@@ -12,10 +12,6 @@ date and final status.
 
 ## Active plans
 
-- [Deep code quality and reuse plan](2026-10-01-deep-code-quality-and-reuse-plan.md)
-  - Tracks verified isolation defects, Rust release/project parity, publication
-    correctness, model and auth ownership, and concrete DRY consolidation after
-    the Kanna audit baseline.
 - [Repository code-quality audit](2026-10-01-repository-code-quality-audit.md)
   - Records the model-proxy metrics redesign, conditional passkey flow, reusable
     Rust Projen project and release helper, release compile ownership, dependency

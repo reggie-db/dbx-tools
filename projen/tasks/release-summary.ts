@@ -8,12 +8,12 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { exec, project } from "@dbx-tools/core";
 import { json, log, object, string } from "@dbx-tools/shared-core";
+import { captureTaskCommand } from "../src/_task-command.ts";
 import {
   RELEASE_SUMMARY_PROVIDER_NAMES,
   releaseSummaryFile,
   type ReleaseSummaryProviderName,
 } from "../src/release-dispatch.ts";
-import { captureTaskCommand } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:release-summary");
 const PROVIDER_TIMEOUT_MS = 60_000;

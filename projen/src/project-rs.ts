@@ -5,23 +5,8 @@ import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Component, Project, TextFile, TomlFile, javascript } from "projen";
 import {
-  DBX_TOOLS_LICENSE,
-  type DBXToolsJavaScriptProject,
-  DBXToolsTypeScriptProject,
-  projectRepositoryUrl,
-} from "./project-js.ts";
-import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
-import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
-import { defaultReleaseUnitId, type ReleaseDependencyInput } from "./release-catalog.ts";
-import {
-  hasNodeRelease,
-  independentReleaseSetupSteps,
-  registerIndependentPublicationJob,
-  tryReleaseWorkflow,
-} from "./release.ts";
-import { readWorkspaceVersion } from "./workspace-version.ts";
-import {
   RustProject,
+  type CargoExampleOptions as RustCargoExampleOptions,
   cargoDependency,
   discoverRustCrates,
   structuredTomlSections,
@@ -48,11 +33,29 @@ import {
   rustNativeNpmPublishJob,
   rustNodeFacadePublishJob,
 } from "./_rust-release-workflow.ts";
+import { toPosix } from "./packages.ts";
+import {
+  DBX_TOOLS_LICENSE,
+  type DBXToolsJavaScriptProject,
+  DBXToolsTypeScriptProject,
+  projectRepositoryUrl,
+} from "./project-js.ts";
+import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
+import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
+import { defaultReleaseUnitId, type ReleaseDependencyInput } from "./release-catalog.ts";
+import {
+  hasNodeRelease,
+  independentReleaseSetupSteps,
+  registerIndependentPublicationJob,
+  tryReleaseWorkflow,
+} from "./release.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 export { discoverRustCrates, hasUniFFIBindings } from "./_rust-project.ts";
 export { orderRustBindings } from "./_rust-release-workflow.ts";
 
 export type CargoDependency = RustCargoDependency;
 export type CargoDependencyOptions = RustCargoDependencyOptions;
+export type CargoExampleOptions = RustCargoExampleOptions;
 export type DBXToolsRustProjectOptions = RustProjectOptions;
 export type LegacyDBXToolsRustProjectOptions = LegacyRustProjectOptions;
 export type RustCrateOptions = RustCrateConfiguration;
@@ -916,7 +919,7 @@ export class DBXToolsRustWorkspace extends Component {
           language: "rust",
           identity: pkg.crateName,
           publish: !pkg.packageOptions.private || pkg.packageOptions.release === true,
-          sourcePaths: [`${relative(project.outdir, pkg.outdir).replaceAll("\\", "/")}/src`],
+          sourcePaths: [`${toPosix(relative(project.outdir, pkg.outdir))}/src`],
           dependencies: [
             ...rustReleaseDependencies(
               project,

@@ -20,11 +20,7 @@
  * @module
  */
 
-import {
-  ConfigurationError,
-  type PluginData,
-  type ToPlugin,
-} from "@databricks/appkit";
+import { ConfigurationError, type PluginData, type ToPlugin } from "@databricks/appkit";
 import { log, type NameLike } from "@dbx-tools/shared-core";
 
 const logger = log.logger("plugin");

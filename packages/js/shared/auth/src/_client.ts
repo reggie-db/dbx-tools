@@ -13,8 +13,8 @@ import { WebAuthnAbortService } from "@simplewebauthn/browser";
 import { createAuthClient } from "better-auth/client";
 import { emailOTPClient } from "better-auth/client/plugins";
 
-import type { AuthStatus } from "./auth.ts";
 import { AUTH_BASE_PATH } from "./_route.ts";
+import type { AuthStatus } from "./auth.ts";
 
 /** @deprecated Import `AUTH_BASE_PATH` from `@dbx-tools/shared-auth`. */
 export const AUTH_BASE = AUTH_BASE_PATH;
@@ -47,7 +47,9 @@ function browserClient(signal?: AbortSignal) {
 const client = browserClient();
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function authStatus(value: unknown): AuthStatus {
@@ -65,9 +67,7 @@ function authStatus(value: unknown): AuthStatus {
     authenticated: item.authenticated,
     enabled: item.enabled,
     ...(typeof item.email === "string" ? { email: item.email } : {}),
-    ...(typeof item.passkeysEnabled === "boolean"
-      ? { passkeysEnabled: item.passkeysEnabled }
-      : {}),
+    ...(typeof item.passkeysEnabled === "boolean" ? { passkeysEnabled: item.passkeysEnabled } : {}),
   };
 }
 

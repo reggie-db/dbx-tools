@@ -110,6 +110,13 @@ describe("DBXToolsRustProject", () => {
         binaryName: "external",
         features: { native: [] },
         defaultFeatures: ["native"],
+        examples: [
+          {
+            name: "generated-contracts",
+            path: "examples/generated-contracts.rs",
+            requiredFeatures: ["native"],
+          },
+        ],
         dependencies: { serde: "1" },
       });
       project.synth();
@@ -118,6 +125,7 @@ describe("DBXToolsRustProject", () => {
         package: Record<string, unknown>;
         lib: Record<string, unknown>;
         bin: Array<Record<string, unknown>>;
+        example: Array<Record<string, unknown>>;
         features: Record<string, unknown>;
         dependencies: Record<string, unknown>;
       };
@@ -132,6 +140,13 @@ describe("DBXToolsRustProject", () => {
       });
       assert.equal(manifest.lib.name, "external_native");
       assert.deepEqual(manifest.bin, [{ name: "external", path: "src/main.rs" }]);
+      assert.deepEqual(manifest.example, [
+        {
+          name: "generated-contracts",
+          path: "examples/generated-contracts.rs",
+          "required-features": ["native"],
+        },
+      ]);
       assert.deepEqual(manifest.features, { default: ["native"], native: [] });
       assert.equal(manifest.dependencies.serde, "1");
       assert.match(readFileSync(join(directory, "LICENSE"), "utf8"), /Copyright \(c\).*Example/);

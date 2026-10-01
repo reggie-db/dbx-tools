@@ -84,6 +84,7 @@ dev.ts
 package.json
 test/tsconfig.json
 src/_python-runtime.ts
+assets/tsconfig.json
 uniffi-bindgen.rs
 uniffi.toml
 **/src/generated/**

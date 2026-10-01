@@ -6,7 +6,7 @@ import { exec, project } from "@dbx-tools/core";
 import { find } from "@dbx-tools/path";
 import { json, log, object } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
-import { recordedPackages } from "../src/packages.ts";
+import { recordedPackages, toPosix } from "../src/packages.ts";
 import type { ReleaseUnitGraph } from "../src/release-catalog.ts";
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
@@ -53,7 +53,7 @@ function cargoVersions(root: string): Array<{ name: string; version: string; pat
       {
         name: candidate.name,
         version: candidate.version,
-        path: relative(root, dirname(candidate.manifest_path)).replaceAll("\\", "/") || ".",
+        path: toPosix(relative(root, dirname(candidate.manifest_path))) || ".",
       },
     ];
   });
@@ -94,7 +94,7 @@ function main(): void {
   }
 
   for (const path of find.findFiles("**/pyproject.toml", { cwd: root })) {
-    check(path, dirname(path).replaceAll("\\", "/"), pythonVersion(join(root, path)));
+    check(path, toPosix(dirname(path)), pythonVersion(join(root, path)));
   }
   for (const pkg of cargoVersions(root)) {
     check(`Cargo package ${pkg.name}`, pkg.path, pkg.version);

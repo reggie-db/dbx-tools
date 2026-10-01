@@ -6,9 +6,9 @@ import { join, resolve } from "node:path";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { generateReleaseSummary } from "./release-summary.ts";
+import { captureTaskCommand } from "../src/_task-command.ts";
 import type { ReleaseUnitGraph } from "../src/release-catalog.ts";
 import type { ReleasePlan } from "../src/release-plan.ts";
-import { captureTaskCommand } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:release-summary-units");
 

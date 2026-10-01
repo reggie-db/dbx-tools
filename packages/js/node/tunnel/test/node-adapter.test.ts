@@ -47,7 +47,10 @@ describe("Better Call Node adapters", () => {
     } as unknown as IncomingMessage;
 
     const request = webRequest(incoming);
-    assert.equal(request.url, "http://localhost/api/email/auth/email-otp/send-verification-otp?source=login");
+    assert.equal(
+      request.url,
+      "http://localhost/api/email/auth/email-otp/send-verification-otp?source=login",
+    );
     assert.deepEqual(await request.json(), { email: "user@example.com" });
   });
 

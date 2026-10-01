@@ -80,8 +80,9 @@ When you update docs, README positioning, or agent instructions:
 building Databricks Apps, AppKit backends, Mastra agents, Genie workflows, Model
 Serving integrations, approval-gated email flows, and AppKit-oriented React UI.
 
-The repo also includes a projen/pnpm workspace generator because the packages are
-dogfooded here, but that is contributor tooling, not the primary product story.
+The repo also includes a Bun-first Projen workspace generator because the
+packages are dogfooded here, but that is contributor tooling, not the primary
+product story.
 Keep generator details in `projen/README.md` and
 `packages/js/cli/dbx-tools/README.md`.
 
@@ -1417,15 +1418,14 @@ Cross-package contracts that are easy to duplicate by accident:
   extended-thinking block types. Both wire sanitizers (Responses and Chat
   Completions) MUST strip the same set; Anthropic signs these blocks, so a
   replay that mutates one is rejected.
-- Anthropic's "assistant message prefill" rule needs a repair on BOTH wire
-  surfaces, because Databricks rejects any transcript ending on an assistant
-  turn: `openaiResponses.repairTrailingAssistantInput` (Responses `input`, used
-  by the model proxy) and `appkit-mastra`'s `repairAssistantPrefill` (Chat
-  Completions `messages`). Order matters - the reasoning strip CREATES the
-  offending shape when a turn ended on a `reasoning` item, so the prefill repair
-  runs after it. Neither may touch a trailing `function_call` / `tool_calls`
-  turn: an unanswered tool call fails a DIFFERENT provider rule, and dropping it
-  would discard a call the client is about to answer.
+- Anthropic's "assistant message prefill" rule applies on both wire surfaces.
+  `openaiResponses.repairTrailingAssistantInput` remains a public compatibility
+  helper for TypeScript Responses adapters, while `appkit-mastra` owns
+  `repairAssistantPrefill` for Chat Completions `messages`. The Rust model proxy
+  uses the `aigw_*` request and response adapters and forwards native Responses
+  input directly; it does not call the TypeScript translator. In either adapter,
+  reasoning stripping must precede prefill repair and neither step may discard
+  an unanswered `function_call` / `tool_calls` turn.
 - `@dbx-tools/model` `invoke.*_PATH` / `*Url` - the Databricks serving paths
   (`invocations`, `responses`, `open-responses`, `chat/completions`). Never
   hard-code a `/serving-endpoints/...` string in a consumer.
@@ -2150,7 +2150,8 @@ Hard rules:
   Rust helper crate, regex TOML parsing, or magic-byte scanning.
 - `DBXToolsRustProject` is the single Projen project type for standalone crates
   and workspace members. Its options-object constructor owns Cargo metadata,
-  dependency aliases, features, binary settings, bindings, and crate tasks;
+  dependency aliases, features, feature-gated examples, binary settings,
+  bindings, and crate tasks;
   `DBXToolsRustWorkspace` composes those projects as a `Component` and retains
   only aggregate workspace, binding, and release coordination.
 
@@ -2270,7 +2271,7 @@ bun run --filter @dbx-tools/demo-appkit-app build    # Bun.build production bund
 ```
 
 Deployment stages a standalone package outside the repository. The staging
-script replaces local `workspace:` references with exact release-unit versions from the
+script replaces local `workspace:` references with the exact repository version from the
 root `VERSION` file, verifies the generated example manifest carries that same
 version, and resolves `catalog:` entries. This keeps local runs on source while
 deployed Apps install the matching published packages without a lockfile.
@@ -2324,12 +2325,13 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `tasks/publish.ts` validates that each member already carries the reviewed
   `VERSION`. It does NOT rewrite `workspace:`/`catalog:` deps - `bun publish` STRIPS both protocols
   in the packed tarball (`workspace:^` -> the sibling's compatible range, `catalog:` -> the
-  root catalog range; verified against a packed manifest). It also does NOT pack
-  by hand. The workspace publish driver compiles every publishable member once
-  from the root with Bun's filtered workspace runner, then uses a bounded pool of
-  `bun publish --ignore-scripts` calls so uploads overlap without repeating each
-  package's `prepack`. Keep `prepack` on each package anyway: a standalone
-  `bun publish` still needs to build itself. The driver first checks whether the
+  root catalog range; verified against a packed manifest). The workspace publish
+  driver compiles every publishable member once from the root with Bun's filtered
+  workspace runner, packs each package once with lifecycle scripts disabled,
+  validates that archive's identity, access, integrity, and repository metadata,
+  then passes the same archive to a bounded pool of `bun publish` calls. Keep
+  `prepack` on each package anyway: a standalone `bun publish` still needs to
+  build itself. The driver first checks whether the
   manifests and Bun workspace lock already carry the release version. Compile
   while manifests still point at workspace source, then apply `publishConfig`;
   switching to `lib/` first makes clean-checkout consumers resolve declaration
@@ -2340,7 +2342,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   the LOCKFILE, not the live manifest, and a plain `bun install` (even `--force`)
   does not re-resolve after only a version-field change - so without the lockfile
   refresh a sibling dep can publish against a stale resolved version. Disk
-  manifests carry reviewed release-unit versions; publication fails rather
+  manifests carry the reviewed repository version; publication fails rather
   than changing them.
   During local release preparation, the npm/Verdaccio and Python/devpi publishers run in
   parallel because they mutate disjoint JS and Python package trees; each still
@@ -2356,7 +2358,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 - **`bootstrap.ts` pins the engine version explicitly.** `bootstrap.ts` asks for
   `@dbx-tools/projen@^<this CLI's own version>` (see `defaultProjenSpecifier`)
   rather than `@latest`, so the installed engine matches the CLI. The CLI and
-  engine intentionally share the `projen-cli` release unit.
+  engine intentionally share the repository version.
 - **An established workspace pins its engine forever unless the CLI moves it.**
   Bootstrap installs the engine once; every later `dbx` run took the
   "established workspace" path, which only installed when `node_modules` was

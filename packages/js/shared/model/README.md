@@ -1,25 +1,22 @@
 # @dbx-tools/shared-model
 
-Browser-safe model-selection contract and classifier.
+Browser-safe model-selection contracts generated from the Rust model owner.
 
 Import this package when UI code, route handlers, tools, or tests need to
-validate model lookup requests, type ranked model responses, or classify serving
-endpoints without talking to Databricks. Live workspace listing and fuzzy
-resolution live in [`@dbx-tools/model`](../../node/model).
+validate model lookup requests or type ranked model responses without talking to
+Databricks. Rust owns normalization, classification, capability policy, ranking,
+and fuzzy resolution through [`@dbx-tools/model`](../../node/model). The
+handwritten browser classifier remains only as a deprecated compatibility API.
 
 Key features:
 
-- Shared `ModelClass` taxonomy for chat-thinking, chat-balanced, chat-fast, and
-  embedding workloads.
-- Browser-safe zod schemas for lookup requests, endpoint summaries, ranked
-  results, and profile metadata.
-- Endpoint classifier that groups serving endpoints by score profile and family
-  naming conventions, plus `classify.endpointCapabilities` for chat / embedding
-  / tool-calling capability flags.
-- Version/family parsing helpers for model catalogues and tests.
+- Rust-owned `ModelClass`, endpoint, query, status, profile, ranking, and
+  reasoning-effort contracts generated as browser-safe TypeScript and zod.
+- Deprecated classification, capability, and version helpers retained for
+  compatibility while callers move to the classified server response.
 - Human-readable endpoint display names via `display.toModelDisplayName`.
-- OpenAI wire contracts: chat message/tool-call types plus a Responses API
-  translator, so a proxy, a route, and a UI all speak the same payload shapes.
+- OpenAI wire contracts and legacy TypeScript Chat/Responses adapters for routes
+  and consumers that still need them.
 - Types that match the server selection API without depending on the Databricks
   SDK.
 
@@ -74,26 +71,19 @@ reasoning-effort wire values, lifecycle status, and embedding dimension.
 search/ranking to endpoints that can complete both a function call and the
 subsequent `function_call_output` replay.
 
-## Classify Endpoint Catalogues
+## Use Classified Endpoint Catalogues
 
 ```ts
-import { classify, model } from "@dbx-tools/shared-model";
+import { model } from "@dbx-tools/shared-model";
 
-const byClass = classify.classifyEndpoints(endpoints);
-const fast = byClass[model.ModelClass.ChatFast];
-const agentModels = endpoints.filter((endpoint) => classify.endpointCapabilities(endpoint).tools);
+const fast = endpoints.filter((endpoint) => endpoint.class === model.ModelClass.ChatFast);
+const agentModels = endpoints.filter((endpoint) => endpoint.supportsTools);
 ```
 
-Databricks currently exposes no tool-capability attribute in the endpoint list
-or OpenAPI schema. `supportsTools` therefore uses a conservative, live-verified
-provider-family policy: GPT (except GPT-OSS), Claude, Qwen, GLM, and Llama.
-Gemini is excluded because its Open Responses tool-result replay requires a
-thought signature the wire does not currently accept; GPT-OSS rejects Responses
-passthrough. An explicit `supportsTools` stamp overrides the family fallback.
-
-The classifier uses Foundation Model API quality/speed/cost scores when present
-and family-name heuristics when scores are missing. This is useful for client
-grouping, tests, and offline catalogue analysis.
+The server stamps class and capability fields through the Rust policy before it
+returns `/models`. Prefer those fields directly. The `classify` calls above are
+deprecated compatibility helpers for existing browser consumers and will be
+removed in the next major release.
 
 ## Parse Model Families
 
@@ -102,22 +92,22 @@ const family = classify.classifyByFamily("databricks-claude-sonnet-4-6");
 const version = classify.versionTuple("llama-3-1-70b");
 ```
 
-Family parsing helps callers bucket custom lists or explain why an endpoint
-landed in a class before the live workspace scores are available.
+These parsing helpers are deprecated. Server-side callers use
+[`@dbx-tools/model`](../../node/model), which delegates family and version policy
+to Rust; browser callers consume the classified response.
 
-## Ask What An Endpoint Can Do
+## Read Endpoint Capabilities
 
 ```ts
-const caps = classify.endpointCapabilities(endpoint);
-if (caps.chat) offerInChatPicker(endpoint);
+if (endpoint.class !== model.ModelClass.Embedding) offerInChatPicker(endpoint);
+if (endpoint.supportsTools) offerInAgentPicker(endpoint);
 ```
 
-Capability comes from the Databricks task hint (`llm/v1/chat` /
-`llm/v1/embeddings`) with the classified class as the fallback for endpoints
-Databricks left untagged. Filter on this rather than comparing raw `task`
-strings, so every picker, CLI, and route agrees on what "chat-capable" means.
+`classify.endpointCapabilities` is retained for compatibility. New code reads
+the Rust-stamped class and capability fields so every picker, CLI, and route
+uses the same policy.
 
-## Translate The OpenAI Responses API
+## Use The Legacy TypeScript Responses Adapters
 
 ```ts
 import { openaiResponses } from "@dbx-tools/shared-model";
@@ -127,13 +117,14 @@ const { chat, stream } = openaiResponses.responsesToChat(requestBody);
 const response = openaiResponses.chatToResponse(completion, modelId);
 ```
 
-Databricks serving endpoints speak Chat Completions; some clients (the Codex
-CLI, for one) speak only the Responses API. `openaiResponses` bridges the two in
-both directions, including a streaming translator
+`openaiResponses` bridges Chat Completions and Responses in both directions for
+TypeScript consumers, including a streaming translator
 (`createResponsesStreamTranslator`) that lifts `chat.completion.chunk` SSE into
 the Responses event stream, and `readResponsesOutput` for pulling the answer and
-its citations back out of a native Responses reply. Pure functions over plain
-JSON, so the same translation runs in a proxy, a server route, or a test.
+its citations back out of a native Responses reply. These are pure compatibility
+helpers over plain JSON. The Rust model proxy uses the `aigw_*` adapters and
+forwards native Responses input directly; it does not call this TypeScript
+translator.
 
 ## Sanitize A Replayed Conversation
 
@@ -180,12 +171,12 @@ one-by-one (`openaiResponses.responsesToChat`) already can't leak them. Pass
 
 - `model` - `ModelClass`, reasoning-effort wire schema, and inferred types for
   profiles, endpoint summaries, lookup requests, and ranked results.
-- `classify` - family parsing, version tuple parsing, endpoint classification,
-  and capability flags.
+- `classify` - deprecated family parsing, endpoint classification, and
+  capability compatibility helpers.
 - `display` - human-readable endpoint labels.
 - `openaiChat` - Chat Completions message / tool-call types,
   `chatContentParts`, `chatContentToText`, and `stripUnsupportedChatFields`.
-- `openaiResponses` - Responses API translation in both directions, plus
+- `openaiResponses` - legacy TypeScript Responses adapters, plus
   `sanitizeOpenResponsesRequest` and the shared `REASONING_TYPES` constant.
 
 Server-side selection, cache, and fuzzy endpoint matching are in
