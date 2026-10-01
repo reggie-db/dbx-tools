@@ -172,19 +172,27 @@ small {
   min-height: 24px;
   padding: 0;
   place-items: center;
-  border-color: transparent;
-  border-radius: 50%;
+  border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--dashboard-muted);
   cursor: pointer;
 }
 
 .widget-info:hover,
-.widget-info:focus-visible,
 .widget-info[aria-expanded="true"] {
-  border-color: var(--brand-border);
-  background: var(--brand-background);
+  border-color: transparent;
+  background: transparent;
   color: var(--brand-primary-hover);
+  outline: none;
+}
+
+.widget-info:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  color: var(--brand-primary-hover);
+  outline: 2px solid var(--brand-primary-hover);
+  outline-offset: 1px;
 }
 
 .widget-info svg {
@@ -333,9 +341,19 @@ small {
 }
 
 .panel-heading {
+  justify-content: flex-start;
   gap: 16px;
   min-height: 36px;
-  padding-right: 28px;
+}
+
+.panel-heading > :first-child {
+  margin-right: auto;
+}
+
+.panel-heading > .widget-info {
+  position: static;
+  flex: 0 0 auto;
+  margin-left: -8px;
 }
 
 .panel-heading h2 {

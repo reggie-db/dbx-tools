@@ -213,7 +213,7 @@
     button.dataset.tooltipTrigger = "click";
     button.innerHTML =
       '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></svg>';
-    widget.append(button);
+    (widget.querySelector(".panel-heading") ?? widget).append(button);
   });
 
   document.querySelectorAll("[data-tooltip]").forEach((target) => {
