@@ -14,6 +14,9 @@ Reusable Rust lifecycle support for per-user dbx-tools background services.
 - opens and migrates a service-owned SQLite database through `rusqlite` and
   `rusqlite_migration`;
 - persists non-secret executable arguments and companion configuration;
+- copies the service executable into `<config-dir>/bin` before registration so
+  Cargo builds and versioned download caches can change without mutating a
+  launching executable;
 - supplies reusable `--config-dir`, `--persistence auto|memory|sqlite`, and
   installed-service runtime options;
 - supplies `SettingsStore` with process-local memory and shared service-owned
@@ -21,6 +24,8 @@ Reusable Rust lifecycle support for per-user dbx-tools background services.
 - stores bounded aggregate consumer data through the same `ServiceStorage`
   connection without exposing a second database;
 - manages companion autostart with `auto`, `always`, and `never` policy;
+- starts an enabled companion immediately, records its process identity, and
+  writes its stdout/stderr under `<config-dir>/logs`;
 - exposes typed Clap commands for install, start, stop, restart, status, and
   uninstall, with `remove` as an uninstall alias;
 - exposes a hidden machine-readable requirements preflight that parses the

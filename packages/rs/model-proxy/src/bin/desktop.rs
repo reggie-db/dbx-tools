@@ -6,7 +6,7 @@
 )]
 
 use clap::{CommandFactory, FromArgMatches, Parser};
-use dbx_tools_core::build_info;
+use dbx_tools_core::{build_info, init_logging_with_verbose};
 use dbx_tools_service::{
     desktop::{run_desktop, DesktopCli, DesktopConfig, DesktopIcon},
     ServiceConfig,
@@ -49,6 +49,7 @@ fn proxy_icon() -> DesktopIcon {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::from_arg_matches(&Cli::command().version(build_info::version()).get_matches())?;
+    init_logging_with_verbose(false)?;
     let service = ServiceConfig::new("model-proxy", 4000)?
         .with_invalid_runtime_detector(dbx_tools_core::is_databricks_app);
     let config = DesktopConfig::new(

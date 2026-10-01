@@ -17,7 +17,7 @@ use std::{
     ffi::OsString,
     net::IpAddr,
     num::{NonZeroU64, NonZeroUsize},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -36,7 +36,7 @@ use rate_limit::{ModelFallbackMode, ModelFallbackPolicy, RateLimitPolicy};
 use routes::{AppConfig, AppState};
 use runtime::{RuntimeConfig, RuntimeManager, RuntimeSelection};
 use throttle::{RateLimitMode, ThrottleConfig};
-use tracing::info;
+use tracing::{info, warn};
 
 const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
     NonZeroUsize::new(25_000_000).expect("default request limit is non-zero");
@@ -312,15 +312,33 @@ fn resolve_service_launch(
 
 fn service_definition() -> dbx_tools_service::Result<ServiceDefinition> {
     let mut definition = ServiceDefinition::new("model-proxy", 4000)?;
+    definition.companion = local_desktop_companion();
     definition.invalid_runtime_detector = dbx_tools_core::is_databricks_app;
     Ok(definition)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn local_desktop_companion() -> Option<PathBuf> {
+    let executable = std::env::current_exe().ok()?;
+    let name = if cfg!(target_os = "windows") {
+        "dbx-model-proxy-desktop.exe"
+    } else {
+        "dbx-model-proxy-desktop"
+    };
+    let companion = executable.with_file_name(name);
+    companion.is_file().then_some(companion)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::from_arg_matches(&Cli::command().version(build_info::version()).get_matches())?;
+    init_logging_with_verbose(cli.server.verbose)?;
     if let Some(CliCommand::Service(service)) = cli.command {
         let definition = service_definition()?;
+        if service.companion_requested() && definition.companion.is_none() {
+            warn!(
+                "desktop companion is unavailable; build dbx-model-proxy-desktop with the desktop feature or use dbx model-proxy service install"
+            );
+        }
+        info!(command = ?service.command, "executing model proxy service lifecycle");
         let mut stdout = std::io::stdout().lock();
         if let Some(requirements) = service.requirements(&definition)? {
             serde_json::to_writer(&mut stdout, &requirements)?;
@@ -331,8 +349,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::io::Write::write_all(&mut stdout, b"\n")?;
         return Ok(());
     }
-    init_logging_with_verbose(cli.server.verbose)?;
-    run_server(cli.server).await
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run_server(cli.server))
 }
 
 async fn run_server(cli: ServerOptions) -> Result<(), Box<dyn std::error::Error>> {

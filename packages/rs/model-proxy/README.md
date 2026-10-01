@@ -39,12 +39,15 @@ Service installation injects the stable configuration directory and service
 mode into the launched arguments. `--persistence=auto` uses memory for a direct
 CLI run and `service.sqlite3` for an installed service. Explicit `memory` and
 `sqlite` values override that selection. The same SQLite connection owns
-non-secret settings and aggregate metric snapshots.
+non-secret settings and aggregate metric snapshots. The service runs a managed
+copy under `<config-dir>/bin`, not a mutable Cargo target or download cache.
 
 The systray policy is `auto`, `always`, or `never`. Auto is the default and
 registers the companion only when its tray-icon capability probe succeeds.
 Always turns an unsupported desktop session into an error. Never disables
-companion autostart. Every lifecycle command fails inside a Databricks App,
+companion autostart. Enabled companions start immediately and write
+`desktop.log` / `desktop-error.log` under `<config-dir>/logs`. Every lifecycle
+command fails inside a Databricks App,
 where host OS service management is unavailable.
 
 The companion is the `dbx-model-proxy-desktop` binary target in this crate. It

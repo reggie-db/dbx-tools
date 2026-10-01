@@ -324,6 +324,7 @@ describe("release task contracts", () => {
       "utf8",
     );
     assert.match(localCargo, /"metadata", "--format-version", "1", "--no-deps", "--locked"/);
+    assert.match(localCargo, /"run",\s*"--no-project",\s*"python"/);
     assert.ok(localCargo.includes("if (workspaceDependency) visit(workspaceDependency)"));
     assert.ok(
       releasePr.indexOf("generateReleaseSummary({") <

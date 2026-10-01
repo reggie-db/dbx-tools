@@ -485,7 +485,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   is `auto` by default, `always`, or `never`. Auto registers the hidden
   `dbx-model-proxy-desktop` companion only when its tray-icon capability probe
   succeeds; always fails when the probe does not, and never disables companion
-  startup. Every lifecycle command rejects Databricks App execution before
+  startup. Enabled companions start immediately and write stdout/stderr under
+  `<config-dir>/logs`. Every lifecycle command rejects Databricks App execution before
   touching service or SQLite state.
   The companion uses `tray-icon`, opens the local metrics UI, and reports
   `/api/healthz`; macOS and Windows render Wry native webviews, while Linux uses
@@ -503,7 +504,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   detection, non-secret settings, aggregate storage, health status, typed Clap
   lifecycle commands, and companion autostart policy. Direct auto mode uses
   memory; installed auto mode uses the one shared SQLite connection. Install
-  injects the stable config directory and service marker into launched argv.
+  injects the stable config directory and service marker into launched argv and
+  copies the executable into `<config-dir>/bin` before registration; never point
+  a service at a mutable Cargo target or versioned download-cache file.
   Its optional `desktop` feature owns the generic tray-icon event loop,
   lifecycle/status menus, Wry system WebView on macOS/Windows, Linux default-
   browser fallback, desktop capability probe, and callback-based health/open
