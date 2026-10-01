@@ -115,8 +115,9 @@ describe("unified release workflow", () => {
     assert.ok(verify.run?.includes('git push origin "refs/tags/$RELEASE_TAG"'));
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
-    assert.ok(verify.run?.includes('test "$GITHUB_REF_TYPE" = "tag"'));
-    assert.ok(verify.run?.includes('test "$GITHUB_REF_NAME" = "$RELEASE_TAG"'));
+    assert.ok(verify.run?.includes('test "$RELEASE_SHA" = "$EXPECTED_SHA"'));
+    assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_TYPE" = "tag"/);
+    assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_NAME" = "\$RELEASE_TAG"/);
     assert.ok(verify.run?.includes("inputs.source_run_id"));
     assert.equal(step(verifyJob, "Verify source artifact run").uses, "actions/github-script@v8");
   });

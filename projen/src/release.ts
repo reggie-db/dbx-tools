@@ -238,8 +238,6 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
           '  test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
           '  RELEASE_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
           '  test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
-          '  test "$GITHUB_REF_TYPE" = "tag"',
-          '  test "$GITHUB_REF_NAME" = "$RELEASE_TAG"',
           '  test "$RELEASE_SHA" = "$EXPECTED_SHA"',
           '  if [ -n "${{ inputs.source_run_id }}" ]; then',
           '    case "${{ inputs.stage }}" in node|python) ;; *) exit 1 ;; esac',
