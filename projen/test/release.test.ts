@@ -320,8 +320,17 @@ describe("release task contracts", () => {
     );
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('"--no-approve",'));
+    assert.ok(releasePr.includes('"--no-wait",'));
+    assert.ok(releasePr.includes('"--no-validate",'));
+    assert.ok(releasePr.includes('"--no-local-publish",'));
     assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--auto",\s*"--merge"/);
-    assert.doesNotMatch(releasePr, /repos\/\$\{account\.owner\}\/\$\{account\.repository\}\/merges/);
+    assert.match(releasePr, /"pr",\s*"checks",[\s\S]*"--watch",[\s\S]*"--required"/);
+    assert.match(releasePr, /"run",\s*"watch",\s*runId,\s*"--exit-status"/);
+    assert.match(releasePr, /"--commit",\s*mergeSha/);
+    assert.doesNotMatch(
+      releasePr,
+      /repos\/\$\{account\.owner\}\/\$\{account\.repository\}\/merges/,
+    );
     assert.doesNotMatch(releasePr, /"--admin"/);
   });
 

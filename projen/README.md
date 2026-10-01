@@ -447,10 +447,15 @@ a new package is covered without a re-synth. Work from the root:
 increments `VERSION`, synthesizes manifests and registries, runs validation and
 local publication, writes the release summary, and opens one PR. It enables
 automatic merge unless `--no-approve` is supplied. The merged `VERSION` change
-starts publication from the exact `main` SHA and creates one `v<version>` tag.
+starts publication from the exact `main` SHA and creates one `v<version>` tag;
+the command waits for that workflow by default. Use `--no-wait` to return after
+requesting auto-merge, `--no-validate` to skip repository tests/compile, or
+`--no-local-publish` to skip local registry preflight.
 The repository host and owner are derived from the Git remote. If the GitHub CLI
 has multiple accounts for that host, release preparation selects the first
-authenticated account with write access to the detected repository.
+authenticated account with write access to the detected repository. Classic
+tokens must include the `workflow` scope so the release PR can update the
+generated workflow.
 
 The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
 public `BuildWorkflow` `buildTask` option. That task runs synth plus the

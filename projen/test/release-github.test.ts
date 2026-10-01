@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  githubAccountSupportsWorkflowChanges,
   githubAuthenticatedAccounts,
   githubRepositoryApiPath,
   githubRepositoryIdentity,
@@ -47,19 +48,43 @@ describe("release GitHub identity", () => {
         JSON.stringify({
           hosts: {
             "github.com": [
-              { state: "success", active: false, login: "write-user" },
+              { state: "success", active: false, login: "write-user", scopes: "repo, workflow" },
               { state: "failed", active: false, login: "expired-user" },
-              { state: "success", active: true, login: "active-user" },
-              { state: "success", active: false, login: "write-user" },
+              { state: "success", active: true, login: "active-user", scopes: "read:org, repo" },
+              { state: "success", active: false, login: "write-user", scopes: "repo, workflow" },
             ],
           },
         }),
         "github.com",
       ),
       [
-        { login: "active-user", active: true },
-        { login: "write-user", active: false },
+        { login: "active-user", active: true, scopes: ["read:org", "repo"] },
+        { login: "write-user", active: false, scopes: ["repo", "workflow"] },
       ],
+    );
+    assert.equal(
+      githubAccountSupportsWorkflowChanges({
+        login: "classic",
+        active: true,
+        scopes: ["repo"],
+      }),
+      false,
+    );
+    assert.equal(
+      githubAccountSupportsWorkflowChanges({
+        login: "classic",
+        active: true,
+        scopes: ["repo", "workflow"],
+      }),
+      true,
+    );
+    assert.equal(
+      githubAccountSupportsWorkflowChanges({
+        login: "fine-grained",
+        active: true,
+        scopes: [],
+      }),
+      true,
     );
   });
 
