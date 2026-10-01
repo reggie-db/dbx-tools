@@ -769,6 +769,13 @@ jobs:
           pattern: "*-binary"
           path: dist/rust-release
           merge-multiple: true
+      - name: Download reusable raw Rust outputs
+        id: download_reusable_raw_rust_outputs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-raw"
+          path: dist/rust-raw
+          merge-multiple: true
       - name: Publish GitHub release assets
         id: publish_github_release_assets
         uses: softprops/action-gh-release@v2

@@ -213,6 +213,7 @@ describe("DBXToolsRustWorkspace", () => {
         "Checkout release commit",
         "Verify release source",
         "Download release binaries",
+        "Download reusable raw Rust outputs",
         "Publish GitHub release assets",
       ]);
       assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-release.mjs")), false);
@@ -790,6 +791,11 @@ describe("DBXToolsRustWorkspace", () => {
       workflowStep(githubReleaseJob, "Checkout release commit").uses,
       "actions/checkout@v6",
     );
+    assert.deepEqual(workflowStep(githubReleaseJob, "Download reusable raw Rust outputs").with, {
+      pattern: "*-raw",
+      path: "dist/rust-raw",
+      "merge-multiple": true,
+    });
     const githubRelease = workflowStep(githubReleaseJob, "Publish GitHub release assets");
     assert.equal(githubRelease.uses, "softprops/action-gh-release@v2");
     assert.equal(

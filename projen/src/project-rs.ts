@@ -1660,6 +1660,15 @@ function rustGitHubReleaseJob(): Job {
         },
       },
       {
+        name: "Download reusable raw Rust outputs",
+        uses: "actions/download-artifact@v8",
+        with: {
+          pattern: "*-raw",
+          path: "dist/rust-raw",
+          "merge-multiple": true,
+        },
+      },
+      {
         name: "Publish GitHub release assets",
         uses: "softprops/action-gh-release@v2",
         with: {

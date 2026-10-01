@@ -173,7 +173,9 @@ the committed manifest and target configuration.
   that target. Do not add per-crate partial reuse in the first implementation.
 
 Reused and newly built raw bundles then follow the same stamping and packaging
-path.
+path. The GitHub Release publisher downloads every target's `*-raw` Actions
+artifact and attaches the raw tarball plus checksum to the durable release;
+temporary run artifacts alone are not a reuse source.
 
 ### 4. Stamp, package, and publish
 
