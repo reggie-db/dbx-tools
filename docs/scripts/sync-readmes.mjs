@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { brandFiles, projectUtils } from "../../packages/js/node/core/index.ts";
+import * as brandFiles from "../../packages/js/node/core/src/brand-files.ts";
+import * as projectUtils from "../../packages/js/node/core/src/project-utils.ts";
 import { loadDocsToolchain } from "./docs-toolchain.mjs";
 import {
   discoverRepositoryPackages,
