@@ -895,6 +895,11 @@ describe("DBXToolsRustWorkspace", () => {
     });
     assert.match(rawAssetCleanup.with?.script ?? "", /deleteReleaseAsset/);
     assert.match(rawAssetCleanup.with?.script ?? "", /rust-\(\?:raw\|build\)-/);
+    assert.match(rawAssetCleanup.with?.script ?? "", /parseVersion\(release\.tag_name\)/);
+    assert.match(
+      rawAssetCleanup.with?.script ?? "",
+      /compareVersions\(version, currentVersion\) >= 0/,
+    );
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
     assert.ok(packager.includes('"node_modules", "npm", "bin", "npm-cli.js"'));
     assert.ok(packager.includes("command: process.execPath, args: [npmCli, ...args]"));
