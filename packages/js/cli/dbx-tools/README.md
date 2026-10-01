@@ -113,9 +113,6 @@ dbx tunnel status --allow databricks.com
 dbx tunnel --allow databricks.com -- bun src/server.ts
 ```
 
-The `status` subcommand prints the resolved configuration without starting a
-process.
-
 `dbx tunnel` claims the public port, moves the wrapped command to a private
 loopback port, and reverse-proxies between them so an email one-time-code gate
 sits in front of traffic the command never has to know about. The command does
