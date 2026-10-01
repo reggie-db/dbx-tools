@@ -33,9 +33,10 @@ use tokio::{
 };
 
 use crate::{
-    adaptive::AutoTransition,
-    request_log::{ReasoningSetting, RequestOutcome},
+    adaptive::AutoTransition, request_log::RequestOutcome, throttle::ThrottleModelSnapshot,
 };
+#[cfg(feature = "metrics")]
+use crate::{adaptive::AutoTransitionKind, request_log::ReasoningSetting};
 
 const MODEL_SERIES_LIMIT: usize = 32;
 #[cfg(feature = "metrics")]
@@ -300,6 +301,24 @@ impl MetricsRuntime {
         let _ = (model, input_token_limit);
     }
 
+    pub(crate) fn record_in_band_rate_limit(&self, model: &str) {
+        #[cfg(feature = "metrics")]
+        if let Some(inner) = &self.inner {
+            inner.record_in_band_rate_limit(model);
+        }
+        #[cfg(not(feature = "metrics"))]
+        let _ = model;
+    }
+
+    pub(crate) fn record_local_rate_limit(&self, model: &str, reason: &'static str) {
+        #[cfg(feature = "metrics")]
+        if let Some(inner) = &self.inner {
+            inner.record_local_rate_limit(model, reason);
+        }
+        #[cfg(not(feature = "metrics"))]
+        let _ = (model, reason);
+    }
+
     pub(crate) fn record_oversized(&self, model: &str) {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -358,6 +377,15 @@ impl MetricsRuntime {
         }
         let _ = model;
         MetricsSnapshot::disabled(self.config.mode)
+    }
+
+    pub(crate) fn record_capacity_snapshots(&self, capacities: &[ThrottleModelSnapshot]) {
+        #[cfg(feature = "metrics")]
+        if let Some(inner) = &self.inner {
+            inner.record_capacity_snapshots(capacities);
+        }
+        #[cfg(not(feature = "metrics"))]
+        let _ = capacities;
     }
 
     pub(crate) fn prometheus(&self) -> Option<String> {
@@ -519,6 +547,39 @@ impl MetricsSnapshot {
             },
         }
     }
+
+    pub(crate) fn apply_capacity_snapshots(&mut self, capacities: &[ThrottleModelSnapshot]) {
+        for capacity in capacities {
+            let model = if let Some(model) = self
+                .models
+                .iter_mut()
+                .find(|model| model.model == capacity.model)
+            {
+                model
+            } else {
+                self.models.push(ModelSnapshot::from_capacity(capacity));
+                self.models.last_mut().expect("capacity model was appended")
+            };
+            model.queue_depth = capacity.queue_depth;
+            model.queue_depth_max = model.queue_depth_max.max(capacity.queue_depth);
+            model.limiter = if capacity.active {
+                "enforced".to_owned()
+            } else {
+                "inactive".to_owned()
+            };
+            model.penalty_basis_points = capacity.penalty_basis_points;
+            model.input_limit = capacity.input_limit;
+            model.effective_input_budget = capacity.effective_input_budget;
+            model.input_window_used = capacity.input_window_used;
+        }
+        self.models.sort_by(|left, right| {
+            right
+                .requests
+                .cmp(&left.requests)
+                .then_with(|| left.model.cmp(&right.model))
+        });
+        self.summary.active_models = self.models.len();
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -536,6 +597,7 @@ pub(crate) struct SummarySnapshot {
     pub(crate) active_models: usize,
     pub(crate) total_requests: u64,
     pub(crate) total_rate_limited: u64,
+    pub(crate) total_fallbacks: u64,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -573,14 +635,53 @@ pub(crate) struct ModelSnapshot {
     pub(crate) rate_limited: u64,
     pub(crate) oversized_rejections: u64,
     pub(crate) retries: u64,
+    pub(crate) fallbacks: u64,
     pub(crate) queue_wait_ms: u64,
+    pub(crate) queue_depth: u64,
     pub(crate) queue_depth_max: u64,
     pub(crate) p50_latency_ms: u64,
     pub(crate) p95_latency_ms: u64,
     pub(crate) p99_latency_ms: u64,
     pub(crate) limiter: String,
+    pub(crate) penalty_basis_points: u16,
+    pub(crate) input_limit: Option<u64>,
     pub(crate) effective_input_budget: Option<u64>,
+    pub(crate) input_window_used: Option<u64>,
     pub(crate) reasoning_levels: Vec<ReasoningLevelSnapshot>,
+}
+
+impl ModelSnapshot {
+    fn from_capacity(capacity: &ThrottleModelSnapshot) -> Self {
+        Self {
+            model: capacity.model.clone(),
+            history: Vec::new(),
+            rollup_history: Vec::new(),
+            requests: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            errors: 0,
+            rate_limited: 0,
+            oversized_rejections: 0,
+            retries: 0,
+            fallbacks: 0,
+            queue_wait_ms: 0,
+            queue_depth: capacity.queue_depth,
+            queue_depth_max: capacity.queue_depth,
+            p50_latency_ms: 0,
+            p95_latency_ms: 0,
+            p99_latency_ms: 0,
+            limiter: if capacity.active {
+                "enforced".to_owned()
+            } else {
+                "inactive".to_owned()
+            },
+            penalty_basis_points: capacity.penalty_basis_points,
+            input_limit: capacity.input_limit,
+            effective_input_budget: capacity.effective_input_budget,
+            input_window_used: capacity.input_window_used,
+            reasoning_levels: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -664,6 +765,13 @@ impl MetricsInner {
             )
             .increment(1);
         }
+        if outcome.fallback_step > 0 {
+            ::metrics::counter!(
+                "dbx_model_proxy_model_fallbacks_total",
+                "model" => model_label.clone()
+            )
+            .increment(1);
+        }
         ::metrics::counter!(
             "dbx_model_proxy_input_bytes_total",
             "model" => model_label.clone()
@@ -697,16 +805,46 @@ impl MetricsInner {
         ::metrics::histogram!(
             "dbx_model_proxy_request_duration_seconds",
             "route" => outcome.route,
-            "model" => model_label
+            "model" => model_label.clone()
         )
         .record(outcome.duration_ms as f64 / 1_000.0);
         ::metrics::histogram!("dbx_model_proxy_admission_queue_depth")
             .record(outcome.throttle.queue_depth as f64);
+        ::metrics::gauge!(
+            "dbx_model_proxy_current_queue_depth",
+            "model" => model_label.clone()
+        )
+        .set(outcome.throttle.current_queue_depth() as f64);
+        if let Some(input_limit) = outcome.throttle.input_limit {
+            ::metrics::gauge!(
+                "dbx_model_proxy_input_limit_tokens",
+                "model" => model_label.clone()
+            )
+            .set(input_limit as f64);
+        }
+        if let Some(input_budget) = outcome.throttle.input_window_budget {
+            ::metrics::gauge!(
+                "dbx_model_proxy_input_window_used_tokens",
+                "model" => model_label.clone()
+            )
+            .set(
+                outcome
+                    .throttle
+                    .input_window_used_before
+                    .saturating_add(outcome.throttle.reserved_input_tokens) as f64,
+            );
+            ::metrics::gauge!(
+                "dbx_model_proxy_effective_input_budget_tokens",
+                "model" => model_label
+            )
+            .set(input_budget as f64);
+        }
     }
 
     fn record_transition(&self, model: &str, transition: AutoTransition) {
         let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-        self.store
+        let model_label = self
+            .store
             .lock()
             .expect("metrics store lock is not poisoned")
             .record_transition(elapsed_ms, model, transition);
@@ -715,6 +853,16 @@ impl MetricsInner {
             "transition" => format!("{:?}", transition.kind).to_ascii_lowercase()
         )
         .increment(1);
+        ::metrics::gauge!(
+            "dbx_model_proxy_rate_limit_penalty_basis_points",
+            "model" => model_label.clone()
+        )
+        .set(f64::from(transition.penalty_basis_points));
+        ::metrics::gauge!(
+            "dbx_model_proxy_effective_input_budget_tokens",
+            "model" => model_label
+        )
+        .set(transition.effective_input_budget as f64);
     }
 
     fn record_upstream_429(&self, model: &str, input_token_limit: bool) {
@@ -723,7 +871,7 @@ impl MetricsInner {
             .store
             .lock()
             .expect("metrics store lock is not poisoned")
-            .record_upstream_429(elapsed_ms, model);
+            .record_rate_limited(elapsed_ms, model);
         ::metrics::counter!(
             "dbx_model_proxy_upstream_429_total",
             "model" => model_label,
@@ -732,12 +880,44 @@ impl MetricsInner {
         .increment(1);
     }
 
-    fn record_oversized(&self, model: &str) {
+    fn record_in_band_rate_limit(&self, model: &str) {
+        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
         let model_label = self
             .store
             .lock()
             .expect("metrics store lock is not poisoned")
-            .record_oversized(model);
+            .record_rate_limited(elapsed_ms, model);
+        ::metrics::counter!(
+            "dbx_model_proxy_stream_rate_limits_total",
+            "model" => model_label
+        )
+        .increment(1);
+    }
+
+    fn record_local_rate_limit(&self, model: &str, reason: &'static str) {
+        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let model_label = self
+            .store
+            .lock()
+            .expect("metrics store lock is not poisoned")
+            .record_rate_limited(elapsed_ms, model);
+        ::metrics::counter!(
+            "dbx_model_proxy_local_rate_limits_total",
+            "model" => model_label,
+            "reason" => reason
+        )
+        .increment(1);
+    }
+
+    fn record_oversized(&self, model: &str) {
+        let elapsed_ms = self.started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let mut store = self
+            .store
+            .lock()
+            .expect("metrics store lock is not poisoned");
+        store.record_rate_limited(elapsed_ms, model);
+        let model_label = store.record_oversized(model);
+        drop(store);
         ::metrics::counter!(
             "dbx_model_proxy_oversized_rejections_total",
             "model" => model_label
@@ -756,6 +936,56 @@ impl MetricsInner {
             "model" => model_label
         )
         .increment(1);
+    }
+
+    fn record_capacity_snapshots(&self, capacities: &[ThrottleModelSnapshot]) {
+        for capacity in capacities {
+            let model = {
+                let mut store = self
+                    .store
+                    .lock()
+                    .expect("metrics store lock is not poisoned");
+                let label = store.model_label(&capacity.model);
+                if label != "other" {
+                    store
+                        .models
+                        .entry(label.clone())
+                        .or_insert_with(|| ModelMetrics::new(&label));
+                }
+                label
+            };
+            ::metrics::gauge!(
+                "dbx_model_proxy_current_queue_depth",
+                "model" => model.clone()
+            )
+            .set(capacity.queue_depth as f64);
+            ::metrics::gauge!(
+                "dbx_model_proxy_rate_limit_penalty_basis_points",
+                "model" => model.clone()
+            )
+            .set(f64::from(capacity.penalty_basis_points));
+            if let Some(input_limit) = capacity.input_limit {
+                ::metrics::gauge!(
+                    "dbx_model_proxy_input_limit_tokens",
+                    "model" => model.clone()
+                )
+                .set(input_limit as f64);
+            }
+            if let Some(input_budget) = capacity.effective_input_budget {
+                ::metrics::gauge!(
+                    "dbx_model_proxy_effective_input_budget_tokens",
+                    "model" => model.clone()
+                )
+                .set(input_budget as f64);
+            }
+            if let Some(input_used) = capacity.input_window_used {
+                ::metrics::gauge!(
+                    "dbx_model_proxy_input_window_used_tokens",
+                    "model" => model
+                )
+                .set(input_used as f64);
+            }
+        }
     }
 
     fn snapshot(&self) -> MetricsSnapshot {
@@ -836,6 +1066,7 @@ impl ReasoningCounts {
 struct MetricsStore {
     total_requests: u64,
     total_rate_limited: u64,
+    total_fallbacks: u64,
     latency: Histogram<u64>,
     detailed: VecDeque<Bucket>,
     detailed_current: Bucket,
@@ -853,6 +1084,7 @@ impl MetricsStore {
         Self {
             total_requests: 0,
             total_rate_limited: 0,
+            total_fallbacks: 0,
             latency: latency_histogram(),
             detailed: VecDeque::with_capacity(DETAILED_BUCKET_LIMIT),
             detailed_current: Bucket::default(),
@@ -868,6 +1100,9 @@ impl MetricsStore {
     fn record_outcome(&mut self, elapsed_ms: u64, outcome: &RequestOutcome) -> String {
         self.advance(elapsed_ms);
         self.total_requests = self.total_requests.saturating_add(1);
+        self.total_fallbacks = self
+            .total_fallbacks
+            .saturating_add(u64::from(outcome.fallback_step > 0));
         let _ = self.latency.record(outcome.duration_ms);
         self.detailed_current.record(outcome);
         self.rollup_current.record(outcome);
@@ -893,7 +1128,7 @@ impl MetricsStore {
         model_label
     }
 
-    fn record_upstream_429(&mut self, elapsed_ms: u64, model: &str) -> String {
+    fn record_rate_limited(&mut self, elapsed_ms: u64, model: &str) -> String {
         self.advance(elapsed_ms);
         self.total_rate_limited = self.total_rate_limited.saturating_add(1);
         self.detailed_current.rate_limited = self.detailed_current.rate_limited.saturating_add(1);
@@ -947,7 +1182,12 @@ impl MetricsStore {
         }
     }
 
-    fn record_transition(&mut self, elapsed_ms: u64, model: &str, transition: AutoTransition) {
+    fn record_transition(
+        &mut self,
+        elapsed_ms: u64,
+        model: &str,
+        transition: AutoTransition,
+    ) -> String {
         if self.rate_limit_events.len() == RATE_LIMIT_EVENT_LIMIT {
             self.rate_limit_events.pop_front();
         }
@@ -956,17 +1196,32 @@ impl MetricsStore {
             model: model.to_owned(),
             transition,
         });
-        if self.models.contains_key(model) || self.models.len() < MODEL_SERIES_LIMIT {
+        let label = self.model_label(model);
+        let limiter = limiter_state(transition);
+        if label == "other" {
+            self.other.limiter = limiter.to_owned();
+            self.other.penalty_basis_points = transition.penalty_basis_points;
+            self.other.input_limit = Some(transition.base_input_budget);
+            self.other.effective_input_budget = Some(transition.effective_input_budget);
+            self.other.limiter_observed = true;
+            if transition.kind == AutoTransitionKind::Deactivated {
+                self.other.input_window_used = Some(0);
+            }
+        } else {
             let target = self
                 .models
-                .entry(model.to_owned())
-                .or_insert_with(|| ModelMetrics::new(model));
-            target.limiter = format!("{:?}", transition.kind).to_ascii_lowercase();
+                .entry(label.clone())
+                .or_insert_with(|| ModelMetrics::new(&label));
+            target.limiter = limiter.to_owned();
+            target.penalty_basis_points = transition.penalty_basis_points;
+            target.input_limit = Some(transition.base_input_budget);
             target.effective_input_budget = Some(transition.effective_input_budget);
-        } else {
-            self.other.limiter = format!("{:?}", transition.kind).to_ascii_lowercase();
-            self.other.effective_input_budget = Some(transition.effective_input_budget);
+            target.limiter_observed = true;
+            if transition.kind == AutoTransitionKind::Deactivated {
+                target.input_window_used = Some(0);
+            }
         }
+        label
     }
 
     fn advance(&mut self, elapsed_ms: u64) {
@@ -1059,6 +1314,7 @@ impl MetricsStore {
                 active_models: self.models.len(),
                 total_requests: self.total_requests,
                 total_rate_limited: self.total_rate_limited,
+                total_fallbacks: self.total_fallbacks,
             },
             history,
             rollup_history,
@@ -1147,11 +1403,17 @@ struct ModelMetrics {
     rate_limited: u64,
     oversized_rejections: u64,
     retries: u64,
+    fallbacks: u64,
     queue_wait_ms: u64,
+    queue_depth: u64,
     queue_depth_max: u64,
     latency: Histogram<u64>,
     limiter: String,
+    limiter_observed: bool,
+    penalty_basis_points: u16,
+    input_limit: Option<u64>,
     effective_input_budget: Option<u64>,
+    input_window_used: Option<u64>,
     reasoning: ReasoningCounts,
 }
 
@@ -1171,11 +1433,17 @@ impl ModelMetrics {
             rate_limited: 0,
             oversized_rejections: 0,
             retries: 0,
+            fallbacks: 0,
             queue_wait_ms: 0,
+            queue_depth: 0,
             queue_depth_max: 0,
             latency: latency_histogram(),
             limiter: "inactive".to_owned(),
+            limiter_observed: false,
+            penalty_basis_points: 0,
+            input_limit: None,
             effective_input_budget: None,
+            input_window_used: None,
             reasoning: ReasoningCounts::default(),
         }
     }
@@ -1203,21 +1471,31 @@ impl ModelMetrics {
         self.retries = self
             .retries
             .saturating_add(u64::from(outcome.upstream_attempt.saturating_sub(1)));
+        self.fallbacks = self
+            .fallbacks
+            .saturating_add(u64::from(outcome.fallback_step > 0));
         self.queue_wait_ms = self
             .queue_wait_ms
             .saturating_add(outcome.throttle.wait.as_millis().min(u128::from(u64::MAX)) as u64);
+        self.queue_depth = outcome.throttle.current_queue_depth();
         self.queue_depth_max = self.queue_depth_max.max(outcome.throttle.queue_depth);
         if let Some(reasoning_setting) = outcome.reasoning_setting {
             self.reasoning.record(reasoning_setting);
         }
         let _ = self.latency.record(outcome.duration_ms);
-        if outcome.throttle.active && self.limiter == "inactive" {
-            self.limiter = if outcome.throttle.penalty_basis_points == 0 {
-                "probation".to_owned()
-            } else {
-                "enforced".to_owned()
-            };
+        if !self.limiter_observed && outcome.throttle.active {
+            self.limiter = "enforced".to_owned();
+            self.penalty_basis_points = outcome.throttle.penalty_basis_points;
+            self.input_limit = outcome.throttle.input_limit;
             self.effective_input_budget = outcome.throttle.input_window_budget;
+        }
+        if self.limiter != "inactive" {
+            self.input_window_used = outcome.throttle.input_window_budget.map(|_| {
+                outcome
+                    .throttle
+                    .input_window_used_before
+                    .saturating_add(outcome.throttle.reserved_input_tokens)
+            });
         }
     }
 
@@ -1275,15 +1553,31 @@ impl ModelMetrics {
             rate_limited: self.rate_limited,
             oversized_rejections: self.oversized_rejections,
             retries: self.retries,
+            fallbacks: self.fallbacks,
             queue_wait_ms: self.queue_wait_ms,
+            queue_depth: self.queue_depth,
             queue_depth_max: self.queue_depth_max,
             p50_latency_ms: quantile(&self.latency, 0.50),
             p95_latency_ms: quantile(&self.latency, 0.95),
             p99_latency_ms: quantile(&self.latency, 0.99),
             limiter: self.limiter.clone(),
+            penalty_basis_points: self.penalty_basis_points,
+            input_limit: self.input_limit,
             effective_input_budget: self.effective_input_budget,
+            input_window_used: self.input_window_used,
             reasoning_levels: self.reasoning.snapshot(),
         }
+    }
+}
+
+#[cfg(feature = "metrics")]
+fn limiter_state(transition: AutoTransition) -> &'static str {
+    match transition.kind {
+        AutoTransitionKind::Deactivated => "inactive",
+        AutoTransitionKind::Activated
+        | AutoTransitionKind::Tightened
+        | AutoTransitionKind::Relaxed
+        | AutoTransitionKind::Reactivated => "enforced",
     }
 }
 
@@ -1468,26 +1762,88 @@ mod tests {
         })
         .unwrap();
         let mut receiver = runtime.subscribe().unwrap();
-        runtime.record_outcome(&fixture_outcome("model".to_owned()));
+        let mut outcome = fixture_outcome("model".to_owned());
+        outcome.fallback_step = 1;
+        runtime.record_outcome(&outcome);
         runtime.record_upstream_429("model", true);
         runtime.record_oversized("model");
+        runtime.record_local_rate_limit("model", "wait-budget");
+        runtime.record_transition(
+            "model",
+            AutoTransition {
+                kind: AutoTransitionKind::Activated,
+                penalty_basis_points: 1_000,
+                base_input_budget: 200_000,
+                effective_input_budget: 180_000,
+            },
+        );
 
         let snapshot = runtime.snapshot();
         assert_eq!(snapshot.summary.total_requests, 1);
-        assert_eq!(snapshot.summary.total_rate_limited, 1);
+        assert_eq!(snapshot.summary.total_rate_limited, 3);
+        assert_eq!(snapshot.summary.total_fallbacks, 1);
         assert_eq!(snapshot.models[0].requests, 1);
+        assert_eq!(snapshot.models[0].fallbacks, 1);
         assert!(snapshot.models[0].history.is_empty());
-        assert_eq!(snapshot.models[0].rate_limited, 1);
+        assert_eq!(snapshot.models[0].rate_limited, 3);
         assert_eq!(snapshot.models[0].oversized_rejections, 1);
         assert_eq!(snapshot.reasoning_levels[0].level, "high");
         assert_eq!(snapshot.reasoning_levels[0].requests, 1);
         assert_eq!(snapshot.models[0].reasoning_levels[0].level, "high");
+        assert_eq!(snapshot.models[0].limiter, "enforced");
+        assert_eq!(snapshot.models[0].penalty_basis_points, 1_000);
+        assert_eq!(snapshot.models[0].effective_input_budget, Some(180_000));
         let model_snapshot = runtime.snapshot_for_model("model");
         assert!(!model_snapshot.models[0].history.is_empty());
-        assert!(runtime
-            .prometheus()
-            .unwrap()
-            .contains("dbx_model_proxy_requests_total"));
+        let prometheus = runtime.prometheus().unwrap();
+        assert!(prometheus.contains("dbx_model_proxy_requests_total"));
+        assert!(prometheus.contains("dbx_model_proxy_rate_limit_penalty_basis_points"));
+        assert!(prometheus.contains("dbx_model_proxy_effective_input_budget_tokens"));
+        assert!(prometheus.contains("dbx_model_proxy_model_fallbacks_total"));
+        assert!(prometheus.contains("dbx_model_proxy_local_rate_limits_total"));
+
+        runtime.record_transition(
+            "model",
+            AutoTransition {
+                kind: AutoTransitionKind::Deactivated,
+                penalty_basis_points: 0,
+                base_input_budget: 200_000,
+                effective_input_budget: 200_000,
+            },
+        );
+        let inactive = runtime.snapshot();
+        assert_eq!(inactive.models[0].limiter, "inactive");
+        assert_eq!(inactive.models[0].penalty_basis_points, 0);
+        assert_eq!(inactive.models[0].input_limit, Some(200_000));
+        assert_eq!(inactive.models[0].effective_input_budget, Some(200_000));
+        assert_eq!(inactive.models[0].input_window_used, Some(0));
+
+        let mut completing_activation = fixture_outcome("model".to_owned());
+        completing_activation.throttle.active = true;
+        completing_activation.throttle.input_limit = Some(200_000);
+        completing_activation.throttle.input_window_budget = Some(180_000);
+        completing_activation.throttle.input_window_used_before = 120_000;
+        completing_activation.throttle.reserved_input_tokens = 20_000;
+        runtime.record_outcome(&completing_activation);
+        let remains_inactive = runtime.snapshot();
+        assert_eq!(remains_inactive.models[0].limiter, "inactive");
+        assert_eq!(remains_inactive.models[0].input_window_used, Some(0));
+
+        let capacity = ThrottleModelSnapshot {
+            model: "model".to_owned(),
+            active: true,
+            input_limit: Some(200_000),
+            effective_input_budget: Some(180_000),
+            input_window_used: Some(120_000),
+            penalty_basis_points: 1_000,
+            queue_depth: 3,
+        };
+        runtime.record_capacity_snapshots(std::slice::from_ref(&capacity));
+        let mut live = runtime.snapshot();
+        live.apply_capacity_snapshots(&[capacity]);
+        assert_eq!(live.models[0].limiter, "enforced");
+        assert_eq!(live.models[0].input_window_used, Some(120_000));
+        assert_eq!(live.models[0].queue_depth, 3);
 
         tokio::time::timeout(Duration::from_secs(6), receiver.recv())
             .await
@@ -1522,9 +1878,17 @@ mod tests {
         let index = dashboard_asset("index.html").expect("dashboard index is embedded");
         let index = std::str::from_utf8(&index.body).unwrap();
         assert!(index.contains("Model proxy metrics"));
+        assert!(index.contains("<th>Fallbacks</th>"));
         assert!(index.contains("app.js"));
+        let app = dashboard_asset("app.js").expect("dashboard script is embedded");
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("penaltyBasisPoints"));
+        assert!(std::str::from_utf8(&app.body)
+            .unwrap()
+            .contains("inputWindowUsed"));
         assert!(!dashboard_asset("app.js").unwrap().immutable);
-        assert!(dashboard_asset("app.20cfdf0a.css").unwrap().immutable);
+        assert!(dashboard_asset("app.2675ef49.css").unwrap().immutable);
         assert!(dashboard_asset("assets/status-live-8.svg").is_some());
         assert!(dashboard_asset("missing.js").is_none());
     }
@@ -1555,6 +1919,7 @@ mod tests {
             usage: Default::default(),
             throttle: ThrottleAcquisition::test_fixture(),
             upstream_attempt: 1,
+            fallback_step: 0,
             finished: true,
             failed: false,
         }

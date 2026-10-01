@@ -1,6 +1,6 @@
 //! Fuzzy model search, ranking, and resolution.
 
-use std::{cmp::Ordering, sync::LazyLock};
+use std::{cmp::Ordering, collections::BTreeMap, sync::LazyLock};
 
 use difflib_fast::ratio;
 use regex::Regex;
@@ -161,6 +161,78 @@ pub fn rank_model_id(
     }
 }
 
+/// Build one same-family fallback candidate for each lower model version.
+///
+/// Exact variant tokens are preferred across versions. When a version does not
+/// offer that variant, live AI Gateway profile scores select its highest-quality
+/// endpoint without relying on provider-specific variant names.
+pub fn same_family_fallbacks(
+    endpoints: &[ServingEndpointSummary],
+    selected: &ServingEndpointSummary,
+    limit: usize,
+) -> Vec<ServingEndpointSummary> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let selected_name = endpoint_model_identity(selected);
+    let Some(selected_model) = parse_model_name(selected_name) else {
+        return Vec::new();
+    };
+    if !selected_model.family.is_versioned() || selected_model.version.is_empty() {
+        return Vec::new();
+    }
+    let selected_version = normalized_version(&selected_model.version);
+    let mut versions = BTreeMap::<[u32; 3], Vec<(&ServingEndpointSummary, Vec<String>)>>::new();
+    for endpoint in endpoints {
+        if endpoint.name == selected.name
+            || endpoint.status.deprecated
+            || endpoint.task.as_deref() != Some(crate::classify::CHAT_TASK)
+            || endpoint
+                .state
+                .as_deref()
+                .is_some_and(|state| !state.eq_ignore_ascii_case("READY"))
+        {
+            continue;
+        }
+        let identity = endpoint_model_identity(endpoint);
+        let Some(model) = parse_model_name(identity) else {
+            continue;
+        };
+        let version = normalized_version(&model.version);
+        if model.family != selected_model.family
+            || model.version.is_empty()
+            || version >= selected_version
+        {
+            continue;
+        }
+        versions
+            .entry(version)
+            .or_default()
+            .push((endpoint, model.model));
+    }
+
+    versions
+        .into_iter()
+        .rev()
+        .filter_map(|(_, mut candidates)| {
+            candidates.sort_by(|left, right| {
+                compare_fallback_candidate(
+                    &selected_model.model,
+                    left.0,
+                    &left.1,
+                    right.0,
+                    &right.1,
+                )
+            });
+            candidates
+                .into_iter()
+                .next()
+                .map(|(endpoint, _)| endpoint.clone())
+        })
+        .take(limit)
+        .collect()
+}
+
 fn token_distance(token: &str, name: &str) -> f64 {
     if name.contains(token) {
         return 0.0;
@@ -239,4 +311,73 @@ fn model_variant_rank(name: &str) -> u8 {
         return 1;
     }
     2
+}
+
+fn endpoint_model_identity(endpoint: &ServingEndpointSummary) -> &str {
+    endpoint
+        .model_service_name
+        .as_deref()
+        .unwrap_or(&endpoint.name)
+}
+
+fn normalized_version(version: &[u32]) -> [u32; 3] {
+    [
+        version.first().copied().unwrap_or_default(),
+        version.get(1).copied().unwrap_or_default(),
+        version.get(2).copied().unwrap_or_default(),
+    ]
+}
+
+fn compare_fallback_candidate(
+    selected_variant: &[String],
+    left: &ServingEndpointSummary,
+    left_variant: &[String],
+    right: &ServingEndpointSummary,
+    right_variant: &[String],
+) -> Ordering {
+    let left_exact = left_variant == selected_variant;
+    let right_exact = right_variant == selected_variant;
+    right_exact
+        .cmp(&left_exact)
+        .then_with(|| {
+            optional_profile_number(right.profile.as_ref().and_then(|profile| profile.quality))
+                .total_cmp(&optional_profile_number(
+                    left.profile.as_ref().and_then(|profile| profile.quality),
+                ))
+        })
+        .then_with(|| {
+            left.model_class
+                .map(ModelClass::order)
+                .unwrap_or(ModelClass::ORDER.len())
+                .cmp(
+                    &right
+                        .model_class
+                        .map(ModelClass::order)
+                        .unwrap_or(ModelClass::ORDER.len()),
+                )
+        })
+        .then_with(|| {
+            left.profile
+                .as_ref()
+                .and_then(|profile| profile.cost)
+                .unwrap_or(f64::INFINITY)
+                .total_cmp(
+                    &right
+                        .profile
+                        .as_ref()
+                        .and_then(|profile| profile.cost)
+                        .unwrap_or(f64::INFINITY),
+                )
+        })
+        .then_with(|| {
+            optional_profile_number(right.profile.as_ref().and_then(|profile| profile.speed))
+                .total_cmp(&optional_profile_number(
+                    left.profile.as_ref().and_then(|profile| profile.speed),
+                ))
+        })
+        .then_with(|| left.name.cmp(&right.name))
+}
+
+fn optional_profile_number(value: Option<f64>) -> f64 {
+    value.unwrap_or(f64::NEG_INFINITY)
 }

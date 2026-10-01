@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/metrics/vendor/gridstack.min.css" />
     <link rel="stylesheet" href="/metrics/vendor/uPlot.min.css" />
     <link rel="stylesheet" href="/metrics/brand.0b7222df.css" />
-    <link rel="stylesheet" href="/metrics/app.20cfdf0a.css" />
+    <link rel="stylesheet" href="/metrics/app.2675ef49.css" />
     <script src="/metrics/vendor/gridstack-all.js" defer></script>
     <script src="/metrics/vendor/uPlot.iife.min.js" defer></script>
     <script src="/metrics/app.js" defer></script>
@@ -121,8 +121,8 @@
           </article>
         </div>
         <div class="grid-stack-item" gs-id="rate-limit-summary" gs-x="8" gs-y="0" gs-w="2" gs-h="2" gs-min-w="2">
-          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Upstream HTTP 429 signals observed across every attempt, including attempts later recovered by a retry.">
-            <span>Upstream 429s</span>
+          <article class="grid-stack-item-content metric-card" tabindex="0" data-tooltip="Upstream HTTP 429s, in-band stream rate limits, and local admission rejections, including attempts later recovered by a retry or fallback.">
+            <span>Rate-limit signals</span>
             <div class="metric-value">
               <strong id="rate-429">0</strong>
               <img src="/metrics/assets/status-warning-7.svg" alt="" />
@@ -142,13 +142,13 @@
         </div>
 
         <div class="grid-stack-item" gs-id="request-chart" gs-x="0" gs-y="2" gs-w="6" gs-h="5" gs-min-w="4">
-          <article class="grid-stack-item-content panel chart-panel" tabindex="0" data-tooltip="Completed requests per minute over time. Upstream 429 signals are shown separately because a retry can recover them.">
+          <article class="grid-stack-item-content panel chart-panel" tabindex="0" data-tooltip="Completed requests per minute over time. Rate-limit signals are shown separately because a retry or model fallback can recover them.">
             <div class="panel-heading">
               <div>
                 <h2>Request throughput</h2>
                 <div class="chart-legend" aria-label="Request throughput legend">
                   <span><i class="legend-swatch legend-primary"></i><span id="request-series-label">All requests</span></span>
-                  <span id="request-429-legend"><i class="legend-swatch legend-warning"></i>Upstream 429s</span>
+                  <span id="request-429-legend"><i class="legend-swatch legend-warning"></i>Rate-limit signals</span>
                 </div>
               </div>
               <strong id="request-chart-value">0 rpm</strong>
@@ -206,14 +206,15 @@
                     <th>Errors</th>
                     <th>429s</th>
                     <th>Retries</th>
+                    <th>Fallbacks</th>
                     <th>Avg queue</th>
                     <th>Max depth</th>
                     <th>Reasoning</th>
-                    <th>Limiter</th>
+                    <th>Rate-limit capacity</th>
                   </tr>
                 </thead>
                 <tbody id="models-body">
-                  <tr><td colspan="13" class="empty">Waiting for model traffic</td></tr>
+                  <tr><td colspan="14" class="empty">Waiting for model traffic</td></tr>
                 </tbody>
               </table>
             </div>
@@ -231,7 +232,7 @@
           </article>
         </div>
         <div class="grid-stack-item" gs-id="rate-limit-timeline" gs-x="6" gs-y="18" gs-w="6" gs-h="5" gs-min-w="4">
-          <article class="grid-stack-item-content panel timeline-panel" tabindex="0" data-tooltip="Recent adaptive rate-limit activation, tightening, recovery, probation, and deactivation events.">
+          <article class="grid-stack-item-content panel timeline-panel" tabindex="0" data-tooltip="Recent adaptive rate-limit activation, tightening, recovery, and deactivation events.">
             <div class="panel-heading">
               <h2>Rate-limit timeline</h2>
             </div>

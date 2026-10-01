@@ -16,10 +16,10 @@ use dbx_tools_model::{
     model_family, model_search_query, model_service_names, model_serving_api, models_payload,
     models_payload_with_capabilities, normalize_serving_endpoints_json, parse_model_capabilities,
     parse_model_name, parse_model_rate_limits, parse_retired_models, rank_model_id,
-    reasoning_effort_names_by_family, reasoning_efforts_by_family, status_from_names,
-    version_tuple, ModelCapabilitiesResolver, ModelClass, ModelClient, ModelFamily, ModelQuery,
-    ModelRateLimitsResolver, ModelServingApi, ModelStatus, ModelStatusResolver, ParsedModelName,
-    ReasoningEffort, ServingEndpointSummary,
+    reasoning_effort_names_by_family, reasoning_efforts_by_family, same_family_fallbacks,
+    status_from_names, version_tuple, ModelCapabilitiesResolver, ModelClass, ModelClient,
+    ModelFamily, ModelProfile, ModelQuery, ModelRateLimitsResolver, ModelServingApi, ModelStatus,
+    ModelStatusResolver, ParsedModelName, ReasoningEffort, ServingEndpointSummary,
 };
 use serde_json::json;
 use wiremock::{
@@ -124,6 +124,69 @@ fn gpt_search_returns_the_highest_version_and_excludes_gpt_oss() {
 
     assert!(resolved.matched);
     assert_eq!(resolved.model_id, "databricks-gpt-5-6-sol");
+}
+
+#[test]
+fn family_fallbacks_preserve_variants_then_use_live_quality() {
+    let selected = endpoint("databricks-gpt-6-1-sol", ModelClass::ChatBalanced);
+    let mut gpt_6_astra = endpoint("databricks-gpt-6-astra", ModelClass::ChatThinking);
+    gpt_6_astra.profile = profile(100.0);
+    let mut gpt_6_sol = endpoint("databricks-gpt-6-sol", ModelClass::ChatBalanced);
+    gpt_6_sol.profile = profile(70.0);
+    let mut gpt_5_6_terra = endpoint("databricks-gpt-5-6-terra", ModelClass::ChatBalanced);
+    gpt_5_6_terra.profile = profile(60.0);
+    let mut gpt_5_6_luna = endpoint("databricks-gpt-5-6-luna", ModelClass::ChatFast);
+    gpt_5_6_luna.profile = profile(30.0);
+    let gpt_5_5_pro = endpoint("databricks-gpt-5-5-pro", ModelClass::ChatThinking);
+    let endpoints = [
+        selected.clone(),
+        gpt_6_astra,
+        gpt_6_sol,
+        gpt_5_6_luna,
+        gpt_5_6_terra,
+        gpt_5_5_pro,
+        endpoint("databricks-claude-sonnet-5", ModelClass::ChatBalanced),
+    ];
+
+    assert_eq!(
+        same_family_fallbacks(&endpoints, &selected, 5)
+            .into_iter()
+            .map(|endpoint| endpoint.name)
+            .collect::<Vec<_>>(),
+        [
+            "databricks-gpt-6-sol",
+            "databricks-gpt-5-6-terra",
+            "databricks-gpt-5-5-pro",
+        ]
+    );
+}
+
+#[test]
+fn family_fallbacks_use_foundation_identity_and_skip_ineligible_models() {
+    let mut selected = endpoint("preferred-alias", ModelClass::ChatBalanced);
+    selected.model_service_name = Some("system.ai.databricks-gpt-6-1-sol".to_owned());
+    let mut ready = endpoint("fallback-alias", ModelClass::ChatBalanced);
+    ready.model_service_name = Some("system.ai.databricks-gpt-6-sol".to_owned());
+    ready.state = Some("READY".to_owned());
+    let mut unavailable = endpoint("unavailable", ModelClass::ChatBalanced);
+    unavailable.model_service_name = Some("databricks-gpt-5-6-sol".to_owned());
+    unavailable.state = Some("NOT_READY".to_owned());
+    let mut deprecated = endpoint("deprecated", ModelClass::ChatBalanced);
+    deprecated.model_service_name = Some("databricks-gpt-5-5-sol".to_owned());
+    deprecated.status.deprecated = true;
+    let lower = endpoint("databricks-gpt-5-4", ModelClass::ChatBalanced);
+
+    assert_eq!(
+        same_family_fallbacks(
+            &[selected.clone(), ready, unavailable, deprecated, lower],
+            &selected,
+            1,
+        )
+        .into_iter()
+        .map(|endpoint| endpoint.name)
+        .collect::<Vec<_>>(),
+        ["fallback-alias"]
+    );
 }
 
 #[test]
@@ -895,6 +958,14 @@ fn endpoint(name: &str, model_class: ModelClass) -> ServingEndpointSummary {
         status: ModelStatus::default(),
         dimension: None,
     }
+}
+
+fn profile(quality: f64) -> Option<ModelProfile> {
+    Some(ModelProfile {
+        quality: Some(quality),
+        speed: None,
+        cost: None,
+    })
 }
 
 #[cfg(unix)]

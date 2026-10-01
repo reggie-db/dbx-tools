@@ -31,6 +31,8 @@ pub(crate) enum ProxyError {
         estimated_input_tokens: u64,
         input_limit: u64,
     },
+    #[error("rate-limit wait budget exhausted for {model} after {wait_ms} ms")]
+    RateLimitWait { model: String, wait_ms: u64 },
     #[error("invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error("Databricks request failed: {0}")]
@@ -63,6 +65,21 @@ impl IntoResponse for ProxyError {
             )
                 .into_response();
         }
+        if let Self::RateLimitWait { model, wait_ms } = self {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({
+                    "error": {
+                        "message": "The proxy exhausted its total rate-limit wait budget.",
+                        "type": "local_rate_limit_wait_exceeded",
+                        "code": 429,
+                        "model": model,
+                        "wait_ms": wait_ms
+                    }
+                })),
+            )
+                .into_response();
+        }
         let status = match &self {
             Self::MissingModel
             | Self::EmbeddingModelNotFound(_)
@@ -77,7 +94,8 @@ impl IntoResponse for ProxyError {
             | Self::Translation(_)
             | Self::Databricks(_)
             | Self::Model(_)
-            | Self::OversizedInput { .. } => StatusCode::BAD_GATEWAY,
+            | Self::OversizedInput { .. }
+            | Self::RateLimitWait { .. } => StatusCode::BAD_GATEWAY,
         };
         (
             status,

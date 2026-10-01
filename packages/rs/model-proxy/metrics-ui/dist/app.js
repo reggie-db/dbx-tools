@@ -393,7 +393,7 @@
         "request-chart",
         [
           { label: "Requests", color: blue },
-          { label: "Upstream 429s", color: warning },
+          { label: "Rate-limit signals", color: warning },
         ],
         (value) => formatNumber(value),
       );
@@ -513,7 +513,7 @@
       all: "All requests",
       success: "Successful requests",
       errors: "Failed requests",
-      "rate-limited": "Upstream 429s",
+      "rate-limited": "Rate-limit signals",
     };
     document.querySelector("#request-chart-value").textContent =
       state.outcome === "rate-limited"
@@ -604,6 +604,89 @@
     return reasoningLabel(dominant.level);
   }
 
+  function limiterLabel(model) {
+    const limiter = model.limiter || "inactive";
+    if (limiter === "inactive") {
+      return limiter;
+    }
+    const penalty = Number(model.penaltyBasisPoints || 0) / 100;
+    const formattedPenalty = Number.isInteger(penalty)
+      ? penalty.toFixed(0)
+      : penalty.toFixed(2);
+    const budget =
+      model.effectiveInputBudget == null
+        ? ""
+        : `, ${formatNumber(model.effectiveInputBudget)} ITPM`;
+    return `${limiter} (${formattedPenalty}%${budget})`;
+  }
+
+  function capacityPercent(value, total) {
+    return total > 0 ? Math.max(0, Math.min(100, (Number(value || 0) * 100) / total)) : 0;
+  }
+
+  function capacityRow(labelText, percent, detailText, stateName) {
+    const row = document.createElement("div");
+    row.className = "capacity-row";
+    const heading = document.createElement("div");
+    const label = document.createElement("span");
+    label.textContent = labelText;
+    const detail = document.createElement("strong");
+    detail.textContent = detailText;
+    heading.append(label, detail);
+    const track = document.createElement("div");
+    track.className = "capacity-track";
+    const fill = document.createElement("span");
+    fill.style.width = `${percent}%`;
+    fill.dataset.state = stateName;
+    track.append(fill);
+    row.append(heading, track);
+    return row;
+  }
+
+  function capacityCell(model) {
+    const element = cell("", "capacity-cell", model.limiter);
+    const summary = document.createElement("strong");
+    summary.className = "capacity-summary";
+    summary.textContent = limiterLabel(model);
+    element.append(summary);
+
+    const budget = Number(model.effectiveInputBudget || 0);
+    const used = Number(model.inputWindowUsed || 0);
+    const windowPercent = capacityPercent(used, budget);
+    const windowState = windowPercent >= 85 ? "danger" : windowPercent >= 60 ? "warning" : "safe";
+    element.append(
+      capacityRow(
+        "Input window",
+        windowPercent,
+        budget ? `${formatNumber(used)} / ${formatNumber(budget)}` : "inactive",
+        windowState,
+      ),
+    );
+
+    const penalty = Number(model.penaltyBasisPoints || 0) / 100;
+    element.append(
+      capacityRow(
+        "Adaptive penalty",
+        capacityPercent(penalty, 90),
+        `${penalty}% / 90% max`,
+        penalty >= 50 ? "danger" : penalty > 0 ? "warning" : "safe",
+      ),
+    );
+
+    const queueDepth = Number(model.queueDepth || 0);
+    const queuePeak = Math.max(queueDepth, Number(model.queueDepthMax || 0));
+    const averageWait = Number(model.queueWaitMs || 0) / Math.max(1, Number(model.requests || 0));
+    element.append(
+      capacityRow(
+        "Queue",
+        capacityPercent(queueDepth, Math.max(1, queuePeak)),
+        `${formatInteger(queueDepth)} waiting · peak ${formatInteger(queuePeak)} · avg ${formatDuration(averageWait)}`,
+        queueDepth > 1 ? "danger" : queueDepth > 0 ? "warning" : "safe",
+      ),
+    );
+    return element;
+  }
+
   function renderReasoning(snapshot, selectedModel) {
     const levels = selectedModel?.reasoningLevels ?? snapshot.reasoningLevels ?? [];
     const total = levels.reduce((sum, level) => sum + Number(level.requests || 0), 0);
@@ -665,7 +748,7 @@
     if (!models.length) {
       const row = document.createElement("tr");
       const empty = cell("Waiting for model traffic", "empty");
-      empty.colSpan = 13;
+      empty.colSpan = 14;
       row.append(empty);
       body.append(row);
     } else {
@@ -681,10 +764,11 @@
           cell(formatInteger(model.errors)),
           cell(formatInteger(model.rateLimited)),
           cell(formatInteger(model.retries)),
+          cell(formatInteger(model.fallbacks)),
           cell(formatDuration(Number(model.queueWaitMs || 0) / Math.max(1, model.requests || 0))),
           cell(formatInteger(model.queueDepthMax || 0)),
           cell(dominantReasoning(model.reasoningLevels), "reasoning-setting"),
-          cell(model.limiter, "limiter", model.limiter),
+          capacityCell(model),
         );
         body.append(row);
       });
@@ -697,7 +781,7 @@
     if (["activated", "tightened", "reactivated"].includes(kind)) {
       return "/metrics/assets/status-danger-8.svg";
     }
-    if (["relaxed", "probation"].includes(kind)) {
+    if (kind === "relaxed") {
       return "/metrics/assets/status-warning-8.svg";
     }
     return "/metrics/assets/status-info-8.svg";
@@ -728,7 +812,8 @@
         `${timestamp.toLocaleTimeString([], { hour12: false })}  ${event.transition.kind}`;
       const description = document.createElement("span");
       description.textContent =
-        `${event.model} · budget ${formatNumber(event.transition.effectiveInputBudget)}`;
+        `${event.model} · ${Number(event.transition.penaltyBasisPoints || 0) / 100}% penalty · ` +
+        `budget ${formatNumber(event.transition.effectiveInputBudget)}`;
       detail.append(title, description);
       row.append(icon, detail);
       timeline.append(row);
@@ -813,14 +898,10 @@
     source.addEventListener("snapshot", (event) => {
       try {
         const snapshot = JSON.parse(event.data);
-        if (state.model === "all") {
-          render(snapshot);
-        } else {
-          updateModelOptions(snapshot.models);
-          loadSnapshot().catch(() => {
-            notice.textContent = "Selected model history could not be refreshed.";
-          });
-        }
+        updateModelOptions(snapshot.models);
+        loadSnapshot().catch(() => {
+          notice.textContent = "Live model capacity could not be refreshed.";
+        });
       } catch {
         notice.textContent = "A metrics update could not be decoded.";
       }

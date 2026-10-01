@@ -22,13 +22,13 @@ pub(crate) struct AutoRecoveryPolicy {
 impl Default for AutoRecoveryPolicy {
     fn default() -> Self {
         Self {
-            initial_penalty_basis_points: 5_000,
-            tightening_basis_points: 2_500,
+            initial_penalty_basis_points: 1_000,
+            tightening_basis_points: 1_000,
             maximum_penalty_basis_points: 9_000,
             recovery_basis_points: 1_000,
-            initial_hold: Duration::from_secs(10 * 60),
-            recovery_interval: Duration::from_secs(5 * 60),
-            clean_successes: 10,
+            initial_hold: Duration::from_secs(5 * 60),
+            recovery_interval: Duration::from_secs(60),
+            clean_successes: 5,
         }
     }
 }
@@ -40,7 +40,6 @@ pub(crate) enum AutoTransitionKind {
     Activated,
     Tightened,
     Relaxed,
-    Probation,
     Deactivated,
     Reactivated,
 }
@@ -62,7 +61,6 @@ pub(crate) struct AutoSnapshot {
     pub(crate) active: bool,
     pub(crate) penalty_basis_points: u16,
     pub(crate) clean_successes: u32,
-    pub(crate) probation: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -71,7 +69,6 @@ struct EnforcedState {
     last_input_429_at: Instant,
     last_recovery_step_at: Instant,
     clean_successes_since_step: u32,
-    full_budget_probation: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -109,7 +106,6 @@ impl AutoLimiter {
                     last_input_429_at: now,
                     last_recovery_step_at: now,
                     clean_successes_since_step: 0,
-                    full_budget_probation: false,
                 });
                 kind
             }
@@ -121,7 +117,6 @@ impl AutoLimiter {
                 state.last_input_429_at = now;
                 state.last_recovery_step_at = now;
                 state.clean_successes_since_step = 0;
-                state.full_budget_probation = false;
                 AutoTransitionKind::Tightened
             }
         };
@@ -152,13 +147,9 @@ impl AutoLimiter {
                 .saturating_sub(policy.recovery_basis_points);
             state.clean_successes_since_step = 0;
             state.last_recovery_step_at = now;
-            let kind = if state.penalty_basis_points == 0 {
-                state.full_budget_probation = true;
-                AutoTransitionKind::Probation
-            } else {
-                AutoTransitionKind::Relaxed
-            };
-            return Some(self.transition(kind, base_input_budget));
+            if state.penalty_basis_points > 0 {
+                return Some(self.transition(AutoTransitionKind::Relaxed, base_input_budget));
+            }
         }
 
         self.phase = AutoPhase::Inactive;
@@ -171,13 +162,11 @@ impl AutoLimiter {
                 active: false,
                 penalty_basis_points: 0,
                 clean_successes: 0,
-                probation: false,
             },
             AutoPhase::Enforced(state) => AutoSnapshot {
                 active: true,
                 penalty_basis_points: state.penalty_basis_points,
                 clean_successes: state.clean_successes_since_step,
-                probation: state.full_budget_probation,
             },
         }
     }
@@ -219,14 +208,27 @@ mod tests {
 
     fn test_policy() -> AutoRecoveryPolicy {
         AutoRecoveryPolicy {
-            initial_penalty_basis_points: 5_000,
-            tightening_basis_points: 2_500,
-            maximum_penalty_basis_points: 9_000,
-            recovery_basis_points: 1_000,
             initial_hold: Duration::from_secs(10),
             recovery_interval: Duration::from_secs(5),
             clean_successes: 2,
+            ..AutoRecoveryPolicy::default()
         }
+    }
+
+    #[test]
+    fn default_policy_ramps_and_recovers_gradually() {
+        assert_eq!(
+            AutoRecoveryPolicy::default(),
+            AutoRecoveryPolicy {
+                initial_penalty_basis_points: 1_000,
+                tightening_basis_points: 1_000,
+                maximum_penalty_basis_points: 9_000,
+                recovery_basis_points: 1_000,
+                initial_hold: Duration::from_secs(5 * 60),
+                recovery_interval: Duration::from_secs(60),
+                clean_successes: 5,
+            }
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -236,10 +238,12 @@ mod tests {
 
         let activated = limiter.record_input_429(Instant::now(), 1_000, policy);
         assert_eq!(activated.kind, AutoTransitionKind::Activated);
-        assert_eq!(activated.penalty_basis_points, 5_000);
-        assert_eq!(activated.effective_input_budget, 500);
+        assert_eq!(activated.penalty_basis_points, 1_000);
+        assert_eq!(activated.effective_input_budget, 900);
 
-        for expected in [7_500, 9_000, 9_000] {
+        for expected in [
+            2_000, 3_000, 4_000, 5_000, 6_000, 7_000, 8_000, 9_000, 9_000,
+        ] {
             let tightened = limiter.record_input_429(Instant::now(), 1_000, policy);
             assert_eq!(tightened.kind, AutoTransitionKind::Tightened);
             assert_eq!(tightened.penalty_basis_points, expected);
@@ -251,6 +255,7 @@ mod tests {
         let mut limiter = AutoLimiter::default();
         let policy = test_policy();
         limiter.record_input_429(Instant::now(), 1_000, policy);
+        limiter.record_input_429(Instant::now(), 1_000, policy);
 
         tokio::time::advance(Duration::from_secs(20)).await;
         assert_eq!(limiter.record_success(Instant::now(), 1_000, policy), None);
@@ -258,20 +263,20 @@ mod tests {
             .record_success(Instant::now(), 1_000, policy)
             .expect("clean traffic relaxes one step");
         assert_eq!(relaxed.kind, AutoTransitionKind::Relaxed);
-        assert_eq!(relaxed.penalty_basis_points, 4_000);
+        assert_eq!(relaxed.penalty_basis_points, 1_000);
 
-        for _ in 0..2 {
-            assert_eq!(limiter.record_success(Instant::now(), 1_000, policy), None);
-        }
+        assert_eq!(limiter.record_success(Instant::now(), 1_000, policy), None);
         tokio::time::advance(Duration::from_secs(5)).await;
-        let relaxed = limiter
+        let deactivated = limiter
             .record_success(Instant::now(), 1_000, policy)
             .expect("the next interval relaxes exactly once");
-        assert_eq!(relaxed.penalty_basis_points, 3_000);
+        assert_eq!(deactivated.kind, AutoTransitionKind::Deactivated);
+        assert_eq!(deactivated.penalty_basis_points, 0);
+        assert!(!limiter.snapshot().active);
     }
 
     #[tokio::test(start_paused = true)]
-    async fn enters_probation_before_deactivation_and_reactivates() {
+    async fn zero_penalty_deactivates_and_a_later_signal_reactivates() {
         let policy = AutoRecoveryPolicy {
             recovery_basis_points: 5_000,
             ..test_policy()
@@ -282,21 +287,9 @@ mod tests {
         assert!(limiter
             .record_success(Instant::now(), 1_000, policy)
             .is_none());
-        let probation = limiter
-            .record_success(Instant::now(), 1_000, policy)
-            .expect("zero penalty begins probation");
-        assert_eq!(probation.kind, AutoTransitionKind::Probation);
-        assert!(limiter.snapshot().probation);
-
-        for _ in 0..2 {
-            assert!(limiter
-                .record_success(Instant::now(), 1_000, policy)
-                .is_none());
-        }
-        tokio::time::advance(Duration::from_secs(5)).await;
         let deactivated = limiter
             .record_success(Instant::now(), 1_000, policy)
-            .expect("probation completes after time and traffic");
+            .expect("zero penalty deactivates automatic admission");
         assert_eq!(deactivated.kind, AutoTransitionKind::Deactivated);
         assert!(!limiter.snapshot().active);
 
@@ -322,6 +315,6 @@ mod tests {
         assert!(limiter
             .record_success(Instant::now(), 1_000, policy)
             .is_none());
-        assert_eq!(limiter.snapshot().penalty_basis_points, 7_500);
+        assert_eq!(limiter.snapshot().penalty_basis_points, 2_000);
     }
 }

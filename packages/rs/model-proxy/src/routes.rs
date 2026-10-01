@@ -27,8 +27,8 @@ use base64::{
 };
 use dbx_tools_core::{DatabricksClient, DatabricksClientError};
 use dbx_tools_model::{
-    codex_model_name, is_responses_only, models_payload_with_capabilities,
-    ModelCapabilitiesResolver, ModelClass, ModelClient,
+    codex_model_name, is_responses_only, models_payload_with_capabilities, same_family_fallbacks,
+    ModelCapabilities, ModelCapabilitiesResolver, ModelClass, ModelClient, ServingEndpointSummary,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -44,7 +44,8 @@ use crate::{
     metrics::{MetricsRuntime, PeerAddr},
     protocol::{is_codex_originator, ClientWire, TargetWire},
     rate_limit::{
-        rate_limit_details, server_retry_after, RateLimitDetails, RateLimitGate, RateLimitPolicy,
+        rate_limit_details, server_retry_after, ModelFallbackPolicy, RateLimitDetails,
+        RateLimitGate, RateLimitPolicy,
     },
     request_log::{ReasoningSetting, RequestLogContext, RequestLogMetadata},
     stream::{stream_response, StreamLogContext},
@@ -57,6 +58,9 @@ use crate::{
 const ORIGINATOR_HEADER: &str = "originator";
 const USER_ID_HEADER: &str = "x-forwarded-user";
 const USER_EMAIL_HEADER: &str = "x-forwarded-email";
+const FALLBACK_PREFERRED_MODEL_HEADER: &str = "x-model-proxy-preferred-model";
+const FALLBACK_RESOLVED_MODEL_HEADER: &str = "x-model-proxy-resolved-model";
+const FALLBACK_STEP_HEADER: &str = "x-model-proxy-fallback-step";
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -66,6 +70,7 @@ pub(crate) struct AppState {
     target: TargetWire,
     throttle: RequestThrottle,
     image_resize_threshold_bytes: usize,
+    model_fallback: ModelFallbackPolicy,
     rate_limits: RateLimitGate,
     metrics: MetricsRuntime,
 }
@@ -74,6 +79,7 @@ pub(crate) struct AppConfig {
     pub(crate) target: TargetWire,
     pub(crate) throttle: ThrottleConfig,
     pub(crate) image_resize_threshold_bytes: usize,
+    pub(crate) model_fallback: ModelFallbackPolicy,
     pub(crate) rate_limits: RateLimitPolicy,
     pub(crate) metrics: MetricsRuntime,
 }
@@ -94,6 +100,7 @@ impl AppState {
             target: config.target,
             throttle,
             image_resize_threshold_bytes: config.image_resize_threshold_bytes,
+            model_fallback: config.model_fallback,
             rate_limits,
             metrics: config.metrics,
         }
@@ -116,22 +123,26 @@ struct RequestCaller {
 
 struct UpstreamControls<'a> {
     client: &'a DatabricksClient,
+    model_fallback: ModelFallbackPolicy,
     rate_limits: &'a RateLimitGate,
     throttle: &'a RequestThrottle,
     metrics: &'a MetricsRuntime,
 }
 
-struct UpstreamRequest<'a> {
-    model: &'a str,
+#[derive(Clone, Debug)]
+struct UpstreamRequest {
+    model: String,
     model_class: Option<ModelClass>,
     estimate: TokenEstimate,
-    path: &'a str,
+    path: String,
     headers: HeaderMap,
     body: Vec<u8>,
+    target: Option<TargetWire>,
 }
 
 #[derive(Debug)]
 struct UpstreamResult {
+    candidate_index: usize,
     response: reqwest::Response,
     throttle: ThrottleAcquisition,
     upstream_attempt: u32,
@@ -210,7 +221,6 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
             "automaticDeactivations": counters.automatic_deactivations,
             "automaticReactivations": counters.automatic_reactivations,
             "autoActiveKeys": counters.auto_active_keys,
-            "autoProbationKeys": counters.auto_probation_keys,
             "admissionWaits": counters.admission_waits,
             "oversizedRejections": counters.oversized_rejections,
             "input429AfterAdmission": counters.input_429_after_admission,
@@ -258,10 +268,13 @@ async fn metrics_snapshot(
         .as_deref()
         .map(str::trim)
         .filter(|model| !model.is_empty());
-    let snapshot = model.map_or_else(
+    let mut snapshot = model.map_or_else(
         || state.metrics.snapshot(),
         |model| state.metrics.snapshot_for_model(model),
     );
+    let capacities = state.throttle.capacity_snapshots().await;
+    state.metrics.record_capacity_snapshots(&capacities);
+    snapshot.apply_capacity_snapshots(&capacities);
     (
         [(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))],
         Json(snapshot),
@@ -273,6 +286,8 @@ async fn metrics_prometheus(State(state): State<AppState>) -> Response {
     if !state.metrics.routes_visible() {
         return StatusCode::NOT_FOUND.into_response();
     }
+    let capacities = state.throttle.capacity_snapshots().await;
+    state.metrics.record_capacity_snapshots(&capacities);
     let Some(payload) = state.metrics.prometheus() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -441,22 +456,28 @@ async fn embeddings(
     let upstream = send_upstream(
         UpstreamControls {
             client: &state.databricks,
+            model_fallback: ModelFallbackPolicy {
+                mode: crate::rate_limit::ModelFallbackMode::Off,
+                ..state.model_fallback
+            },
             rate_limits: &state.rate_limits,
             throttle: &state.throttle,
             metrics: &state.metrics,
         },
         &caller,
-        UpstreamRequest {
-            model: &endpoint.name,
+        &[UpstreamRequest {
+            model: endpoint.name.clone(),
             model_class: endpoint.model_class,
             estimate,
-            path: &path,
+            path,
             headers: upstream_headers(originator),
             body: request_body,
-        },
+            target: None,
+        }],
     )
     .await?;
     let UpstreamResult {
+        candidate_index: _,
         response,
         throttle,
         upstream_attempt,
@@ -471,6 +492,7 @@ async fn embeddings(
             request_bytes,
             started,
             reasoning_setting: None,
+            fallback_step: 0,
         },
         throttle,
         upstream_attempt,
@@ -505,67 +527,109 @@ async fn proxy(
         .models
         .resolve_serving_endpoint(&requested_model)
         .await?;
-    let native_responses = if let Some(endpoint) = endpoint.as_ref() {
-        if is_responses_only(&endpoint.name) {
-            true
-        } else {
-            match state.capabilities.capabilities().await {
-                Ok(capabilities) => capabilities.supports_responses(endpoint),
-                Err(error) => {
-                    tracing::warn!(%error, "model capability discovery unavailable");
-                    false
-                }
+    let capabilities = match state.capabilities.capabilities().await {
+        Ok(capabilities) => Some(capabilities),
+        Err(error) => {
+            tracing::warn!(%error, "model capability discovery unavailable");
+            None
+        }
+    };
+    let mut endpoint_candidates = endpoint.iter().cloned().collect::<Vec<_>>();
+    if state.model_fallback.enabled() && state.rate_limits.policy().max_retries > 0 {
+        if let Some(endpoint) = endpoint.as_ref() {
+            let endpoints = state.models.list_serving_endpoints(false).await?;
+            endpoint_candidates.extend(same_family_fallbacks(
+                &endpoints,
+                endpoint,
+                state.model_fallback.max_steps,
+            ));
+        }
+    }
+    let mut candidates = Vec::new();
+    if endpoint_candidates.is_empty() {
+        candidates.push(prepare_upstream_request(
+            &state.throttle,
+            client_wire,
+            state.target,
+            originator,
+            codex,
+            &input,
+            &requested_model,
+            None,
+            capabilities.as_ref(),
+        )?);
+    } else {
+        for (index, candidate) in endpoint_candidates.iter().enumerate() {
+            if index > 0
+                && !fallback_compatible(
+                    client_wire,
+                    state.target,
+                    originator,
+                    codex,
+                    &input,
+                    reasoning_setting,
+                    candidate,
+                    capabilities.as_ref(),
+                )
+            {
+                continue;
+            }
+            let prepared = prepare_upstream_request(
+                &state.throttle,
+                client_wire,
+                state.target,
+                originator,
+                codex,
+                &input,
+                &candidate.name,
+                Some(candidate),
+                capabilities.as_ref(),
+            );
+            match prepared {
+                Ok(prepared) => candidates.push(prepared),
+                Err(error) if index > 0 => tracing::debug!(
+                    model = candidate.name,
+                    %error,
+                    "same-family model fallback candidate is incompatible"
+                ),
+                Err(error) => return Err(error),
             }
         }
-    } else {
-        is_responses_only(&requested_model)
-    };
-    let model = endpoint
-        .as_ref()
-        .map(|endpoint| endpoint.name.clone())
-        .unwrap_or_else(|| requested_model.clone());
-    let model_class = endpoint.as_ref().and_then(|endpoint| endpoint.model_class);
-    let estimate = state.throttle.estimate(&model, &input);
-    let upstream_model = if codex {
-        endpoint
-            .as_ref()
-            .and_then(codex_model_name)
-            .unwrap_or_else(|| model.clone())
-    } else {
-        model.clone()
-    };
-    input["model"] = Value::String(upstream_model);
-    let target = select_request_target(
-        state.target,
-        client_wire,
-        originator,
-        &input,
-        native_responses,
-    );
-    let request_body = adapt_request(client_wire, target, input)?;
+    }
+    let preferred_model = candidates
+        .first()
+        .expect("primary upstream candidate")
+        .model
+        .clone();
     let upstream = send_upstream(
         UpstreamControls {
             client: &state.databricks,
+            model_fallback: state.model_fallback,
             rate_limits: &state.rate_limits,
             throttle: &state.throttle,
             metrics: &state.metrics,
         },
         &caller,
-        UpstreamRequest {
-            model: &model,
-            model_class,
-            estimate,
-            path: upstream_path(target, codex, native_responses),
-            headers: upstream_headers(originator),
-            body: request_body,
-        },
+        &candidates,
     )
     .await?;
     let UpstreamResult {
-        response: upstream,
+        candidate_index,
+        response: mut upstream,
         throttle,
         upstream_attempt,
     } = upstream;
+    let candidate = &candidates[candidate_index];
+    let model = candidate.model.clone();
+    let target = candidate.target.expect("model candidate target");
+    if candidate_index > 0 {
+        add_fallback_headers(
+            upstream.headers_mut(),
+            &preferred_model,
+            &model,
+            candidate_index,
+        );
+    }
     let request_log = RequestLogContext::new(
         RequestLogMetadata {
             requested_model,
@@ -574,6 +638,7 @@ async fn proxy(
             request_bytes,
             started,
             reasoning_setting: Some(reasoning_setting),
+            fallback_step: candidate_index,
         },
         throttle,
         upstream_attempt,
@@ -587,7 +652,7 @@ async fn proxy(
             client_wire,
             target,
             upstream,
-            model.clone(),
+            model,
             response_headers,
             StreamLogContext {
                 client_wire,
@@ -618,6 +683,160 @@ async fn proxy(
     Ok(upstream.into_json_response(output))
 }
 
+#[allow(clippy::too_many_arguments)]
+fn prepare_upstream_request(
+    throttle: &RequestThrottle,
+    client_wire: ClientWire,
+    configured_target: TargetWire,
+    originator: Option<&str>,
+    codex: bool,
+    original_input: &Value,
+    model: &str,
+    endpoint: Option<&ServingEndpointSummary>,
+    capabilities: Option<&ModelCapabilities>,
+) -> Result<UpstreamRequest, ProxyError> {
+    let native_responses = endpoint.map_or_else(
+        || is_responses_only(model),
+        |endpoint| {
+            is_responses_only(&endpoint.name)
+                || capabilities.is_some_and(|value| value.supports_responses(endpoint))
+        },
+    );
+    let mut input = original_input.clone();
+    let upstream_model = if codex {
+        endpoint
+            .and_then(codex_model_name)
+            .unwrap_or_else(|| model.to_owned())
+    } else {
+        model.to_owned()
+    };
+    input["model"] = Value::String(upstream_model);
+    let estimate = throttle.estimate(model, &input);
+    let target = select_request_target(
+        configured_target,
+        client_wire,
+        originator,
+        &input,
+        native_responses,
+    );
+    Ok(UpstreamRequest {
+        model: model.to_owned(),
+        model_class: endpoint.and_then(|value| value.model_class),
+        estimate,
+        path: upstream_path(target, codex, native_responses).to_owned(),
+        headers: upstream_headers(originator),
+        body: adapt_request(client_wire, target, input)?,
+        target: Some(target),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fallback_compatible(
+    client_wire: ClientWire,
+    configured_target: TargetWire,
+    originator: Option<&str>,
+    codex: bool,
+    input: &Value,
+    reasoning_setting: ReasoningSetting,
+    endpoint: &ServingEndpointSummary,
+    capabilities: Option<&ModelCapabilities>,
+) -> bool {
+    if endpoint.model_class == Some(ModelClass::Embedding)
+        || (codex && codex_model_name(endpoint).is_none())
+    {
+        return false;
+    }
+    let supports_responses = is_responses_only(&endpoint.name)
+        || capabilities.is_some_and(|value| value.supports_responses(endpoint));
+    let tools = input
+        .get("tools")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    if tools.iter().any(|tool| {
+        tool.get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("function")
+            == "function"
+    }) && endpoint.supports_tools != Some(true)
+    {
+        return false;
+    }
+    for tool in tools {
+        let kind = tool
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("function");
+        let supported = match kind {
+            "function" => endpoint.supports_tools == Some(true),
+            kind if kind.starts_with("web_search") => {
+                capabilities.is_some_and(|value| value.supports_web_search(endpoint))
+            }
+            "apply_patch" => capabilities.is_some_and(|value| value.supports_apply_patch(endpoint)),
+            "custom" | "shell" | "local_shell" if codex => supports_responses,
+            _ => false,
+        };
+        if !supported {
+            return false;
+        }
+    }
+    if request_contains_image(input)
+        && !capabilities.is_some_and(|value| value.supports_image_input(endpoint))
+    {
+        return false;
+    }
+    match reasoning_setting {
+        ReasoningSetting::Effort(effort) if !endpoint.reasoning_efforts.contains(&effort) => {
+            return false;
+        }
+        ReasoningSetting::Adaptive | ReasoningSetting::Enabled
+            if endpoint.reasoning_efforts.is_empty() =>
+        {
+            return false;
+        }
+        _ => {}
+    }
+    let mut candidate_input = input.clone();
+    candidate_input["model"] = Value::String(endpoint.name.clone());
+    let target = select_request_target(
+        configured_target,
+        client_wire,
+        originator,
+        &candidate_input,
+        supports_responses,
+    );
+    target != TargetWire::Responses || supports_responses
+}
+
+fn request_contains_image(value: &Value) -> bool {
+    match value {
+        Value::Array(values) => values.iter().any(request_contains_image),
+        Value::Object(values) => values.iter().any(|(key, value)| {
+            matches!(key.as_str(), "image_url" | "input_image")
+                || (key == "type" && value.as_str().is_some_and(|kind| kind.contains("image")))
+                || request_contains_image(value)
+        }),
+        _ => false,
+    }
+}
+
+fn add_fallback_headers(
+    headers: &mut HeaderMap,
+    preferred_model: &str,
+    resolved_model: &str,
+    step: usize,
+) {
+    for (name, value) in [
+        (FALLBACK_PREFERRED_MODEL_HEADER, preferred_model.to_owned()),
+        (FALLBACK_RESOLVED_MODEL_HEADER, resolved_model.to_owned()),
+        (FALLBACK_STEP_HEADER, step.to_string()),
+    ] {
+        if let Ok(value) = HeaderValue::from_str(&value) {
+            headers.insert(HeaderName::from_static(name), value);
+        }
+    }
+}
+
 fn response_usage(body: &[u8]) -> ResponseTokenUsage {
     serde_json::from_slice::<Value>(body)
         .map(|output| response_token_usage(&output))
@@ -627,69 +846,128 @@ fn response_usage(body: &[u8]) -> ResponseTokenUsage {
 async fn send_upstream(
     controls: UpstreamControls<'_>,
     caller: &RequestCaller,
-    request: UpstreamRequest<'_>,
+    requests: &[UpstreamRequest],
 ) -> Result<UpstreamResult, ProxyError> {
     let UpstreamControls {
         client,
+        model_fallback,
         rate_limits,
         throttle,
         metrics,
     } = controls;
-    let UpstreamRequest {
-        model,
-        model_class,
-        estimate,
-        path,
-        headers,
-        body,
-    } = request;
+    assert!(
+        !requests.is_empty(),
+        "upstream candidate list must not be empty"
+    );
     let policy = rate_limits.policy();
+    let deadline = tokio::time::Instant::now() + policy.max_wait;
     let mut backoff = policy.backoff();
+    let mut last_rate_limit = None;
     let mut retries = 0;
     loop {
         let upstream_attempt = retries + 1;
-        let permit = if policy.max_retries == 0 {
-            None
+        let mut preferred_indices = Vec::with_capacity(requests.len());
+        for (index, request) in requests.iter().enumerate() {
+            let long_local_wait = if model_fallback.enabled() && index + 1 < requests.len() {
+                throttle
+                    .token_window_delay(&request.model, request.model_class, request.estimate)
+                    .await
+                    .is_some_and(|delay| delay > model_fallback.threshold)
+            } else {
+                false
+            };
+            if !long_local_wait {
+                preferred_indices.push(index);
+            }
+        }
+        let (candidate_index, permit) = if policy.max_retries == 0 {
+            (0, None)
         } else {
-            Some(
-                rate_limits
-                    .acquire(client.host(), &caller.principal, model)
-                    .await,
+            let models = preferred_indices
+                .iter()
+                .map(|index| requests[*index].model.as_str())
+                .collect::<Vec<_>>();
+            let Ok((preferred_index, permit)) = tokio::time::timeout_at(
+                deadline,
+                rate_limits.acquire_preferred(client.host(), &caller.principal, &models),
             )
-        };
-        let admission = match throttle.acquire(model, model_class, estimate).await {
-            Ok(admission) => admission,
-            Err(error) => {
-                if let Some(permit) = permit.as_ref() {
-                    rate_limits.completed(permit).await;
+            .await
+            else {
+                metrics.record_retry("wait-budget", true);
+                if last_rate_limit.is_none() {
+                    metrics.record_local_rate_limit(&requests[0].model, "wait-budget");
                 }
-                metrics.record_oversized(model);
                 tracing::warn!(
                     host = client.host(),
-                    model,
-                    estimated_input_tokens = error.estimated_input_tokens,
-                    token_limit_input = error.input_limit,
-                    token_window_used_before = error.input_window_used_before,
-                    token_throttle_mode = ?error.mode,
-                    token_throttle_active = true,
-                    upstream_attempt,
-                    oversized_request = true,
-                    "model request rejected by local input-token budget"
+                    model = requests[0].model,
+                    max_wait_ms = policy.max_wait.as_millis(),
+                    "rate-limit wait budget exhausted"
                 );
-                return Err(ProxyError::OversizedInput {
-                    model: model.to_owned(),
-                    estimated_input_tokens: error.estimated_input_tokens,
-                    input_limit: error.input_limit,
-                });
+                return rate_limit_wait_exhausted(
+                    last_rate_limit,
+                    &requests[0].model,
+                    policy.max_wait,
+                );
+            };
+            (preferred_indices[preferred_index], Some(permit))
+        };
+        let request = &requests[candidate_index];
+        let admission = match tokio::time::timeout_at(
+            deadline,
+            throttle.acquire(&request.model, request.model_class, request.estimate),
+        )
+        .await
+        {
+            Err(_) => {
+                if let Some(permit) = permit.as_ref() {
+                    rate_limits.cancelled(permit).await;
+                }
+                metrics.record_retry("wait-budget", true);
+                if last_rate_limit.is_none() {
+                    metrics.record_local_rate_limit(&request.model, "wait-budget");
+                }
+                tracing::warn!(
+                    host = client.host(),
+                    model = request.model,
+                    max_wait_ms = policy.max_wait.as_millis(),
+                    "token admission wait budget exhausted"
+                );
+                return rate_limit_wait_exhausted(last_rate_limit, &request.model, policy.max_wait);
             }
+            Ok(result) => match result {
+                Ok(admission) => admission,
+                Err(error) => {
+                    if let Some(permit) = permit.as_ref() {
+                        rate_limits.completed(permit).await;
+                    }
+                    metrics.record_oversized(&request.model);
+                    tracing::warn!(
+                        host = client.host(),
+                        model = request.model,
+                        estimated_input_tokens = error.estimated_input_tokens,
+                        token_limit_input = error.input_limit,
+                        token_window_used_before = error.input_window_used_before,
+                        token_throttle_mode = ?error.mode,
+                        token_throttle_active = true,
+                        upstream_attempt,
+                        oversized_request = true,
+                        "model request rejected by local input-token budget"
+                    );
+                    return Err(ProxyError::OversizedInput {
+                        model: request.model.clone(),
+                        estimated_input_tokens: error.estimated_input_tokens,
+                        input_limit: error.input_limit,
+                    });
+                }
+            },
         };
         if retries > 0 && admission.active {
             throttle.record_retry_reacquisition();
         }
         let response = match client
-            .request_builder(path, Method::POST)?
-            .headers(headers.clone())
-            .body(body.clone())
+            .request_builder(&request.path, Method::POST)?
+            .headers(request.headers.clone())
+            .body(request.body.clone())
             .send()
             .await
         {
@@ -699,10 +977,10 @@ async fn send_upstream(
                 if let Some(permit) = permit.as_ref() {
                     rate_limits.completed(permit).await;
                 }
-                metrics.record_transport_failure(model);
+                metrics.record_transport_failure(&request.model);
                 tracing::warn!(
                     host = client.host(),
-                    model,
+                    model = request.model,
                     upstream_attempt,
                     %error,
                     "model request transport failed"
@@ -715,12 +993,16 @@ async fn send_upstream(
                 rate_limits.completed(permit).await;
             }
             if response.status().is_success() {
-                if let Some(transition) = throttle.record_success(model, model_class).await {
-                    metrics.record_transition(model, transition);
-                    log_auto_transition(client, model, transition);
+                if let Some(transition) = throttle
+                    .record_success(&request.model, request.model_class)
+                    .await
+                {
+                    metrics.record_transition(&request.model, transition);
+                    log_auto_transition(client, &request.model, transition);
                 }
             }
             return Ok(UpstreamResult {
+                candidate_index,
                 response,
                 throttle: admission,
                 upstream_attempt,
@@ -740,22 +1022,34 @@ async fn send_upstream(
             .message
             .as_deref()
             .is_some_and(is_input_limit_message);
-        metrics.record_upstream_429(model, input_token_limit);
+        metrics.record_upstream_429(&request.model, input_token_limit);
         if input_token_limit && admission.active {
             throttle.record_input_429_after_admission();
         }
         admission.release().await;
-        activate_token_throttle(throttle, metrics, client, model, model_class, &details).await;
+        activate_token_throttle(
+            throttle,
+            metrics,
+            client,
+            &request.model,
+            request.model_class,
+            &details,
+        )
+        .await;
         let exhausted = retries >= policy.max_retries;
         if exhausted {
             if let Some(permit) = permit.as_ref() {
-                rate_limits.completed(permit).await;
+                let cooldown = server_retry_after(response.headers(), &details)
+                    .map(|(delay, _)| delay)
+                    .or(details.retry_after)
+                    .unwrap_or(policy.max_delay);
+                rate_limits.rejected_for_fallback(permit, cooldown).await;
             }
             metrics.record_retry("exhausted", true);
             log_rate_limit(RetryLog {
                 client,
                 caller,
-                model,
+                model: &request.model,
                 upstream_attempt,
                 retry: retries,
                 policy,
@@ -765,33 +1059,74 @@ async fn send_upstream(
                 details: &details,
             });
             return Ok(UpstreamResult {
+                candidate_index,
                 response,
                 throttle: admission,
                 upstream_attempt,
             });
         }
         let server_delay = server_retry_after(response.headers(), &details);
-        let (delay, delay_source) = if let Some((delay, source)) = server_delay {
-            (delay, source)
-        } else if input_token_limit {
-            match throttle
-                .token_window_delay(model, model_class, estimate)
-                .await
-            {
-                Some(delay) => (delay, "token-window"),
-                None => {
-                    throttle.record_fallback_window_delay();
-                    (std::time::Duration::from_secs(60), "token-window-fallback")
+        let remaining_delays = policy.max_retries.saturating_sub(retries).max(1);
+        let (recovery_horizon, delay_source, incremental) =
+            if let Some((delay, source)) = server_delay {
+                (delay, source, true)
+            } else if input_token_limit {
+                match throttle
+                    .token_window_delay(&request.model, request.model_class, request.estimate)
+                    .await
+                {
+                    Some(delay) => (delay, "token-window", true),
+                    None => {
+                        throttle.record_fallback_window_delay();
+                        (
+                            std::time::Duration::from_secs(60),
+                            "token-window-fallback",
+                            true,
+                        )
+                    }
                 }
+            } else {
+                (
+                    backoff
+                        .next()
+                        .unwrap_or(policy.max_delay)
+                        .min(policy.max_delay),
+                    "backoff",
+                    false,
+                )
+            };
+        let can_fallback = model_fallback.enabled()
+            && candidate_index + 1 < requests.len()
+            && recovery_horizon > model_fallback.threshold;
+        if can_fallback {
+            if let Some(permit) = permit.as_ref() {
+                rate_limits
+                    .rejected_for_fallback(permit, recovery_horizon)
+                    .await;
             }
+            metrics.record_retry("model-fallback", false);
+            tracing::warn!(
+                host = client.host(),
+                model = request.model,
+                fallback_model = requests[candidate_index + 1].model,
+                fallback_step = candidate_index + 1,
+                recovery_horizon_ms = recovery_horizon.as_millis(),
+                upstream_attempt,
+                "rate limit triggered same-family model fallback"
+            );
+            last_rate_limit = Some(UpstreamResult {
+                candidate_index,
+                response,
+                throttle: admission,
+                upstream_attempt,
+            });
+            retries += 1;
+            continue;
+        }
+        let delay = if incremental {
+            policy.incremental_delay(recovery_horizon, remaining_delays)
         } else {
-            (
-                backoff
-                    .next()
-                    .unwrap_or(policy.max_delay)
-                    .min(policy.max_delay),
-                "backoff",
-            )
+            recovery_horizon
         };
         if let Some(permit) = permit.as_ref() {
             rate_limits.rejected(permit, delay).await;
@@ -802,7 +1137,7 @@ async fn send_upstream(
         log_rate_limit(RetryLog {
             client,
             caller,
-            model,
+            model: &request.model,
             upstream_attempt,
             retry: retries + 1,
             policy,
@@ -811,9 +1146,25 @@ async fn send_upstream(
             admission: &admission,
             details: &details,
         });
+        last_rate_limit = Some(UpstreamResult {
+            candidate_index,
+            response,
+            throttle: admission,
+            upstream_attempt,
+        });
         retries += 1;
-        drop(response);
     }
+}
+
+fn rate_limit_wait_exhausted(
+    last_rate_limit: Option<UpstreamResult>,
+    model: &str,
+    max_wait: std::time::Duration,
+) -> Result<UpstreamResult, ProxyError> {
+    last_rate_limit.ok_or_else(|| ProxyError::RateLimitWait {
+        model: model.to_owned(),
+        wait_ms: max_wait.as_millis().min(u128::from(u64::MAX)) as u64,
+    })
 }
 
 /// Activate auto TPM admission once Databricks reports an input-token limit.
@@ -860,9 +1211,7 @@ fn log_auto_transition(client: &DatabricksClient, model: &str, transition: AutoT
             effective_input_budget = fields.2,
             "automatic token rate limiting changed"
         ),
-        AutoTransitionKind::Relaxed
-        | AutoTransitionKind::Probation
-        | AutoTransitionKind::Deactivated => tracing::info!(
+        AutoTransitionKind::Relaxed | AutoTransitionKind::Deactivated => tracing::info!(
             host = client.host(),
             model,
             transition = ?transition.kind,
@@ -1120,6 +1469,7 @@ fn forwarded_response_headers(upstream: &HeaderMap) -> HeaderMap {
             || name_text.contains("rate-limit")
             || name_text.contains("quota")
             || name_text.starts_with("x-databricks-limit")
+            || name_text.starts_with("x-model-proxy-")
         {
             forwarded.append(name.clone(), value.clone());
         }
@@ -1137,6 +1487,7 @@ mod tests {
     use std::time::Duration;
 
     use dbx_tools_core::DatabricksAuthOptions;
+    use dbx_tools_model::ReasoningEffort;
     use wiremock::{
         matchers::{method, path},
         Mock, MockServer, Request, Respond, ResponseTemplate,
@@ -1159,6 +1510,55 @@ mod tests {
             } else {
                 ResponseTemplate::new(200).set_body_json(json!({"ok": true}))
             }
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct ModelFallbackResponder {
+        primary: Arc<AtomicUsize>,
+        fallback: Arc<AtomicUsize>,
+    }
+
+    impl Respond for ModelFallbackResponder {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let model = serde_json::from_slice::<Value>(&request.body)
+                .unwrap()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap()
+                .to_owned();
+            if model == "primary" {
+                self.primary.fetch_add(1, Ordering::SeqCst);
+                ResponseTemplate::new(429)
+                    .insert_header("Retry-After", "60")
+                    .set_body_json(json!({"error": {"message": "rate limited"}}))
+            } else {
+                self.fallback.fetch_add(1, Ordering::SeqCst);
+                ResponseTemplate::new(200).set_body_json(json!({"model": model}))
+            }
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct SuccessfulModelResponder {
+        primary: Arc<AtomicUsize>,
+        fallback: Arc<AtomicUsize>,
+    }
+
+    impl Respond for SuccessfulModelResponder {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let model = serde_json::from_slice::<Value>(&request.body)
+                .unwrap()
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap()
+                .to_owned();
+            if model == "primary" {
+                self.primary.fetch_add(1, Ordering::SeqCst);
+            } else {
+                self.fallback.fetch_add(1, Ordering::SeqCst);
+            }
+            ResponseTemplate::new(200).set_body_json(json!({"model": model}))
         }
     }
 
@@ -1200,6 +1600,93 @@ mod tests {
         .unwrap()
     }
 
+    fn disabled_model_fallback() -> ModelFallbackPolicy {
+        ModelFallbackPolicy {
+            mode: crate::rate_limit::ModelFallbackMode::Off,
+            ..Default::default()
+        }
+    }
+
+    fn test_upstream_request(model: &str) -> UpstreamRequest {
+        UpstreamRequest {
+            model: model.to_owned(),
+            model_class: None,
+            estimate: TokenEstimate {
+                input: 1,
+                output: 0,
+            },
+            path: "/test".to_owned(),
+            headers: upstream_headers(None),
+            body: serde_json::to_vec(&json!({"model": model})).unwrap(),
+            target: Some(TargetWire::Responses),
+        }
+    }
+
+    fn test_endpoint(name: &str) -> ServingEndpointSummary {
+        ServingEndpointSummary {
+            name: name.to_owned(),
+            display_name: None,
+            family: Some("gpt".to_owned()),
+            task: Some("llm/v1/chat".to_owned()),
+            state: Some("READY".to_owned()),
+            description: None,
+            supports_tools: Some(true),
+            profile: None,
+            model_class: Some(ModelClass::ChatBalanced),
+            service_names: Default::default(),
+            model_service_name: None,
+            reasoning_efforts: vec![ReasoningEffort::High],
+            status: Default::default(),
+            dimension: None,
+        }
+    }
+
+    #[test]
+    fn fallback_candidates_must_preserve_request_capabilities() {
+        let input = json!({
+            "model": "primary",
+            "messages": [{"role": "user", "content": "hello"}],
+            "reasoning_effort": "high",
+            "tools": [{"type": "function", "function": {"name": "lookup", "parameters": {}}}]
+        });
+        let mut endpoint = test_endpoint("databricks-gpt-5-3");
+        assert!(fallback_compatible(
+            ClientWire::Chat,
+            TargetWire::Auto,
+            None,
+            false,
+            &input,
+            ReasoningSetting::Effort(ReasoningEffort::High),
+            &endpoint,
+            None,
+        ));
+
+        endpoint.supports_tools = Some(false);
+        assert!(!fallback_compatible(
+            ClientWire::Chat,
+            TargetWire::Auto,
+            None,
+            false,
+            &input,
+            ReasoningSetting::Effort(ReasoningEffort::High),
+            &endpoint,
+            None,
+        ));
+
+        endpoint.supports_tools = Some(true);
+        endpoint.reasoning_efforts.clear();
+        assert!(!fallback_compatible(
+            ClientWire::Chat,
+            TargetWire::Auto,
+            None,
+            false,
+            &input,
+            ReasoningSetting::Effort(ReasoningEffort::High),
+            &endpoint,
+            None,
+        ));
+    }
+
     #[test]
     fn embeddings_use_the_resolved_endpoint_invocation_path() {
         let (path, body) = prepare_embedding_request(
@@ -1235,6 +1722,7 @@ mod tests {
             max_retries: 4,
             initial_delay: Duration::from_secs(1),
             max_delay: Duration::from_secs(1),
+            max_wait: Duration::from_secs(1),
         });
         let throttle = RequestThrottle::new(
             "host",
@@ -1254,22 +1742,24 @@ mod tests {
             send_upstream(
                 UpstreamControls {
                     client: &client,
+                    model_fallback: disabled_model_fallback(),
                     rate_limits: &gate,
                     throttle: &throttle,
                     metrics: &metrics,
                 },
                 &caller,
-                UpstreamRequest {
-                    model: "model",
+                &[UpstreamRequest {
+                    model: "model".to_owned(),
                     model_class: None,
                     estimate: TokenEstimate {
                         input: 1,
                         output: 0,
                     },
-                    path: "/test",
+                    path: "/test".to_owned(),
                     headers: upstream_headers(None),
                     body: br#"{"model":"model"}"#.to_vec(),
-                },
+                    target: None,
+                }],
             ),
         )
         .await
@@ -1297,6 +1787,212 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn long_rate_limit_wait_falls_back_and_keeps_primary_cooling_down() {
+        let server = MockServer::start().await;
+        let responder = ModelFallbackResponder::default();
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(responder.clone())
+            .expect(3)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 4,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_secs(60),
+            max_wait: Duration::from_secs(60),
+        });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: None,
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::Off,
+                documented_limits: Default::default(),
+            },
+        );
+        let caller = test_caller();
+        let metrics = test_metrics();
+        let candidates = [
+            test_upstream_request("primary"),
+            test_upstream_request("fallback"),
+        ];
+        let fallback = ModelFallbackPolicy::default();
+
+        let first = send_upstream(
+            UpstreamControls {
+                client: &client,
+                model_fallback: fallback,
+                rate_limits: &gate,
+                throttle: &throttle,
+                metrics: &metrics,
+            },
+            &caller,
+            &candidates,
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.response.status(), StatusCode::OK);
+        assert_eq!(first.candidate_index, 1);
+        assert_eq!(first.upstream_attempt, 2);
+
+        let second = send_upstream(
+            UpstreamControls {
+                client: &client,
+                model_fallback: fallback,
+                rate_limits: &gate,
+                throttle: &throttle,
+                metrics: &metrics,
+            },
+            &caller,
+            &candidates,
+        )
+        .await
+        .unwrap();
+        assert_eq!(second.response.status(), StatusCode::OK);
+        assert_eq!(second.candidate_index, 1);
+        assert_eq!(second.upstream_attempt, 1);
+        assert_eq!(responder.primary.load(Ordering::SeqCst), 1);
+        assert_eq!(responder.fallback.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn long_local_token_wait_uses_fallback_before_queueing() {
+        let server = MockServer::start().await;
+        let responder = SuccessfulModelResponder::default();
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(responder.clone())
+            .expect(2)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 4,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_secs(60),
+            max_wait: Duration::from_secs(60),
+        });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: NonZeroU64::new(100),
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::Auto,
+                documented_limits: Default::default(),
+            },
+        );
+        let caller = test_caller();
+        let metrics = test_metrics();
+        assert!(matches!(
+            throttle
+                .activate_from_message(
+                    "primary",
+                    None,
+                    Some("Exceeded workspace input tokens per minute"),
+                )
+                .await,
+            AutoActivation::Transition(_)
+        ));
+        let mut primary = test_upstream_request("primary");
+        primary.estimate.input = 80;
+        let first = send_upstream(
+            UpstreamControls {
+                client: &client,
+                model_fallback: disabled_model_fallback(),
+                rate_limits: &gate,
+                throttle: &throttle,
+                metrics: &metrics,
+            },
+            &caller,
+            &[primary],
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.candidate_index, 0);
+
+        let mut primary = test_upstream_request("primary");
+        primary.estimate.input = 20;
+        let mut fallback = test_upstream_request("fallback");
+        fallback.estimate.input = 20;
+        let second = send_upstream(
+            UpstreamControls {
+                client: &client,
+                model_fallback: ModelFallbackPolicy::default(),
+                rate_limits: &gate,
+                throttle: &throttle,
+                metrics: &metrics,
+            },
+            &caller,
+            &[primary, fallback],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(second.candidate_index, 1);
+        assert_eq!(second.upstream_attempt, 1);
+        assert_eq!(responder.primary.load(Ordering::SeqCst), 1);
+        assert_eq!(responder.fallback.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn total_wait_budget_returns_the_original_rate_limit_response() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .respond_with(
+                ResponseTemplate::new(429)
+                    .insert_header("Retry-After", "60")
+                    .set_body_json(json!({"error": {"message": "quota exhausted"}})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client = test_client(&server).await;
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 4,
+            initial_delay: Duration::from_secs(1),
+            max_delay: Duration::from_secs(60),
+            max_wait: Duration::from_millis(30),
+        });
+        let throttle = RequestThrottle::new(
+            "host",
+            ThrottleConfig {
+                input_tokens_per_minute: None,
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: crate::throttle::RateLimitMode::Off,
+                documented_limits: Default::default(),
+            },
+        );
+        let started = tokio::time::Instant::now();
+        let response = send_upstream(
+            UpstreamControls {
+                client: &client,
+                model_fallback: disabled_model_fallback(),
+                rate_limits: &gate,
+                throttle: &throttle,
+                metrics: &test_metrics(),
+            },
+            &test_caller(),
+            &[test_upstream_request("primary")],
+        )
+        .await
+        .unwrap();
+
+        assert!(started.elapsed() < Duration::from_millis(200));
+        assert_eq!(response.response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.upstream_attempt, 1);
+        assert_eq!(
+            response.response.bytes().await.unwrap(),
+            br#"{"error":{"message":"quota exhausted"}}"#.as_slice()
+        );
+    }
+
+    #[tokio::test]
     async fn zero_retries_disables_rate_limit_recovery() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -1314,6 +2010,7 @@ mod tests {
             max_retries: 0,
             initial_delay: Duration::from_millis(1),
             max_delay: Duration::from_millis(10),
+            max_wait: Duration::from_secs(60),
         });
         let throttle = RequestThrottle::new(
             "host",
@@ -1331,22 +2028,24 @@ mod tests {
         let response = send_upstream(
             UpstreamControls {
                 client: &client,
+                model_fallback: disabled_model_fallback(),
                 rate_limits: &gate,
                 throttle: &throttle,
                 metrics: &metrics,
             },
             &caller,
-            UpstreamRequest {
-                model: "model",
+            &[UpstreamRequest {
+                model: "model".to_owned(),
                 model_class: None,
                 estimate: TokenEstimate {
                     input: 1,
                     output: 0,
                 },
-                path: "/test",
+                path: "/test".to_owned(),
                 headers: upstream_headers(None),
                 body: Vec::new(),
-            },
+                target: None,
+            }],
         )
         .await
         .unwrap();
@@ -1377,6 +2076,7 @@ mod tests {
             max_retries: 2,
             initial_delay: Duration::from_millis(1),
             max_delay: Duration::from_millis(10),
+            max_wait: Duration::from_secs(60),
         });
         let throttle = RequestThrottle::new(
             "host",
@@ -1394,22 +2094,24 @@ mod tests {
         let response = send_upstream(
             UpstreamControls {
                 client: &client,
+                model_fallback: disabled_model_fallback(),
                 rate_limits: &gate,
                 throttle: &throttle,
                 metrics: &metrics,
             },
             &caller,
-            UpstreamRequest {
-                model: "model",
+            &[UpstreamRequest {
+                model: "model".to_owned(),
                 model_class: None,
                 estimate: TokenEstimate {
                     input: 1,
                     output: 0,
                 },
-                path: "/test",
+                path: "/test".to_owned(),
                 headers: upstream_headers(None),
                 body: Vec::new(),
-            },
+                target: None,
+            }],
         )
         .await
         .unwrap();
@@ -1437,6 +2139,7 @@ mod tests {
             max_retries: 1,
             initial_delay: Duration::from_millis(1),
             max_delay: Duration::from_millis(10),
+            max_wait: Duration::from_secs(60),
         });
         let throttle = RequestThrottle::new(
             "host",
@@ -1454,22 +2157,24 @@ mod tests {
         let response = send_upstream(
             UpstreamControls {
                 client: &client,
+                model_fallback: disabled_model_fallback(),
                 rate_limits: &gate,
                 throttle: &throttle,
                 metrics: &metrics,
             },
             &caller,
-            UpstreamRequest {
-                model: "model",
+            &[UpstreamRequest {
+                model: "model".to_owned(),
                 model_class: None,
                 estimate: TokenEstimate {
                     input: 1,
                     output: 0,
                 },
-                path: "/test",
+                path: "/test".to_owned(),
                 headers: upstream_headers(None),
                 body: Vec::new(),
-            },
+                target: None,
+            }],
         )
         .await
         .unwrap();
@@ -1496,6 +2201,7 @@ mod tests {
             max_retries: 1,
             initial_delay: Duration::from_millis(1),
             max_delay: Duration::from_millis(10),
+            max_wait: Duration::from_secs(60),
         });
         let throttle = RequestThrottle::new(
             "host",
@@ -1513,22 +2219,24 @@ mod tests {
         let error = send_upstream(
             UpstreamControls {
                 client: &client,
+                model_fallback: disabled_model_fallback(),
                 rate_limits: &gate,
                 throttle: &throttle,
                 metrics: &metrics,
             },
             &caller,
-            UpstreamRequest {
-                model: "model",
+            &[UpstreamRequest {
+                model: "model".to_owned(),
                 model_class: None,
                 estimate: TokenEstimate {
                     input: 101,
                     output: 0,
                 },
-                path: "/test",
+                path: "/test".to_owned(),
                 headers: upstream_headers(None),
                 body: Vec::new(),
-            },
+                target: None,
+            }],
         )
         .await
         .unwrap_err();
@@ -1595,6 +2303,7 @@ mod tests {
             HeaderName::from_static("x-databricks-quota-name"),
             HeaderValue::from_static("tokens-per-minute"),
         );
+        add_fallback_headers(&mut upstream, "primary", "fallback", 1);
         upstream.insert(header::SERVER, HeaderValue::from_static("internal"));
 
         let forwarded = forwarded_response_headers(&upstream);
@@ -1613,6 +2322,15 @@ mod tests {
             forwarded.get("x-databricks-quota-name").unwrap(),
             "tokens-per-minute"
         );
+        assert_eq!(
+            forwarded.get(FALLBACK_PREFERRED_MODEL_HEADER).unwrap(),
+            "primary"
+        );
+        assert_eq!(
+            forwarded.get(FALLBACK_RESOLVED_MODEL_HEADER).unwrap(),
+            "fallback"
+        );
+        assert_eq!(forwarded.get(FALLBACK_STEP_HEADER).unwrap(), "1");
         assert!(forwarded.get(header::SERVER).is_none());
     }
 
