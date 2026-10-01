@@ -47,7 +47,7 @@ await appkit.createApp({
 });
 ```
 
-AppKit continues to listen on `DATABRICKS_APP_PORT`. The plugin adds a
+AppKit listens on `DATABRICKS_APP_PORT`. The plugin adds a
 user-scoped MCP server at `/api/graphiti/mcp`; Graphiti, the model proxy, and Caddy
 remain loopback-only. The plugin's manifest declares the Lakebase resource
 requirements used by generated deployments, so Graphiti does not require a

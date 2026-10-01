@@ -90,10 +90,10 @@ for await (const message of chat.genieChat(spaceId, "Top stores by revenue?")) {
 `chat.genieChat()` starts an Agent Mode response or continues an existing
 conversation, projects SSE output into `GenieMessage` snapshots, filters
 identical consecutive payloads, and stops after a terminal response. Set
-`agentMode: false` to force the legacy start/create/get-message polling flow.
-Use it when you want to run your own diffing or persist the normalized wire
-shape. Agent Mode returns query output inline as Markdown; use polling when a
-consumer specifically requires the legacy `statement_id`.
+`agentMode: false` to force the Conversation API start/create/get-message
+polling flow. Use it when you want to run your own diffing or persist the
+normalized wire shape. Agent Mode returns query output inline as Markdown; use
+polling when a consumer specifically requires a `statement_id`.
 
 ## Continue A Conversation
 
@@ -166,7 +166,7 @@ thrown.
 - `agentMode` - use Agent Mode SSE, default `true`; `false` forces polling.
 - `enableVisualization` - request Agent Mode visualization generation.
 - `workspaceClient` - explicit Databricks SDK client.
-- `pollIntervalMs` - legacy fallback polling cadence, default `500`.
+- `pollIntervalMs` - fallback polling cadence, default `500`.
 - `context` - SDK `Context` or `AbortSignal` for cancellation.
 
 ## Modules

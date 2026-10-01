@@ -129,7 +129,7 @@ function markdownAnchors(markdown) {
  * Reconcile flat TypeDoc filenames with the routes Starlight actually serves,
  * and rewrite intra-package cross-links to absolute, always-resolvable routes.
  *
- * Two problems this fixes:
+ * The normalization enforces two route constraints:
  *
  *   1. TypeDoc's mixed-case, dotted filenames (`Namespace.mcp.md`,
  *      `mcp.Interface.ResolvedMcp.md`) slugify to lowercase, dot-free routes.

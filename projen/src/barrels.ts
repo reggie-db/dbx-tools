@@ -523,10 +523,9 @@ const WRITE_ATTEMPTS = 3;
  * and the projenrc watcher's post-synth `generateBarrels()` sweep), so any gap
  * between `makeWritable` and the write is a window in which another process's
  * `makeReadonly` lands and this write fails with
- * `EACCES: permission denied, open '<pkg>/index.ts'`. The gap used to span all of
- * the oxc parsing done for export hoisting, which made it wide enough to hit
- * routinely. Keeping the unlock adjacent to the write shrinks it to nothing much,
- * and a retry absorbs what is left.
+ * `EACCES: permission denied, open '<pkg>/index.ts'`. Keeping the unlock adjacent
+ * to the write avoids a gap during export parsing, and a retry absorbs what is
+ * left.
  *
  * Do NOT "simplify" this back to a single unlock-then-write: the failure is
  * timing-dependent, so it looks fine until a full-repo sweep runs against a

@@ -28,7 +28,7 @@ the crate root.
 
 Without an explicit profile, resolution uses `__settings__.default_profile`,
 then an existing `DEFAULT` section, then the sole configured profile, and
-finally the legacy `DEFAULT` fallback.
+finally the `DEFAULT` fallback.
 
 Outside Databricks Apps, automatic U2M uses
 `databricks auth token --profile` when the CLI is available and falls back to

@@ -136,13 +136,12 @@ Primary package areas:
   Conversation API polling driver; a pre-stream `FEATURE_DISABLED`/preview
   error falls back automatically. The SSE boundary validates shared Genie
   schemas, requires a terminal event, and invokes the Agent Mode cancel endpoint
-  when a consumer disconnects. Agent Mode carries query output inline as
-  Markdown rather than a legacy `statement_id`; chart those inline rows through
-  `render_data`. Use the polling opt-out when a workflow specifically requires
+  when a consumer disconnects. Agent Mode carries query output inline instead of
+  a Conversation API `statement_id`; chart those rows through `render_data`. Use
+  the polling opt-out when a workflow specifically requires
   statement-backed chart/data embeds. `shared/genie` also owns the codegen'd
   `src/dashboards.ts` (zod schemas from the upstream SDK `.d.ts`) that its Genie
-  schemas widen; that used to be a separate `shared-sdk-model` package with
-  exactly one consumer.
+  schemas widen. Keep this single-consumer contract in `shared/genie`.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
 - `packages/rs/core` owns Databricks authentication and shared Rust runtime
@@ -166,8 +165,8 @@ Primary package areas:
   keychain access, a Postgres adapter, or a Postgres dependency. U2M is
   preferred by default. An explicit profile is never remapped. Implicit profile
   selection uses `__settings__.default_profile`, then an existing `DEFAULT`
-  section, then the sole configured profile, and finally the legacy `DEFAULT`
-  fallback. Profiles
+  section, then the sole configured profile, and finally the `DEFAULT` fallback.
+  Profiles
   containing both client ID and secret remain M2M even when `auth_type` is
   absent. Outside Databricks Apps, automatic U2M uses
   `databricks auth token --profile` when the CLI is available; otherwise it
@@ -515,7 +514,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   as the optional fourth `executeAgentTool` argument so service-principal
   execution does not collapse users onto one graph. Routine `write` and `update`
   effects describe mutation but do not automatically require Mastra approval;
-  only `effect: "destructive"` or the legacy `destructive: true` annotation
+  only `effect: "destructive"` or the `destructive: true` annotation
   enables the generic approval gate. A tool with stricter policy owns its
   explicit Mastra `requireApproval` setting.
 - `packages/js/node/rust-binary` owns the generated native release-command
@@ -802,9 +801,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   separate `key` input, and disabling the environment hash would leave one
   immutable stale cache per target. `cache-workspace-crates: true` retains
   unchanged workspace crate outputs when an exact raw-bundle hit is unavailable;
-  Cargo's source hashing still rebuilds changed crates. There is no separate
-  cache workflow and no GitHub sccache layer: that backend previously exhausted
-  the repository quota with per-object entries. `Cargo.lock` and `--locked` keep
+  Cargo's source hashing still rebuilds changed crates. Do not add a separate
+  cache workflow or GitHub sccache layer because per-object entries can exhaust
+  the repository quota. `Cargo.lock` and `--locked` keep
   dependency resolution reproducible.
   Set
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
@@ -1204,8 +1203,8 @@ Splits that ARE earning their keep, so leave them alone:
 What does NOT justify a package: being a different KIND of thing (generated vs
 hand-written - the barrel generator and codegen both handle mixed packages fine),
 or being conceptually separable while having exactly one consumer and no
-dependency of its own to isolate. `shared-sdk-model` was both and is now
-`shared/genie/src/dashboards.ts`.
+dependency of its own to isolate. Keep Genie dashboard schemas in
+`shared/genie/src/dashboards.ts` with their sole consumer.
 
 ### The single-consumer packages, already audited
 
@@ -1458,14 +1457,13 @@ all of shared-core speculatively. When moving duplicated Python helper code into
 change. When a contract must remain identical across languages, add one
 `polygotTest` callback to the owning TypeScript package and delete equivalent
 Python assertions. The private `@dbx-tools/test-polyglot` package owns the
-embedded-Python adapter and is added only as a TEST dependency. Process-isolated
+embedded-Python adapter and is a TEST dependency. Process-isolated
 configuration, cyclic values, and private constants belong in native tests under
 the owning package rather than a central fixture runner. Include parity cases
 when both runtimes independently encode protocol limits, wire names, retry
 bounds, or other compatibility-sensitive values.
 
-Package-local modules that exist so a helper is written once, listed here because
-each was previously duplicated across sibling files:
+Package-local modules that keep shared behavior in one place:
 
 - `node/appkit-web-search` `src/html-text.ts` - parser-backed `htmlToText` /
   `htmlFragmentToText` / `decodeHtmlEntities`, shared by `fetch.ts` and
@@ -1519,14 +1517,13 @@ run over the configured package roots plus `projen`). The normal task is
 check-only; `bun run eslint:fix` is the explicit mutating path and follows the
 same final-step timing rule as formatting.
 
-## Comments describe the code, not the changes to it
+## Docs and comments describe the code, not the changes to it
 
-A comment is read by someone looking at the CURRENT code, who has no idea what it
-looked like before. Git history already records what changed, so a comment that
-narrates a refactor is noise that ages into a lie. Write every comment as a
-description of how the code behaves NOW and why it is shaped that way.
+Readers need the current contract and its rationale. Git history records the
+sequence of edits. Write comments, docstrings, READMEs, and package docs as a
+description of how the code behaves and why it is shaped that way.
 
-Do not write, in code or docstrings:
+Do not write, in current-facing documentation or code comments:
 
 - "replaces the old X", "this is the in-process replacement for Y", "X is gone now";
 - "used to be its own package", "was previously spelled out in both", "before this
@@ -1878,8 +1875,8 @@ resolves under BOTH managers, so package deps are written once.
 default (isolated) linker instantiates a peer dependency once per peer context, so
 a package with many peers (`@mastra/*`) gets two peer-hash variants of the same
 `@mastra/core` version and TypeScript rejects passing a value built against one to
-an API typed by the other. Hoisted de-dupes to a single flat copy - the coherence
-the old cross-workspace `.pnpmfile.cjs` bridge used to provide. Do not remove it.
+an API typed by the other. Hoisted de-dupes to a single flat copy and preserves
+type identity across peer contexts. Do not remove it.
 
 The Mastra catalogue entries in `.projenrc.ts` are exact versions, not caret
 ranges. Keep the server packages, `@mastra/core`, and `@mastra/client-js` on the
@@ -1984,13 +1981,10 @@ clears `dist/` before each build, and stages an optional `public/` directory aft
 `Bun.build`; use `bun-build.override.ts` only to replace a default for an app with
 different deployment requirements.
 
-That note also recorded an engine bug that is now FIXED, kept here because the
-failure is unintuitive: `runSynth()` spawned `process.execPath --import tsx`, but
-under bun `process.execPath` IS bun, which cannot load tsx's loader (`Cannot find
-module './cjs/index.cjs' from ''`) - so `sync`, `projenrc`, and `openapi` all
-failed at the re-synth step. Loading tsx under bun is pointless anyway (bun runs
-`.ts` natively), so `runSynth` now branches on `process.versions.bun` and passes
-the loader flag only under node. Do not "restore" the flag unconditionally.
+`runSynth()` branches on `process.versions.bun`: Bun runs `.ts` directly, while
+Node receives the `tsx` loader flag. Passing `--import tsx` to Bun fails because
+its `process.execPath` cannot load the Node loader. Keep the runner-specific
+branch.
 
 ## Commands
 
@@ -2262,11 +2256,10 @@ surface of every package at once; regenerate with `bun run barrels`.
 The runnable sample lives under `packages/example/` as two ordinary workspace
 members - `packages/example/server/appkit-demo` (`@dbx-tools/demo-appkit-server`,
 `server` tag) and `packages/example/app/appkit-demo` (`@dbx-tools/demo-appkit-app`,
-`app` tag). It is no longer a standalone workspace: both members declare their
-`@dbx-tools/*` deps as `workspace:^`, so bun resolves them from source in the one
-`node_modules`. Editing a package is reflected in the demo immediately - there is
-no link hook, no `DBX_TOOLS_LINK` switch, and no consumer-mode registry install
-(that portability was dropped when the demo merged into the main tree).
+`app` tag). Both members declare their `@dbx-tools/*` deps as `workspace:^`, so
+Bun resolves them from source in the root `node_modules`. Editing a package is
+reflected in the demo immediately. The demo has no link hook, `DBX_TOOLS_LINK`
+switch, or consumer-mode registry install.
 
 ```sh
 bun install                                   # one workspace; demo resolves packages from source
@@ -2366,16 +2359,9 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `@dbx-tools/projen@^<this CLI's own version>` (see `defaultProjenSpecifier`)
   rather than `@latest`, so the installed engine matches the CLI. The CLI and
   engine intentionally share the repository version.
-- **An established workspace pins its engine forever unless the CLI moves it.**
-  Bootstrap installs the engine once; every later `dbx` run took the
-  "established workspace" path, which only installed when `node_modules` was
-  missing and never looked at the engine's VERSION. So a workspace scaffolded
-  months earlier kept resolving its original engine no matter how current the CLI
-  invoking it was, and then failed inside that old engine's code - which is what
-  made a `sync --watch` die on a `concurrently` the installed engine predated,
-  and an `addOverride` call fail against a `PnpmWorkspaceState` that had not
-  gained it yet. `ensureEngineCurrent` (`bootstrap.ts`, called from `cli.ts`) now
-  re-adds the engine when the installed one is BEHIND this CLI. It compares
+- **An established workspace follows the CLI's compatible engine version.**
+  `ensureEngineCurrent` (`bootstrap.ts`, called from `cli.ts`) re-adds the engine
+  when the installed version is behind the CLI. It compares
   versions and only moves forward, so an older CLI cannot downgrade a workspace,
   and an in-repo build from the same `projen-cli` unit is a no-op.
 - **The engine's `@dbx-tools/*` deps are resolved from workspace in-repo and use
@@ -2395,11 +2381,11 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   declared by some member package resolves fine. `typescript` and `tsoa` are the two
   that qualify: `generateOpenapi` returns before touching either unless a package has
   tsoa controllers, and a package can only have those if it carries the `server` tag,
-  which adds `tsoa@catalog:` to that package itself. Shipping tsoa anyway cost every
-  workspace 179 packages (and a deprecated `glob@10` warning) for a module it never
-  loads; dropping it took a bare bootstrap from 334 packages to 179. They stay
-  devDeps so the engine's own run and its `typeof import("tsoa")` types still
-  resolve. `ts-to-zod` and `openapi-typescript` are the opposite case — nothing else
+  which adds `tsoa@catalog:` to that package itself. Installing tsoa as a runtime
+  dependency would add its complete transitive tree to workspaces that do not use
+  it. It stays a devDep so the engine's own run and its
+  `typeof import("tsoa")` types still resolve. `ts-to-zod` and
+  `openapi-typescript` are the opposite case — nothing else
   puts them in a consumer's tree, so they remain real deps. Before adding a dep here,
   ask whether a tag mixin or the root already installs it; if it does, `lazyRequire`
   it. The residual `glob@10` warning in a workspace that genuinely uses tsoa is
@@ -2421,18 +2407,16 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   into an excluded directory, so every per-file `!/.projen/tasks.json` negation
   projen emits to FORCE its generated files into git becomes a no-op. Files
   already in the index keep working, so nothing appears wrong; only newly
-  generated ones are silently unaddable. That is exactly what happened here - 7
-  packages had their `.projen/*.json` committed and 27 could not - and it stayed
-  invisible for months. Ignore CONTENTS (`.idea/*`), never the directory, so a
-  later negation can still reach inside. Verify any ignore change with
+  generated ones are silently unaddable. Ignore CONTENTS (`.idea/*`), never the
+  directory, so a later negation can still reach inside. Verify any ignore change with
   `git add --dry-run <path>`, never `git check-ignore` alone, which reports the
   per-file rule and hides the parent-directory one that actually decides.
 - **Dot-paths that must stay out of git are named explicitly.** The engine adds
   the secrets and editor set (`.env`, `.env.*` with `!.env.example` /
   `!.env.sample`, `.idea/*`); `.projenrc.ts` adds this repo's generated
-  dot-directories (`.docs-build/`, `.astro/`, `.worktrees/`). A new generated
+  dot-directories (`.docs-build/`, `.astro/`, `.worktrees/`). A generated
   dot-directory needs a line in one of those two places - it will otherwise show
-  up as untracked, which is the intended failure mode now (loud, not silent).
+  up as untracked, which makes the omission visible.
 - **The published tarball is an ALLOWLIST, not everything on disk.** Every
   package gets `files: ["index.ts", "src"]` at construction
   (`addPackageFiles`, `project.ts`); the `cli` tag adds `"bin"` for its
@@ -2697,8 +2681,8 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   ELEMENT, not `:root`, so a theme scoped to an embedded chat panel wins, and it
   re-resolves on both a root `.dark`/`.light` mutation and a
   `prefers-color-scheme` change. `brandChartTheme` deliberately sets NO text
-  color: it used to bake `colors.foreground`, a single light value, which
-  rendered near-black labels on a dark chat surface. The PDF export pins
+  color because a fixed light-theme foreground renders near-black labels on a
+  dark chat surface. The PDF export pins
   `LIGHT_CHART_CHROME` because its document forces `color-scheme: light`.
   Add a brand property in `brandChartTheme`/`themed`; add a theme-dependent one
   in `ChartChrome` + `normalizeChrome`. Never per-chart-type.
@@ -2870,7 +2854,7 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   restore a private custom-route agent-context helper or pagination coercion;
   use native Mastra pagination inputs.
   Regeneration first deletes the persisted user/assistant pair, then replays the
-  user message. Persisted suspended runs restore actionable approval cards after
+  user message. Persisted suspended runs restore usable approval cards after
   reloads and server restarts.
 - **Thread placement is ONE option with THREE surfaces, all the same list.**
   `threadPlacement` (`disabled` | `auto` | `left` | `right` | `top`) picks
