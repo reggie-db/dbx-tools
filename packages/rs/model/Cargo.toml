@@ -28,7 +28,7 @@ name = "dbx-tools-model-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
 
 [dependencies.dbx-tools-core]
-version = "0.9.4"
+version = "0.9.5"
 path = "../core"
 
 [dependencies.difflib-fast]
