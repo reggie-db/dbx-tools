@@ -695,9 +695,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   GitHub's failed-job rerun reuses successful Rust artifacts from the same run.
   Manual recovery selects `all`, `node`, `python`, or `docs`; a Node or Python
   recovery can name an earlier `release.yml` run whose commit must match the
-  verified annotated tag. Dispatch the workflow with that tag as its Git ref so
-  the recovery run checks out the immutable release boundary. Manual runs default to
-  dry-run, while clearing `dry_run` permits the selected publication stage. npm
+  verified annotated tag. Dispatch the current default-branch workflow with the
+  annotated tag and exact SHA as inputs; the workflow verifies both before
+  checking out the immutable release boundary. Manual runs default to dry-run,
+  while clearing `dry_run` permits the selected publication stage. npm
   recovery compares canonical extracted paths, executable bits, bytes, and
   repository identity before skipping an exact published version; read-only
   generator modes, tar timestamps, and gzip metadata do not make equivalent
