@@ -18,7 +18,7 @@ import { StringDecoder } from "node:string_decoder";
 import { promisify } from "node:util";
 
 import { bin, configUtils } from "@dbx-tools/core";
-import { log } from "@dbx-tools/shared-core";
+import { log, stringUtils } from "@dbx-tools/shared-core";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
 
@@ -142,21 +142,24 @@ export async function writePortrConfig(
   const directory = join(childEnv.HOME ?? os.homedir(), ".portr");
   const path = join(directory, "config.yaml");
   await mkdir(directory, { recursive: true });
-  await writeFile(
-    path,
-    [
-      `server_url: ${config.server}`,
-      `ssh_url: ${config.sshUrl}`,
-      `secret_key: ${config.token}`,
-      "disable_dashboard: true",
-      "disable_tui: true",
-      "tunnels:",
-      `  - name: ${config.subdomain}`,
-      `    subdomain: ${config.subdomain}`,
-      `    port: ${config.port}`,
-      "",
-    ].join("\n"),
+  // prettier-ignore
+  const template = (
+    // ============================================================================
+    /*yaml*/`
+    server_url: ${config.server}
+    ssh_url: ${config.sshUrl}
+    secret_key: ${config.token}
+    disable_dashboard: true
+    disable_tui: true
+    tunnels:
+      - name: ${config.subdomain}
+        subdomain: ${config.subdomain}
+        port: ${config.port}
+    `
+    // ============================================================================
   );
+  const contents = stringUtils.dedent(template, { trimEnd: false });
+  await writeFile(path, contents);
 }
 
 /** Launch `portr start` as a child process (caller supervises + kills it). */

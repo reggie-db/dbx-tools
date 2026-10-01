@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stringUtils } from "@dbx-tools/shared-core";
 import { TextFile, javascript } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import type { RustProject } from "./_rust-project.ts";
@@ -482,29 +483,34 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
               id: "raw-native",
               shell: "bash",
               env: { GH_TOKEN: "${{ github.token }}" },
-              run: [
-                'KEY="${{ steps.rust-fingerprint.outputs.key }}"',
-                'test -n "$KEY"',
-                'ASSET="rust-raw-${{ matrix.node }}-$KEY.tar.gz"',
-                "mkdir -p dist/rust-raw",
-                'MATCH="$(gh api --paginate "repos/${{ github.repository }}/releases?per_page=100" --jq \'.[] | select(.draft == false) | . as $release | .assets[] | select(.name == "\'"$ASSET"\'") | [$release.tag_name, .url] | @tsv\' | head -n 1)"',
-                'if [ -n "$MATCH" ]; then',
-                "  TAG=\"${MATCH%%$'\\t'*}\"",
-                "  URL=\"${MATCH#*$'\\t'}\"",
-                '  CHECKSUM_URL="$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq \'.assets[] | select(.name == "\'"$ASSET.sha256"\'") | .url\')"',
-                '  rm -rf "target/${{ matrix.cargo }}/release"',
-                '  if test -n "$CHECKSUM_URL" && gh api "$URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET" && gh api "$CHECKSUM_URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET.sha256" && (cd dist/rust-raw && if command -v sha256sum >/dev/null 2>&1; then sha256sum --check "$ASSET.sha256"; else shasum -a 256 --check "$ASSET.sha256"; fi) && tar -xzf "dist/rust-raw/$ASSET"; then',
-                '    echo "hit=true" >> "$GITHUB_OUTPUT"',
-                "  else",
-                '    rm -rf "target/${{ matrix.cargo }}/release" "dist/rust-raw/$ASSET" "dist/rust-raw/$ASSET.sha256"',
-                '    echo "::warning::matching raw Rust bundle failed validation; rebuilding"',
-                '    echo "hit=false" >> "$GITHUB_OUTPUT"',
-                "  fi",
-                "else",
-                '  echo "hit=false" >> "$GITHUB_OUTPUT"',
-                "fi",
-                'echo "asset=$ASSET" >> "$GITHUB_OUTPUT"',
-              ].join("\n"),
+              // prettier-ignore
+              run: stringUtils.dedent(
+                // ============================================================================
+                /*bash*/`
+                KEY="\${{ steps.rust-fingerprint.outputs.key }}"
+                test -n "$KEY"
+                ASSET="rust-raw-\${{ matrix.node }}-$KEY.tar.gz"
+                mkdir -p dist/rust-raw
+                MATCH="$(gh api --paginate "repos/\${{ github.repository }}/releases?per_page=100" --jq '.[] | select(.draft == false) | . as $release | .assets[] | select(.name == "'"$ASSET"'") | [$release.tag_name, .url] | @tsv' | head -n 1)"
+                if [ -n "$MATCH" ]; then
+                  TAG="\${MATCH%%$'\\t'*}"
+                  URL="\${MATCH#*$'\\t'}"
+                  CHECKSUM_URL="$(gh api "repos/\${{ github.repository }}/releases/tags/$TAG" --jq '.assets[] | select(.name == "'"$ASSET.sha256"'") | .url')"
+                  rm -rf "target/\${{ matrix.cargo }}/release"
+                  if test -n "$CHECKSUM_URL" && gh api "$URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET" && gh api "$CHECKSUM_URL" -H "Accept: application/octet-stream" > "dist/rust-raw/$ASSET.sha256" && (cd dist/rust-raw && if command -v sha256sum >/dev/null 2>&1; then sha256sum --check "$ASSET.sha256"; else shasum -a 256 --check "$ASSET.sha256"; fi) && tar -xzf "dist/rust-raw/$ASSET"; then
+                    echo "hit=true" >> "$GITHUB_OUTPUT"
+                  else
+                    rm -rf "target/\${{ matrix.cargo }}/release" "dist/rust-raw/$ASSET" "dist/rust-raw/$ASSET.sha256"
+                    echo "::warning::matching raw Rust bundle failed validation; rebuilding"
+                    echo "hit=false" >> "$GITHUB_OUTPUT"
+                  fi
+                else
+                  echo "hit=false" >> "$GITHUB_OUTPUT"
+                fi
+                echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+              `
+                // ============================================================================
+              ),
             },
           ]
         : []),
@@ -755,6 +761,53 @@ export function rustGitHubReleaseJob(): Job {
           generate_release_notes: true,
           tag_name: RELEASE_TAG,
           target_commitish: RELEASE_SHA,
+        },
+      },
+      {
+        name: "Delete superseded raw Rust release assets",
+        uses: "actions/github-script@v8",
+        env: { CURRENT_RELEASE_TAG: RELEASE_TAG },
+        with: {
+          // prettier-ignore
+          script: stringUtils.dedent(
+            // ============================================================================
+            /*js*/`
+            const currentTag = process.env.CURRENT_RELEASE_TAG;
+            if (!currentTag) throw new Error("CURRENT_RELEASE_TAG is required");
+            const parseVersion = (tag) => {
+              const match = /^v(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(tag);
+              return match ? match.slice(1).map(Number) : undefined;
+            };
+            const compareVersions = (left, right) => {
+              for (let index = 0; index < 3; index += 1) {
+                if (left[index] !== right[index]) return left[index] - right[index];
+              }
+              return 0;
+            };
+            const currentVersion = parseVersion(currentTag);
+            if (!currentVersion) throw new Error(\`Unsupported release tag: \${currentTag}\`);
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              ...context.repo,
+              per_page: 100,
+            });
+            const assets = releases.flatMap((release) => {
+              const version = parseVersion(release.tag_name);
+              if (release.draft || !version || compareVersions(version, currentVersion) >= 0) {
+                return [];
+              }
+              return release.assets.filter((asset) => /^rust-(?:raw|build)-/.test(asset.name));
+            });
+            for (const asset of assets) {
+              core.info(\`Deleting \${asset.name} (\${asset.id})\`);
+              await github.rest.repos.deleteReleaseAsset({
+                ...context.repo,
+                asset_id: asset.id,
+              });
+            }
+            core.info(\`Deleted \${assets.length} superseded raw Rust release assets\`);
+          `
+            // ============================================================================
+          ),
         },
       },
     ],

@@ -42,7 +42,7 @@ Use this package when the friction is around bootstrapping and reuse:
 - AppKit exposes request context inside AppKit handlers; these helpers make code
   safe to call from scripts, tests, and background jobs too.
 - AppKit plugin instances are generic; the lookup helpers keep sibling-plugin
-  access typed and errors actionable.
+  access typed and return clear errors.
 - AppKit does not own your local CLI flags, bundle validation output, or
   `app.yaml`; `@dbx-tools/core` centralizes those sources for this package and
   other Node callers.

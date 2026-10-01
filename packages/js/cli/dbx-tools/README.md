@@ -109,7 +109,7 @@ option surface.
 ## Put A Gated Public URL In Front Of A Command
 
 ```sh
-dbx tunnel status --allow databricks.com          # what would happen, nothing started
+dbx tunnel status --allow databricks.com
 dbx tunnel --allow databricks.com -- bun src/server.ts
 ```
 

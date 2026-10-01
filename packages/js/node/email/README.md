@@ -226,7 +226,7 @@ Nothing else has to be wired up. Two consequences are worth knowing:
 - In a plain Mastra app with no AppKit plugin registered, the slot falls back to
   running the send directly, so the tool still works without interceptors.
 - Recipient, cap, and sender-policy checks run _before_ the chain, so a rejected
-  message keeps its specific status and actionable message. A failure inside the
+  message keeps its specific status and clear message. A failure inside the
   chain is re-raised as a stable `ExecutionError`, so an SMTP relay's own wording
   never becomes the caller's or the model's error text.
 
@@ -364,8 +364,8 @@ const fragment = await markdown.markdownToHtml("## Status\nResolved.");
 component tree into the two MIME alternatives used by SMTP. The universal
 components live in `@dbx-tools/shared-email-template`, so the browser preview
 and delivered message share typography, content styling, and brand behavior.
-`markdown.normalizeMarkdown()` remains available for compatibility, while
-`markdown.markdownToHtml()` now renders through the shared React Email body.
+`markdown.normalizeMarkdown()` normalizes Markdown without rendering it.
+`markdown.markdownToHtml()` renders through the shared React Email body.
 
 ## Brand The Email
 

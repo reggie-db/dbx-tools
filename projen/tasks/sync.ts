@@ -95,9 +95,9 @@ if (!process.argv.includes("--watch")) {
    * re-emitting it is how we say "stop" in a language the supervisor understands.
    *
    * Killing is asynchronous (concurrently shells out to `ps` to walk each process tree)
-   * and can outlive `result`, which is how a plain SIGTERM used to leave orphaned
-   * watchers behind. The timer holds the process open until the kills land, and doubles
-   * as the backstop that leaves anyway if one of them wedges.
+   * and can outlive `result`. The timer keeps the process open until the kills
+   * land, which prevents orphaned watchers after SIGTERM. It also stops waiting
+   * if one of them wedges.
    */
   function stop(): void {
     if (stopping) return;

@@ -287,14 +287,13 @@ await fileLock.withFileLock(["cache", name], async () => {
 `withFileLock()` serializes processes on the same machine or shared filesystem.
 Bun and Node both use `proper-lockfile` atomic lock-directory creation,
 heartbeats, stale-lock reclamation, and ownership-safe release. Callers can
-select the lock directory, explicitly request the legacy Bun `flock` backend,
+select the lock directory, explicitly request the Bun `flock` backend,
 observe the chosen backend, or set a wait timeout. Lock keys use the same stable
 structured identity as process and Postgres advisory locks.
 
-Drain long-running processes that still use the legacy default before starting
-an upgraded process against the same shared state. The explicit `flock` backend
-remains available for compatibility, but it does not coordinate with the
-portable directory protocol.
+Processes using `flock` must stop before a process using the portable directory
+protocol starts against the same shared state. The two protocols do not
+coordinate with each other.
 
 Use `processLock.withProcessLock()` when only threads in one process compete,
 `fileLock.withFileLock()` when local processes compete, and Postgres advisory
@@ -333,7 +332,7 @@ cached too.
   including runtime detection and typed coercion helpers.
 - `file` - best-effort filesystem stat.
 - `fileLock` - portable cross-process lock directories shared by Bun and Node,
-  with an explicit legacy `flock` option.
+  with an explicit `flock` option.
 - `processLock` - keyed mutual exclusion across the main thread and its workers,
   with worker wiring (`processLockWorkerOptions`, `attachProcessLock`,
   `processLockAttached`).

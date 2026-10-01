@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-core";
-export const PACKAGE_VERSION = "0.9.6";
+export const PACKAGE_VERSION = "0.9.7";
 export * as asyncUtils from "./src/async-utils.ts";
 export * as brandUtils from "./src/brand-utils.ts";
 export * as errorUtils from "./src/error-utils.ts";
@@ -31,5 +31,5 @@ export type { UrlLike, IpVersion, ParsedIp, Cidr, UrlBuilder, ParseEmailsOptions
 export type { Sequence, Container, Collection, OneOrMany, NameLike, NonFunctionKeys, SerializablePrimitive, SerializableValue, ToNumberOptions, ToDateOptions, ToDurationOptions, DeepEqualComparator } from "./src/object.ts";
 export type { PatternOptions } from "./src/pattern.ts";
 export type { PredicateFunction, TypePredicateFunction, PredicateInput, Predicate } from "./src/predicate.ts";
-export type { TokenizeOptions, KeyOptions, IdentifierOptions, Description } from "./src/string-utils.ts";
+export type { TokenizeOptions, KeyOptions, IdentifierOptions, DedentOptions, Description } from "./src/string-utils.ts";
 export { ACCESS_TOKEN_HEADER, USER_ID_HEADER, USER_EMAIL_HEADER } from "./src/token.ts";

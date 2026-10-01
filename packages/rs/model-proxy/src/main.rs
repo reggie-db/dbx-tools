@@ -24,7 +24,7 @@ use dbx_tools_model::{ModelCapabilitiesResolver, ModelClient, ModelRateLimitsRes
 use images::DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES;
 use metrics::{default_metrics_option, MetricsConfig, MetricsOption, MetricsRuntime, PeerAddr};
 use protocol::TargetWire;
-use rate_limit::RateLimitPolicy;
+use rate_limit::{ModelFallbackMode, ModelFallbackPolicy, RateLimitPolicy};
 use routes::{AppConfig, AppState};
 use throttle::{RateLimitMode, ThrottleConfig};
 use tracing::info;
@@ -39,6 +39,10 @@ const DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS: NonZeroU64 =
     NonZeroU64::new(1_000).expect("default retry delay is non-zero");
 const DEFAULT_RATE_LIMIT_MAX_DELAY_MS: NonZeroU64 =
     NonZeroU64::new(60_000).expect("default maximum retry delay is non-zero");
+const DEFAULT_RATE_LIMIT_MAX_WAIT_MS: u64 = 60_000;
+const DEFAULT_RATE_LIMIT_MODEL_FALLBACK_MAX_STEPS: u32 = 5;
+const DEFAULT_RATE_LIMIT_MODEL_FALLBACK_THRESHOLD_MS: NonZeroU64 =
+    NonZeroU64::new(10_000).expect("default model fallback threshold is non-zero");
 
 #[derive(Debug, Parser)]
 #[command(name = "dbx-model-proxy")]
@@ -86,6 +90,37 @@ struct Cli {
     /// Process-local TPM admission mode.
     #[arg(long, env = "RATE_LIMIT_MODE", value_enum, default_value_t = RateLimitMode::Auto)]
     rate_limit_mode: RateLimitMode,
+    /// Model fallback behavior before a long rate-limit wait.
+    #[arg(
+        long,
+        env = "RATE_LIMIT_MODEL_FALLBACK",
+        value_enum,
+        default_value_t = ModelFallbackMode::SameFamily
+    )]
+    rate_limit_model_fallback: ModelFallbackMode,
+    /// Maximum number of lower same-family model versions.
+    #[arg(
+        long,
+        env = "RATE_LIMIT_MODEL_FALLBACK_MAX_STEPS",
+        default_value_t = DEFAULT_RATE_LIMIT_MODEL_FALLBACK_MAX_STEPS,
+        value_parser = clap::value_parser!(u32).range(..=20)
+    )]
+    rate_limit_model_fallback_max_steps: u32,
+    /// Wait threshold that triggers an immediate model fallback.
+    #[arg(
+        long,
+        env = "RATE_LIMIT_MODEL_FALLBACK_THRESHOLD_MS",
+        default_value_t = DEFAULT_RATE_LIMIT_MODEL_FALLBACK_THRESHOLD_MS
+    )]
+    rate_limit_model_fallback_threshold_ms: NonZeroU64,
+    /// Maximum total time one request may spend waiting on rate limits.
+    #[arg(
+        long,
+        env = "RATE_LIMIT_MAX_WAIT_MS",
+        default_value_t = DEFAULT_RATE_LIMIT_MAX_WAIT_MS,
+        value_parser = clap::value_parser!(u64).range(1..=60_000)
+    )]
+    rate_limit_max_wait_ms: u64,
     /// Retries after an upstream 429 response; zero disables coordinated backoff.
     #[arg(
         long,
@@ -94,14 +129,14 @@ struct Cli {
         value_parser = clap::value_parser!(u32).range(..=100)
     )]
     rate_limit_retries: u32,
-    /// Initial jittered exponential delay when Retry-After is absent.
+    /// Initial delay for incremental 429 recovery.
     #[arg(
         long,
         env = "RATE_LIMIT_INITIAL_DELAY_MS",
         default_value_t = DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS
     )]
     rate_limit_initial_delay_ms: NonZeroU64,
-    /// Maximum exponential delay when Retry-After is absent.
+    /// Maximum delay for each incremental 429 recovery step.
     #[arg(
         long,
         env = "RATE_LIMIT_MAX_DELAY_MS",
@@ -128,6 +163,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         output_tokens_per_minute,
         provisioned_throughput,
         rate_limit_mode,
+        rate_limit_model_fallback,
+        rate_limit_model_fallback_max_steps,
+        rate_limit_model_fallback_threshold_ms,
+        rate_limit_max_wait_ms,
         rate_limit_retries,
         rate_limit_initial_delay_ms,
         rate_limit_max_delay_ms,
@@ -157,10 +196,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 documented_limits: model_rate_limits,
             },
             image_resize_threshold_bytes: image_resize_threshold_bytes.get(),
+            model_fallback: ModelFallbackPolicy {
+                mode: rate_limit_model_fallback,
+                max_steps: rate_limit_model_fallback_max_steps as usize,
+                threshold: Duration::from_millis(rate_limit_model_fallback_threshold_ms.get()),
+            },
             rate_limits: RateLimitPolicy {
                 max_retries: rate_limit_retries,
                 initial_delay: Duration::from_millis(rate_limit_initial_delay_ms.get()),
                 max_delay: Duration::from_millis(rate_limit_max_delay_ms.get()),
+                max_wait: Duration::from_millis(rate_limit_max_wait_ms),
             },
             metrics: metrics.clone(),
         },
@@ -179,6 +224,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         output_tokens_per_minute = output_tokens_per_minute.map(NonZeroU64::get),
         provisioned_throughput,
         ?rate_limit_mode,
+        ?rate_limit_model_fallback,
+        rate_limit_model_fallback_max_steps,
+        rate_limit_model_fallback_threshold_ms = rate_limit_model_fallback_threshold_ms.get(),
+        rate_limit_max_wait_ms,
         rate_limit_retries,
         rate_limit_initial_delay_ms = rate_limit_initial_delay_ms.get(),
         rate_limit_max_delay_ms = rate_limit_max_delay_ms.get(),
@@ -214,6 +263,16 @@ mod tests {
         assert_eq!(cli.output_tokens_per_minute, None);
         assert!(!cli.provisioned_throughput);
         assert_eq!(cli.rate_limit_mode, RateLimitMode::Auto);
+        assert_eq!(cli.rate_limit_model_fallback, ModelFallbackMode::SameFamily);
+        assert_eq!(
+            cli.rate_limit_model_fallback_max_steps,
+            DEFAULT_RATE_LIMIT_MODEL_FALLBACK_MAX_STEPS
+        );
+        assert_eq!(
+            cli.rate_limit_model_fallback_threshold_ms,
+            DEFAULT_RATE_LIMIT_MODEL_FALLBACK_THRESHOLD_MS
+        );
+        assert_eq!(cli.rate_limit_max_wait_ms, DEFAULT_RATE_LIMIT_MAX_WAIT_MS);
         assert_eq!(cli.rate_limit_retries, DEFAULT_RATE_LIMIT_RETRIES);
         assert_eq!(cli.rate_limit_retries, 5);
         assert_eq!(
@@ -238,6 +297,14 @@ mod tests {
             "--provisioned-throughput",
             "--rate-limit-mode",
             "off",
+            "--rate-limit-model-fallback",
+            "off",
+            "--rate-limit-model-fallback-max-steps",
+            "3",
+            "--rate-limit-model-fallback-threshold-ms",
+            "7500",
+            "--rate-limit-max-wait-ms",
+            "30000",
             "--rate-limit-retries",
             "0",
             "--rate-limit-initial-delay-ms",
@@ -254,8 +321,15 @@ mod tests {
         assert_eq!(cli.output_tokens_per_minute.unwrap().get(), 20_000);
         assert!(cli.provisioned_throughput);
         assert_eq!(cli.rate_limit_mode, RateLimitMode::Off);
+        assert_eq!(cli.rate_limit_model_fallback, ModelFallbackMode::Off);
+        assert_eq!(cli.rate_limit_model_fallback_max_steps, 3);
+        assert_eq!(cli.rate_limit_model_fallback_threshold_ms.get(), 7_500);
+        assert_eq!(cli.rate_limit_max_wait_ms, 30_000);
         assert_eq!(cli.rate_limit_retries, 0);
         assert_eq!(cli.rate_limit_initial_delay_ms.get(), 250);
         assert_eq!(cli.rate_limit_max_delay_ms.get(), 5_000);
+        assert!(
+            Cli::try_parse_from(["dbx-model-proxy", "--rate-limit-max-wait-ms", "60001",]).is_err()
+        );
     }
 }

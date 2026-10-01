@@ -67,7 +67,14 @@ struct NativeUsageObserver {
     events: EventStream<NativeUsageInput>,
     event_size: SseEventSize,
     usage: ResponseTokenUsage,
+    failure_status: Option<StatusCode>,
     observing: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct NativeObservation {
+    usage: ResponseTokenUsage,
+    failure_status: Option<StatusCode>,
 }
 
 #[derive(Default)]
@@ -119,6 +126,7 @@ impl Default for NativeUsageObserver {
             events: EventStream::new(NativeUsageInput { receiver }),
             event_size: SseEventSize::default(),
             usage: ResponseTokenUsage::default(),
+            failure_status: None,
             observing: true,
         }
     }
@@ -146,23 +154,26 @@ impl NativeUsageObserver {
     }
 
     /// Close the framed input and consume every complete event still buffered by the parser.
-    async fn finish(mut self) -> ResponseTokenUsage {
+    async fn finish(mut self) -> NativeObservation {
         self.sender.take();
         if self.observing {
             while let Some(event) = self.events.next().await {
                 match event {
-                    Ok(event) => self.observe(&event.data),
+                    Ok(event) => self.observe(&event.event, &event.data),
                     Err(_) => break,
                 }
             }
         }
-        self.usage
+        NativeObservation {
+            usage: self.usage,
+            failure_status: self.failure_status,
+        }
     }
 
     fn drain_ready(&mut self) {
         loop {
             match self.events.next().now_or_never() {
-                Some(Some(Ok(event))) => self.observe(&event.data),
+                Some(Some(Ok(event))) => self.observe(&event.event, &event.data),
                 Some(Some(Err(_))) | Some(None) => {
                     self.stop();
                     break;
@@ -172,10 +183,13 @@ impl NativeUsageObserver {
         }
     }
 
-    fn observe(&mut self, data: &str) {
+    fn observe(&mut self, event: &str, data: &str) {
         let Ok(payload) = serde_json::from_str::<Value>(data) else {
             return;
         };
+        if self.failure_status.is_none() {
+            self.failure_status = native_failure_status(event, &payload);
+        }
         let usage = response_token_usage(&payload);
         if usage.reported {
             self.usage = usage;
@@ -188,12 +202,39 @@ impl NativeUsageObserver {
     }
 }
 
+fn native_failure_status(event: &str, payload: &Value) -> Option<StatusCode> {
+    let payload_type = payload.get("type").and_then(Value::as_str);
+    let failed = matches!(event, "response.failed" | "error")
+        || matches!(payload_type, Some("response.failed" | "error"))
+        || payload.pointer("/response/status").and_then(Value::as_str) == Some("failed");
+    if !failed {
+        return None;
+    }
+    let failure = payload
+        .pointer("/response/error")
+        .or_else(|| payload.get("error"))
+        .unwrap_or(payload)
+        .to_string()
+        .to_ascii_lowercase();
+    Some(
+        if failure.contains("rate_limit")
+            || failure.contains("rate limit")
+            || failure.contains("too many requests")
+            || failure.contains("exceeded workspace")
+        {
+            StatusCode::TOO_MANY_REQUESTS
+        } else {
+            StatusCode::BAD_GATEWAY
+        },
+    )
+}
+
 struct StreamCompletion {
     context: StreamLogContext,
     response_bytes: u64,
     usage: ResponseTokenUsage,
+    status: StatusCode,
     finished: bool,
-    failed: bool,
 }
 
 impl StreamCompletion {
@@ -202,8 +243,8 @@ impl StreamCompletion {
             context,
             response_bytes: 0,
             usage: ResponseTokenUsage::default(),
+            status: StatusCode::OK,
             finished: false,
-            failed: false,
         }
     }
 
@@ -226,9 +267,11 @@ impl StreamCompletion {
         }
     }
 
-    fn finish(&mut self, failed: bool) {
+    fn finish(&mut self, failure_status: Option<StatusCode>) {
         self.finished = true;
-        self.failed = failed;
+        if let Some(status) = failure_status {
+            self.status = status;
+        }
     }
 
     async fn reconcile(&self) {
@@ -243,8 +286,8 @@ impl Drop for StreamCompletion {
             self.context.target,
             self.response_bytes,
             self.usage,
+            self.status,
             self.finished,
-            self.failed,
         );
     }
 }
@@ -274,15 +317,16 @@ pub(crate) fn stream_response(
                         yield Ok::<Bytes, io::Error>(chunk);
                     }
                     Err(error) => {
-                        completion.finish(true);
+                        completion.finish(Some(StatusCode::BAD_GATEWAY));
                         yield Err(io::Error::other(error.to_string()));
                         return;
                     }
                 }
             }
-            completion.usage = usage.finish().await;
+            let observation = usage.finish().await;
+            completion.usage = observation.usage;
             completion.reconcile().await;
-            completion.finish(false);
+            completion.finish(observation.failure_status);
         };
         return Ok(sse_response(Body::from_stream(stream), response_headers));
     }
@@ -359,7 +403,7 @@ pub(crate) fn stream_response(
             }
         }
         completion.reconcile().await;
-        completion.finish(failed);
+        completion.finish(failed.then_some(StatusCode::BAD_GATEWAY));
     };
     Ok(sse_response(Body::from_stream(stream), response_headers))
 }
@@ -505,7 +549,7 @@ mod tests {
         for chunk in chunks {
             observer.observe_chunk(chunk).await;
         }
-        observer.finish().await
+        observer.finish().await.usage
     }
 
     #[tokio::test]
@@ -520,6 +564,37 @@ mod tests {
             forwarded.push(observer.observe_chunk(chunk).await);
         }
         assert_eq!(forwarded, chunks);
+    }
+
+    #[tokio::test]
+    async fn native_usage_observer_classifies_in_band_response_failures() {
+        let mut rate_limit = NativeUsageObserver::default();
+        rate_limit
+            .observe_chunk(Bytes::from_static(
+                br#"event: response.failed
+data: {"type":"response.failed","response":{"status":"failed","error":{"code":"rate_limit_exceeded","message":"Too many requests"}}}
+
+"#,
+            ))
+            .await;
+        assert_eq!(
+            rate_limit.finish().await.failure_status,
+            Some(StatusCode::TOO_MANY_REQUESTS)
+        );
+
+        let mut failure = NativeUsageObserver::default();
+        failure
+            .observe_chunk(Bytes::from_static(
+                br#"event: response.failed
+data: {"type":"response.failed","response":{"status":"failed","error":{"code":"server_error"}}}
+
+"#,
+            ))
+            .await;
+        assert_eq!(
+            failure.finish().await.failure_status,
+            Some(StatusCode::BAD_GATEWAY)
+        );
     }
 
     #[tokio::test]

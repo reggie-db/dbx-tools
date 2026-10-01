@@ -766,23 +766,28 @@ export class DBXToolsPythonWorkspace extends Component {
     ];
     const helper = ".projen/pypi-trusted-publisher-instructions.mjs";
     new TextFile(project.root, helper, {
-      lines: [
-        "#!/usr/bin/env node",
-        'import { parseArgs } from "node:util";',
-        "",
-        "const { values } = parseArgs({",
-        '  options: { secretFile: { type: "string" } },',
-        "});",
-        `const beforeAuthentication = ${JSON.stringify(linesBeforeAuthentication)};`,
-        `const afterAuthentication = ${JSON.stringify(linesAfterAuthentication)};`,
-        "const authentication = values.secretFile",
-        "  ? [",
-        "      `- If browser authentication is required, read credentials from ${values.secretFile} directly into the browser without printing, logging, or exposing secret values.`,",
-        "      `- If ${values.secretFile} is absent, invalid, or insufficient for authentication, pause and ask the user to complete authentication.`,",
-        "    ]",
-        '  : ["- If browser authentication is required, pause and ask the user to complete authentication."];',
-        'process.stdout.write(`${[...beforeAuthentication, ...authentication, ...afterAuthentication].join("\\n").trimEnd()}\\n`);',
-      ],
+      // prettier-ignore
+      lines: stringUtils.dedent(
+        // ============================================================================
+        /*js*/`
+          #!/usr/bin/env node
+          import { parseArgs } from "node:util";
+
+          const { values } = parseArgs({
+            options: { secretFile: { type: "string" } },
+          });
+          const beforeAuthentication = ${JSON.stringify(linesBeforeAuthentication)};
+          const afterAuthentication = ${JSON.stringify(linesAfterAuthentication)};
+          const authentication = values.secretFile
+            ? [
+                \`- If browser authentication is required, read credentials from \${values.secretFile} directly into the browser without printing, logging, or exposing secret values.\`,
+                \`- If \${values.secretFile} is absent, invalid, or insufficient for authentication, pause and ask the user to complete authentication.\`,
+              ]
+            : ["- If browser authentication is required, pause and ask the user to complete authentication."];
+          process.stdout.write(\`\${[...beforeAuthentication, ...authentication, ...afterAuthentication].join("\\n").trimEnd()}\\n\`);
+        `
+        // ============================================================================
+      ).split("\n"),
     });
     project.root.addTask("pypiTrustedPublisherInstructions", {
       description: "Print system-browser instructions for PyPI trusted publishers",

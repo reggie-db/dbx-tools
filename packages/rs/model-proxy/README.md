@@ -245,19 +245,59 @@ HTTP 429 responses pause the process-local host/principal/model gate described
 above. One request probes after the shared cooldown while other streaming and
 non-streaming requests for the same key remain paused. The `Retry-After`
 response header controls the delay when present, followed by the documented
-Foundation Model API `error.retry_after` JSON value. An input-token 429 without
-either waits for the local token window, or 60 seconds when process-local
-history cannot explain the workspace limit. Other 429s use BackON jittered
+Foundation Model API `error.retry_after` JSON value. The proxy treats either
+value as an upper recovery horizon. A compatible same-family fallback is tried
+before sleeping when the horizon exceeds ten seconds. Otherwise, the horizon is
+divided across the remaining retries, so a short hint produces smaller probes.
+An input-token 429 without either uses the local token-window delay as the same
+horizon, or 60 seconds when process-local history cannot explain the workspace
+limit. Each incremental wait uses
+`RATE_LIMIT_INITIAL_DELAY_MS` as its floor when the horizon permits and
+`RATE_LIMIT_MAX_DELAY_MS` as its ceiling. Other 429s use BackON jittered
 exponential delays from one second to one minute. Every retry reacquires token
 admission and owns exactly one reservation. Every 429 logs a returned
 `error.message`, including the final attempt. The default five retries mean one
 initial request plus up to five retries.
-After the final attempt, the original 429 status, body, and rate-limit headers
-are returned to the caller. Configure `RATE_LIMIT_RETRIES`,
-`RATE_LIMIT_INITIAL_DELAY_MS`, and `RATE_LIMIT_MAX_DELAY_MS`, or the matching
-CLI flags. Set retries to `0` to disable both retries and coordinated cooldowns.
-Only an initial HTTP 429 is retried; an SSE error after streaming begins cannot
-be replayed safely.
+After the final attempt, or after at most 60 seconds of total rate-limit waiting,
+the latest original 429 status, body, and rate-limit headers are returned to the
+caller. A local queue timeout before any upstream 429 returns a structured local 429. Configure `RATE_LIMIT_RETRIES`, `RATE_LIMIT_INITIAL_DELAY_MS`,
+`RATE_LIMIT_MAX_DELAY_MS`, and `RATE_LIMIT_MAX_WAIT_MS`, or the matching CLI
+flags. The maximum wait cannot exceed 60,000 milliseconds. Set retries to `0`
+to disable both retries and coordinated cooldowns. Only an initial HTTP 429 is
+retried; an SSE error after streaming begins cannot be replayed safely.
+Native Responses streams still inspect complete bounded SSE events while
+forwarding the original bytes. A terminal `response.failed` or `error` event is
+recorded as a failed completion; rate-limit payloads contribute a semantic 429
+to the same dashboard series as upstream HTTP 429s. Local oversized-input and
+wait-budget rejections also contribute to that series.
+
+Same-family fallback uses the live serving catalogue instead of a static model
+ladder. It preserves parsed variant tokens at each lower version when possible,
+then uses Databricks' live `ai_gateway_model_profile` quality score to choose the
+best available variant for that version. Candidates must be ready,
+non-deprecated, lower-version endpoints in the same family and must support the
+request's protocol, tools, image input, hosted tools, and reasoning effort.
+Embeddings do not fallback. The defaults are `same-family`, five lower versions,
+and a ten-second wait threshold. Configure them with
+`RATE_LIMIT_MODEL_FALLBACK`, `RATE_LIMIT_MODEL_FALLBACK_MAX_STEPS`, and
+`RATE_LIMIT_MODEL_FALLBACK_THRESHOLD_MS`, or the matching flags.
+
+The full original cooldown remains attached to the actual endpoint that returned
+the 429. Requests use lower candidates until one request probes that endpoint
+after expiry; success restores it and another 429 extends its cooldown. Every
+gate, token queue, retry, log, and metric is keyed by the actual candidate
+endpoint rather than the client's unresolved model string. Responses report the
+actual serving model and include `x-model-proxy-preferred-model`,
+`x-model-proxy-resolved-model`, and `x-model-proxy-fallback-step` when a fallback
+served the request.
+
+Fallback improves availability but does not make model versions behaviorally
+identical. Reasoning defaults, structured-output adherence, context limits,
+tool behavior, latency, and cost can change between versions. Databricks also
+updates and retires models on an ongoing cadence, which is why the proxy uses
+live profile, capability, readiness, and retirement metadata rather than a
+committed provider ladder. Production evaluations should segment results by the
+actual resolved model and treat fallback traffic as a separate quality cohort.
 
 The process-local token queue reads Databricks' published Enterprise
 pay-per-token ITPM and OTPM limits from the same daily documentation cache and
@@ -272,16 +312,16 @@ per-minute budget with a local structured 429 rather than clamping it.
 `RATE_LIMIT_MODE` / `--rate-limit-mode` accepts `auto`, `on`, or `off` and
 defaults to `auto`. Auto mode leaves each workspace/model key unthrottled until
 its first 429 message containing `Exceeded workspace input tokens`,
-case-insensitively. A matching 429 starts with a 50 percent input-budget
-penalty, repeated matches add 25 percentage points up to a 90 percent penalty,
+case-insensitively. A matching 429 starts with a 10 percent input-budget
+penalty, repeated matches add 10 percentage points up to a 90 percent penalty,
 and each clean recovery step removes 10 percentage points. Output admission is
 not reduced.
 
-Recovery requires both ten minutes since the latest matching 429 and ten clean
-upstream 2xx responses. Later steps require another five minutes and ten clean
-responses. Zero penalty starts one final full-budget probation interval before
-the key becomes inactive again. Idle time alone never relaxes a key, and a
-renewed matching 429 immediately tightens or reactivates it. The state is
+Recovery requires both five minutes since the latest matching 429 and five clean
+upstream 2xx responses. Later steps require another minute and five clean
+responses. Reaching zero penalty immediately deactivates automatic admission,
+so a fully relaxed key no longer queues requests. Idle time alone never relaxes
+a key, and a renewed matching 429 immediately tightens or reactivates it. The state is
 process-local adaptive congestion control and resets when the process exits. It
 does not claim ownership of the complete workspace quota.
 
@@ -300,8 +340,8 @@ published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
 `--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
 Databricks because process-local tracking cannot coordinate a workspace across
 proxy replicas. `/healthz` exposes aggregate process-local counters for
-automatic activation, tightening, relaxation, probation, deactivation,
-reactivation, admission waits, oversized rejections, post-admission input 429s,
+automatic activation, tightening, relaxation, deactivation, reactivation,
+admission waits, oversized rejections, post-admission input 429s,
 retry reacquisition, and fallback full-window delays.
 
 ## Metrics And Dashboard
@@ -330,13 +370,29 @@ ordinary snapshots and SSE retain only aggregate model summaries.
 `/metrics` serves the static dashboard embedded in the normal release binary.
 The dashboard provides 1h, 6h, and 24h ranges, model and outcome filters,
 request, token, and latency line graphs, model latency and error summaries, the
-adaptive rate-limit timeline, and process-wide retention status. GridStack
+current per-model limiter phase, penalty, and effective input budget, the
+adaptive rate-limit timeline, and process-wide retention status. Prometheus
+exports the current penalty basis points, effective input budget, and fallback
+count for each bounded model label. GridStack
 provides drag-and-drop placement and widget resizing without a runtime CDN or
 framework server. The bounded widget geometry is stored in browser
 `localStorage`, restored after reloads and proxy restarts, and synchronized
 across open tabs. Metric history remains process-local and is never stored in
 the browser. The reset-layout icon restores and persists the canonical widget
 geometry.
+
+The model table renders three compact capacity meters:
+
+- input-window use against the latest effective rolling budget;
+- adaptive penalty against the 90 percent maximum;
+- current waiting requests against the process-lifetime queue-depth peak,
+  alongside average queue wait.
+
+These values are tied to the actual resolved endpoint. Input-window use is the
+live process-local reservation total after pruning the rolling window, and queue
+depth is sampled when the metrics snapshot is requested. Limiter transitions
+remain authoritative between snapshots so a request completing after full
+recovery cannot make an inactive limiter appear enforced again.
 
 History remains in process memory:
 

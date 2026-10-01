@@ -1,4 +1,5 @@
 /** Unified default-branch release workflow generation. */
+import { stringUtils } from "@dbx-tools/shared-core";
 import { Component } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
@@ -205,47 +206,52 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
             "${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || '' }}",
           DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
         },
-        run: [
-          'if [ "$GITHUB_EVENT_NAME" = "push" ]; then',
-          '  test "$GITHUB_REF_TYPE" = "branch"',
-          `  test "$GITHUB_REF_NAME" = "${releaseBranch}"`,
-          '  RELEASE_SHA="$GITHUB_SHA"',
-          '  test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
-          "  RELEASE_VERSION=\"$(tr -d '\\r\\n' < VERSION)\"",
-          '  bun node_modules/@dbx-tools/projen/tasks/release-version.ts --version "$RELEASE_VERSION"',
-          '  PREVIOUS_VERSION="$(git show "$RELEASE_SHA^:VERSION" | tr -d \'\\r\\n\')"',
-          '  test "$PREVIOUS_VERSION" != "$RELEASE_VERSION"',
-          `  RELEASE_TAG="${tagPrefix}$RELEASE_VERSION"`,
-          '  if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then',
-          '    git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
-          '    test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
-          '    test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$RELEASE_SHA"',
-          "  else",
-          "    git fetch --force --tags origin",
-          `    bun node_modules/@dbx-tools/projen/tasks/release-version.ts --version "$RELEASE_VERSION" --prefix ${JSON.stringify(tagPrefix)} --assert-next`,
-          '    git config user.name "github-actions[bot]"',
-          '    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
-          '    git tag -a "$RELEASE_TAG" "$RELEASE_SHA" -m "$RELEASE_TAG"',
-          '    git push origin "refs/tags/$RELEASE_TAG"',
-          "  fi",
-          "else",
-          `  case "$RELEASE_TAG" in ${tagPrefix}*) ;; *) exit 1 ;; esac`,
-          `  RELEASE_VERSION="\${RELEASE_TAG#${tagPrefix}}"`,
-          '  bun node_modules/@dbx-tools/projen/tasks/release-version.ts --version "$RELEASE_VERSION"',
-          '  git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
-          '  test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
-          '  RELEASE_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
-          '  test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
-          '  test "$RELEASE_SHA" = "$EXPECTED_SHA"',
-          '  if [ -n "${{ inputs.source_run_id }}" ]; then',
-          '    case "${{ inputs.stage }}" in node|python) ;; *) exit 1 ;; esac',
-          '    case "${{ inputs.source_run_id }}" in *[!0-9]*|"") exit 1 ;; esac',
-          "  fi",
-          "fi",
-          'echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"',
-          'echo "expected_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"',
-          'echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"',
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            test "$GITHUB_REF_TYPE" = "branch"
+            test "$GITHUB_REF_NAME" = "${releaseBranch}"
+            RELEASE_SHA="$GITHUB_SHA"
+            test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+            RELEASE_VERSION="$(tr -d '\\r\\n' < VERSION)"
+            bun node_modules/@dbx-tools/projen/tasks/release-version.ts --version "$RELEASE_VERSION"
+            PREVIOUS_VERSION="$(git show "$RELEASE_SHA^:VERSION" | tr -d '\\r\\n')"
+            test "$PREVIOUS_VERSION" != "$RELEASE_VERSION"
+            RELEASE_TAG="${tagPrefix}$RELEASE_VERSION"
+            if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+              git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+              test "$(git cat-file -t "$RELEASE_TAG")" = "tag"
+              test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$RELEASE_SHA"
+            else
+              git fetch --force --tags origin
+              bun node_modules/@dbx-tools/projen/tasks/release-version.ts --version "$RELEASE_VERSION" --prefix ${JSON.stringify(tagPrefix)} --assert-next
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git tag -a "$RELEASE_TAG" "$RELEASE_SHA" -m "$RELEASE_TAG"
+              git push origin "refs/tags/$RELEASE_TAG"
+            fi
+          else
+            case "$RELEASE_TAG" in ${tagPrefix}*) ;; *) exit 1 ;; esac
+            RELEASE_VERSION="\${RELEASE_TAG#${tagPrefix}}"
+            bun node_modules/@dbx-tools/projen/tasks/release-version.ts --version "$RELEASE_VERSION"
+            git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+            test "$(git cat-file -t "$RELEASE_TAG")" = "tag"
+            RELEASE_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"
+            test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+            test "$RELEASE_SHA" = "$EXPECTED_SHA"
+            if [ -n "\${{ inputs.source_run_id }}" ]; then
+              case "\${{ inputs.stage }}" in node|python) ;; *) exit 1 ;; esac
+              case "\${{ inputs.source_run_id }}" in *[!0-9]*|"") exit 1 ;; esac
+            fi
+          fi
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "expected_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+        `
+          // ============================================================================
+        ),
       },
       {
         name: "Verify source artifact run",
@@ -256,15 +262,20 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
           SOURCE_RUN_ID: "${{ inputs.source_run_id }}",
         },
         with: {
-          script: [
-            "const run = await github.rest.actions.getWorkflowRun({",
-            "  owner: context.repo.owner,",
-            "  repo: context.repo.repo,",
-            "  run_id: Number(process.env.SOURCE_RUN_ID),",
-            "});",
-            'if (run.data.path !== ".github/workflows/release.yml") core.setFailed("Source run is not release.yml");',
-            'if (run.data.head_sha !== process.env.EXPECTED_SHA) core.setFailed("Source run commit does not match the release tag");',
-          ].join("\n"),
+          // prettier-ignore
+          script: stringUtils.dedent(
+            // ============================================================================
+            /*js*/`
+            const run = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: Number(process.env.SOURCE_RUN_ID),
+            });
+            if (run.data.path !== ".github/workflows/release.yml") core.setFailed("Source run is not release.yml");
+            if (run.data.head_sha !== process.env.EXPECTED_SHA) core.setFailed("Source run commit does not match the release tag");
+          `
+            // ============================================================================
+          ),
         },
       },
     ],
@@ -422,44 +433,49 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
           RELEASE_PRS: "${{ steps.release.outputs.prs }}",
         },
         shell: "bash",
-        run: [
-          'BRANCH="$(jq -r \'.[0].headBranchName\' <<<"$RELEASE_PRS")"',
-          'test -n "$BRANCH" && test "$BRANCH" != "null"',
-          'git fetch origin "$BRANCH"',
-          'git switch --force-create "$BRANCH" "origin/$BRANCH"',
-          "bun install",
-          "bunx projen",
-          "bun node_modules/@dbx-tools/projen/tasks/version-check.ts",
-          `bun node_modules/@dbx-tools/projen/tasks/release-plan.ts --base-ref origin/${branch}`,
-          `bun node_modules/@dbx-tools/projen/tasks/release-summary-units.ts --from-ref origin/${branch}`,
-          'if ! git diff --quiet || test -n "$(git ls-files --others --exclude-standard)"; then',
-          '  git config user.name "github-actions[bot]"',
-          '  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
-          "  git add -A",
-          '  git commit -m "chore: reconcile release metadata"',
-          '  git push origin "HEAD:$BRANCH"',
-          "fi",
-          'MERGED="false"',
-          "for ATTEMPT in $(seq 1 15); do",
-          '  STATE="$(gh pr view "$BRANCH" --json state,mergeable --jq \'[.state,.mergeable] | join(" ")\')"',
-          '  if [[ "$STATE" == MERGED* ]]; then MERGED="true"; break; fi',
-          '  if [ "$STATE" = "OPEN CONFLICTING" ]; then',
-          '    echo "::error::release pull request has merge conflicts"',
-          "    exit 1",
-          "  fi",
-          '  if [ "$STATE" = "OPEN MERGEABLE" ] && gh pr merge "$BRANCH" --merge; then',
-          '    MERGED="true"',
-          "    break",
-          "  fi",
-          '  echo "release pull request is not mergeable yet (attempt $ATTEMPT/15)"',
-          "  sleep 2",
-          "done",
-          'if [ "$MERGED" != "true" ]; then',
-          '  echo "::error::release pull request did not become mergeable"',
-          "  exit 1",
-          "fi",
-          'gh workflow run release.yml --ref "$RELEASE_BRANCH" -f automatic=true',
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+          BRANCH="$(jq -r '.[0].headBranchName' <<<"$RELEASE_PRS")"
+          test -n "$BRANCH" && test "$BRANCH" != "null"
+          git fetch origin "$BRANCH"
+          git switch --force-create "$BRANCH" "origin/$BRANCH"
+          bun install
+          bunx projen
+          bun node_modules/@dbx-tools/projen/tasks/version-check.ts
+          bun node_modules/@dbx-tools/projen/tasks/release-plan.ts --base-ref origin/${branch}
+          bun node_modules/@dbx-tools/projen/tasks/release-summary-units.ts --from-ref origin/${branch}
+          if ! git diff --quiet || test -n "$(git ls-files --others --exclude-standard)"; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore: reconcile release metadata"
+            git push origin "HEAD:$BRANCH"
+          fi
+          MERGED="false"
+          for ATTEMPT in $(seq 1 15); do
+            STATE="$(gh pr view "$BRANCH" --json state,mergeable --jq '[.state,.mergeable] | join(" ")')"
+            if [[ "$STATE" == MERGED* ]]; then MERGED="true"; break; fi
+            if [ "$STATE" = "OPEN CONFLICTING" ]; then
+              echo "::error::release pull request has merge conflicts"
+              exit 1
+            fi
+            if [ "$STATE" = "OPEN MERGEABLE" ] && gh pr merge "$BRANCH" --merge; then
+              MERGED="true"
+              break
+            fi
+            echo "release pull request is not mergeable yet (attempt $ATTEMPT/15)"
+            sleep 2
+          done
+          if [ "$MERGED" != "true" ]; then
+            echo "::error::release pull request did not become mergeable"
+            exit 1
+          fi
+          gh workflow run release.yml --ref "$RELEASE_BRANCH" -f automatic=true
+        `
+          // ============================================================================
+        ),
       },
     ],
   };
@@ -499,22 +515,27 @@ function configureReleaseRequestWorkflow(
         name: "Read release request",
         id: "request",
         shell: "bash",
-        run: [
-          'MESSAGE="$(git log -1 --format=%B)"',
-          'if ! grep -q "^Release-Request: true$" <<<"$MESSAGE"; then',
-          '  echo "requested=false" >> "$GITHUB_OUTPUT"',
-          "  exit 0",
-          "fi",
-          `git fetch origin ${JSON.stringify(baseBranch)}`,
-          `if git diff --quiet "origin/${baseBranch}...HEAD"; then`,
-          '  echo "requested=false" >> "$GITHUB_OUTPUT"',
-          "  exit 0",
-          "fi",
-          'echo "requested=true" >> "$GITHUB_OUTPUT"',
-          'echo "branch=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"',
-          'echo "notes_path=$(sed -n \'s/^Release-Notes-Path: //p\' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"',
-          'echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"',
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+          MESSAGE="$(git log -1 --format=%B)"
+          if ! grep -q "^Release-Request: true$" <<<"$MESSAGE"; then
+            echo "requested=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch origin ${JSON.stringify(baseBranch)}
+          if git diff --quiet "origin/${baseBranch}...HEAD"; then
+            echo "requested=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "requested=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          echo "notes_path=$(sed -n 's/^Release-Notes-Path: //p' <<<"$MESSAGE" | tail -1)" >> "$GITHUB_OUTPUT"
+          echo "title=$(git log -1 --skip=1 --format=%s)" >> "$GITHUB_OUTPUT"
+        `
+          // ============================================================================
+        ),
       },
       {
         name: "Create, merge, and release source pull request",
@@ -527,20 +548,25 @@ function configureReleaseRequestWorkflow(
           NOTES_PATH: "${{ steps.request.outputs.notes_path }}",
         },
         shell: "bash",
-        run: [
-          'test -f "$NOTES_PATH"',
-          'NOTES="$(cat "$NOTES_PATH")"',
-          'BODY="$(printf \'## Release notes\\n\\n%s\\n\' "$NOTES")"',
-          'PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number // empty\')"',
-          'if [ -n "$PR" ]; then',
-          '  gh pr edit "$PR" --title "$TITLE" --body "$BODY"',
-          "else",
-          '  gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"',
-          '  PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq \'.[0].number\')"',
-          "fi",
-          'gh pr merge "$PR" --merge',
-          'gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" -f automatic=true',
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+          test -f "$NOTES_PATH"
+          NOTES="$(cat "$NOTES_PATH")"
+          BODY="$(printf '## Release notes\\n\\n%s\\n' "$NOTES")"
+          PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --title "$TITLE" --body "$BODY"
+          else
+            gh pr create --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --title "$TITLE" --body "$BODY"
+            PR="$(gh pr list --head "$SOURCE_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number')"
+          fi
+          gh pr merge "$PR" --merge
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$BASE_BRANCH" -f automatic=true
+        `
+          // ============================================================================
+        ),
       },
     ],
   });
@@ -672,20 +698,25 @@ function independentReleaseNotesJob(project: DBXToolsJavaScriptProject): Job {
       {
         name: "Remove consumed release notes",
         shell: "bash",
-        run: [
-          `git fetch origin ${JSON.stringify(projectReleaseBranch(project))}`,
-          `if [ "$(git rev-parse origin/${projectReleaseBranch(project)})" != "$(git rev-parse HEAD)" ]; then`,
-          '  echo "::warning::main advanced before release-note cleanup; leaving temporary notes for the next release"',
-          "  exit 0",
-          "fi",
-          "git rm -r --ignore-unmatch .release-notes",
-          "if ! git diff --cached --quiet; then",
-          '  git config user.name "github-actions[bot]"',
-          '  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
-          '  git commit -m "chore: remove consumed release notes"',
-          `  git push origin "HEAD:${projectReleaseBranch(project)}"`,
-          "fi",
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+          git fetch origin ${JSON.stringify(projectReleaseBranch(project))}
+          if [ "$(git rev-parse origin/${projectReleaseBranch(project)})" != "$(git rev-parse HEAD)" ]; then
+            echo "::warning::main advanced before release-note cleanup; leaving temporary notes for the next release"
+            exit 0
+          fi
+          git rm -r --ignore-unmatch .release-notes
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: remove consumed release notes"
+            git push origin "HEAD:${projectReleaseBranch(project)}"
+          fi
+        `
+          // ============================================================================
+        ),
       },
     ],
   };
@@ -769,44 +800,49 @@ function addIndependentBranchSyncJob(
         name: `Safely sync ${branch}`,
         shell: "bash",
         env: { SOURCE_BRANCH: branch, RELEASE_BRANCH: releaseBranch },
-        run: [
-          'if ! git ls-remote --exit-code --heads origin "refs/heads/$SOURCE_BRANCH" >/dev/null 2>&1; then',
-          '  echo "source branch $SOURCE_BRANCH no longer exists; nothing to sync"',
-          "  exit 0",
-          "fi",
-          'git fetch origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"',
-          'git fetch origin "refs/heads/$RELEASE_BRANCH:refs/remotes/origin/$RELEASE_BRANCH"',
-          'if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" "origin/$RELEASE_BRANCH"; then',
-          '  git push origin "refs/remotes/origin/$RELEASE_BRANCH:refs/heads/$SOURCE_BRANCH"',
-          'elif git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "origin/$SOURCE_BRANCH"; then',
-          '  echo "source branch $SOURCE_BRANCH already contains released main"',
-          "else",
-          '  git config user.name "github-actions[bot]"',
-          '  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
-          '  git switch --force-create "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"',
-          '  if git merge --no-ff --no-edit "origin/$RELEASE_BRANCH"; then',
-          '    git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
-          "  else",
-          '    SAFE_GENERATED="true"',
-          "    while IFS= read -r FILE; do",
-          '      case "$FILE" in',
-          "        .projen/release-units.json|.release-please-manifest.json|.release-units/*/source.json|.release-units/*/version.txt|.release-units/*/CHANGELOG.md|Cargo.lock|*/Cargo.toml|*/package.json|*/pyproject.toml|*/index.ts) ;;",
-          '        *) SAFE_GENERATED="false" ;;',
-          "      esac",
-          "    done < <(git diff --name-only --diff-filter=U)",
-          '    if [ "$SAFE_GENERATED" = "true" ] && bunx projen; then',
-          "      git add -A",
-          '      if [ -z "$(git diff --name-only --diff-filter=U)" ]; then',
-          "        git commit --no-edit",
-          '        git push origin "HEAD:refs/heads/$SOURCE_BRANCH"',
-          "        exit 0",
-          "      fi",
-          "    fi",
-          "    git merge --abort",
-          '    echo "::warning::source branch $SOURCE_BRANCH has handwritten or unresolved conflicts with released main; leaving it untouched"',
-          "  fi",
-          "fi",
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+          if ! git ls-remote --exit-code --heads origin "refs/heads/$SOURCE_BRANCH" >/dev/null 2>&1; then
+            echo "source branch $SOURCE_BRANCH no longer exists; nothing to sync"
+            exit 0
+          fi
+          git fetch origin "refs/heads/$SOURCE_BRANCH:refs/remotes/origin/$SOURCE_BRANCH"
+          git fetch origin "refs/heads/$RELEASE_BRANCH:refs/remotes/origin/$RELEASE_BRANCH"
+          if git merge-base --is-ancestor "origin/$SOURCE_BRANCH" "origin/$RELEASE_BRANCH"; then
+            git push origin "refs/remotes/origin/$RELEASE_BRANCH:refs/heads/$SOURCE_BRANCH"
+          elif git merge-base --is-ancestor "origin/$RELEASE_BRANCH" "origin/$SOURCE_BRANCH"; then
+            echo "source branch $SOURCE_BRANCH already contains released main"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git switch --force-create "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"
+            if git merge --no-ff --no-edit "origin/$RELEASE_BRANCH"; then
+              git push origin "HEAD:refs/heads/$SOURCE_BRANCH"
+            else
+              SAFE_GENERATED="true"
+              while IFS= read -r FILE; do
+                case "$FILE" in
+                  .projen/release-units.json|.release-please-manifest.json|.release-units/*/source.json|.release-units/*/version.txt|.release-units/*/CHANGELOG.md|Cargo.lock|*/Cargo.toml|*/package.json|*/pyproject.toml|*/index.ts) ;;
+                  *) SAFE_GENERATED="false" ;;
+                esac
+              done < <(git diff --name-only --diff-filter=U)
+              if [ "$SAFE_GENERATED" = "true" ] && bunx projen; then
+                git add -A
+                if [ -z "$(git diff --name-only --diff-filter=U)" ]; then
+                  git commit --no-edit
+                  git push origin "HEAD:refs/heads/$SOURCE_BRANCH"
+                  exit 0
+                fi
+              fi
+              git merge --abort
+              echo "::warning::source branch $SOURCE_BRANCH has handwritten or unresolved conflicts with released main; leaving it untouched"
+            fi
+          fi
+        `
+          // ============================================================================
+        ),
       },
     ],
   });

@@ -190,6 +190,15 @@ impl ThrottleAcquisition {
         drop(state);
         reservation.queue.notify.notify_waiters();
     }
+
+    /// Return the number of requests currently waiting on this model queue.
+    #[cfg(feature = "metrics")]
+    pub(crate) fn current_queue_depth(&self) -> u64 {
+        self.reservation
+            .as_ref()
+            .map(|reservation| reservation.queue.queue_depth.load(Ordering::Relaxed))
+            .unwrap_or_default()
+    }
 }
 
 impl RequestThrottle {
@@ -350,7 +359,7 @@ impl RequestThrottle {
             )
         }?;
         match transition.kind {
-            AutoTransitionKind::Relaxed | AutoTransitionKind::Probation => {
+            AutoTransitionKind::Relaxed => {
                 self.counters
                     .automatic_relaxations
                     .fetch_add(1, Ordering::Relaxed);
@@ -360,7 +369,7 @@ impl RequestThrottle {
                     .automatic_deactivations
                     .fetch_add(1, Ordering::Relaxed);
             }
-            _ => unreachable!("success only relaxes, begins probation, or deactivates"),
+            _ => unreachable!("success only relaxes or deactivates"),
         }
         queue.notify.notify_waiters();
         Some(transition)
@@ -429,11 +438,9 @@ impl RequestThrottle {
             .cloned()
             .collect::<Vec<_>>();
         let mut auto_active_keys = 0;
-        let mut auto_probation_keys = 0;
         for queue in queues {
             let snapshot = queue.state.lock().await.adaptive.snapshot();
             auto_active_keys += u64::from(snapshot.active);
-            auto_probation_keys += u64::from(snapshot.probation);
         }
         ThrottleCounterSnapshot {
             automatic_activations: self.counters.automatic_activations.load(Ordering::Relaxed),
@@ -448,7 +455,6 @@ impl RequestThrottle {
                 .automatic_reactivations
                 .load(Ordering::Relaxed),
             auto_active_keys,
-            auto_probation_keys,
             admission_waits: self.counters.admission_waits.load(Ordering::Relaxed),
             oversized_rejections: self.counters.oversized_rejections.load(Ordering::Relaxed),
             input_429_after_admission: self
@@ -458,6 +464,54 @@ impl RequestThrottle {
             retry_reacquisitions: self.counters.retry_reacquisitions.load(Ordering::Relaxed),
             fallback_window_delays: self.counters.fallback_window_delays.load(Ordering::Relaxed),
         }
+    }
+
+    /// Snapshot current token-window and queue capacity by actual model.
+    pub(crate) async fn capacity_snapshots(&self) -> Vec<ThrottleModelSnapshot> {
+        let queues = self
+            .queues
+            .lock()
+            .await
+            .iter()
+            .map(|(key, queue)| (key.model.to_string(), Arc::clone(queue)))
+            .collect::<Vec<_>>();
+        let now = Instant::now();
+        let mut snapshots = Vec::with_capacity(queues.len());
+        for (model, queue) in queues {
+            let configured = self.limits(&model, None).input;
+            let mut state = queue.state.lock().await;
+            state.input.prune(now, WINDOW);
+            let adaptive = state.adaptive.snapshot();
+            let (active, effective_input_budget, penalty_basis_points) = if self
+                .provisioned_throughput
+            {
+                (false, None, 0)
+            } else {
+                match self.mode {
+                    RateLimitMode::Auto if adaptive.active => (
+                        true,
+                        configured.and_then(|limits| {
+                            state
+                                .adaptive
+                                .effective_input_budget(limits.request_ceiling)
+                        }),
+                        adaptive.penalty_basis_points,
+                    ),
+                    RateLimitMode::On => (true, configured.map(|limits| limits.window_budget), 0),
+                    RateLimitMode::Auto | RateLimitMode::Off => (false, None, 0),
+                }
+            };
+            snapshots.push(ThrottleModelSnapshot {
+                model,
+                active,
+                input_limit: configured.map(|limits| limits.request_ceiling),
+                effective_input_budget,
+                input_window_used: effective_input_budget.map(|_| state.input.reserved_tokens),
+                penalty_basis_points,
+                queue_depth: queue.queue_depth.load(Ordering::Relaxed),
+            });
+        }
+        snapshots
     }
 
     async fn queue(&self, model: &str) -> Arc<TokenQueue> {
@@ -532,12 +586,23 @@ pub(crate) struct ThrottleCounterSnapshot {
     pub(crate) automatic_deactivations: u64,
     pub(crate) automatic_reactivations: u64,
     pub(crate) auto_active_keys: u64,
-    pub(crate) auto_probation_keys: u64,
     pub(crate) admission_waits: u64,
     pub(crate) oversized_rejections: u64,
     pub(crate) input_429_after_admission: u64,
     pub(crate) retry_reacquisitions: u64,
     pub(crate) fallback_window_delays: u64,
+}
+
+/// Live process-local capacity for one actual model queue.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ThrottleModelSnapshot {
+    pub(crate) model: String,
+    pub(crate) active: bool,
+    pub(crate) input_limit: Option<u64>,
+    pub(crate) effective_input_budget: Option<u64>,
+    pub(crate) input_window_used: Option<u64>,
+    pub(crate) penalty_basis_points: u16,
+    pub(crate) queue_depth: u64,
 }
 
 #[derive(Debug, Default)]
@@ -1402,7 +1467,7 @@ mod tests {
                 .await,
             AutoActivation::Transition(AutoTransition {
                 kind: AutoTransitionKind::Activated,
-                penalty_basis_points: 5_000,
+                penalty_basis_points: 1_000,
                 ..
             })
         ));
@@ -1417,7 +1482,7 @@ mod tests {
                 .await,
             AutoActivation::Transition(AutoTransition {
                 kind: AutoTransitionKind::Tightened,
-                penalty_basis_points: 7_500,
+                penalty_basis_points: 2_000,
                 ..
             })
         ));
@@ -1452,7 +1517,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn recovery_transitions_update_health_counters_and_gauges() {
+    async fn full_recovery_deactivates_queueing_and_updates_health_counters() {
         let throttle = RequestThrottle::new(
             "workspace",
             ThrottleConfig {
@@ -1478,26 +1543,17 @@ mod tests {
         ));
 
         tokio::time::advance(Duration::from_secs(10)).await;
-        let probation = throttle
-            .record_success("model", None)
-            .await
-            .expect("first recovery begins probation");
-        assert_eq!(probation.kind, AutoTransitionKind::Probation);
-        let counters = throttle.counters().await;
-        assert_eq!(counters.automatic_relaxations, 1);
-        assert_eq!(counters.auto_active_keys, 1);
-        assert_eq!(counters.auto_probation_keys, 1);
-
-        tokio::time::advance(Duration::from_secs(5)).await;
         let deactivated = throttle
             .record_success("model", None)
             .await
-            .expect("probation deactivates after another clean interval");
+            .expect("full recovery deactivates automatic admission");
         assert_eq!(deactivated.kind, AutoTransitionKind::Deactivated);
         let counters = throttle.counters().await;
+        assert_eq!(counters.automatic_relaxations, 0);
         assert_eq!(counters.automatic_deactivations, 1);
         assert_eq!(counters.auto_active_keys, 0);
-        assert_eq!(counters.auto_probation_keys, 0);
+        let queue = throttle.queue("model").await;
+        assert!(!throttle.enabled(&queue).await);
     }
 
     #[tokio::test]
@@ -1527,8 +1583,53 @@ mod tests {
         .expect("a request within the ceiling can occupy an empty window");
 
         assert_eq!(acquisition.input_limit, Some(100));
-        assert_eq!(acquisition.input_window_budget, Some(50));
+        assert_eq!(acquisition.input_window_budget, Some(90));
         assert_eq!(acquisition.reserved_input_tokens, 80);
+    }
+
+    #[tokio::test]
+    async fn capacity_snapshot_uses_the_actual_model_queue() {
+        let throttle = RequestThrottle::new(
+            "workspace",
+            ThrottleConfig {
+                input_tokens_per_minute: NonZeroU64::new(100),
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: RateLimitMode::Auto,
+                documented_limits: Default::default(),
+            },
+        );
+        throttle
+            .activate_from_message(
+                "resolved-model",
+                None,
+                Some("Exceeded workspace input tokens"),
+            )
+            .await;
+        throttle
+            .acquire(
+                "resolved-model",
+                None,
+                TokenEstimate {
+                    input: 20,
+                    output: 0,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            throttle.capacity_snapshots().await,
+            [ThrottleModelSnapshot {
+                model: "resolved-model".to_owned(),
+                active: true,
+                input_limit: Some(100),
+                effective_input_budget: Some(90),
+                input_window_used: Some(20),
+                penalty_basis_points: 1_000,
+                queue_depth: 0,
+            }]
+        );
     }
 
     #[test]

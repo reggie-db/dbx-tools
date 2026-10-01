@@ -8,17 +8,53 @@ use std::{
 
 use axum::http::{header, HeaderMap};
 use backon::{BackoffBuilder, ExponentialBackoff, ExponentialBuilder};
+use clap::ValueEnum;
 use serde_json::Value;
 use tokio::{
-    sync::{Mutex, Notify},
+    sync::{futures::OwnedNotified, Mutex, Notify},
     time::Instant,
 };
+
+/// Model selection behavior when rate-limit recovery would otherwise wait.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub(crate) enum ModelFallbackMode {
+    /// Return rate-limit recovery to the originally resolved model.
+    Off,
+    /// Try compatible lower versions from the same model family.
+    #[default]
+    SameFamily,
+}
+
+/// Policy for selecting another model before a long rate-limit wait.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ModelFallbackPolicy {
+    pub(crate) mode: ModelFallbackMode,
+    pub(crate) max_steps: usize,
+    pub(crate) threshold: Duration,
+}
+
+impl Default for ModelFallbackPolicy {
+    fn default() -> Self {
+        Self {
+            mode: ModelFallbackMode::SameFamily,
+            max_steps: 5,
+            threshold: Duration::from_secs(10),
+        }
+    }
+}
+
+impl ModelFallbackPolicy {
+    pub(crate) fn enabled(self) -> bool {
+        self.mode == ModelFallbackMode::SameFamily && self.max_steps > 0
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct RateLimitPolicy {
     pub(crate) max_retries: u32,
     pub(crate) initial_delay: Duration,
     pub(crate) max_delay: Duration,
+    pub(crate) max_wait: Duration,
 }
 
 impl RateLimitPolicy {
@@ -29,6 +65,22 @@ impl RateLimitPolicy {
             .with_max_times(self.max_retries as usize)
             .with_jitter()
             .build()
+    }
+
+    /// Split a bounded recovery horizon across the remaining retry delays.
+    pub(crate) fn incremental_delay(
+        self,
+        upper_bound: Duration,
+        remaining_delays: u32,
+    ) -> Duration {
+        if upper_bound.is_zero() {
+            return Duration::ZERO;
+        }
+        upper_bound
+            .div_f64(f64::from(remaining_delays.max(1)))
+            .max(self.initial_delay)
+            .min(self.max_delay)
+            .min(upper_bound)
     }
 }
 
@@ -50,57 +102,100 @@ impl RateLimitGate {
         self.policy
     }
 
+    #[cfg(test)]
     pub(crate) async fn acquire(
         &self,
         host: &str,
         principal: &str,
         model: &str,
     ) -> RateLimitPermit {
-        let gate = {
-            let mut gates = self.gates.lock().await;
-            gates
-                .entry(RateLimitKey {
-                    host: Arc::from(host),
-                    principal: Arc::from(principal),
-                    model: Arc::from(model),
-                })
-                .or_default()
-                .clone()
-        };
+        self.acquire_preferred(host, principal, &[model]).await.1
+    }
+
+    /// Acquire the highest preferred model whose cooldown permits a request.
+    pub(crate) async fn acquire_preferred(
+        &self,
+        host: &str,
+        principal: &str,
+        models: &[&str],
+    ) -> (usize, RateLimitPermit) {
+        assert!(!models.is_empty(), "preferred model list must not be empty");
         loop {
-            let notified = gate.notify.notified();
-            let mut state = gate.state.lock().await;
-            let now = Instant::now();
-            match state.blocked_until {
-                Some(until) if until > now => {
-                    let delay = until - now;
-                    drop(state);
-                    tokio::time::sleep(delay).await;
+            let mut fallback_wait: Option<(Instant, OwnedNotified)> = None;
+            for (index, model) in models.iter().enumerate() {
+                let gate = self.gate(host, principal, model).await;
+                let notified = Arc::clone(&gate.notify).notified_owned();
+                let mut state = gate.state.lock().await;
+                let now = Instant::now();
+                match state.blocked_until {
+                    Some(until) if until > now && state.fallback_eligible => {
+                        if fallback_wait
+                            .as_ref()
+                            .is_none_or(|(current, _)| until < *current)
+                        {
+                            fallback_wait = Some((until, notified));
+                        }
+                    }
+                    Some(until) if until > now => {
+                        let delay = until - now;
+                        drop(state);
+                        tokio::time::sleep(delay).await;
+                        break;
+                    }
+                    Some(_) if state.probe_in_flight && state.fallback_eligible => {
+                        fallback_wait.get_or_insert((now, notified));
+                    }
+                    Some(_) if state.probe_in_flight => {
+                        drop(state);
+                        notified.await;
+                        break;
+                    }
+                    Some(_) => {
+                        state.probe_in_flight = true;
+                        drop(state);
+                        return (
+                            index,
+                            RateLimitPermit {
+                                gate: Arc::clone(&gate),
+                                probe: true,
+                            },
+                        );
+                    }
+                    None => {
+                        drop(state);
+                        return (
+                            index,
+                            RateLimitPermit {
+                                gate: Arc::clone(&gate),
+                                probe: false,
+                            },
+                        );
+                    }
                 }
-                Some(_) if state.probe_in_flight => {
-                    drop(state);
-                    notified.await;
-                }
-                Some(_) => {
-                    state.probe_in_flight = true;
-                    drop(state);
-                    return RateLimitPermit {
-                        gate: Arc::clone(&gate),
-                        probe: true,
-                    };
-                }
-                None => {
-                    drop(state);
-                    return RateLimitPermit {
-                        gate: Arc::clone(&gate),
-                        probe: false,
-                    };
+                if index + 1 == models.len() {
+                    if let Some((until, notified)) = fallback_wait.take() {
+                        let now = Instant::now();
+                        if until > now {
+                            tokio::time::sleep_until(until).await;
+                        } else {
+                            notified.await;
+                        }
+                    }
                 }
             }
         }
     }
 
     pub(crate) async fn rejected(&self, permit: &RateLimitPermit, delay: Duration) {
+        self.reject(permit, delay, false).await;
+    }
+
+    /// Mark a model unavailable while lower fallback candidates remain eligible.
+    pub(crate) async fn rejected_for_fallback(&self, permit: &RateLimitPermit, delay: Duration) {
+        self.reject(permit, delay, true).await;
+    }
+
+    async fn reject(&self, permit: &RateLimitPermit, delay: Duration, fallback_eligible: bool) {
         let mut state = permit.gate.state.lock().await;
         let until = Instant::now() + delay;
         state.blocked_until = Some(
@@ -108,6 +203,7 @@ impl RateLimitGate {
                 .blocked_until
                 .map_or(until, |current| current.max(until)),
         );
+        state.fallback_eligible = fallback_eligible;
         if permit.probe {
             state.probe_in_flight = false;
         }
@@ -122,8 +218,32 @@ impl RateLimitGate {
         let mut state = permit.gate.state.lock().await;
         state.blocked_until = None;
         state.probe_in_flight = false;
+        state.fallback_eligible = false;
         drop(state);
         permit.gate.notify.notify_waiters();
+    }
+
+    /// Release an unfinished recovery probe without changing its cooldown.
+    pub(crate) async fn cancelled(&self, permit: &RateLimitPermit) {
+        if !permit.probe {
+            return;
+        }
+        let mut state = permit.gate.state.lock().await;
+        state.probe_in_flight = false;
+        drop(state);
+        permit.gate.notify.notify_waiters();
+    }
+
+    async fn gate(&self, host: &str, principal: &str, model: &str) -> Arc<KeyGate> {
+        let mut gates = self.gates.lock().await;
+        gates
+            .entry(RateLimitKey {
+                host: Arc::from(host),
+                principal: Arc::from(principal),
+                model: Arc::from(model),
+            })
+            .or_default()
+            .clone()
     }
 }
 
@@ -137,13 +257,14 @@ struct RateLimitKey {
 #[derive(Debug, Default)]
 struct KeyGate {
     state: Mutex<GateState>,
-    notify: Notify,
+    notify: Arc<Notify>,
 }
 
 #[derive(Debug, Default)]
 struct GateState {
     blocked_until: Option<Instant>,
     probe_in_flight: bool,
+    fallback_eligible: bool,
 }
 
 #[derive(Debug)]
@@ -247,6 +368,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn model_fallback_defaults_limit_latency_and_depth() {
+        assert_eq!(
+            ModelFallbackPolicy::default(),
+            ModelFallbackPolicy {
+                mode: ModelFallbackMode::SameFamily,
+                max_steps: 5,
+                threshold: Duration::from_secs(10),
+            }
+        );
+    }
+
+    #[test]
     fn parses_retry_after_seconds_and_dates() {
         let mut headers = HeaderMap::new();
         headers.insert(header::RETRY_AFTER, "12".parse().unwrap());
@@ -299,12 +432,41 @@ mod tests {
         );
     }
 
+    #[test]
+    fn stages_long_recovery_horizons_across_remaining_delays() {
+        let policy = RateLimitPolicy {
+            max_retries: 5,
+            initial_delay: Duration::from_secs(1),
+            max_delay: Duration::from_secs(60),
+            max_wait: Duration::from_secs(60),
+        };
+
+        assert_eq!(
+            policy.incremental_delay(Duration::from_secs(43), 5),
+            Duration::from_secs_f64(8.6)
+        );
+        assert_eq!(
+            policy.incremental_delay(Duration::from_secs(3), 5),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            policy.incremental_delay(Duration::from_millis(500), 5),
+            Duration::from_millis(500)
+        );
+        assert_eq!(
+            policy.incremental_delay(Duration::from_secs(600), 2),
+            Duration::from_secs(60)
+        );
+        assert_eq!(policy.incremental_delay(Duration::ZERO, 5), Duration::ZERO);
+    }
+
     #[tokio::test]
     async fn blocks_a_key_until_its_shared_cooldown_expires() {
         let gate = RateLimitGate::new(RateLimitPolicy {
             max_retries: 4,
             initial_delay: Duration::from_millis(10),
             max_delay: Duration::from_secs(1),
+            max_wait: Duration::from_secs(1),
         });
         let permit = gate.acquire("host", "principal", "model").await;
         gate.rejected(&permit, Duration::from_millis(25)).await;
@@ -327,11 +489,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preferred_models_fall_back_then_probe_the_primary_after_cooldown() {
+        let gate = RateLimitGate::new(RateLimitPolicy {
+            max_retries: 4,
+            initial_delay: Duration::from_millis(1),
+            max_delay: Duration::from_secs(1),
+            max_wait: Duration::from_secs(1),
+        });
+        let models = ["primary", "fallback"];
+        let (primary_index, primary) = gate.acquire_preferred("host", "principal", &models).await;
+        assert_eq!(primary_index, 0);
+        gate.rejected_for_fallback(&primary, Duration::from_millis(25))
+            .await;
+
+        let (fallback_index, fallback) = gate.acquire_preferred("host", "principal", &models).await;
+        assert_eq!(fallback_index, 1);
+        assert!(!fallback.probe);
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let (probe_index, probe) = gate.acquire_preferred("host", "principal", &models).await;
+        assert_eq!(probe_index, 0);
+        assert!(probe.probe);
+        gate.completed(&probe).await;
+
+        let (recovered_index, recovered) =
+            gate.acquire_preferred("host", "principal", &models).await;
+        assert_eq!(recovered_index, 0);
+        assert!(!recovered.probe);
+    }
+
+    #[tokio::test]
     async fn keeps_other_host_principal_model_keys_independent() {
         let gate = RateLimitGate::new(RateLimitPolicy {
             max_retries: 4,
             initial_delay: Duration::from_millis(10),
             max_delay: Duration::from_secs(1),
+            max_wait: Duration::from_secs(1),
         });
         let permit = gate.acquire("host", "principal-a", "model").await;
         gate.rejected(&permit, Duration::from_secs(1)).await;

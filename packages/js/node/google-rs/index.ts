@@ -3,5 +3,5 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/google-rs";
-export const PACKAGE_VERSION = "0.9.6";
+export const PACKAGE_VERSION = "0.9.7";
 export * from "./src/bindings.ts";

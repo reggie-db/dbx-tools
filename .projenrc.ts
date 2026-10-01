@@ -1483,8 +1483,7 @@ for (const task of [SCOPE, "dbx"]) {
 // or registry install - just their bun dev tasks.
 // `.env` is the committed-shape local secret file; `.env.local` optionally
 // overlays it. Both `--env-file` flags are missing-file tolerant under bun, so
-// a laptop with only `.env` still boots (loading `.env.local` alone used to
-// leave SMTP unset and crash the email plugin at createApp).
+// a laptop with only `.env` still supplies the email plugin's SMTP settings.
 root.addTask("demo", {
   env: {
     NODE_ENV: "development",
