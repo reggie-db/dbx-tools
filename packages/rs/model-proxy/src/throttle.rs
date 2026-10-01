@@ -19,6 +19,8 @@ use tokio::{
     time::Instant,
 };
 
+use crate::adaptive::{AutoLimiter, AutoRecoveryPolicy, AutoTransition, AutoTransitionKind};
+
 const WINDOW: Duration = Duration::from_secs(60);
 const CLAUDE_SONNET_4_DEFAULT_OUTPUT_TOKENS: u64 = 1_000;
 const CALIBRATION_ALPHA: f64 = 0.25;
@@ -49,6 +51,7 @@ pub(crate) struct RequestThrottle {
     documented_limits: ModelRateLimitCatalogue,
     queues: Arc<Mutex<HashMap<ThrottleKey, Arc<TokenQueue>>>>,
     counters: Arc<ThrottleCounters>,
+    auto_recovery_policy: AutoRecoveryPolicy,
 }
 
 /// Configuration for process-local pay-per-token admission control.
@@ -87,6 +90,12 @@ pub(crate) struct ThrottleAcquisition {
     pub(crate) active: bool,
     /// Input-token budget applied to this attempt.
     pub(crate) input_limit: Option<u64>,
+    /// Effective rolling input budget applied to this attempt.
+    pub(crate) input_window_budget: Option<u64>,
+    /// Temporary automatic input-budget penalty.
+    pub(crate) penalty_basis_points: u16,
+    /// Admission queue depth observed before this attempt acquired the FIFO lock.
+    pub(crate) queue_depth: u64,
     /// Input tokens reserved in the local window.
     pub(crate) reserved_input_tokens: u64,
     /// Input tokens already reserved before this attempt.
@@ -107,6 +116,17 @@ pub(crate) struct OversizedInput {
     pub(crate) mode: RateLimitMode,
 }
 
+/// Result of evaluating an upstream 429 for automatic token admission.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AutoActivation {
+    /// The response was not a matching automatic activation signal.
+    Ignored,
+    /// The response matched but no local input budget is known.
+    Unavailable,
+    /// Automatic congestion state changed or reset.
+    Transition(AutoTransition),
+}
+
 /// Token usage reported by a completed upstream response.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ResponseTokenUsage {
@@ -121,6 +141,27 @@ pub(crate) struct ResponseTokenUsage {
 }
 
 impl ThrottleAcquisition {
+    #[cfg(test)]
+    pub(crate) fn test_fixture() -> Self {
+        Self {
+            wait: Duration::ZERO,
+            estimated_input_tokens: 1,
+            raw_estimated_input_tokens: 1,
+            estimate_factor: 1.0,
+            reserved_output_tokens: 0,
+            estimated_tokens: 1,
+            mode: RateLimitMode::Auto,
+            active: false,
+            input_limit: None,
+            input_window_budget: None,
+            penalty_basis_points: 0,
+            queue_depth: 1,
+            reserved_input_tokens: 0,
+            input_window_used_before: 0,
+            reservation: None,
+        }
+    }
+
     /// Replace estimated reservations with reported upstream usage.
     pub(crate) async fn reconcile(&self, usage: ResponseTokenUsage) {
         let Some(reservation) = self.reservation.as_ref().filter(|_| usage.reported) else {
@@ -162,7 +203,14 @@ impl RequestThrottle {
             documented_limits: config.documented_limits,
             queues: Arc::default(),
             counters: Arc::default(),
+            auto_recovery_policy: AutoRecoveryPolicy::default(),
         }
+    }
+
+    #[cfg(test)]
+    fn with_auto_recovery_policy(mut self, policy: AutoRecoveryPolicy) -> Self {
+        self.auto_recovery_policy = policy;
+        self
     }
 
     /// Estimate the model-visible input and requested output reservation.
@@ -178,29 +226,22 @@ impl RequestThrottle {
         estimate: TokenEstimate,
     ) -> Result<ThrottleAcquisition, OversizedInput> {
         let queue = self.queue(model).await;
-        let active = self.enabled(&queue);
         let configured_limits = self.limits(model, model_class);
-        let limits = if active {
-            configured_limits
-        } else {
-            TokenLimits::default()
-        };
         let result = reserve(
             Arc::clone(&queue),
             estimate,
-            limits,
-            configured_limits.input,
+            configured_limits,
             self.mode,
-            active,
             WINDOW,
         )
         .await;
         match result {
             Ok(acquisition) => {
-                if !active
+                if !acquisition.active
                     && self.mode == RateLimitMode::Auto
-                    && configured_limits.input.is_some_and(|limit| {
-                        acquisition.estimated_input_tokens >= limit.saturating_mul(4) / 5
+                    && configured_limits.input.is_some_and(|limits| {
+                        acquisition.estimated_input_tokens
+                            >= limits.request_ceiling.saturating_mul(4) / 5
                     })
                     && !queue.cold_warning.swap(true, Ordering::AcqRel)
                 {
@@ -208,7 +249,9 @@ impl RequestThrottle {
                         workspace = self.workspace.as_ref(),
                         model,
                         estimated_input_tokens = acquisition.estimated_input_tokens,
-                        token_limit_input = configured_limits.input,
+                        token_limit_input = configured_limits
+                            .input
+                            .map(|limits| limits.request_ceiling),
                         token_throttle_mode = ?self.mode,
                         token_throttle_active = false,
                         "automatic token throttling is inactive for a near-limit request"
@@ -231,20 +274,96 @@ impl RequestThrottle {
     }
 
     /// Activate automatic TPM admission after a matching Databricks 429.
-    pub(crate) async fn activate_from_message(&self, model: &str, message: Option<&str>) -> bool {
+    pub(crate) async fn activate_from_message(
+        &self,
+        model: &str,
+        model_class: Option<ModelClass>,
+        message: Option<&str>,
+    ) -> AutoActivation {
         if self.provisioned_throughput
             || self.mode != RateLimitMode::Auto
             || !message.is_some_and(is_input_limit_message)
         {
-            return false;
+            return AutoActivation::Ignored;
         }
-        let activated = !self.queue(model).await.active.swap(true, Ordering::AcqRel);
-        if activated {
-            self.counters
-                .automatic_activations
-                .fetch_add(1, Ordering::Relaxed);
+        let Some(base_input_budget) = self
+            .limits(model, model_class)
+            .input
+            .map(|limits| limits.request_ceiling)
+        else {
+            return AutoActivation::Unavailable;
+        };
+        let queue = self.queue(model).await;
+        let transition = {
+            let mut state = queue.state.lock().await;
+            state.adaptive.record_input_429(
+                Instant::now(),
+                base_input_budget,
+                self.auto_recovery_policy,
+            )
+        };
+        match transition.kind {
+            AutoTransitionKind::Activated => {
+                self.counters
+                    .automatic_activations
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            AutoTransitionKind::Reactivated => {
+                self.counters
+                    .automatic_activations
+                    .fetch_add(1, Ordering::Relaxed);
+                self.counters
+                    .automatic_reactivations
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            AutoTransitionKind::Tightened => {
+                self.counters
+                    .automatic_tightenings
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            _ => unreachable!("input 429 only activates or tightens"),
         }
-        activated
+        queue.notify.notify_waiters();
+        AutoActivation::Transition(transition)
+    }
+
+    /// Count a successful upstream response and lazily advance automatic recovery.
+    pub(crate) async fn record_success(
+        &self,
+        model: &str,
+        model_class: Option<ModelClass>,
+    ) -> Option<AutoTransition> {
+        if self.provisioned_throughput || self.mode != RateLimitMode::Auto {
+            return None;
+        }
+        let base_input_budget = self
+            .limits(model, model_class)
+            .input
+            .map(|limits| limits.request_ceiling)?;
+        let queue = self.queue(model).await;
+        let transition = {
+            let mut state = queue.state.lock().await;
+            state.adaptive.record_success(
+                Instant::now(),
+                base_input_budget,
+                self.auto_recovery_policy,
+            )
+        }?;
+        match transition.kind {
+            AutoTransitionKind::Relaxed | AutoTransitionKind::Probation => {
+                self.counters
+                    .automatic_relaxations
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            AutoTransitionKind::Deactivated => {
+                self.counters
+                    .automatic_deactivations
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            _ => unreachable!("success only relaxes, begins probation, or deactivates"),
+        }
+        queue.notify.notify_waiters();
+        Some(transition)
     }
 
     /// Return the local input-window delay for another attempt when known.
@@ -255,16 +374,27 @@ impl RequestThrottle {
         estimate: TokenEstimate,
     ) -> Option<Duration> {
         let queue = self.queue(model).await;
-        if !self.enabled(&queue) {
+        if !self.enabled(&queue).await {
             return None;
         }
-        let input_limit = self.limits(model, model_class).input?;
+        let base_input_limit = self.limits(model, model_class).input?;
         let now = Instant::now();
         let mut state = queue.state.lock().await;
+        let input_limit = match self.mode {
+            RateLimitMode::Auto => state
+                .adaptive
+                .effective_input_budget(base_input_limit.request_ceiling)?,
+            RateLimitMode::On => base_input_limit.window_budget,
+            RateLimitMode::Off => return None,
+        };
         state.input.prune(now, WINDOW);
         let adjusted_input = state.calibration.apply(estimate.input);
-        (adjusted_input <= input_limit)
-            .then(|| state.input.delay(now, adjusted_input, input_limit, WINDOW))
+        (adjusted_input <= base_input_limit.request_ceiling)
+            .then(|| {
+                state
+                    .input
+                    .delay_with_burst(now, adjusted_input, input_limit, WINDOW)
+            })
             .flatten()
     }
 
@@ -290,9 +420,35 @@ impl RequestThrottle {
     }
 
     /// Snapshot process-local rate-limit counters.
-    pub(crate) fn counters(&self) -> ThrottleCounterSnapshot {
+    pub(crate) async fn counters(&self) -> ThrottleCounterSnapshot {
+        let queues = self
+            .queues
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut auto_active_keys = 0;
+        let mut auto_probation_keys = 0;
+        for queue in queues {
+            let snapshot = queue.state.lock().await.adaptive.snapshot();
+            auto_active_keys += u64::from(snapshot.active);
+            auto_probation_keys += u64::from(snapshot.probation);
+        }
         ThrottleCounterSnapshot {
             automatic_activations: self.counters.automatic_activations.load(Ordering::Relaxed),
+            automatic_tightenings: self.counters.automatic_tightenings.load(Ordering::Relaxed),
+            automatic_relaxations: self.counters.automatic_relaxations.load(Ordering::Relaxed),
+            automatic_deactivations: self
+                .counters
+                .automatic_deactivations
+                .load(Ordering::Relaxed),
+            automatic_reactivations: self
+                .counters
+                .automatic_reactivations
+                .load(Ordering::Relaxed),
+            auto_active_keys,
+            auto_probation_keys,
             admission_waits: self.counters.admission_waits.load(Ordering::Relaxed),
             oversized_rejections: self.counters.oversized_rejections.load(Ordering::Relaxed),
             input_429_after_admission: self
@@ -313,12 +469,12 @@ impl RequestThrottle {
         queues.entry(key).or_default().clone()
     }
 
-    fn enabled(&self, queue: &TokenQueue) -> bool {
+    async fn enabled(&self, queue: &TokenQueue) -> bool {
         if self.provisioned_throughput {
             return false;
         }
         match self.mode {
-            RateLimitMode::Auto => queue.active.load(Ordering::Acquire),
+            RateLimitMode::Auto => queue.state.lock().await.adaptive.snapshot().active,
             RateLimitMode::On => true,
             RateLimitMode::Off => false,
         }
@@ -337,7 +493,8 @@ impl RequestThrottle {
             input: self
                 .input_tokens_per_minute
                 .map(NonZeroU64::get)
-                .or_else(|| documented.and_then(|limits| limits.input_tokens_per_minute)),
+                .or_else(|| documented.and_then(|limits| limits.input_tokens_per_minute))
+                .map(InputTokenLimits::full),
             output: self
                 .output_tokens_per_minute
                 .map(NonZeroU64::get)
@@ -355,6 +512,10 @@ struct ThrottleKey {
 #[derive(Debug, Default)]
 struct ThrottleCounters {
     automatic_activations: AtomicU64,
+    automatic_tightenings: AtomicU64,
+    automatic_relaxations: AtomicU64,
+    automatic_deactivations: AtomicU64,
+    automatic_reactivations: AtomicU64,
     admission_waits: AtomicU64,
     oversized_rejections: AtomicU64,
     input_429_after_admission: AtomicU64,
@@ -366,6 +527,12 @@ struct ThrottleCounters {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ThrottleCounterSnapshot {
     pub(crate) automatic_activations: u64,
+    pub(crate) automatic_tightenings: u64,
+    pub(crate) automatic_relaxations: u64,
+    pub(crate) automatic_deactivations: u64,
+    pub(crate) automatic_reactivations: u64,
+    pub(crate) auto_active_keys: u64,
+    pub(crate) auto_probation_keys: u64,
     pub(crate) admission_waits: u64,
     pub(crate) oversized_rejections: u64,
     pub(crate) input_429_after_admission: u64,
@@ -375,9 +542,9 @@ pub(crate) struct ThrottleCounterSnapshot {
 
 #[derive(Debug, Default)]
 struct TokenQueue {
-    /// Tokio mutex acquisition order provides FIFO admission for this key.
+    /// Admission is acquired before state; no code may acquire them in reverse order.
     admission: Mutex<()>,
-    active: AtomicBool,
+    queue_depth: AtomicU64,
     cold_warning: AtomicBool,
     state: Mutex<WindowState>,
     notify: Notify,
@@ -386,6 +553,7 @@ struct TokenQueue {
 #[derive(Debug, Default)]
 struct WindowState {
     next_id: u64,
+    adaptive: AutoLimiter,
     calibration: InputCalibration,
     input: TokenWindow,
     output: TokenWindow,
@@ -396,6 +564,14 @@ struct ThrottleReservation {
     queue: Arc<TokenQueue>,
     id: u64,
     raw_estimated_input: u64,
+}
+
+struct QueueDepthGuard(Arc<TokenQueue>);
+
+impl Drop for QueueDepthGuard {
+    fn drop(&mut self) {
+        self.0.queue_depth.fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 #[derive(Debug)]
@@ -433,6 +609,19 @@ impl TokenWindow {
         self.reservations
             .front()
             .map(|reservation| window.saturating_sub(now.duration_since(reservation.reserved_at)))
+    }
+
+    fn delay_with_burst(
+        &self,
+        now: Instant,
+        tokens: u64,
+        window_budget: u64,
+        window: Duration,
+    ) -> Option<Duration> {
+        if tokens > window_budget && self.reservations.is_empty() {
+            return None;
+        }
+        self.delay(now, tokens, window_budget, window)
     }
 
     fn reserve(&mut self, id: u64, now: Instant, tokens: u64) {
@@ -532,40 +721,73 @@ impl InputCalibration {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct TokenLimits {
-    input: Option<u64>,
+    input: Option<InputTokenLimits>,
     output: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct InputTokenLimits {
+    request_ceiling: u64,
+    window_budget: u64,
+}
+
+impl InputTokenLimits {
+    fn full(limit: u64) -> Self {
+        Self {
+            request_ceiling: limit,
+            window_budget: limit,
+        }
+    }
 }
 
 async fn reserve(
     queue: Arc<TokenQueue>,
     estimate: TokenEstimate,
-    limits: TokenLimits,
-    configured_input_limit: Option<u64>,
+    configured_limits: TokenLimits,
     mode: RateLimitMode,
-    active: bool,
     window: Duration,
 ) -> Result<ThrottleAcquisition, OversizedInput> {
     let started = Instant::now();
+    let queue_depth = queue.queue_depth.fetch_add(1, Ordering::Relaxed) + 1;
+    let _queue_depth = QueueDepthGuard(Arc::clone(&queue));
     let _admission = queue.admission.lock().await;
-    let output_tokens = limits
-        .output
-        .map(|limit| estimate.output.min(limit))
-        .unwrap_or_default();
     loop {
         let notified = queue.notify.notified();
         let delay = {
             let now = Instant::now();
             let mut state = queue.state.lock().await;
+            let adaptive = state.adaptive.snapshot();
+            let (active, limits) = match mode {
+                RateLimitMode::Auto if adaptive.active => (
+                    true,
+                    TokenLimits {
+                        input: configured_limits.input.map(|limits| InputTokenLimits {
+                            request_ceiling: limits.request_ceiling,
+                            window_budget: state
+                                .adaptive
+                                .effective_input_budget(limits.request_ceiling)
+                                .unwrap_or(limits.window_budget),
+                        }),
+                        output: configured_limits.output,
+                    },
+                ),
+                RateLimitMode::Auto | RateLimitMode::Off => (false, TokenLimits::default()),
+                RateLimitMode::On => (true, configured_limits),
+            };
+            let output_tokens = limits
+                .output
+                .map(|limit| estimate.output.min(limit))
+                .unwrap_or_default();
             let estimate_factor = state.calibration.factor();
             let adjusted_input = state.calibration.apply(estimate.input);
             state.input.prune(now, window);
             state.output.prune(now, window);
             let input_window_used_before = state.input.reserved_tokens;
-            if let Some(input_limit) = limits.input {
-                if adjusted_input > input_limit {
+            if let Some(input_limits) = limits.input {
+                if adjusted_input > input_limits.request_ceiling {
                     return Err(OversizedInput {
                         estimated_input_tokens: adjusted_input,
-                        input_limit,
+                        input_limit: input_limits.request_ceiling,
                         input_window_used_before,
                         mode,
                     });
@@ -573,9 +795,11 @@ async fn reserve(
             }
             let input_tokens = limits.input.map(|_| adjusted_input).unwrap_or_default();
             let delay = [
-                limits
-                    .input
-                    .and_then(|limit| state.input.delay(now, input_tokens, limit, window)),
+                limits.input.and_then(|limits| {
+                    state
+                        .input
+                        .delay_with_burst(now, input_tokens, limits.window_budget, window)
+                }),
                 limits
                     .output
                     .and_then(|limit| state.output.delay(now, output_tokens, limit, window)),
@@ -601,7 +825,10 @@ async fn reserve(
                     estimated_tokens: adjusted_input.saturating_add(estimate.output),
                     mode,
                     active,
-                    input_limit: configured_input_limit,
+                    input_limit: configured_limits.input.map(|limits| limits.request_ceiling),
+                    input_window_budget: limits.input.map(|limits| limits.window_budget),
+                    penalty_basis_points: adaptive.penalty_basis_points,
+                    queue_depth,
                     reserved_input_tokens: input_tokens,
                     input_window_used_before,
                     reservation: Some(ThrottleReservation {
@@ -829,12 +1056,10 @@ mod tests {
                 output: 70,
             },
             TokenLimits {
-                input: Some(100),
+                input: Some(InputTokenLimits::full(100)),
                 output: Some(100),
             },
-            Some(100),
             RateLimitMode::On,
-            true,
             WINDOW,
         )
         .await
@@ -858,7 +1083,7 @@ mod tests {
     async fn reconciliation_wakes_requests_waiting_for_capacity() {
         let queue = Arc::new(TokenQueue::default());
         let limits = TokenLimits {
-            input: Some(100),
+            input: Some(InputTokenLimits::full(100)),
             output: None,
         };
         let acquisition = reserve(
@@ -868,9 +1093,7 @@ mod tests {
                 output: 0,
             },
             limits,
-            limits.input,
             RateLimitMode::On,
-            true,
             Duration::from_secs(1),
         )
         .await
@@ -884,9 +1107,7 @@ mod tests {
                     output: 0,
                 },
                 limits,
-                limits.input,
                 RateLimitMode::On,
-                true,
                 Duration::from_secs(1),
             )
             .await
@@ -922,12 +1143,10 @@ mod tests {
                 output: 0,
             },
             TokenLimits {
-                input: Some(100),
+                input: Some(InputTokenLimits::full(100)),
                 output: None,
             },
-            Some(100),
             RateLimitMode::On,
-            true,
             WINDOW,
         )
         .await
@@ -942,7 +1161,7 @@ mod tests {
     async fn cancelled_waiter_releases_fifo_admission() {
         let queue = Arc::new(TokenQueue::default());
         let limits = TokenLimits {
-            input: Some(100),
+            input: Some(InputTokenLimits::full(100)),
             output: None,
         };
         let first = reserve(
@@ -952,9 +1171,7 @@ mod tests {
                 output: 0,
             },
             limits,
-            limits.input,
             RateLimitMode::On,
-            true,
             Duration::from_secs(1),
         )
         .await
@@ -968,9 +1185,7 @@ mod tests {
                     output: 0,
                 },
                 limits,
-                limits.input,
                 RateLimitMode::On,
-                true,
                 Duration::from_secs(1),
             )
             .await
@@ -978,6 +1193,7 @@ mod tests {
         tokio::task::yield_now().await;
         waiting.abort();
         assert!(waiting.await.unwrap_err().is_cancelled());
+        assert_eq!(queue.queue_depth.load(Ordering::Relaxed), 0);
         first.release().await;
 
         tokio::time::timeout(
@@ -989,9 +1205,7 @@ mod tests {
                     output: 0,
                 },
                 limits,
-                limits.input,
                 RateLimitMode::On,
-                true,
                 Duration::from_secs(1),
             ),
         )
@@ -1004,7 +1218,7 @@ mod tests {
     async fn admission_is_fifo_for_each_workspace_model_queue() {
         let queue = Arc::new(TokenQueue::default());
         let limits = TokenLimits {
-            input: Some(100),
+            input: Some(InputTokenLimits::full(100)),
             output: None,
         };
         let acquisition = reserve(
@@ -1014,9 +1228,7 @@ mod tests {
                 output: 0,
             },
             limits,
-            limits.input,
             RateLimitMode::On,
-            true,
             Duration::from_secs(1),
         )
         .await
@@ -1032,9 +1244,7 @@ mod tests {
                     output: 0,
                 },
                 limits,
-                limits.input,
                 RateLimitMode::On,
-                true,
                 Duration::from_secs(1),
             )
             .await
@@ -1051,9 +1261,7 @@ mod tests {
                     output: 0,
                 },
                 limits,
-                limits.input,
                 RateLimitMode::On,
-                true,
                 Duration::from_secs(1),
             )
             .await
@@ -1091,14 +1299,14 @@ mod tests {
         assert_eq!(
             throttle.limits("databricks-gpt-5-6-sol", Some(ModelClass::ChatBalanced)),
             TokenLimits {
-                input: Some(200_000),
+                input: Some(InputTokenLimits::full(200_000)),
                 output: Some(20_000),
             }
         );
         assert_eq!(
             throttle.limits("qwen3.5-122b-a10b", Some(ModelClass::ChatBalanced)),
             TokenLimits {
-                input: Some(1_000_000),
+                input: Some(InputTokenLimits::full(1_000_000)),
                 output: Some(100_000),
             }
         );
@@ -1108,7 +1316,7 @@ mod tests {
                 Some(ModelClass::ChatThinking)
             ),
             TokenLimits {
-                input: Some(200_000),
+                input: Some(InputTokenLimits::full(200_000)),
                 output: Some(4_000),
             }
         );
@@ -1138,6 +1346,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn explicit_modes_never_enter_adaptive_state() {
+        for mode in [RateLimitMode::On, RateLimitMode::Off] {
+            let throttle = RequestThrottle::new(
+                "workspace",
+                ThrottleConfig {
+                    input_tokens_per_minute: NonZeroU64::new(100),
+                    output_tokens_per_minute: NonZeroU64::new(10),
+                    provisioned_throughput: false,
+                    mode,
+                    documented_limits: Default::default(),
+                },
+            );
+            assert_eq!(
+                throttle
+                    .activate_from_message("model", None, Some("Exceeded workspace input tokens"),)
+                    .await,
+                AutoActivation::Ignored
+            );
+            assert_eq!(throttle.counters().await.auto_active_keys, 0);
+        }
+    }
+
+    #[tokio::test]
     async fn auto_mode_activates_only_after_matching_input_token_429() {
         let throttle = RequestThrottle::new(
             "workspace",
@@ -1150,34 +1381,154 @@ mod tests {
             },
         );
         let queue = throttle.queue("databricks-gpt-5-6-sol").await;
-        assert!(!throttle.enabled(&queue));
-        assert!(
-            !throttle
-                .activate_from_message(
-                    "databricks-gpt-5-6-sol",
-                    Some("Exceeded workspace output tokens per minute")
-                )
-                .await
-        );
-        assert!(
+        assert!(!throttle.enabled(&queue).await);
+        assert_eq!(
             throttle
                 .activate_from_message(
                     "databricks-gpt-5-6-sol",
-                    Some("REQUEST_LIMIT_EXCEEDED: EXCEEDED WORKSPACE INPUT TOKENS per minute")
+                    Some(ModelClass::ChatBalanced),
+                    Some("Exceeded workspace output tokens per minute"),
                 )
-                .await
+                .await,
+            AutoActivation::Ignored
         );
-        assert!(throttle.enabled(&queue));
-        assert!(
-            !throttle
+        assert!(matches!(
+            throttle
                 .activate_from_message(
                     "databricks-gpt-5-6-sol",
-                    Some("Exceeded workspace input tokens")
+                    Some(ModelClass::ChatBalanced),
+                    Some("REQUEST_LIMIT_EXCEEDED: EXCEEDED WORKSPACE INPUT TOKENS per minute"),
                 )
-                .await
-        );
+                .await,
+            AutoActivation::Transition(AutoTransition {
+                kind: AutoTransitionKind::Activated,
+                penalty_basis_points: 5_000,
+                ..
+            })
+        ));
+        assert!(throttle.enabled(&queue).await);
+        assert!(matches!(
+            throttle
+                .activate_from_message(
+                    "databricks-gpt-5-6-sol",
+                    Some(ModelClass::ChatBalanced),
+                    Some("Exceeded workspace input tokens"),
+                )
+                .await,
+            AutoActivation::Transition(AutoTransition {
+                kind: AutoTransitionKind::Tightened,
+                penalty_basis_points: 7_500,
+                ..
+            })
+        ));
         let other = throttle.queue("databricks-gpt-6-astra").await;
-        assert!(!throttle.enabled(&other));
+        assert!(!throttle.enabled(&other).await);
+    }
+
+    #[tokio::test]
+    async fn auto_mode_keeps_unknown_limits_inactive() {
+        let throttle = RequestThrottle::new(
+            "workspace",
+            ThrottleConfig {
+                input_tokens_per_minute: None,
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: RateLimitMode::Auto,
+                documented_limits: Default::default(),
+            },
+        );
+
+        assert_eq!(
+            throttle
+                .activate_from_message(
+                    "unknown-model",
+                    None,
+                    Some("Exceeded workspace input tokens"),
+                )
+                .await,
+            AutoActivation::Unavailable
+        );
+        assert_eq!(throttle.counters().await.auto_active_keys, 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn recovery_transitions_update_health_counters_and_gauges() {
+        let throttle = RequestThrottle::new(
+            "workspace",
+            ThrottleConfig {
+                input_tokens_per_minute: NonZeroU64::new(100),
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: RateLimitMode::Auto,
+                documented_limits: Default::default(),
+            },
+        )
+        .with_auto_recovery_policy(AutoRecoveryPolicy {
+            recovery_basis_points: 5_000,
+            initial_hold: Duration::from_secs(10),
+            recovery_interval: Duration::from_secs(5),
+            clean_successes: 1,
+            ..AutoRecoveryPolicy::default()
+        });
+        assert!(matches!(
+            throttle
+                .activate_from_message("model", None, Some("Exceeded workspace input tokens"),)
+                .await,
+            AutoActivation::Transition(_)
+        ));
+
+        tokio::time::advance(Duration::from_secs(10)).await;
+        let probation = throttle
+            .record_success("model", None)
+            .await
+            .expect("first recovery begins probation");
+        assert_eq!(probation.kind, AutoTransitionKind::Probation);
+        let counters = throttle.counters().await;
+        assert_eq!(counters.automatic_relaxations, 1);
+        assert_eq!(counters.auto_active_keys, 1);
+        assert_eq!(counters.auto_probation_keys, 1);
+
+        tokio::time::advance(Duration::from_secs(5)).await;
+        let deactivated = throttle
+            .record_success("model", None)
+            .await
+            .expect("probation deactivates after another clean interval");
+        assert_eq!(deactivated.kind, AutoTransitionKind::Deactivated);
+        let counters = throttle.counters().await;
+        assert_eq!(counters.automatic_deactivations, 1);
+        assert_eq!(counters.auto_active_keys, 0);
+        assert_eq!(counters.auto_probation_keys, 0);
+    }
+
+    #[tokio::test]
+    async fn adaptive_budget_preserves_the_complete_request_ceiling() {
+        let queue = Arc::new(TokenQueue::default());
+        queue.state.lock().await.adaptive.record_input_429(
+            Instant::now(),
+            100,
+            AutoRecoveryPolicy::default(),
+        );
+        let limits = TokenLimits {
+            input: Some(InputTokenLimits::full(100)),
+            output: None,
+        };
+
+        let acquisition = reserve(
+            Arc::clone(&queue),
+            TokenEstimate {
+                input: 80,
+                output: 0,
+            },
+            limits,
+            RateLimitMode::Auto,
+            Duration::from_secs(1),
+        )
+        .await
+        .expect("a request within the ceiling can occupy an empty window");
+
+        assert_eq!(acquisition.input_limit, Some(100));
+        assert_eq!(acquisition.input_window_budget, Some(50));
+        assert_eq!(acquisition.reserved_input_tokens, 80);
     }
 
     #[test]

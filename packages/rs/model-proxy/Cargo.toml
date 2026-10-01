@@ -22,6 +22,15 @@ description = "Multi-protocol Databricks model proxy"
 name = "dbx-model-proxy"
 path = "src/main.rs"
 
+[features]
+default = [ "metrics-ui" ]
+metrics = [
+  "dep:metrics",
+  "dep:metrics-exporter-prometheus",
+  "dep:hdrhistogram"
+]
+metrics-ui = [ "metrics", "dep:rust-embed", "dep:mime_guess" ]
+
 [dependencies]
 aigw-anthropic = "=0.6.0"
 aigw-core = "=0.6.0"
@@ -48,15 +57,35 @@ futures-util = "0.3"
   version = "0.9.3"
   path = "../model"
 
+  [dependencies.hdrhistogram]
+  workspace = true
+  optional = true
+
   [dependencies.image]
   workspace = true
 
   [dependencies.httpdate]
   workspace = true
 
+  [dependencies.metrics]
+  workspace = true
+  optional = true
+
+  [dependencies.metrics-exporter-prometheus]
+  workspace = true
+  optional = true
+
+  [dependencies.mime_guess]
+  workspace = true
+  optional = true
+
   [dependencies.reqwest]
   workspace = true
   features = [ "stream" ]
+
+  [dependencies.rust-embed]
+  workspace = true
+  optional = true
 
   [dependencies.serde]
   workspace = true
@@ -78,6 +107,10 @@ futures-util = "0.3"
 
 [dev-dependencies.tempfile]
 workspace = true
+
+[dev-dependencies.tokio]
+workspace = true
+features = [ "test-util" ]
 
 [dev-dependencies.wiremock]
 workspace = true
