@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
 const BASIS_POINTS: u64 = 10_000;
@@ -34,7 +34,7 @@ impl Default for AutoRecoveryPolicy {
 }
 
 /// Stable transition vocabulary shared by logs, health counters, and metrics.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum AutoTransitionKind {
     Activated,
@@ -45,7 +45,7 @@ pub(crate) enum AutoTransitionKind {
 }
 
 /// One automatic congestion-control transition.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AutoTransition {
     pub(crate) kind: AutoTransitionKind,

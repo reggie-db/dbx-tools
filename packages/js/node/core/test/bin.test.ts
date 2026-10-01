@@ -1,5 +1,6 @@
 import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access, chmod, mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -72,6 +73,20 @@ describe("bin.ensure", () => {
 
       assert.deepEqual(installed, destination);
       await access(installed.path, constants.X_OK);
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("verifies an available SHA-256 download digest", async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-digest-"));
+    const sha256 = createHash("sha256").update(EXECUTABLE_SOURCE).digest("hex");
+    try {
+      await bin.ensure("example", { url: executableUrl(), sha256 }, { homeDir });
+      await assert.rejects(
+        bin.ensure("another", { url: executableUrl(), sha256: "0".repeat(64) }, { homeDir }),
+        /digest mismatch/,
+      );
     } finally {
       await rm(homeDir, { recursive: true, force: true });
     }

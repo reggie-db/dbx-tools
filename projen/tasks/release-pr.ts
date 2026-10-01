@@ -48,6 +48,7 @@ import {
   resolveBaseVersion,
   resolveNextVersion,
 } from "../src/workspace-version.ts";
+import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
 const logger = log.logger("projen:release");
 
@@ -303,227 +304,237 @@ program
       waitTimeoutMinutes: string;
     }) => {
       const root = projectUtils.root() ?? process.cwd();
-      const waitTimeoutMinutes = object.toNumber(opts.waitTimeoutMinutes, {
-        separators: false,
-        percent: false,
-      });
-      if (
-        waitTimeoutMinutes === undefined ||
-        !Number.isInteger(waitTimeoutMinutes) ||
-        waitTimeoutMinutes <= 0
-      ) {
-        throw new Error("--wait-timeout-minutes must be a positive integer");
-      }
-      const waitTimeoutMs = waitTimeoutMinutes * 60_000;
-      const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
-      if (!currentBranch) throw new Error("Release preparation requires a local branch");
-      const account = githubAccount(root);
-      git(root, ["fetch", "--tags", "origin", opts.base]);
-      const comparisonBase = resolveBaseVersion(root, [opts.prefix], {
-        fetch: false,
-        includeComponentTags: false,
-      }).version;
-      const next = resolveNextVersion(root, [opts.prefix], opts.level, { fetch: false });
-      const releaseVersionScript = fileURLToPath(new URL("./release-version.ts", import.meta.url));
-      runTaskCommand(root, process.execPath, [
-        releaseVersionScript,
-        "--version",
-        next.version,
-        "--prefix",
-        opts.prefix,
-        "--assert-next",
-      ]);
-      const releaseTag = `${opts.prefix}${next.version}`;
-      const releaseBranch = `release/${releaseTag}`;
-      const releaseRoot = join(root, ".worktrees", releaseTag);
-      if (currentBranch.startsWith("release/")) {
-        throw new Error("Release preparation must start from a source branch");
-      }
-      if (
-        git(root, ["ls-remote", "--tags", "origin", `refs/tags/${releaseTag}`], {
-          capture: true,
-          check: false,
-        })
-      ) {
-        throw new Error(`Release tag already exists: ${releaseTag}`);
-      }
-
-      const status = git(root, ["status", "--porcelain=v1", "--untracked-files=all"], {
-        capture: true,
-      });
-      if (status) {
-        git(root, ["add", "-A"]);
-        git(root, ["commit", "-m", opts.message]);
-      }
-      if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
-        git(root, ["merge", "--no-edit", `origin/${opts.base}`]);
-      }
-      pushCurrentBranch(root, currentBranch);
-
-      const worktreeExists = existsSync(join(releaseRoot, ".git"));
-      if (!worktreeExists) {
-        git(root, ["worktree", "prune"]);
-        const localBranch = git(root, ["branch", "--list", releaseBranch], { capture: true });
-        const remoteBranch = git(
-          root,
-          ["ls-remote", "--heads", "origin", `refs/heads/${releaseBranch}`],
-          { capture: true, check: false },
-        );
-        if (localBranch || remoteBranch) {
-          throw new Error(`Release branch already exists without its worktree: ${releaseBranch}`);
-        }
-        git(root, ["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"]);
-      } else {
-        const releaseStatus = git(
-          releaseRoot,
-          ["status", "--porcelain=v1", "--untracked-files=all"],
-          { capture: true },
-        );
-        if (releaseStatus) {
-          git(releaseRoot, ["stash", "push", "--include-untracked", "--message", "release-resume"]);
-        }
-        if (!gitSucceeds(releaseRoot, ["merge-base", "--is-ancestor", currentBranch, "HEAD"])) {
-          git(releaseRoot, ["merge", "--no-edit", currentBranch]);
-        }
-        if (releaseStatus) {
-          git(releaseRoot, ["stash", "pop"]);
-        }
-        logger.info(`resuming ${releaseBranch} in ${releaseRoot}`);
-      }
-      runTaskCommand(releaseRoot, process.execPath, ["install"]);
-
-      const bumpScript = fileURLToPath(new URL("./bump.ts", import.meta.url));
-      const versionCheckScript = fileURLToPath(new URL("./version-check.ts", import.meta.url));
-      runTaskCommand(releaseRoot, process.execPath, [
-        bumpScript,
-        "--level",
-        opts.level,
-        "--prefix",
-        opts.prefix,
-        ...opts.os.flatMap((value) => ["--os", value]),
-        ...opts.arch.flatMap((value) => ["--arch", value]),
-      ]);
-      if (readWorkspaceVersion(releaseRoot) !== next.version) {
-        throw new Error(`Release preparation did not produce ${next.version}`);
-      }
-
-      runTaskCommand(releaseRoot, process.execPath, [versionCheckScript]);
-      if (opts.validate) {
-        for (const task of opts.validateTask) {
-          runTaskCommand(releaseRoot, process.execPath, ["run", task]);
-        }
-        if (existsSync(join(releaseRoot, "Cargo.toml"))) {
-          runTaskCommand(releaseRoot, "cargo", [
-            "test",
-            "--workspace",
-            ...(existsSync(join(releaseRoot, "Cargo.lock")) ? ["--locked"] : []),
-          ]);
-        }
-        runTaskCommand(releaseRoot, process.execPath, ["run", "compile"]);
-      } else {
-        logger.warn("release validation skipped by --no-validate");
-      }
-      if (opts.localPublish) {
-        await publishLocalRelease({
-          root: releaseRoot,
-          version: next.version,
-          localRegistry: opts.localRegistry,
-          localPypi: opts.localPypi,
-          pythonRoot: opts.pythonRoot,
-          localCargo: opts.localCargo,
-          reuseValidatedNodeCompile: opts.validate,
+      await withWorkspaceMutationLock(root, async () => {
+        const waitTimeoutMinutes = object.toNumber(opts.waitTimeoutMinutes, {
+          separators: false,
+          percent: false,
         });
-      } else {
-        logger.info("local publication skipped by --no-local-publish");
-      }
-      runTaskCommand(releaseRoot, process.execPath, [versionCheckScript]);
-      const releaseSummary = opts.releaseSummary
-        ? await generateReleaseSummary({
-            root: releaseRoot,
-            version: next.version,
-            fromRef: `${opts.prefix}${comparisonBase}`,
-            providers: releaseSummaryProviders(opts.releaseSummaryProviders),
-          })
-        : undefined;
-
-      git(releaseRoot, ["add", "-A"]);
-      const staged = git(releaseRoot, ["diff", "--cached", "--name-only"], { capture: true });
-      if (staged) {
-        git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`]);
-      } else if (!worktreeExists) {
-        throw new Error("Release preparation produced no changes");
-      }
-      // The source push and release commit hooks have already scanned every new
-      // byte. A new remote branch has no upstream comparison point, so the
-      // managed pre-push hook would rescan the repository's complete history.
-      git(releaseRoot, ["push", "--no-verify", "--set-upstream", "origin", releaseBranch]);
-
-      const title = `chore(release): ${next.version}`;
-      const body = [
-        `Release ${releaseTag}.`,
-        "",
-        `Source commit: ${git(releaseRoot, ["rev-parse", `${releaseBranch}^`], { capture: true })}`,
-        "",
-        "Merging this PR updates VERSION on main and starts the public release workflow.",
-        ...(releaseSummary ? ["", releaseSummary] : []),
-      ].join("\n");
-      const githubEnvironment = {
-        ...process.env,
-        GH_HOST: account.hostname,
-        GH_REPO: githubRepositorySpecifier(account),
-        [githubTokenEnvironmentName(account.hostname)]: account.token,
-      };
-      const ensurePullRequest = (): void => {
         if (
-          taskCommandSucceeds(root, "gh", ["pr", "view", releaseBranch], {
-            env: githubEnvironment,
+          waitTimeoutMinutes === undefined ||
+          !Number.isInteger(waitTimeoutMinutes) ||
+          waitTimeoutMinutes <= 0
+        ) {
+          throw new Error("--wait-timeout-minutes must be a positive integer");
+        }
+        const waitTimeoutMs = waitTimeoutMinutes * 60_000;
+        const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
+        if (!currentBranch) throw new Error("Release preparation requires a local branch");
+        const account = githubAccount(root);
+        git(root, ["fetch", "--tags", "origin", opts.base]);
+        const comparisonBase = resolveBaseVersion(root, [opts.prefix], {
+          fetch: false,
+          includeComponentTags: false,
+        }).version;
+        const next = resolveNextVersion(root, [opts.prefix], opts.level, { fetch: false });
+        const releaseVersionScript = fileURLToPath(
+          new URL("./release-version.ts", import.meta.url),
+        );
+        runTaskCommand(root, process.execPath, [
+          releaseVersionScript,
+          "--version",
+          next.version,
+          "--prefix",
+          opts.prefix,
+          "--assert-next",
+        ]);
+        const releaseTag = `${opts.prefix}${next.version}`;
+        const releaseBranch = `release/${releaseTag}`;
+        const releaseRoot = join(root, ".worktrees", releaseTag);
+        if (currentBranch.startsWith("release/")) {
+          throw new Error("Release preparation must start from a source branch");
+        }
+        if (
+          git(root, ["ls-remote", "--tags", "origin", `refs/tags/${releaseTag}`], {
+            capture: true,
+            check: false,
           })
         ) {
+          throw new Error(`Release tag already exists: ${releaseTag}`);
+        }
+
+        const status = git(root, ["status", "--porcelain=v1", "--untracked-files=all"], {
+          capture: true,
+        });
+        if (status) {
+          git(root, ["add", "-A"]);
+          git(root, ["commit", "-m", opts.message]);
+        }
+        if (!gitSucceeds(root, ["merge-base", "--is-ancestor", `origin/${opts.base}`, "HEAD"])) {
+          git(root, ["merge", "--no-edit", `origin/${opts.base}`]);
+        }
+        pushCurrentBranch(root, currentBranch);
+
+        const worktreeExists = existsSync(join(releaseRoot, ".git"));
+        if (!worktreeExists) {
+          git(root, ["worktree", "prune"]);
+          const localBranch = git(root, ["branch", "--list", releaseBranch], { capture: true });
+          const remoteBranch = git(
+            root,
+            ["ls-remote", "--heads", "origin", `refs/heads/${releaseBranch}`],
+            { capture: true, check: false },
+          );
+          if (localBranch || remoteBranch) {
+            throw new Error(`Release branch already exists without its worktree: ${releaseBranch}`);
+          }
+          git(root, ["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"]);
+        } else {
+          const releaseStatus = git(
+            releaseRoot,
+            ["status", "--porcelain=v1", "--untracked-files=all"],
+            { capture: true },
+          );
+          if (releaseStatus) {
+            git(releaseRoot, [
+              "stash",
+              "push",
+              "--include-untracked",
+              "--message",
+              "release-resume",
+            ]);
+          }
+          if (!gitSucceeds(releaseRoot, ["merge-base", "--is-ancestor", currentBranch, "HEAD"])) {
+            git(releaseRoot, ["merge", "--no-edit", currentBranch]);
+          }
+          if (releaseStatus) {
+            git(releaseRoot, ["stash", "pop"]);
+          }
+          logger.info(`resuming ${releaseBranch} in ${releaseRoot}`);
+        }
+        runTaskCommand(releaseRoot, process.execPath, ["install"]);
+
+        const bumpScript = fileURLToPath(new URL("./bump.ts", import.meta.url));
+        const versionCheckScript = fileURLToPath(new URL("./version-check.ts", import.meta.url));
+        runTaskCommand(releaseRoot, process.execPath, [
+          bumpScript,
+          "--level",
+          opts.level,
+          "--prefix",
+          opts.prefix,
+          ...opts.os.flatMap((value) => ["--os", value]),
+          ...opts.arch.flatMap((value) => ["--arch", value]),
+        ]);
+        if (readWorkspaceVersion(releaseRoot) !== next.version) {
+          throw new Error(`Release preparation did not produce ${next.version}`);
+        }
+
+        runTaskCommand(releaseRoot, process.execPath, [versionCheckScript]);
+        if (opts.validate) {
+          for (const task of opts.validateTask) {
+            runTaskCommand(releaseRoot, process.execPath, ["run", task]);
+          }
+          if (existsSync(join(releaseRoot, "Cargo.toml"))) {
+            runTaskCommand(releaseRoot, "cargo", [
+              "test",
+              "--workspace",
+              ...(existsSync(join(releaseRoot, "Cargo.lock")) ? ["--locked"] : []),
+            ]);
+          }
+          runTaskCommand(releaseRoot, process.execPath, ["run", "compile"]);
+        } else {
+          logger.warn("release validation skipped by --no-validate");
+        }
+        if (opts.localPublish) {
+          await publishLocalRelease({
+            root: releaseRoot,
+            version: next.version,
+            localRegistry: opts.localRegistry,
+            localPypi: opts.localPypi,
+            pythonRoot: opts.pythonRoot,
+            localCargo: opts.localCargo,
+            reuseValidatedNodeCompile: opts.validate,
+          });
+        } else {
+          logger.info("local publication skipped by --no-local-publish");
+        }
+        runTaskCommand(releaseRoot, process.execPath, [versionCheckScript]);
+        const releaseSummary = opts.releaseSummary
+          ? await generateReleaseSummary({
+              root: releaseRoot,
+              version: next.version,
+              fromRef: `${opts.prefix}${comparisonBase}`,
+              providers: releaseSummaryProviders(opts.releaseSummaryProviders),
+            })
+          : undefined;
+
+        git(releaseRoot, ["add", "-A"]);
+        const staged = git(releaseRoot, ["diff", "--cached", "--name-only"], { capture: true });
+        if (staged) {
+          git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`]);
+        } else if (!worktreeExists) {
+          throw new Error("Release preparation produced no changes");
+        }
+        // The source push and release commit hooks have already scanned every new
+        // byte. A new remote branch has no upstream comparison point, so the
+        // managed pre-push hook would rescan the repository's complete history.
+        git(releaseRoot, ["push", "--no-verify", "--set-upstream", "origin", releaseBranch]);
+
+        const title = `chore(release): ${next.version}`;
+        const body = [
+          `Release ${releaseTag}.`,
+          "",
+          `Source commit: ${git(releaseRoot, ["rev-parse", `${releaseBranch}^`], { capture: true })}`,
+          "",
+          "Merging this PR updates VERSION on main and starts the public release workflow.",
+          ...(releaseSummary ? ["", releaseSummary] : []),
+        ].join("\n");
+        const githubEnvironment = {
+          ...process.env,
+          GH_HOST: account.hostname,
+          GH_REPO: githubRepositorySpecifier(account),
+          [githubTokenEnvironmentName(account.hostname)]: account.token,
+        };
+        const ensurePullRequest = (): void => {
+          if (
+            taskCommandSucceeds(root, "gh", ["pr", "view", releaseBranch], {
+              env: githubEnvironment,
+            })
+          ) {
+            return;
+          }
+          runTaskCommand(
+            root,
+            "gh",
+            [
+              "pr",
+              "create",
+              "--base",
+              opts.base,
+              "--head",
+              releaseBranch,
+              "--title",
+              title,
+              "--body",
+              body,
+            ],
+            { env: githubEnvironment },
+          );
+        };
+        ensurePullRequest();
+        if (opts.approve) {
+          runTaskCommand(root, "gh", ["pr", "merge", releaseBranch, "--auto", "--merge"], {
+            env: githubEnvironment,
+          });
+        }
+        git(root, ["worktree", "remove", "--force", releaseRoot]);
+        git(root, ["branch", "--delete", "--force", releaseBranch]);
+        if (opts.approve && opts.wait) {
+          const mergeSha = await waitForPullRequestMerge(
+            root,
+            releaseBranch,
+            githubEnvironment,
+            waitTimeoutMs,
+          );
+          logger.info("release pull request merged", { releaseBranch, mergeSha });
+          await waitForReleaseWorkflow(root, opts.base, mergeSha, githubEnvironment, waitTimeoutMs);
+          logger.success(`published ${releaseTag} from ${mergeSha}`);
           return;
         }
-        runTaskCommand(
-          root,
-          "gh",
-          [
-            "pr",
-            "create",
-            "--base",
-            opts.base,
-            "--head",
-            releaseBranch,
-            "--title",
-            title,
-            "--body",
-            body,
-          ],
-          { env: githubEnvironment },
+        logger.success(
+          `${
+            opts.approve ? "enabled automatic merge for" : "opened"
+          } ${releaseBranch} for ${releaseTag}${opts.approve && !opts.wait ? " without waiting" : ""}`,
         );
-      };
-      ensurePullRequest();
-      if (opts.approve) {
-        runTaskCommand(root, "gh", ["pr", "merge", releaseBranch, "--auto", "--merge"], {
-          env: githubEnvironment,
-        });
-      }
-      git(root, ["worktree", "remove", "--force", releaseRoot]);
-      git(root, ["branch", "--delete", "--force", releaseBranch]);
-      if (opts.approve && opts.wait) {
-        const mergeSha = await waitForPullRequestMerge(
-          root,
-          releaseBranch,
-          githubEnvironment,
-          waitTimeoutMs,
-        );
-        logger.info("release pull request merged", { releaseBranch, mergeSha });
-        await waitForReleaseWorkflow(root, opts.base, mergeSha, githubEnvironment, waitTimeoutMs);
-        logger.success(`published ${releaseTag} from ${mergeSha}`);
-        return;
-      }
-      logger.success(
-        `${
-          opts.approve ? "enabled automatic merge for" : "opened"
-        } ${releaseBranch} for ${releaseTag}${opts.approve && !opts.wait ? " without waiting" : ""}`,
-      );
+      });
     },
   );
 

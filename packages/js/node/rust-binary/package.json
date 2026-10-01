@@ -24,7 +24,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/core": "workspace:^"
+    "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/shared-core": "workspace:^"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -40,7 +41,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.7",
+  "version": "0.9.8",
   "types": "index.ts",
   "type": "module",
   "exports": {

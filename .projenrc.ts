@@ -438,6 +438,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   projectJs.addExports(p, {
     "./bin": "./src/bin.ts",
     "./exec": "./src/exec.ts",
+    "./file-lock": "./src/file-lock.ts",
     "./project-utils": "./src/project-utils.ts",
   });
   p.addDeps(
@@ -483,6 +484,13 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
   p.package.addField("description", "Commander CLI for Databricks OAuth");
   p.addDeps("@dbx-tools/core-rs@workspace:^");
+});
+
+// cli-model-proxy: keeps direct native proxy forwarding lazy while adding the
+// service lifecycle command group and exact-version companion installation.
+project.applyToProjects(root, { identifierName: "cli-model-proxy", tags: "cli" }, (p) => {
+  p.package.addField("description", "Service lifecycle CLI for dbx-model-proxy");
+  p.addDeps("@dbx-tools/rust-binary@workspace:^", "@dbx-tools/shared-core@workspace:^");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -616,7 +624,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
 // node-rust-binary: narrow runtime owner for generated native release metadata,
 // atomic installation, and process/signal forwarding.
 project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/core@workspace:^");
+  p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-core@workspace:^");
   projectJs.addPackageFiles(p, "exports.ts");
 });
 
@@ -838,6 +846,7 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/cli-appkit-env@workspace:^",
     "@dbx-tools/cli-auth@workspace:^",
+    "@dbx-tools/cli-model-proxy@workspace:^",
     "@dbx-tools/cli-tunnel@workspace:^",
     "@dbx-tools/rust-binary@workspace:^",
   );
@@ -1147,11 +1156,12 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // Rust Cargo workspace
 // ---------------------------------------------------------------------------
 const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
-  rustVersion: "1.89",
+  rustVersion: "1.90",
   cliRegistryPath: "packages/js/node/rust-binary/src/_release-binaries.ts",
   pythonRoot: PYTHON_ROOT,
   workspaceDependencies: {
     "async-trait": "0.1",
+    "auto-launcher": "=1.1.0",
     backon: { version: "=1.6.0", defaultFeatures: false, features: ["tokio-sleep"] },
     base64: "0.22",
     bytes: "1",
@@ -1187,11 +1197,15 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
     regex: "1",
     rcgen: "0.14",
     rustls: "0.23",
+    rusqlite: { version: "=0.39.0", features: ["bundled"] },
+    "rusqlite_migration": "=2.5.0",
     "rust-embed": { version: "8", features: ["debug-embed"] },
     scraper: "0.24",
     serde: { version: "1", features: ["derive"] },
     "serde_json": "1",
+    "service-manager": "=0.11.0",
     sha2: "0.10",
+    sysinfo: "0.37",
     tempfile: "3",
     thiserror: "2",
     time: { version: "0.3", features: ["serde", "formatting", "parsing"] },
@@ -1286,16 +1300,75 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
         wiremock: { workspace: true },
       },
     },
+    service: {
+      description:
+        "Reusable per-user service lifecycle, SQLite state, and companion autostart",
+      features: {
+        desktop: ["dep:open", "dep:tao", "dep:tray-icon", "dep:wry"],
+      },
+      dependencies: {
+        "auto-launcher": { workspace: true },
+        clap: { workspace: true },
+        directories: { workspace: true },
+        open: { workspace: true, optional: true },
+        reqwest: { workspace: true, features: ["blocking"] },
+        rusqlite: { workspace: true },
+        "rusqlite_migration": { workspace: true },
+        serde: { workspace: true },
+        "serde_json": { workspace: true },
+        "service-manager": { workspace: true },
+        "tray-icon": {
+          version: "=0.25.1",
+          defaultFeatures: false,
+          features: ["ksni"],
+          optional: true,
+        },
+      },
+      targetDependencies: {
+        'cfg(target_os = "windows")': {
+          sysinfo: { workspace: true },
+        },
+        'cfg(any(target_os = "macos", target_os = "windows"))': {
+          tao: {
+            version: "=0.37.1",
+            defaultFeatures: false,
+            features: ["rwh_06"],
+            optional: true,
+          },
+          wry: {
+            version: "=0.56.0",
+            defaultFeatures: false,
+            features: ["os-webview"],
+            optional: true,
+          },
+        },
+      },
+      devDependencies: {
+        tempfile: { workspace: true },
+      },
+    },
     "model-proxy": {
       description: "Multi-protocol Databricks model proxy",
       release: true,
       cli: true,
       binaryName: "dbx-model-proxy",
+      defaultRun: "dbx-model-proxy",
       defaultFeatures: ["metrics-ui"],
       features: {
+        desktop: [`${root.scope}-service/desktop`],
         metrics: ["dep:metrics", "dep:metrics-exporter-prometheus", "dep:hdrhistogram"],
         "metrics-ui": ["metrics", "dep:rust-embed", "dep:mime_guess"],
       },
+      binaries: [
+        {
+          name: "dbx-model-proxy-desktop",
+          path: "src/bin/desktop.rs",
+          requiredFeatures: ["desktop"],
+          release: true,
+          description: "Native tray and metrics webview companion for dbx-model-proxy",
+          cli: { command: "model-proxy-desktop", hidden: true },
+        },
+      ],
       dependencies: {
         "aigw-anthropic": "=0.6.0",
         "aigw-core": "=0.6.0",
@@ -1307,6 +1380,7 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
         clap: { workspace: true },
         [`${root.scope}-core`]: { path: "../core" },
         [`${root.scope}-model`]: { path: "../model" },
+        [`${root.scope}-service`]: { path: "../service" },
         "eventsource-stream": "0.2",
         "futures-util": "0.3",
         hdrhistogram: { workspace: true, optional: true },
@@ -1319,6 +1393,7 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
         "rust-embed": { workspace: true, optional: true },
         serde: { workspace: true },
         "serde_json": { workspace: true },
+        sha2: { workspace: true },
         thiserror: { workspace: true },
         "tokenx-rs": { workspace: true },
         tokio: { workspace: true },
@@ -1429,7 +1504,10 @@ root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
   propagation: "always",
   publishOrder: true,
 });
-for (const binary of ["dbx-tools-model-proxy", "dbx-tools-lakebase-proxy"]) {
+for (const binary of [
+  "dbx-tools-model-proxy",
+  "dbx-tools-lakebase-proxy",
+]) {
   root.releaseCatalog.addDependency("@dbx-tools/rust-binary", {
     target: binary,
     kind: "generated",

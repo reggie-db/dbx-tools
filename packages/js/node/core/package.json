@@ -52,6 +52,10 @@
         "types": "./lib/src/exec.d.ts",
         "default": "./lib/src/exec.js"
       },
+      "./file-lock": {
+        "types": "./lib/src/file-lock.d.ts",
+        "default": "./lib/src/file-lock.js"
+      },
       "./project-utils": {
         "types": "./lib/src/project-utils.d.ts",
         "default": "./lib/src/project-utils.js"
@@ -59,13 +63,14 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.7",
+  "version": "0.9.8",
   "types": "index.ts",
   "type": "module",
   "exports": {
     ".": "./index.ts",
     "./bin": "./src/bin.ts",
     "./exec": "./src/exec.ts",
+    "./file-lock": "./src/file-lock.ts",
     "./project-utils": "./src/project-utils.ts",
     "./package.json": "./package.json"
   },

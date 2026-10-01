@@ -267,6 +267,27 @@ export function isDatabricksAppEnvironment(environment: Map<string, string>): bo
     }
 
 /**
+ * Enumerate secret-free Databricks CLI profile metadata.
+ */
+export function listDatabricksProfiles(configFile: string | undefined = undefined, refresh: boolean = false): Array<DatabricksProfileSummary> /*throws*/ {
+    const __rb: Uint8Array = uniffiCaller.rustCallWithError(
+            /*liftError:*/ FfiConverterTypeAuthError.lift.bind(FfiConverterTypeAuthError),
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_core_fn_func_list_databricks_profiles(
+        FfiConverterOptionalString.lower(configFile, nativeModule().rustbuffer_alloc),
+        FfiConverterBool.lower(refresh, nativeModule().rustbuffer_alloc),
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    );
+    try {
+        return FfiConverterSequenceTypeDatabricksProfileSummary.lift(__rb);
+    } finally {
+        nativeModule().rustbuffer_free(__rb);
+    }
+    }
+
+/**
  * Parse a PostgreSQL URL, Lakebase resource path, hostname, or project id.
  */
 export function parseAddress(input: string | undefined): ParsedAddress {
@@ -715,6 +736,184 @@ const FfiConverterTypeDatabricksAuthStatus = (() => {
             return FfiConverterString.allocationSize(value.profile) +
              FfiConverterString.allocationSize(value.host) +
              FfiConverterTypeStorage.allocationSize(value.storage);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * Scope of the Databricks authentication target.
+ */
+export enum TargetKind {
+    /**
+     * A Databricks workspace.
+     */
+    Workspace,
+    /**
+     * A Databricks account.
+     */
+    Account,
+    /**
+     * Unified authentication discovered for a Databricks account.
+     */
+    Unified
+}
+
+const FfiConverterTypeTargetKind = (() => {
+    type TypeName = TargetKind;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            switch (c.readI32()) {
+                case 1: return TargetKind.Workspace;
+                case 2: return TargetKind.Account;
+                case 3: return TargetKind.Unified;
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            switch (value) {
+                case TargetKind.Workspace: return c.writeI32(1);
+                case TargetKind.Account: return c.writeI32(2);
+                case TargetKind.Unified: return c.writeI32(3);
+            }
+        }
+        allocationSize(value: TypeName): number {
+            return 4;
+        }
+    }
+    return new FFIConverter();
+})();
+
+/**
+ * Authentication strategy selected from Databricks configuration.
+ */
+export enum AuthKind {
+    /**
+     * Interactive user authorization with refresh-token storage.
+     */
+    UserToMachine,
+    /**
+     * Service-principal client credentials.
+     */
+    MachineToMachine,
+    /**
+     * Static personal access token.
+     */
+    PersonalAccessToken,
+    /**
+     * Databricks App service-principal client credentials.
+     */
+    AppServicePrincipal,
+    /**
+     * Current Databricks App request's on-behalf-of token.
+     */
+    AppOnBehalfOf
+}
+
+const FfiConverterTypeAuthKind = (() => {
+    type TypeName = AuthKind;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            switch (c.readI32()) {
+                case 1: return AuthKind.UserToMachine;
+                case 2: return AuthKind.MachineToMachine;
+                case 3: return AuthKind.PersonalAccessToken;
+                case 4: return AuthKind.AppServicePrincipal;
+                case 5: return AuthKind.AppOnBehalfOf;
+                default: throw new UniffiInternalError.UnexpectedEnumCase();
+            }
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            switch (value) {
+                case AuthKind.UserToMachine: return c.writeI32(1);
+                case AuthKind.MachineToMachine: return c.writeI32(2);
+                case AuthKind.PersonalAccessToken: return c.writeI32(3);
+                case AuthKind.AppServicePrincipal: return c.writeI32(4);
+                case AuthKind.AppOnBehalfOf: return c.writeI32(5);
+            }
+        }
+        allocationSize(value: TypeName): number {
+            return 4;
+        }
+    }
+    return new FFIConverter();
+})();
+
+/**
+ * Secret-free metadata discovered from one Databricks CLI profile.
+ */
+export type DatabricksProfileSummary = {
+    /**
+     * Databricks CLI profile name.
+     */
+    name: string,
+    /**
+     * Configured workspace or accounts host.
+     */
+    host?: string,
+    /**
+     * Account identifier associated with the profile.
+     */
+    accountId?: string,
+    /**
+     * Workspace identifier associated with the profile.
+     */
+    workspaceId?: string,
+    /**
+     * Target inferred from the configured host and account metadata.
+     */
+    target: TargetKind,
+    /**
+     * Authentication kind inferred without returning credential values.
+     */
+    authKind: AuthKind
+}
+
+/**
+ * Generated factory for {@link DatabricksProfileSummary} record objects.
+ */
+export const DatabricksProfileSummary = (() => {
+    const defaults = () => ({
+    });
+    const create = (() => {
+        return uniffiCreateRecord<DatabricksProfileSummary, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<DatabricksProfileSummary>,
+    });
+})();
+
+const FfiConverterTypeDatabricksProfileSummary = (() => {
+    type TypeName = DatabricksProfileSummary;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                name: FfiConverterString.readFromCursor(c),
+                host: FfiConverterOptionalString.readFromCursor(c),
+                accountId: FfiConverterOptionalString.readFromCursor(c),
+                workspaceId: FfiConverterOptionalString.readFromCursor(c),
+                target: FfiConverterTypeTargetKind.readFromCursor(c),
+                authKind: FfiConverterTypeAuthKind.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterString.writeIntoCursor(value.name, c);
+            FfiConverterOptionalString.writeIntoCursor(value.host, c);
+            FfiConverterOptionalString.writeIntoCursor(value.accountId, c);
+            FfiConverterOptionalString.writeIntoCursor(value.workspaceId, c);
+            FfiConverterTypeTargetKind.writeIntoCursor(value.target, c);
+            FfiConverterTypeAuthKind.writeIntoCursor(value.authKind, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterString.allocationSize(value.name) +
+             FfiConverterOptionalString.allocationSize(value.host) +
+             FfiConverterOptionalString.allocationSize(value.accountId) +
+             FfiConverterOptionalString.allocationSize(value.workspaceId) +
+             FfiConverterTypeTargetKind.allocationSize(value.target) +
+             FfiConverterTypeAuthKind.allocationSize(value.authKind);
 
         }
     };
@@ -2678,6 +2877,9 @@ const FfiConverterOptionalTypeFileLayout = new FfiConverterOptional(FfiConverter
 // FfiConverter for boolean | undefined
 const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
 
+// FfiConverter for Array<DatabricksProfileSummary>
+const FfiConverterSequenceTypeDatabricksProfileSummary = new FfiConverterArray(FfiConverterTypeDatabricksProfileSummary);
+
 
 /**
  * This should be called before anything else.
@@ -2729,6 +2931,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment() !== 48341) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment");
+    }
+    if (nativeModule().uniffi_dbx_tools_core_checksum_func_list_databricks_profiles() !== 59366) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_list_databricks_profiles");
     }
     if (nativeModule().uniffi_dbx_tools_core_checksum_func_parse_address() !== 9538) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_core_checksum_func_parse_address");
@@ -2799,9 +3004,11 @@ export default Object.freeze({
   converters: {
     FfiConverterTypeAccessToken,
     FfiConverterTypeAuthError,
+    FfiConverterTypeAuthKind,
     FfiConverterTypeAuthOptions,
     FfiConverterTypeDatabricksAuthOptions,
     FfiConverterTypeDatabricksAuthStatus,
+    FfiConverterTypeDatabricksProfileSummary,
     FfiConverterTypeFileLayout,
     FfiConverterTypeOAuthGrant,
     FfiConverterTypeParsedAddress,
@@ -2812,5 +3019,6 @@ export default Object.freeze({
     FfiConverterTypeStorage,
     FfiConverterTypeStorageAdapter,
     FfiConverterTypeStorageHandle,
+    FfiConverterTypeTargetKind,
   }
 });

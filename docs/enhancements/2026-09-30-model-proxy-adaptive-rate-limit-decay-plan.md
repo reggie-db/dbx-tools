@@ -96,7 +96,7 @@ The existing implementation already provided:
 - release of reservations for attempts rejected before token consumption;
 - retry reacquisition after an upstream 429;
 - a separate host/principal/model cooldown gate for immediate 429 recovery;
-- process-local counters through `/healthz`.
+- process-local counters through `/api/healthz`.
 
 The immediate retry gate and the token admission queue solve different
 problems. The gate coordinates a short upstream cooldown. Adaptive decay belongs
@@ -229,7 +229,7 @@ Do not add a background timer per key. Advance recovery when:
 
 - a request is about to acquire token admission;
 - a successful upstream response records clean evidence;
-- `/healthz` takes its aggregate snapshot, if doing so can remain read-only.
+- `/api/healthz` takes its aggregate snapshot, if doing so can remain read-only.
 
 Lazy evaluation keeps idle keys free of tasks and wakeups. A key must advance by
 at most one stage for each qualifying clean-evidence cycle, regardless of how
@@ -320,16 +320,16 @@ Mount metrics routes on the existing Axum router and listener. The dashboard
 uses the same configured `--host` and `--port`:
 
 - `GET /metrics`: embedded graphical dashboard;
-- `GET /metrics/snapshot`: current bounded JSON snapshot;
-- `GET /metrics/events`: server-sent metric updates;
-- `GET /metrics/prometheus`: Prometheus text exposition.
+- `GET /api/metrics/snapshot`: current bounded JSON snapshot;
+- `GET /api/metrics/events`: server-sent metric updates;
+- `GET /api/metrics/prometheus`: Prometheus text exposition.
 
 SSE is sufficient because updates flow only from the process to the browser. Do
 not add WebSockets or a client command channel. The frontend refreshes the
 snapshot once, subscribes to SSE, reconnects with bounded backoff, and pauses
 rendering when the page is hidden without stopping collection.
 
-Keep `/healthz` small and machine-oriented. Extend its process-local counters
+Keep `/api/healthz` small and machine-oriented. Extend its process-local counters
 with:
 
 - `automaticTightenings`;
@@ -515,7 +515,7 @@ Never store metric snapshots, model history, request details, or identities in
 browser storage.
 
 Keep periodic SSE snapshots aggregate-only. When a model is selected, fetch
-`/metrics/snapshot?model=<resolved-model>` so the response includes that one
+`/api/metrics/snapshot?model=<resolved-model>` so the response includes that one
 model's bounded history without broadcasting every retained model history to
 every dashboard every five seconds.
 

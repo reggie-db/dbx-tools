@@ -4,7 +4,7 @@ import { arch, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { log } from "@dbx-tools/shared-core";
+import { json, log, object } from "@dbx-tools/shared-core";
 import { parse, stringify } from "smol-toml";
 import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
@@ -94,17 +94,90 @@ function cargoVersionExists(crateName: string, version: string, registry: string
   ]);
 }
 
+interface CargoMetadataPackage {
+  dependencies: Array<{ name: string; source?: string | null }>;
+  manifest_path: string;
+  name: string;
+}
+
+function orderedCargoManifests(config: RustWorkspaceMapping): string[] {
+  const configured = new Set(config.crates.map((crate) => resolve(repoRoot, crate, "Cargo.toml")));
+  const metadata = json.parseRecord(
+    run("cargo", ["metadata", "--format-version", "1", "--no-deps", "--locked"], true),
+  );
+  if (!metadata || !Array.isArray(metadata.packages)) {
+    throw new Error("Cargo metadata did not return workspace packages");
+  }
+  const packages = metadata.packages.filter(object.isRecord).map((pkg) => {
+    if (
+      typeof pkg.name !== "string" ||
+      typeof pkg.manifest_path !== "string" ||
+      !Array.isArray(pkg.dependencies)
+    ) {
+      throw new Error("Cargo metadata returned an invalid package");
+    }
+    return {
+      name: pkg.name,
+      manifest_path: resolve(pkg.manifest_path),
+      dependencies: pkg.dependencies.filter(object.isRecord).map((dependency) => {
+        if (typeof dependency.name !== "string") {
+          throw new Error(`Cargo metadata returned an invalid dependency for ${pkg.name}`);
+        }
+        return {
+          name: dependency.name,
+          source: typeof dependency.source === "string" ? dependency.source : null,
+        };
+      }),
+    } satisfies CargoMetadataPackage;
+  });
+  const publishable = new Map(
+    packages
+      .filter((pkg) => configured.has(pkg.manifest_path))
+      .filter((pkg) => {
+        const manifest = parse(readFileSync(pkg.manifest_path, "utf8")) as {
+          package?: { publish?: boolean };
+        };
+        return manifest.package?.publish !== false;
+      })
+      .map((pkg) => [pkg.name, pkg]),
+  );
+  const ordered: CargoMetadataPackage[] = [];
+  const visiting = new Set<string>();
+  const completed = new Set<string>();
+  const visit = (pkg: CargoMetadataPackage): void => {
+    if (completed.has(pkg.name)) return;
+    if (visiting.has(pkg.name)) {
+      throw new Error(`Cyclic Cargo publication dependency: ${pkg.name}`);
+    }
+    visiting.add(pkg.name);
+    for (const dependency of pkg.dependencies) {
+      if (dependency.source) continue;
+      const workspaceDependency = publishable.get(dependency.name);
+      if (workspaceDependency) visit(workspaceDependency);
+    }
+    visiting.delete(pkg.name);
+    completed.add(pkg.name);
+    ordered.push(pkg);
+  };
+  for (const pkg of publishable.values()) visit(pkg);
+  return ordered.map((pkg) => pkg.manifest_path);
+}
+
 function publishCargo(config: RustWorkspaceMapping, registry: string, version: string): void {
-  const manifests = config.crates
-    .map((crate) => resolve(repoRoot, crate, "Cargo.toml"))
-    .filter((manifest) => !/^publish = false$/m.test(readFileSync(manifest, "utf8")));
+  const manifests = orderedCargoManifests(config);
   const originals = new Map(
     manifests.map((manifest) => [manifest, readFileSync(manifest, "utf8")]),
   );
   try {
-    const crateNames = manifests.map(
-      (manifest) => readFileSync(manifest, "utf8").match(/^name = "([^"]+)"$/m)?.[1],
-    );
+    const crateNames = manifests.map((manifest) => {
+      const document = parse(readFileSync(manifest, "utf8")) as {
+        package?: { name?: string };
+      };
+      if (!document.package?.name) {
+        throw new Error(`Cargo manifest has no package name: ${manifest}`);
+      }
+      return document.package.name;
+    });
     for (const manifest of manifests) {
       const mode = statSync(manifest).mode;
       const document = parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;

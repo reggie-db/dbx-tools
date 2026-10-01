@@ -241,7 +241,7 @@ fn same_auth_target(selected: &RawProfile, candidate: &RawProfile) -> bool {
             .is_none_or(|workspace_id| candidate.workspace_id.as_ref() == Some(workspace_id))
 }
 
-fn normalize_host(value: &str) -> Result<Url> {
+pub(super) fn normalize_host(value: &str) -> Result<Url> {
     let value = value.trim().trim_end_matches('/');
     let value = if value.starts_with("http://") || value.starts_with("https://") {
         value.to_owned()

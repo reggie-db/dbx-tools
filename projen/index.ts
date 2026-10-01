@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.9.7";
+export const PACKAGE_VERSION = "0.9.8";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -36,6 +36,7 @@ export * as tsconfig from "./src/tsconfig.ts";
 export * as uniffi from "./src/uniffi.ts";
 export * as vscode from "./src/vscode.ts";
 export * as watch from "./src/watch.ts";
+export * as workspaceLock from "./src/workspace-lock.ts";
 export * as workspaceVersion from "./src/workspace-version.ts";
 export { BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE, BUN_APP_OVERRIDES, RootBunfigFile, BunfigFile, BunDevServerFile, BunBuildFile } from "./src/bun-app.ts";
 export { BUN_VERSION } from "./src/bun-workflow.ts";

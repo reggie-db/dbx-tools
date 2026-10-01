@@ -128,6 +128,7 @@ interface RustReleaseBinaryPlan {
   readonly crate: string;
   readonly binary: string;
   readonly excludedOs: readonly RustReleaseOs[];
+  readonly requiredFeatures: readonly string[];
 }
 
 type RustReleaseTargetPlan = Readonly<Record<string, string | boolean | number>>;
@@ -165,13 +166,26 @@ export function planRustRelease(
     nodePackage: binding.nodePackage ?? "",
     pythonPackage: binding.pythonPackage ?? "",
   }));
-  const releaseBinaries = packages
-    .filter((pkg) => pkg.packageOptions.release)
-    .map((pkg) => ({
-      crate: pkg.crateName,
-      binary: pkg.packageOptions.binaryName ?? pkg.crateName,
-      excludedOs: pkg.packageOptions.releaseExcludeOs ?? [],
-    }));
+  const releaseBinaries = packages.flatMap((pkg) => [
+    ...(pkg.packageOptions.release
+      ? [
+          {
+            crate: pkg.crateName,
+            binary: pkg.packageOptions.binaryName ?? pkg.crateName,
+            excludedOs: pkg.packageOptions.releaseExcludeOs ?? [],
+            requiredFeatures: [],
+          },
+        ]
+      : []),
+    ...(pkg.packageOptions.binaries ?? [])
+      .filter((binary) => binary.release)
+      .map((binary) => ({
+        crate: pkg.crateName,
+        binary: binary.name,
+        excludedOs: binary.releaseExcludeOs ?? [],
+        requiredFeatures: binary.requiredFeatures ?? [],
+      })),
+  ]);
   const publicCrates = orderRustBindings(
     packages
       .filter((pkg) => !pkg.packageOptions.private)
@@ -338,7 +352,31 @@ function rustBinaryCommands(plan: RustReleasePlan, independent: boolean): string
   });
 }
 
+function rustAdditionalBinaryBuildCommands(plan: RustReleasePlan, independent: boolean): string[] {
+  return plan.releaseBinaries
+    .filter((binary) => binary.requiredFeatures.length)
+    .flatMap((binary) => {
+      const command = `cargo build --release --package "${binary.crate}" --bin "${binary.binary}" --features "${binary.requiredFeatures.join(",")}"${
+        plan.usesCargoLock ? " --locked" : ""
+      } --target "\${{ matrix.cargo }}"`;
+      const excludedCondition = binary.excludedOs
+        .map((os) => `[ "\${{ matrix.os }}" != "${os}" ]`)
+        .join(" && ");
+      const platformCommands = excludedCondition
+        ? [`if ${excludedCondition}; then`, `  ${command}`, "fi"]
+        : [command];
+      if (!independent) return platformCommands;
+      const unit = defaultReleaseUnitId("rust", binary.crate);
+      return [
+        `if jq -e --arg unit "${unit}" '.units[] | select(.id == $unit)' dist/release-plan.json >/dev/null; then`,
+        ...platformCommands.map((line) => `  ${line}`),
+        "fi",
+      ];
+    });
+}
+
 function rustArtifactSteps(plan: RustReleasePlan): JobStep[] {
+  const binaryCrates = [...new Set(plan.releaseBinaries.map((binary) => binary.crate))];
   return [
     ...plan.bindings.flatMap((binding) => [
       ...(binding.node
@@ -368,24 +406,35 @@ function rustArtifactSteps(plan: RustReleasePlan): JobStep[] {
           ]
         : []),
     ]),
-    ...plan.releaseBinaries.map((pkg) => ({
-      name: `Upload ${pkg.crate} release binary`,
-      uses: "actions/upload-artifact@v7",
-      ...(rustReleaseBinaryCondition(pkg.excludedOs)
-        ? { if: rustReleaseBinaryCondition(pkg.excludedOs) }
-        : {}),
-      with: {
-        name: `${pkg.crate}-\${{ matrix.node }}-binary`,
-        path: `dist/release/${pkg.crate}/\${{ matrix.node }}/binary/*`,
-        "retention-days": 7,
-      },
-    })),
+    ...binaryCrates.map((crate) => {
+      const binaries = plan.releaseBinaries.filter((binary) => binary.crate === crate);
+      const excludedOs =
+        binaries[0]?.excludedOs.filter((os) =>
+          binaries.every((binary) => binary.excludedOs.includes(os)),
+        ) ?? [];
+      return {
+        name: `Upload ${crate} release binary`,
+        uses: "actions/upload-artifact@v7",
+        ...(rustReleaseBinaryCondition(excludedOs)
+          ? { if: rustReleaseBinaryCondition(excludedOs) }
+          : {}),
+        with: {
+          name: `${crate}-\${{ matrix.node }}-binary`,
+          path: `dist/release/${crate}/\${{ matrix.node }}/binary/*`,
+          "retention-days": 7,
+        },
+      };
+    }),
   ];
 }
 
 export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep[]): Job {
   const bindingCommands = rustBindingCommands(plan, Boolean(independentSetup));
   const binaryCommands = rustBinaryCommands(plan, Boolean(independentSetup));
+  const additionalBinaryBuildCommands = rustAdditionalBinaryBuildCommands(
+    plan,
+    Boolean(independentSetup),
+  );
   return {
     if: independentSetup
       ? "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'docs') }}"
@@ -524,16 +573,19 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
         },
         run: timedBash(
           "rust_workspace",
-          independentSetup
-            ? [
-                "mapfile -t PACKAGES < <(jq -r '.[]' <<<'${{ toJSON(matrix.packages) }}')",
-                "PACKAGE_ARGS=()",
-                'for PACKAGE in "${PACKAGES[@]}"; do PACKAGE_ARGS+=(--package "$PACKAGE"); done',
-                `cargo build --release --timings "\${PACKAGE_ARGS[@]}"${plan.usesCargoLock ? " --locked" : ""} --target "\${{ matrix.cargo }}"`,
-              ].join("\n")
-            : `cargo build --release --timings --workspace${plan.usesCargoLock ? " --locked" : ""} --target "\${{ matrix.cargo }}"${
-                plan.hasReleaseExclusions ? " ${{ matrix.cargoExcludes }}" : ""
-              }`,
+          [
+            independentSetup
+              ? [
+                  "mapfile -t PACKAGES < <(jq -r '.[]' <<<'${{ toJSON(matrix.packages) }}')",
+                  "PACKAGE_ARGS=()",
+                  'for PACKAGE in "${PACKAGES[@]}"; do PACKAGE_ARGS+=(--package "$PACKAGE"); done',
+                  `cargo build --release --timings "\${PACKAGE_ARGS[@]}"${plan.usesCargoLock ? " --locked" : ""} --target "\${{ matrix.cargo }}"`,
+                ].join("\n")
+              : `cargo build --release --timings --workspace${plan.usesCargoLock ? " --locked" : ""} --target "\${{ matrix.cargo }}"${
+                  plan.hasReleaseExclusions ? " ${{ matrix.cargoExcludes }}" : ""
+                }`,
+            ...additionalBinaryBuildCommands,
+          ].join("\n"),
         ),
       },
       ...(!independentSetup

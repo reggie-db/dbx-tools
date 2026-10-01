@@ -26,6 +26,19 @@ export interface RustCliOptions {
   readonly command?: string;
   /** Root CLI help text. Defaults to the Rust package description. */
   readonly description?: string;
+  /** Keep the binary installable by registry lookup without exposing a root command. */
+  readonly hidden?: boolean;
+}
+
+/** One explicit Cargo binary target and its optional release registration. */
+export interface RustBinaryOptions {
+  readonly name: string;
+  readonly path: string;
+  readonly requiredFeatures?: readonly string[];
+  readonly release?: boolean;
+  readonly releaseExcludeOs?: readonly RustReleaseOs[];
+  readonly description?: string;
+  readonly cli?: boolean | RustCliOptions;
 }
 
 /** Explicit Cargo example target and the feature gate required to compile it. */
@@ -47,6 +60,8 @@ export interface RustCrateOptions {
   /** Omit this crate and any release binary artifact from these operating systems. */
   readonly releaseExcludeOs?: readonly RustReleaseOs[];
   readonly dependencies?: Readonly<Record<string, CargoDependency>>;
+  /** Cargo dependencies scoped by a target cfg expression. */
+  readonly targetDependencies?: Readonly<Record<string, Readonly<Record<string, CargoDependency>>>>;
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
   readonly features?: Readonly<Record<string, readonly string[]>>;
   readonly defaultFeatures?: readonly string[];
@@ -54,6 +69,10 @@ export interface RustCrateOptions {
   readonly examples?: readonly CargoExampleOptions[];
   /** Cargo and release executable name. Defaults to the generated package name. */
   readonly binaryName?: string;
+  /** Additional Cargo binary targets owned by this crate. */
+  readonly binaries?: readonly RustBinaryOptions[];
+  /** Cargo binary selected by `cargo run` when this crate has multiple binaries. */
+  readonly defaultRun?: string;
   /** Publish this release binary through the generated `dbx` command registry. */
   readonly cli?: boolean | RustCliOptions;
   readonly bindings?: readonly ("node" | "python")[];
@@ -187,10 +206,12 @@ function packageOptions(
     ...(options.release !== undefined ? { release: options.release } : {}),
     ...(options.releaseExcludeOs ? { releaseExcludeOs: options.releaseExcludeOs } : {}),
     ...(options.dependencies ? { dependencies: options.dependencies } : {}),
+    ...(options.targetDependencies ? { targetDependencies: options.targetDependencies } : {}),
     ...(options.devDependencies ? { devDependencies: options.devDependencies } : {}),
     ...(options.features ? { features: options.features } : {}),
     ...(options.defaultFeatures ? { defaultFeatures: options.defaultFeatures } : {}),
     ...(options.binaryName ? { binaryName: options.binaryName } : {}),
+    ...(options.binaries ? { binaries: options.binaries } : {}),
     ...(options.cli !== undefined ? { cli: options.cli } : {}),
     ...(options.bindings ? { bindings: options.bindings } : {}),
     ...(options.uniffiConfig ? { uniffiConfig: options.uniffiConfig } : {}),
@@ -244,6 +265,7 @@ export class RustProject extends Project implements DBXToolsProject {
       ...(!workspace ? { workspace: {} } : {}),
       package: {
         name: this.crateName,
+        ...(options.defaultRun ? { "default-run": options.defaultRun } : {}),
         version: inheritedCargoValue(workspace, options.version, "0.1.0"),
         edition: inheritedCargoValue(workspace, options.edition, "2021"),
         "rust-version": inheritedCargoValue(workspace, options.rustVersion, "1.82"),
@@ -272,6 +294,13 @@ export class RustProject extends Project implements DBXToolsProject {
                 ? [{ name: `${this.crateName}-uniffi-bindgen`, path: "uniffi-bindgen.rs" }]
                 : []),
               ...(binary ? [{ name: binaryName, path: "src/main.rs" }] : []),
+              ...(options.binaries ?? []).map((target) => ({
+                name: target.name,
+                path: target.path,
+                ...(target.requiredFeatures?.length
+                  ? { "required-features": [...target.requiredFeatures] }
+                  : {}),
+              })),
             ],
           }
         : {}),
@@ -300,6 +329,23 @@ export class RustProject extends Project implements DBXToolsProject {
               Object.entries(options.dependencies).map(([name, value]) => [
                 name,
                 cargoDependency(value, dependencyVersion),
+              ]),
+            ),
+          }
+        : {}),
+      ...(options.targetDependencies
+        ? {
+            target: Object.fromEntries(
+              Object.entries(options.targetDependencies).map(([target, dependencies]) => [
+                target,
+                {
+                  dependencies: Object.fromEntries(
+                    Object.entries(dependencies).map(([name, value]) => [
+                      name,
+                      cargoDependency(value, dependencyVersion),
+                    ]),
+                  ),
+                },
               ]),
             ),
           }

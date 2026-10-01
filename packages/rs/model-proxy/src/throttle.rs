@@ -11,11 +11,12 @@ use std::{
 };
 
 use clap::ValueEnum;
+use dbx_tools_core::DatabricksWorkspaceIdentity;
 use dbx_tools_model::{ModelClass, ModelRateLimitCatalogue};
 use serde_json::Value;
 use tokenx_rs::estimate_token_count;
 use tokio::{
-    sync::{Mutex, Notify},
+    sync::{watch, Mutex, Notify},
     time::Instant,
 };
 
@@ -28,6 +29,8 @@ const CALIBRATION_MIN_SAMPLES: u32 = 3;
 const CALIBRATION_DEADBAND: f64 = 0.05;
 const CALIBRATION_MIN_FACTOR: f64 = 0.25;
 const CALIBRATION_MAX_FACTOR: f64 = 4.0;
+const DEFAULT_THROTTLE_WORKSPACES: usize = 16;
+const DEFAULT_THROTTLE_IDLE_TTL: Duration = Duration::from_secs(30 * 60);
 
 /// Activation policy for process-local pay-per-token admission control.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
@@ -69,6 +72,74 @@ pub(crate) struct ThrottleConfig {
     pub(crate) documented_limits: ModelRateLimitCatalogue,
 }
 
+/// Bounded process-local throttle state shared across runtime generations.
+#[derive(Clone, Debug)]
+pub(crate) struct ThrottlePool {
+    entries: Arc<Mutex<HashMap<DatabricksWorkspaceIdentity, ThrottlePoolEntry>>>,
+    max_workspaces: usize,
+    idle_ttl: Duration,
+}
+
+#[derive(Clone, Debug)]
+struct ThrottlePoolEntry {
+    throttle: RequestThrottle,
+    last_used: Instant,
+}
+
+impl Default for ThrottlePool {
+    fn default() -> Self {
+        Self {
+            entries: Arc::default(),
+            max_workspaces: DEFAULT_THROTTLE_WORKSPACES,
+            idle_ttl: DEFAULT_THROTTLE_IDLE_TTL,
+        }
+    }
+}
+
+impl ThrottlePool {
+    /// Resolve reusable throttle state for one stable workspace identity.
+    pub(crate) async fn resolve(
+        &self,
+        workspace: DatabricksWorkspaceIdentity,
+        config: ThrottleConfig,
+    ) -> RequestThrottle {
+        let now = Instant::now();
+        let mut entries = self.entries.lock().await;
+        entries.retain(|_, entry| {
+            now.duration_since(entry.last_used) < self.idle_ttl || !entry.throttle.pool_only()
+        });
+        if let Some(entry) = entries.get_mut(&workspace) {
+            entry.last_used = now;
+            return entry.throttle.clone();
+        }
+        while entries.len() >= self.max_workspaces {
+            let candidate = entries
+                .iter()
+                .filter(|(_, entry)| entry.throttle.pool_only())
+                .min_by_key(|(_, entry)| entry.last_used)
+                .map(|(identity, _)| identity.clone());
+            let Some(candidate) = candidate else {
+                break;
+            };
+            entries.remove(&candidate);
+        }
+        let throttle = RequestThrottle::new(&workspace.key(), config);
+        entries.insert(
+            workspace,
+            ThrottlePoolEntry {
+                throttle: throttle.clone(),
+                last_used: now,
+            },
+        );
+        throttle
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn len(&self) -> usize {
+        self.entries.lock().await.len()
+    }
+}
+
 /// Token estimate and time spent waiting for a local reservation.
 #[derive(Clone, Debug)]
 pub(crate) struct ThrottleAcquisition {
@@ -103,9 +174,17 @@ pub(crate) struct ThrottleAcquisition {
     reservation: Option<ThrottleReservation>,
 }
 
-/// Local rejection for a request larger than its active input-token budget.
+/// Reason a local token admission attempt did not acquire a reservation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct OversizedInput {
+pub(crate) enum ThrottleRejectionKind {
+    OversizedInput,
+    WaitCancelled,
+}
+
+/// Local token admission rejection details.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ThrottleRejection {
+    pub(crate) kind: ThrottleRejectionKind,
     /// Calibrated input estimate.
     pub(crate) estimated_input_tokens: u64,
     /// Active input-token budget.
@@ -114,6 +193,47 @@ pub(crate) struct OversizedInput {
     pub(crate) input_window_used_before: u64,
     /// Configured activation mode.
     pub(crate) mode: RateLimitMode,
+}
+
+impl ThrottleRejection {
+    fn oversized(
+        estimated_input_tokens: u64,
+        input_limit: u64,
+        input_window_used_before: u64,
+        mode: RateLimitMode,
+    ) -> Self {
+        Self {
+            kind: ThrottleRejectionKind::OversizedInput,
+            estimated_input_tokens,
+            input_limit,
+            input_window_used_before,
+            mode,
+        }
+    }
+
+    fn wait_cancelled(
+        estimate: TokenEstimate,
+        configured_limits: TokenLimits,
+        mode: RateLimitMode,
+    ) -> Self {
+        Self {
+            kind: ThrottleRejectionKind::WaitCancelled,
+            estimated_input_tokens: estimate.input,
+            input_limit: configured_limits
+                .input
+                .map(|limits| limits.request_ceiling)
+                .unwrap_or_default(),
+            input_window_used_before: 0,
+            mode,
+        }
+    }
+}
+
+/// Result of cancelling current token-admission waiters for one exact model.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ThrottleCancellation {
+    pub(crate) model: String,
+    pub(crate) cancelled_waiters: u64,
 }
 
 /// Result of evaluating an upstream 429 for automatic token admission.
@@ -222,6 +342,15 @@ impl RequestThrottle {
         self
     }
 
+    fn pool_only(&self) -> bool {
+        Arc::strong_count(&self.queues) == 1 && Arc::strong_count(&self.counters) == 1
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_state_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.queues, &other.queues) && Arc::ptr_eq(&self.counters, &other.counters)
+    }
+
     /// Estimate the model-visible input and requested output reservation.
     pub(crate) fn estimate(&self, model: &str, request: &Value) -> TokenEstimate {
         token_estimate(model, request)
@@ -233,11 +362,13 @@ impl RequestThrottle {
         model: &str,
         model_class: Option<ModelClass>,
         estimate: TokenEstimate,
-    ) -> Result<ThrottleAcquisition, OversizedInput> {
+    ) -> Result<ThrottleAcquisition, ThrottleRejection> {
         let queue = self.queue(model).await;
+        let cancellation_generation = *queue.cancellation.borrow();
         let configured_limits = self.limits(model, model_class);
-        let result = reserve(
+        let result = reserve_cancellable(
             Arc::clone(&queue),
+            cancellation_generation,
             estimate,
             configured_limits,
             self.mode,
@@ -274,11 +405,45 @@ impl RequestThrottle {
                 Ok(acquisition)
             }
             Err(error) => {
-                self.counters
-                    .oversized_rejections
-                    .fetch_add(1, Ordering::Relaxed);
+                match error.kind {
+                    ThrottleRejectionKind::OversizedInput => {
+                        self.counters
+                            .oversized_rejections
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    ThrottleRejectionKind::WaitCancelled => {
+                        self.counters
+                            .wait_cancellations
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                }
                 Err(error)
             }
+        }
+    }
+
+    /// Cancel current FIFO and token-capacity waiters for one exact model.
+    pub(crate) async fn cancel_waits(&self, model: &str) -> ThrottleCancellation {
+        let key = ThrottleKey {
+            workspace: self.workspace.clone(),
+            model: Arc::from(model),
+        };
+        let queue = self.queues.lock().await.get(&key).cloned();
+        let Some(queue) = queue else {
+            return ThrottleCancellation {
+                model: model.to_owned(),
+                cancelled_waiters: 0,
+            };
+        };
+        let cancelled_waiters = queue.queue_depth.load(Ordering::Acquire);
+        if cancelled_waiters > 0 {
+            let generation = (*queue.cancellation.borrow()).wrapping_add(1);
+            queue.cancellation.send_replace(generation);
+            queue.notify.notify_waiters();
+        }
+        ThrottleCancellation {
+            model: model.to_owned(),
+            cancelled_waiters,
         }
     }
 
@@ -456,6 +621,7 @@ impl RequestThrottle {
                 .load(Ordering::Relaxed),
             auto_active_keys,
             admission_waits: self.counters.admission_waits.load(Ordering::Relaxed),
+            wait_cancellations: self.counters.wait_cancellations.load(Ordering::Relaxed),
             oversized_rejections: self.counters.oversized_rejections.load(Ordering::Relaxed),
             input_429_after_admission: self
                 .counters
@@ -509,6 +675,8 @@ impl RequestThrottle {
                 input_window_used: effective_input_budget.map(|_| state.input.reserved_tokens),
                 penalty_basis_points,
                 queue_depth: queue.queue_depth.load(Ordering::Relaxed),
+                waiters: queue.queue_depth.load(Ordering::Relaxed),
+                wait_cancellations: queue.wait_cancellations.load(Ordering::Relaxed),
             });
         }
         snapshots
@@ -571,6 +739,7 @@ struct ThrottleCounters {
     automatic_deactivations: AtomicU64,
     automatic_reactivations: AtomicU64,
     admission_waits: AtomicU64,
+    wait_cancellations: AtomicU64,
     oversized_rejections: AtomicU64,
     input_429_after_admission: AtomicU64,
     retry_reacquisitions: AtomicU64,
@@ -587,6 +756,7 @@ pub(crate) struct ThrottleCounterSnapshot {
     pub(crate) automatic_reactivations: u64,
     pub(crate) auto_active_keys: u64,
     pub(crate) admission_waits: u64,
+    pub(crate) wait_cancellations: u64,
     pub(crate) oversized_rejections: u64,
     pub(crate) input_429_after_admission: u64,
     pub(crate) retry_reacquisitions: u64,
@@ -603,9 +773,11 @@ pub(crate) struct ThrottleModelSnapshot {
     pub(crate) input_window_used: Option<u64>,
     pub(crate) penalty_basis_points: u16,
     pub(crate) queue_depth: u64,
+    pub(crate) waiters: u64,
+    pub(crate) wait_cancellations: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct TokenQueue {
     /// Admission is acquired before state; no code may acquire them in reverse order.
     admission: Mutex<()>,
@@ -613,6 +785,23 @@ struct TokenQueue {
     cold_warning: AtomicBool,
     state: Mutex<WindowState>,
     notify: Notify,
+    cancellation: watch::Sender<u64>,
+    wait_cancellations: AtomicU64,
+}
+
+impl Default for TokenQueue {
+    fn default() -> Self {
+        let (cancellation, _) = watch::channel(0);
+        Self {
+            admission: Mutex::default(),
+            queue_depth: AtomicU64::new(0),
+            cold_warning: AtomicBool::new(false),
+            state: Mutex::default(),
+            notify: Notify::new(),
+            cancellation,
+            wait_cancellations: AtomicU64::new(0),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -805,18 +994,55 @@ impl InputTokenLimits {
     }
 }
 
+#[cfg(test)]
 async fn reserve(
     queue: Arc<TokenQueue>,
     estimate: TokenEstimate,
     configured_limits: TokenLimits,
     mode: RateLimitMode,
     window: Duration,
-) -> Result<ThrottleAcquisition, OversizedInput> {
+) -> Result<ThrottleAcquisition, ThrottleRejection> {
+    let cancellation_generation = *queue.cancellation.borrow();
+    reserve_cancellable(
+        queue,
+        cancellation_generation,
+        estimate,
+        configured_limits,
+        mode,
+        window,
+    )
+    .await
+}
+
+async fn reserve_cancellable(
+    queue: Arc<TokenQueue>,
+    cancellation_generation: u64,
+    estimate: TokenEstimate,
+    configured_limits: TokenLimits,
+    mode: RateLimitMode,
+    window: Duration,
+) -> Result<ThrottleAcquisition, ThrottleRejection> {
     let started = Instant::now();
     let queue_depth = queue.queue_depth.fetch_add(1, Ordering::Relaxed) + 1;
     let _queue_depth = QueueDepthGuard(Arc::clone(&queue));
-    let _admission = queue.admission.lock().await;
+    let mut cancellation = queue.cancellation.subscribe();
+    let _admission = tokio::select! {
+        biased;
+        () = cancellation_changed(&mut cancellation, cancellation_generation) => {
+            queue.wait_cancellations.fetch_add(1, Ordering::Relaxed);
+            return Err(ThrottleRejection::wait_cancelled(estimate, configured_limits, mode));
+        }
+        admission = queue.admission.lock() => admission,
+    };
     loop {
+        if *cancellation.borrow() != cancellation_generation {
+            queue.wait_cancellations.fetch_add(1, Ordering::Relaxed);
+            return Err(ThrottleRejection::wait_cancelled(
+                estimate,
+                configured_limits,
+                mode,
+            ));
+        }
         let notified = queue.notify.notified();
         let delay = {
             let now = Instant::now();
@@ -850,12 +1076,12 @@ async fn reserve(
             let input_window_used_before = state.input.reserved_tokens;
             if let Some(input_limits) = limits.input {
                 if adjusted_input > input_limits.request_ceiling {
-                    return Err(OversizedInput {
-                        estimated_input_tokens: adjusted_input,
-                        input_limit: input_limits.request_ceiling,
+                    return Err(ThrottleRejection::oversized(
+                        adjusted_input,
+                        input_limits.request_ceiling,
                         input_window_used_before,
                         mode,
-                    });
+                    ));
                 }
             }
             let input_tokens = limits.input.map(|_| adjusted_input).unwrap_or_default();
@@ -907,10 +1133,28 @@ async fn reserve(
         };
         if let Some(delay) = delay {
             tokio::select! {
-                () = tokio::time::sleep(delay) => {}
+                biased;
+                () = cancellation_changed(&mut cancellation, cancellation_generation) => {
+                    queue.wait_cancellations.fetch_add(1, Ordering::Relaxed);
+                    return Err(ThrottleRejection::wait_cancelled(
+                        estimate,
+                        configured_limits,
+                        mode,
+                    ));
+                }
                 () = notified => {}
+                () = tokio::time::sleep(delay) => {}
             }
         }
+    }
+}
+
+async fn cancellation_changed(receiver: &mut watch::Receiver<u64>, generation: u64) {
+    while *receiver.borrow_and_update() == generation {
+        receiver
+            .changed()
+            .await
+            .expect("token queue cancellation sender remains open");
     }
 }
 
@@ -1628,8 +1872,148 @@ mod tests {
                 input_window_used: Some(20),
                 penalty_basis_points: 1_000,
                 queue_depth: 0,
+                waiters: 0,
+                wait_cancellations: 0,
             }]
         );
+    }
+
+    #[tokio::test]
+    async fn operator_cancellation_releases_fifo_and_capacity_waiters() {
+        let throttle = RequestThrottle::new(
+            "workspace",
+            ThrottleConfig {
+                input_tokens_per_minute: NonZeroU64::new(100),
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: RateLimitMode::On,
+                documented_limits: Default::default(),
+            },
+        );
+        let reservation = throttle
+            .acquire(
+                "model",
+                None,
+                TokenEstimate {
+                    input: 100,
+                    output: 0,
+                },
+            )
+            .await
+            .unwrap();
+        let first_throttle = throttle.clone();
+        let first = tokio::spawn(async move {
+            first_throttle
+                .acquire(
+                    "model",
+                    None,
+                    TokenEstimate {
+                        input: 1,
+                        output: 0,
+                    },
+                )
+                .await
+        });
+        let second_throttle = throttle.clone();
+        let second = tokio::spawn(async move {
+            second_throttle
+                .acquire(
+                    "model",
+                    None,
+                    TokenEstimate {
+                        input: 1,
+                        output: 0,
+                    },
+                )
+                .await
+        });
+        let queue = throttle.queue("model").await;
+        tokio::time::timeout(Duration::from_millis(100), async {
+            while queue.queue_depth.load(Ordering::Acquire) < 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+
+        let cancellation = throttle.cancel_waits("model").await;
+        let first = first.await.unwrap().unwrap_err();
+        let second = second.await.unwrap().unwrap_err();
+
+        assert_eq!(cancellation.cancelled_waiters, 2);
+        assert_eq!(first.kind, ThrottleRejectionKind::WaitCancelled);
+        assert_eq!(second.kind, ThrottleRejectionKind::WaitCancelled);
+        assert_eq!(queue.queue_depth.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            reservation
+                .reservation
+                .as_ref()
+                .unwrap()
+                .queue
+                .state
+                .lock()
+                .await
+                .input
+                .reserved_tokens,
+            100
+        );
+        assert_eq!(throttle.counters().await.wait_cancellations, 2);
+        reservation.release().await;
+    }
+
+    #[tokio::test]
+    async fn operator_cancellation_is_isolated_by_exact_model() {
+        let throttle = RequestThrottle::new(
+            "workspace",
+            ThrottleConfig {
+                input_tokens_per_minute: NonZeroU64::new(100),
+                output_tokens_per_minute: None,
+                provisioned_throughput: false,
+                mode: RateLimitMode::On,
+                documented_limits: Default::default(),
+            },
+        );
+        let reservation = throttle
+            .acquire(
+                "model-b",
+                None,
+                TokenEstimate {
+                    input: 100,
+                    output: 0,
+                },
+            )
+            .await
+            .unwrap();
+        let waiting_throttle = throttle.clone();
+        let mut waiting = tokio::spawn(async move {
+            waiting_throttle
+                .acquire(
+                    "model-b",
+                    None,
+                    TokenEstimate {
+                        input: 1,
+                        output: 0,
+                    },
+                )
+                .await
+        });
+        let queue = throttle.queue("model-b").await;
+        tokio::time::timeout(Duration::from_millis(100), async {
+            while queue.queue_depth.load(Ordering::Acquire) < 1 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(throttle.cancel_waits("model-a").await.cancelled_waiters, 0);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut waiting)
+                .await
+                .is_err()
+        );
+        reservation.release().await;
+        assert!(waiting.await.unwrap().is_ok());
     }
 
     #[test]

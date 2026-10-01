@@ -2,12 +2,15 @@ mod config_file;
 mod policy;
 mod resolve;
 
-use std::{fmt, path::PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use sha2::{Digest, Sha256};
 use url::Url;
 
-pub use config_file::{config_profile_exists, resolve_config_file};
+pub use config_file::{config_profile_exists, invalidate_config_file, resolve_config_file};
 pub(super) use policy::{
     app_service_principal_available, request_obo_token, resolve_app_auth_type,
 };
@@ -25,7 +28,7 @@ pub const AUTH_TYPE_APP_SP: &str = "app_sp";
 const SETTINGS_SECTION: &str = "__settings__";
 
 /// Authentication strategy selected from Databricks configuration.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, uniffi::Enum)]
 pub enum AuthKind {
     /// Interactive user authorization with refresh-token storage.
     #[default]
@@ -41,7 +44,7 @@ pub enum AuthKind {
 }
 
 /// Scope of the Databricks authentication target.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, uniffi::Enum)]
 pub enum TargetKind {
     /// A Databricks workspace.
     #[default]
@@ -50,6 +53,87 @@ pub enum TargetKind {
     Account,
     /// Unified authentication discovered for a Databricks account.
     Unified,
+}
+
+/// Secret-free metadata discovered from one Databricks CLI profile.
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct DatabricksProfileSummary {
+    /// Databricks CLI profile name.
+    pub name: String,
+    /// Configured workspace or accounts host.
+    pub host: Option<String>,
+    /// Account identifier associated with the profile.
+    pub account_id: Option<String>,
+    /// Workspace identifier associated with the profile.
+    pub workspace_id: Option<String>,
+    /// Target inferred from the configured host and account metadata.
+    pub target: TargetKind,
+    /// Authentication kind inferred without returning credential values.
+    pub auth_kind: AuthKind,
+}
+
+/// Enumerate secret-free profiles from the cached Databricks CLI configuration.
+///
+/// Set `refresh` after an external process such as `databricks auth login`
+/// changes the profile file. Ordinary calls preserve the process-wide parsed
+/// configuration cache.
+pub fn list_config_profiles(
+    config_file: Option<&Path>,
+    refresh: bool,
+) -> crate::Result<Vec<DatabricksProfileSummary>> {
+    if refresh {
+        invalidate_config_file(config_file)?;
+    }
+    let path = resolve_config_file(config_file)?;
+    let Some(config) = config_file::load_config(&path)? else {
+        return Ok(Vec::new());
+    };
+    let mut profiles = config
+        .sections()
+        .into_iter()
+        .filter(|name| name != SETTINGS_SECTION)
+        .map(|name| {
+            let raw = config_file::load_profile(&config, &name);
+            let auth_kind = policy::resolve_auth_kind(
+                raw.auth_type.as_deref(),
+                raw.client_id.as_deref(),
+                raw.client_secret.as_deref(),
+                raw.access_token.as_deref(),
+            )?;
+            let host = raw.host.as_deref().and_then(trimmed);
+            let account_id = raw.account_id.as_deref().and_then(trimmed);
+            let workspace_id = raw.workspace_id.as_deref().and_then(trimmed);
+            Ok(DatabricksProfileSummary {
+                target: inferred_target(host.as_deref(), account_id.as_deref()),
+                name,
+                host,
+                account_id,
+                workspace_id,
+                auth_kind,
+            })
+        })
+        .collect::<crate::Result<Vec<_>>>()?;
+    profiles.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(profiles)
+}
+
+fn inferred_target(host: Option<&str>, account_id: Option<&str>) -> TargetKind {
+    if account_id.is_some()
+        && host
+            .and_then(|value| resolve::normalize_host(value).ok())
+            .and_then(|value| value.host_str().map(str::to_owned))
+            .as_deref()
+            == Some("accounts.cloud.databricks.com")
+    {
+        TargetKind::Account
+    } else {
+        TargetKind::Workspace
+    }
+}
+
+fn trimmed(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_owned())
 }
 
 /// Resolved Databricks profile and authentication strategy.
@@ -309,5 +393,61 @@ mod tests {
         assert!(key.starts_with("service-oauth-m2m-"));
         assert!(!key.contains("credential-value"));
         assert!(!format!("{profile:?}").contains("credential-value"));
+    }
+
+    #[test]
+    fn profile_enumeration_is_secret_free_and_refreshable() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("databrickscfg");
+        std::fs::write(
+            &path,
+            "[workspace]\nhost = https://workspace.example\nworkspace_id = 123\nauth_type = pat\ntoken = sensitive-token\n\
+             [account]\nhost = https://accounts.cloud.databricks.com\naccount_id = account-1\nclient_id = client\nclient_secret = sensitive-secret\n",
+        )
+        .unwrap();
+
+        let profiles = list_config_profiles(Some(&path), false).unwrap();
+        assert_eq!(
+            profiles,
+            vec![
+                DatabricksProfileSummary {
+                    name: "account".into(),
+                    host: Some("https://accounts.cloud.databricks.com".into()),
+                    account_id: Some("account-1".into()),
+                    workspace_id: None,
+                    target: TargetKind::Account,
+                    auth_kind: AuthKind::MachineToMachine,
+                },
+                DatabricksProfileSummary {
+                    name: "workspace".into(),
+                    host: Some("https://workspace.example".into()),
+                    account_id: None,
+                    workspace_id: Some("123".into()),
+                    target: TargetKind::Workspace,
+                    auth_kind: AuthKind::PersonalAccessToken,
+                },
+            ]
+        );
+        let debug = format!("{profiles:?}");
+        assert!(!debug.contains("sensitive-token"));
+        assert!(!debug.contains("sensitive-secret"));
+
+        std::fs::write(
+            &path,
+            "[replacement]\nhost = https://replacement.example\nauth_type = databricks-cli\n",
+        )
+        .unwrap();
+        assert_eq!(list_config_profiles(Some(&path), false).unwrap(), profiles);
+        assert_eq!(
+            list_config_profiles(Some(&path), true).unwrap(),
+            vec![DatabricksProfileSummary {
+                name: "replacement".into(),
+                host: Some("https://replacement.example".into()),
+                account_id: None,
+                workspace_id: None,
+                target: TargetKind::Workspace,
+                auth_kind: AuthKind::UserToMachine,
+            }]
+        );
     }
 }

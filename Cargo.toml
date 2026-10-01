@@ -5,20 +5,26 @@ members = [
   "packages/rs/google",
   "packages/rs/lakebase-proxy",
   "packages/rs/model",
-  "packages/rs/model-proxy"
+  "packages/rs/model-proxy",
+  "packages/rs/service"
 ]
-default-members = [ "packages/rs/lakebase-proxy", "packages/rs/model-proxy" ]
+default-members = [
+  "packages/rs/lakebase-proxy",
+  "packages/rs/model-proxy",
+  "packages/rs/service"
+]
 resolver = "2"
 
   [workspace.package]
-  version = "0.9.7"
+  version = "0.9.8"
   edition = "2021"
-  rust-version = "1.89"
+  rust-version = "1.90"
   license = "Apache-2.0"
   repository = "https://github.com/reggie-db/dbx-tools"
 
   [workspace.dependencies]
   async-trait = "0.1"
+  auto-launcher = "=1.1.0"
   base64 = "0.22"
   bytes = "1"
   configparser = "3"
@@ -38,9 +44,12 @@ resolver = "2"
   regex = "1"
   rcgen = "0.14"
   rustls = "0.23"
+  rusqlite_migration = "=2.5.0"
   scraper = "0.24"
   serde_json = "1"
+  service-manager = "=0.11.0"
   sha2 = "0.10"
+  sysinfo = "0.37"
   tempfile = "3"
   thiserror = "2"
   tokenx-rs = "=0.1.0"
@@ -87,6 +96,10 @@ resolver = "2"
     [workspace.dependencies.reqwest-middleware]
     version = "=0.4.2"
     features = [ "json" ]
+
+    [workspace.dependencies.rusqlite]
+    version = "=0.39.0"
+    features = [ "bundled" ]
 
     [workspace.dependencies.rust-embed]
     version = "8"

@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/metrics/vendor/gridstack.min.css" />
     <link rel="stylesheet" href="/metrics/vendor/uPlot.min.css" />
     <link rel="stylesheet" href="/metrics/brand.0b7222df.css" />
-    <link rel="stylesheet" href="/metrics/app.2675ef49.css" />
+    <link rel="stylesheet" href="/metrics/app.f2ff8387.css" />
     <script src="/metrics/vendor/gridstack-all.js" defer></script>
     <script src="/metrics/vendor/uPlot.iife.min.js" defer></script>
     <script src="/metrics/app.js" defer></script>
@@ -33,6 +33,20 @@
           <h1>Model Proxy Metrics</h1>
         </div>
         <div class="controls" aria-label="Dashboard controls">
+          <div
+            id="auth-control"
+            class="auth-control"
+            aria-label="Databricks authentication profile"
+          >
+            <label class="select-control header-select auth-select">
+              <span class="sr-only">Databricks profile</span>
+              <select id="auth-profile" aria-label="Databricks profile">
+                <option value="ambient">Ambient authentication</option>
+              </select>
+            </label>
+            <button type="button" id="auth-switch" disabled>Switch</button>
+            <span id="auth-status">Loading authentication</span>
+          </div>
           <label class="select-control header-select">
             <span class="sr-only">Model</span>
             <select id="model-filter" aria-label="Model">
@@ -187,51 +201,91 @@
           </article>
         </div>
 
-        <div class="grid-stack-item" gs-id="models-table" gs-x="0" gs-y="12" gs-w="12" gs-h="6" gs-min-w="6">
+        <div class="grid-stack-item" gs-id="models-table" gs-x="0" gs-y="12" gs-w="12" gs-h="7" gs-min-w="6">
           <article class="grid-stack-item-content panel models-panel" tabindex="0" data-tooltip="Per-model request, token, latency, error, retry, queue, reasoning, and adaptive limiter metrics.">
             <div class="panel-heading">
-              <h2>Model performance</h2>
-              <p id="model-count">No active models</p>
+              <div>
+                <h2>Model performance</h2>
+                <p id="model-count">No active models</p>
+              </div>
+              <div class="model-table-controls" aria-label="Model performance filters">
+                <label>
+                  <span class="sr-only">Search models</span>
+                  <input id="model-search" type="search" placeholder="Search models" autocomplete="off" />
+                </label>
+                <label class="select-control">
+                  <span class="sr-only">Rate-limit state</span>
+                  <select id="model-state-filter" aria-label="Rate-limit state">
+                    <option value="all">All states</option>
+                    <option value="waiting">Waiting</option>
+                    <option value="cooldown">Cooldown</option>
+                    <option value="probing">Probing</option>
+                    <option value="enforced">Limiter enforced</option>
+                    <option value="idle">Idle</option>
+                  </select>
+                </label>
+                <label class="select-control">
+                  <span class="sr-only">Model outcome</span>
+                  <select id="model-outcome-filter" aria-label="Model outcome">
+                    <option value="all">All outcomes</option>
+                    <option value="success">Successful</option>
+                    <option value="errors">Errors</option>
+                    <option value="rate-limited">Rate limited</option>
+                  </select>
+                </label>
+              </div>
             </div>
             <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Model</th>
-                    <th>Requests</th>
-                    <th>p50</th>
-                    <th>p95</th>
-                    <th>p99</th>
-                    <th>Tokens</th>
-                    <th>Errors</th>
-                    <th>429s</th>
-                    <th>Retries</th>
-                    <th>Fallbacks</th>
-                    <th>Avg queue</th>
-                    <th>Max depth</th>
+                    <th><button type="button" class="sort-control" data-sort="model">Model</button></th>
+                    <th><button type="button" class="sort-control" data-sort="requests">Requests</button></th>
+                    <th><button type="button" class="sort-control" data-sort="p50LatencyMs">p50</button></th>
+                    <th><button type="button" class="sort-control" data-sort="p95LatencyMs">p95</button></th>
+                    <th><button type="button" class="sort-control" data-sort="p99LatencyMs">p99</button></th>
+                    <th><button type="button" class="sort-control" data-sort="tokens">Tokens</button></th>
+                    <th><button type="button" class="sort-control" data-sort="errors">Errors</button></th>
+                    <th><button type="button" class="sort-control" data-sort="rateLimited">429s</button></th>
+                    <th><button type="button" class="sort-control" data-sort="retries">Retries</button></th>
+                    <th><button type="button" class="sort-control" data-sort="fallbacks">Fallbacks</button></th>
+                    <th><button type="button" class="sort-control" data-sort="averageQueueMs">Avg queue</button></th>
+                    <th><button type="button" class="sort-control" data-sort="queueDepthMax">Max depth</button></th>
                     <th>Reasoning</th>
                     <th>Rate-limit capacity</th>
+                    <th><button type="button" class="sort-control" data-sort="waiters">Cooldown / waits</button></th>
+                    <th class="control-column">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="models-body">
-                  <tr><td colspan="14" class="empty">Waiting for model traffic</td></tr>
+                  <tr><td colspan="16" class="empty">Waiting for model traffic</td></tr>
                 </tbody>
               </table>
             </div>
           </article>
         </div>
-        <div class="grid-stack-item" gs-id="reasoning-levels" gs-x="0" gs-y="18" gs-w="6" gs-h="5" gs-min-w="4">
+        <div class="grid-stack-item" gs-id="reasoning-levels" gs-x="0" gs-y="19" gs-w="6" gs-h="5" gs-min-w="4">
           <article class="grid-stack-item-content panel reasoning-panel" tabindex="0" data-tooltip="Distribution of explicit reasoning or thinking settings detected in model requests. Provider defaults are counted separately from explicitly disabled or enabled reasoning.">
             <div class="panel-heading">
               <h2>Reasoning levels</h2>
               <p id="reasoning-total">No model requests</p>
             </div>
-            <ol id="reasoning-levels" class="reasoning-levels">
-              <li class="empty">Waiting for model traffic</li>
-            </ol>
+            <div class="reasoning-content">
+              <div
+                id="reasoning-chart"
+                class="reasoning-chart"
+                role="img"
+                aria-label="No reasoning data"
+              >
+                <strong id="reasoning-chart-total">0</strong>
+              </div>
+              <ol id="reasoning-levels" class="reasoning-levels">
+                <li class="empty">Waiting for model traffic</li>
+              </ol>
+            </div>
           </article>
         </div>
-        <div class="grid-stack-item" gs-id="rate-limit-timeline" gs-x="6" gs-y="18" gs-w="6" gs-h="5" gs-min-w="4">
+        <div class="grid-stack-item" gs-id="rate-limit-timeline" gs-x="6" gs-y="19" gs-w="6" gs-h="5" gs-min-w="4">
           <article class="grid-stack-item-content panel timeline-panel" tabindex="0" data-tooltip="Recent adaptive rate-limit activation, tightening, recovery, and deactivation events.">
             <div class="panel-heading">
               <h2>Rate-limit timeline</h2>

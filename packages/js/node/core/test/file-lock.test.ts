@@ -50,6 +50,14 @@ describe("withFileLock", () => {
     const dir = await mkdtemp(join(tmpdir(), "dbx-file-lock-"));
     try {
       const order: number[] = [];
+      let waits = 0;
+      const options = {
+        dir,
+        backends: ["file"] as const,
+        onWait: () => {
+          waits += 1;
+        },
+      };
       await Promise.all([
         withFileLock(
           "shared",
@@ -58,7 +66,7 @@ describe("withFileLock", () => {
             await new Promise((r) => setTimeout(r, 40));
             order.push(2);
           },
-          { dir, backends: ["file"] },
+          options,
         ),
         withFileLock(
           "shared",
@@ -66,10 +74,11 @@ describe("withFileLock", () => {
             order.push(3);
             order.push(4);
           },
-          { dir, backends: ["file"] },
+          options,
         ),
       ]);
       assert.match(order.join(","), /^(1,2,3,4|3,4,1,2)$/);
+      assert.equal(waits, 1);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

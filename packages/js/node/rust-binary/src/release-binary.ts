@@ -8,6 +8,7 @@ import { constants as osConstants, homedir } from "node:os";
 import { join } from "node:path";
 
 import { bin } from "@dbx-tools/core";
+import { json, object, stringUtils } from "@dbx-tools/shared-core";
 import { RELEASE_BINARY_COMMANDS } from "./_release-binaries.ts";
 
 /** One release archive available to the current Node runtime. */
@@ -22,9 +23,11 @@ export interface ReleaseBinaryCommand {
   readonly command: string;
   readonly description: string;
   readonly binaryName: string;
+  readonly hidden: boolean;
   readonly unit: string;
   readonly component: string;
   readonly version: string;
+  readonly tagPrefix: string;
   readonly tag: string;
   readonly repository: string;
   readonly assets: readonly ReleaseBinaryAsset[];
@@ -40,7 +43,7 @@ export interface ReleaseBinaryOptions {
 
 /** Return every native command registered by the synthesized workspace. */
 export function releaseBinaryCommands(): readonly ReleaseBinaryCommand[] {
-  return RELEASE_BINARY_COMMANDS;
+  return RELEASE_BINARY_COMMANDS.filter((command) => !command.hidden);
 }
 
 /** Resolve one registered native command by its `dbx` subcommand. */
@@ -90,8 +93,47 @@ export function releaseBinaryUrl(
   asset: ReleaseBinaryAsset,
   version = command.version,
 ): string {
-  const tag = version === command.version ? command.tag : `${command.component}-v${version}`;
+  const tag = releaseBinaryTag(command, version);
   return `https://github.com/${repositoryName(command.repository)}/releases/download/${tag}/${asset.name}`;
+}
+
+function releaseBinaryTag(command: ReleaseBinaryCommand, version: string): string {
+  return version === command.version ? command.tag : `${command.tagPrefix}${version}`;
+}
+
+async function releaseBinarySource(
+  command: ReleaseBinaryCommand,
+  asset: ReleaseBinaryAsset,
+  version: string,
+): Promise<bin.BinSource> {
+  const url = releaseBinaryUrl(command, asset, version);
+  const repository = repositoryName(command.repository);
+  const tag = releaseBinaryTag(command, version);
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.github.com/repos/${repository}/releases/tags/${encodeURIComponent(tag)}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          "user-agent": "@dbx-tools/rust-binary",
+          "x-github-api-version": "2022-11-28",
+        },
+      },
+    );
+  } catch {
+    return { url };
+  }
+  if (!response.ok) return { url };
+  const release = json.parseRecord(await response.text());
+  const assets = Array.isArray(release?.assets) ? release.assets : [];
+  const candidate = assets.find(
+    (entry): entry is Record<string, unknown> =>
+      object.isRecord(entry) && entry.name === asset.name,
+  );
+  const digest = stringUtils.trimToNull(candidate?.digest);
+  const sha256 = digest?.match(/^sha256:([0-9a-f]{64})$/i)?.[1];
+  return sha256 ? { url, sha256 } : { url };
 }
 
 /** Install the registered binary release matching the host platform. */
@@ -110,7 +152,7 @@ export async function ensureReleaseBinary(
     binDir,
     path: join(binDir, versionedBinaryName(command.binaryName, version, platform)),
   };
-  return bin.ensure(command.binaryName, () => releaseBinaryUrl(command, asset, version), {
+  return bin.ensure(command.binaryName, () => releaseBinarySource(command, asset, version), {
     autoUnpackage: true,
     destination,
     minVersion: version,

@@ -288,9 +288,14 @@ OpenAI-compatible endpoints with Databricks auth and Model Serving resolution.
 
 ```sh
 dbx model-proxy --profile my-workspace --port 4000
+dbx model-proxy service install --systray auto -- --profile my-workspace
+dbx model-proxy service status
 ```
 
 Then point the client at `http://127.0.0.1:4000/v1`.
+The installed per-user service starts at login, keeps non-secret settings and
+bounded aggregate metrics under `~/.dbx-tools/model-proxy`, and opens its local
+Metrics UI from a supported desktop tray.
 
 ### Authenticate With Databricks OAuth
 

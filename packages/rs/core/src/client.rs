@@ -11,9 +11,62 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware, Next, 
 use serde_json::Value;
 
 use crate::{
-    create_persistent_auth, AuthError, DatabricksAuthOptions, PersistentAuth,
-    DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER,
+    auth::create_persistent_auth_for_exact_profile, create_persistent_auth, AuthError, AuthKind,
+    DatabricksAuthOptions, PersistentAuth, DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER,
 };
+
+/// Non-secret identity attached to an authenticated Databricks client.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct DatabricksIdentity {
+    /// Normalized workspace or accounts host.
+    pub host: String,
+    /// Workspace identifier selected for unified hosts.
+    pub workspace_id: Option<String>,
+    /// User profile or service-principal client identifier.
+    pub principal: String,
+}
+
+/// Stable non-secret identity for one Databricks workspace.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct DatabricksWorkspaceIdentity {
+    /// Normalized workspace or accounts host.
+    pub host: String,
+    /// Workspace identifier selected for unified hosts.
+    pub workspace_id: Option<String>,
+}
+
+impl DatabricksIdentity {
+    /// Return the workspace portion of this identity.
+    pub fn workspace(&self) -> DatabricksWorkspaceIdentity {
+        DatabricksWorkspaceIdentity {
+            host: self.host.clone(),
+            workspace_id: self.workspace_id.clone(),
+        }
+    }
+
+    /// Return the stable workspace key used for process-local shared state.
+    pub fn workspace_key(&self) -> String {
+        self.workspace().key()
+    }
+
+    /// Return the complete non-secret identity key used for caller-specific caches.
+    pub fn cache_key(&self) -> String {
+        let workspace = self.workspace_key();
+        format!("{}:{}{}", workspace.len(), workspace, self.principal)
+    }
+}
+
+impl DatabricksWorkspaceIdentity {
+    /// Return a stable string key for process-local shared state.
+    pub fn key(&self) -> String {
+        format!(
+            "{}:{}{}",
+            self.host.len(),
+            self.host,
+            self.workspace_id.as_deref().unwrap_or_default()
+        )
+    }
+}
 
 /// Authenticated Databricks REST client with shared token lifecycle.
 #[derive(Clone)]
@@ -28,6 +81,7 @@ pub struct DatabricksClient {
 #[derive(Clone)]
 struct AuthorizationMiddleware {
     auth: Arc<PersistentAuth>,
+    login: Option<bool>,
 }
 
 #[async_trait::async_trait]
@@ -50,7 +104,7 @@ impl Middleware for AuthorizationMiddleware {
             return Ok(response);
         };
         self.auth
-            .refresh_rejected_token(stale_access_token, None)
+            .refresh_rejected_token(stale_access_token, self.login)
             .await
             .map_err(reqwest_middleware::Error::middleware)?;
         self.authorize(&mut retry_request).await?;
@@ -65,7 +119,7 @@ impl AuthorizationMiddleware {
         request.headers_mut().remove(WORKSPACE_ID_HEADER);
         let mut headers = self
             .auth
-            .request_headers_for_url(request.url().to_string(), None)
+            .request_headers_for_url(request.url().to_string(), self.login)
             .await
             .map_err(reqwest_middleware::Error::middleware)?;
         let Some(authorization) = headers.remove(DEFAULT_ACCESS_TOKEN_HEADER) else {
@@ -109,6 +163,22 @@ impl DatabricksClient {
         Self::with_host(options, None).await
     }
 
+    /// Resolve one exact named profile without ambient credential overrides.
+    pub async fn with_exact_profile(
+        profile: String,
+        config_file: Option<String>,
+    ) -> Result<Self, DatabricksClientError> {
+        let auth = create_persistent_auth_for_exact_profile(DatabricksAuthOptions {
+            profile: Some(profile),
+            config_file,
+            prefer_user_to_machine: false,
+            ..Default::default()
+        })
+        .await
+        .map_err(|error| DatabricksClientError::Authentication(error.to_string()))?;
+        Self::from_auth(auth, None)
+    }
+
     /// Resolve authentication and optionally override the request base URL.
     pub async fn with_host(
         options: DatabricksAuthOptions,
@@ -131,11 +201,7 @@ impl DatabricksClient {
                 "resolved Databricks host is empty".into(),
             ));
         }
-        let http = ClientBuilder::new(reqwest::Client::new())
-            .with(AuthorizationMiddleware {
-                auth: Arc::clone(&auth),
-            })
-            .build();
+        let http = authenticated_http(&auth, None);
         let principal = auth.principal_key().to_owned();
         let workspace_id = auth.workspace_id().map(str::to_owned);
         Ok(Self {
@@ -165,6 +231,31 @@ impl DatabricksClient {
     /// Return the workspace identifier resolved from options or the profile.
     pub fn workspace_id(&self) -> Option<&str> {
         self.workspace_id.as_deref()
+    }
+
+    /// Return the complete non-secret identity used by caches and coordinators.
+    pub fn identity(&self) -> DatabricksIdentity {
+        DatabricksIdentity {
+            host: self.host.clone(),
+            workspace_id: self.workspace_id.clone(),
+            principal: self.principal.clone(),
+        }
+    }
+
+    /// Return the resolved authentication strategy.
+    pub fn auth_kind(&self) -> AuthKind {
+        self.auth.auth_kind()
+    }
+
+    /// Clone this client with automatic login disabled for validation requests.
+    pub fn non_interactive(&self) -> Self {
+        Self {
+            auth: Arc::clone(&self.auth),
+            host: self.host.clone(),
+            principal: self.principal.clone(),
+            workspace_id: self.workspace_id.clone(),
+            http: authenticated_http(&self.auth, Some(false)),
+        }
     }
 
     /// Create a middleware-enabled request builder for a relative path or absolute URL.
@@ -217,6 +308,15 @@ impl DatabricksClient {
         }
         serde_json::from_slice(&bytes).map_err(Into::into)
     }
+}
+
+fn authenticated_http(auth: &Arc<PersistentAuth>, login: Option<bool>) -> ClientWithMiddleware {
+    ClientBuilder::new(reqwest::Client::new())
+        .with(AuthorizationMiddleware {
+            auth: Arc::clone(auth),
+            login,
+        })
+        .build()
 }
 
 /// Errors returned by [`DatabricksClient`].

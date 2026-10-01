@@ -289,9 +289,11 @@ export interface RustReleaseBinaryMapping {
   readonly command: string;
   readonly description: string;
   readonly binaryName: string;
+  readonly hidden: boolean;
   readonly unit: string;
   readonly component: string;
   readonly version: string;
+  readonly tagPrefix: string;
   readonly tag: string;
   readonly repository: string;
   readonly assets: readonly RustReleaseBinaryAssetMapping[];
@@ -379,17 +381,40 @@ function planRustReleaseBinaries(
   resolved: ResolvedRustWorkspaceOptions,
 ): RustReleaseBinaryMapping[] {
   const commands = new Set<string>();
-  const binaries = packages
-    .filter((pkg) => Boolean(pkg.packageOptions.cli))
-    .map((pkg) => {
-      if (!pkg.packageOptions.release) {
+  const binaries = packages.flatMap((pkg) => {
+    const configuredBinaries = [
+      ...(pkg.packageOptions.cli
+        ? [
+            {
+              name: pkg.packageOptions.binaryName ?? pkg.crateName,
+              defaultCommand: pkg.packageOptions.directory,
+              description: pkg.packageOptions.description,
+              release: pkg.packageOptions.release,
+              excludedOs: pkg.packageOptions.releaseExcludeOs,
+              cli: pkg.packageOptions.cli,
+            },
+          ]
+        : []),
+      ...(pkg.packageOptions.binaries ?? [])
+        .filter((binary) => Boolean(binary.cli))
+        .map((binary) => ({
+          name: binary.name,
+          defaultCommand: binary.name,
+          description: binary.description ?? pkg.packageOptions.description,
+          release: binary.release,
+          excludedOs: binary.releaseExcludeOs,
+          cli: binary.cli!,
+        })),
+    ];
+    return configuredBinaries.map((binary) => {
+      if (!binary.release) {
         throw new Error(`${pkg.crateName} must set release when cli is configured`);
       }
-      const configured = pkg.packageOptions.cli;
+      const configured = binary.cli;
       const command =
         typeof configured === "object" && configured.command
           ? configured.command
-          : pkg.packageOptions.directory;
+          : binary.defaultCommand;
       if (!/^[a-z0-9][a-z0-9-]*$/.test(command)) {
         throw new Error(`Invalid Rust CLI command: ${command}`);
       }
@@ -399,24 +424,31 @@ function planRustReleaseBinaries(
       commands.add(command);
       const description =
         (typeof configured === "object" ? configured.description : undefined) ??
-        pkg.packageOptions.description ??
+        binary.description ??
         pkg.crateName;
-      const excludedOs = new Set(pkg.packageOptions.releaseExcludeOs ?? []);
-      const binaryName = pkg.packageOptions.binaryName ?? pkg.crateName;
+      const hidden = typeof configured === "object" && configured.hidden === true;
+      const excludedOs = new Set(binary.excludedOs ?? []);
+      const binaryName = binary.name;
       const identity = isDBXToolsJavaScriptProject()(project)
         ? project.releaseCatalog.releaseIdentityFor(pkg)
         : {
             component: defaultReleaseUnitId("rust", pkg.crateName),
             version: readWorkspaceVersion(project.outdir),
           };
+      const tagPrefix =
+        isDBXToolsJavaScriptProject()(project) && project.releaseCatalog.mode === "independent"
+          ? `${identity.component}-v`
+          : "v";
       return {
         command,
         description,
         binaryName,
+        hidden,
         unit: "id" in identity ? identity.id : identity.component,
         component: identity.component,
         version: identity.version,
-        tag: `${identity.component}-v${identity.version}`,
+        tagPrefix,
+        tag: `${tagPrefix}${identity.version}`,
         repository: resolved.repository,
         assets: resolved.nativeTargets
           .filter((target) => !excludedOs.has(target.os))
@@ -427,6 +459,7 @@ function planRustReleaseBinaries(
           })),
       };
     });
+  });
   if (binaries.length && !resolved.repository) {
     throw new Error("A repository URL is required when Rust CLI commands are configured");
   }
@@ -894,6 +927,10 @@ export class DBXToolsRustWorkspace extends Component {
           identity: pkg.crateName,
           publish: !pkg.packageOptions.private || pkg.packageOptions.release === true,
           sourcePaths: [`${toPosix(relative(project.outdir, pkg.outdir))}/src`],
+        });
+      }
+      for (const pkg of this.packages) {
+        project.releaseCatalog.configureProject(pkg, {
           dependencies: [
             ...rustReleaseDependencies(
               project,
@@ -921,7 +958,7 @@ export class DBXToolsRustWorkspace extends Component {
     if (isDBXToolsJavaScriptProject()(project)) {
       for (const binary of this.releaseBinaries) {
         project.releaseCatalog.registerArtifact(binary.unit, {
-          id: `${binary.unit}:github-binary`,
+          id: `${binary.unit}:github-binary:${binary.binaryName}`,
           kind: "github-binary",
           name: binary.binaryName,
           generated: true,

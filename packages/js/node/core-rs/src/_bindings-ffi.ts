@@ -365,6 +365,11 @@ const DEFINITIONS = {
       ret: FfiType.Int8,
       hasRustCallStatus: true,
     },
+    "uniffi_dbx_tools_core_fn_func_list_databricks_profiles": {
+      args: [FfiType.RustBuffer, FfiType.Int8],
+      ret: FfiType.RustBuffer,
+      hasRustCallStatus: true,
+    },
     "uniffi_dbx_tools_core_fn_func_parse_address": {
       args: [FfiType.RustBuffer],
       ret: FfiType.RustBuffer,
@@ -521,6 +526,11 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_core_checksum_func_list_databricks_profiles": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -795,6 +805,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_core_fn_func_databricks_cli_available(uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_core_fn_func_is_databricks_app(uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_core_fn_func_is_databricks_app_environment(environment: Uint8Array, uniffi_out_err: UniffiRustCallStatus): number;
+    uniffi_dbx_tools_core_fn_func_list_databricks_profiles(configFile: Uint8Array, refresh: number, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_func_parse_address(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_func_parse_resource_path(input: Uint8Array, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_core_fn_method_persistentauth_authorization_header_for_url(uniffiSelf: bigint, requestUrl: Uint8Array, login: Uint8Array): bigint;
@@ -827,6 +838,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_core_checksum_func_databricks_cli_available(): number;
     uniffi_dbx_tools_core_checksum_func_is_databricks_app(): number;
     uniffi_dbx_tools_core_checksum_func_is_databricks_app_environment(): number;
+    uniffi_dbx_tools_core_checksum_func_list_databricks_profiles(): number;
     uniffi_dbx_tools_core_checksum_func_parse_address(): number;
     uniffi_dbx_tools_core_checksum_func_parse_resource_path(): number;
     uniffi_dbx_tools_core_checksum_method_persistentauth_authorization_header_for_url(): number;

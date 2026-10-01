@@ -17,7 +17,9 @@ mod oauth;
 mod runtime;
 
 pub use auth::*;
-pub use client::{DatabricksClient, DatabricksClientError};
+pub use client::{
+    DatabricksClient, DatabricksClientError, DatabricksIdentity, DatabricksWorkspaceIdentity,
+};
 pub use credentials::*;
 pub use database::advisory_lock_id;
 pub use databricks_cli::{

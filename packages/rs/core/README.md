@@ -8,6 +8,7 @@ Key features:
 - Databricks App detection and CLI token access.
 - U2M browser OAuth, M2M client credentials, and PAT authentication.
 - Profile, account, workspace, scope, and endpoint resolution.
+- Secret-free profile enumeration with explicit cache refresh after CLI login.
 - Shared token lifecycle with file, memory, or caller-provided storage.
 - A `reqwest-middleware` client that defaults to the resolved credential host,
   omits credentials for other origins, adds the resolved
@@ -29,6 +30,14 @@ the crate root.
 Without an explicit profile, resolution uses `__settings__.default_profile`,
 then an existing `DEFAULT` section, then the sole configured profile, and
 finally the `DEFAULT` fallback.
+
+`list_config_profiles(config_file, refresh)` returns profile name, host,
+account/workspace identifiers, inferred target, and inferred auth kind. It
+never returns tokens or client secrets. Pass `refresh = true`, or call
+`invalidate_config_file`, after an external CLI login changes
+`.databrickscfg`; ordinary calls retain the parsed per-path cache. Generated
+Node and Python bindings expose the same source of truth as
+`list_databricks_profiles`.
 
 Outside Databricks Apps, automatic U2M uses
 `databricks auth token --profile` when the CLI is available and falls back to

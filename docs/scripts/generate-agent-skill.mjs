@@ -46,7 +46,7 @@ for (const [group, entries] of [...groups.entries()].sort(([left], [right]) => l
   catalogue.push(`## ${groupTitle(group)}`, "");
   for (const entry of entries) {
     const summary = summaryText(read(entry.readme)) || "See the package README for its current surface.";
-    catalogue.push(`- \`${entry.name}\` — ${summary} Source: \`${entry.relDir}\`.`);
+    catalogue.push(`- \`${entry.name}\` - ${summary} Source: \`${entry.relDir}\`.`);
   }
   catalogue.push("");
 }

@@ -6,10 +6,12 @@ export const RELEASE_BINARY_COMMANDS = [
     "command": "lakebase-proxy",
     "description": "Loopback PostgreSQL proxy for Databricks Lakebase",
     "binaryName": "dbx-lakebase-proxy",
+    "hidden": false,
     "unit": "rs-lakebase-proxy",
     "component": "rs-lakebase-proxy",
-    "version": "0.9.7",
-    "tag": "rs-lakebase-proxy-v0.9.7",
+    "version": "0.9.8",
+    "tagPrefix": "v",
+    "tag": "v0.9.8",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
@@ -38,10 +40,12 @@ export const RELEASE_BINARY_COMMANDS = [
     "command": "model-proxy",
     "description": "Multi-protocol Databricks model proxy",
     "binaryName": "dbx-model-proxy",
+    "hidden": false,
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.7",
-    "tag": "rs-model-proxy-v0.9.7",
+    "version": "0.9.8",
+    "tagPrefix": "v",
+    "tag": "v0.9.8",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "assets": [
       {
@@ -73,6 +77,50 @@ export const RELEASE_BINARY_COMMANDS = [
         "os": "win32",
         "cpu": "arm64",
         "name": "dbx-model-proxy-win32-arm64-msvc.zip"
+      }
+    ]
+  },
+  {
+    "command": "model-proxy-desktop",
+    "description": "Native tray and metrics webview companion for dbx-model-proxy",
+    "binaryName": "dbx-model-proxy-desktop",
+    "hidden": true,
+    "unit": "rs-model-proxy",
+    "component": "rs-model-proxy",
+    "version": "0.9.8",
+    "tagPrefix": "v",
+    "tag": "v0.9.8",
+    "repository": "https://github.com/reggie-db/dbx-tools",
+    "assets": [
+      {
+        "os": "linux",
+        "cpu": "x64",
+        "name": "dbx-model-proxy-desktop-linux-x64-gnu.tar.gz"
+      },
+      {
+        "os": "linux",
+        "cpu": "arm64",
+        "name": "dbx-model-proxy-desktop-linux-arm64-gnu.tar.gz"
+      },
+      {
+        "os": "darwin",
+        "cpu": "x64",
+        "name": "dbx-model-proxy-desktop-darwin-x64.tar.gz"
+      },
+      {
+        "os": "darwin",
+        "cpu": "arm64",
+        "name": "dbx-model-proxy-desktop-darwin-arm64.tar.gz"
+      },
+      {
+        "os": "win32",
+        "cpu": "x64",
+        "name": "dbx-model-proxy-desktop-win32-x64-msvc.zip"
+      },
+      {
+        "os": "win32",
+        "cpu": "arm64",
+        "name": "dbx-model-proxy-desktop-win32-arm64-msvc.zip"
       }
     ]
   }
