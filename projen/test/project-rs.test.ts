@@ -671,6 +671,18 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(workflowStep(rustBuild, "Setup Rust").if, "${{ matrix.os != 'win32' }}");
     assert.equal(stepNames(rustBuild).includes("Verify preinstalled Windows Rust"), true);
     assert.equal(stepNames(rustBuild).includes("Setup Bun"), false);
+    const fingerprint = workflowStep(rustBuild, "Verify Rust build fingerprint");
+    assert.equal(fingerprint.id, "rust-fingerprint");
+    assert.match(
+      fingerprint.run ?? "",
+      /dist\/rust-raw\/rust-build-\$\{\{ matrix\.node \}\}\.json/,
+    );
+    assert.match(fingerprint.run ?? "", /rustSourceHash/);
+    assert.match(fingerprint.run ?? "", /echo "key=\$KEY" >> "\$GITHUB_OUTPUT"/);
+    assert.match(
+      workflowStep(rustBuild, "Reuse matching raw Rust outputs").run ?? "",
+      /steps\.rust-fingerprint\.outputs\.key/,
+    );
     assert.ok(
       workflowStep(rustBuild, "Build Rust outputs").run?.includes(
         'cargo build --release --timings --workspace --target "${{ matrix.cargo }}"',

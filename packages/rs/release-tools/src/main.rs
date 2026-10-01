@@ -11,7 +11,7 @@ use object::{BinaryFormat, Object, ObjectSection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const FINGERPRINT_SCHEMA: u32 = 1;
+const FINGERPRINT_SCHEMA: u32 = 2;
 const VERSION_SLOT_SCHEMA: u32 = 1;
 const MAGIC: &[u8; 12] = b"DBXVERSION\0\0";
 const RECORD_SIZE: usize = 128;
@@ -36,6 +36,8 @@ enum ReleaseCommand {
         target: Vec<String>,
         #[arg(long, default_value = "stable")]
         toolchain: String,
+        #[arg(long)]
+        portable: bool,
     },
     Stamp {
         #[arg(long)]
@@ -67,7 +69,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             check,
             target,
             toolchain,
-        } => fingerprint(&output, check, &target, &toolchain),
+            portable,
+        } => fingerprint(&output, check, &target, &toolchain, portable),
         ReleaseCommand::Stamp { binary, version } => {
             if !stamp(&binary, &version)? {
                 return Err(format!(
@@ -87,31 +90,29 @@ fn fingerprint(
     check: bool,
     targets: &[String],
     toolchain: &str,
+    portable: bool,
 ) -> Result<(), Box<dyn Error>> {
     let root = repository_root()?;
     let rust_source_hash = source_hash(&root)?;
-    let rustc = rustc_identity()?;
+    let rustc = if portable {
+        None
+    } else {
+        Some(rustc_identity()?)
+    };
     let target_keys = targets
         .iter()
         .map(|target_spec| {
             let (target, target_config) = target_spec.split_once('|').unwrap_or((target_spec, ""));
-            let mut hash = Sha256::new();
-            for value in [
-                FINGERPRINT_SCHEMA.to_string(),
-                VERSION_SLOT_SCHEMA.to_string(),
-                rust_source_hash.clone(),
+            (
                 target.to_owned(),
-                target_config.to_owned(),
-                toolchain.to_owned(),
-                rustc.clone(),
-                linker_identity(target).to_owned(),
-                "release".to_owned(),
-                "raw-target-release-v1".to_owned(),
-            ] {
-                hash.update(value.as_bytes());
-                hash.update([0]);
-            }
-            (target.to_owned(), format!("{:x}", hash.finalize()))
+                target_key(
+                    &rust_source_hash,
+                    target,
+                    target_config,
+                    toolchain,
+                    rustc.as_deref(),
+                ),
+            )
         })
         .collect();
     let manifest = RustBuildManifest {
@@ -142,6 +143,32 @@ fn fingerprint(
         fs::write(output, rendered)?;
     }
     Ok(())
+}
+
+fn target_key(
+    rust_source_hash: &str,
+    target: &str,
+    target_config: &str,
+    toolchain: &str,
+    rustc: Option<&str>,
+) -> String {
+    let mut hash = Sha256::new();
+    for value in [
+        FINGERPRINT_SCHEMA.to_string(),
+        VERSION_SLOT_SCHEMA.to_string(),
+        rust_source_hash.to_owned(),
+        target.to_owned(),
+        target_config.to_owned(),
+        toolchain.to_owned(),
+        rustc.unwrap_or("<portable>").to_owned(),
+        linker_identity(target).to_owned(),
+        "release".to_owned(),
+        "raw-target-release-v1".to_owned(),
+    ] {
+        hash.update(value.as_bytes());
+        hash.update([0]);
+    }
+    format!("{:x}", hash.finalize())
 }
 
 fn rustc_identity() -> Result<String, Box<dyn Error>> {
@@ -378,4 +405,48 @@ fn stamp(path: &Path, version: &str) -> Result<bool, Box<dyn Error>> {
         }
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn portable_target_keys_ignore_host_compiler_identity() {
+        let portable = target_key("source", "x86_64-unknown-linux-gnu", "", "stable", None);
+        assert_eq!(
+            portable,
+            target_key("source", "x86_64-unknown-linux-gnu", "", "stable", None,)
+        );
+        assert_ne!(
+            portable,
+            target_key(
+                "source",
+                "x86_64-unknown-linux-gnu",
+                "",
+                "stable",
+                Some("rustc 1.94.1"),
+            )
+        );
+    }
+
+    #[test]
+    fn runtime_target_keys_change_with_compiler_identity() {
+        assert_ne!(
+            target_key(
+                "source",
+                "aarch64-apple-darwin",
+                "",
+                "stable",
+                Some("rustc 1.94.1"),
+            ),
+            target_key(
+                "source",
+                "aarch64-apple-darwin",
+                "",
+                "stable",
+                Some("rustc 1.95.0"),
+            )
+        );
+    }
 }

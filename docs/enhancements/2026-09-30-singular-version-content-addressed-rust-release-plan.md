@@ -314,9 +314,18 @@ The local release command writes a small committed file such as
 }
 ```
 
-The release workflow recalculates and compares this file before trusting it.
-This still satisfies the local-first release design while preventing a modified
-or stale manifest from selecting an unrelated artifact.
+The release workflow recalculates and compares the portable source hash before
+trusting it. Each target runner then combines its portable target key with the
+actual compiler identity on that runner. This keeps the committed review
+boundary cross-platform while preventing a macOS compiler identity from
+authorizing Linux or Windows output.
+
+Every matrix row performs the lookup independently. When every target finds a
+matching verified raw bundle, the complete matrix is stamp-and-package-only.
+When only some targets match, those rows reuse while the missing or invalid rows
+rebuild. Do not replace this with one all-or-nothing local build hash: one
+platform's binary output cannot prove the compiler, linker, CRT, exclusions, or
+native output of another platform.
 
 Changing only `VERSION` must leave every target build key unchanged. Changing
 Rust source, an external Rust dependency, features, release profile, toolchain,

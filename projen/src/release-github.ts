@@ -25,6 +25,7 @@ export function githubRepositoryIdentity(repositoryUrl: string): GithubRepositor
 export interface GithubAuthenticatedAccount {
   login: string;
   active: boolean;
+  scopes: string[];
 }
 
 /** Parse successful GitHub CLI accounts with the active account first. */
@@ -41,13 +42,25 @@ export function githubAuthenticatedAccounts(
       if (!object.isRecord(entry) || entry.state !== "success" || typeof entry.login !== "string") {
         return [];
       }
-      return [{ login: entry.login, active: entry.active === true }];
+      const scopes =
+        typeof entry.scopes === "string"
+          ? entry.scopes
+              .split(",")
+              .map((scope) => scope.trim())
+              .filter(Boolean)
+          : [];
+      return [{ login: entry.login, active: entry.active === true, scopes }];
     })
     .filter(
       (account, index, accounts) =>
         accounts.findIndex((candidate) => candidate.login === account.login) === index,
     )
     .sort((left, right) => Number(right.active) - Number(left.active));
+}
+
+/** Whether an account can update workflow files when using a classic OAuth token. */
+export function githubAccountSupportsWorkflowChanges(account: GithubAuthenticatedAccount): boolean {
+  return !account.scopes.includes("repo") || account.scopes.includes("workflow");
 }
 
 /** Ask GitHub CLI for one account token on the repository host. */

@@ -11,7 +11,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
-import { json, log, object } from "@dbx-tools/shared-core";
+import { async as asyncModule, json, log, object } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
 import { generateReleaseSummary } from "./release-summary.ts";
@@ -24,6 +24,7 @@ import {
   type VersionLevel,
 } from "../src/_release-platform.ts";
 import {
+  githubAccountSupportsWorkflowChanges,
   githubAuthenticatedAccounts,
   githubRepositoryApiPath,
   githubRepositoryIdentity,
@@ -103,6 +104,125 @@ function run(root: string, command: string, args: string[], env?: NodeJS.Process
   });
 }
 
+/** Run one release command with inherited output and a hard timeout. */
+async function runWithTimeout(
+  root: string,
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+): Promise<void> {
+  await exec.spawn(command, args, {
+    cwd: root,
+    env,
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "ignore",
+    signal: AbortSignal.timeout(timeoutMs),
+    check: true,
+  });
+}
+
+/** Capture one non-interactive command without throwing on a nonzero exit. */
+function captureCommand(
+  root: string,
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+): string {
+  return (
+    exec
+      .spawnSync(command, args, {
+        cwd: root,
+        env,
+        stdout: "capture",
+        stderr: "ignore",
+        stdin: "ignore",
+        check: false,
+      })
+      .stdout?.trim() ?? ""
+  );
+}
+
+/** Wait for required checks and return the merged pull request commit. */
+async function waitForPullRequestMerge(
+  root: string,
+  releaseBranch: string,
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+): Promise<string> {
+  await runWithTimeout(
+    root,
+    "gh",
+    ["pr", "checks", releaseBranch, "--watch", "--fail-fast", "--required", "--interval", "10"],
+    env,
+    timeoutMs,
+  );
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = captureCommand(
+      root,
+      "gh",
+      [
+        "pr",
+        "view",
+        releaseBranch,
+        "--json",
+        "state,mergeCommit",
+        "--jq",
+        '[.state, (.mergeCommit.oid // "")] | @tsv',
+      ],
+      env,
+    );
+    const [status, mergeSha] = state.split("\t");
+    if (status === "MERGED" && mergeSha) return mergeSha;
+    if (status === "CLOSED") throw new Error(`Release pull request closed without merging`);
+    await asyncModule.sleep(2_000);
+  }
+  throw new Error(`Release pull request did not merge within ${timeoutMs}ms`);
+}
+
+/** Find and watch the release workflow for an exact merged commit. */
+async function waitForReleaseWorkflow(
+  root: string,
+  baseBranch: string,
+  mergeSha: string,
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let runId = "";
+  while (Date.now() < deadline) {
+    runId = captureCommand(
+      root,
+      "gh",
+      [
+        "run",
+        "list",
+        "--workflow",
+        "release.yml",
+        "--branch",
+        baseBranch,
+        "--event",
+        "push",
+        "--commit",
+        mergeSha,
+        "--limit",
+        "1",
+        "--json",
+        "databaseId",
+        "--jq",
+        ".[0].databaseId // empty",
+      ],
+      env,
+    );
+    if (runId) break;
+    await asyncModule.sleep(5_000);
+  }
+  if (!runId) throw new Error(`Release workflow did not start within ${timeoutMs}ms`);
+  await runWithTimeout(root, "gh", ["run", "watch", runId, "--exit-status"], env, timeoutMs);
+}
+
 function runIgnoringStdout(root: string, command: string, args: string[]): void {
   exec.spawnSync(command, args, {
     cwd: root,
@@ -134,6 +254,7 @@ function githubAccount(root: string): {
     .stdout?.trim();
   const accounts = githubAuthenticatedAccounts(status ?? "", identity.hostname);
   for (const account of accounts) {
+    if (!githubAccountSupportsWorkflowChanges(account)) continue;
     const token = exec
       .spawnSync("gh", githubTokenArguments(identity.hostname, account.login), {
         cwd: root,
@@ -176,9 +297,17 @@ function githubAccount(root: string): {
     });
     return { ...identity, login: account.login, token };
   }
-  const detected = accounts.map((account) => account.login).join(", ") || "none";
+  const detected =
+    accounts
+      .map((account) => {
+        const workflow = githubAccountSupportsWorkflowChanges(account)
+          ? "workflow-capable"
+          : "missing workflow scope";
+        return `${account.login} (${workflow})`;
+      })
+      .join(", ") || "none";
   throw new Error(
-    `No authenticated GitHub CLI account can write ${identity.owner}/${identity.repository} on ${identity.hostname}; detected accounts: ${detected}`,
+    `No authenticated GitHub CLI account can write release workflow changes to ${identity.owner}/${identity.repository} on ${identity.hostname}; detected accounts: ${detected}`,
   );
 }
 
@@ -221,8 +350,16 @@ program
     "--release-summary-providers <providers>",
     "comma-separated provider order: cursor,codex,claude",
   )
+  .option("--no-validate", "skip repository validation tasks, Rust tests, and TypeScript compile")
+  .option("--no-local-publish", "skip local npm, PyPI, and Cargo publication")
   .option("--no-local-cargo", "skip local Cargo publication")
   .option("--no-approve", "open the release pull request without enabling automatic merge")
+  .option("--no-wait", "return after enabling automatic merge without watching publication")
+  .option(
+    "--wait-timeout-minutes <minutes>",
+    "maximum time for pull request checks, merge, and publication",
+    "120",
+  )
   .action(
     async (opts: {
       level: VersionLevel;
@@ -237,10 +374,26 @@ program
       validateTask: string[];
       releaseSummary: boolean;
       releaseSummaryProviders?: string;
+      validate: boolean;
+      localPublish: boolean;
       localCargo: boolean;
       approve: boolean;
+      wait: boolean;
+      waitTimeoutMinutes: string;
     }) => {
       const root = project.root() ?? process.cwd();
+      const waitTimeoutMinutes = object.toNumber(opts.waitTimeoutMinutes, {
+        separators: false,
+        percent: false,
+      });
+      if (
+        waitTimeoutMinutes === undefined ||
+        !Number.isInteger(waitTimeoutMinutes) ||
+        waitTimeoutMinutes <= 0
+      ) {
+        throw new Error("--wait-timeout-minutes must be a positive integer");
+      }
+      const waitTimeoutMs = waitTimeoutMinutes * 60_000;
       const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
       if (!currentBranch) throw new Error("Release preparation requires a local branch");
       const account = githubAccount(root);
@@ -324,25 +477,33 @@ program
         runIgnoringStdout(releaseRoot, "cargo", ["metadata", "--format-version", "1"]);
       }
       run(releaseRoot, process.execPath, [versionCheckScript]);
-      for (const task of opts.validateTask) {
-        run(releaseRoot, process.execPath, ["run", task]);
+      if (opts.validate) {
+        for (const task of opts.validateTask) {
+          run(releaseRoot, process.execPath, ["run", task]);
+        }
+        if (existsSync(join(releaseRoot, "Cargo.toml"))) {
+          run(releaseRoot, "cargo", [
+            "test",
+            "--workspace",
+            ...(existsSync(join(releaseRoot, "Cargo.lock")) ? ["--locked"] : []),
+          ]);
+        }
+        run(releaseRoot, process.execPath, ["run", "compile"]);
+      } else {
+        logger.warn("release validation skipped by --no-validate");
       }
-      if (existsSync(join(releaseRoot, "Cargo.toml"))) {
-        run(releaseRoot, "cargo", [
-          "test",
-          "--workspace",
-          ...(existsSync(join(releaseRoot, "Cargo.lock")) ? ["--locked"] : []),
-        ]);
+      if (opts.localPublish) {
+        await publishLocalRelease({
+          root: releaseRoot,
+          version: next.version,
+          localRegistry: opts.localRegistry,
+          localPypi: opts.localPypi,
+          pythonRoot: opts.pythonRoot,
+          localCargo: opts.localCargo,
+        });
+      } else {
+        logger.info("local publication skipped by --no-local-publish");
       }
-      run(releaseRoot, process.execPath, ["run", "compile"]);
-      await publishLocalRelease({
-        root: releaseRoot,
-        version: next.version,
-        localRegistry: opts.localRegistry,
-        localPypi: opts.localPypi,
-        pythonRoot: opts.pythonRoot,
-        localCargo: opts.localCargo,
-      });
       run(releaseRoot, process.execPath, [versionCheckScript]);
       const releaseSummary = opts.releaseSummary
         ? await generateReleaseSummary({
@@ -406,8 +567,22 @@ program
       }
       git(root, ["worktree", "remove", "--force", releaseRoot]);
       git(root, ["branch", "--delete", "--force", releaseBranch]);
+      if (opts.approve && opts.wait) {
+        const mergeSha = await waitForPullRequestMerge(
+          root,
+          releaseBranch,
+          githubEnvironment,
+          waitTimeoutMs,
+        );
+        logger.info("release pull request merged", { releaseBranch, mergeSha });
+        await waitForReleaseWorkflow(root, opts.base, mergeSha, githubEnvironment, waitTimeoutMs);
+        logger.success(`published ${releaseTag} from ${mergeSha}`);
+        return;
+      }
       logger.success(
-        `${opts.approve ? "enabled automatic merge for" : "opened"} ${releaseBranch} for ${releaseTag}`,
+        `${
+          opts.approve ? "enabled automatic merge for" : "opened"
+        } ${releaseBranch} for ${releaseTag}${opts.approve && !opts.wait ? " without waiting" : ""}`,
       );
     },
   );

@@ -2007,12 +2007,18 @@ What is configured, and why:
 `release/v<version>` worktree, increments the single root `VERSION`, regenerates
 every owned version surface, runs release validation and local publication, then
 opens one pull request into `main`. Automatic merge is enabled by default after
-required checks pass. Pass `--no-approve` to leave that PR for a human merge.
+required checks pass, and the command waits for the exact merged-SHA release
+workflow to finish. Pass `--no-approve` to leave that PR for a human merge or
+`--no-wait` to return after requesting automatic merge. `--no-validate` skips
+repository tests/compile, while `--no-local-publish` skips all local registry
+preflight; both are explicit recovery shortcuts and are never defaults.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
 Repository owner and host come from the configured Git remote. When several
 GitHub CLI accounts exist on that host, release preparation probes them in
 active-first order and uses the first token with write access to that repository;
-it never assumes the repository owner is the authenticated login.
+it never assumes the repository owner is the authenticated login. Classic
+OAuth/PAT credentials must also expose the `workflow` scope because every
+singular release updates the generated release workflow's versioned run name.
 
 Merging the release PR is the only automatic publication signal. The generated
 workflow verifies that the triggering SHA is the exact `main` commit, creates one
@@ -2060,6 +2066,9 @@ Hard rules:
 - Rust build reuse must be content-addressed and version-independent. Reuse only
   an exact target-key match from a previously successful GitHub Release, verify
   checksums and provenance, then stamp the dedicated structured version section.
+  The committed manifest uses portable target keys for review; each target runner
+  validates the committed source hash and derives the reusable asset key with its
+  actual compiler identity.
 - Never patch arbitrary binary strings or use `sed` against executables.
 
 ## The `dbx` CLI
