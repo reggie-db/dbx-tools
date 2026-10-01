@@ -40,7 +40,8 @@ mode into the launched arguments. `--persistence=auto` uses memory for a direct
 CLI run and `service.sqlite3` for an installed service. Explicit `memory` and
 `sqlite` values override that selection. The same SQLite connection owns
 non-secret settings and aggregate metric snapshots. The service runs a managed
-copy under `<config-dir>/bin`, not a mutable Cargo target or download cache.
+copy under `<config-dir>/bin`; the companion is copied beside it. Neither
+autostart entry points at a mutable Cargo target or download cache.
 
 The systray policy is `auto`, `always`, or `never`. Auto is the default and
 registers the companion only when its tray-icon capability probe succeeds.

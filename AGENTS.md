@@ -505,8 +505,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   lifecycle commands, and companion autostart policy. Direct auto mode uses
   memory; installed auto mode uses the one shared SQLite connection. Install
   injects the stable config directory and service marker into launched argv and
-  copies the executable into `<config-dir>/bin` before registration; never point
-  a service at a mutable Cargo target or versioned download-cache file.
+  copies service and companion executables into `<config-dir>/bin` before
+  registration; never point autostart at a mutable Cargo target or versioned
+  download-cache file.
   Its optional `desktop` feature owns the generic tray-icon event loop,
   lifecycle/status menus, Wry system WebView on macOS/Windows, Linux default-
   browser fallback, desktop capability probe, and callback-based health/open
