@@ -16,7 +16,7 @@
  * @module
  */
 
-import { projectUtils } from "@dbx-tools/core";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { functionUtils, object, type Sequence } from "@dbx-tools/shared-core";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match.ts";
 import { directoryNamePattern, fileExtensionPattern } from "./pattern.ts";
