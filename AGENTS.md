@@ -2009,6 +2009,10 @@ every owned version surface, runs release validation and local publication, then
 opens one pull request into `main`. Automatic merge is enabled by default after
 required checks pass. Pass `--no-approve` to leave that PR for a human merge.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
+Repository owner and host come from the configured Git remote. When several
+GitHub CLI accounts exist on that host, release preparation probes them in
+active-first order and uses the first token with write access to that repository;
+it never assumes the repository owner is the authenticated login.
 
 Merging the release PR is the only automatic publication signal. The generated
 workflow verifies that the triggering SHA is the exact `main` commit, creates one
