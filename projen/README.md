@@ -254,7 +254,10 @@ and select `rust-lld` for the workspace build. Rust release rows restore and
 update dependency-only Cargo caches in the release branch's cache scope. The
 cache key excludes workspace version changes, and manual tag recovery restores
 without saving a tag-scoped copy. There is no separate cache workflow or
-sccache layer. Phase timings are written to each build log. Python generation executes the already-built
+sccache layer. After publishing the current raw Rust bundles and build manifests,
+the GitHub release job deletes those internal assets from earlier releases while
+leaving versioned consumer binaries in place. Phase timings are written to each
+build log. Python generation executes the already-built
 `target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging therefore
 does no Rust compilation after the main workspace build.
 

@@ -792,6 +792,32 @@ jobs:
           generate_release_notes: true
           tag_name: ${{ needs.verify-context.outputs.release_tag }}
           target_commitish: ${{ needs.verify-context.outputs.expected_sha }}
+      - name: Delete superseded raw Rust release assets
+        id: delete_superseded_raw_rust_release_assets
+        uses: actions/github-script@v8
+        env:
+          CURRENT_RELEASE_TAG: ${{ needs.verify-context.outputs.release_tag }}
+        with:
+          script: |-
+            const currentTag = process.env.CURRENT_RELEASE_TAG;
+            if (!currentTag) throw new Error("CURRENT_RELEASE_TAG is required");
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              ...context.repo,
+              per_page: 100,
+            });
+            const assets = releases.flatMap((release) =>
+              release.draft || release.tag_name === currentTag
+                ? []
+                : release.assets.filter((asset) => /^rust-(?:raw|build)-/.test(asset.name)),
+            );
+            for (const asset of assets) {
+              core.info(`Deleting ${asset.name} (${asset.id})`);
+              await github.rest.repos.deleteReleaseAsset({
+                ...context.repo,
+                asset_id: asset.id,
+              });
+            }
+            core.info(`Deleted ${assets.length} superseded raw Rust release assets`);
   publish-native-npm:
     needs:
       - verify-context

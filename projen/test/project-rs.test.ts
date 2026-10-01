@@ -293,6 +293,7 @@ describe("DBXToolsRustWorkspace", () => {
         "Download release binaries",
         "Download reusable raw Rust outputs",
         "Publish GitHub release assets",
+        "Delete superseded raw Rust release assets",
       ]);
       assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-release.mjs")), false);
       assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-python.js")), false);
@@ -884,6 +885,16 @@ describe("DBXToolsRustWorkspace", () => {
       "docs/releases/v${{ needs.verify-context.outputs.release_version }}.md",
     );
     assert.equal(githubRelease.with?.generate_release_notes, true);
+    const rawAssetCleanup = workflowStep(
+      githubReleaseJob,
+      "Delete superseded raw Rust release assets",
+    );
+    assert.equal(rawAssetCleanup.uses, "actions/github-script@v8");
+    assert.deepEqual(rawAssetCleanup.env, {
+      CURRENT_RELEASE_TAG: "${{ needs.verify-context.outputs.release_tag }}",
+    });
+    assert.match(rawAssetCleanup.with?.script ?? "", /deleteReleaseAsset/);
+    assert.match(rawAssetCleanup.with?.script ?? "", /rust-\(\?:raw\|build\)-/);
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
     assert.ok(packager.includes('"node_modules", "npm", "bin", "npm-cli.js"'));
     assert.ok(packager.includes("command: process.execPath, args: [npmCli, ...args]"));

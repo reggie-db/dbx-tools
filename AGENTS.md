@@ -803,8 +803,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   unchanged workspace crate outputs when an exact raw-bundle hit is unavailable;
   Cargo's source hashing still rebuilds changed crates. Do not add a separate
   cache workflow or GitHub sccache layer because per-object entries can exhaust
-  the repository quota. `Cargo.lock` and `--locked` keep
-  dependency resolution reproducible.
+  the repository quota. A successful GitHub release keeps its raw Rust bundles
+  and build manifests, then deletes those internal assets from every earlier
+  published release. Consumer binaries remain attached to their original
+  versions. `Cargo.lock` and `--locked` keep dependency resolution reproducible.
   Set
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
