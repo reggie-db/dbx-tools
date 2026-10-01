@@ -33,7 +33,8 @@
  */
 
 import { getUsernameWithApiLookup } from "@databricks/appkit";
-import { error, hash, log } from "@dbx-tools/shared-core";
+import { migration as appkitMigration } from "@dbx-tools/appkit";
+import { hash, log } from "@dbx-tools/shared-core";
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
@@ -45,19 +46,6 @@ import { agentStorageSchemaName } from "./storage-schema.ts";
 import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
 const logger = log.logger("mastra/memory");
-
-/** Process-wide dedupe so instance + per-agent stores share one ownership log. */
-const loggedMigrationErrors = new Set<string>();
-
-/** Whether `LOG_LEVEL` is currently at or below debug. */
-function isDebugEnabled(): boolean {
-  return log.isLevelEnabled("debug");
-}
-
-/** Whether a migration failed only because this role does not own an existing object. */
-function isOwnershipMigrationError(err: unknown): boolean {
-  return error.errorContext(err).hasMessage("must be owner");
-}
 
 /**
  * Soften {@link PostgresStore.init} so a failed migration (e.g. Lakebase
@@ -87,19 +75,15 @@ export function withSoftStorageInit(store: PostgresStore): PostgresStore {
       try {
         await originalInit();
       } catch (err) {
-        if (!isOwnershipMigrationError(err)) throw err;
-        const message = error.errorMessage(err);
-        if (!loggedMigrationErrors.has(message)) {
-          loggedMigrationErrors.add(message);
-          if (isDebugEnabled()) {
-            logger.error("mastra storage migration failed", err);
-          } else {
-            logger.warn("mastra storage migration failed", {
-              error: message,
-              storeId: soft.id,
-              schema: soft.schema,
-            });
-          }
+        if (
+          !appkitMigration.handleOwnershipMigrationError(err, {
+            scope: "mastra-storage",
+            logger,
+            event: "mastra storage migration failed",
+            context: { storeId: soft.id, schema: soft.schema },
+          })
+        ) {
+          throw err;
         }
       }
     })();
