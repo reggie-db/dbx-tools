@@ -24,7 +24,7 @@ each configured platform.
 
 ## Per-User Service
 
-Install the proxy for the current user with its native desktop:
+Install the proxy for the current user with its optional native tray:
 
 ```sh
 dbx model-proxy service install --systray auto -- --profile PROFILE
@@ -44,20 +44,17 @@ copied under `<config-dir>/bin`, so autostart never points at a mutable Cargo
 target or download cache.
 
 The systray policy is `auto`, `always`, or `never`. Auto is the default and
-selects `dbx-model-proxy-desktop` only when its Tauri capability probe
-succeeds. Always turns an unsupported desktop session into an error. Never
-selects the headless binary. The desktop executable is the one registered
-service process and owns the proxy runtime in-process. Every lifecycle command
-fails inside a Databricks App,
-where host OS service management is unavailable.
+starts `dbx-model-proxy-tray` only when its native capability probe succeeds.
+Always turns an unsupported tray session into an error. Never starts a
+companion. The headless proxy remains the registered service process. Every
+lifecycle command fails inside a Databricks App, where host OS service
+management is unavailable.
 
-The desktop target requires the `desktop` Cargo feature. It uses the reusable
-Tauri tray/window shell from `dbx-tools-service-desktop` and keeps Tauri, Wry,
-and platform WebView dependencies out of the headless executable. Its menu
-contains only `Open Model Proxy` and `Quit`. The React UI calls typed
-rspc procedures against the same process that owns the proxy listener. The
-native shell uses Tauri IPC, while the embedded dashboard can also be opened at
-the proxy's loopback HTTP address.
+The tray target requires the `tray` Cargo feature and has no WebView or product
+UI. It shows the proxy address, the resolved current profile with lazily loaded
+profile choices, and Quit. The address submenu opens `/v1/models`, Scalar at
+`/api`, or GraphiQL at `/graphql` in the system browser. Profile changes call
+the same loopback auth API used by other local operators.
 
 macOS and Linux use the native user-level service manager. Windows uses
 current-user login startup plus the persisted exact executable and `sysinfo`
@@ -85,29 +82,28 @@ incoming request supplies the principal used to partition reactive rate-limit
 cooldowns. Identity selection never calls a Databricks API:
 
 - With `dbx model-proxy --profile PROFILE`, `dbx-tools-core` resolves that
-  exact profile without ambient credential overrides and uses its normal cached
-  token lifecycle. U2M profiles use the Databricks CLI when available and may
-  invoke login when renewal requires it.
-  PAT and U2M requests key cooldowns by the profile name; the token itself is
-  never part of the key.
+exact profile without ambient credential overrides and uses its normal cached
+token lifecycle. U2M profiles use the Databricks CLI when available and may
+invoke login when renewal requires it.
+PAT and U2M requests key cooldowns by the profile name; the token itself is
+never part of the key.
 - M2M profiles key cooldowns by OAuth client ID. Token refreshes can replace the
-  access token without changing the rate-limit identity.
+access token without changing the rate-limit identity.
 - In a Databricks App using App SP, startup resolves
-  `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and
-  `DATABRICKS_CLIENT_SECRET`. The key is therefore the normalized App host,
-  service-principal client ID, and resolved serving endpoint.
+`DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and
+`DATABRICKS_CLIENT_SECRET`. The key is therefore the normalized App host,
+service-principal client ID, and resolved serving endpoint.
 - Trusted `x-forwarded-user` and `x-forwarded-email` headers partition requests
-  by App user. When those are absent, the proxy may decode `sub`, `user_id`,
-  `oid`, `client_id`, `azp`, `email`, or `preferred_username` from an incoming
-  bearer JWT without verifying it. This decode is only a local rate-limit
-  partitioning hint and never authenticates the request.
+by App user. When those are absent, the proxy may decode `sub`, `user_id`,
+`oid`, `client_id`, `azp`, `email`, or `preferred_username` from an incoming
+bearer JWT without verifying it. This decode is only a local rate-limit
+partitioning hint and never authenticates the request.
 - Forwarded OBO identity does not replace the captured generation's upstream
-  credential. The standalone binary has no request-scoped AppKit context, so
-  automatic App startup resolves App SP. A global App OBO generation is
-  prohibited.
+credential. The standalone binary has no request-scoped AppKit context, so
+automatic App startup resolves App SP. A global App OBO generation is
+prohibited.
 
-The resulting key is `[normalized Databricks host, current principal, resolved
-model]`. Different users, service principals, hosts, or serving endpoints never
+The resulting key is `[normalized Databricks host, current principal, resolved model]`. Different users, service principals, hosts, or serving endpoints never
 share a cooldown. Keys are stored only in process memory, retain at most 1,024
 idle entries, expire after one idle hour, and disappear when the proxy exits.
 
@@ -118,10 +114,11 @@ Switching refreshes the profile file cache, disables implicit login during a
 service SQLite is active, and commits the complete generation only after every
 step succeeds. Direct CLI mode keeps the selection in process memory. Old
 generations drain after their captured requests finish. Profile switching is
-disabled inside Databricks Apps. The desktop exposes current status, secret-free
-profile metadata, and ambient or exact-profile switching through generated
-Tauri IPC only. Tokens, client secrets, arbitrary hosts, and manual credentials
-never cross that contract.
+disabled inside Databricks Apps. The loopback API exposes current status,
+secret-free profile metadata, and exact-profile switching. Tokens, client
+secrets, arbitrary hosts, and manual credentials never cross that contract.
+A missing or malformed persisted profile is cleared before startup and normal
+core profile resolution selects the effective profile.
 
 Token throttle windows are pooled separately by normalized host and workspace
 ID. This lets two authentication generations for the same workspace reuse
@@ -194,9 +191,21 @@ Supported routes:
 - `POST /v1/responses`
 - `POST /v1/messages`
 - `GET /api/healthz`
+- `GET /api/auth`
+- `GET /api/auth/profiles`
+- `PUT /api/auth`
+- `POST /api/rate-limits/models/{model}/cancel-waits`
+- `POST /api/rate-limits/models/{model}/retry-now`
+- `GET|POST|WebSocket /graphql`
+- `GET /api`
+- `GET /api/openapi.yaml`
+- `GET /api/openapi.json`
+- `GET /api/docs`
 
-Metrics, profile controls, and rate-limit controls are not HTTP routes. They
-are available only through the typed desktop IPC surface.
+Mutation routes require a same-origin loopback request with
+`X-Model-Proxy-Control: 1`. GraphQL uses GET for GraphiQL or WebSocket
+subscriptions and POST for queries and introspection. HTML requests to `/api`
+serve Scalar.
 
 `GET /v1/models` reads the cached live serving-endpoint catalogue. Standard
 requests receive an OpenAI `object` / `data` envelope. An `originator` header
@@ -255,7 +264,7 @@ Codex discovery is a separate wire contract over the same route:
 
 - a standard `GET /v1/models` receives the OpenAI `data` envelope;
 - a request carrying `originator: codex_cli_rs` receives the Codex `models`
-  envelope used by `codex debug models` and the `/model` picker.
+envelope used by `codex debug models` and the `/model` picker.
 
 Codex validates the complete remote catalogue before merging it with its bundled
 models. One incompatible record causes it to retain the bundled catalogue.
@@ -330,7 +339,7 @@ retried; an SSE error after streaming begins cannot be replayed safely.
 Native Responses streams still inspect complete bounded SSE events while
 forwarding the original bytes. A terminal `response.failed` or `error` event is
 recorded as a failed completion; rate-limit payloads contribute a semantic 429
-to the same dashboard series as upstream HTTP 429s. Local oversized-input and
+to the same metrics series as upstream HTTP 429s. Local oversized-input and
 wait-budget rejections also contribute to that series.
 
 Same-family fallback uses the live serving catalogue instead of a static model
@@ -402,43 +411,64 @@ published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
 `--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
 Databricks because process-local tracking cannot coordinate a workspace across
 proxy replicas. `/api/healthz` reports readiness and the active runtime
-generation. The headless server does not expose model and limiter controls;
-the desktop runtime exposes them through its shared rspc router.
+generation. GraphQL carries limiter counters and model state. Loopback control
+routes can cancel current waits, release cooldowns, enumerate profiles, and
+atomically switch the runtime.
 
-## Metrics And Desktop
+## Metrics And Operator APIs
 
 The default `--metrics=auto` enables bounded collection outside a Databricks
 App and disables it inside an App. `on` and `true` enable collection
 explicitly; `off` and `false` disable it. `METRICS` accepts the same values.
 
-The desktop owns one rspc router for status, metrics, profile switching, and
-rate-limit controls. `rspc-tauri` mounts it over native IPC, and the same router
-is available under `/rspc` on the loopback proxy server. The React Query client
-selects Tauri IPC inside the native shell and HTTP fetch in a browser, polling
-metrics every five seconds. The dashboard is available at the proxy root, such
-as `http://127.0.0.1:4000/`. It provides:
+Metrics are strongly typed GraphQL objects at `/graphql`. Send POST queries for
+the complete bounded state graph and select only the fields needed, use WebSocket
+subscriptions for live client/proxy/upstream events, closed metric windows, and
+rate-limit transitions, or open GraphiQL with an HTML GET. GraphiQL starts with
+named examples for snapshots, model performance, the unified HTTP exchange,
+windows, and rate-limit changes. Every example is type-validated at startup
+without running its resolvers. Retained feeds
+accept sequence cursors for replay. Introspection includes descriptions for
+snapshots, buckets, model performance, reasoning levels, limiter transitions,
+process rate-limit health, and retention. There is no separate metrics page,
+Prometheus endpoint, or metrics SSE route.
 
-- request, token, and latency trends;
-- a reasoning-level pie chart;
-- a searchable model-performance table;
-- current limiter, cooldown, and waiting state;
-- cancel-wait and retry-now controls;
-- secret-free profile discovery and atomic runtime switching.
+One `requests` subscription carries `CLIENT_REQUEST`, `UPSTREAM_REQUEST`,
+`UPSTREAM_RESPONSE`, `CLIENT_RESPONSE`, `UPSTREAM_SSE`, and `CLIENT_SSE` events
+with uniform request and response shapes, correlation IDs, elapsed and hop
+timings, bodies, models, protocols, and hosts. Each non-SSE hop emits one
+log-style event; every parsed SSE frame emits its own event without repeating
+HTTP headers. The `include`, `exclude`, and `models` arguments filter events.
 
-The headless binary retains only `/v1/*` and `/api/healthz`. The dashboard and
-`/rspc` routes are compiled only into the desktop runtime and call the same
-in-memory state graph that owns the proxy listener. No Prometheus or SSE route
-is added.
+Request and non-SSE response bodies are complete and uncapped whenever the live
+HTTP topic has a subscriber. Textual UTF-8 media use `content`; binary data
+uses a data URL in `content`, while `contentRaw` always carries plain base64.
+SSE `data` uses the same parsed JSON or text representation and `dataRaw`
+contains its plain base64 bytes.
+Complete headers are captured for the live event, but authorization, cookie,
+token, and API-key values read `[REDACTED]`. `--show-sensitive` is the only
+visibility switch and must be set when the proxy starts to expose those values.
+Headers use `name` plus `values[]`; each value provides text in `value` and
+plain base64 in `valueRaw`, though examples select only `value`.
+Bodies, headers, and HTTP events are live-only and never retained in memory
+history or SQLite.
+
+The REST API is generated from the same aide and `axum-typed-routing` handlers
+used by the server. Prefer `/api/openapi.yaml`; JSON is available at
+`/api/openapi.json` and Scalar at `/api` or `/api/docs`. Run
+`dbx-model-proxy --generate-spec [PATH]` to export the same document without
+starting the listener. Repository generation consumes that command to publish
+the browser-safe `@dbx-tools/openapi-model-proxy` client.
 
 History remains bounded in process memory:
 
 - five-second buckets retain the latest hour;
 - one-minute rollups retain the latest 24 hours;
 - at most 32 named model series are retained, with additional names combined
-  under `other`;
+under `other`;
 - aggregate history targets and caps retained data at 16 MiB;
 - no request events, bodies, identities, peers, credentials, or model traffic
-  are written to disk.
+are written to disk.
 
 Installed service mode also stores aggregate buckets and model snapshots in the
 same `service.sqlite3` used for non-secret service settings. Rows are keyed by a
@@ -450,29 +480,10 @@ metric storage at 134217728 bytes by default. Zero disables metric persistence
 without disabling SQLite settings. Old runtime snapshots are pruned before a
 write and settings remain writable.
 
-The desktop follows the approved
-[Figma frame](https://www.figma.com/design/D95Sm5gTgOdWLW88wh0qLW?node-id=2-18)
-and canonical `branding/brand.yaml` tokens. It uses a no-manifest Bun frontend
-under `desktop/`; Tauri embeds the committed build output. Regenerate and
-validate it with:
-
-```sh
-bun run model-proxy:desktop-build
-bun run model-proxy:desktop-dev
-bun run model-proxy:desktop-check
-```
-
-The model-proxy Projen subproject replaces its standard `cargo build` compile
-task with `tauri build` and adds a native `tauri dev` task. Tauri's configured
-before-build command generates rspc bindings and bundles the frontend. Desktop
-assets are not generated during Projen synthesis. A generated Bun runner keeps
-Tauri on the desktop Cargo target without changing the crate's normal headless
-default-run target.
-
 ## Cargo Features
 
 The default `metrics` feature keeps bounded in-process aggregation available to
-both headless and desktop runtimes:
+the headless runtime:
 
 ```sh
 cargo build -p dbx-tools-model-proxy --no-default-features --features metrics
@@ -485,7 +496,6 @@ A metrics-free build resolves `--metrics=auto` to `off`, accepts explicit
 cargo build -p dbx-tools-model-proxy --no-default-features
 ```
 
-`desktop` adds Tauri, the shared service desktop shell, rspc IPC and HTTP
-transports, and the embedded frontend. The `desktop-codegen` feature exports the
-shared router's committed `desktop/src/bindings.ts` with JavaScript-number
-representations for the existing metrics counters.
+`tray` adds the separate `dbx-model-proxy-tray` binary and generic native tray
+support from `dbx-tools-service`. The default `dbx-model-proxy` binary remains
+headless.

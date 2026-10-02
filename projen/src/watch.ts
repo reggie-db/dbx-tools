@@ -81,13 +81,28 @@ function ignoredPath(path: string): boolean {
  * (e.g. the projenrc watcher passes `{ dot: false }` so its lone dotfile target,
  * `.projenrc.ts`, isn't pruned by the default dotfile group and left with nothing to
  * watch - which would let the process exit immediately).
+ *
+ * `check` is forwarded to the workspace mutation lock so a watcher that can tell
+ * the batch is a no-op never waits on an unrelated holder.
  */
+export interface WatchLoopOptions {
+  ignoreOptions?: IgnoreGroupOptions;
+  check?: (changed: string[]) => boolean | Promise<boolean>;
+}
+
+function resolveWatchLoopOptions(config?: IgnoreGroupOptions | WatchLoopOptions): WatchLoopOptions {
+  if (!config) return {};
+  if ("check" in config || "ignoreOptions" in config) return config as WatchLoopOptions;
+  return { ignoreOptions: config as IgnoreGroupOptions };
+}
+
 export function watchLoop(
   tag: string,
   paths: string[],
   onBatch: (changed: string[]) => void | Promise<void>,
-  ignoreOptions?: IgnoreGroupOptions,
+  config?: IgnoreGroupOptions | WatchLoopOptions,
 ): void {
+  const { ignoreOptions, check } = resolveWatchLoopOptions(config);
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let running = false;
@@ -105,7 +120,9 @@ export function watchLoop(
     pending.clear();
     try {
       if (relevant.length) {
-        await withWorkspaceMutationLock(repoRoot, () => onBatch(relevant));
+        await withWorkspaceMutationLock(repoRoot, () => onBatch(relevant), {
+          check: check ? () => check(relevant) : undefined,
+        });
       }
     } catch (err) {
       logger.error(`${tag} cycle failed:`, err instanceof Error ? err.message : err);

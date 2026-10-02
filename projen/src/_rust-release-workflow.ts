@@ -488,11 +488,16 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
       {
         name: "Install Linux native dependencies",
         if: "${{ matrix.os == 'linux' }}",
-        run: [
-          "sudo rm -f /etc/apt/sources.list.d/google-chrome.list",
-          "sudo apt-get update",
-          "sudo apt-get install --yes libappindicator3-dev libdbus-1-dev librsvg2-dev libwebkit2gtk-4.1-dev patchelf pkg-config",
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+            sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+            sudo apt-get update
+            sudo apt-get install --yes libdbus-1-dev pkg-config
+          `
+          // ============================================================================
+        ),
       },
       {
         name: "Verify Rust build fingerprint",

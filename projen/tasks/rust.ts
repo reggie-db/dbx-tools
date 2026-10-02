@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { log } from "@dbx-tools/shared-core";
+import { log, object } from "@dbx-tools/shared-core";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import {
   discoverRustCrates,
@@ -40,7 +40,7 @@ function currentStructure(config: RustWorkspaceMapping): RustWorkspaceMapping {
     const binding = recorded.get(rust);
     return binding ? [binding] : [{ crate: "", rust }];
   });
-  return { root: config.root, crates, bindings, binaries: config.binaries ?? [] };
+  return { ...config, crates, bindings };
 }
 
 /** Whether discovered crate membership or UniFFI marker membership changed. */
@@ -87,18 +87,47 @@ function generate(binding: RustBindingMapping): void {
   if (result.status !== 0) throw new Error(`binding generation exited with ${result.status}`);
 }
 
+function* iterateAffectedRustBindings(
+  bindings: readonly RustBindingMapping[],
+  changed: ReadonlySet<string>,
+): Generator<RustBindingMapping> {
+  const affected = new Set(changed);
+  for (const binding of orderRustBindings(bindings)) {
+    if (binding.dependencies?.some((dependency) => affected.has(dependency))) {
+      affected.add(binding.crate);
+    }
+    if (affected.has(binding.crate)) yield binding;
+  }
+}
+
 export function affectedRustBindings(
   bindings: readonly RustBindingMapping[],
   changed: ReadonlySet<string>,
 ): RustBindingMapping[] {
-  const affected = new Set(changed);
-  const ordered = orderRustBindings(bindings);
-  for (const binding of ordered) {
-    if (binding.dependencies?.some((dependency) => affected.has(dependency))) {
-      affected.add(binding.crate);
-    }
-  }
-  return ordered.filter((binding) => affected.has(binding.crate));
+  return [...iterateAffectedRustBindings(bindings, changed)];
+}
+
+/**
+ * Lazily resolve direct binding owners so lock checks stop at the first match.
+ */
+export function changedRustOwners(
+  config: RustWorkspaceMapping,
+  changed: readonly string[],
+): object.Sequence<RustBindingMapping> {
+  return object
+    .sequence(changed)
+    .map((path) => ownerBinding(path, config.bindings))
+    .nonNull()
+    .distinct();
+}
+
+/** Collect direct owners, then lazily yield them and their dependents in order. */
+export function changedRustBindings(
+  config: RustWorkspaceMapping,
+  changed: readonly string[],
+): object.Sequence<RustBindingMapping> {
+  const targets = new Set(changedRustOwners(config, changed).map((binding) => binding.crate));
+  return object.sequence(iterateAffectedRustBindings(config.bindings, targets));
 }
 
 const config = rustConfig();
@@ -113,37 +142,37 @@ async function main(): Promise<void> {
     return;
   }
 
-  watchLoop("rust", [resolve(repoRoot, config.root)], (changed) => {
-    const latest = rustConfig() ?? config;
-    if (rustStructureChanged(latest)) {
-      logger.start("Rust project structure changed - re-synthesizing (+install)");
-      runSynth({ post: true });
-      logger.success("Rust project structure synchronized");
-      const refreshed = rustConfig();
-      if (!refreshed) return;
-      const targets = new Map<string, RustBindingMapping>();
-      for (const path of changed) {
-        const binding = ownerBinding(path, refreshed.bindings);
-        if (binding) targets.set(binding.crate, binding);
+  watchLoop(
+    "rust",
+    [resolve(repoRoot, config.root)],
+    (changed) => {
+      const latest = rustConfig() ?? config;
+      if (rustStructureChanged(latest)) {
+        logger.start("Rust project structure changed - re-synthesizing (+install)");
+        runSynth({ post: true });
+        logger.success("Rust project structure synchronized");
+        const refreshed = rustConfig();
+        if (!refreshed) return;
+        for (const binding of changedRustBindings(refreshed, changed)) {
+          logger.start(`generating ${binding.crate} bindings`);
+          generate(binding);
+          logger.success(`generated ${binding.crate} bindings`);
+        }
+        return;
       }
-      for (const binding of affectedRustBindings(refreshed.bindings, new Set(targets.keys()))) {
+      for (const binding of changedRustBindings(latest, changed)) {
         logger.start(`generating ${binding.crate} bindings`);
         generate(binding);
         logger.success(`generated ${binding.crate} bindings`);
       }
-      return;
-    }
-    const targets = new Map<string, RustBindingMapping>();
-    for (const path of changed) {
-      const binding = ownerBinding(path, latest.bindings);
-      if (binding) targets.set(binding.crate, binding);
-    }
-    for (const binding of affectedRustBindings(latest.bindings, new Set(targets.keys()))) {
-      logger.start(`generating ${binding.crate} bindings`);
-      generate(binding);
-      logger.success(`generated ${binding.crate} bindings`);
-    }
-  });
+    },
+    {
+      check: (changed) => {
+        const latest = rustConfig() ?? config;
+        return changedRustOwners(latest, changed).some(() => true) || rustStructureChanged(latest);
+      },
+    },
+  );
 }
 
 if (import.meta.main) await main();

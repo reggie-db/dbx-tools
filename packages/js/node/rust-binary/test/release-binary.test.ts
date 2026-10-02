@@ -80,14 +80,14 @@ function internalDependencyReach(
 describe("Rust release binaries", () => {
   it("keeps hidden auxiliary binaries available without exposing commands", () => {
     assert.equal(
-      releaseBinaryCommands().some((command) => command.command === "model-proxy-desktop"),
+      releaseBinaryCommands().some((command) => command.command === "model-proxy-tray"),
       false,
     );
-    assert.equal(releaseBinaryCommand("model-proxy-desktop").binaryName, "dbx-model-proxy-desktop");
+    assert.equal(releaseBinaryCommand("model-proxy-tray").binaryName, "dbx-model-proxy-tray");
     assert.equal(releaseBinaryCommand("model-proxy").crateName, "dbx-tools-model-proxy");
     assert.deepEqual(releaseBinaryCommand("model-proxy").cargoFeatures, []);
     assert.equal(releaseBinaryCommand("lakebase-proxy").crateName, "dbx-tools-lakebase-proxy");
-    assert.deepEqual(releaseBinaryCommand("model-proxy-desktop").cargoFeatures, ["desktop"]);
+    assert.deepEqual(releaseBinaryCommand("model-proxy-tray").cargoFeatures, ["tray"]);
   });
 
   it("keeps the isolated runtime dependency reach below the CLI graph", () => {

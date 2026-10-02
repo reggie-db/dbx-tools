@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
-import { stringUtils } from "@dbx-tools/shared-core";
+import { object, stringUtils } from "@dbx-tools/shared-core";
 import { License, Project, TextFile, TomlFile, javascript, type Task } from "projen";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import type { RustReleaseOs } from "./project-rs.ts";
@@ -50,13 +50,19 @@ export interface CargoExampleOptions {
   readonly requiredFeatures?: readonly string[];
 }
 
+/** Rust code-first OpenAPI producer consumed by the shared generator. */
+export interface RustOpenApiOptions {
+  /** Cargo binary that handles `--generate-spec` when the package has multiple binaries. */
+  readonly binary?: string;
+  /** Features enabled while running the OpenAPI export command. */
+  readonly features?: readonly string[];
+  /** Disable the crate's default features while running the export command. */
+  readonly noDefaultFeatures?: boolean;
+}
+
 /** Cargo package, target, binding, and release behavior shared by every Rust project. */
 export interface RustCrateOptions {
   readonly description?: string;
-  /** Replace the default `cargo build` compile step with one native build command. */
-  readonly buildCommand?: string;
-  /** Add a development task for runtimes with their own native dev command. */
-  readonly devCommand?: string;
   /** Keep this crate unpublished and out of public docs. */
   readonly private?: boolean;
   /** Build this crate's binary for each target and attach it to the GitHub release. */
@@ -67,11 +73,12 @@ export interface RustCrateOptions {
   /** Cargo dependencies scoped by a target cfg expression. */
   readonly targetDependencies?: Readonly<Record<string, Readonly<Record<string, CargoDependency>>>>;
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
-  readonly buildDependencies?: Readonly<Record<string, CargoDependency>>;
   readonly features?: Readonly<Record<string, readonly string[]>>;
   readonly defaultFeatures?: readonly string[];
   /** Explicit example targets, including optional Cargo feature gates. */
   readonly examples?: readonly CargoExampleOptions[];
+  /** Generate an OpenAPI client package from this crate's aide document. */
+  readonly openapi?: boolean | RustOpenApiOptions;
   /** Cargo and release executable name. Defaults to the generated package name. */
   readonly binaryName?: string;
   /** Additional Cargo binary targets owned by this crate. */
@@ -111,29 +118,31 @@ export interface DBXToolsRustProjectOptions extends DBXToolsProjectOptions, Rust
   readonly repository?: string;
 }
 
-function rustSources(directory: string): string[] {
-  if (!existsSync(directory)) return [];
-  const files: string[] = [];
+function* rustSources(directory: string): Generator<string> {
+  if (!existsSync(directory)) return;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...rustSources(path));
-    else if (entry.isFile() && entry.name.endsWith(".rs")) files.push(path);
+    if (entry.isDirectory()) yield* rustSources(path);
+    else if (entry.isFile() && entry.name.endsWith(".rs")) yield path;
   }
-  return files;
 }
 
 /** Whether a Rust crate embeds the UniFFI proc-macro scaffolding marker. */
 export function hasUniFFIBindings(directory: string): boolean {
-  return rustSources(join(directory, "src")).some((path) =>
-    /\buniffi\s*::\s*setup_scaffolding\s*!\s*\(/.test(readFileSync(path, "utf8")),
-  );
+  return object
+    .sequence(rustSources(join(directory, "src")))
+    .some((path) => /\buniffi\s*::\s*setup_scaffolding\s*!\s*\(/.test(readFileSync(path, "utf8")));
+}
+
+function hasRustSources(directory: string): boolean {
+  return object.sequence(rustSources(directory)).some(() => true);
 }
 
 export function discoverRustCrates(root: string): string[] {
   if (!existsSync(root)) return [];
   return readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .filter((entry) => rustSources(join(root, entry.name, "src")).length > 0)
+    .filter((entry) => hasRustSources(join(root, entry.name, "src")))
     .map((entry) => entry.name)
     .sort();
 }
@@ -207,17 +216,15 @@ function packageOptions(
   return {
     directory: options.directory,
     ...(options.description !== undefined ? { description: options.description } : {}),
-    ...(options.buildCommand ? { buildCommand: options.buildCommand } : {}),
-    ...(options.devCommand ? { devCommand: options.devCommand } : {}),
     ...(options.private !== undefined ? { private: options.private } : {}),
     ...(options.release !== undefined ? { release: options.release } : {}),
     ...(options.releaseExcludeOs ? { releaseExcludeOs: options.releaseExcludeOs } : {}),
     ...(options.dependencies ? { dependencies: options.dependencies } : {}),
     ...(options.targetDependencies ? { targetDependencies: options.targetDependencies } : {}),
     ...(options.devDependencies ? { devDependencies: options.devDependencies } : {}),
-    ...(options.buildDependencies ? { buildDependencies: options.buildDependencies } : {}),
     ...(options.features ? { features: options.features } : {}),
     ...(options.defaultFeatures ? { defaultFeatures: options.defaultFeatures } : {}),
+    ...(options.openapi !== undefined ? { openapi: options.openapi } : {}),
     ...(options.binaryName ? { binaryName: options.binaryName } : {}),
     ...(options.binaries ? { binaries: options.binaries } : {}),
     ...(options.cli !== undefined ? { cli: options.cli } : {}),
@@ -368,16 +375,6 @@ export class RustProject extends Project implements DBXToolsProject {
             ),
           }
         : {}),
-      ...(options.buildDependencies
-        ? {
-            "build-dependencies": Object.fromEntries(
-              Object.entries(options.buildDependencies).map(([name, value]) => [
-                name,
-                cargoDependency(value, dependencyVersion),
-              ]),
-            ),
-          }
-        : {}),
     };
     this.manifestFile = new TomlFile(this, "Cargo.toml", { marker: false, obj: manifest });
     if (this.uniffi) {
@@ -394,13 +391,7 @@ export class RustProject extends Project implements DBXToolsProject {
         ),
       });
     }
-    this.compileTask.reset(options.buildCommand ?? "cargo build");
-    if (options.devCommand) {
-      this.addTask("dev", {
-        description: "Run the native development runtime",
-        exec: options.devCommand,
-      });
-    }
+    this.compileTask.reset("cargo build");
     this.testTask.reset("cargo test");
     this.packageTask.reset("cargo package");
     this.lintTask = this.addTask("lint", {

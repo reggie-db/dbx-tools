@@ -16,7 +16,7 @@ import { json } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 
 const PROXY = releaseBinaryCommand("model-proxy");
-const DESKTOP = releaseBinaryCommand("model-proxy-desktop");
+const TRAY = releaseBinaryCommand("model-proxy-tray");
 const execFileAsync = promisify(execFile);
 
 function argvAfter(argv: readonly string[], prefix: readonly string[]): string[] | undefined {
@@ -53,29 +53,23 @@ export function restoreInstallArgs(
 async function installRequirements(
   proxy: string,
   installArgs: readonly string[],
-  desktop?: string,
-): Promise<{ desktopAssetRequired: boolean; installArgs: string[] }> {
+  tray?: string,
+): Promise<{ trayAssetRequired: boolean; installArgs: string[] }> {
   const { stdout } = await execFileAsync(
     proxy,
-    [
-      "service",
-      "requirements",
-      ...(desktop ? ["--desktop-executable", desktop] : []),
-      "--",
-      ...installArgs,
-    ],
+    ["service", "requirements", ...(tray ? ["--companion", tray] : []), "--", ...installArgs],
     { encoding: "utf8" },
   );
   const requirements = json.parseRecord(stdout);
   if (
-    typeof requirements?.desktop_asset_required !== "boolean" ||
+    typeof requirements?.companion_asset_required !== "boolean" ||
     !Array.isArray(requirements.install_args) ||
     !requirements.install_args.every((argument) => typeof argument === "string")
   ) {
     throw new Error("model proxy returned invalid service requirements");
   }
   return {
-    desktopAssetRequired: requirements.desktop_asset_required,
+    trayAssetRequired: requirements.companion_asset_required,
     installArgs: requirements.install_args,
   };
 }
@@ -91,9 +85,9 @@ async function run(args: readonly string[]): Promise<void> {
     const proxy = await ensureReleaseBinary(PROXY);
     const original = restoreInstallArgs(args);
     let requirements = await installRequirements(proxy.path, original);
-    if (requirements.desktopAssetRequired) {
-      const desktop = await ensureReleaseBinary(DESKTOP);
-      requirements = await installRequirements(proxy.path, original, desktop.path);
+    if (requirements.trayAssetRequired) {
+      const tray = await ensureReleaseBinary(TRAY);
+      requirements = await installRequirements(proxy.path, original, tray.path);
     }
     forwarded = ["service", "install", ...requirements.installArgs];
   }

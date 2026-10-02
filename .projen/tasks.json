@@ -248,36 +248,6 @@
         }
       ]
     },
-    "model-proxy:desktop-build": {
-      "name": "model-proxy:desktop-build",
-      "description": "Build the model-proxy desktop through Tauri",
-      "steps": [
-        {
-          "exec": "cd packages/rs/model-proxy && bunx projen compile"
-        }
-      ]
-    },
-    "model-proxy:desktop-check": {
-      "name": "model-proxy:desktop-check",
-      "description": "Build and verify committed rspc bindings and desktop assets",
-      "steps": [
-        {
-          "spawn": "model-proxy:desktop-build"
-        },
-        {
-          "exec": "git diff --exit-code -- packages/rs/model-proxy/desktop/src/bindings.ts packages/rs/model-proxy/desktop/dist"
-        }
-      ]
-    },
-    "model-proxy:desktop-dev": {
-      "name": "model-proxy:desktop-dev",
-      "description": "Run the model-proxy desktop through Tauri",
-      "steps": [
-        {
-          "exec": "cd packages/rs/model-proxy && bunx projen dev"
-        }
-      ]
-    },
     "model:contracts": {
       "name": "model:contracts",
       "description": "Generate browser-safe TypeScript and Zod model contracts from Rust",
@@ -393,7 +363,7 @@
       "description": "Prepare, validate, locally publish, and automatically merge a release PR",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"model-proxy:desktop-check\" --validate-task \"rs:release-fingerprint\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"rs:release-fingerprint\"",
           "receiveArgs": true
         }
       ]
@@ -466,9 +436,6 @@
         },
         {
           "spawn": "test:installer"
-        },
-        {
-          "spawn": "model-proxy:desktop-check"
         },
         {
           "exec": "bun run --filter '*' test"

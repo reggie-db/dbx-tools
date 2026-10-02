@@ -1,8 +1,8 @@
-//! Bounded process-local metrics for headless and desktop proxy runtimes.
+//! Bounded process-local metrics exposed through typed GraphQL queries.
 
 use std::{
     fmt,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     pin::Pin,
     str::FromStr,
     task::{Context, Poll},
@@ -22,28 +22,27 @@ use dbx_tools_service::ServiceStorage;
 #[cfg(feature = "metrics")]
 use hdrhistogram::Histogram;
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use tokio::sync::broadcast;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{TcpListener, TcpStream},
 };
 
-use crate::{adaptive::AutoTransition, request_log::RequestOutcome};
+use crate::{
+    adaptive::AutoTransition, rate_limit::RateLimitModelSnapshot, request_log::RequestOutcome,
+    throttle::ThrottleModelSnapshot,
+};
 #[cfg(feature = "metrics")]
-use crate::{adaptive::AutoTransitionKind, request_log::ReasoningSetting};
-#[cfg(any(feature = "desktop", test))]
-use crate::{rate_limit::RateLimitModelSnapshot, throttle::ThrottleModelSnapshot};
+use crate::{
+    adaptive::AutoTransitionKind,
+    events::{MetricWindowEvent, MetricWindowResolution, ProxyFeeds},
+    request_log::ReasoningSetting,
+};
 
-#[cfg(any(feature = "metrics", test))]
 const MODEL_SERIES_LIMIT: usize = 32;
 #[cfg(feature = "metrics")]
 const DETAILED_BUCKET_LIMIT: usize = 720;
 #[cfg(feature = "metrics")]
 const ROLLUP_BUCKET_LIMIT: usize = 1_440;
-#[cfg(feature = "metrics")]
-const RATE_LIMIT_EVENT_LIMIT: usize = 128;
-#[cfg(any(feature = "metrics", test))]
 const RETENTION_TARGET_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Requested metrics behavior before build capabilities are resolved.
@@ -78,8 +77,17 @@ impl FromStr for MetricsOption {
 }
 
 /// Resolved metrics behavior supported by the current binary.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::Enum,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    PartialEq,
+    schemars::JsonSchema,
+    Serialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum MetricsMode {
     On,
@@ -103,11 +111,14 @@ pub(crate) const fn default_metrics_option() -> MetricsOption {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MetricsConfig {
     pub(crate) mode: MetricsMode,
+    pub(crate) routes_visible: bool,
 }
 
 impl MetricsConfig {
     pub(crate) fn resolve(
         requested: MetricsOption,
+        host: IpAddr,
+        metrics_public: bool,
         in_databricks_app: bool,
     ) -> Result<Self, MetricsError> {
         let mode = match requested {
@@ -118,7 +129,10 @@ impl MetricsConfig {
             MetricsOption::On if cfg!(feature = "metrics") => MetricsMode::On,
             MetricsOption::On => return Err(MetricsError::CollectionUnavailable),
         };
-        Ok(Self { mode })
+        Ok(Self {
+            mode,
+            routes_visible: mode != MetricsMode::Off && (host.is_loopback() || metrics_public),
+        })
     }
 }
 
@@ -152,6 +166,8 @@ pub(crate) struct MetricsRuntime {
     config: MetricsConfig,
     #[cfg(feature = "metrics")]
     inner: Option<Arc<MetricsInner>>,
+    #[cfg(feature = "metrics")]
+    feeds: Arc<Mutex<Option<ProxyFeeds>>>,
 }
 
 impl fmt::Debug for MetricsRuntime {
@@ -174,10 +190,12 @@ impl MetricsRuntime {
         persistence: Option<MetricsPersistenceConfig>,
     ) -> Result<Self, MetricsError> {
         #[cfg(feature = "metrics")]
+        let feeds = Arc::new(Mutex::new(None));
+        #[cfg(feature = "metrics")]
         let inner = if config.mode == MetricsMode::Off {
             None
         } else {
-            Some(MetricsInner::new(persistence)?)
+            Some(MetricsInner::new(persistence, Arc::clone(&feeds))?)
         };
         #[cfg(not(feature = "metrics"))]
         let _ = persistence;
@@ -185,10 +203,34 @@ impl MetricsRuntime {
             config,
             #[cfg(feature = "metrics")]
             inner,
+            #[cfg(feature = "metrics")]
+            feeds,
         };
         #[cfg(feature = "metrics")]
         runtime.start_sampler();
         Ok(runtime)
+    }
+
+    pub(crate) fn set_feeds(&self, feeds: crate::events::ProxyFeeds) {
+        #[cfg(feature = "metrics")]
+        if let Ok(mut configured) = self.feeds.lock() {
+            *configured = Some(feeds);
+        }
+        #[cfg(not(feature = "metrics"))]
+        let _ = feeds;
+    }
+
+    #[cfg(feature = "metrics")]
+    pub(crate) fn feeds(&self) -> Option<ProxyFeeds> {
+        self.feeds
+            .lock()
+            .ok()
+            .and_then(|configured| configured.clone())
+    }
+
+    #[cfg(not(feature = "metrics"))]
+    pub(crate) fn feeds(&self) -> Option<crate::events::ProxyFeeds> {
+        None
     }
 
     pub(crate) fn activate_runtime(&self, runtime_key: String) -> Result<(), MetricsError> {
@@ -205,19 +247,12 @@ impl MetricsRuntime {
         self.config.mode
     }
 
-    pub(crate) fn collection_enabled(&self) -> bool {
-        self.config.mode != MetricsMode::Off
+    pub(crate) fn routes_visible(&self) -> bool {
+        self.config.routes_visible
     }
 
-    pub(crate) async fn flush(&self) -> Result<(), MetricsError> {
-        #[cfg(feature = "metrics")]
-        if let Some(inner) = &self.inner {
-            let inner = Arc::clone(inner);
-            return tokio::task::spawn_blocking(move || inner.persist())
-                .await
-                .map_err(|error| MetricsError::Persistence(error.to_string()))?;
-        }
-        Ok(())
+    pub(crate) fn collection_enabled(&self) -> bool {
+        self.config.mode != MetricsMode::Off
     }
 
     pub(crate) fn track_listener(&self, listener: TcpListener) -> MetricsListener {
@@ -368,7 +403,6 @@ impl MetricsRuntime {
         let _ = (delay_source, exhausted);
     }
 
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn snapshot(&self) -> MetricsSnapshot {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -379,19 +413,6 @@ impl MetricsRuntime {
         MetricsSnapshot::disabled(self.config.mode)
     }
 
-    #[cfg(any(feature = "desktop", test))]
-    pub(crate) fn snapshot_for_model(&self, model: &str) -> MetricsSnapshot {
-        #[cfg(feature = "metrics")]
-        if let Some(inner) = &self.inner {
-            let mut snapshot = inner.snapshot_for_model(model);
-            snapshot.mode = self.config.mode;
-            return snapshot;
-        }
-        let _ = model;
-        MetricsSnapshot::disabled(self.config.mode)
-    }
-
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn record_capacity_snapshots(&self, capacities: &[ThrottleModelSnapshot]) {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -401,7 +422,6 @@ impl MetricsRuntime {
         let _ = capacities;
     }
 
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn record_rate_limit_snapshots(
         &self,
         snapshots: &[RateLimitModelSnapshot],
@@ -415,11 +435,6 @@ impl MetricsRuntime {
         let _ = (snapshots, controls_enabled);
     }
 
-    #[cfg(test)]
-    pub(crate) fn subscribe(&self) -> Option<broadcast::Receiver<()>> {
-        self.inner.as_ref().map(|inner| inner.events.subscribe())
-    }
-
     #[cfg(feature = "metrics")]
     fn start_sampler(&self) {
         let Some(inner) = self.inner.clone() else {
@@ -430,8 +445,6 @@ impl MetricsRuntime {
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
-                #[cfg(test)]
-                let _ = inner.events.send(());
                 let persistence = Arc::clone(&inner);
                 match tokio::task::spawn_blocking(move || persistence.persist()).await {
                     Ok(Ok(())) => {}
@@ -533,28 +546,40 @@ impl Drop for MetricsStream {
     }
 }
 
-/// Current dashboard and JSON endpoint payload.
-#[cfg(any(feature = "metrics", test))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+/// Current typed GraphQL metrics snapshot.
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Deserialize, schemars::JsonSchema, Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MetricsSnapshot {
+    /// Active metrics collection mode.
     pub(crate) mode: MetricsMode,
+    /// Whether local operator controls are available.
     pub(crate) controls_enabled: bool,
+    /// Process-relative timestamp represented by this snapshot.
     pub(crate) generated_at_ms: u64,
+    /// Process uptime in seconds.
     pub(crate) uptime_seconds: u64,
+    /// Aggregate process metrics.
     pub(crate) summary: SummarySnapshot,
+    /// Process-local rate-limit control and adaptation counters.
+    #[serde(default)]
+    pub(crate) rate_limits: RateLimitHealthSnapshot,
+    /// Five-second aggregate history.
     pub(crate) history: Vec<BucketSnapshot>,
+    /// One-minute aggregate history.
     pub(crate) rollup_history: Vec<BucketSnapshot>,
+    /// Bounded per-model metrics.
     pub(crate) models: Vec<ModelSnapshot>,
+    /// Aggregate request counts by reasoning setting.
     pub(crate) reasoning_levels: Vec<ReasoningLevelSnapshot>,
+    /// Recent adaptive limiter transitions.
     pub(crate) rate_limit_events: Vec<RateLimitEvent>,
+    /// Retention policy and current estimated footprint.
     pub(crate) retention: RetentionSnapshot,
 }
 
-#[cfg(any(feature = "metrics", test))]
 impl MetricsSnapshot {
-    #[cfg(any(feature = "desktop", test))]
     fn disabled(mode: MetricsMode) -> Self {
         Self {
             mode,
@@ -562,6 +587,7 @@ impl MetricsSnapshot {
             generated_at_ms: 0,
             uptime_seconds: 0,
             summary: SummarySnapshot::default(),
+            rate_limits: RateLimitHealthSnapshot::default(),
             history: Vec::new(),
             rollup_history: Vec::new(),
             models: Vec::new(),
@@ -572,7 +598,7 @@ impl MetricsSnapshot {
                 detailed_seconds: 3_600,
                 rollup_resolution_seconds: 60,
                 rollup_seconds: 86_400,
-                model_series_limit: MODEL_SERIES_LIMIT,
+                model_series_limit: MODEL_SERIES_LIMIT as u64,
                 target_bytes: RETENTION_TARGET_BYTES,
                 estimated_bytes: 0,
                 process_local: true,
@@ -580,7 +606,6 @@ impl MetricsSnapshot {
         }
     }
 
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn apply_capacity_snapshots(&mut self, capacities: &[ThrottleModelSnapshot]) {
         for model in &mut self.models {
             model.reset_capacity();
@@ -592,7 +617,6 @@ impl MetricsSnapshot {
         self.finish_model_merge();
     }
 
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn apply_rate_limit_snapshots(
         &mut self,
         snapshots: &[RateLimitModelSnapshot],
@@ -609,7 +633,6 @@ impl MetricsSnapshot {
         self.finish_model_merge();
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn model_merge_index(&mut self, model: &str) -> (usize, bool) {
         if let Some(index) = self
             .models
@@ -639,7 +662,6 @@ impl MetricsSnapshot {
         (self.models.len() - 1, target == "other")
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn finish_model_merge(&mut self) {
         self.models.sort_by(|left, right| {
             (left.model == "other")
@@ -647,7 +669,7 @@ impl MetricsSnapshot {
                 .then_with(|| right.requests.cmp(&left.requests))
                 .then_with(|| left.model.cmp(&right.model))
         });
-        self.summary.active_models = self.models.len();
+        self.summary.active_models = self.models.len() as u64;
         self.summary.cooldown_keys = self.models.iter().map(|model| model.cooldown_keys).sum();
         self.summary.rate_limit_waiters = self
             .models
@@ -676,98 +698,200 @@ impl MetricsSnapshot {
     }
 }
 
-#[cfg(any(feature = "metrics", test))]
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Default, Deserialize, schemars::JsonSchema, Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SummarySnapshot {
+    /// Currently open TCP connections.
     pub(crate) connections: u64,
+    /// Requests currently executing.
     pub(crate) active_requests: u64,
+    /// Streaming responses currently open.
     pub(crate) active_streams: u64,
+    /// Requests observed in the latest minute.
     pub(crate) requests_per_minute: u64,
+    /// Input plus output tokens observed in the latest minute.
     pub(crate) tokens_per_minute: u64,
+    /// Median request latency in milliseconds.
     pub(crate) p50_latency_ms: u64,
+    /// 95th percentile request latency in milliseconds.
     pub(crate) p95_latency_ms: u64,
+    /// 99th percentile request latency in milliseconds.
     pub(crate) p99_latency_ms: u64,
+    /// Percentage of latest-minute requests that were rate limited.
     pub(crate) rate_429_percent: f64,
-    pub(crate) active_models: usize,
+    /// Number of retained model series.
+    pub(crate) active_models: u64,
+    /// Requests observed since the current runtime aggregate began.
     pub(crate) total_requests: u64,
+    /// Rate-limited requests observed in the aggregate.
     pub(crate) total_rate_limited: u64,
+    /// Requests that used a lower model fallback.
     pub(crate) total_fallbacks: u64,
+    /// Current rate-limit cooldown keys.
     pub(crate) cooldown_keys: u64,
+    /// Requests waiting for token capacity or cooldown recovery.
     pub(crate) rate_limit_waiters: u64,
+    /// Cooldown keys currently running a recovery probe.
     pub(crate) probe_keys: u64,
+    /// Waiters cancelled by an operator.
     pub(crate) wait_cancellations: u64,
+    /// Cooldowns released by an operator.
     pub(crate) cooldown_releases: u64,
 }
 
-#[cfg(any(feature = "metrics", test))]
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Default, Deserialize, schemars::JsonSchema, Serialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RateLimitHealthSnapshot {
+    /// Automatic limiter activations.
+    pub(crate) automatic_activations: u64,
+    /// Automatic adaptive-budget tightenings.
+    pub(crate) automatic_tightenings: u64,
+    /// Automatic adaptive-budget relaxations.
+    pub(crate) automatic_relaxations: u64,
+    /// Automatic limiter deactivations.
+    pub(crate) automatic_deactivations: u64,
+    /// Automatic limiter reactivations.
+    pub(crate) automatic_reactivations: u64,
+    /// Current automatically active workspace/model keys.
+    pub(crate) auto_active_keys: u64,
+    /// Requests that waited for local token admission.
+    pub(crate) admission_waits: u64,
+    /// Token-capacity waiters cancelled by an operator.
+    pub(crate) capacity_wait_cancellations: u64,
+    /// Cooldown waiters cancelled by an operator.
+    pub(crate) cooldown_wait_cancellations: u64,
+    /// Cooldowns released by an operator.
+    pub(crate) cooldown_releases: u64,
+    /// Requests rejected for exceeding a complete input ceiling.
+    pub(crate) oversized_rejections: u64,
+    /// Input-token 429 responses received after admission.
+    pub(crate) input_429_after_admission: u64,
+    /// Retry attempts that reacquired local token capacity.
+    pub(crate) retry_reacquisitions: u64,
+    /// Retry delays that used a local token-window fallback.
+    pub(crate) fallback_window_delays: u64,
+}
+
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Default, Deserialize, schemars::JsonSchema, Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BucketSnapshot {
+    /// Bucket start relative to the aggregate timeline.
     pub(crate) started_at_ms: u64,
+    /// Requests completed in this bucket.
     pub(crate) requests: u64,
+    /// Input tokens recorded in this bucket.
     pub(crate) input_tokens: u64,
+    /// Output tokens recorded in this bucket.
     pub(crate) output_tokens: u64,
+    /// Failed requests in this bucket.
     pub(crate) errors: u64,
+    /// Rate-limited requests in this bucket.
     pub(crate) rate_limited: u64,
+    /// Average completed-request latency in milliseconds.
     pub(crate) average_latency_ms: u64,
+    /// Maximum completed-request latency in milliseconds.
     pub(crate) maximum_latency_ms: u64,
+    /// Median completed-request latency in milliseconds.
+    #[serde(default)]
+    pub(crate) p50_latency_ms: u64,
+    /// 95th percentile completed-request latency in milliseconds.
+    #[serde(default)]
+    pub(crate) p95_latency_ms: u64,
+    /// 99th percentile completed-request latency in milliseconds.
+    #[serde(default)]
+    pub(crate) p99_latency_ms: u64,
 }
 
-#[cfg(any(feature = "metrics", test))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Deserialize, schemars::JsonSchema, Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReasoningLevelSnapshot {
+    /// Normalized reasoning level label.
     pub(crate) level: String,
+    /// Requests observed at this reasoning level.
     pub(crate) requests: u64,
 }
 
-#[cfg(any(feature = "metrics", test))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Deserialize, schemars::JsonSchema, Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ModelSnapshot {
+    /// Resolved Databricks serving endpoint.
     pub(crate) model: String,
+    /// Five-second history included for a selected model.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) history: Vec<BucketSnapshot>,
+    /// One-minute history included for a selected model.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) rollup_history: Vec<BucketSnapshot>,
+    /// Completed requests.
     pub(crate) requests: u64,
+    /// Recorded input tokens.
     pub(crate) input_tokens: u64,
+    /// Recorded output tokens.
     pub(crate) output_tokens: u64,
+    /// Failed requests.
     pub(crate) errors: u64,
+    /// Rate-limited requests.
     pub(crate) rate_limited: u64,
+    /// Requests rejected for exceeding the per-request input ceiling.
     pub(crate) oversized_rejections: u64,
+    /// Upstream retry attempts.
     pub(crate) retries: u64,
+    /// Requests served by a lower model fallback.
     pub(crate) fallbacks: u64,
+    /// Aggregate local queue wait in milliseconds.
     pub(crate) queue_wait_ms: u64,
+    /// Current token-capacity queue depth.
     pub(crate) queue_depth: u64,
+    /// Peak token-capacity queue depth.
     pub(crate) queue_depth_max: u64,
+    /// Median model latency in milliseconds.
     pub(crate) p50_latency_ms: u64,
+    /// 95th percentile model latency in milliseconds.
     pub(crate) p95_latency_ms: u64,
+    /// 99th percentile model latency in milliseconds.
     pub(crate) p99_latency_ms: u64,
+    /// Current local limiter phase.
     pub(crate) limiter: String,
+    /// Adaptive input-budget penalty in basis points.
     pub(crate) penalty_basis_points: u16,
+    /// Complete documented or configured input-token ceiling.
     pub(crate) input_limit: Option<u64>,
+    /// Current adaptive rolling input-token budget.
     pub(crate) effective_input_budget: Option<u64>,
+    /// Tokens reserved in the current input window.
     pub(crate) input_window_used: Option<u64>,
+    /// Requests waiting for token capacity.
     pub(crate) capacity_waiters: u64,
+    /// Current upstream cooldown keys.
     pub(crate) cooldown_keys: u64,
+    /// Requests waiting for cooldown recovery.
     pub(crate) cooldown_waiters: u64,
+    /// Longest remaining cooldown in milliseconds.
     pub(crate) max_remaining_cooldown_ms: u64,
+    /// Cooldown keys currently running a recovery probe.
     pub(crate) probe_keys: u64,
+    /// Token-capacity waits cancelled by an operator.
     pub(crate) capacity_wait_cancellations: u64,
+    /// Cooldown waits cancelled by an operator.
     pub(crate) cooldown_wait_cancellations: u64,
+    /// Cooldowns released by an operator.
     pub(crate) cooldown_releases: u64,
+    /// Request counts by reasoning level.
     pub(crate) reasoning_levels: Vec<ReasoningLevelSnapshot>,
 }
 
-#[cfg(any(feature = "desktop", test))]
 impl ModelSnapshot {
-    fn empty(model: &str) -> Self {
+    pub(crate) fn empty(model: &str) -> Self {
         Self {
             model: model.to_owned(),
             history: Vec::new(),
@@ -840,7 +964,6 @@ impl ModelSnapshot {
         }
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn reset_capacity(&mut self) {
         self.queue_depth = 0;
         self.capacity_waiters = 0;
@@ -885,28 +1008,39 @@ impl ModelSnapshot {
     }
 }
 
-#[cfg(any(feature = "metrics", test))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Deserialize, schemars::JsonSchema, Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RateLimitEvent {
+    /// Process-relative transition timestamp.
     pub(crate) at_ms: u64,
+    /// Resolved model affected by the transition.
     pub(crate) model: String,
+    /// Adaptive limiter transition details.
     pub(crate) transition: AutoTransition,
 }
 
-#[cfg(any(feature = "metrics", test))]
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::SimpleObject, Clone, Debug, Deserialize, schemars::JsonSchema, Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RetentionSnapshot {
+    /// Detailed bucket width in seconds.
     pub(crate) detailed_resolution_seconds: u64,
+    /// Detailed history retention in seconds.
     pub(crate) detailed_seconds: u64,
+    /// Rollup bucket width in seconds.
     pub(crate) rollup_resolution_seconds: u64,
+    /// Rollup history retention in seconds.
     pub(crate) rollup_seconds: u64,
-    pub(crate) model_series_limit: usize,
+    /// Maximum named model series before aggregation into `other`.
+    pub(crate) model_series_limit: u64,
+    /// Process-memory retention target.
     pub(crate) target_bytes: u64,
+    /// Estimated currently retained bytes.
     pub(crate) estimated_bytes: u64,
+    /// Whether aggregates exist only in this process.
     pub(crate) process_local: bool,
 }
 
@@ -918,10 +1052,9 @@ struct MetricsInner {
     connections: AtomicU64,
     active_requests: AtomicU64,
     active_streams: AtomicU64,
-    #[cfg(test)]
-    events: broadcast::Sender<()>,
     active_runtime_key: Mutex<Option<String>>,
     persistence: Mutex<Option<MetricsPersistenceState>>,
+    feeds: Arc<Mutex<Option<ProxyFeeds>>>,
 }
 
 #[cfg(feature = "metrics")]
@@ -943,9 +1076,10 @@ struct PersistedMetrics {
 
 #[cfg(feature = "metrics")]
 impl MetricsInner {
-    fn new(persistence: Option<MetricsPersistenceConfig>) -> Result<Arc<Self>, MetricsError> {
-        #[cfg(test)]
-        let (events, _) = broadcast::channel(8);
+    fn new(
+        persistence: Option<MetricsPersistenceConfig>,
+        feeds: Arc<Mutex<Option<ProxyFeeds>>>,
+    ) -> Result<Arc<Self>, MetricsError> {
         let mut timeline_base_ms = 0;
         let mut store = MetricsStore::new();
         let persistence = persistence.map(|config| MetricsPersistenceState {
@@ -985,10 +1119,9 @@ impl MetricsInner {
             connections: AtomicU64::new(0),
             active_requests: AtomicU64::new(0),
             active_streams: AtomicU64::new(0),
-            #[cfg(test)]
-            events,
             active_runtime_key: Mutex::new(active_runtime_key),
             persistence: Mutex::new(persistence),
+            feeds,
         }))
     }
 
@@ -1005,14 +1138,24 @@ impl MetricsInner {
             .expect("metrics persistence lock is not poisoned")
             .clone();
         let Some(persistence) = persistence else {
+            self.publish_closed_windows();
             return Ok(());
         };
         let timeline_ms = self.timeline_ms();
-        let snapshot = self
-            .store
-            .lock()
-            .expect("metrics store lock is not poisoned")
-            .snapshot_for_persistence(timeline_ms);
+        let (snapshot, detailed, rollups) = {
+            let mut store = self
+                .store
+                .lock()
+                .expect("metrics store lock is not poisoned");
+            store.advance(timeline_ms);
+            let closed = store.take_closed_windows();
+            (
+                store.snapshot_for_persistence(timeline_ms),
+                closed.0,
+                closed.1,
+            )
+        };
+        self.publish_windows(detailed, rollups);
         let stored_at_ms = wall_clock_ms();
         let payload = serde_json::to_vec(&PersistedMetrics {
             version: 1,
@@ -1030,6 +1173,46 @@ impl MetricsInner {
             )
             .map_err(|error| MetricsError::Persistence(error.to_string()))?;
         Ok(())
+    }
+
+    fn publish_closed_windows(&self) {
+        let timeline_ms = self.timeline_ms();
+        let (detailed, rollups) = {
+            let mut store = self
+                .store
+                .lock()
+                .expect("metrics store lock is not poisoned");
+            store.advance(timeline_ms);
+            store.take_closed_windows()
+        };
+        self.publish_windows(detailed, rollups);
+    }
+
+    fn publish_windows(&self, detailed: Vec<BucketSnapshot>, rollups: Vec<BucketSnapshot>) {
+        let feeds = self
+            .feeds
+            .lock()
+            .ok()
+            .and_then(|configured| configured.clone());
+        let Some(feeds) = feeds else {
+            return;
+        };
+        for bucket in detailed {
+            if let Err(error) = feeds.five_second_windows.publish(MetricWindowEvent {
+                resolution: MetricWindowResolution::FiveSeconds,
+                bucket,
+            }) {
+                tracing::warn!(%error, "five-second metrics window could not be published");
+            }
+        }
+        for bucket in rollups {
+            if let Err(error) = feeds.minute_windows.publish(MetricWindowEvent {
+                resolution: MetricWindowResolution::OneMinute,
+                bucket,
+            }) {
+                tracing::warn!(%error, "one-minute metrics window could not be published");
+            }
+        }
     }
 
     fn activate_runtime(&self, runtime_key: String) -> Result<(), MetricsError> {
@@ -1208,7 +1391,21 @@ impl MetricsInner {
             .store
             .lock()
             .expect("metrics store lock is not poisoned")
-            .record_transition(elapsed_ms, model, transition);
+            .record_transition(model, transition);
+        let feeds = self
+            .feeds
+            .lock()
+            .ok()
+            .and_then(|configured| configured.clone());
+        if let Some(feeds) = feeds {
+            if let Err(error) = feeds.rate_limits.publish(RateLimitEvent {
+                at_ms: elapsed_ms,
+                model: model.to_owned(),
+                transition,
+            }) {
+                tracing::warn!(%error, "rate-limit event could not be published");
+            }
+        }
         ::metrics::counter!(
             "dbx_model_proxy_rate_limit_transitions_total",
             "transition" => format!("{:?}", transition.kind).to_ascii_lowercase()
@@ -1299,7 +1496,6 @@ impl MetricsInner {
         .increment(1);
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn record_capacity_snapshots(&self, capacities: &[ThrottleModelSnapshot]) {
         let labels = self
             .store
@@ -1351,7 +1547,6 @@ impl MetricsInner {
         }
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn record_rate_limit_snapshots(
         &self,
         snapshots: &[RateLimitModelSnapshot],
@@ -1396,17 +1591,10 @@ impl MetricsInner {
         }
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn snapshot(&self) -> MetricsSnapshot {
-        self.snapshot_with_model(None)
+        self.snapshot_with_model(Some("*"))
     }
 
-    #[cfg(any(feature = "desktop", test))]
-    fn snapshot_for_model(&self, model: &str) -> MetricsSnapshot {
-        self.snapshot_with_model(Some(model))
-    }
-
-    #[cfg(any(feature = "desktop", test))]
     fn snapshot_with_model(&self, model: Option<&str>) -> MetricsSnapshot {
         let elapsed_ms = self.timeline_ms();
         let connections = self.connections.load(Ordering::Relaxed);
@@ -1494,10 +1682,11 @@ struct MetricsStore {
     detailed_current: Bucket,
     rollups: VecDeque<Bucket>,
     rollup_current: Bucket,
+    closed_detailed: VecDeque<BucketSnapshot>,
+    closed_rollups: VecDeque<BucketSnapshot>,
     models: HashMap<String, ModelMetrics>,
     other: ModelMetrics,
     reasoning: ReasoningCounts,
-    rate_limit_events: VecDeque<RateLimitEvent>,
 }
 
 #[cfg(feature = "metrics")]
@@ -1513,10 +1702,11 @@ impl MetricsStore {
             detailed_current: Bucket::default(),
             rollups: VecDeque::with_capacity(ROLLUP_BUCKET_LIMIT),
             rollup_current: Bucket::default(),
+            closed_detailed: VecDeque::new(),
+            closed_rollups: VecDeque::new(),
             models: HashMap::with_capacity(MODEL_SERIES_LIMIT),
             other: ModelMetrics::new("other"),
             reasoning: ReasoningCounts::default(),
-            rate_limit_events: VecDeque::with_capacity(RATE_LIMIT_EVENT_LIMIT),
         }
     }
 
@@ -1546,14 +1736,6 @@ impl MetricsStore {
                 models.insert(restored.model.clone(), restored);
             }
         }
-        let mut rate_limit_events = snapshot
-            .rate_limit_events
-            .into_iter()
-            .filter(|event| event.at_ms.saturating_add(86_400_000) >= timeline_ms)
-            .collect::<VecDeque<_>>();
-        while rate_limit_events.len() > RATE_LIMIT_EVENT_LIMIT {
-            rate_limit_events.pop_front();
-        }
         Self {
             controls_enabled: false,
             total_requests: snapshot.summary.total_requests,
@@ -1564,10 +1746,11 @@ impl MetricsStore {
             detailed_current,
             rollups,
             rollup_current,
+            closed_detailed: VecDeque::new(),
+            closed_rollups: VecDeque::new(),
             models,
             other,
             reasoning: ReasoningCounts::restore(&snapshot.reasoning_levels),
-            rate_limit_events,
         }
     }
 
@@ -1620,7 +1803,6 @@ impl MetricsStore {
         model_label
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn record_capacity_snapshots(&mut self, capacities: &[ThrottleModelSnapshot]) -> Vec<String> {
         for model in self.models.values_mut() {
             model.reset_capacity();
@@ -1643,7 +1825,6 @@ impl MetricsStore {
             .collect()
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn record_rate_limit_snapshots(
         &mut self,
         snapshots: &[RateLimitModelSnapshot],
@@ -1725,20 +1906,7 @@ impl MetricsStore {
         }
     }
 
-    fn record_transition(
-        &mut self,
-        elapsed_ms: u64,
-        model: &str,
-        transition: AutoTransition,
-    ) -> String {
-        if self.rate_limit_events.len() == RATE_LIMIT_EVENT_LIMIT {
-            self.rate_limit_events.pop_front();
-        }
-        self.rate_limit_events.push_back(RateLimitEvent {
-            at_ms: elapsed_ms,
-            model: model.to_owned(),
-            transition,
-        });
+    fn record_transition(&mut self, model: &str, transition: AutoTransition) -> String {
         let label = self.model_label(model);
         let limiter = limiter_state(transition);
         if label == "other" {
@@ -1768,20 +1936,31 @@ impl MetricsStore {
     }
 
     fn advance(&mut self, elapsed_ms: u64) {
-        advance_bucket(
+        if let Some(closed) = advance_bucket(
             &mut self.detailed,
             &mut self.detailed_current,
             elapsed_ms,
             5_000,
             DETAILED_BUCKET_LIMIT,
-        );
-        advance_bucket(
+        ) {
+            self.closed_detailed.push_back(closed);
+        }
+        if let Some(closed) = advance_bucket(
             &mut self.rollups,
             &mut self.rollup_current,
             elapsed_ms,
             60_000,
             ROLLUP_BUCKET_LIMIT,
-        );
+        ) {
+            self.closed_rollups.push_back(closed);
+        }
+    }
+
+    fn take_closed_windows(&mut self) -> (Vec<BucketSnapshot>, Vec<BucketSnapshot>) {
+        (
+            self.closed_detailed.drain(..).collect(),
+            self.closed_rollups.drain(..).collect(),
+        )
     }
 
     fn snapshot(
@@ -1810,7 +1989,8 @@ impl MetricsStore {
             .models
             .values_mut()
             .map(|model| {
-                let include_history = selected_model == Some(model.model.as_str());
+                let include_history =
+                    selected_model == Some("*") || selected_model == Some(model.model.as_str());
                 model.snapshot(elapsed_ms, include_history)
             })
             .collect::<Vec<_>>();
@@ -1823,10 +2003,10 @@ impl MetricsStore {
             || self.other.cooldown_wait_cancellations > 0
             || self.other.cooldown_releases > 0
         {
-            models.push(
-                self.other
-                    .snapshot(elapsed_ms, selected_model == Some("other")),
-            );
+            models.push(self.other.snapshot(
+                elapsed_ms,
+                selected_model == Some("*") || selected_model == Some("other"),
+            ));
         }
         models.sort_by(|left, right| {
             right
@@ -1856,7 +2036,7 @@ impl MetricsStore {
                 p95_latency_ms: quantile(&self.latency, 0.95),
                 p99_latency_ms: quantile(&self.latency, 0.99),
                 rate_429_percent,
-                active_models: self.models.len(),
+                active_models: self.models.len() as u64,
                 total_requests: self.total_requests,
                 total_rate_limited: self.total_rate_limited,
                 total_fallbacks: self.total_fallbacks,
@@ -1880,17 +2060,18 @@ impl MetricsStore {
                     .sum(),
                 cooldown_releases: models.iter().map(|model| model.cooldown_releases).sum(),
             },
+            rate_limits: RateLimitHealthSnapshot::default(),
             history,
             rollup_history,
             models,
             reasoning_levels: self.reasoning.snapshot(),
-            rate_limit_events: self.rate_limit_events.iter().cloned().collect(),
+            rate_limit_events: Vec::new(),
             retention: RetentionSnapshot {
                 detailed_resolution_seconds: 5,
                 detailed_seconds: 3_600,
                 rollup_resolution_seconds: 60,
                 rollup_seconds: 86_400,
-                model_series_limit: MODEL_SERIES_LIMIT,
+                model_series_limit: MODEL_SERIES_LIMIT as u64,
                 target_bytes: RETENTION_TARGET_BYTES,
                 estimated_bytes,
                 process_local: true,
@@ -1910,6 +2091,10 @@ struct Bucket {
     rate_limited: u64,
     latency_total_ms: u64,
     latency_maximum_ms: u64,
+    latencies: Vec<u64>,
+    p50_latency_ms: u64,
+    p95_latency_ms: u64,
+    p99_latency_ms: u64,
 }
 
 #[cfg(feature = "metrics")]
@@ -1933,6 +2118,15 @@ impl Bucket {
         ));
         self.latency_total_ms = self.latency_total_ms.saturating_add(outcome.duration_ms);
         self.latency_maximum_ms = self.latency_maximum_ms.max(outcome.duration_ms);
+        self.latencies.push(outcome.duration_ms);
+    }
+
+    fn finalize(&mut self) {
+        self.latencies.sort_unstable();
+        self.p50_latency_ms = slice_quantile(&self.latencies, 0.50);
+        self.p95_latency_ms = slice_quantile(&self.latencies, 0.95);
+        self.p99_latency_ms = slice_quantile(&self.latencies, 0.99);
+        self.latencies = Vec::new();
     }
 
     fn snapshot(&self) -> BucketSnapshot {
@@ -1948,6 +2142,9 @@ impl Bucket {
                 .checked_div(self.requests)
                 .unwrap_or_default(),
             maximum_latency_ms: self.latency_maximum_ms,
+            p50_latency_ms: self.p50_latency_ms,
+            p95_latency_ms: self.p95_latency_ms,
+            p99_latency_ms: self.p99_latency_ms,
         }
     }
 
@@ -1963,6 +2160,10 @@ impl Bucket {
                 .average_latency_ms
                 .saturating_mul(snapshot.requests),
             latency_maximum_ms: snapshot.maximum_latency_ms,
+            latencies: Vec::new(),
+            p50_latency_ms: snapshot.p50_latency_ms,
+            p95_latency_ms: snapshot.p95_latency_ms,
+            p99_latency_ms: snapshot.p99_latency_ms,
         }
     }
 }
@@ -2095,7 +2296,6 @@ impl ModelMetrics {
         }
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn reset_capacity(&mut self) {
         self.queue_depth = 0;
         self.capacity_waiters = 0;
@@ -2107,7 +2307,6 @@ impl ModelMetrics {
         self.capacity_wait_cancellations = 0;
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn merge_capacity(&mut self, capacity: &ThrottleModelSnapshot, aggregate: bool) {
         self.queue_depth = self.queue_depth.saturating_add(capacity.queue_depth);
         self.queue_depth_max = self.queue_depth_max.max(capacity.queue_depth);
@@ -2129,7 +2328,6 @@ impl ModelMetrics {
         }
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn reset_rate_limit(&mut self) {
         self.cooldown_keys = 0;
         self.cooldown_waiters = 0;
@@ -2139,7 +2337,6 @@ impl ModelMetrics {
         self.cooldown_releases = 0;
     }
 
-    #[cfg(any(feature = "desktop", test))]
     fn merge_rate_limit(&mut self, snapshot: &RateLimitModelSnapshot, aggregate: bool) {
         self.cooldown_keys = self.cooldown_keys.saturating_add(snapshot.cooldown_keys);
         self.cooldown_waiters = self.cooldown_waiters.saturating_add(snapshot.waiters);
@@ -2220,14 +2417,14 @@ impl ModelMetrics {
     }
 
     fn advance(&mut self, elapsed_ms: u64) {
-        advance_bucket(
+        let _ = advance_bucket(
             &mut self.detailed,
             &mut self.detailed_current,
             elapsed_ms,
             5_000,
             DETAILED_BUCKET_LIMIT,
         );
-        advance_bucket(
+        let _ = advance_bucket(
             &mut self.rollups,
             &mut self.rollup_current,
             elapsed_ms,
@@ -2317,6 +2514,15 @@ fn quantile(histogram: &Histogram<u64>, quantile: f64) -> u64 {
 }
 
 #[cfg(feature = "metrics")]
+fn slice_quantile(sorted: &[u64], quantile: f64) -> u64 {
+    if sorted.is_empty() {
+        return 0;
+    }
+    let index = ((sorted.len() - 1) as f64 * quantile).round() as usize;
+    sorted[index]
+}
+
+#[cfg(feature = "metrics")]
 fn restore_quantiles(histogram: &mut Histogram<u64>, p50: u64, p95: u64, p99: u64) {
     for value in [p50, p95, p99].into_iter().filter(|value| *value > 0) {
         let _ = histogram.record(value);
@@ -2363,7 +2569,7 @@ fn advance_bucket(
     elapsed_ms: u64,
     resolution_ms: u64,
     limit: usize,
-) {
+) -> Option<BucketSnapshot> {
     let start = elapsed_ms / resolution_ms * resolution_ms;
     let retained_after = start.saturating_sub(resolution_ms.saturating_mul(limit as u64));
     while history
@@ -2373,15 +2579,20 @@ fn advance_bucket(
         history.pop_front();
     }
     if current.started_at_ms == start {
-        return;
+        return None;
     }
+    let mut closed = None;
     if current.requests > 0 || current.started_at_ms > 0 {
         if history.len() == limit {
             history.pop_front();
         }
-        history.push_back(std::mem::take(current));
+        let mut completed = std::mem::take(current);
+        completed.finalize();
+        closed = Some(completed.snapshot());
+        history.push_back(completed);
     }
     current.started_at_ms = start;
+    closed
 }
 
 #[cfg(feature = "metrics")]
@@ -2407,13 +2618,69 @@ fn estimated_retained_bytes(detailed: usize, rollups: usize, models: usize) -> u
     bucket_bytes
         .saturating_add(model_buckets)
         .saturating_add(model_histograms)
-        .saturating_add((RATE_LIMIT_EVENT_LIMIT * 256) as u64)
         .min(RETENTION_TARGET_BYTES)
 }
 
 #[cfg(test)]
 mod tests {
+    use async_graphql::Object;
+
     use super::*;
+
+    struct SnapshotQuery;
+
+    #[Object]
+    impl SnapshotQuery {
+        /// Return one typed metrics snapshot.
+        async fn snapshot(&self) -> MetricsSnapshot {
+            MetricsSnapshot::disabled(MetricsMode::On)
+        }
+    }
+
+    #[tokio::test]
+    async fn graphql_schema_describes_typed_metric_fields() {
+        let schema = async_graphql::Schema::build(
+            SnapshotQuery,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .finish();
+        let response = schema
+            .execute(
+                r#"
+                {
+                  snapshot {
+                    mode
+                    summary { totalRequests }
+                    rateLimits { automaticActivations cooldownReleases }
+                    retention { modelSeriesLimit }
+                  }
+                  __type(name: "MetricsSnapshot") { fields { name description } }
+                }
+                "#,
+            )
+            .await;
+        assert!(response.errors.is_empty());
+        let payload = response.data.into_json().unwrap();
+        assert_eq!(payload["snapshot"]["mode"], "ON");
+        assert!(payload["__type"]["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|field| field["description"]
+                .as_str()
+                .is_some_and(|value| !value.is_empty())));
+    }
+
+    #[test]
+    fn persisted_snapshot_without_rate_limit_health_uses_defaults() {
+        let mut payload = serde_json::to_value(MetricsSnapshot::disabled(MetricsMode::On)).unwrap();
+        payload.as_object_mut().unwrap().remove("rateLimits");
+        let snapshot: MetricsSnapshot = serde_json::from_value(payload).unwrap();
+
+        assert_eq!(snapshot.rate_limits.automatic_activations, 0);
+        assert_eq!(snapshot.rate_limits.cooldown_releases, 0);
+    }
 
     #[test]
     fn metrics_aliases_and_build_defaults_are_stable() {
@@ -2431,9 +2698,14 @@ mod tests {
     }
 
     #[test]
-    fn automatic_metrics_disable_in_databricks_apps() {
+    fn non_loopback_listener_requires_public_acknowledgement() {
+        let host = "0.0.0.0".parse().unwrap();
+        let config = MetricsConfig::resolve(default_metrics_option(), host, false, false).unwrap();
+        assert!(!config.routes_visible);
+        let public = MetricsConfig::resolve(default_metrics_option(), host, true, false).unwrap();
+        assert_eq!(public.routes_visible, public.mode != MetricsMode::Off);
         assert_eq!(
-            MetricsConfig::resolve(MetricsOption::Auto, true)
+            MetricsConfig::resolve(MetricsOption::Auto, host, true, true)
                 .unwrap()
                 .mode,
             MetricsMode::Off
@@ -2443,12 +2715,13 @@ mod tests {
     #[cfg(not(feature = "metrics"))]
     #[test]
     fn metrics_free_build_rejects_collection() {
+        let host = "127.0.0.1".parse().unwrap();
         assert!(matches!(
-            MetricsConfig::resolve(MetricsOption::On, false),
+            MetricsConfig::resolve(MetricsOption::On, host, false, false),
             Err(MetricsError::CollectionUnavailable)
         ));
         assert_eq!(
-            MetricsConfig::resolve(MetricsOption::Off, false)
+            MetricsConfig::resolve(MetricsOption::Off, host, false, false)
                 .unwrap()
                 .mode,
             MetricsMode::Off
@@ -2485,13 +2758,13 @@ mod tests {
 
     #[cfg(feature = "metrics")]
     #[tokio::test]
-    async fn snapshots_and_desktop_ticks_share_one_recorded_outcome() {
+    async fn snapshot_tracks_one_recorded_outcome() {
         let runtime = MetricsRuntime::new(MetricsConfig {
             mode: MetricsMode::On,
+            routes_visible: true,
         })
         .unwrap();
         runtime.activate_runtime("runtime".into()).unwrap();
-        let mut receiver = runtime.subscribe().unwrap();
         let mut outcome = fixture_outcome("model".to_owned());
         outcome.fallback_step = 1;
         runtime.record_outcome(&outcome);
@@ -2514,7 +2787,7 @@ mod tests {
         assert_eq!(snapshot.summary.total_fallbacks, 1);
         assert_eq!(snapshot.models[0].requests, 1);
         assert_eq!(snapshot.models[0].fallbacks, 1);
-        assert!(snapshot.models[0].history.is_empty());
+        assert!(!snapshot.models[0].history.is_empty());
         assert_eq!(snapshot.models[0].rate_limited, 3);
         assert_eq!(snapshot.models[0].oversized_rejections, 1);
         assert_eq!(snapshot.reasoning_levels[0].level, "high");
@@ -2523,8 +2796,6 @@ mod tests {
         assert_eq!(snapshot.models[0].limiter, "enforced");
         assert_eq!(snapshot.models[0].penalty_basis_points, 1_000);
         assert_eq!(snapshot.models[0].effective_input_budget, Some(180_000));
-        let model_snapshot = runtime.snapshot_for_model("model");
-        assert!(!model_snapshot.models[0].history.is_empty());
         runtime.record_transition(
             "model",
             AutoTransition {
@@ -2589,10 +2860,6 @@ mod tests {
         assert_eq!(live.summary.wait_cancellations, 5);
         assert_eq!(live.summary.cooldown_releases, 1);
         assert!(live.controls_enabled);
-        tokio::time::timeout(Duration::from_secs(6), receiver.recv())
-            .await
-            .expect("sampler publishes within one interval")
-            .expect("desktop update channel remains open");
     }
 
     #[test]
@@ -2638,26 +2905,60 @@ mod tests {
         assert!(snapshot.controls_enabled);
     }
 
-    #[test]
-    fn desktop_metric_numbers_fit_javascript_integer_precision() {
-        const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+    #[cfg(feature = "metrics")]
+    #[tokio::test(start_paused = true)]
+    async fn sampler_emits_closed_windows_with_quantiles() {
+        use futures_util::StreamExt;
 
-        fn assert_safe(value: &serde_json::Value) {
-            match value {
-                serde_json::Value::Array(values) => values.iter().for_each(assert_safe),
-                serde_json::Value::Object(values) => values.values().for_each(assert_safe),
-                serde_json::Value::Number(number) => {
-                    if let Some(value) = number.as_u64() {
-                        assert!(value <= MAX_SAFE_INTEGER);
-                    }
-                }
-                _ => {}
-            }
-        }
+        let runtime = MetricsRuntime::new(MetricsConfig {
+            mode: MetricsMode::On,
+            routes_visible: true,
+        })
+        .unwrap();
+        let feeds = crate::events::ProxyFeeds::new(None, false).unwrap();
+        runtime.set_feeds(feeds.clone());
+        runtime.activate_runtime("runtime".into()).unwrap();
+        let mut detailed = feeds.five_second_windows.subscribe(None);
+        let mut minute = feeds.minute_windows.subscribe(None);
 
-        let mut snapshot = MetricsSnapshot::disabled(MetricsMode::On);
-        snapshot.summary.total_requests = MAX_SAFE_INTEGER;
-        assert_safe(&serde_json::to_value(snapshot).unwrap());
+        runtime.record_outcome(&fixture_outcome("model".into()));
+        tokio::time::advance(Duration::from_secs(6)).await;
+        let detailed = detailed.next().await.unwrap().payload;
+        assert_eq!(detailed.bucket.requests, 1);
+        assert_eq!(detailed.bucket.p50_latency_ms, 100);
+        assert_eq!(detailed.bucket.p95_latency_ms, 100);
+        assert_eq!(detailed.bucket.p99_latency_ms, 100);
+
+        tokio::time::advance(Duration::from_secs(55)).await;
+        let minute = minute.next().await.unwrap().payload;
+        assert_eq!(minute.bucket.requests, 1);
+        assert_eq!(minute.bucket.p50_latency_ms, 100);
+    }
+
+    #[cfg(feature = "metrics")]
+    #[tokio::test]
+    async fn rate_limit_topic_owns_replay_history() {
+        let runtime = MetricsRuntime::new(MetricsConfig {
+            mode: MetricsMode::On,
+            routes_visible: true,
+        })
+        .unwrap();
+        let feeds = crate::events::ProxyFeeds::new(None, false).unwrap();
+        runtime.set_feeds(feeds.clone());
+        runtime.record_transition(
+            "model",
+            AutoTransition {
+                kind: AutoTransitionKind::Activated,
+                penalty_basis_points: 1_000,
+                base_input_budget: 200_000,
+                effective_input_budget: 180_000,
+            },
+        );
+
+        assert!(runtime.snapshot().rate_limit_events.is_empty());
+        let replay = feeds.rate_limits.replay(None).unwrap();
+        assert_eq!(replay.len(), 1);
+        assert_eq!(replay[0].payload.model, "model");
     }
 
     #[cfg(feature = "metrics")]
@@ -2667,6 +2968,7 @@ mod tests {
 
         let runtime = MetricsRuntime::new(MetricsConfig {
             mode: MetricsMode::On,
+            routes_visible: true,
         })
         .unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2687,6 +2989,7 @@ mod tests {
         let storage = ServiceStorage::open(directory.path()).unwrap();
         let config = MetricsConfig {
             mode: MetricsMode::On,
+            routes_visible: true,
         };
         let runtime = MetricsRuntime::new_with_persistence(
             config,
@@ -2711,7 +3014,7 @@ mod tests {
             }),
         )
         .unwrap();
-        let snapshot = restored.snapshot_for_model("model");
+        let snapshot = restored.snapshot();
         assert_eq!(snapshot.summary.total_requests, 1);
         assert_eq!(snapshot.models[0].model, "model");
         assert_eq!(snapshot.models[0].requests, 1);
@@ -2729,6 +3032,7 @@ mod tests {
     async fn memory_runtime_switch_starts_fresh_aggregates() {
         let runtime = MetricsRuntime::new(MetricsConfig {
             mode: MetricsMode::On,
+            routes_visible: true,
         })
         .unwrap();
         runtime.activate_runtime("runtime".into()).unwrap();

@@ -2,25 +2,31 @@
 
 use std::{net::SocketAddr, num::NonZeroUsize, time::Instant};
 
+use aide::axum::ApiRouter;
 use axum::{
-    body::Bytes,
-    extract::{ConnectInfo, DefaultBodyLimit, Query, Request, State},
+    body::{Body, Bytes},
+    extract::{
+        ConnectInfo, DefaultBodyLimit, FromRequest, FromRequestParts, Query, Request, State,
+    },
     http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
     Json, Router,
 };
+use axum_typed_routing::{api_route, TypedApiRouter};
 use base64::{
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
     Engine,
 };
-use dbx_tools_core::{DatabricksClient, DatabricksClientError};
+use dbx_tools_core::{
+    AuthKind, DatabricksClient, DatabricksClientError, DatabricksProfileSummary, TargetKind,
+};
 use dbx_tools_model::{
     codex_model_name, is_responses_only, models_payload_with_capabilities, same_family_fallbacks,
     ModelCapabilities, ModelCapabilitiesResolver, ModelClass, ServingEndpointSummary,
 };
-use serde::Deserialize;
+use futures_util::{Stream, StreamExt};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::info;
 
@@ -28,6 +34,11 @@ use crate::{
     adapt::{adapt_request, adapt_response, select_request_target, upstream_path},
     adaptive::{AutoTransition, AutoTransitionKind},
     error::ProxyError,
+    events::{
+        HttpEventKind, HttpExchangeEvent, HttpRequestEvent, HttpResponseEvent, HttpStreamEvent,
+        MetricWindowResolution, MetricWindowStreamEvent, ProxyFeeds, RateLimitStreamEvent,
+        RequestHop, ResponseHop,
+    },
     images::normalize_embedded_images,
     metrics::{MetricsRuntime, PeerAddr},
     protocol::{is_codex_originator, ClientWire, TargetWire},
@@ -36,7 +47,7 @@ use crate::{
         RateLimitGate, RateLimitPolicy,
     },
     request_log::{ReasoningSetting, RequestLogContext, RequestLogMetadata},
-    runtime::RuntimeManager,
+    runtime::{RuntimeManager, RuntimeSelection},
     stream::{stream_response, StreamLogContext},
     throttle::{
         is_input_limit_message, response_token_usage, AutoActivation, RequestThrottle,
@@ -53,16 +64,20 @@ const USER_EMAIL_HEADER: &str = "x-forwarded-email";
 const FALLBACK_PREFERRED_MODEL_HEADER: &str = "x-model-proxy-preferred-model";
 const FALLBACK_RESOLVED_MODEL_HEADER: &str = "x-model-proxy-resolved-model";
 const FALLBACK_STEP_HEADER: &str = "x-model-proxy-fallback-step";
+const CONTROL_HEADER: &str = "x-model-proxy-control";
+const GRAPHQL_PATH: &str = "/graphql";
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    pub(crate) capabilities: ModelCapabilitiesResolver,
-    pub(crate) runtime: RuntimeManager,
+    capabilities: ModelCapabilitiesResolver,
+    runtime: RuntimeManager,
     target: TargetWire,
     image_resize_threshold_bytes: usize,
     model_fallback: ModelFallbackPolicy,
-    pub(crate) rate_limits: RateLimitGate,
-    pub(crate) metrics: MetricsRuntime,
+    rate_limits: RateLimitGate,
+    metrics: MetricsRuntime,
+    feeds: ProxyFeeds,
+    controls_enabled: bool,
 }
 
 pub(crate) struct AppConfig {
@@ -71,6 +86,8 @@ pub(crate) struct AppConfig {
     pub(crate) model_fallback: ModelFallbackPolicy,
     pub(crate) rate_limits: RateLimitPolicy,
     pub(crate) metrics: MetricsRuntime,
+    pub(crate) feeds: ProxyFeeds,
+    pub(crate) controls_enabled: bool,
 }
 
 impl AppState {
@@ -88,26 +105,128 @@ impl AppState {
             model_fallback: config.model_fallback,
             rate_limits,
             metrics: config.metrics,
+            feeds: config.feeds,
+            controls_enabled: config.controls_enabled,
         }
-    }
-
-    pub(crate) fn metrics(&self) -> &MetricsRuntime {
-        &self.metrics
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 struct ModelsQuery {
+    /// Include dbx-tools capability metadata in each model record.
     #[serde(default)]
     extended: bool,
+    /// Filter or fuzzy-rank the live model catalogue.
     search: Option<String>,
 }
 
 /// Logical rate-limit principal and immediate transport peer for one request.
 #[derive(Debug)]
 struct RequestCaller {
+    request_id: u64,
+    started: Instant,
+    preferred_model: String,
+    upstream_host: String,
     principal: String,
     peer: SocketAddr,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RequestId {
+    id: u64,
+    started: Instant,
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedModel(String);
+
+struct RequestHeaders(HeaderMap);
+
+impl<S> FromRequestParts<S> for RequestHeaders
+where
+    S: Send + Sync,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Self(parts.headers.clone()))
+    }
+}
+
+impl aide::OperationInput for RequestHeaders {}
+
+struct ProxyRequest {
+    request_id: u64,
+    started: Instant,
+    headers: HeaderMap,
+    body: Bytes,
+}
+
+impl<S> FromRequest<S> for ProxyRequest
+where
+    S: Send + Sync,
+{
+    type Rejection = Response;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let request_context = request.extensions().get::<RequestId>().copied();
+        let request_id = request_context.map_or(0, |request| request.id);
+        let started = request_context.map_or_else(Instant::now, |request| request.started);
+        let headers = request.headers().clone();
+        let body = Bytes::from_request(request, state)
+            .await
+            .map_err(IntoResponse::into_response)?;
+        Ok(Self {
+            request_id,
+            started,
+            headers,
+            body,
+        })
+    }
+}
+
+impl aide::OperationInput for ProxyRequest {
+    fn operation_input(
+        ctx: &mut aide::generate::GenContext,
+        operation: &mut aide::openapi::Operation,
+    ) {
+        <dbx_tools_service::openapi::FreeformJsonInput as aide::OperationInput>::operation_input(
+            ctx, operation,
+        );
+    }
+}
+
+struct ProxyResponse(Response);
+
+impl IntoResponse for ProxyResponse {
+    fn into_response(self) -> Response {
+        self.0
+    }
+}
+
+impl aide::OperationOutput for ProxyResponse {
+    type Inner = serde_json::Value;
+
+    fn operation_response(
+        ctx: &mut aide::generate::GenContext,
+        operation: &mut aide::openapi::Operation,
+    ) -> Option<aide::openapi::Response> {
+        <dbx_tools_service::openapi::JsonOrEventStreamOutput as aide::OperationOutput>::operation_response(
+            ctx, operation,
+        )
+    }
+
+    fn inferred_responses(
+        ctx: &mut aide::generate::GenContext,
+        operation: &mut aide::openapi::Operation,
+    ) -> Vec<(Option<u16>, aide::openapi::Response)> {
+        <dbx_tools_service::openapi::JsonOrEventStreamOutput as aide::OperationOutput>::inferred_responses(
+            ctx, operation,
+        )
+    }
 }
 
 struct UpstreamControls<'a> {
@@ -135,83 +254,860 @@ struct UpstreamResult {
     response: reqwest::Response,
     throttle: ThrottleAcquisition,
     upstream_attempt: u32,
+    response_event_emitted: bool,
 }
 
-pub(crate) fn routes(
+#[api_route(POST "/v1/chat/completions" with AppState)]
+async fn chat_completions(
+    ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
+    State(state): State<AppState>,
+    ProxyRequest {
+        request_id,
+        started,
+        headers,
+        body,
+    }: ProxyRequest,
+) -> ProxyResponse {
+    ProxyResponse(
+        proxy(
+            state,
+            ClientWire::Chat,
+            peer,
+            request_id,
+            started,
+            headers,
+            body,
+        )
+        .await
+        .into_response(),
+    )
+}
+
+#[api_route(POST "/v1/responses" with AppState)]
+async fn responses(
+    ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
+    State(state): State<AppState>,
+    ProxyRequest {
+        request_id,
+        started,
+        headers,
+        body,
+    }: ProxyRequest,
+) -> ProxyResponse {
+    ProxyResponse(
+        proxy(
+            state,
+            ClientWire::Responses,
+            peer,
+            request_id,
+            started,
+            headers,
+            body,
+        )
+        .await
+        .into_response(),
+    )
+}
+
+#[api_route(POST "/v1/messages" with AppState)]
+async fn anthropic_messages(
+    ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
+    State(state): State<AppState>,
+    ProxyRequest {
+        request_id,
+        started,
+        headers,
+        body,
+    }: ProxyRequest,
+) -> ProxyResponse {
+    ProxyResponse(
+        proxy(
+            state,
+            ClientWire::Anthropic,
+            peer,
+            request_id,
+            started,
+            headers,
+            body,
+        )
+        .await
+        .into_response(),
+    )
+}
+
+fn api_router(controls_enabled: bool) -> ApiRouter<AppState> {
+    let mut router = ApiRouter::new()
+        .typed_api_route(health)
+        .typed_api_route(list_models)
+        .typed_api_route(embeddings)
+        .typed_api_route(chat_completions)
+        .typed_api_route(responses)
+        .typed_api_route(anthropic_messages);
+    if controls_enabled {
+        router = router
+            .typed_api_route(auth_status)
+            .typed_api_route(auth_profiles);
+        let controls = ApiRouter::new()
+            .typed_api_route(auth_switch)
+            .typed_api_route(cancel_model_waits)
+            .typed_api_route(retry_model_now)
+            .layer(middleware::from_fn(require_control_request));
+        router = router.merge(controls);
+    }
+    router
+}
+
+pub(crate) fn openapi() -> aide::openapi::OpenApi {
+    dbx_tools_service::openapi::finish(
+        api_router(true),
+        "dbx-tools model proxy",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .document
+    .as_ref()
+    .clone()
+}
+
+pub(crate) async fn routes(
     state: AppState,
     max_request_bytes: NonZeroUsize,
-    #[cfg(feature = "desktop")] desktop: Option<crate::desktop::DesktopHttp>,
-) -> Router {
+) -> Result<Router, String> {
     let metrics = state.metrics.clone();
-    let mut router = Router::new()
-        .route("/api/healthz", get(health))
-        .route("/v1/models", get(list_models))
-        .route("/v1/embeddings", post(embeddings))
-        .route(
-            "/v1/chat/completions",
-            post(
-                |ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
-                 State(state): State<AppState>,
-                 headers: HeaderMap,
-                 body: Bytes| async move {
-                    proxy(state, ClientWire::Chat, peer, headers, body).await
-                },
-            ),
-        )
-        .route(
-            "/v1/responses",
-            post(
-                |ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
-                 State(state): State<AppState>,
-                 headers: HeaderMap,
-                 body: Bytes| async move {
-                    proxy(state, ClientWire::Responses, peer, headers, body).await
-                },
-            ),
-        )
-        .route(
-            "/v1/messages",
-            post(
-                |ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
-                 State(state): State<AppState>,
-                 headers: HeaderMap,
-                 body: Bytes| async move {
-                    proxy(state, ClientWire::Anthropic, peer, headers, body).await
-                },
-            ),
+    let mut router = dbx_tools_service::openapi::finish(
+        api_router(state.controls_enabled),
+        "dbx-tools model proxy",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .router;
+    if metrics.collection_enabled() && metrics.routes_visible() {
+        let schema = dbx_tools_service::graphql::schema(
+            MetricsQuery {
+                state: state.clone(),
+            },
+            async_graphql::EmptyMutation,
+            MetricsSubscription {
+                state: state.clone(),
+            },
         );
+        let ui = graphql_ui();
+        dbx_tools_service::graphql::validate_samples(&schema, &ui).await?;
+        router = router.merge(dbx_tools_service::graphql::routes_with_ui(
+            GRAPHQL_PATH,
+            schema,
+            ui,
+        ));
+    }
     router = router.layer(DefaultBodyLimit::max(max_request_bytes.get()));
     if metrics.collection_enabled() {
         router = router.layer(middleware::from_fn_with_state(
-            metrics.clone(),
+            state.clone(),
             track_active_request,
         ));
     }
-    #[cfg(feature = "desktop")]
-    if let Some(desktop) = desktop {
-        router = router.merge(desktop.routes());
-    }
-    router.with_state(state)
+    Ok(router.with_state(state))
 }
 
-async fn health(State(state): State<AppState>) -> Json<Value> {
-    Json(json!({
-        "status": "ok",
-        "generation": state.runtime.status().generation
+async fn require_control_request(request: Request, next: Next) -> Response {
+    if !control_request_allowed(request.headers()) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "error": {
+                    "type": "control_request_forbidden",
+                    "message": "Model proxy controls require a same-origin loopback request and X-Model-Proxy-Control: 1."
+                }
+            })),
+        )
+            .into_response();
+    }
+    next.run(request).await
+}
+
+fn control_request_allowed(headers: &HeaderMap) -> bool {
+    let control = headers
+        .get(CONTROL_HEADER)
+        .and_then(|value| value.to_str().ok());
+    let host = headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok());
+    let origin = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok());
+    control == Some("1")
+        && host.is_some_and(is_loopback_authority)
+        && origin.zip(host).is_some_and(|(origin, host)| {
+            origin == format!("http://{host}")
+                && headers
+                    .get("sec-fetch-site")
+                    .and_then(|value| value.to_str().ok())
+                    .is_none_or(|value| value == "same-origin")
+        })
+}
+
+fn is_loopback_authority(authority: &str) -> bool {
+    let host = authority
+        .strip_prefix('[')
+        .and_then(|value| value.split_once(']').map(|(host, _)| host))
+        .or_else(|| authority.split(':').next())
+        .unwrap_or(authority);
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
+}
+
+async fn live_metrics_snapshot(state: &AppState) -> crate::metrics::MetricsSnapshot {
+    let runtime = state.runtime.capture();
+    let capacities = runtime.throttle.capacity_snapshots().await;
+    let rate_limits = state.rate_limits.model_snapshots().await;
+    let counters = runtime.throttle.counters().await;
+    let gate_counters = state.rate_limits.control_counters();
+    state.metrics.record_capacity_snapshots(&capacities);
+    state
+        .metrics
+        .record_rate_limit_snapshots(&rate_limits, state.controls_enabled);
+    let mut snapshot = state.metrics.snapshot();
+    snapshot.apply_capacity_snapshots(&capacities);
+    snapshot.apply_rate_limit_snapshots(&rate_limits, state.controls_enabled);
+    snapshot.rate_limit_events = state
+        .feeds
+        .rate_limits
+        .replay(None)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|event| event.payload)
+        .collect();
+    snapshot.rate_limits = crate::metrics::RateLimitHealthSnapshot {
+        automatic_activations: counters.automatic_activations,
+        automatic_tightenings: counters.automatic_tightenings,
+        automatic_relaxations: counters.automatic_relaxations,
+        automatic_deactivations: counters.automatic_deactivations,
+        automatic_reactivations: counters.automatic_reactivations,
+        auto_active_keys: counters.auto_active_keys,
+        admission_waits: counters.admission_waits,
+        capacity_wait_cancellations: counters.wait_cancellations,
+        cooldown_wait_cancellations: gate_counters.wait_cancellations,
+        cooldown_releases: gate_counters.cooldown_releases,
+        oversized_rejections: counters.oversized_rejections,
+        input_429_after_admission: counters.input_429_after_admission,
+        retry_reacquisitions: counters.retry_reacquisitions,
+        fallback_window_delays: counters.fallback_window_delays,
+    };
+    snapshot
+}
+
+#[derive(Clone)]
+struct MetricsQuery {
+    state: AppState,
+}
+
+#[async_graphql::Object]
+impl MetricsQuery {
+    /// Query the current bounded metrics snapshot.
+    async fn snapshot(&self) -> crate::metrics::MetricsSnapshot {
+        live_metrics_snapshot(&self.state).await
+    }
+
+    /// Query retained closed metric windows after an optional sequence cursor.
+    async fn metric_window_history(
+        &self,
+        resolution: MetricWindowResolution,
+        #[graphql(desc = "Return events with sequence greater than this cursor")]
+        after_sequence: Option<u64>,
+    ) -> Vec<MetricWindowStreamEvent> {
+        let events = match resolution {
+            MetricWindowResolution::FiveSeconds => {
+                self.state.feeds.five_second_windows.replay(after_sequence)
+            }
+            MetricWindowResolution::OneMinute => {
+                self.state.feeds.minute_windows.replay(after_sequence)
+            }
+        };
+        events
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    /// Query retained rate-limit transitions after an optional sequence cursor.
+    async fn rate_limit_history(
+        &self,
+        #[graphql(desc = "Return events with sequence greater than this cursor")]
+        after_sequence: Option<u64>,
+    ) -> Vec<RateLimitStreamEvent> {
+        self.state
+            .feeds
+            .rate_limits
+            .replay(after_sequence)
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+}
+
+#[derive(Clone)]
+struct MetricsSubscription {
+    state: AppState,
+}
+
+#[rustfmt::skip]
+fn graphql_ui() -> dbx_tools_service::graphql::GraphqlUiConfig {
+    use dbx_tools_service::graphql::{GraphqlSample, GraphqlUiConfig};
+
+    GraphqlUiConfig::new("Model Proxy GraphQL")
+        .sample(GraphqlSample::new(
+            "Current metrics",
+            // ============================================================================
+            /*graphql*/r#"
+query CurrentMetrics {
+  snapshot {
+    mode
+    summary { requestsPerMinute p50LatencyMs p95LatencyMs p99LatencyMs }
+    rateLimits { automaticActivations automaticTightenings retryReacquisitions }
+  }
+}
+"#
+            // ============================================================================
+            ,
+        ))
+        .sample(GraphqlSample::new(
+            "Model performance",
+            // ============================================================================
+            /*graphql*/r#"
+query ModelPerformance {
+  snapshot {
+    models {
+      model
+      requests
+      p50LatencyMs
+      p95LatencyMs
+      p99LatencyMs
+      limiter
+      penaltyBasisPoints
+    }
+  }
+}
+"#
+            // ============================================================================
+            ,
+        ))
+        .sample(GraphqlSample::new(
+            "HTTP exchange",
+            // ============================================================================
+            /*graphql*/r#"
+subscription HttpExchange {
+  requests {
+    sequence
+    event {
+      kind
+      request {
+        requestId hop elapsedMs attempt method host path bodyBytes
+        clientProtocol targetProtocol preferredModel actualModel streaming fallbackStep
+        headers { name values { value } }
+        body { content }
+      }
+      response {
+        requestId hop elapsedMs durationMs attempt method host path status responseBytes
+        clientProtocol targetProtocol preferredModel actualModel streaming fallbackStep transportError
+        headers { name values { value } }
+        body { content }
+        sse { event data id }
+      }
+    }
+  }
+}
+"#
+            // ============================================================================
+            ,
+        ))
+        .sample(GraphqlSample::new(
+            "Five-second windows",
+            // ============================================================================
+            /*graphql*/r#"
+subscription MetricWindows {
+  metricWindows(resolution: FIVE_SECONDS) {
+    sequence
+    event {
+      bucket { requests p50LatencyMs p95LatencyMs p99LatencyMs rateLimited }
+    }
+  }
+}
+"#
+            // ============================================================================
+            ,
+        ))
+        .sample(GraphqlSample::new(
+            "Rate-limit changes",
+            // ============================================================================
+            /*graphql*/r#"
+subscription RateLimitChanges {
+  rateLimitChanges {
+    sequence
+    event {
+      model
+      transition { kind penaltyBasisPoints effectiveInputBudget }
+    }
+  }
+}
+"#
+            // ============================================================================
+            ,
+        ))
+}
+
+#[async_graphql::Subscription]
+impl MetricsSubscription {
+    /// Stream selected client and upstream request/response hops.
+    async fn requests(
+        &self,
+        #[graphql(desc = "Include only these event kinds; omitted or empty includes all")]
+        include: Option<Vec<HttpEventKind>>,
+        #[graphql(desc = "Omit these event kinds")] exclude: Option<Vec<HttpEventKind>>,
+        #[graphql(desc = "Include events matching any preferred or actual model")] models: Option<
+            Vec<String>,
+        >,
+    ) -> impl Stream<Item = HttpStreamEvent> {
+        let include = include.unwrap_or_default();
+        let exclude = exclude.unwrap_or_default();
+        let models = models.unwrap_or_default();
+        self.state
+            .feeds
+            .http
+            .subscribe(None)
+            .filter_map(move |value| {
+                let included = (include.is_empty() || include.contains(&value.payload.kind))
+                    && !exclude.contains(&value.payload.kind)
+                    && value.payload.model_matches(&models);
+                futures_util::future::ready(included.then(|| value.into()))
+            })
+    }
+
+    /// Stream closed aggregate windows with optional replay after a sequence.
+    async fn metric_windows(
+        &self,
+        resolution: MetricWindowResolution,
+        #[graphql(desc = "Replay events with sequence greater than this cursor")]
+        after_sequence: Option<u64>,
+    ) -> impl Stream<Item = MetricWindowStreamEvent> {
+        match resolution {
+            MetricWindowResolution::FiveSeconds => self
+                .state
+                .feeds
+                .five_second_windows
+                .subscribe(after_sequence),
+            MetricWindowResolution::OneMinute => {
+                self.state.feeds.minute_windows.subscribe(after_sequence)
+            }
+        }
+        .map(Into::into)
+    }
+
+    /// Stream rate-limit transitions with optional replay after a sequence.
+    async fn rate_limit_changes(
+        &self,
+        #[graphql(desc = "Replay events with sequence greater than this cursor")]
+        after_sequence: Option<u64>,
+    ) -> impl Stream<Item = RateLimitStreamEvent> {
+        self.state
+            .feeds
+            .rate_limits
+            .subscribe(after_sequence)
+            .map(Into::into)
+    }
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HealthResponse {
+    /// Health state for the running proxy.
+    status: String,
+    /// Active immutable runtime generation.
+    generation: u64,
+}
+
+#[api_route(GET "/api/healthz" with AppState)]
+async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok".to_owned(),
+        generation: state.runtime.capture().id,
+    })
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthStatusResponse {
+    /// Whether same-origin loopback control routes are enabled.
+    controls_enabled: bool,
+    /// Current secret-free Databricks runtime status.
+    runtime: crate::runtime::RuntimeStatus,
+}
+
+#[api_route(GET "/api/auth" with AppState)]
+async fn auth_status(State(state): State<AppState>) -> Json<AuthStatusResponse> {
+    Json(AuthStatusResponse {
+        controls_enabled: state.controls_enabled,
+        runtime: state.runtime.status(),
+    })
+}
+
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
+struct AuthProfilesQuery {
+    /// Re-read the Databricks configuration file before listing profiles.
+    #[serde(default)]
+    refresh: bool,
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfilesResponse {
+    /// Secret-free configured Databricks profiles.
+    profiles: Vec<ProfileResponse>,
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileResponse {
+    /// Databricks CLI profile name.
+    name: String,
+    /// Configured workspace or accounts host.
+    host: Option<String>,
+    /// Account identifier associated with the profile.
+    account_id: Option<String>,
+    /// Workspace identifier associated with the profile.
+    workspace_id: Option<String>,
+    /// Target inferred from the configured host and account metadata.
+    target: ProfileTarget,
+    /// Authentication kind inferred without returning credential values.
+    auth_kind: ProfileAuthKind,
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProfileTarget {
+    Workspace,
+    Account,
+    Unified,
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProfileAuthKind {
+    UserToMachine,
+    MachineToMachine,
+    PersonalAccessToken,
+    AppServicePrincipal,
+    AppOnBehalfOf,
+}
+
+#[api_route(GET "/api/auth/profiles" with AppState)]
+async fn auth_profiles(
+    State(state): State<AppState>,
+    Query(query): Query<AuthProfilesQuery>,
+) -> Result<Json<ProfilesResponse>, ControlApiError> {
+    let profiles = state
+        .runtime
+        .profiles(query.refresh)
+        .map_err(|error| ControlApiError::new(StatusCode::BAD_GATEWAY, error.to_string()))?;
+    Ok(Json(ProfilesResponse {
+        profiles: profiles.iter().map(profile_response).collect(),
     }))
 }
 
+fn profile_response(profile: &DatabricksProfileSummary) -> ProfileResponse {
+    ProfileResponse {
+        name: profile.name.clone(),
+        host: profile.host.clone(),
+        account_id: profile.account_id.clone(),
+        workspace_id: profile.workspace_id.clone(),
+        target: match profile.target {
+            TargetKind::Workspace => ProfileTarget::Workspace,
+            TargetKind::Account => ProfileTarget::Account,
+            TargetKind::Unified => ProfileTarget::Unified,
+        },
+        auth_kind: match profile.auth_kind {
+            AuthKind::UserToMachine => ProfileAuthKind::UserToMachine,
+            AuthKind::MachineToMachine => ProfileAuthKind::MachineToMachine,
+            AuthKind::PersonalAccessToken => ProfileAuthKind::PersonalAccessToken,
+            AuthKind::AppServicePrincipal => ProfileAuthKind::AppServicePrincipal,
+            AuthKind::AppOnBehalfOf => ProfileAuthKind::AppOnBehalfOf,
+        },
+    }
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthSwitchResponse {
+    /// Newly committed secret-free Databricks runtime status.
+    runtime: crate::runtime::RuntimeStatus,
+}
+
+#[api_route(PUT "/api/auth" with AppState)]
+async fn auth_switch(
+    State(state): State<AppState>,
+    Json(selection): Json<RuntimeSelection>,
+) -> Result<Json<AuthSwitchResponse>, ControlApiError> {
+    match state.runtime.switch(selection).await {
+        Ok(status) => {
+            let metrics = state.metrics.clone();
+            let storage_key = status.storage_key.clone();
+            match tokio::task::spawn_blocking(move || metrics.activate_runtime(storage_key)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    tracing::warn!(%error, "runtime switched but aggregate metrics restoration failed");
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "runtime switched but metrics restoration task failed");
+                }
+            }
+            Ok(Json(AuthSwitchResponse { runtime: status }))
+        }
+        Err(error) => Err(ControlApiError::new(
+            StatusCode::BAD_GATEWAY,
+            error.to_string(),
+        )),
+    }
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CancelWaitsResponse {
+    /// Resolved model whose waits were cancelled.
+    model: String,
+    /// Cancelled token-capacity waiters.
+    capacity_waiters: u64,
+    /// Cancelled cooldown waiters.
+    cooldown_waiters: u64,
+    /// Cooldown keys matched for the model.
+    matched_cooldown_keys: u64,
+    /// Total token-capacity and cooldown waiters cancelled.
+    cancelled_waiters: u64,
+}
+
+#[api_route(POST "/api/rate-limits/models/{model}/cancel-waits" with AppState)]
+async fn cancel_model_waits(
+    model: String,
+    State(state): State<AppState>,
+) -> Result<Json<CancelWaitsResponse>, ControlApiError> {
+    let model = model.trim();
+    if model.is_empty() {
+        return Err(ControlApiError::new(
+            StatusCode::BAD_REQUEST,
+            "model must not be empty",
+        ));
+    }
+    let runtime = state.runtime.capture();
+    let capacity = runtime.throttle.cancel_waits(model).await;
+    let cooldown = state.rate_limits.cancel_waits(model).await;
+    Ok(Json(CancelWaitsResponse {
+        model: model.to_owned(),
+        capacity_waiters: capacity.cancelled_waiters,
+        cooldown_waiters: cooldown.cancelled_waiters,
+        matched_cooldown_keys: cooldown.matched_keys,
+        cancelled_waiters: capacity
+            .cancelled_waiters
+            .saturating_add(cooldown.cancelled_waiters),
+    }))
+}
+
+#[derive(Debug, schemars::JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RetryNowResponse {
+    /// Resolved model whose cooldowns were released.
+    model: String,
+    /// Cooldown keys matched for the model.
+    matched_cooldown_keys: u64,
+    /// Active cooldowns released immediately.
+    released_cooldowns: u64,
+}
+
+#[api_route(POST "/api/rate-limits/models/{model}/retry-now" with AppState)]
+async fn retry_model_now(
+    model: String,
+    State(state): State<AppState>,
+) -> Result<Json<RetryNowResponse>, ControlApiError> {
+    let model = model.trim();
+    if model.is_empty() {
+        return Err(ControlApiError::new(
+            StatusCode::BAD_REQUEST,
+            "model must not be empty",
+        ));
+    }
+    let released = state.rate_limits.release_cooldowns(model).await;
+    Ok(Json(RetryNowResponse {
+        model: model.to_owned(),
+        matched_cooldown_keys: released.matched_keys,
+        released_cooldowns: released.released_cooldowns,
+    }))
+}
+
+#[derive(Debug)]
+struct ControlApiError {
+    status: StatusCode,
+    message: String,
+}
+
+impl ControlApiError {
+    fn new(status: StatusCode, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            message: message.into(),
+        }
+    }
+}
+
+impl IntoResponse for ControlApiError {
+    fn into_response(self) -> Response {
+        (
+            self.status,
+            Json(json!({
+            "error": {
+                "type": "model_proxy_control_error",
+                    "message": self.message
+                }
+            })),
+        )
+            .into_response()
+    }
+}
+
+impl aide::OperationOutput for ControlApiError {
+    type Inner = serde_json::Value;
+}
+
+fn elapsed_ms(started: Instant) -> u64 {
+    started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
+}
+
 async fn track_active_request(
-    State(metrics): State<MetricsRuntime>,
-    request: Request,
+    State(state): State<AppState>,
+    mut request: Request,
     next: Next,
 ) -> Response {
-    if request.uri().path().starts_with("/api/") {
-        return next.run(request).await;
+    let request_id = state.feeds.next_request_id();
+    let started = Instant::now();
+    request.extensions_mut().insert(RequestId {
+        id: request_id,
+        started,
+    });
+    let method = request.method().to_string();
+    let path = request.uri().path().to_owned();
+    let host = request
+        .headers()
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let content_type = request
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let event_headers = state.feeds.headers(request.headers());
+    let model_body_route = matches!(
+        path.as_str(),
+        "/v1/chat/completions" | "/v1/responses" | "/v1/messages" | "/v1/embeddings"
+    );
+    if state.feeds.http.is_active() {
+        let (parts, body) = request.into_parts();
+        let mut body = body.into_data_stream();
+        let mut completion = ClientRequestCompletion {
+            feeds: state.feeds.clone(),
+            request_id,
+            method: method.clone(),
+            host: host.clone(),
+            path: path.clone(),
+            started,
+            content_type,
+            headers: event_headers,
+            request_body: Vec::new(),
+            publish_completion: !model_body_route,
+        };
+        let stream = async_stream::stream! {
+            while let Some(chunk) = body.next().await {
+                if let Ok(bytes) = &chunk {
+                    completion.record_chunk(bytes);
+                }
+                yield chunk;
+            }
+        };
+        request = Request::from_parts(parts, Body::from_stream(stream));
     }
-    metrics.request_started();
-    let _active_request = ActiveRequestGuard(metrics);
-    next.run(request).await
+    let track_active = !path.starts_with("/api/") && path != "/graphql";
+    let _active_request = track_active.then(|| {
+        state.metrics.request_started();
+        ActiveRequestGuard(state.metrics.clone())
+    });
+    let response = next.run(request).await;
+    if !state.feeds.http.is_active() {
+        return response;
+    }
+    let (parts, body) = response.into_parts();
+    let status = parts.status;
+    let resolved_model = parts
+        .extensions
+        .get::<ResolvedModel>()
+        .map(|model| model.0.clone());
+    let content_type = parts
+        .headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let event_headers = state.feeds.headers(&parts.headers);
+    if content_type
+        .as_deref()
+        .is_some_and(|content_type| content_type.starts_with("text/event-stream"))
+    {
+        let _ = state
+            .feeds
+            .http
+            .publish(HttpExchangeEvent::from_response(HttpResponseEvent {
+                request_id,
+                hop: ResponseHop::ProxyToClient,
+                elapsed_ms: elapsed_ms(started),
+                duration_ms: None,
+                attempt: None,
+                method: method.clone(),
+                host: host.clone(),
+                path: path.clone(),
+                status: Some(status.as_u16()),
+                headers: Some(event_headers),
+                response_bytes: None,
+                client_protocol: None,
+                target_protocol: None,
+                preferred_model: None,
+                actual_model: resolved_model.clone(),
+                streaming: None,
+                fallback_step: None,
+                transport_error: None,
+                body: None,
+                sse: None,
+            }));
+        return Response::from_parts(parts, body);
+    }
+    let mut completion = ClientResponseCompletion {
+        feeds: state.feeds,
+        request_id,
+        method,
+        host,
+        path,
+        status,
+        started,
+        content_type,
+        headers: event_headers,
+        response_body: Vec::new(),
+        resolved_model,
+    };
+    let mut body = body.into_data_stream();
+    let stream = async_stream::stream! {
+        while let Some(chunk) = body.next().await {
+            if let Ok(bytes) = &chunk {
+                completion.record_chunk(bytes);
+            }
+            yield chunk;
+        }
+    };
+    Response::from_parts(parts, Body::from_stream(stream))
 }
 
 struct ActiveRequestGuard(MetricsRuntime);
@@ -222,11 +1118,119 @@ impl Drop for ActiveRequestGuard {
     }
 }
 
+struct ClientRequestCompletion {
+    feeds: ProxyFeeds,
+    request_id: u64,
+    method: String,
+    host: Option<String>,
+    path: String,
+    started: Instant,
+    content_type: Option<String>,
+    headers: Vec<crate::events::HttpHeader>,
+    request_body: Vec<u8>,
+    publish_completion: bool,
+}
+
+impl ClientRequestCompletion {
+    fn record_chunk(&mut self, bytes: &[u8]) {
+        self.request_body.extend_from_slice(bytes);
+    }
+}
+
+impl Drop for ClientRequestCompletion {
+    fn drop(&mut self) {
+        if !self.publish_completion {
+            return;
+        }
+        let body = self
+            .feeds
+            .request_body(&self.request_body, self.content_type.as_deref(), 0);
+        let _ = self
+            .feeds
+            .http
+            .publish(HttpExchangeEvent::from_request(HttpRequestEvent {
+                request_id: self.request_id,
+                hop: RequestHop::ClientToProxy,
+                elapsed_ms: elapsed_ms(self.started),
+                attempt: None,
+                method: self.method.clone(),
+                host: self.host.clone(),
+                path: self.path.clone(),
+                headers: Some(self.headers.clone()),
+                body_bytes: Some(self.request_body.len() as u64),
+                client_protocol: None,
+                target_protocol: None,
+                preferred_model: None,
+                actual_model: None,
+                streaming: None,
+                fallback_step: None,
+                body,
+            }));
+    }
+}
+
+struct ClientResponseCompletion {
+    feeds: ProxyFeeds,
+    request_id: u64,
+    method: String,
+    host: Option<String>,
+    path: String,
+    status: StatusCode,
+    started: Instant,
+    content_type: Option<String>,
+    headers: Vec<crate::events::HttpHeader>,
+    response_body: Vec<u8>,
+    resolved_model: Option<String>,
+}
+
+impl ClientResponseCompletion {
+    fn record_chunk(&mut self, bytes: &[u8]) {
+        self.response_body.extend_from_slice(bytes);
+    }
+}
+
+impl Drop for ClientResponseCompletion {
+    fn drop(&mut self) {
+        let body = self.feeds.response_body(
+            &self.response_body,
+            self.response_body.len(),
+            self.content_type.as_deref(),
+            Some(0),
+        );
+        let _ = self
+            .feeds
+            .http
+            .publish(HttpExchangeEvent::from_response(HttpResponseEvent {
+                request_id: self.request_id,
+                hop: ResponseHop::ProxyToClient,
+                elapsed_ms: elapsed_ms(self.started),
+                duration_ms: Some(elapsed_ms(self.started)),
+                attempt: None,
+                method: self.method.clone(),
+                host: self.host.clone(),
+                path: self.path.clone(),
+                status: Some(self.status.as_u16()),
+                headers: Some(self.headers.clone()),
+                response_bytes: Some(self.response_body.len() as u64),
+                client_protocol: None,
+                target_protocol: None,
+                preferred_model: None,
+                actual_model: self.resolved_model.clone(),
+                streaming: None,
+                fallback_step: None,
+                transport_error: None,
+                body,
+                sse: None,
+            }));
+    }
+}
+
+#[api_route(GET "/v1/models" with AppState)]
 async fn list_models(
     ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
     State(state): State<AppState>,
     Query(query): Query<ModelsQuery>,
-    headers: HeaderMap,
+    RequestHeaders(headers): RequestHeaders,
 ) -> Result<Json<Value>, ProxyError> {
     let runtime = state.runtime.capture();
     let started = Instant::now();
@@ -276,25 +1280,69 @@ async fn list_models(
     Ok(Json(payload))
 }
 
+#[api_route(POST "/v1/embeddings" with AppState)]
 async fn embeddings(
     ConnectInfo(PeerAddr(peer)): ConnectInfo<PeerAddr>,
     State(state): State<AppState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Result<Response, ProxyError> {
+    ProxyRequest {
+        request_id,
+        started,
+        headers,
+        body,
+    }: ProxyRequest,
+) -> Result<ProxyResponse, ProxyError> {
     let runtime = state.runtime.capture();
-    let started = Instant::now();
     let request_bytes = body.len();
     let input: Value = serde_json::from_slice(&body)?;
     let requested_model = requested_model(&input)?.to_owned();
+    if state.feeds.http.is_active() {
+        let _ = state
+            .feeds
+            .http
+            .publish(HttpExchangeEvent::from_request(HttpRequestEvent {
+                request_id,
+                hop: RequestHop::ClientToProxy,
+                elapsed_ms: elapsed_ms(started),
+                attempt: None,
+                method: Method::POST.to_string(),
+                host: headers
+                    .get(header::HOST)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned),
+                path: "/v1/embeddings".to_owned(),
+                headers: Some(state.feeds.headers(&headers)),
+                body_bytes: Some(request_bytes as u64),
+                client_protocol: Some("embeddings".to_owned()),
+                target_protocol: None,
+                preferred_model: Some(requested_model.clone()),
+                actual_model: None,
+                streaming: Some(false),
+                fallback_step: None,
+                body: state.feeds.request_body(
+                    &body,
+                    headers
+                        .get(header::CONTENT_TYPE)
+                        .and_then(|value| value.to_str().ok()),
+                    0,
+                ),
+            }));
+    }
     let endpoint = runtime
         .models
         .resolve_serving_endpoint_for_class(&requested_model, ModelClass::Embedding)
         .await?
         .ok_or_else(|| ProxyError::EmbeddingModelNotFound(requested_model.clone()))?;
     let estimate = runtime.throttle.estimate(&endpoint.name, &input);
-    let caller = request_caller(&headers, &runtime.databricks, peer);
+    let caller = request_caller(
+        &headers,
+        &runtime.databricks,
+        peer,
+        request_id,
+        started,
+        &requested_model,
+    );
     let (path, request_body) = prepare_embedding_request(input, &endpoint.name)?;
+    let event_path = path.clone();
     let originator = request_originator(&headers);
     let upstream = send_upstream(
         UpstreamControls {
@@ -324,14 +1372,27 @@ async fn embeddings(
         response,
         throttle,
         upstream_attempt,
+        response_event_emitted,
     } = upstream;
     let upstream = buffered_response(response).await?;
+    if !response_event_emitted {
+        publish_buffered_upstream_body(
+            &state.feeds,
+            &caller,
+            &endpoint.name,
+            &event_path,
+            None,
+            upstream_attempt,
+            0,
+            &upstream,
+        );
+    }
     let usage = response_usage(&upstream.body);
     RequestLogContext::new(
         RequestLogMetadata {
             runtime_key: runtime.storage_key.clone(),
             requested_model,
-            resolved_model: endpoint.name,
+            resolved_model: endpoint.name.clone(),
             peer: caller.peer,
             request_bytes,
             started,
@@ -344,18 +1405,23 @@ async fn embeddings(
     )
     .complete_embedding(upstream.status, usage)
     .await;
-    Ok(upstream.into_raw_response())
+    let mut response = upstream.into_raw_response();
+    response
+        .extensions_mut()
+        .insert(ResolvedModel(endpoint.name));
+    Ok(ProxyResponse(response))
 }
 
 async fn proxy(
     state: AppState,
     client_wire: ClientWire,
     peer: SocketAddr,
+    request_id: u64,
+    started: Instant,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, ProxyError> {
     let runtime = state.runtime.capture();
-    let started = Instant::now();
     let request_bytes = body.len();
     let mut input: Value = serde_json::from_slice(&body)?;
     normalize_embedded_images(&mut input, state.image_resize_threshold_bytes)?;
@@ -365,8 +1431,52 @@ async fn proxy(
         .get("stream")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    if state.feeds.http.is_active() {
+        let _ = state
+            .feeds
+            .http
+            .publish(HttpExchangeEvent::from_request(HttpRequestEvent {
+                request_id,
+                hop: RequestHop::ClientToProxy,
+                elapsed_ms: elapsed_ms(started),
+                attempt: None,
+                method: Method::POST.to_string(),
+                host: headers
+                    .get(header::HOST)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned),
+                path: match client_wire {
+                    ClientWire::Chat => "/v1/chat/completions",
+                    ClientWire::Responses => "/v1/responses",
+                    ClientWire::Anthropic => "/v1/messages",
+                }
+                .to_owned(),
+                headers: Some(state.feeds.headers(&headers)),
+                body_bytes: Some(request_bytes as u64),
+                client_protocol: Some(client_wire.label().to_owned()),
+                target_protocol: None,
+                preferred_model: Some(requested_model.clone()),
+                actual_model: None,
+                streaming: Some(streaming),
+                fallback_step: None,
+                body: state.feeds.request_body(
+                    &body,
+                    headers
+                        .get(header::CONTENT_TYPE)
+                        .and_then(|value| value.to_str().ok()),
+                    0,
+                ),
+            }));
+    }
     let originator = request_originator(&headers);
-    let caller = request_caller(&headers, &runtime.databricks, peer);
+    let caller = request_caller(
+        &headers,
+        &runtime.databricks,
+        peer,
+        request_id,
+        started,
+        &requested_model,
+    );
     let codex = originator.is_some_and(is_codex_originator);
     let endpoint = runtime
         .models
@@ -463,6 +1573,7 @@ async fn proxy(
         response: mut upstream,
         throttle,
         upstream_attempt,
+        response_event_emitted,
     } = upstream;
     let candidate = &candidates[candidate_index];
     let model = candidate.model.clone();
@@ -493,22 +1604,62 @@ async fn proxy(
     let status = upstream_status(&upstream)?;
     if status.is_success() && streaming {
         let response_headers = forwarded_response_headers(upstream.headers());
+        let event_response_headers = state.feeds.headers(upstream.headers());
         request_log.stream_connected(client_wire, target, status);
-        return stream_response(
+        let mut response = stream_response(
             client_wire,
             target,
             upstream,
-            model,
+            model.clone(),
             response_headers,
             StreamLogContext {
                 client_wire,
                 target,
                 request: request_log,
+                feeds: state.feeds.clone(),
+                upstream_event: HttpResponseEvent {
+                    request_id: caller.request_id,
+                    hop: ResponseHop::UpstreamToProxy,
+                    elapsed_ms: elapsed_ms(caller.started),
+                    duration_ms: None,
+                    attempt: Some(upstream_attempt),
+                    method: Method::POST.to_string(),
+                    host: Some(caller.upstream_host.clone()),
+                    path: candidate.path.clone(),
+                    status: Some(status.as_u16()),
+                    headers: Some(event_response_headers),
+                    response_bytes: None,
+                    client_protocol: None,
+                    target_protocol: Some(target.label().to_owned()),
+                    preferred_model: Some(caller.preferred_model.clone()),
+                    actual_model: Some(model.clone()),
+                    streaming: Some(true),
+                    fallback_step: Some(u32::try_from(candidate_index).unwrap_or(u32::MAX)),
+                    transport_error: None,
+                    body: None,
+                    sse: None,
+                },
                 _runtime: runtime,
             },
-        );
+        )?;
+        response
+            .extensions_mut()
+            .insert(ResolvedModel(model.clone()));
+        return Ok(response);
     }
     let upstream = buffered_response(upstream).await?;
+    if !response_event_emitted {
+        publish_buffered_upstream_body(
+            &state.feeds,
+            &caller,
+            &model,
+            &candidate.path,
+            Some(target),
+            upstream_attempt,
+            candidate_index,
+            &upstream,
+        );
+    }
     if !upstream.status.is_success() {
         request_log
             .complete_model(
@@ -519,7 +1670,11 @@ async fn proxy(
                 ResponseTokenUsage::default(),
             )
             .await;
-        return Ok(upstream.into_raw_response());
+        let mut response = upstream.into_raw_response();
+        response
+            .extensions_mut()
+            .insert(ResolvedModel(model.clone()));
+        return Ok(response);
     }
 
     let output = adapt_response(client_wire, target, upstream.status, &upstream.body)?;
@@ -527,7 +1682,9 @@ async fn proxy(
     request_log
         .complete_model(client_wire, target, streaming, upstream.status, usage)
         .await;
-    Ok(upstream.into_json_response(output))
+    let mut response = upstream.into_json_response(output);
+    response.extensions_mut().insert(ResolvedModel(model));
+    Ok(response)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -836,6 +1993,16 @@ async fn send_upstream(
         if retries > 0 && admission.active {
             throttle.record_retry_reacquisition();
         }
+        let attempt_started = Instant::now();
+        if let Some(feeds) = metrics.feeds().filter(|feeds| feeds.http.is_active()) {
+            let _ = feeds.http.publish(upstream_request_event(
+                &feeds,
+                caller,
+                request,
+                upstream_attempt,
+                candidate_index,
+            ));
+        }
         let response = match client
             .request_builder(&request.path, Method::POST)?
             .headers(request.headers.clone())
@@ -845,6 +2012,20 @@ async fn send_upstream(
         {
             Ok(response) => response,
             Err(error) => {
+                if let Some(feeds) = metrics.feeds().filter(|feeds| feeds.http.is_active()) {
+                    let _ = feeds.http.publish(upstream_response_event(
+                        &feeds,
+                        caller,
+                        request,
+                        upstream_attempt,
+                        None,
+                        Some(attempt_started.elapsed()),
+                        Some(error.to_string()),
+                        candidate_index,
+                        None,
+                        None,
+                    ));
+                }
                 admission.release().await;
                 if let Some(permit) = permit.as_ref() {
                     rate_limits.completed(permit).await;
@@ -878,9 +2059,11 @@ async fn send_upstream(
                 response,
                 throttle: admission,
                 upstream_attempt,
+                response_event_emitted: false,
             });
         }
-        let (response, details) = match inspect_rate_limit_response(response).await {
+        let (response, details, rate_limit_body) = match inspect_rate_limit_response(response).await
+        {
             Ok(inspected) => inspected,
             Err(error) => {
                 admission.release().await;
@@ -890,6 +2073,32 @@ async fn send_upstream(
                 return Err(error.into());
             }
         };
+        if let Some(feeds) = metrics.feeds().filter(|feeds| feeds.http.is_active()) {
+            let content_type = response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok());
+            if let Some(body) = feeds.response_body(
+                &rate_limit_body,
+                rate_limit_body.len(),
+                content_type,
+                Some(0),
+            ) {
+                let event = upstream_response_event(
+                    &feeds,
+                    caller,
+                    request,
+                    upstream_attempt,
+                    Some(StatusCode::TOO_MANY_REQUESTS),
+                    Some(attempt_started.elapsed()),
+                    None,
+                    candidate_index,
+                    Some(response.headers()),
+                    Some(body),
+                );
+                let _ = feeds.http.publish(event);
+            }
+        }
         let input_token_limit = details
             .message
             .as_deref()
@@ -935,6 +2144,7 @@ async fn send_upstream(
                 response,
                 throttle: admission,
                 upstream_attempt,
+                response_event_emitted: true,
             });
         }
         let server_delay = server_retry_after(response.headers(), &details);
@@ -991,6 +2201,7 @@ async fn send_upstream(
                 response,
                 throttle: admission,
                 upstream_attempt,
+                response_event_emitted: true,
             });
             retries += 1;
             continue;
@@ -1023,9 +2234,78 @@ async fn send_upstream(
             response,
             throttle: admission,
             upstream_attempt,
+            response_event_emitted: true,
         });
         retries += 1;
     }
+}
+
+fn upstream_request_event(
+    feeds: &ProxyFeeds,
+    caller: &RequestCaller,
+    request: &UpstreamRequest,
+    attempt: u32,
+    fallback_step: usize,
+) -> HttpExchangeEvent {
+    let content_type = request
+        .headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok());
+    HttpExchangeEvent::from_request(HttpRequestEvent {
+        request_id: caller.request_id,
+        hop: RequestHop::ProxyToUpstream,
+        elapsed_ms: elapsed_ms(caller.started),
+        attempt: Some(attempt),
+        method: Method::POST.to_string(),
+        host: Some(caller.upstream_host.clone()),
+        path: request.path.clone(),
+        headers: Some(feeds.headers(&request.headers)),
+        body_bytes: Some(request.body.len() as u64),
+        client_protocol: None,
+        target_protocol: request.target.map(|target| target.label().to_owned()),
+        preferred_model: Some(caller.preferred_model.clone()),
+        actual_model: Some(request.model.clone()),
+        streaming: None,
+        fallback_step: Some(u32::try_from(fallback_step).unwrap_or(u32::MAX)),
+        body: feeds.request_body(&request.body, content_type, 0),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn upstream_response_event(
+    feeds: &ProxyFeeds,
+    caller: &RequestCaller,
+    request: &UpstreamRequest,
+    attempt: u32,
+    status: Option<StatusCode>,
+    duration: Option<std::time::Duration>,
+    transport_error: Option<String>,
+    fallback_step: usize,
+    response_headers: Option<&HeaderMap>,
+    body: Option<crate::events::HttpBodyContent>,
+) -> HttpExchangeEvent {
+    HttpExchangeEvent::from_response(HttpResponseEvent {
+        request_id: caller.request_id,
+        hop: ResponseHop::UpstreamToProxy,
+        elapsed_ms: elapsed_ms(caller.started),
+        duration_ms: duration.map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64),
+        attempt: Some(attempt),
+        method: Method::POST.to_string(),
+        host: Some(caller.upstream_host.clone()),
+        path: request.path.clone(),
+        status: status.map(|status| status.as_u16()),
+        headers: response_headers.map(|headers| feeds.headers(headers)),
+        response_bytes: body.as_ref().map(|body| body.total_bytes),
+        client_protocol: None,
+        target_protocol: request.target.map(|target| target.label().to_owned()),
+        preferred_model: Some(caller.preferred_model.clone()),
+        actual_model: Some(request.model.clone()),
+        streaming: None,
+        fallback_step: Some(u32::try_from(fallback_step).unwrap_or(u32::MAX)),
+        transport_error,
+        body,
+        sse: None,
+    })
 }
 
 fn rate_limit_wait_exhausted(
@@ -1156,17 +2436,17 @@ fn log_rate_limit(log: RetryLog<'_>) {
 /// Buffer a 429 for metadata inspection and rebuild it for retries or forwarding.
 async fn inspect_rate_limit_response(
     response: reqwest::Response,
-) -> Result<(reqwest::Response, RateLimitDetails), DatabricksClientError> {
+) -> Result<(reqwest::Response, RateLimitDetails, Bytes), DatabricksClientError> {
     let status = response.status();
     let version = response.version();
     let headers = response.headers().clone();
     let body = response.bytes().await?;
     let details = rate_limit_details(&body);
-    let mut rebuilt = axum::http::Response::new(body);
+    let mut rebuilt = axum::http::Response::new(body.clone());
     *rebuilt.status_mut() = status;
     *rebuilt.version_mut() = version;
     *rebuilt.headers_mut() = headers;
-    Ok((reqwest::Response::from(rebuilt), details))
+    Ok((reqwest::Response::from(rebuilt), details, body))
 }
 
 fn requested_model(input: &Value) -> Result<&str, ProxyError> {
@@ -1219,8 +2499,15 @@ fn request_caller(
     headers: &HeaderMap,
     client: &DatabricksClient,
     peer: SocketAddr,
+    request_id: u64,
+    started: Instant,
+    preferred_model: &str,
 ) -> RequestCaller {
     RequestCaller {
+        request_id,
+        started,
+        preferred_model: preferred_model.to_owned(),
+        upstream_host: client.host().to_owned(),
         principal: request_principal(headers, client),
         peer,
     }
@@ -1271,6 +2558,55 @@ fn jwt_principal(headers: &HeaderMap) -> Option<String> {
 fn upstream_status(response: &reqwest::Response) -> Result<StatusCode, ProxyError> {
     StatusCode::from_u16(response.status().as_u16())
         .map_err(|error| ProxyError::Upstream(error.to_string()))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn publish_buffered_upstream_body(
+    feeds: &ProxyFeeds,
+    caller: &RequestCaller,
+    actual_model: &str,
+    path: &str,
+    target: Option<TargetWire>,
+    attempt: u32,
+    fallback_step: usize,
+    upstream: &BufferedUpstream,
+) {
+    if !feeds.http.is_active() {
+        return;
+    }
+    let content_type = upstream
+        .headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok());
+    let Some(body) =
+        feeds.response_body(&upstream.body, upstream.body.len(), content_type, Some(0))
+    else {
+        return;
+    };
+    let _ = feeds
+        .http
+        .publish(HttpExchangeEvent::from_response(HttpResponseEvent {
+            request_id: caller.request_id,
+            hop: ResponseHop::UpstreamToProxy,
+            elapsed_ms: elapsed_ms(caller.started),
+            duration_ms: None,
+            attempt: Some(attempt),
+            method: Method::POST.to_string(),
+            host: Some(caller.upstream_host.clone()),
+            path: path.to_owned(),
+            status: Some(upstream.status.as_u16()),
+            headers: Some(feeds.headers(&upstream.headers)),
+            response_bytes: Some(upstream.body.len() as u64),
+            client_protocol: None,
+            target_protocol: target.map(|target| target.label().to_owned()),
+            preferred_model: Some(caller.preferred_model.clone()),
+            actual_model: Some(actual_model.to_owned()),
+            streaming: Some(false),
+            fallback_step: Some(u32::try_from(fallback_step).unwrap_or(u32::MAX)),
+            transport_error: None,
+            body: Some(body),
+            sse: None,
+        }));
 }
 
 struct BufferedUpstream {
@@ -1459,6 +2795,10 @@ mod tests {
 
     fn test_caller() -> RequestCaller {
         RequestCaller {
+            request_id: 1,
+            started: Instant::now(),
+            preferred_model: "model".to_owned(),
+            upstream_host: "https://workspace.example".to_owned(),
             principal: "principal".to_owned(),
             peer: "127.0.0.1:54321".parse().unwrap(),
         }
@@ -1467,6 +2807,7 @@ mod tests {
     fn test_metrics() -> MetricsRuntime {
         MetricsRuntime::new(crate::metrics::MetricsConfig {
             mode: crate::metrics::MetricsMode::Off,
+            routes_visible: false,
         })
         .unwrap()
     }
@@ -1510,6 +2851,71 @@ mod tests {
             status: Default::default(),
             dimension: None,
         }
+    }
+
+    #[test]
+    fn upstream_events_distinguish_preferred_and_actual_models() {
+        let caller = RequestCaller {
+            request_id: 42,
+            started: Instant::now(),
+            preferred_model: "preferred".into(),
+            upstream_host: "https://workspace.example".into(),
+            principal: "principal".into(),
+            peer: "127.0.0.1:1234".parse().unwrap(),
+        };
+        let request = test_upstream_request("fallback");
+        let feeds = ProxyFeeds::new(None, false).unwrap();
+        let request_event = upstream_request_event(&feeds, &caller, &request, 2, 1);
+        let event = upstream_response_event(
+            &feeds,
+            &caller,
+            &request,
+            2,
+            Some(StatusCode::OK),
+            Some(Duration::from_millis(15)),
+            None,
+            1,
+            None,
+            None,
+        );
+
+        let request = request_event.request.unwrap();
+        assert_eq!(request.request_id, 42);
+        assert_eq!(request.preferred_model.as_deref(), Some("preferred"));
+        assert_eq!(request.actual_model.as_deref(), Some("fallback"));
+        assert_eq!(request.fallback_step, Some(1));
+        assert_eq!(request.host.as_deref(), Some("https://workspace.example"));
+        let response = event.response.unwrap();
+        assert_eq!(response.status, Some(200));
+        assert_eq!(response.duration_ms, Some(15));
+    }
+
+    #[test]
+    fn openapi_documents_runtime_rest_and_protocol_routes() {
+        let document = serde_json::to_value(openapi()).unwrap();
+        let paths = document["paths"].as_object().unwrap();
+        for path in [
+            "/api/auth",
+            "/api/auth/profiles",
+            "/api/healthz",
+            "/api/rate-limits/models/{model}/cancel-waits",
+            "/api/rate-limits/models/{model}/retry-now",
+            "/v1/chat/completions",
+            "/v1/embeddings",
+            "/v1/messages",
+            "/v1/models",
+            "/v1/responses",
+        ] {
+            assert!(paths.contains_key(path), "missing OpenAPI path {path}");
+        }
+        assert!(!paths.contains_key("/graphql"));
+        assert!(document["components"]["schemas"]["HealthResponse"].is_object());
+        assert!(document["components"]["schemas"]["AuthStatusResponse"].is_object());
+        assert!(document["components"]["schemas"]["ModelSnapshot"].is_null());
+        let chat = &document["paths"]["/v1/chat/completions"]["post"];
+        assert!(chat["requestBody"]["content"]["application/json"].is_object());
+        assert!(chat["responses"]["200"]["content"]["application/json"].is_object());
+        assert!(chat["responses"]["200"]["content"]["text/event-stream"].is_object());
     }
 
     #[test]
@@ -2297,5 +3703,51 @@ mod tests {
         assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
         assert_eq!(response.headers()[header::RETRY_AFTER], "5");
+    }
+
+    #[test]
+    fn control_requests_require_loopback_same_origin_and_custom_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, HeaderValue::from_static("127.0.0.1:4000"));
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("http://127.0.0.1:4000"),
+        );
+        headers.insert(
+            HeaderName::from_static(CONTROL_HEADER),
+            HeaderValue::from_static("1"),
+        );
+        headers.insert(
+            HeaderName::from_static("sec-fetch-site"),
+            HeaderValue::from_static("same-origin"),
+        );
+        assert!(control_request_allowed(&headers));
+
+        headers.remove(CONTROL_HEADER);
+        assert!(!control_request_allowed(&headers));
+        headers.insert(
+            HeaderName::from_static(CONTROL_HEADER),
+            HeaderValue::from_static("1"),
+        );
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("http://attacker.example"),
+        );
+        assert!(!control_request_allowed(&headers));
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("http://proxy.example"),
+        );
+        headers.insert(header::HOST, HeaderValue::from_static("proxy.example"));
+        assert!(!control_request_allowed(&headers));
+    }
+
+    #[test]
+    fn loopback_authority_accepts_supported_local_hosts_only() {
+        assert!(is_loopback_authority("localhost:4000"));
+        assert!(is_loopback_authority("127.0.0.1:4000"));
+        assert!(is_loopback_authority("[::1]:4000"));
+        assert!(!is_loopback_authority("0.0.0.0:4000"));
+        assert!(!is_loopback_authority("proxy.example:4000"));
     }
 }

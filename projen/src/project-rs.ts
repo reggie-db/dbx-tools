@@ -1,6 +1,6 @@
 /** Filesystem-discovered Rust workspaces and UniFFI binding package wiring. */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, Project, TextFile, TomlFile, javascript } from "projen";
@@ -15,6 +15,7 @@ import {
   type DBXToolsRustProjectOptions as RustProjectOptions,
   type RustCrateOptions as RustCrateConfiguration,
   type RustCliOptions as RustCliConfiguration,
+  type RustOpenApiOptions as RustOpenApiConfiguration,
 } from "./_rust-project.ts";
 import {
   configureRustReleaseTask,
@@ -57,6 +58,7 @@ export type CargoExampleOptions = RustCargoExampleOptions;
 export type DBXToolsRustProjectOptions = RustProjectOptions;
 export type RustCrateOptions = RustCrateConfiguration;
 export type RustCliOptions = RustCliConfiguration;
+export type RustOpenApiOptions = RustOpenApiConfiguration;
 
 /** Public Rust project facade; implementation lives apart from workspace/release coordination. */
 export class DBXToolsRustProject extends RustProject {
@@ -269,12 +271,23 @@ export interface RustBindingMapping {
   readonly dependencies?: readonly string[];
 }
 
+/** Persisted Rust OpenAPI producer consumed by the shared OpenAPI task. */
+export interface RustOpenApiMapping {
+  readonly crate: string;
+  readonly rust: string;
+  readonly output: string;
+  readonly binary?: string;
+  readonly features: readonly string[];
+  readonly noDefaultFeatures: boolean;
+}
+
 /** Persisted Rust workspace state consumed by `sync --watch`. */
 export interface RustWorkspaceMapping {
   readonly root: string;
   readonly crates: readonly string[];
   readonly bindings: readonly RustBindingMapping[];
   readonly binaries: readonly RustReleaseBinaryMapping[];
+  readonly openapi: readonly RustOpenApiMapping[];
 }
 
 /** One platform archive published for a Rust CLI binary. */
@@ -778,11 +791,26 @@ function createRustWorkspaceMapping(
   binaries: readonly RustReleaseBinaryMapping[],
   resolved: ResolvedRustWorkspaceOptions,
 ): RustWorkspaceMapping {
+  const openapiRoot = join(dirname(resolved.nodeRoot), "openapi");
   return {
     root: resolved.root,
     crates: packages.map((pkg) => `${resolved.root}/${pkg.packageOptions.directory}`),
     bindings,
     binaries,
+    openapi: packages.flatMap((pkg) => {
+      if (!pkg.packageOptions.openapi) return [];
+      const options = pkg.packageOptions.openapi === true ? {} : pkg.packageOptions.openapi;
+      return [
+        {
+          crate: pkg.crateName,
+          rust: `${resolved.root}/${pkg.packageOptions.directory}`,
+          output: toPosix(join(openapiRoot, pkg.packageOptions.directory)),
+          ...(options.binary ? { binary: options.binary } : {}),
+          features: [...(options.features ?? [])],
+          noDefaultFeatures: options.noDefaultFeatures ?? false,
+        },
+      ];
+    }),
   };
 }
 
@@ -895,7 +923,6 @@ function configureIndependentRustVersions(
     for (const [section, dependencies] of [
       ["dependencies", pkg.packageOptions.dependencies],
       ["dev-dependencies", pkg.packageOptions.devDependencies],
-      ["build-dependencies", pkg.packageOptions.buildDependencies],
     ] as const) {
       for (const [name, dependency] of Object.entries(dependencies ?? {})) {
         if (typeof dependency === "string" || !dependency.path) continue;
@@ -954,13 +981,6 @@ export class DBXToolsRustWorkspace extends Component {
               this.packages,
               pkg.packageOptions.devDependencies,
               true,
-            ),
-            ...rustReleaseDependencies(
-              project,
-              pkg,
-              this.packages,
-              pkg.packageOptions.buildDependencies,
-              false,
             ),
           ],
         });

@@ -181,7 +181,7 @@ and typed per-turn Mastra request context without owning authentication.
 | AppKit-hosted agents           | [`@dbx-tools/appkit-mastra`](packages/js/node/appkit-mastra), [`@dbx-tools/shared-mastra`](packages/js/shared/mastra)                                                                                                       |
 | Genie streaming and schemas    | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
 | Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model), [`@dbx-tools/model-rs`](packages/js/node/model-rs)                                                                     |
-| Local model proxy              | [`dbx-tools-model-proxy`](packages/rs/model-proxy)                                                                                                                                                                          |
+| Local model proxy              | [`dbx-tools-model-proxy`](packages/rs/model-proxy), [`@dbx-tools/openapi-model-proxy`](packages/js/openapi/model-proxy)                                                                                                     |
 | Native command runtime         | [`@dbx-tools/rust-binary`](packages/js/node/rust-binary)                                                                                                                                                                    |
 | Databricks runtime utilities   | [`dbx-tools-core`](packages/rs/core), [`@dbx-tools/databricks`](packages/js/node/databricks), [`@dbx-tools/core-rs`](packages/js/node/core-rs), [`dbx-tools-core-rs`](packages/py/core-rs)                                  |
 | Lakebase parsing and discovery | [`dbx-tools-core`](packages/rs/core), [`@dbx-tools/core-rs`](packages/js/node/core-rs), [`dbx-tools-core-rs`](packages/py/core-rs), [`dbx-tools-lakebase-proxy`](packages/rs/lakebase-proxy)                                |
@@ -294,9 +294,10 @@ dbx model-proxy service status
 
 Then point the client at `http://127.0.0.1:4000/v1`.
 The installed per-user service starts at login, keeps non-secret settings and
-bounded aggregate metrics under `~/.dbx-tools/model-proxy`, and opens its local
-Tauri metrics UI from a supported desktop tray. The desktop owns the proxy
-runtime in one process and keeps controls off the HTTP listener.
+bounded aggregate metrics under `~/.dbx-tools/model-proxy`, and can start a
+small native tray companion for address and profile selection. State and live
+feeds use GraphQL at `/graphql`; REST controls and generated API documentation
+remain on loopback under `/api`.
 
 ### Authenticate With Databricks OAuth
 

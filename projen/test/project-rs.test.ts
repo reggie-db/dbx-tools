@@ -119,7 +119,6 @@ describe("DBXToolsRustProject", () => {
           },
         ],
         dependencies: { serde: "1" },
-        buildDependencies: { "tauri-build": "2" },
         targetDependencies: {
           'cfg(target_os = "linux")': { libc: "0.2" },
         },
@@ -133,7 +132,6 @@ describe("DBXToolsRustProject", () => {
         example: Array<Record<string, unknown>>;
         features: Record<string, unknown>;
         dependencies: Record<string, unknown>;
-        "build-dependencies": Record<string, unknown>;
         target: Record<string, { dependencies: Record<string, unknown> }>;
       };
       assert.deepEqual(manifest.package, {
@@ -157,7 +155,6 @@ describe("DBXToolsRustProject", () => {
       ]);
       assert.deepEqual(manifest.features, { default: ["native"], native: [] });
       assert.equal(manifest.dependencies.serde, "1");
-      assert.equal(manifest["build-dependencies"]["tauri-build"], "2");
       assert.equal(manifest.target['cfg(target_os = "linux")']?.dependencies.libc, "0.2");
       assert.match(readFileSync(join(directory, "LICENSE"), "utf8"), /Copyright \(c\).*Example/);
       assert.match(readFileSync(join(directory, ".gitignore"), "utf8"), /^target\/$/m);
@@ -171,33 +168,6 @@ describe("DBXToolsRustProject", () => {
       assert.equal(tasks.tasks.lint?.steps[0]?.exec, "cargo clippy --all-targets --all-features");
       assert.equal(tasks.tasks.format?.steps[0]?.exec, "cargo fmt");
       assert.equal(tasks.tasks["format:check"]?.steps[0]?.exec, "cargo fmt -- --check");
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-
-  it("supports native build and development commands", () => {
-    const directory = mkdtempSync(join(tmpdir(), "project-rs-native-build-"));
-    try {
-      mkdirSync(join(directory, "src"), { recursive: true });
-      writeFileSync(join(directory, "src/main.rs"), "fn main() {}\n");
-      const project = new DBXToolsRustProject({
-        name: "native-desktop",
-        outdir: directory,
-        buildCommand: "bunx tauri build --features desktop",
-        devCommand: "bunx tauri dev --features desktop-codegen",
-      });
-      project.synth();
-
-      const tasks = JSON.parse(readFileSync(join(directory, ".projen/tasks.json"), "utf8")) as {
-        tasks: Record<string, { steps: Array<{ exec?: string; spawn?: string }> }>;
-      };
-      assert.deepEqual(tasks.tasks.compile?.steps, [
-        { exec: "bunx tauri build --features desktop" },
-      ]);
-      assert.deepEqual(tasks.tasks.dev?.steps, [
-        { exec: "bunx tauri dev --features desktop-codegen" },
-      ]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -285,6 +255,52 @@ describe("DBXToolsRustWorkspace", () => {
       assert.equal(existsSync(join(emptyOutdir, ".github/workflows/release-dispatch.yml")), false);
     } finally {
       rmSync(emptyOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("records code-first Rust OpenAPI producers for the shared generator", () => {
+    const openapiOutdir = mkdtempSync(join(tmpdir(), "project-rs-openapi-"));
+    try {
+      mkdirSync(join(openapiOutdir, "native/api/src"), { recursive: true });
+      writeFileSync(join(openapiOutdir, "native/api/src/main.rs"), "fn main() {}\n");
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/openapi-root",
+        scope: "fixture",
+        outdir: openapiOutdir,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+        github: false,
+        nodeRelease: false,
+      });
+      const rust = new DBXToolsRustWorkspace(project, {
+        root: "native",
+        packages: {
+          api: {
+            binaryName: "fixture-api",
+            features: { docs: [] },
+            openapi: {
+              binary: "fixture-api",
+              features: ["docs"],
+              noDefaultFeatures: true,
+            },
+          },
+        },
+      });
+      project.synth();
+
+      assert.deepEqual(rust.workspaceMapping.openapi, [
+        {
+          crate: "fixture-api",
+          rust: "native/api",
+          output: "packages/js/openapi/api",
+          binary: "fixture-api",
+          features: ["docs"],
+          noDefaultFeatures: true,
+        },
+      ]);
+      assert.deepEqual(project.dbxToolsConfig.rust.openapi, rust.workspaceMapping.openapi);
+    } finally {
+      rmSync(openapiOutdir, { recursive: true, force: true });
     }
   });
 
@@ -628,7 +644,7 @@ describe("DBXToolsRustWorkspace", () => {
         workflowStep(buildJob, "Install Linux native dependencies").run ?? "",
         /rm -f \/etc\/apt\/sources\.list\.d\/google-chrome\.list/,
       );
-      assert.match(
+      assert.doesNotMatch(
         workflowStep(buildJob, "Install Linux native dependencies").run ?? "",
         /libwebkit2gtk-4\.1-dev/,
       );
@@ -799,6 +815,7 @@ describe("DBXToolsRustWorkspace", () => {
         },
       ],
       binaries: [],
+      openapi: [],
     });
     assert.deepEqual(project.dbxToolsConfig.rust, rust.workspaceMapping);
     assert.match(

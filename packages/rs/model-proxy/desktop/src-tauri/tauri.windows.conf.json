@@ -1,5 +1,0 @@
-{
-  "build": {
-    "runner": "../tauri-runner.cmd"
-  }
-}

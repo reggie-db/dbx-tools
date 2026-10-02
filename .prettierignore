@@ -75,15 +75,6 @@ bunfig.toml
 Cargo.toml
 LICENSE
 packages/js/node/rust-binary/src/_release-binaries.ts
-packages/rs/model-proxy/desktop/src-tauri/capabilities/default.json
-packages/rs/model-proxy/desktop/src-tauri/debug-capabilities/mcp.json
-packages/rs/model-proxy/desktop/src-tauri/tauri.conf.json
-packages/rs/model-proxy/desktop/src-tauri/tauri.mcp.conf.json
-packages/rs/model-proxy/desktop/src-tauri/tauri.windows.conf.json
-packages/rs/model-proxy/desktop/tauri-runner.cmd
-packages/rs/model-proxy/desktop/tauri-runner.ts
-packages/rs/model-proxy/tauri.conf.json
-packages/rs/model-proxy/tauri.windows.conf.json
 pyproject.toml
 tsconfig.base.json
 tsconfig.json
@@ -125,6 +116,7 @@ packages/js/node/rust-binary/index.ts
 packages/js/node/search/index.ts
 packages/js/node/teams/index.ts
 packages/js/node/tunnel/index.ts
+packages/js/openapi/model-proxy/index.ts
 packages/js/shared/auth/index.ts
 packages/js/shared/core/index.ts
 packages/js/shared/email/index.ts

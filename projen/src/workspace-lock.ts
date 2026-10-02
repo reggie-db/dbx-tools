@@ -6,17 +6,43 @@ import { log } from "@dbx-tools/shared-core";
 const MUTATION_LOCK_SCOPE = "dbx-tools-workspace-mutation";
 const logger = log.logger("projen:workspace-lock");
 
+export interface WorkspaceMutationLockOptions {
+  /**
+   * When this returns false, skip both the lock and the callback. After the
+   * lock is held it runs again so a completed holder can make the work a no-op
+   * without taking the critical section only to return.
+   */
+  check?: () => boolean | Promise<boolean>;
+}
+
 /**
  * Serialize synthesis, generated-file watchers, and release preparation for one
  * repository without coordinating unrelated worktrees or repositories.
+ *
+ * `check` is check-lock-check: a false result before acquire never waits, and a
+ * false result after acquire releases immediately without running `callback`.
  */
-export function withWorkspaceMutationLock<T>(
+export async function withWorkspaceMutationLock<T>(
   root: string,
   callback: () => T | Promise<T>,
-): Promise<T> {
+  options?: WorkspaceMutationLockOptions,
+): Promise<T | undefined> {
   const repository = resolve(root);
-  return fileLock.withFileLock([MUTATION_LOCK_SCOPE, repository], callback, {
-    backends: process.platform === "win32" ? ["file"] : ["flock", "file"],
-    onWait: () => logger.info("waiting for workspace mutation lock", { repository }),
-  });
+  const check = options?.check;
+  if (check && !(await check())) {
+    return undefined;
+  }
+  return fileLock.withFileLock(
+    [MUTATION_LOCK_SCOPE, repository],
+    async () => {
+      if (check && !(await check())) {
+        return undefined;
+      }
+      return callback();
+    },
+    {
+      backends: process.platform === "win32" ? ["file"] : ["flock", "file"],
+      onWait: () => logger.info("waiting for workspace mutation lock", { repository }),
+    },
+  );
 }

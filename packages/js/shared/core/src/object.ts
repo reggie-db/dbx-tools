@@ -652,7 +652,7 @@ class SequenceImpl<T> {
    */
   join(...sources: readonly SequenceSource<T>[]): Sequence<T> {
     const sourceIterables = sequenceSources(this, ...sources);
-    return sequenceSources.length === 0 ? this : sequence(...sourceIterables);
+    return sourceIterables.length === 1 ? this : sequence(...sourceIterables);
   }
 
   /** @see {@link take} */

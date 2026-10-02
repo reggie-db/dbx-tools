@@ -34,8 +34,17 @@ impl Default for AutoRecoveryPolicy {
 }
 
 /// Stable transition vocabulary shared by logs, health counters, and metrics.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::Enum,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    PartialEq,
+    schemars::JsonSchema,
+    Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum AutoTransitionKind {
     Activated,
@@ -46,8 +55,17 @@ pub(crate) enum AutoTransitionKind {
 }
 
 /// One automatic congestion-control transition.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(
+    async_graphql::SimpleObject,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    PartialEq,
+    schemars::JsonSchema,
+    Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AutoTransition {
     pub(crate) kind: AutoTransitionKind,

@@ -10,8 +10,9 @@ use std::{
 };
 
 use dbx_tools_core::{
-    invalidate_config_file, is_databricks_app, list_config_profiles, AuthKind,
-    DatabricksAuthOptions, DatabricksClient, DatabricksClientError, DatabricksProfileSummary,
+    config_profile_exists, invalidate_config_file, is_databricks_app, list_config_profiles,
+    AuthKind, DatabricksAuthOptions, DatabricksClient, DatabricksClientError,
+    DatabricksProfileSummary,
 };
 use dbx_tools_model::{ModelClient, ModelError};
 use dbx_tools_service::{PersistenceMode, SettingsStore};
@@ -25,8 +26,7 @@ const PROFILE_SETTING: &str = "databricks.runtime-selection";
 const DEFAULT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Profile source accepted by the runtime manager.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "desktop", derive(specta::Type))]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind", content = "profile")]
 pub(crate) enum RuntimeSelection {
     /// Resolve the normal ambient Databricks authentication chain.
@@ -58,18 +58,27 @@ impl RuntimeSelection {
 }
 
 /// Secret-free status for one committed runtime generation.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, schemars::JsonSchema, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RuntimeStatus {
+    /// Monotonic runtime generation identifier.
     pub(crate) generation: u64,
+    /// Requested source used to resolve Databricks authentication.
     pub(crate) selection: RuntimeSelection,
+    /// Resolved Databricks CLI profile name.
     pub(crate) profile: String,
+    /// Resolved Databricks workspace or account host.
     pub(crate) host: String,
+    /// Resolved workspace identifier when configured.
     pub(crate) workspace_id: Option<String>,
+    /// Secret-free authentication kind label.
     pub(crate) auth_kind: String,
+    /// Persistence mode used for service settings and aggregate metrics.
     pub(crate) persistence: PersistenceMode,
+    /// Whether this process permits runtime profile switching.
     pub(crate) switching_enabled: bool,
     #[serde(skip)]
+    #[schemars(skip)]
     pub(crate) storage_key: String,
 }
 
@@ -147,16 +156,23 @@ impl RuntimeManager {
         persistence: PersistenceMode,
         in_databricks_app: bool,
     ) -> Result<Self, RuntimeError> {
-        let selection = settings
-            .get(PROFILE_SETTING)
-            .map_err(settings_error)?
-            .map(|value| {
-                serde_json::from_str(&value)
-                    .map_err(|error| RuntimeError::Settings(error.to_string()))
-            })
-            .transpose()?
-            .unwrap_or(initial)
-            .normalized()?;
+        let selection = match settings.get(PROFILE_SETTING).map_err(settings_error)? {
+            Some(value) => match serde_json::from_str::<RuntimeSelection>(&value) {
+                Ok(RuntimeSelection::Profile(profile))
+                    if !config_profile_exists(&profile, config.config_file.as_deref())? =>
+                {
+                    settings.remove(PROFILE_SETTING).map_err(settings_error)?;
+                    initial
+                }
+                Ok(selection) => selection,
+                Err(_) => {
+                    settings.remove(PROFILE_SETTING).map_err(settings_error)?;
+                    initial
+                }
+            },
+            None => initial,
+        }
+        .normalized()?;
         let throttle_pool = ThrottlePool::default();
         let generation = build_generation(1, selection, &config, &throttle_pool, false).await?;
         Ok(Self {
@@ -453,6 +469,73 @@ mod tests {
             .is_err());
         assert_eq!(manager.status().generation, 1);
         assert_eq!(manager.status().profile, "first");
+    }
+
+    #[tokio::test]
+    async fn missing_persisted_profile_falls_back_to_core_resolution() {
+        let server = endpoint_server(200).await;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("databrickscfg");
+        std::fs::write(
+            &path,
+            format!(
+                "[first]\nhost = {}\nauth_type = pat\ntoken = first-token\n",
+                server.uri()
+            ),
+        )
+        .unwrap();
+        let settings = Arc::new(MemorySettings::default());
+        settings
+            .set(
+                PROFILE_SETTING,
+                &serde_json::to_string(&RuntimeSelection::Profile("missing".into())).unwrap(),
+            )
+            .unwrap();
+
+        let manager = RuntimeManager::new_with_runtime(
+            RuntimeSelection::Ambient,
+            config(path),
+            settings.clone(),
+            PersistenceMode::Memory,
+            false,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(manager.status().profile, "first");
+        assert_eq!(manager.status().selection, RuntimeSelection::Ambient);
+        assert_eq!(settings.get(PROFILE_SETTING).unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn malformed_persisted_profile_falls_back_to_core_resolution() {
+        let server = endpoint_server(200).await;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("databrickscfg");
+        std::fs::write(
+            &path,
+            format!(
+                "[first]\nhost = {}\nauth_type = pat\ntoken = first-token\n",
+                server.uri()
+            ),
+        )
+        .unwrap();
+        let settings = Arc::new(MemorySettings::default());
+        settings.set(PROFILE_SETTING, "not-json").unwrap();
+
+        let manager = RuntimeManager::new_with_runtime(
+            RuntimeSelection::Ambient,
+            config(path),
+            settings.clone(),
+            PersistenceMode::Memory,
+            false,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(manager.status().profile, "first");
+        assert_eq!(manager.status().selection, RuntimeSelection::Ambient);
+        assert_eq!(settings.get(PROFILE_SETTING).unwrap(), None);
     }
 
     #[tokio::test]

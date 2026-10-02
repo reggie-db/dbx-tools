@@ -23,6 +23,22 @@ describe("object.sequence", () => {
     assert.deepEqual(sequence.toArray(), ["dotenv", "bundle"]);
     assert.deepEqual(visited, ["trailing"]);
   });
+
+  it("joins more sources onto an existing sequence lazily", () => {
+    const visited: string[] = [];
+    const trailing = {
+      *[Symbol.iterator]() {
+        visited.push("trailing");
+        yield "bundle";
+      },
+    };
+    const sequence = object.sequence(["env"]).join(trailing);
+
+    assert.equal(sequence.at(0), "env");
+    assert.deepEqual(visited, []);
+    assert.deepEqual(sequence.toArray(), ["bundle"]);
+    assert.deepEqual(visited, ["trailing"]);
+  });
 });
 
 describe("object.toDate", () => {
