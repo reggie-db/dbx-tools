@@ -939,17 +939,15 @@ describe("DBXToolsRustWorkspace", () => {
     const archive = workflowStep(rustUniffi, "Archive raw Rust outputs").run ?? "";
     assert.match(archive, /command -v sha256sum/);
     assert.match(archive, /shasum -a 256/);
-    assert.ok(
-      workflowStep(rustUniffi, "Build Rust UniFFI outputs").run?.includes(
-        "toJSON(matrix.features)",
-      ),
-    );
+    const uniffiBuild = workflowStep(rustUniffi, "Build Rust UniFFI outputs").run ?? "";
+    assert.ok(uniffiBuild.includes("toJSON(matrix.features)"));
+    assert.ok(uniffiBuild.includes("PACKAGE=\"${PACKAGE%$'\\r'}\""));
+    assert.ok(uniffiBuild.includes("FEATURE=\"${FEATURE%$'\\r'}\""));
     assert.ok(workflowStep(rustUniffi, "Package UniFFI outputs").run?.includes("--skip-build"));
     assert.ok(workflowStep(rustBinaries, "Package release binaries").run?.includes("7z a"));
-    assert.match(
-      workflowStep(rustBinaries, "Build Rust binaries outputs").run ?? "",
-      /toJSON\(matrix\.binaries\)/,
-    );
+    const binaryBuild = workflowStep(rustBinaries, "Build Rust binaries outputs").run ?? "";
+    assert.match(binaryBuild, /toJSON\(matrix\.binaries\)/);
+    assert.ok(binaryBuild.includes("BINARY=\"${BINARY%$'\\r'}\""));
     assert.deepEqual(
       rustUniffi.steps
         .filter((candidate) => candidate.uses === "actions/upload-artifact@v7")
