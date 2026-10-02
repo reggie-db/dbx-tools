@@ -279,9 +279,9 @@ Node jobs consume same-run artifacts, publish native archives first with npm
 provenance, compile and publish normal workspace packages including the Projen
 engine, then build facades from committed generated TypeScript without UBRN and
 publish them in binding dependency order. Every npm archive is published to
-npmjs with provenance. `releaseGitHubPackages: true` additionally publishes to
-GitHub Packages without provenance when the package scope belongs to the
-repository owner and a `PACKAGES_TOKEN` secret grants `write:packages`. Set the `UNIFFI_FACADE_SMOKE`
+npmjs with provenance and to GitHub Packages without provenance. GitHub
+Packages uses the package scope configured by the project and authenticates
+with the `PACKAGES_TOKEN` Actions secret. Set the `UNIFFI_FACADE_SMOKE`
 repository variable to `true` to run the optional
 nonblocking registry install and import check after facade publication. Python
 combines same-run platform wheels with standard wheel and source builds, then
@@ -299,8 +299,8 @@ selects every publishable package with compiled entry points, invokes one
 root-level filtered compile, then packs each package exactly once with lifecycle
 scripts disabled. It validates the archive identity, configured access,
 integrity, and repository metadata before publishing those same bytes. The
-packaging step writes one archive per package, and each configured npm publisher
-consumes those same archives.
+packaging step writes one archive per package, and the npmjs and GitHub Packages
+publishers consume those same archives.
 Package `prepack` tasks remain available for standalone publishes without
 multiplying `tsc --build` across the monorepo release flow.
 

@@ -17,7 +17,6 @@ const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
 export const GITHUB_NPM_REGISTRY_URL = "https://npm.pkg.github.com";
 const nodeReleaseProjects = new WeakSet<DBXToolsJavaScriptProject>();
-const githubPackagesProjects = new WeakSet<DBXToolsJavaScriptProject>();
 const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
 const releaseWorkflows = new WeakMap<DBXToolsJavaScriptProject, GithubWorkflow>();
 const publicationJobs = new WeakMap<GithubWorkflow, Set<string>>();
@@ -53,8 +52,6 @@ export interface DBXToolsReleaseOptions {
   readonly tagPrefix?: string;
   /** Omit normal npm workspace publication while retaining other release jobs. */
   readonly nodeRelease?: boolean;
-  /** Also publish npm archives to GitHub Packages. */
-  readonly githubPackages?: boolean;
   /** Build and deploy generated documentation through GitHub Pages. */
   readonly pages?: ReleasePagesOptions;
   /** Repository task names run in the release worktree before validation. */
@@ -94,11 +91,6 @@ export function registerPublicationJob(workflow: GithubWorkflow, jobId: string):
 /** Whether the unified workflow publishes the normal npm workspace. */
 export function hasNodeRelease(project: DBXToolsJavaScriptProject): boolean {
   return nodeReleaseProjects.has(project);
-}
-
-/** Whether the unified workflow also publishes npm archives to GitHub Packages. */
-export function hasGitHubPackagesRelease(project: DBXToolsJavaScriptProject): boolean {
-  return githubPackagesProjects.has(project);
 }
 
 /** Tag pattern created by release jobs and accepted by manual recovery. */
@@ -314,7 +306,7 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
   };
 }
 
-function nodePublishJob(project: DBXToolsJavaScriptProject, githubPackages: boolean): Job {
+function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
   return {
     if: releaseStageCondition("node"),
     needs: ["verify-context"],
@@ -341,16 +333,12 @@ function nodePublishJob(project: DBXToolsJavaScriptProject, githubPackages: bool
         env: { RELEASE_VERSION, ...npmPublishEnvironment() },
         run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --version "$RELEASE_VERSION" $DRY_RUN',
       },
-      ...(githubPackages
-        ? [
-            githubPackagesSetupStep(project),
-            {
-              name: "Publish npm workspace to GitHub Packages",
-              env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
-              run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`,
-            },
-          ]
-        : []),
+      githubPackagesSetupStep(project),
+      {
+        name: "Publish npm workspace to GitHub Packages",
+        env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
+        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`,
+      },
     ],
   };
 }
@@ -706,10 +694,7 @@ export function independentReleaseSetupSteps(
   ];
 }
 
-function independentNodePublishJob(
-  project: DBXToolsJavaScriptProject,
-  githubPackages: boolean,
-): Job {
+function independentNodePublishJob(project: DBXToolsJavaScriptProject): Job {
   return {
     if: "${{ needs.release-plan.outputs.node == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
     needs: ["release-plan"],
@@ -732,16 +717,12 @@ function independentNodePublishJob(
         env: npmPublishEnvironment(),
         run: "bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace",
       },
-      ...(githubPackages
-        ? [
-            githubPackagesSetupStep(project),
-            {
-              name: "Publish affected npm packages to GitHub Packages",
-              env: githubPackagesPublishEnvironment(),
-              run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --registry ${GITHUB_NPM_REGISTRY_URL}`,
-            },
-          ]
-        : []),
+      githubPackagesSetupStep(project),
+      {
+        name: "Publish affected npm packages to GitHub Packages",
+        env: githubPackagesPublishEnvironment(),
+        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --registry ${GITHUB_NPM_REGISTRY_URL}`,
+      },
     ],
   };
 }
@@ -1043,10 +1024,7 @@ function configureIndependentRelease(
   workflow.addJob("publish-release-notes", independentReleaseNotesJob(project));
   registerPublicationJob(workflow, "publish-release-notes");
   if (options.nodeRelease !== false) {
-    workflow.addJob(
-      "publish-node",
-      independentNodePublishJob(project, options.githubPackages ?? false),
-    );
+    workflow.addJob("publish-node", independentNodePublishJob(project));
     registerPublicationJob(workflow, "publish-node");
   }
   new ReleaseFinalizer(project, workflow, options.pages, options.syncBranch || undefined, true);
@@ -1058,7 +1036,6 @@ function configureIndependentRelease(
 export class DBXToolsRelease extends Component {
   constructor(project: DBXToolsJavaScriptProject, options: DBXToolsReleaseOptions = {}) {
     super(project);
-    if (options.githubPackages) githubPackagesProjects.add(project);
     if (project.releaseCatalog.mode === "independent") {
       configureIndependentRelease(project, options);
       return;
@@ -1156,7 +1133,7 @@ export class DBXToolsRelease extends Component {
     workflow.file?.addOverride("on.workflow_dispatch.inputs.dry_run.default", true);
     workflow.addJob("verify-context", verifyContextJob(tagPrefix, releaseBranch));
     if (options.nodeRelease !== false) {
-      workflow.addJob("publish-node", nodePublishJob(project, options.githubPackages ?? false));
+      workflow.addJob("publish-node", nodePublishJob(project));
       registerPublicationJob(workflow, "publish-node");
     }
     new ReleaseFinalizer(project, workflow, options.pages, undefined, false);

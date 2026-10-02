@@ -2238,11 +2238,12 @@ singular release updates the generated release workflow's versioned run name.
 Merging the release PR is the only automatic publication signal. The generated
 workflow verifies that the triggering SHA is the exact `main` commit, creates one
 annotated `v<version>` tag, and publishes all public npm, PyPI, Cargo, native, and
-GitHub artifacts at that version. npm packages publish to npmjs. Do not enable
-`releaseGitHubPackages` in this repository: the `@dbx-tools` package scope does
-not match the `reggie-db` GitHub owner, so GitHub rejects package creation even
-with a token carrying `write:packages`. Python wheels and Cargo archives remain
-attached to GitHub Releases.
+GitHub artifacts at that version. npm packages publish to npmjs and GitHub
+Packages. Because the packages use the `@dbx-tools` scope while the repository
+owner is `reggie-db`, GitHub Packages publication uses the
+`PACKAGES_TOKEN` Actions secret. It must contain a classic token with
+`write:packages` access to the `dbx-tools` GitHub organization. Python wheels
+and Cargo archives remain attached to GitHub Releases.
 The Pages workflow rebuilds its PEP 503 and Cargo sparse indexes from those
 durable assets before deploying the documentation site. Manual recovery must
 provide the same annotated tag and exact expected SHA; it never calculates
