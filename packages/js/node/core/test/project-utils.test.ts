@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { cwd } from "node:process";
@@ -21,65 +21,96 @@ describe("resolveWorkingDirectory", () => {
   });
 });
 
-describe("project command cache", () => {
-  it("caches results by command, including across chdir, while bypassing another cwd", () => {
-    const root = mkdtempSync(resolve(tmpdir(), "dbx-tools-project-cache-"));
+describe("npmRegistry", () => {
+  it("reads a project .npmrc and memoizes by cwd", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "dbx-tools-npm-registry-"));
     try {
       const current = resolve(root, "current");
       const other = resolve(root, "other");
-      const bin = resolve(root, "bin");
-      const counter = resolve(root, "calls");
       mkdirSync(current);
       mkdirSync(other);
-      mkdirSync(bin);
-      const npm = resolve(bin, "npm");
-      writeFileSync(
-        npm,
-        `#!/bin/sh\necho call >> "$PROJECT_CACHE_COUNTER"\n` +
-          `if [ -n "$PROJECT_CACHE_OUTPUT" ]; then echo "$PROJECT_CACHE_OUTPUT"; fi\n`,
-      );
-      chmodSync(npm, 0o755);
+      writeFileSync(resolve(current, ".npmrc"), "registry=https://current.example.test/\n");
+      writeFileSync(resolve(other, ".npmrc"), "registry=https://other.example.test/\n");
       const fixture = resolve(import.meta.dir, "fixtures/project-probe.ts");
       const result = spawnSync(process.execPath, [fixture, current, other], {
         encoding: "utf8",
-        env: {
-          ...process.env,
-          PATH: `${bin}:${process.env.PATH ?? ""}`,
-          PROJECT_CACHE_COUNTER: counter,
-          PROJECT_CACHE_OUTPUT: "https://registry.example.test/",
-        },
+        env: isolatedEnv(root),
       });
       assert.equal(result.status, 0, result.stderr);
       assert.deepEqual(JSON.parse(result.stdout), {
         current: [
-          "https://registry.example.test/",
-          "https://registry.example.test/",
-          "https://registry.example.test/",
+          "https://current.example.test/",
+          "https://current.example.test/",
+          "https://current.example.test/",
         ],
-        other: ["https://registry.example.test/", "https://registry.example.test/"],
-        moved: ["https://registry.example.test/", "https://registry.example.test/"],
+        other: ["https://other.example.test/", "https://other.example.test/"],
+        moved: ["https://other.example.test/", "https://other.example.test/"],
       });
-      assert.equal(readFileSync(counter, "utf8").trim().split("\n").length, 3);
-
-      writeFileSync(counter, "");
-      const empty = spawnSync(process.execPath, [fixture, current, other], {
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          PATH: `${bin}:${process.env.PATH ?? ""}`,
-          PROJECT_CACHE_COUNTER: counter,
-          PROJECT_CACHE_OUTPUT: "",
-        },
-      });
-      assert.equal(empty.status, 0, empty.stderr);
-      assert.deepEqual(JSON.parse(empty.stdout), {
-        current: [null, null, null],
-        other: [null, null],
-        moved: [null, null],
-      });
-      assert.equal(readFileSync(counter, "utf8").trim().split("\n").length, 3);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it("prefers env, then npmrc, then bunfig, then pnpm yaml, then public npm", () => {
+    const home = mkdtempSync(resolve(tmpdir(), "dbx-tools-npm-registry-home-"));
+    try {
+      const project = resolve(home, "project");
+      mkdirSync(project);
+      writeFileSync(
+        resolve(project, "bunfig.toml"),
+        `[install]\nregistry = "https://bun.example.test/"\n`,
+      );
+      writeFileSync(resolve(project, "pnpm-workspace.yaml"), "registry: https://pnpm.example.test/\n");
+      assert.equal(
+        spawnRegistry(project, home).hostname,
+        "bun.example.test",
+        "bunfig wins over pnpm yaml",
+      );
+
+      writeFileSync(resolve(project, ".npmrc"), 'registry="https://npmrc.example.test/"\n');
+      assert.equal(spawnRegistry(project, home).hostname, "npmrc.example.test");
+
+      assert.equal(
+        spawnRegistry(project, home, { npm_config_registry: "https://env.example.test/" }).hostname,
+        "env.example.test",
+      );
+
+      const empty = resolve(home, "empty");
+      mkdirSync(empty);
+      assert.equal(spawnRegistry(empty, home).hostname, "registry.npmjs.org");
+      assert.equal(spawnRegistry(empty, home, { overrideOnly: "1" }), null);
+    } finally {
+      rmSync(home, { force: true, recursive: true });
+    }
+  });
 });
+
+function isolatedEnv(home: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    ...extra,
+  };
+  delete env.npm_config_registry;
+  delete env.NPM_CONFIG_REGISTRY;
+  delete env.BUN_CONFIG_REGISTRY;
+  delete env.NPM_CONFIG_USERCONFIG;
+  delete env.NPM_CONFIG_GLOBALCONFIG;
+  Object.assign(env, extra);
+  return env;
+}
+
+function spawnRegistry(
+  cwd: string,
+  home: string,
+  extra: NodeJS.ProcessEnv = {},
+): { hostname: string } | null {
+  const fixture = resolve(import.meta.dir, "fixtures/registry-probe.ts");
+  const result = spawnSync(process.execPath, [fixture, cwd], {
+    encoding: "utf8",
+    env: isolatedEnv(home, extra),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout) as { hostname: string } | null;
+}

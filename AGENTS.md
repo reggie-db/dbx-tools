@@ -485,7 +485,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   is `auto` by default, `always`, or `never`. Auto registers the hidden
   `dbx-model-proxy-desktop` companion only when its tray-icon capability probe
   succeeds; always fails when the probe does not, and never disables companion
-  startup. Every lifecycle command rejects Databricks App execution before
+  startup. Enabled companions start immediately and write stdout/stderr under
+  `<config-dir>/logs`. Every lifecycle command rejects Databricks App execution before
   touching service or SQLite state.
   The companion uses `tray-icon`, opens the local metrics UI, and reports
   `/api/healthz`; macOS and Windows render Wry native webviews, while Linux uses
@@ -1509,6 +1510,21 @@ package that imports it.
   `ProjectContext`, including unsuccessful/empty results.
   Blank, null, omitted, and an explicit path equal to `process.cwd()` may hit or
   populate that command map; another directory executes without populating it.
+- `@dbx-tools/core` `dependencyResolver` takes a parsed `package.json` record
+  and never writes the project. `missingDependencies` walks declared registry
+  specifiers and each reachable packument `dependencies` map. `resolveVersion`
+  accepts a name, `name@spec`, a specifier string, or `{ name, version?,
+  range? }` (`semver` aliases `version`) and returns a concrete version,
+  retaining a range when one was requested and a published version satisfies
+  it. `resolveDependencies` reuses both; its dependency maps may be raw
+  strings or those structured objects, and it returns `{ name, version,
+  range? }` maps. Packuments are fetched over HTTP; `registryUrl` defaults to
+  `projectUtils.npmRegistry()`. No installer is invoked.
+- `projectUtils.npmRegistry` is memoized per cwd and options. It reads env
+  (`npm_config_registry`, `NPM_CONFIG_REGISTRY`, `BUN_CONFIG_REGISTRY`), then
+  `.npmrc` (project ancestors, user, global), then Bun `bunfig.toml`
+  `install.registry`, then pnpm workspace/global YAML, then
+  `https://registry.npmjs.org/`. Parsed config files use `file.cachedRecord`.
 - `token` also owns the TypeScript front-door header NAMES -
   `ACCESS_TOKEN_HEADER`, `USER_ID_HEADER`, `USER_EMAIL_HEADER`. TypeScript
   packages must import those constants rather than repeating a header string:

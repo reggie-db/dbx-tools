@@ -25,6 +25,8 @@ Key features:
 - Cross-process file locks with one portable, stale-reclaiming lock-directory
   protocol shared by Bun and Node.
 - Keyed mutual exclusion across the main thread and its worker threads.
+- npm dependency resolution from an in-memory `package.json` against the
+  configured registry.
 
 ## Install A Binary
 
@@ -318,14 +320,51 @@ share a command/argument result cache only when that resolved path is the live
 process cwd; another directory executes directly. Empty command results are
 cached too.
 
+## Resolve npm Dependencies
+
+```ts
+import { readFile } from "node:fs/promises";
+
+import { json } from "@dbx-tools/shared-core";
+import { dependencyResolver } from "@dbx-tools/core";
+
+const manifest = json.parseRecord(await readFile("package.json", "utf8"));
+if (!manifest) throw new Error("package.json is not a JSON object");
+const missing = await dependencyResolver.missingDependencies(manifest);
+const leftpad = await dependencyResolver.resolveVersion({ name: "leftpad", range: "^1.0.0" });
+const also = await dependencyResolver.resolveVersion("leftpad@^1.0.0");
+const resolved = await dependencyResolver.resolveDependencies({
+  dependencies: {
+    leftpad: "^1.0.0",
+    typescript: { version: "5.8.3" },
+  },
+});
+```
+
+`missingDependencies()` walks declared registry specifiers and each reachable
+packument `dependencies` map through HTTP GETs. `resolveVersion()` accepts a
+package name, `name@version` / `name@range`, a second specifier string, or
+`{ name, version?, range? }` (`semver` is an alias for `version`). An exact
+version that exists is unchanged, and a range is kept when a published version
+satisfies it. `resolveDependencies()` copies the record and pins unavailable
+registry packages (or their parents) until that graph is complete. No installer
+is invoked. Dependency maps may use raw strings or the same structured objects.
+Each returned map entry is `{ name, version, range? }`. The input object is
+unchanged. Workspace, catalog, file, and git specifiers are left alone. Use
+this when a mirror or delayed proxy 404s versions that public npm already has.
+
 ## Modules
 
 - `exec` - async/sync process spawning, stdio handling, abort wiring, and shlex.
 - `bin` - executable download, optional archive extraction, selection, and
   atomic installation.
 - `bundle` - asynchronous streaming of CLI-resolved Databricks bundle App resources.
-- `project` - cwd normalization, root discovery, project naming, and git-remote
-  parsing.
+- `project` - cwd normalization, root discovery, project naming, git-remote
+  parsing, and memoized npm registry resolution (env, npmrc, bunfig, pnpm yaml,
+  then public npm).
+- `dependencyResolver` - HTTP packument missing-graph walk, single-package
+  version resolution, and resolvable `{ name, version, range? }` maps from a
+  parsed `package.json`. `registryUrl` defaults to `projectUtils.npmRegistry()`.
 - `file` - best-effort stat and parsed-record caching by caller-defined source key.
 - `brand` - YAML/JSON discovery, parsing, validation, and asset path resolution.
 - `config` - scoped environment, dotenv, and validated Databricks bundle lookup,
