@@ -43,12 +43,12 @@ import {
   githubTokenArguments,
   githubTokenEnvironmentName,
 } from "../src/release-github.ts";
+import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 import {
   readWorkspaceVersion,
   resolveBaseVersion,
   resolveNextVersion,
 } from "../src/workspace-version.ts";
-import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
 const logger = log.logger("projen:release");
 

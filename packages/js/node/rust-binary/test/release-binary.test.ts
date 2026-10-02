@@ -27,6 +27,8 @@ const COMMAND: ReleaseBinaryCommand = {
   tagPrefix: "rs-fixture-v",
   tag: `rs-fixture-v${PACKAGE_VERSION}`,
   repository: "https://github.com/example/project",
+  crateName: "fixture-crate",
+  cargoFeatures: ["desktop"],
   assets: [
     {
       os: "linux",
@@ -82,6 +84,10 @@ describe("Rust release binaries", () => {
       false,
     );
     assert.equal(releaseBinaryCommand("model-proxy-desktop").binaryName, "dbx-model-proxy-desktop");
+    assert.equal(releaseBinaryCommand("model-proxy").crateName, "dbx-tools-model-proxy");
+    assert.deepEqual(releaseBinaryCommand("model-proxy").cargoFeatures, []);
+    assert.equal(releaseBinaryCommand("lakebase-proxy").crateName, "dbx-tools-lakebase-proxy");
+    assert.deepEqual(releaseBinaryCommand("model-proxy-desktop").cargoFeatures, ["desktop"]);
   });
 
   it("keeps the isolated runtime dependency reach below the CLI graph", () => {
@@ -146,6 +152,38 @@ describe("Rust release binaries", () => {
           arch: "x64",
         }),
         7,
+      );
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses an unstamped 0.0.0 executable as the requested version", async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), "dbx-rust-bin-unstamped-"));
+    const version = PACKAGE_VERSION.replace(/[^0-9A-Za-z]+/g, "_");
+    const binDir = join(homeDir, ".dbx-tools", "bin");
+    const path = join(binDir, `fixture-bin_${version}`);
+    try {
+      await mkdir(binDir, { recursive: true });
+      await writeFile(
+        path,
+        `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "fixture-bin 0.0.0"; exit 0; fi\nexit 3\n`,
+      );
+      await chmod(path, 0o755);
+
+      const installed = await ensureReleaseBinary(COMMAND, {
+        homeDir,
+        platform: "linux",
+        arch: "x64",
+      });
+      assert.equal(installed.path, path);
+      assert.equal(
+        await runReleaseBinary(COMMAND, ["value"], {
+          homeDir,
+          platform: "linux",
+          arch: "x64",
+        }),
+        3,
       );
     } finally {
       await rm(homeDir, { recursive: true, force: true });

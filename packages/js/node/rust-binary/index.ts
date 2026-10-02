@@ -3,6 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/rust-binary";
-export const PACKAGE_VERSION = "0.9.12";
+export const PACKAGE_VERSION = "0.9.13";
 export * as releaseBinary from "./src/release-binary.ts";
 export * from "./exports.ts";

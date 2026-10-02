@@ -1,8 +1,8 @@
-//! Bounded process-local metrics, machine endpoints, and embedded dashboard assets.
+//! Bounded process-local metrics for headless and desktop proxy runtimes.
 
 use std::{
     fmt,
-    net::{IpAddr, SocketAddr},
+    net::SocketAddr,
     pin::Pin,
     str::FromStr,
     task::{Context, Poll},
@@ -13,7 +13,7 @@ use std::{
     collections::{HashMap, VecDeque},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, Mutex, OnceLock,
+        Arc, Mutex,
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -21,10 +21,6 @@ use std::{
 use dbx_tools_service::ServiceStorage;
 #[cfg(feature = "metrics")]
 use hdrhistogram::Histogram;
-#[cfg(feature = "metrics")]
-use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
-#[cfg(feature = "metrics-ui")]
-use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "metrics")]
 use tokio::sync::broadcast;
@@ -33,13 +29,13 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-use crate::{
-    adaptive::AutoTransition, rate_limit::RateLimitModelSnapshot, request_log::RequestOutcome,
-    throttle::ThrottleModelSnapshot,
-};
+use crate::{adaptive::AutoTransition, request_log::RequestOutcome};
 #[cfg(feature = "metrics")]
 use crate::{adaptive::AutoTransitionKind, request_log::ReasoningSetting};
+#[cfg(any(feature = "desktop", test))]
+use crate::{rate_limit::RateLimitModelSnapshot, throttle::ThrottleModelSnapshot};
 
+#[cfg(any(feature = "metrics", test))]
 const MODEL_SERIES_LIMIT: usize = 32;
 #[cfg(feature = "metrics")]
 const DETAILED_BUCKET_LIMIT: usize = 720;
@@ -47,26 +43,23 @@ const DETAILED_BUCKET_LIMIT: usize = 720;
 const ROLLUP_BUCKET_LIMIT: usize = 1_440;
 #[cfg(feature = "metrics")]
 const RATE_LIMIT_EVENT_LIMIT: usize = 128;
+#[cfg(any(feature = "metrics", test))]
 const RETENTION_TARGET_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Requested metrics behavior before build capabilities are resolved.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum MetricsOption {
     Auto,
-    Ui,
-    Collect,
+    On,
     Off,
-    Fullest,
 }
 
 impl fmt::Display for MetricsOption {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Auto => "auto",
-            Self::Ui => "ui",
-            Self::Collect => "collect",
+            Self::On => "on",
             Self::Off => "off",
-            Self::Fullest => "true",
         })
     }
 }
@@ -77,29 +70,26 @@ impl FromStr for MetricsOption {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "auto" => Ok(Self::Auto),
-            "ui" => Ok(Self::Ui),
-            "collect" => Ok(Self::Collect),
             "off" | "false" => Ok(Self::Off),
-            "true" => Ok(Self::Fullest),
-            _ => Err("expected auto, ui, collect, off, true, or false".to_owned()),
+            "on" | "true" => Ok(Self::On),
+            _ => Err("expected auto, on, off, true, or false".to_owned()),
         }
     }
 }
 
 /// Resolved metrics behavior supported by the current binary.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum MetricsMode {
-    Ui,
-    Collect,
+    On,
     Off,
 }
 
 impl fmt::Display for MetricsMode {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::Ui => "ui",
-            Self::Collect => "collect",
+            Self::On => "on",
             Self::Off => "off",
         })
     }
@@ -113,35 +103,22 @@ pub(crate) const fn default_metrics_option() -> MetricsOption {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MetricsConfig {
     pub(crate) mode: MetricsMode,
-    pub(crate) routes_visible: bool,
 }
 
 impl MetricsConfig {
     pub(crate) fn resolve(
         requested: MetricsOption,
-        host: IpAddr,
-        metrics_public: bool,
         in_databricks_app: bool,
     ) -> Result<Self, MetricsError> {
         let mode = match requested {
             MetricsOption::Auto if in_databricks_app => MetricsMode::Off,
-            MetricsOption::Auto if cfg!(feature = "metrics-ui") => MetricsMode::Ui,
-            MetricsOption::Auto if cfg!(feature = "metrics") => MetricsMode::Collect,
+            MetricsOption::Auto if cfg!(feature = "metrics") => MetricsMode::On,
             MetricsOption::Auto => MetricsMode::Off,
             MetricsOption::Off => MetricsMode::Off,
-            MetricsOption::Fullest if cfg!(feature = "metrics-ui") => MetricsMode::Ui,
-            MetricsOption::Fullest if cfg!(feature = "metrics") => MetricsMode::Collect,
-            MetricsOption::Ui if cfg!(feature = "metrics-ui") => MetricsMode::Ui,
-            MetricsOption::Collect if cfg!(feature = "metrics") => MetricsMode::Collect,
-            MetricsOption::Ui => return Err(MetricsError::UiUnavailable),
-            MetricsOption::Collect | MetricsOption::Fullest => {
-                return Err(MetricsError::CollectionUnavailable)
-            }
+            MetricsOption::On if cfg!(feature = "metrics") => MetricsMode::On,
+            MetricsOption::On => return Err(MetricsError::CollectionUnavailable),
         };
-        Ok(Self {
-            mode,
-            routes_visible: mode != MetricsMode::Off && (host.is_loopback() || metrics_public),
-        })
+        Ok(Self { mode })
     }
 }
 
@@ -158,11 +135,6 @@ pub(crate) struct MetricsPersistenceConfig {
 pub(crate) enum MetricsError {
     #[error("metrics collection is not compiled into this binary; use --metrics=false")]
     CollectionUnavailable,
-    #[error("the metrics dashboard is not compiled into this binary; use --metrics=collect")]
-    UiUnavailable,
-    #[cfg(feature = "metrics")]
-    #[error("could not install the metrics recorder: {0}")]
-    Recorder(String),
     #[cfg(feature = "metrics")]
     #[error("aggregate metrics persistence failed: {0}")]
     Persistence(String),
@@ -233,17 +205,19 @@ impl MetricsRuntime {
         self.config.mode
     }
 
-    pub(crate) fn routes_visible(&self) -> bool {
-        self.config.routes_visible
-    }
-
-    #[cfg(feature = "metrics-ui")]
-    pub(crate) fn ui_enabled(&self) -> bool {
-        self.config.mode == MetricsMode::Ui
-    }
-
     pub(crate) fn collection_enabled(&self) -> bool {
         self.config.mode != MetricsMode::Off
+    }
+
+    pub(crate) async fn flush(&self) -> Result<(), MetricsError> {
+        #[cfg(feature = "metrics")]
+        if let Some(inner) = &self.inner {
+            let inner = Arc::clone(inner);
+            return tokio::task::spawn_blocking(move || inner.persist())
+                .await
+                .map_err(|error| MetricsError::Persistence(error.to_string()))?;
+        }
+        Ok(())
     }
 
     pub(crate) fn track_listener(&self, listener: TcpListener) -> MetricsListener {
@@ -394,6 +368,7 @@ impl MetricsRuntime {
         let _ = (delay_source, exhausted);
     }
 
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn snapshot(&self) -> MetricsSnapshot {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -404,6 +379,7 @@ impl MetricsRuntime {
         MetricsSnapshot::disabled(self.config.mode)
     }
 
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn snapshot_for_model(&self, model: &str) -> MetricsSnapshot {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -415,6 +391,7 @@ impl MetricsRuntime {
         MetricsSnapshot::disabled(self.config.mode)
     }
 
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn record_capacity_snapshots(&self, capacities: &[ThrottleModelSnapshot]) {
         #[cfg(feature = "metrics")]
         if let Some(inner) = &self.inner {
@@ -424,6 +401,7 @@ impl MetricsRuntime {
         let _ = capacities;
     }
 
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn record_rate_limit_snapshots(
         &self,
         snapshots: &[RateLimitModelSnapshot],
@@ -437,16 +415,8 @@ impl MetricsRuntime {
         let _ = (snapshots, controls_enabled);
     }
 
-    pub(crate) fn prometheus(&self) -> Option<String> {
-        #[cfg(feature = "metrics")]
-        if let Some(inner) = &self.inner {
-            return Some(inner.prometheus.render());
-        }
-        None
-    }
-
-    #[cfg(feature = "metrics")]
-    pub(crate) fn subscribe(&self) -> Option<broadcast::Receiver<String>> {
+    #[cfg(all(feature = "metrics", any(feature = "desktop", test)))]
+    pub(crate) fn subscribe(&self) -> Option<broadcast::Receiver<()>> {
         self.inner.as_ref().map(|inner| inner.events.subscribe())
     }
 
@@ -460,11 +430,7 @@ impl MetricsRuntime {
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
-                inner.prometheus.run_upkeep();
-                let snapshot = inner.snapshot();
-                if let Ok(payload) = serde_json::to_string(&snapshot) {
-                    let _ = inner.events.send(payload);
-                }
+                let _ = inner.events.send(());
                 let persistence = Arc::clone(&inner);
                 match tokio::task::spawn_blocking(move || persistence.persist()).await {
                     Ok(Ok(())) => {}
@@ -567,7 +533,9 @@ impl Drop for MetricsStream {
 }
 
 /// Current dashboard and JSON endpoint payload.
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MetricsSnapshot {
     pub(crate) mode: MetricsMode,
@@ -584,6 +552,7 @@ pub(crate) struct MetricsSnapshot {
 }
 
 impl MetricsSnapshot {
+    #[cfg(any(feature = "desktop", test))]
     fn disabled(mode: MetricsMode) -> Self {
         Self {
             mode,
@@ -609,6 +578,7 @@ impl MetricsSnapshot {
         }
     }
 
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn apply_capacity_snapshots(&mut self, capacities: &[ThrottleModelSnapshot]) {
         for model in &mut self.models {
             model.reset_capacity();
@@ -620,6 +590,7 @@ impl MetricsSnapshot {
         self.finish_model_merge();
     }
 
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) fn apply_rate_limit_snapshots(
         &mut self,
         snapshots: &[RateLimitModelSnapshot],
@@ -636,6 +607,7 @@ impl MetricsSnapshot {
         self.finish_model_merge();
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn model_merge_index(&mut self, model: &str) -> (usize, bool) {
         if let Some(index) = self
             .models
@@ -665,6 +637,7 @@ impl MetricsSnapshot {
         (self.models.len() - 1, target == "other")
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn finish_model_merge(&mut self) {
         self.models.sort_by(|left, right| {
             (left.model == "other")
@@ -701,7 +674,9 @@ impl MetricsSnapshot {
     }
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SummarySnapshot {
     pub(crate) connections: u64,
@@ -724,7 +699,9 @@ pub(crate) struct SummarySnapshot {
     pub(crate) cooldown_releases: u64,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BucketSnapshot {
     pub(crate) started_at_ms: u64,
@@ -737,14 +714,18 @@ pub(crate) struct BucketSnapshot {
     pub(crate) maximum_latency_ms: u64,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReasoningLevelSnapshot {
     pub(crate) level: String,
     pub(crate) requests: u64,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ModelSnapshot {
     pub(crate) model: String,
@@ -782,6 +763,7 @@ pub(crate) struct ModelSnapshot {
     pub(crate) reasoning_levels: Vec<ReasoningLevelSnapshot>,
 }
 
+#[cfg(any(feature = "desktop", test))]
 impl ModelSnapshot {
     fn empty(model: &str) -> Self {
         Self {
@@ -856,6 +838,7 @@ impl ModelSnapshot {
         }
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn reset_capacity(&mut self) {
         self.queue_depth = 0;
         self.capacity_waiters = 0;
@@ -900,7 +883,9 @@ impl ModelSnapshot {
     }
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RateLimitEvent {
     pub(crate) at_ms: u64,
@@ -908,7 +893,9 @@ pub(crate) struct RateLimitEvent {
     pub(crate) transition: AutoTransition,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RetentionSnapshot {
     pub(crate) detailed_resolution_seconds: u64,
@@ -929,8 +916,7 @@ struct MetricsInner {
     connections: AtomicU64,
     active_requests: AtomicU64,
     active_streams: AtomicU64,
-    events: broadcast::Sender<String>,
-    prometheus: PrometheusHandle,
+    events: broadcast::Sender<()>,
     active_runtime_key: Mutex<Option<String>>,
     persistence: Mutex<Option<MetricsPersistenceState>>,
 }
@@ -996,7 +982,6 @@ impl MetricsInner {
             active_requests: AtomicU64::new(0),
             active_streams: AtomicU64::new(0),
             events,
-            prometheus: prometheus_handle()?,
             active_runtime_key: Mutex::new(active_runtime_key),
             persistence: Mutex::new(persistence),
         }))
@@ -1309,6 +1294,7 @@ impl MetricsInner {
         .increment(1);
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn record_capacity_snapshots(&self, capacities: &[ThrottleModelSnapshot]) {
         let labels = self
             .store
@@ -1360,6 +1346,7 @@ impl MetricsInner {
         }
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn record_rate_limit_snapshots(
         &self,
         snapshots: &[RateLimitModelSnapshot],
@@ -1404,14 +1391,17 @@ impl MetricsInner {
         }
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn snapshot(&self) -> MetricsSnapshot {
         self.snapshot_with_model(None)
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn snapshot_for_model(&self, model: &str) -> MetricsSnapshot {
         self.snapshot_with_model(Some(model))
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn snapshot_with_model(&self, model: Option<&str>) -> MetricsSnapshot {
         let elapsed_ms = self.timeline_ms();
         let connections = self.connections.load(Ordering::Relaxed);
@@ -1445,26 +1435,6 @@ fn wall_clock_ms() -> u64 {
         .unwrap_or_default()
         .as_millis()
         .min(u128::from(u64::MAX)) as u64
-}
-
-#[cfg(feature = "metrics")]
-fn prometheus_handle() -> Result<PrometheusHandle, MetricsError> {
-    static HANDLE: OnceLock<PrometheusHandle> = OnceLock::new();
-    static INSTALL: Mutex<()> = Mutex::new(());
-    if let Some(handle) = HANDLE.get() {
-        return Ok(handle.clone());
-    }
-    let _install = INSTALL
-        .lock()
-        .expect("metrics recorder lock is not poisoned");
-    if let Some(handle) = HANDLE.get() {
-        return Ok(handle.clone());
-    }
-    let handle = PrometheusBuilder::new()
-        .install_recorder()
-        .map_err(|error| MetricsError::Recorder(error.to_string()))?;
-    let _ = HANDLE.set(handle.clone());
-    Ok(handle)
 }
 
 #[cfg(feature = "metrics")]
@@ -1645,6 +1615,7 @@ impl MetricsStore {
         model_label
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn record_capacity_snapshots(&mut self, capacities: &[ThrottleModelSnapshot]) -> Vec<String> {
         for model in self.models.values_mut() {
             model.reset_capacity();
@@ -1667,6 +1638,7 @@ impl MetricsStore {
             .collect()
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn record_rate_limit_snapshots(
         &mut self,
         snapshots: &[RateLimitModelSnapshot],
@@ -1865,11 +1837,7 @@ impl MetricsStore {
         let estimated_bytes =
             estimated_retained_bytes(history.len(), rollup_history.len(), models.len());
         MetricsSnapshot {
-            mode: if cfg!(feature = "metrics-ui") {
-                MetricsMode::Ui
-            } else {
-                MetricsMode::Collect
-            },
+            mode: MetricsMode::On,
             controls_enabled: self.controls_enabled,
             generated_at_ms: elapsed_ms,
             uptime_seconds: elapsed_ms / 1_000,
@@ -2122,6 +2090,7 @@ impl ModelMetrics {
         }
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn reset_capacity(&mut self) {
         self.queue_depth = 0;
         self.capacity_waiters = 0;
@@ -2133,6 +2102,7 @@ impl ModelMetrics {
         self.capacity_wait_cancellations = 0;
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn merge_capacity(&mut self, capacity: &ThrottleModelSnapshot, aggregate: bool) {
         self.queue_depth = self.queue_depth.saturating_add(capacity.queue_depth);
         self.queue_depth_max = self.queue_depth_max.max(capacity.queue_depth);
@@ -2154,6 +2124,7 @@ impl ModelMetrics {
         }
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn reset_rate_limit(&mut self) {
         self.cooldown_keys = 0;
         self.cooldown_waiters = 0;
@@ -2163,6 +2134,7 @@ impl ModelMetrics {
         self.cooldown_releases = 0;
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn merge_rate_limit(&mut self, snapshot: &RateLimitModelSnapshot, aggregate: bool) {
         self.cooldown_keys = self.cooldown_keys.saturating_add(snapshot.cooldown_keys);
         self.cooldown_waiters = self.cooldown_waiters.saturating_add(snapshot.waiters);
@@ -2434,51 +2406,18 @@ fn estimated_retained_bytes(detailed: usize, rollups: usize, models: usize) -> u
         .min(RETENTION_TARGET_BYTES)
 }
 
-#[cfg(feature = "metrics-ui")]
-#[derive(RustEmbed)]
-#[folder = "metrics-ui/dist/"]
-struct DashboardAssets;
-
-#[cfg(feature = "metrics-ui")]
-pub(crate) struct DashboardAsset {
-    pub(crate) body: std::borrow::Cow<'static, [u8]>,
-    pub(crate) content_type: &'static str,
-    pub(crate) immutable: bool,
-}
-
-#[cfg(feature = "metrics-ui")]
-pub(crate) fn dashboard_asset(path: &str) -> Option<DashboardAsset> {
-    let normalized = if path.is_empty() { "index.html" } else { path };
-    let asset = DashboardAssets::get(normalized)?;
-    Some(DashboardAsset {
-        body: asset.data,
-        content_type: mime_guess::from_path(normalized)
-            .first_raw()
-            .unwrap_or("application/octet-stream"),
-        immutable: normalized
-            .split('.')
-            .any(|part| part.len() == 8 && part.bytes().all(|byte| byte.is_ascii_hexdigit())),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn metrics_aliases_and_build_defaults_are_stable() {
-        assert_eq!(
-            "true".parse::<MetricsOption>().unwrap(),
-            MetricsOption::Fullest
-        );
+        assert_eq!("true".parse::<MetricsOption>().unwrap(), MetricsOption::On);
         assert_eq!(
             "false".parse::<MetricsOption>().unwrap(),
             MetricsOption::Off
         );
-        assert_eq!(
-            "collect".parse::<MetricsOption>().unwrap(),
-            MetricsOption::Collect
-        );
+        assert_eq!("on".parse::<MetricsOption>().unwrap(), MetricsOption::On);
         assert_eq!(default_metrics_option(), MetricsOption::Auto);
         assert_eq!(
             "auto".parse::<MetricsOption>().unwrap(),
@@ -2487,14 +2426,9 @@ mod tests {
     }
 
     #[test]
-    fn non_loopback_listener_requires_public_acknowledgement() {
-        let host = "0.0.0.0".parse().unwrap();
-        let config = MetricsConfig::resolve(default_metrics_option(), host, false, false).unwrap();
-        assert!(!config.routes_visible);
-        let public = MetricsConfig::resolve(default_metrics_option(), host, true, false).unwrap();
-        assert_eq!(public.routes_visible, public.mode != MetricsMode::Off);
+    fn automatic_metrics_disable_in_databricks_apps() {
         assert_eq!(
-            MetricsConfig::resolve(MetricsOption::Auto, host, true, true)
+            MetricsConfig::resolve(MetricsOption::Auto, true)
                 .unwrap()
                 .mode,
             MetricsMode::Off
@@ -2504,13 +2438,12 @@ mod tests {
     #[cfg(not(feature = "metrics"))]
     #[test]
     fn metrics_free_build_rejects_collection() {
-        let host = "127.0.0.1".parse().unwrap();
         assert!(matches!(
-            MetricsConfig::resolve(MetricsOption::Fullest, host, false, false),
+            MetricsConfig::resolve(MetricsOption::On, false),
             Err(MetricsError::CollectionUnavailable)
         ));
         assert_eq!(
-            MetricsConfig::resolve(MetricsOption::Off, host, false, false)
+            MetricsConfig::resolve(MetricsOption::Off, false)
                 .unwrap()
                 .mode,
             MetricsMode::Off
@@ -2547,10 +2480,9 @@ mod tests {
 
     #[cfg(feature = "metrics")]
     #[tokio::test]
-    async fn snapshot_sse_and_prometheus_share_one_recorded_outcome() {
+    async fn snapshots_and_desktop_ticks_share_one_recorded_outcome() {
         let runtime = MetricsRuntime::new(MetricsConfig {
-            mode: MetricsMode::Collect,
-            routes_visible: true,
+            mode: MetricsMode::On,
         })
         .unwrap();
         runtime.activate_runtime("runtime".into()).unwrap();
@@ -2588,13 +2520,6 @@ mod tests {
         assert_eq!(snapshot.models[0].effective_input_budget, Some(180_000));
         let model_snapshot = runtime.snapshot_for_model("model");
         assert!(!model_snapshot.models[0].history.is_empty());
-        let prometheus = runtime.prometheus().unwrap();
-        assert!(prometheus.contains("dbx_model_proxy_requests_total"));
-        assert!(prometheus.contains("dbx_model_proxy_rate_limit_penalty_basis_points"));
-        assert!(prometheus.contains("dbx_model_proxy_effective_input_budget_tokens"));
-        assert!(prometheus.contains("dbx_model_proxy_model_fallbacks_total"));
-        assert!(prometheus.contains("dbx_model_proxy_local_rate_limits_total"));
-
         runtime.record_transition(
             "model",
             AutoTransition {
@@ -2659,20 +2584,15 @@ mod tests {
         assert_eq!(live.summary.wait_cancellations, 5);
         assert_eq!(live.summary.cooldown_releases, 1);
         assert!(live.controls_enabled);
-        let prometheus = runtime.prometheus().unwrap();
-        assert!(prometheus.contains("dbx_model_proxy_rate_limit_capacity_waiters"));
-        assert!(prometheus.contains("dbx_model_proxy_rate_limit_cooldown_keys"));
-        assert!(prometheus.contains("dbx_model_proxy_rate_limit_max_remaining_cooldown_seconds"));
-
         tokio::time::timeout(Duration::from_secs(6), receiver.recv())
             .await
             .expect("sampler publishes within one interval")
-            .expect("SSE payload channel remains open");
+            .expect("desktop update channel remains open");
     }
 
     #[test]
     fn live_model_merges_preserve_the_named_model_bound() {
-        let mut snapshot = MetricsSnapshot::disabled(MetricsMode::Collect);
+        let mut snapshot = MetricsSnapshot::disabled(MetricsMode::On);
         let capacities = (0..40)
             .map(|index| ThrottleModelSnapshot {
                 model: format!("capacity-{index}"),
@@ -2713,14 +2633,35 @@ mod tests {
         assert!(snapshot.controls_enabled);
     }
 
+    #[test]
+    fn desktop_metric_numbers_fit_javascript_integer_precision() {
+        const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
+        fn assert_safe(value: &serde_json::Value) {
+            match value {
+                serde_json::Value::Array(values) => values.iter().for_each(assert_safe),
+                serde_json::Value::Object(values) => values.values().for_each(assert_safe),
+                serde_json::Value::Number(number) => {
+                    if let Some(value) = number.as_u64() {
+                        assert!(value <= MAX_SAFE_INTEGER);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut snapshot = MetricsSnapshot::disabled(MetricsMode::On);
+        snapshot.summary.total_requests = MAX_SAFE_INTEGER;
+        assert_safe(&serde_json::to_value(snapshot).unwrap());
+    }
+
     #[cfg(feature = "metrics")]
     #[tokio::test]
     async fn tracked_listener_counts_tcp_connection_lifetimes() {
         use axum::serve::Listener;
 
         let runtime = MetricsRuntime::new(MetricsConfig {
-            mode: MetricsMode::Collect,
-            routes_visible: true,
+            mode: MetricsMode::On,
         })
         .unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2740,8 +2681,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let storage = ServiceStorage::open(directory.path()).unwrap();
         let config = MetricsConfig {
-            mode: MetricsMode::Collect,
-            routes_visible: true,
+            mode: MetricsMode::On,
         };
         let runtime = MetricsRuntime::new_with_persistence(
             config,
@@ -2783,8 +2723,7 @@ mod tests {
     #[tokio::test]
     async fn memory_runtime_switch_starts_fresh_aggregates() {
         let runtime = MetricsRuntime::new(MetricsConfig {
-            mode: MetricsMode::Collect,
-            routes_visible: true,
+            mode: MetricsMode::On,
         })
         .unwrap();
         runtime.activate_runtime("runtime".into()).unwrap();
@@ -2798,48 +2737,6 @@ mod tests {
         current.runtime_key = "another-runtime".into();
         runtime.record_outcome(&current);
         assert_eq!(runtime.snapshot().summary.total_requests, 1);
-    }
-
-    #[cfg(feature = "metrics-ui")]
-    #[test]
-    fn embedded_dashboard_contains_the_approved_assets() {
-        let index = dashboard_asset("index.html").expect("dashboard index is embedded");
-        let index = std::str::from_utf8(&index.body).unwrap();
-        assert!(index.contains("Model proxy metrics"));
-        assert!(index.contains("data-sort=\"fallbacks\""));
-        assert!(index.contains("Search models"));
-        assert!(index.contains("Databricks profile"));
-        assert!(index.contains("reasoning-chart"));
-        assert!(index.contains("app.js"));
-        let app = dashboard_asset("app.js").expect("dashboard script is embedded");
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("penaltyBasisPoints"));
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("inputWindowUsed"));
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("API_ENDPOINTS"));
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("Cancel waits"));
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("controlsEnabled"));
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("/api/auth"));
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("/api/metrics/events"));
-        assert!(std::str::from_utf8(&app.body)
-            .unwrap()
-            .contains("conic-gradient"));
-        assert!(!dashboard_asset("app.js").unwrap().immutable);
-        assert!(dashboard_asset("app.f2ff8387.css").unwrap().immutable);
-        assert!(dashboard_asset("assets/status-live-8.svg").is_some());
-        assert!(dashboard_asset("missing.js").is_none());
     }
 
     #[cfg(feature = "metrics")]

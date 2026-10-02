@@ -5,8 +5,8 @@ fronts Databricks Model Serving endpoints, and one for the **Lakebase**
 connector. They should read as a set, sit inside the `dbx-tools` pixel-mark
 family, and each say what their service does at a glance.
 
-Status: model-proxy M1 is implemented by the shared service desktop runtime and
-the model-proxy companion adapter. Lakebase adoption and its L1 icon remain
+Status: model-proxy M1 is implemented by the Tauri service desktop shell and
+the in-process model-proxy desktop. Lakebase adoption and its L1 icon remain
 pending.
 
 ## Why template images (the "white" question)
@@ -208,14 +208,15 @@ the `dbx` mark: oat `#F9F7F4` light, navy `#1B3139` dark, glyph in lava red.
 
 ## Export and implementation
 
-The generic tray and WebView runtime lives in `packages/rs/service`; the
-model-proxy companion supplies its M1 pixel mask, title, health URL, and Metrics
-URL from `packages/rs/model-proxy/src/bin/desktop.rs`.
+The generic tray and WebView runtime lives in
+`packages/rs/service-desktop`; the model-proxy desktop supplies its M1 pixel
+mask, title, runtime, Specta commands, and React content from
+`packages/rs/model-proxy`.
 
 The M1 adapter rasterizes the pixel rectangles directly into a 32px RGBA mask.
-The shared desktop runtime marks it as a macOS template icon so the system owns
+The shared Tauri shell marks it as a macOS template icon so the system owns
 light/dark inversion; Windows and Linux receive the coral brand color. A future
-Lakebase adapter can supply its own RGBA mask through the same `DesktopIcon`
+Lakebase desktop can supply its own RGBA mask through the same `DesktopIcon`
 contract without taking a dependency on model-proxy assets.
 
 ## Open questions

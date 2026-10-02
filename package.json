@@ -22,7 +22,9 @@
     "eslint": "projen eslint",
     "eslint:fix": "projen eslint:fix",
     "format": "projen format",
-    "model-proxy:metrics-assets": "projen model-proxy:metrics-assets",
+    "model-proxy:desktop-bindings": "projen model-proxy:desktop-bindings",
+    "model-proxy:desktop-build": "projen model-proxy:desktop-build",
+    "model-proxy:desktop-check": "projen model-proxy:desktop-check",
     "model:contracts": "projen model:contracts",
     "model:metadata": "projen model:metadata",
     "openapi": "projen openapi",
@@ -53,22 +55,30 @@
     "@dbx-tools/appkit": "workspace:^",
     "@dbx-tools/projen": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
+    "@tanstack/react-table": "catalog:",
+    "@tauri-apps/api": "2.11.0",
+    "@tauri-apps/cli": "2.11.0",
     "@types/bun": "1.3.14",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
     "concurrently": "catalog:",
     "constructs": "^10.0.0",
+    "echarts": "catalog:",
+    "echarts-for-react": "catalog:",
     "eslint": "^9",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.6",
-    "gridstack": "^12.3.3",
+    "lucide-react": "catalog:",
     "prettier": "^3.9.4",
     "projen": "^0.103.27",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "ts-to-zod": "5.1.0",
     "typescript": "^5.9.3",
-    "uplot": "^1.6.32",
     "zod": "catalog:"
   },
   "overrides": {
@@ -86,7 +96,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.9.12",
+  "version": "0.9.13",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -213,7 +223,8 @@
         "packages/rs/lakebase-proxy",
         "packages/rs/model",
         "packages/rs/model-proxy",
-        "packages/rs/service"
+        "packages/rs/service",
+        "packages/rs/service-desktop"
       ],
       "bindings": [
         {
@@ -255,10 +266,12 @@
           "hidden": false,
           "unit": "rs-lakebase-proxy",
           "component": "rs-lakebase-proxy",
-          "version": "0.9.12",
+          "version": "0.9.13",
           "tagPrefix": "v",
-          "tag": "v0.9.12",
+          "tag": "v0.9.13",
           "repository": "https://github.com/reggie-db/dbx-tools",
+          "crateName": "dbx-tools-lakebase-proxy",
+          "cargoFeatures": [],
           "assets": [
             {
               "os": "linux",
@@ -289,10 +302,12 @@
           "hidden": false,
           "unit": "rs-model-proxy",
           "component": "rs-model-proxy",
-          "version": "0.9.12",
+          "version": "0.9.13",
           "tagPrefix": "v",
-          "tag": "v0.9.12",
+          "tag": "v0.9.13",
           "repository": "https://github.com/reggie-db/dbx-tools",
+          "crateName": "dbx-tools-model-proxy",
+          "cargoFeatures": [],
           "assets": [
             {
               "os": "linux",
@@ -328,15 +343,19 @@
         },
         {
           "command": "model-proxy-desktop",
-          "description": "Native tray and metrics webview companion for dbx-model-proxy",
+          "description": "Native tray and desktop metrics application for dbx-model-proxy",
           "binaryName": "dbx-model-proxy-desktop",
           "hidden": true,
           "unit": "rs-model-proxy",
           "component": "rs-model-proxy",
-          "version": "0.9.12",
+          "version": "0.9.13",
           "tagPrefix": "v",
-          "tag": "v0.9.12",
+          "tag": "v0.9.13",
           "repository": "https://github.com/reggie-db/dbx-tools",
+          "crateName": "dbx-tools-model-proxy",
+          "cargoFeatures": [
+            "desktop"
+          ],
           "assets": [
             {
               "os": "linux",

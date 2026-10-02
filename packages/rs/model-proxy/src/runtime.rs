@@ -26,6 +26,7 @@ const DEFAULT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Profile source accepted by the runtime manager.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase", tag = "kind", content = "profile")]
 pub(crate) enum RuntimeSelection {
     /// Resolve the normal ambient Databricks authentication chain.

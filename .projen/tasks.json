@@ -248,12 +248,30 @@
         }
       ]
     },
-    "model-proxy:metrics-assets": {
-      "name": "model-proxy:metrics-assets",
-      "description": "Validate embedded model-proxy dashboard assets and brand tokens",
+    "model-proxy:desktop-bindings": {
+      "name": "model-proxy:desktop-bindings",
+      "description": "Generate Specta bindings for the model-proxy desktop",
       "steps": [
         {
-          "exec": "bun scripts/model-proxy-metrics-assets.mjs"
+          "exec": "cargo run --package dbx-tools-model-proxy --example generate-desktop-bindings --features desktop-codegen"
+        }
+      ]
+    },
+    "model-proxy:desktop-build": {
+      "name": "model-proxy:desktop-build",
+      "description": "Build the no-manifest model-proxy desktop frontend",
+      "steps": [
+        {
+          "exec": "bun scripts/model-proxy-desktop.mjs --write"
+        }
+      ]
+    },
+    "model-proxy:desktop-check": {
+      "name": "model-proxy:desktop-check",
+      "description": "Validate Specta bindings and desktop frontend assets",
+      "steps": [
+        {
+          "exec": "bun scripts/model-proxy-desktop.mjs"
         }
       ]
     },
@@ -372,7 +390,7 @@
       "description": "Prepare, validate, locally publish, and automatically merge a release PR",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"model-proxy:metrics-assets\" --validate-task \"rs:release-fingerprint\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"model-proxy:desktop-check\" --validate-task \"rs:release-fingerprint\"",
           "receiveArgs": true
         }
       ]
@@ -447,7 +465,7 @@
           "spawn": "test:installer"
         },
         {
-          "spawn": "model-proxy:metrics-assets"
+          "spawn": "model-proxy:desktop-check"
         },
         {
           "exec": "bun run --filter '*' test"

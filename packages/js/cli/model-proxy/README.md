@@ -9,7 +9,7 @@ Direct execution preserves native argument forwarding:
 dbx model-proxy --profile PROFILE
 ```
 
-Install the service with the systray companion enabled:
+Install the service with the native desktop enabled:
 
 ```sh
 dbx model-proxy service install -- --profile PROFILE
@@ -17,16 +17,19 @@ dbx model-proxy service install -- --profile PROFILE
 
 The service configuration defaults to `~/.dbx-tools/model-proxy`. Override it
 with `--config-dir`. Systray startup defaults to `auto`, which runs the
-companion's tray-icon capability probe before registration. Select `always` to
-require a supported tray or `never` to disable it.
+desktop executable's Tauri capability probe before registration. Select
+`always` to require a supported desktop or `never` to install the headless
+executable. Exactly one process is registered.
 Persistence also defaults to `auto`: direct execution uses memory and an
 installed service uses the shared `service.sqlite3`. Pass
 `--persistence memory|sqlite` to the native command for an explicit choice.
 
 This package does not define the lifecycle command tree or its options. It
 forwards argv to the Rust command. Before installation, it calls the Rust
-service requirements preflight with the original argv, installs the hidden
-companion only when requested, and forwards the preflight's resolved argv.
+service requirements preflight with the original argv, restores a `--`
+that Commander stripped so server flags stay after that delimiter, installs the hidden
+desktop executable only when requested, and forwards the preflight's resolved
+argv.
 
 Lifecycle commands:
 

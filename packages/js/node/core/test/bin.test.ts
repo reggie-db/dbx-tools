@@ -6,6 +6,7 @@ import { access, chmod, mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { c as createTar } from "tar";
 
@@ -292,6 +293,33 @@ describe("bin.ensure", () => {
       await access(installed.path, constants.X_OK);
     } finally {
       await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("copies a file URL without unpacking and passes tempDir to the resolver", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-bin-file-"));
+    const homeDir = join(root, "home");
+    const sourcePath = join(root, "local-tool");
+    await writeFile(sourcePath, '#!/bin/sh\necho "file source"\n');
+    await chmod(sourcePath, 0o755);
+    let seenTemp: string | undefined;
+
+    try {
+      const installed = await bin.ensure(
+        "example",
+        ({ tempDir }) => {
+          seenTemp = tempDir;
+          return { url: pathToFileURL(sourcePath).href, trustVersion: true };
+        },
+        { homeDir, autoUnpackage: true, minVersion: "9.9.9" },
+      );
+
+      assert.ok(seenTemp);
+      assert.match(seenTemp, /example-/);
+      assert.equal(await readFile(installed.path, "utf8"), '#!/bin/sh\necho "file source"\n');
+      await access(installed.path, constants.X_OK);
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 });

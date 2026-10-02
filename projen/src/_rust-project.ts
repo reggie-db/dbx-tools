@@ -63,6 +63,7 @@ export interface RustCrateOptions {
   /** Cargo dependencies scoped by a target cfg expression. */
   readonly targetDependencies?: Readonly<Record<string, Readonly<Record<string, CargoDependency>>>>;
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
+  readonly buildDependencies?: Readonly<Record<string, CargoDependency>>;
   readonly features?: Readonly<Record<string, readonly string[]>>;
   readonly defaultFeatures?: readonly string[];
   /** Explicit example targets, including optional Cargo feature gates. */
@@ -208,6 +209,7 @@ function packageOptions(
     ...(options.dependencies ? { dependencies: options.dependencies } : {}),
     ...(options.targetDependencies ? { targetDependencies: options.targetDependencies } : {}),
     ...(options.devDependencies ? { devDependencies: options.devDependencies } : {}),
+    ...(options.buildDependencies ? { buildDependencies: options.buildDependencies } : {}),
     ...(options.features ? { features: options.features } : {}),
     ...(options.defaultFeatures ? { defaultFeatures: options.defaultFeatures } : {}),
     ...(options.binaryName ? { binaryName: options.binaryName } : {}),
@@ -354,6 +356,16 @@ export class RustProject extends Project implements DBXToolsProject {
         ? {
             "dev-dependencies": Object.fromEntries(
               Object.entries(options.devDependencies).map(([name, value]) => [
+                name,
+                cargoDependency(value, dependencyVersion),
+              ]),
+            ),
+          }
+        : {}),
+      ...(options.buildDependencies
+        ? {
+            "build-dependencies": Object.fromEntries(
+              Object.entries(options.buildDependencies).map(([name, value]) => [
                 name,
                 cargoDependency(value, dependencyVersion),
               ]),

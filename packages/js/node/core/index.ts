@@ -3,22 +3,24 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/core";
-export const PACKAGE_VERSION = "0.9.12";
+export const PACKAGE_VERSION = "0.9.13";
 export * as bin from "./src/bin.ts";
 export * as brandFiles from "./src/brand-files.ts";
 export * as bundle from "./src/bundle.ts";
 export * as configUtils from "./src/config-utils.ts";
+export * as dependencyResolver from "./src/dependency-resolver.ts";
 export * as exec from "./src/exec.ts";
 export * as file from "./src/file.ts";
 export * as fileLock from "./src/file-lock.ts";
 export * as processLock from "./src/process-lock.ts";
 export * as projectUtils from "./src/project-utils.ts";
-export type { BinContext, BinSelectionContext, BinSelector, BinVersionOutput, BinVersionParser, BinOptions, BinSource, BinUrl } from "./src/bin.ts";
+export type { BinContext, BinSelectionContext, BinSelector, BinVersionOutput, BinVersionParser, BinOptions, BinUrlResolveContext, BinSource, BinUrl } from "./src/bin.ts";
 export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt } from "./src/brand-files.ts";
 export type { BrandContext, BrandContextInput } from "./src/brand-files.ts";
 export { MAX_TCP_PORT, ENV_ONLY, valueSchema, bundleResourceSchema, bundleEnvEntrySchema, bundleAppSchema, appEnvEntrySchema, appSchema } from "./src/config-utils.ts";
 export type { ConfigMapValue, ConfigData, ConfigSource, ConfigOptions, ConfigFile } from "./src/config-utils.ts";
+export type { DependencyResolverOptions, DependencyInfo, ResolvedNpmVersion, NpmSpecifierInput, ResolvedNpmDependencies, MissingDependencyInfo } from "./src/dependency-resolver.ts";
 export { COMMAND_NOT_FOUND_EXIT_CODE } from "./src/exec.ts";
 export type { ExecStdio, LineHandler, StdioOption, ExecResult, ChildProcessResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
 export type { FileLockBackend, FileLockAcquisition, FileLockOptions } from "./src/file-lock.ts";
-export type { ProjectContext } from "./src/project-utils.ts";
+export type { ProjectContext, NpmRegistryOptions } from "./src/project-utils.ts";

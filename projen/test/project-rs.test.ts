@@ -119,6 +119,7 @@ describe("DBXToolsRustProject", () => {
           },
         ],
         dependencies: { serde: "1" },
+        buildDependencies: { "tauri-build": "2" },
         targetDependencies: {
           'cfg(target_os = "linux")': { libc: "0.2" },
         },
@@ -132,6 +133,7 @@ describe("DBXToolsRustProject", () => {
         example: Array<Record<string, unknown>>;
         features: Record<string, unknown>;
         dependencies: Record<string, unknown>;
+        "build-dependencies": Record<string, unknown>;
         target: Record<string, { dependencies: Record<string, unknown> }>;
       };
       assert.deepEqual(manifest.package, {
@@ -155,6 +157,7 @@ describe("DBXToolsRustProject", () => {
       ]);
       assert.deepEqual(manifest.features, { default: ["native"], native: [] });
       assert.equal(manifest.dependencies.serde, "1");
+      assert.equal(manifest["build-dependencies"]["tauri-build"], "2");
       assert.equal(manifest.target['cfg(target_os = "linux")']?.dependencies.libc, "0.2");
       assert.match(readFileSync(join(directory, "LICENSE"), "utf8"), /Copyright \(c\).*Example/);
       assert.match(readFileSync(join(directory, ".gitignore"), "utf8"), /^target\/$/m);
@@ -483,6 +486,8 @@ describe("DBXToolsRustWorkspace", () => {
           tagPrefix: "v",
           tag: "v0.0.1",
           repository: "https://github.com/example/fixture",
+          crateName: "fixture-tool",
+          cargoFeatures: [],
           assets: [
             {
               os: "linux",
@@ -502,6 +507,8 @@ describe("DBXToolsRustWorkspace", () => {
           tagPrefix: "v",
           tag: "v0.0.1",
           repository: "https://github.com/example/fixture",
+          crateName: "fixture-tool",
+          cargoFeatures: ["desktop"],
           assets: [
             {
               os: "linux",
@@ -593,6 +600,10 @@ describe("DBXToolsRustWorkspace", () => {
       assert.match(
         workflowStep(buildJob, "Install Linux native dependencies").run ?? "",
         /rm -f \/etc\/apt\/sources\.list\.d\/google-chrome\.list/,
+      );
+      assert.match(
+        workflowStep(buildJob, "Install Linux native dependencies").run ?? "",
+        /libwebkit2gtk-4\.1-dev/,
       );
       assert.equal(stepNames(buildJob).includes("Setup Bun"), false);
     } finally {

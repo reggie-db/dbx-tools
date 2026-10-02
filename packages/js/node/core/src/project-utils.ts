@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { json, net, stringUtils } from "@dbx-tools/shared-core";
-import { statSync as fileStatSync } from "./file.ts";
+import { json, net, object, stringUtils } from "@dbx-tools/shared-core";
+import { parse as parseYaml } from "yaml";
+import { cachedRecord, statSync as fileStatSync } from "./file.ts";
 
 const ROOT_MARKERS = [
   ".projenrc.ts",
@@ -75,9 +77,31 @@ function commandRoot(command: string, args: string[], cwd: string): string | und
   return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
 }
 
+/**
+ * Closest directory with a `package.json` or `node_modules`, matching `npm prefix`.
+ *
+ * Lifecycle scripts from npm and Bun set `npm_config_local_prefix` to that
+ * directory. Read it first when resolving this process's cwd so a missing npm
+ * CLI is not required. `npm_config_prefix` / `PREFIX` are the global install
+ * prefix and must not be used here.
+ *
+ * Bun has no prefix command (`bun pm bin` is the `.bin` directory). pnpm's
+ * `prefix` command is unimplemented; `pnpm root` prints `node_modules`.
+ */
 function npmRoot(cwd?: string): string | undefined {
   const resolved = resolveWorkingDirectory(cwd);
+  if (resolved === resolveWorkingDirectory()) {
+    const fromEnv = envDirectory(process.env.npm_config_local_prefix);
+    if (fromEnv) return fromEnv;
+  }
   return commandRoot("npm", ["prefix"], resolved);
+}
+
+function envDirectory(value: string | undefined): string | undefined {
+  const path = stringUtils.trimToNull(value);
+  if (!path) return undefined;
+  const resolved = resolve(path);
+  return fileStatSync(resolved)?.isDirectory() ? resolved : undefined;
 }
 
 function gitRoot(cwd?: string): string | undefined {
@@ -275,55 +299,226 @@ export function repositoryUrl(cwd?: string, format: "https" | "npm" = "https"): 
   return format === "npm" ? `git+${https.replace(/\.git$/, "")}.git` : https;
 }
 
+/** Public npm, used only after env, npmrc, bunfig, and pnpm yaml miss. */
+const DEFAULT_NPM_REGISTRY = "https://registry.npmjs.org/";
+
+/** Inputs that control active npm registry discovery. */
+export type NpmRegistryOptions = {
+  /** Skip public npmjs.org so callers can detect a configured override. */
+  overrideOnly?: boolean;
+  /**
+   * Read `npm_config_registry`, `NPM_CONFIG_REGISTRY`, and `BUN_CONFIG_REGISTRY`
+   * first. Defaults to true so the same cascade a package manager uses is the
+   * default.
+   */
+  envVars?: boolean;
+};
+
+const npmRegistryCache = new Map<string, net.UrlBuilder | undefined>();
+
 /**
- * The active npm registry (`npm config get registry`) as a chainable
- * {@link net.UrlBuilder}, or `undefined` when npm is absent or prints no URL.
- * A blank, null, omitted, or explicitly current `cwd` reuses the cached npm
- * command; another resolved directory executes it directly. Environment options
- * are evaluated on every call.
+ * The active npm registry as a chainable {@link net.UrlBuilder}.
+ *
+ * Resolution is manager-agnostic and memoized per cwd plus options: environment
+ * variables, then `.npmrc` (project ancestors, user, global), then Bun
+ * `bunfig.toml` `install.registry`, then pnpm workspace/global YAML, then
+ * `https://registry.npmjs.org/`. `overrideOnly` skips that public default.
  */
 export function npmRegistry(
   cwd?: string | null,
-  options?: { overrideOnly?: boolean; envVars?: boolean },
+  options?: NpmRegistryOptions,
 ): net.UrlBuilder | undefined {
   const resolved = resolveWorkingDirectory(cwd);
-  return resolveNpmRegistry(resolved, options);
+  const envVars = options?.envVars !== false;
+  const overrideOnly = Boolean(options?.overrideOnly);
+  const key = JSON.stringify([
+    resolved,
+    overrideOnly,
+    envVars,
+    homedir(),
+    process.env.NPM_CONFIG_USERCONFIG ?? "",
+    process.env.NPM_CONFIG_GLOBALCONFIG ?? "",
+    process.env.PREFIX ?? "",
+    envVars ? (process.env.npm_config_registry ?? "") : "",
+    envVars ? (process.env.NPM_CONFIG_REGISTRY ?? "") : "",
+    envVars ? (process.env.BUN_CONFIG_REGISTRY ?? "") : "",
+  ]);
+  if (npmRegistryCache.has(key)) return npmRegistryCache.get(key);
+  const value = resolveNpmRegistry(resolved, { overrideOnly, envVars });
+  npmRegistryCache.set(key, value);
+  return value;
 }
 
 function resolveNpmRegistry(
-  cwd: string | null | undefined,
-  options: { overrideOnly?: boolean; envVars?: boolean } | undefined,
+  cwd: string,
+  options: { overrideOnly: boolean; envVars: boolean },
 ): net.UrlBuilder | undefined {
-  const candidates = (function* () {
-    yield projectContextCommand(
-      "npm",
-      ["config", "get", "registry"],
-      cwd ?? undefined,
-    ).output?.trim();
-    if (typeof process !== "undefined" && process?.env) {
-      const envKey = "npm_config_registry";
-      if (options?.envVars) {
-        yield process.env[envKey];
-        yield process.env[envKey.toUpperCase()];
-      }
-    }
-  })();
-  for (const candidate of candidates) {
-    if (candidate) {
-      const url = net.urlBuilder(candidate);
-      if (!url) {
-        continue;
-      } else if (options?.overrideOnly) {
-        const npmjsRegistryUrl = "https://registry.npmjs.org";
-        const registryUrl = url.toString();
-        if (registryUrl === npmjsRegistryUrl || registryUrl.startsWith(npmjsRegistryUrl + "/")) {
-          continue;
-        }
-      }
-      return url;
-    }
+  for (const candidate of npmRegistryCandidates(cwd, options.envVars)) {
+    const url = toRegistryUrl(candidate, options.overrideOnly);
+    if (url) return url;
+  }
+  return toRegistryUrl(DEFAULT_NPM_REGISTRY, options.overrideOnly);
+}
+
+function* npmRegistryCandidates(cwd: string, envVars: boolean): Generator<string | undefined> {
+  if (envVars) {
+    yield process.env.npm_config_registry;
+    yield process.env.NPM_CONFIG_REGISTRY;
+    yield process.env.BUN_CONFIG_REGISTRY;
+  }
+  for (const dir of ancestorDirs(cwd)) {
+    yield readNpmrcRegistry(join(dir, ".npmrc"));
+  }
+  yield readNpmrcRegistry(process.env.NPM_CONFIG_USERCONFIG ?? join(homedir(), ".npmrc"));
+  yield readNpmrcRegistry(process.env.NPM_CONFIG_GLOBALCONFIG ?? defaultGlobalNpmrc());
+  for (const dir of ancestorDirs(cwd)) {
+    yield readBunfigRegistry(join(dir, "bunfig.toml"));
+  }
+  yield readBunfigRegistry(join(homedir(), "bunfig.toml"));
+  for (const dir of ancestorDirs(cwd)) {
+    yield readYamlRegistry(join(dir, "pnpm-workspace.yaml"));
+  }
+  for (const path of pnpmGlobalConfigPaths()) {
+    yield readYamlRegistry(path);
+  }
+}
+
+function toRegistryUrl(
+  candidate: string | undefined,
+  overrideOnly: boolean,
+): net.UrlBuilder | undefined {
+  const trimmed = stringUtils.trimToNull(candidate);
+  if (!trimmed) return undefined;
+  const url = net.urlBuilder(trimmed);
+  if (!url) return undefined;
+  if (overrideOnly && isPublicNpmRegistry(url)) return undefined;
+  return url;
+}
+
+function isPublicNpmRegistry(url: net.UrlBuilder): boolean {
+  return url.hostname === "registry.npmjs.org";
+}
+
+function* ancestorDirs(cwd: string): Generator<string> {
+  let current = cwd;
+  while (true) {
+    yield current;
+    const parent = dirname(current);
+    if (parent === current) return;
+    current = parent;
+  }
+}
+
+function defaultGlobalNpmrc(): string {
+  if (process.platform === "win32") {
+    return join(process.env.PROGRAMDATA ?? "C:\\ProgramData", "npm", "etc", "npmrc");
+  }
+  return join(process.env.PREFIX ?? "/usr/local", "etc", "npmrc");
+}
+
+function pnpmGlobalConfigPaths(): string[] {
+  const home = homedir();
+  if (process.platform === "darwin") {
+    return [join(home, "Library/Preferences/pnpm/config.yaml")];
+  }
+  if (process.platform === "win32") {
+    return [join(process.env.LOCALAPPDATA ?? join(home, "AppData/Local"), "pnpm/config.yaml")];
+  }
+  return [join(home, ".config/pnpm/config.yaml")];
+}
+
+function readNpmrcRegistry(path: string): string | undefined {
+  return cachedRecord(`npmrc-registry:${path}`, () => {
+    const text = readTextFile(path);
+    const registry = text ? parseIniRegistry(text) : undefined;
+    return registry ? { registry } : undefined;
+  })?.registry;
+}
+
+function readBunfigRegistry(path: string): string | undefined {
+  return cachedRecord(`bunfig-registry:${path}`, () => {
+    const text = readTextFile(path);
+    const registry = text ? parseBunfigRegistry(text) : undefined;
+    return registry ? { registry } : undefined;
+  })?.registry;
+}
+
+function readYamlRegistry(path: string): string | undefined {
+  return cachedRecord(`yaml-registry:${path}`, () => {
+    const text = readTextFile(path);
+    if (!text) return undefined;
+    const parsed = parseYaml(text);
+    if (!object.isRecord(parsed)) return undefined;
+    const registry = yamlRegistry(parsed);
+    return registry ? { registry } : undefined;
+  })?.registry;
+}
+
+function readTextFile(path: string): string | undefined {
+  if (!fileStatSync(path)?.isFile()) return undefined;
+  return readFileSync(path, "utf8");
+}
+
+/** Parse a `registry=` assignment from npmrc / ini text. */
+function parseIniRegistry(text: string): string | undefined {
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    if (line.slice(0, eq).trim() !== "registry") continue;
+    return unquoteIniValue(line.slice(eq + 1));
   }
   return undefined;
+}
+
+/**
+ * Read Bun `install.registry` from a bunfig.toml. Table form
+ * `[install.registry]` with `url = "..."` is accepted; scoped maps are ignored.
+ */
+function parseBunfigRegistry(text: string): string | undefined {
+  let section = "";
+  for (const raw of text.split(/\r?\n/)) {
+    const line = stripTomlComment(raw).trim();
+    if (!line) continue;
+    const header = /^\[([^\]]+)\]$/.exec(line);
+    if (header) {
+      section = header[1]!.trim();
+      continue;
+    }
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    const value = unquoteIniValue(line.slice(eq + 1));
+    if (section === "install" && key === "registry" && !value.startsWith("{")) return value;
+    if (section === "install.registry" && key === "url") return value;
+    if (!section && key === "install.registry") return value;
+  }
+  return undefined;
+}
+
+function yamlRegistry(data: Record<string, unknown>): string | undefined {
+  if (typeof data.registry === "string") return data.registry;
+  const registries = data.registries;
+  if (object.isRecord(registries) && typeof registries.default === "string") {
+    return registries.default;
+  }
+  return undefined;
+}
+
+function unquoteIniValue(value: string): string {
+  const trimmed = value.trim();
+  const comment = trimmed.search(/\s+#/);
+  const raw = comment === -1 ? trimmed : trimmed.slice(0, comment).trim();
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+    return raw.slice(1, -1);
+  }
+  return raw;
+}
+
+function stripTomlComment(line: string): string {
+  const hash = line.indexOf("#");
+  return hash === -1 ? line : line.slice(0, hash);
 }
 
 function readPackageName(pkgPath: string): string | undefined {

@@ -24,7 +24,7 @@ each configured platform.
 
 ## Per-User Service
 
-Install the proxy for the current user with its default local metrics companion:
+Install the proxy for the current user with its native desktop:
 
 ```sh
 dbx model-proxy service install --systray auto -- --profile PROFILE
@@ -39,28 +39,27 @@ Service installation injects the stable configuration directory and service
 mode into the launched arguments. `--persistence=auto` uses memory for a direct
 CLI run and `service.sqlite3` for an installed service. Explicit `memory` and
 `sqlite` values override that selection. The same SQLite connection owns
-non-secret settings and aggregate metric snapshots. The service runs a managed
-copy under `<config-dir>/bin`; the companion is copied beside it. Neither
-autostart entry points at a mutable Cargo target or download cache.
+non-secret settings and aggregate metric snapshots. The selected executable is
+copied under `<config-dir>/bin`, so autostart never points at a mutable Cargo
+target or download cache.
 
 The systray policy is `auto`, `always`, or `never`. Auto is the default and
-registers the companion only when its tray-icon capability probe succeeds.
-Always turns an unsupported desktop session into an error. Never disables
-companion autostart. Enabled companions start immediately and write
-`desktop.log` / `desktop-error.log` under `<config-dir>/logs`. Every lifecycle
-command fails inside a Databricks App,
+selects `dbx-model-proxy-desktop` only when its Tauri capability probe
+succeeds. Always turns an unsupported desktop session into an error. Never
+selects the headless binary. The desktop executable is the one registered
+service process and owns the proxy runtime in-process. Every lifecycle command
+fails inside a Databricks App,
 where host OS service management is unavailable.
 
-The companion is the `dbx-model-proxy-desktop` binary target in this crate. It
-requires the `desktop` Cargo feature, which enables the generic desktop runtime
-from `dbx-tools-service` while keeping tray-icon, Wry, and platform WebView
-dependencies out of the headless `dbx-model-proxy` executable. The adapter
-supplies model-proxy identity, icon, health endpoint, and Metrics URL; the
-metrics HTML, CSS, JavaScript, and APIs remain served by model-proxy.
+The desktop target requires the `desktop` Cargo feature. It uses the reusable
+Tauri tray/window shell from `dbx-tools-service-desktop` and keeps Tauri, Wry,
+and platform WebView dependencies out of the headless executable. Its menu
+contains only `Open Model Proxy` and `Quit`. The React UI calls typed
+tauri-specta commands against the same process that owns the proxy listener.
 
 macOS and Linux use the native user-level service manager. Windows uses
-current-user login startup and reports `start`, `stop`, and `restart` as
-unsupported because auto-launcher does not supervise a running process.
+current-user login startup plus the persisted exact executable and `sysinfo`
+process control for functional `start`, `stop`, and `restart`.
 
 The proxy uses `aigw-openai` and `aigw-anthropic` as protocol adapters.
 OpenAI Chat Completions and Anthropic Messages requests can target either
@@ -117,10 +116,10 @@ Switching refreshes the profile file cache, disables implicit login during a
 service SQLite is active, and commits the complete generation only after every
 step succeeds. Direct CLI mode keeps the selection in process memory. Old
 generations drain after their captured requests finish. Profile switching is
-disabled inside Databricks Apps. `GET /api/auth` returns the current secret-free
-generation, `GET /api/auth/profiles?refresh=true` refreshes and lists secret-free
-profile metadata, and `PUT /api/auth` accepts only ambient selection or one
-exact profile name.
+disabled inside Databricks Apps. The desktop exposes current status, secret-free
+profile metadata, and ambient or exact-profile switching through generated
+Tauri IPC only. Tokens, client secrets, arbitrary hosts, and manual credentials
+never cross that contract.
 
 Token throttle windows are pooled separately by normalized host and workspace
 ID. This lets two authentication generations for the same workspace reuse
@@ -193,20 +192,9 @@ Supported routes:
 - `POST /v1/responses`
 - `POST /v1/messages`
 - `GET /api/healthz`
-- `GET /metrics`
-- `GET /api/metrics/snapshot`
-- `GET /api/metrics/events`
-- `GET /api/metrics/prometheus`
-- `GET /api/auth`
-- `GET /api/auth/profiles`
-- `PUT /api/auth`
-- `POST /api/rate-limits/models/:model/cancel-waits`
-- `POST /api/rate-limits/models/:model/retry-now`
 
-Control mutations are mounted only for a loopback listener. They require an
-exact same-origin request with `X-Model-Proxy-Control: 1`, and the server emits
-no CORS policy. Profile inputs never accept tokens, client secrets, arbitrary
-hosts, or manual credentials.
+Metrics, profile controls, and rate-limit controls are not HTTP routes. They
+are available only through the typed desktop IPC surface.
 
 `GET /v1/models` reads the cached live serving-endpoint catalogue. Standard
 requests receive an OpenAI `object` / `data` envelope. An `originator` header
@@ -411,66 +399,28 @@ Use `INPUT_TOKENS_PER_MINUTE` / `--input-tokens-per-minute` and
 published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
 `--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
 Databricks because process-local tracking cannot coordinate a workspace across
-proxy replicas. `/api/healthz` exposes aggregate process-local counters for
-automatic activation, tightening, relaxation, deactivation, reactivation,
-admission waits, oversized rejections, post-admission input 429s,
-retry reacquisition, and fallback full-window delays.
+proxy replicas. `/api/healthz` reports readiness and the active runtime
+generation. Detailed model and limiter state is desktop IPC only.
 
-## Metrics And Dashboard
+## Metrics And Desktop
 
-Metrics use the existing proxy listener. The default is `--metrics=auto`:
+The default `--metrics=auto` enables bounded collection outside a Databricks
+App and disables it inside an App. `on` and `true` enable collection
+explicitly; `off` and `false` disable it. `METRICS` accepts the same values.
 
-- `auto` resolves to `off` inside a Databricks App, `ui` in a normal
-  `metrics-ui` build, `collect` in a metrics-only build, and `off` when metrics
-  are not compiled;
-- `ui` collects metrics and serves all metrics routes, including the dashboard;
-- `collect` collects metrics and serves JSON, SSE, and Prometheus without UI
-  routes;
-- `off` removes metrics collection, middleware, history, and routes;
-- `true` selects the fullest mode compiled into the binary;
-- `false` aliases `off`.
+The Tauri desktop reads snapshots through generated tauri-specta commands and
+receives one typed update event every five seconds. It provides:
 
-Use `METRICS` for the same values. A non-loopback `--host` keeps collecting but
-returns 404 from every metrics route unless `--metrics-public` or
-`METRICS_PUBLIC=true` explicitly acknowledges remote exposure. Forwarded
-headers do not bypass this safeguard. Put an operator-owned authenticated proxy
-in front before exposing model names, traffic rates, and limit pressure.
+- request, token, and latency trends;
+- a reasoning-level pie chart;
+- a searchable model-performance table;
+- current limiter, cooldown, and waiting state;
+- cancel-wait and retry-now controls;
+- secret-free profile discovery and atomic runtime switching.
 
-`/api/metrics/snapshot` returns the bounded dashboard payload. Pass
-`?model=<resolved-model>` to include the selected model's bounded history;
-ordinary snapshots and SSE retain only aggregate model summaries.
-`/api/metrics/events` streams five-second snapshot events with SSE.
-`/api/metrics/prometheus` returns Prometheus text from the in-process recorder.
-`/metrics` serves the static dashboard embedded in the normal release binary.
-The dashboard provides 1h, 6h, and 24h ranges, model and outcome filters,
-request, token, and latency line graphs, model latency and error summaries, the
-current per-model limiter phase, penalty, and effective input budget, a
-filter-aware reasoning-level donut chart, the adaptive rate-limit timeline, and
-process-wide retention status. Prometheus
-exports the current penalty basis points, effective input budget, and fallback
-count for each bounded model label. On loopback, the dashboard also lists
-ambient and named profiles with secret-free host and authentication metadata,
-shows the current generation and persistence mode, validates a selected profile
-before switching, and exposes cancel-wait and retry-now model controls.
-GridStack
-provides drag-and-drop placement and widget resizing without a runtime CDN or
-framework server. The bounded widget geometry is stored in browser
-`localStorage`, restored after reloads and proxy restarts, and synchronized
-across open tabs. Metric history is never stored in the browser. The
-reset-layout icon restores and persists the canonical widget geometry.
-
-The model table renders three compact capacity meters:
-
-- input-window use against the latest effective rolling budget;
-- adaptive penalty against the 90 percent maximum;
-- current waiting requests against the process-lifetime queue-depth peak,
-  alongside average queue wait.
-
-These values are tied to the actual resolved endpoint. Input-window use is the
-live process-local reservation total after pruning the rolling window, and queue
-depth is sampled when the metrics snapshot is requested. Limiter transitions
-remain authoritative between snapshots so a request completing after full
-recovery cannot make an inactive limiter appear enforced again.
+No metrics, Prometheus, SSE, authentication, or rate-limit control endpoint is
+mounted on Axum. The desktop process calls the same in-memory state graph that
+owns the proxy listener.
 
 History remains bounded in process memory:
 
@@ -492,29 +442,34 @@ metric storage at 134217728 bytes by default. Zero disables metric persistence
 without disabling SQLite settings. Old runtime snapshots are pruned before a
 write and settings remain writable.
 
-The dashboard follows the approved
-[Figma frame](https://www.figma.com/design/0qI0u23Tx4jzasligbW6PD?node-id=1-294)
-and canonical `branding/brand.yaml` tokens. Assets are static and require no
-runtime CDN or Node server. Validate their canonical tokens and Figma status
-markers with:
+The desktop follows the approved
+[Figma frame](https://www.figma.com/design/D95Sm5gTgOdWLW88wh0qLW?node-id=2-18)
+and canonical `branding/brand.yaml` tokens. It uses a no-manifest Bun frontend
+under `desktop/`; Tauri embeds the committed build output. Regenerate and
+validate it with:
 
 ```sh
-bun run model-proxy:metrics-assets
+bun run model-proxy:desktop-bindings
+bun run model-proxy:desktop-build
+bun run model-proxy:desktop-check
 ```
 
 ## Cargo Features
 
-The default feature is `metrics-ui`, which includes `metrics`. A headless build
-keeps collection and machine endpoints without dashboard assets:
+The default `metrics` feature keeps bounded in-process aggregation available to
+both headless and desktop runtimes:
 
 ```sh
 cargo build -p dbx-tools-model-proxy --no-default-features --features metrics
 ```
 
 A metrics-free build resolves `--metrics=auto` to `off`, accepts explicit
-`--metrics=false`, and excludes the recorder,
-histograms, Prometheus exporter, embedded assets, and metrics routes:
+`--metrics=false`, and excludes aggregation and histograms:
 
 ```sh
 cargo build -p dbx-tools-model-proxy --no-default-features
 ```
+
+`desktop` adds Tauri, the shared service desktop shell, and IPC. The
+`desktop-codegen` feature adds Specta TypeScript export for the committed
+`desktop/src/bindings.ts`.

@@ -18,6 +18,7 @@ import {
 } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { errorUtils, log } from "@dbx-tools/shared-core";
@@ -81,16 +82,31 @@ export interface BinOptions {
   versionArgument?: string;
   /** Version output parser. Defaults to {@link parseVersion}. */
   versionParser?: BinVersionParser;
+  /** Skip `--version` and treat an executable file as acceptable. */
+  skipVersionCheck?: boolean;
+}
+
+/** Temporary directory created for one `ensure` attempt after the install lock. */
+export interface BinUrlResolveContext {
+  readonly tempDir: string;
 }
 
 /** Download source resolved only when the executable is not already installed. */
 export interface BinSource {
   url: string;
   sha256?: string;
+  /**
+   * Skip `--version` on this candidate. Use when the source already identified
+   * the requested version, such as `cargo install --version`.
+   */
+  trustVersion?: boolean;
 }
 
 /** A download source resolved only when the executable is not already installed. */
-export type BinUrl = string | BinSource | (() => string | BinSource | Promise<string | BinSource>);
+export type BinUrl =
+  | string
+  | BinSource
+  | ((context: BinUrlResolveContext) => string | BinSource | Promise<string | BinSource>);
 
 function context(name: string, homeDir: string, destination?: BinContext): BinContext {
   if (!name || basename(name) !== name || name === "." || name === "..") {
@@ -188,6 +204,10 @@ async function isValidBin(path: string, options: BinOptions): Promise<boolean> {
     logger.debug("binary access check failed", { path, ...access });
     return false;
   }
+  if (options.skipVersionCheck) {
+    logger.debug("binary version check skipped", { path });
+    return true;
+  }
   let stdout: string;
   let stderr: string;
   try {
@@ -262,6 +282,16 @@ async function selectSingleFile(source: string): Promise<string> {
   return selected;
 }
 
+function fileUrlPath(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "file:") return undefined;
+    return fileURLToPath(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
 async function selectedBin(
   destination: BinContext,
   source: BinSource,
@@ -269,6 +299,15 @@ async function selectedBin(
   options: BinOptions,
 ): Promise<string> {
   const { url } = source;
+  const localPath = fileUrlPath(url);
+  if (localPath) {
+    const access = await accessContext(localPath);
+    if (!access.file) {
+      throw new Error(`binary file URL does not exist: ${displayUrl(url)}`);
+    }
+    logger.debug("using local binary", { from: displayUrl(url), path: localPath });
+    return localPath;
+  }
   const name = downloadName(url, basename(destination.path));
   const downloadPath = join(temp, name);
   logger.debug("downloading binary", {
@@ -347,22 +386,27 @@ export async function ensure(
       return destination;
     }
 
-    const resolved = typeof url === "function" ? await url() : url;
-    const source = typeof resolved === "string" ? { url: resolved } : resolved;
-    const from = displayUrl(source.url);
     logger.debug("installing binary", {
       name,
-      from,
       to: destination.path,
       minVersion: options.minVersion,
     });
     const temp = await mkdtemp(join(tmpdir(), `${name}-`));
     let staged: string | undefined;
     try {
+      const resolved = typeof url === "function" ? await url({ tempDir: temp }) : url;
+      const source = typeof resolved === "string" ? { url: resolved } : resolved;
+      const from = displayUrl(source.url);
+      logger.debug("resolved binary source", { name, from });
       const selected = await selectedBin(destination, source, temp, options);
       await chmod(selected, 0o755);
-      if (!(await isValidBin(selected, options))) {
-        throw new Error(`selected binary has no acceptable version: ${selected}`);
+      const accepted = source.trustVersion ? { ...options, skipVersionCheck: true } : options;
+      if (!(await isValidBin(selected, accepted))) {
+        throw new Error(
+          source.trustVersion
+            ? `selected binary is not executable: ${selected}`
+            : `selected binary has no acceptable version: ${selected}`,
+        );
       }
 
       await mkdir(destination.binDir, { recursive: true });
@@ -371,7 +415,7 @@ export async function ensure(
       await chmod(staged, 0o755);
       await rename(staged, destination.path);
       staged = undefined;
-      if (!(await isValidBin(destination.path, options))) {
+      if (!(await isValidBin(destination.path, accepted))) {
         throw new Error(`installed binary is invalid after rename: ${destination.path}`);
       }
       logger.info("installed binary", {

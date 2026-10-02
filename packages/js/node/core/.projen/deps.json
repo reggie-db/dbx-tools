@@ -16,6 +16,11 @@
       "type": "build"
     },
     {
+      "name": "@types/semver",
+      "version": "^7.7.1",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "type": "build"
     },
@@ -37,6 +42,11 @@
     {
       "name": "proper-lockfile",
       "version": "^4.1.2",
+      "type": "runtime"
+    },
+    {
+      "name": "semver",
+      "version": "^7.7.3",
       "type": "runtime"
     },
     {

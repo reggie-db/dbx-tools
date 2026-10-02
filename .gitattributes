@@ -43,6 +43,11 @@
 /packages/py/postgres/pyproject.toml linguist-generated
 /packages/rs/core/assets/brand.yaml linguist-generated
 /packages/rs/core/assets/logo-light.svg linguist-generated
+/packages/rs/model-proxy/desktop/src-tauri/capabilities/default.json linguist-generated
+/packages/rs/model-proxy/desktop/src-tauri/debug-capabilities/mcp.json linguist-generated
+/packages/rs/model-proxy/desktop/src-tauri/tauri.conf.json linguist-generated
+/packages/rs/model-proxy/desktop/src-tauri/tauri.mcp.conf.json linguist-generated
+/packages/rs/model-proxy/tauri.conf.json linguist-generated
 /packages/test/**/index.ts linguist-generated
 /packages/test/openapi/** linguist-generated
 /pnpm-workspace.yaml linguist-generated

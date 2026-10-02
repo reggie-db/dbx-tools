@@ -296,6 +296,10 @@ export interface RustReleaseBinaryMapping {
   readonly tagPrefix: string;
   readonly tag: string;
   readonly repository: string;
+  /** Cargo crate published or mirrored for `cargo install` when GitHub has no archive. */
+  readonly crateName: string;
+  /** Feature flags passed to `cargo install --features` for this binary target. */
+  readonly cargoFeatures: readonly string[];
   readonly assets: readonly RustReleaseBinaryAssetMapping[];
 }
 
@@ -392,6 +396,7 @@ function planRustReleaseBinaries(
               release: pkg.packageOptions.release,
               excludedOs: pkg.packageOptions.releaseExcludeOs,
               cli: pkg.packageOptions.cli,
+              requiredFeatures: undefined,
             },
           ]
         : []),
@@ -404,6 +409,7 @@ function planRustReleaseBinaries(
           release: binary.release,
           excludedOs: binary.releaseExcludeOs,
           cli: binary.cli!,
+          requiredFeatures: binary.requiredFeatures,
         })),
     ];
     return configuredBinaries.map((binary) => {
@@ -450,6 +456,8 @@ function planRustReleaseBinaries(
         tagPrefix,
         tag: `${tagPrefix}${identity.version}`,
         repository: resolved.repository,
+        crateName: pkg.crateName,
+        cargoFeatures: [...(binary.requiredFeatures ?? [])],
         assets: resolved.nativeTargets
           .filter((target) => !excludedOs.has(target.os))
           .map((target) => ({
@@ -887,6 +895,7 @@ function configureIndependentRustVersions(
     for (const [section, dependencies] of [
       ["dependencies", pkg.packageOptions.dependencies],
       ["dev-dependencies", pkg.packageOptions.devDependencies],
+      ["build-dependencies", pkg.packageOptions.buildDependencies],
     ] as const) {
       for (const [name, dependency] of Object.entries(dependencies ?? {})) {
         if (typeof dependency === "string" || !dependency.path) continue;
@@ -945,6 +954,13 @@ export class DBXToolsRustWorkspace extends Component {
               this.packages,
               pkg.packageOptions.devDependencies,
               true,
+            ),
+            ...rustReleaseDependencies(
+              project,
+              pkg,
+              this.packages,
+              pkg.packageOptions.buildDependencies,
+              false,
             ),
           ],
         });

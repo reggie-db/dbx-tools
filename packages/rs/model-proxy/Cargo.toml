@@ -19,6 +19,10 @@ description = "Multi-protocol Databricks model proxy"
   [package.repository]
   workspace = true
 
+[lib]
+name = "dbx_tools_model_proxy"
+path = "src/lib.rs"
+
 [[bin]]
 name = "dbx-model-proxy"
 path = "src/main.rs"
@@ -29,14 +33,31 @@ path = "src/bin/desktop.rs"
 required-features = [ "desktop" ]
 
 [features]
-default = [ "metrics-ui" ]
-desktop = [ "dbx-tools-service/desktop" ]
-metrics = [
-  "dep:metrics",
-  "dep:metrics-exporter-prometheus",
-  "dep:hdrhistogram"
+default = [ "metrics" ]
+desktop = [
+  "metrics",
+  "dep:specta",
+  "dep:tauri",
+  "dep:tauri-specta",
+  "dep:dbx-tools-service-desktop",
+  "tauri/custom-protocol"
 ]
-metrics-ui = [ "metrics", "dep:rust-embed", "dep:mime_guess" ]
+desktop-codegen = [
+  "desktop",
+  "tauri-specta/typescript",
+  "dep:specta-typescript"
+]
+desktop-debug = [
+  "desktop",
+  "dep:tauri-plugin-connector",
+  "dbx-tools-service-desktop/debug-mcp"
+]
+metrics = [ "dep:hdrhistogram", "dep:metrics" ]
+
+[[example]]
+name = "generate-desktop-bindings"
+path = "examples/generate-desktop-bindings.rs"
+required-features = [ "desktop-codegen" ]
 
 [dependencies]
 aigw-anthropic = "=0.6.0"
@@ -57,16 +78,21 @@ futures-util = "0.3"
   workspace = true
 
   [dependencies.dbx-tools-core]
-  version = "0.9.12"
+  version = "0.9.13"
   path = "../core"
 
   [dependencies.dbx-tools-model]
-  version = "0.9.12"
+  version = "0.9.13"
   path = "../model"
 
   [dependencies.dbx-tools-service]
-  version = "0.9.12"
+  version = "0.9.13"
   path = "../service"
+
+  [dependencies.dbx-tools-service-desktop]
+  version = "0.9.13"
+  path = "../service-desktop"
+  optional = true
 
   [dependencies.hdrhistogram]
   workspace = true
@@ -82,21 +108,9 @@ futures-util = "0.3"
   workspace = true
   optional = true
 
-  [dependencies.metrics-exporter-prometheus]
-  workspace = true
-  optional = true
-
-  [dependencies.mime_guess]
-  workspace = true
-  optional = true
-
   [dependencies.reqwest]
   workspace = true
   features = [ "stream" ]
-
-  [dependencies.rust-embed]
-  workspace = true
-  optional = true
 
   [dependencies.serde]
   workspace = true
@@ -107,6 +121,26 @@ futures-util = "0.3"
   [dependencies.sha2]
   workspace = true
 
+  [dependencies.specta]
+  workspace = true
+  optional = true
+
+  [dependencies.specta-typescript]
+  workspace = true
+  optional = true
+
+  [dependencies.tauri]
+  workspace = true
+  optional = true
+
+  [dependencies.tauri-plugin-connector]
+  workspace = true
+  optional = true
+
+  [dependencies.tauri-specta]
+  workspace = true
+  optional = true
+
   [dependencies.thiserror]
   workspace = true
 
@@ -114,6 +148,9 @@ futures-util = "0.3"
   workspace = true
 
   [dependencies.tokio]
+  workspace = true
+
+  [dependencies.tokio-util]
   workspace = true
 
   [dependencies.tracing]
@@ -127,4 +164,7 @@ workspace = true
 features = [ "test-util" ]
 
 [dev-dependencies.wiremock]
+workspace = true
+
+[build-dependencies.tauri-build]
 workspace = true

@@ -9,10 +9,12 @@ export const RELEASE_BINARY_COMMANDS = [
     "hidden": false,
     "unit": "rs-lakebase-proxy",
     "component": "rs-lakebase-proxy",
-    "version": "0.9.12",
+    "version": "0.9.13",
     "tagPrefix": "v",
-    "tag": "v0.9.12",
+    "tag": "v0.9.13",
     "repository": "https://github.com/reggie-db/dbx-tools",
+    "crateName": "dbx-tools-lakebase-proxy",
+    "cargoFeatures": [],
     "assets": [
       {
         "os": "linux",
@@ -43,10 +45,12 @@ export const RELEASE_BINARY_COMMANDS = [
     "hidden": false,
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.12",
+    "version": "0.9.13",
     "tagPrefix": "v",
-    "tag": "v0.9.12",
+    "tag": "v0.9.13",
     "repository": "https://github.com/reggie-db/dbx-tools",
+    "crateName": "dbx-tools-model-proxy",
+    "cargoFeatures": [],
     "assets": [
       {
         "os": "linux",
@@ -82,15 +86,19 @@ export const RELEASE_BINARY_COMMANDS = [
   },
   {
     "command": "model-proxy-desktop",
-    "description": "Native tray and metrics webview companion for dbx-model-proxy",
+    "description": "Native tray and desktop metrics application for dbx-model-proxy",
     "binaryName": "dbx-model-proxy-desktop",
     "hidden": true,
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.12",
+    "version": "0.9.13",
     "tagPrefix": "v",
-    "tag": "v0.9.12",
+    "tag": "v0.9.13",
     "repository": "https://github.com/reggie-db/dbx-tools",
+    "crateName": "dbx-tools-model-proxy",
+    "cargoFeatures": [
+      "desktop"
+    ],
     "assets": [
       {
         "os": "linux",
