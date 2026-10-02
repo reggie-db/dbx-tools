@@ -16,20 +16,51 @@ import { json } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 
 const PROXY = releaseBinaryCommand("model-proxy");
-const COMPANION = releaseBinaryCommand("model-proxy-desktop");
+const DESKTOP = releaseBinaryCommand("model-proxy-desktop");
 const execFileAsync = promisify(execFile);
+
+function argvAfter(argv: readonly string[], prefix: readonly string[]): string[] | undefined {
+  for (let index = 0; index <= argv.length - prefix.length; index += 1) {
+    if (prefix.every((token, offset) => argv[index + offset] === token)) {
+      return argv.slice(index + prefix.length);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Commander drops a lone `--` between options and operands. Put it back from
+ * `argv` so `service requirements` still parses server flags after `--`.
+ */
+export function restoreInstallArgs(
+  args: readonly string[],
+  argv: readonly string[] = process.argv,
+): string[] {
+  const parsed = args.slice(2);
+  if (parsed.includes("--")) return [...parsed];
+  const raw = argvAfter(argv, ["service", "install"]);
+  if (!raw?.includes("--")) return [...parsed];
+  const withoutDelimiter = raw.filter((token) => token !== "--");
+  if (
+    withoutDelimiter.length === parsed.length &&
+    withoutDelimiter.every((token, index) => token === parsed[index])
+  ) {
+    return [...raw];
+  }
+  return [...parsed];
+}
 
 async function installRequirements(
   proxy: string,
   installArgs: readonly string[],
-  companion?: string,
-): Promise<{ companionAssetRequired: boolean; installArgs: string[] }> {
+  desktop?: string,
+): Promise<{ desktopAssetRequired: boolean; installArgs: string[] }> {
   const { stdout } = await execFileAsync(
     proxy,
     [
       "service",
       "requirements",
-      ...(companion ? ["--companion", companion] : []),
+      ...(desktop ? ["--desktop-executable", desktop] : []),
       "--",
       ...installArgs,
     ],
@@ -37,14 +68,14 @@ async function installRequirements(
   );
   const requirements = json.parseRecord(stdout);
   if (
-    typeof requirements?.companion_asset_required !== "boolean" ||
+    typeof requirements?.desktop_asset_required !== "boolean" ||
     !Array.isArray(requirements.install_args) ||
     !requirements.install_args.every((argument) => typeof argument === "string")
   ) {
     throw new Error("model proxy returned invalid service requirements");
   }
   return {
-    companionAssetRequired: requirements.companion_asset_required,
+    desktopAssetRequired: requirements.desktop_asset_required,
     installArgs: requirements.install_args,
   };
 }
@@ -58,11 +89,11 @@ async function run(args: readonly string[]): Promise<void> {
     !args.includes("-h")
   ) {
     const proxy = await ensureReleaseBinary(PROXY);
-    const original = args.slice(2);
+    const original = restoreInstallArgs(args);
     let requirements = await installRequirements(proxy.path, original);
-    if (requirements.companionAssetRequired) {
-      const companion = await ensureReleaseBinary(COMPANION);
-      requirements = await installRequirements(proxy.path, original, companion.path);
+    if (requirements.desktopAssetRequired) {
+      const desktop = await ensureReleaseBinary(DESKTOP);
+      requirements = await installRequirements(proxy.path, original, desktop.path);
     }
     forwarded = ["service", "install", ...requirements.installArgs];
   }

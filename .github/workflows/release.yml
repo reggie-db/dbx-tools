@@ -404,7 +404,7 @@ jobs:
         run: |-
           sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
-          sudo apt-get install --yes libdbus-1-dev pkg-config
+          sudo apt-get install --yes libappindicator3-dev libdbus-1-dev librsvg2-dev libwebkit2gtk-4.1-dev patchelf pkg-config
       - name: Verify Rust build fingerprint
         id: rust-fingerprint
         if: ${{ github.event_name == 'push' || inputs.stage == 'all' }}
@@ -714,6 +714,7 @@ jobs:
           cargo publish --package "dbx-tools-google" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-model" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-service" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-service-desktop" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-model-proxy" --registry crates-io --no-verify
   publish-local-cargo:
     needs:
@@ -753,6 +754,7 @@ jobs:
           cargo publish --package "dbx-tools-google" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-model" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-service" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-service-desktop" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-model-proxy" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
   publish-github-release:
     needs:

@@ -2,31 +2,20 @@
 
 use std::{net::SocketAddr, num::NonZeroUsize, time::Instant};
 
-#[cfg(feature = "metrics")]
-use std::convert::Infallible;
-
-use axum::extract::Path;
-#[cfg(feature = "metrics")]
-use axum::response::{
-    sse::{Event, KeepAlive},
-    Sse,
-};
 use axum::{
     body::Bytes,
     extract::{ConnectInfo, DefaultBodyLimit, Query, Request, State},
     http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post, put},
+    routing::{get, post},
     Json, Router,
 };
 use base64::{
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
     Engine,
 };
-use dbx_tools_core::{
-    AuthKind, DatabricksClient, DatabricksClientError, DatabricksProfileSummary, TargetKind,
-};
+use dbx_tools_core::{DatabricksClient, DatabricksClientError};
 use dbx_tools_model::{
     codex_model_name, is_responses_only, models_payload_with_capabilities, same_family_fallbacks,
     ModelCapabilities, ModelCapabilitiesResolver, ModelClass, ServingEndpointSummary,
@@ -35,8 +24,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::info;
 
-#[cfg(feature = "metrics-ui")]
-use crate::metrics::{dashboard_asset, MetricsMode};
 use crate::{
     adapt::{adapt_request, adapt_response, select_request_target, upstream_path},
     adaptive::{AutoTransition, AutoTransitionKind},
@@ -49,7 +36,7 @@ use crate::{
         RateLimitGate, RateLimitPolicy,
     },
     request_log::{ReasoningSetting, RequestLogContext, RequestLogMetadata},
-    runtime::{RuntimeManager, RuntimeSelection},
+    runtime::RuntimeManager,
     stream::{stream_response, StreamLogContext},
     throttle::{
         is_input_limit_message, response_token_usage, AutoActivation, RequestThrottle,
@@ -66,18 +53,16 @@ const USER_EMAIL_HEADER: &str = "x-forwarded-email";
 const FALLBACK_PREFERRED_MODEL_HEADER: &str = "x-model-proxy-preferred-model";
 const FALLBACK_RESOLVED_MODEL_HEADER: &str = "x-model-proxy-resolved-model";
 const FALLBACK_STEP_HEADER: &str = "x-model-proxy-fallback-step";
-const CONTROL_HEADER: &str = "x-model-proxy-control";
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    capabilities: ModelCapabilitiesResolver,
-    runtime: RuntimeManager,
+    pub(crate) capabilities: ModelCapabilitiesResolver,
+    pub(crate) runtime: RuntimeManager,
     target: TargetWire,
     image_resize_threshold_bytes: usize,
     model_fallback: ModelFallbackPolicy,
-    rate_limits: RateLimitGate,
-    metrics: MetricsRuntime,
-    controls_enabled: bool,
+    pub(crate) rate_limits: RateLimitGate,
+    pub(crate) metrics: MetricsRuntime,
 }
 
 pub(crate) struct AppConfig {
@@ -86,7 +71,6 @@ pub(crate) struct AppConfig {
     pub(crate) model_fallback: ModelFallbackPolicy,
     pub(crate) rate_limits: RateLimitPolicy,
     pub(crate) metrics: MetricsRuntime,
-    pub(crate) controls_enabled: bool,
 }
 
 impl AppState {
@@ -104,8 +88,11 @@ impl AppState {
             model_fallback: config.model_fallback,
             rate_limits,
             metrics: config.metrics,
-            controls_enabled: config.controls_enabled,
         }
+    }
+
+    pub(crate) fn metrics(&self) -> &MetricsRuntime {
+        &self.metrics
     }
 }
 
@@ -189,36 +176,6 @@ pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router
                 },
             ),
         );
-    if metrics.collection_enabled() {
-        router = router
-            .route("/api/metrics/snapshot", get(metrics_snapshot))
-            .route("/api/metrics/events", get(metrics_events))
-            .route("/api/metrics/prometheus", get(metrics_prometheus));
-    }
-    if state.controls_enabled {
-        router = router
-            .route("/api/auth", get(auth_status))
-            .route("/api/auth/profiles", get(auth_profiles));
-        let controls = Router::new()
-            .route("/api/auth", put(auth_switch))
-            .route(
-                "/api/rate-limits/models/{model}/cancel-waits",
-                post(cancel_model_waits),
-            )
-            .route(
-                "/api/rate-limits/models/{model}/retry-now",
-                post(retry_model_now),
-            )
-            .layer(middleware::from_fn(require_control_request));
-        router = router.merge(controls);
-    }
-    #[cfg(feature = "metrics-ui")]
-    if metrics.ui_enabled() {
-        router = router
-            .route("/metrics", get(metrics_index))
-            .route("/metrics/", get(metrics_index))
-            .route("/metrics/{*path}", get(metrics_asset));
-    }
     router = router.layer(DefaultBodyLimit::max(max_request_bytes.get()));
     if metrics.collection_enabled() {
         router = router.layer(middleware::from_fn_with_state(
@@ -229,217 +186,11 @@ pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router
     router.with_state(state)
 }
 
-async fn require_control_request(request: Request, next: Next) -> Response {
-    if !control_request_allowed(request.headers()) {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({
-                "error": {
-                    "type": "control_request_forbidden",
-                    "message": "Model proxy controls require a same-origin loopback request and X-Model-Proxy-Control: 1."
-                }
-            })),
-        )
-            .into_response();
-    }
-    next.run(request).await
-}
-
-fn control_request_allowed(headers: &HeaderMap) -> bool {
-    let control = headers
-        .get(CONTROL_HEADER)
-        .and_then(|value| value.to_str().ok());
-    let host = headers
-        .get(header::HOST)
-        .and_then(|value| value.to_str().ok());
-    let origin = headers
-        .get(header::ORIGIN)
-        .and_then(|value| value.to_str().ok());
-    control == Some("1")
-        && host.is_some_and(is_loopback_authority)
-        && origin.zip(host).is_some_and(|(origin, host)| {
-            origin == format!("http://{host}")
-                && headers
-                    .get("sec-fetch-site")
-                    .and_then(|value| value.to_str().ok())
-                    .is_none_or(|value| value == "same-origin")
-        })
-}
-
-fn is_loopback_authority(authority: &str) -> bool {
-    let host = authority
-        .strip_prefix('[')
-        .and_then(|value| value.split_once(']').map(|(host, _)| host))
-        .or_else(|| authority.split(':').next())
-        .unwrap_or(authority);
-    host.eq_ignore_ascii_case("localhost")
-        || host
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|address| address.is_loopback())
-}
-
-async fn live_metrics_snapshot(
-    state: &AppState,
-    model: Option<&str>,
-) -> crate::metrics::MetricsSnapshot {
-    let runtime = state.runtime.capture();
-    let capacities = runtime.throttle.capacity_snapshots().await;
-    let rate_limits = state.rate_limits.model_snapshots().await;
-    state.metrics.record_capacity_snapshots(&capacities);
-    state
-        .metrics
-        .record_rate_limit_snapshots(&rate_limits, state.controls_enabled);
-    let mut snapshot = model.map_or_else(
-        || state.metrics.snapshot(),
-        |model| state.metrics.snapshot_for_model(model),
-    );
-    snapshot.apply_capacity_snapshots(&capacities);
-    snapshot.apply_rate_limit_snapshots(&rate_limits, state.controls_enabled);
-    snapshot
-}
-
 async fn health(State(state): State<AppState>) -> Json<Value> {
-    let runtime = state.runtime.capture();
-    let counters = runtime.throttle.counters().await;
-    let gate_counters = state.rate_limits.control_counters();
-    let metrics = live_metrics_snapshot(&state, None).await;
     Json(json!({
         "status": "ok",
-        "controlsEnabled": state.controls_enabled,
-        "auth": state.runtime.status(),
-        "rateLimits": {
-            "automaticActivations": counters.automatic_activations,
-            "automaticTightenings": counters.automatic_tightenings,
-            "automaticRelaxations": counters.automatic_relaxations,
-            "automaticDeactivations": counters.automatic_deactivations,
-            "automaticReactivations": counters.automatic_reactivations,
-            "autoActiveKeys": counters.auto_active_keys,
-            "admissionWaits": counters.admission_waits,
-            "capacityWaitCancellations": counters.wait_cancellations,
-            "cooldownWaitCancellations": gate_counters.wait_cancellations,
-            "cooldownReleases": gate_counters.cooldown_releases,
-            "oversizedRejections": counters.oversized_rejections,
-            "input429AfterAdmission": counters.input_429_after_admission,
-            "retryReacquisitions": counters.retry_reacquisitions,
-            "fallbackWindowDelays": counters.fallback_window_delays,
-            "models": metrics.models
-        }
+        "generation": state.runtime.status().generation
     }))
-}
-
-async fn auth_status(State(state): State<AppState>) -> Json<Value> {
-    Json(json!({
-        "controlsEnabled": state.controls_enabled,
-        "runtime": state.runtime.status()
-    }))
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct AuthProfilesQuery {
-    #[serde(default)]
-    refresh: bool,
-}
-
-async fn auth_profiles(
-    State(state): State<AppState>,
-    Query(query): Query<AuthProfilesQuery>,
-) -> Response {
-    match state.runtime.profiles(query.refresh) {
-        Ok(profiles) => Json(json!({
-            "profiles": profiles.iter().map(profile_json).collect::<Vec<_>>()
-        }))
-        .into_response(),
-        Err(error) => control_error(StatusCode::BAD_GATEWAY, error.to_string()),
-    }
-}
-
-fn profile_json(profile: &DatabricksProfileSummary) -> Value {
-    json!({
-        "name": profile.name,
-        "host": profile.host,
-        "accountId": profile.account_id,
-        "workspaceId": profile.workspace_id,
-        "target": match profile.target {
-            TargetKind::Workspace => "workspace",
-            TargetKind::Account => "account",
-            TargetKind::Unified => "unified",
-        },
-        "authKind": match profile.auth_kind {
-            AuthKind::UserToMachine => "user-to-machine",
-            AuthKind::MachineToMachine => "machine-to-machine",
-            AuthKind::PersonalAccessToken => "personal-access-token",
-            AuthKind::AppServicePrincipal => "app-service-principal",
-            AuthKind::AppOnBehalfOf => "app-on-behalf-of",
-        }
-    })
-}
-
-async fn auth_switch(
-    State(state): State<AppState>,
-    Json(selection): Json<RuntimeSelection>,
-) -> Response {
-    match state.runtime.switch(selection).await {
-        Ok(status) => {
-            let metrics = state.metrics.clone();
-            let storage_key = status.storage_key.clone();
-            match tokio::task::spawn_blocking(move || metrics.activate_runtime(storage_key)).await {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => {
-                    tracing::warn!(%error, "runtime switched but aggregate metrics restoration failed");
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "runtime switched but metrics restoration task failed");
-                }
-            }
-            Json(json!({"runtime": status})).into_response()
-        }
-        Err(error) => control_error(StatusCode::BAD_GATEWAY, error.to_string()),
-    }
-}
-
-async fn cancel_model_waits(State(state): State<AppState>, Path(model): Path<String>) -> Response {
-    let model = model.trim();
-    if model.is_empty() {
-        return control_error(StatusCode::BAD_REQUEST, "model must not be empty");
-    }
-    let runtime = state.runtime.capture();
-    let capacity = runtime.throttle.cancel_waits(model).await;
-    let cooldown = state.rate_limits.cancel_waits(model).await;
-    Json(json!({
-        "model": model,
-        "capacityWaiters": capacity.cancelled_waiters,
-        "cooldownWaiters": cooldown.cancelled_waiters,
-        "matchedCooldownKeys": cooldown.matched_keys,
-        "cancelledWaiters": capacity.cancelled_waiters.saturating_add(cooldown.cancelled_waiters)
-    }))
-    .into_response()
-}
-
-async fn retry_model_now(State(state): State<AppState>, Path(model): Path<String>) -> Response {
-    let model = model.trim();
-    if model.is_empty() {
-        return control_error(StatusCode::BAD_REQUEST, "model must not be empty");
-    }
-    let released = state.rate_limits.release_cooldowns(model).await;
-    Json(json!({
-        "model": model,
-        "matchedCooldownKeys": released.matched_keys,
-        "releasedCooldowns": released.released_cooldowns
-    }))
-    .into_response()
-}
-
-fn control_error(status: StatusCode, message: impl Into<String>) -> Response {
-    (
-        status,
-        Json(json!({
-            "error": {
-                "type": "model_proxy_control_error",
-                "message": message.into()
-            }
-        })),
-    )
-        .into_response()
 }
 
 async fn track_active_request(
@@ -461,133 +212,6 @@ impl Drop for ActiveRequestGuard {
     fn drop(&mut self) {
         self.0.request_finished();
     }
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct MetricsSnapshotQuery {
-    model: Option<String>,
-}
-
-async fn metrics_snapshot(
-    State(state): State<AppState>,
-    Query(query): Query<MetricsSnapshotQuery>,
-) -> Response {
-    if !state.metrics.routes_visible() {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-    let model = query
-        .model
-        .as_deref()
-        .map(str::trim)
-        .filter(|model| !model.is_empty());
-    let snapshot = live_metrics_snapshot(&state, model).await;
-    (
-        [(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))],
-        Json(snapshot),
-    )
-        .into_response()
-}
-
-async fn metrics_prometheus(State(state): State<AppState>) -> Response {
-    if !state.metrics.routes_visible() {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-    let _ = live_metrics_snapshot(&state, None).await;
-    let Some(payload) = state.metrics.prometheus() else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    (
-        [
-            (
-                header::CONTENT_TYPE,
-                HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),
-            ),
-            (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
-        ],
-        payload,
-    )
-        .into_response()
-}
-
-async fn metrics_events(State(state): State<AppState>) -> Response {
-    if !state.metrics.routes_visible() {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-    #[cfg(feature = "metrics")]
-    {
-        let Some(mut receiver) = state.metrics.subscribe() else {
-            return StatusCode::NOT_FOUND.into_response();
-        };
-        let initial = serde_json::to_string(&live_metrics_snapshot(&state, None).await).ok();
-        let stream = async_stream::stream! {
-            if let Some(initial) = initial {
-                yield Ok::<Event, Infallible>(Event::default().event("snapshot").data(initial));
-            }
-            loop {
-                match receiver.recv().await {
-                    Ok(_) => {
-                        if let Ok(payload) = serde_json::to_string(
-                            &live_metrics_snapshot(&state, None).await
-                        ) {
-                            yield Ok(Event::default().event("snapshot").data(payload));
-                        }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-        };
-        Sse::new(stream)
-            .keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(15)))
-            .into_response()
-    }
-    #[cfg(not(feature = "metrics"))]
-    StatusCode::NOT_FOUND.into_response()
-}
-
-#[cfg(feature = "metrics-ui")]
-async fn metrics_index(State(state): State<AppState>) -> Response {
-    embedded_metrics_asset(&state.metrics, "index.html")
-}
-
-#[cfg(feature = "metrics-ui")]
-async fn metrics_asset(State(state): State<AppState>, Path(path): Path<String>) -> Response {
-    embedded_metrics_asset(&state.metrics, &path)
-}
-
-#[cfg(feature = "metrics-ui")]
-fn embedded_metrics_asset(metrics: &MetricsRuntime, path: &str) -> Response {
-    if !metrics.routes_visible() || metrics.mode() != MetricsMode::Ui {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-    let Some(asset) = dashboard_asset(path) else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    let cache_control = if asset.immutable {
-        "public, max-age=31536000, immutable"
-    } else {
-        "no-cache"
-    };
-    (
-        [
-            (
-                header::CONTENT_TYPE,
-                HeaderValue::from_static(asset.content_type),
-            ),
-            (
-                header::CACHE_CONTROL,
-                HeaderValue::from_static(cache_control),
-            ),
-            (
-                header::CONTENT_SECURITY_POLICY,
-                HeaderValue::from_static(
-                    "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'",
-                ),
-            ),
-        ],
-        asset.body,
-    )
-        .into_response()
 }
 
 async fn list_models(
@@ -1835,7 +1459,6 @@ mod tests {
     fn test_metrics() -> MetricsRuntime {
         MetricsRuntime::new(crate::metrics::MetricsConfig {
             mode: crate::metrics::MetricsMode::Off,
-            routes_visible: false,
         })
         .unwrap()
     }
@@ -2668,49 +2291,4 @@ mod tests {
         assert_eq!(response.headers()[header::RETRY_AFTER], "5");
     }
 
-    #[test]
-    fn control_requests_require_loopback_same_origin_and_custom_header() {
-        let mut headers = HeaderMap::new();
-        headers.insert(header::HOST, HeaderValue::from_static("127.0.0.1:4000"));
-        headers.insert(
-            header::ORIGIN,
-            HeaderValue::from_static("http://127.0.0.1:4000"),
-        );
-        headers.insert(
-            HeaderName::from_static(CONTROL_HEADER),
-            HeaderValue::from_static("1"),
-        );
-        headers.insert(
-            HeaderName::from_static("sec-fetch-site"),
-            HeaderValue::from_static("same-origin"),
-        );
-        assert!(control_request_allowed(&headers));
-
-        headers.remove(CONTROL_HEADER);
-        assert!(!control_request_allowed(&headers));
-        headers.insert(
-            HeaderName::from_static(CONTROL_HEADER),
-            HeaderValue::from_static("1"),
-        );
-        headers.insert(
-            header::ORIGIN,
-            HeaderValue::from_static("http://attacker.example"),
-        );
-        assert!(!control_request_allowed(&headers));
-        headers.insert(
-            header::ORIGIN,
-            HeaderValue::from_static("http://proxy.example"),
-        );
-        headers.insert(header::HOST, HeaderValue::from_static("proxy.example"));
-        assert!(!control_request_allowed(&headers));
-    }
-
-    #[test]
-    fn loopback_authority_accepts_supported_local_hosts_only() {
-        assert!(is_loopback_authority("localhost:4000"));
-        assert!(is_loopback_authority("127.0.0.1:4000"));
-        assert!(is_loopback_authority("[::1]:4000"));
-        assert!(!is_loopback_authority("0.0.0.0:4000"));
-        assert!(!is_loopback_authority("proxy.example:4000"));
-    }
 }

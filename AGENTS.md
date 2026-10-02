@@ -369,10 +369,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   local token-window delay as the same horizon, or a conservative 60-second
   horizon when local history cannot explain the workspace limit. Other 429s use
   BackON jittered exponential delay from one second to one minute. Exhaustion
-  logs no future unslept delay. `/api/healthz` exposes process-local activation,
-  tightening, relaxation, deactivation, reactivation, active key, wait,
-  oversized, post-admission 429, retry-reacquisition, and fallback-delay
-  counters. Metrics snapshots and Prometheus expose each bounded model label's
+  logs no future unslept delay. `/api/healthz` reports readiness and the active
+  runtime generation. Typed desktop metrics expose each bounded model label's
   current limiter phase, penalty basis points, effective input budget, and
   fallback count. Log a returned `error.message` on every 429, including the
   final attempt. Use five request retries by default.
@@ -418,59 +416,39 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   remains process-wide with bounded idle eviction. Installed service mode
   persists only the successful non-secret selection through
   `dbx-tools-service`; direct CLI mode keeps it in memory. Switching is disabled
-  in Databricks Apps, and one global App OBO runtime is prohibited. `GET
-/api/auth`, `GET /api/auth/profiles?refresh=true`, and `PUT /api/auth` expose
-  status, secret-free profile discovery, and ambient or exact-profile switching.
-  `POST /api/rate-limits/models/:model/cancel-waits` cancels both token-capacity
-  and cooldown waits; `retry-now` releases current cooldowns. A cancelled retry
-  loop returns its latest original upstream 429 when one exists, otherwise a
-  structured local 429.
-  The normal release binary enables the `metrics-ui` Cargo feature and defaults
-  `METRICS` / `--metrics` to `auto`. Auto resolves to `off` in a Databricks App,
-  `ui` in a normal metrics-ui build, `collect` in a metrics-only build, and
-  `off` when metrics are not compiled. `collect` retains bounded JSON, SSE, and
-  Prometheus machine endpoints without UI routes; `off` / `false` removes
-  collection and routes; `true` selects the fullest compiled mode. Mount
-  `/metrics`, `/api/metrics/snapshot`, `/api/metrics/events`, and
-  `/api/metrics/prometheus` on the existing Axum listener only. A non-loopback bind
-  returns 404 for metrics routes unless `METRICS_PUBLIC=true` or
-  `--metrics-public` explicitly acknowledges exposure. Forwarded headers never
-  bypass this guard. Retain five-second buckets for one hour, one-minute
-  rollups for 24 hours, 32 named model series plus `other`, and at most 16 MiB
-  in process memory. Installed service mode stores only aggregate buckets and
-  model snapshots in the shared `service.sqlite3`, keyed by a SHA-256 digest of
-  stable non-secret runtime identity. Never store request events, identities,
-  payloads, tokens, or secrets. `METRICS_STORE_MAX_BYTES` /
+  in Databricks Apps, and one global App OBO runtime is prohibited. The Tauri
+  desktop exposes status, secret-free profile discovery, ambient or exact-profile
+  switching, cancel-waits, and retry-now through generated Specta IPC only.
+  A cancelled retry loop returns its latest original upstream 429 when one
+  exists, otherwise a structured local 429.
+  The normal release binary enables the `metrics` Cargo feature and defaults
+  `METRICS` / `--metrics` to `auto`. Auto resolves to `off` in a Databricks App
+  and `on` when metrics are compiled. `on` / `true` collect; `off` / `false`
+  remove collection and history. Do not restore metrics, Prometheus, SSE,
+  profile, or rate-limit control routes to Axum. The HTTP surface is `/v1/*`
+  plus `/api/healthz`.
+  Retain five-second buckets for one hour, one-minute rollups for 24 hours, 32
+  named model series plus `other`, and at most 16 MiB in process memory.
+  Installed service mode stores only aggregate buckets and model snapshots in
+  the shared `service.sqlite3`, keyed by a SHA-256 digest of stable non-secret
+  runtime identity. Never store request events, identities, payloads, tokens,
+  or secrets. `METRICS_STORE_MAX_BYTES` /
   `--metrics-store-max-bytes` defaults to 134217728; zero disables metric
   persistence while settings remain enabled. Prune oldest metric rows before
-  writes and restore the current runtime's aggregates on startup. The embedded
-  vanilla dashboard uses snapshot JSON plus SSE,
-  canonical generated brand tokens, model and outcome filters, request, token,
-  and latency line graphs plus a filter-aware reasoning-level donut chart. Each
-  model's rate-limit capacity cell renders the
-  live process-local input-window use against its effective budget, adaptive
-  penalty against the 90-percent maximum, and current waiting depth against the
-  process-lifetime peak with average wait. Transition events remain the
-  authority for limiter phase and budget so the completing request that caused
-  deactivation cannot turn the displayed limiter back on. GridStack owns drag-and-drop placement and widget resizing; do not
-  restore a separate compact/full-detail mode or hand-roll grid interactions.
-  SSE carries aggregate summaries only; model selection fetches
-  `/api/metrics/snapshot?model=<resolved-model>` so one bounded model history does
-  not multiply every five-second event by all retained models.
-  Persist only bounded widget geometry in browser `localStorage` and synchronize
-  it across tabs; the icon-only reset control restores and persists the canonical
-  layout. Never put metric history or request data there. A proxy owns one
-  active runtime generation at a time; the profile control replaces that
-  generation and never presents simultaneous workspace aggregation.
-  The profile selector is limited to ambient authentication and secret-free named
-  profile metadata from `/api/auth`; it never accepts credentials or arbitrary
-  hosts. Mutations exist only on loopback and require same-origin plus
-  `X-Model-Proxy-Control: 1`, with no CORS.
-  Committed assets are validated by
-  `bun run model-proxy:metrics-assets`. Rust release rows embed those assets
-  without Bun. Only content-addressed assets use immutable caching; `app.js` and
-  every other stable-name asset revalidate. `metrics` and `metrics-ui` remain additive optional features; a
-  metrics-free build contains no recorder, histogram, exporter, or UI assets.
+  writes and restore the current runtime's aggregates on startup.
+  `dbx-model-proxy-desktop` owns the proxy runtime in-process and uses Tauri 2
+  plus tauri-specta. One command/event registry owns runtime registration and
+  generated `desktop/src/bindings.ts`; never hand-maintain a TypeScript mirror.
+  The five-second event carries aggregate summaries, while a command loads one
+  selected model's bounded history. The React UI renders request/token/latency
+  trends, a reasoning pie chart, profile selection, model filtering, and
+  rate-limit actions from IPC. It does not use browser local storage.
+  The no-manifest frontend lives under `packages/rs/model-proxy/desktop`; root
+  Bun dependencies build it and Rust release rows embed the committed `dist`
+  without Bun. `bun run model-proxy:desktop-bindings`,
+  `model-proxy:desktop-build`, and `model-proxy:desktop-check` own generation
+  and validation. The debug-only localhost MCP bridge must never be present in
+  release features or capabilities.
   Direct CLI runs remain memory-only by default; installed service mode enables
   the bounded aggregate SQLite store unless persistence is explicitly disabled.
   `dbx model-proxy` downloads and runs the release asset matching the installed
@@ -483,45 +461,37 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   capture only non-secret server
   options, retain `~/.dbx-tools/model-proxy` unless uninstall receives
   `--purge`, and accept `--config-dir` to replace that default. Systray policy
-  is `auto` by default, `always`, or `never`. Auto registers the hidden
-  `dbx-model-proxy-desktop` companion only when its tray-icon capability probe
-  succeeds; always fails when the probe does not, and never disables companion
-  startup. Enabled companions start immediately and write stdout/stderr under
-  `<config-dir>/logs`. Every lifecycle command rejects Databricks App execution before
-  touching service or SQLite state.
-  The companion uses `tray-icon`, opens the local metrics UI, and reports
-  `/api/healthz`; macOS and Windows render Wry native webviews, while Linux uses
-  tray-icon's KSNI backend and the default browser so release builds do not
-  require WebKitGTK. It is a second binary target in the model-proxy crate,
-  gated behind the `desktop` feature so the headless proxy does not link tray
-  or WebView dependencies. The generated release registry keeps it hidden from
-  root help while allowing service installation through
-  `@dbx-tools/rust-binary`. tray-icon's KSNI backend sets the Rust workspace
-  compatibility floor to 1.90.
+  is `auto` by default, `always`, or `never`. Auto selects the hidden
+  `dbx-model-proxy-desktop` executable only when its Tauri capability probe
+  succeeds; always fails when the probe does not, and never selects the
+  headless executable. Exactly one executable is registered and started.
+  Every lifecycle command rejects Databricks App execution before touching
+  service or SQLite state. The generated release registry keeps the desktop
+  command hidden from root help while allowing service installation through
+  `@dbx-tools/rust-binary`.
 - `packages/rs/service` is the source-only Rust service lifecycle crate. It
   owns per-user service registration, `~/.dbx-tools/<service>` defaults,
   SQLite opening and migrations, persisted non-secret launch configuration,
   reusable `--config-dir`, `--persistence auto|memory|sqlite`, installed-service
   detection, non-secret settings, aggregate storage, health status, typed Clap
-  lifecycle commands, and companion autostart policy. Direct auto mode uses
+  lifecycle commands, and desktop executable selection. Direct auto mode uses
   memory; installed auto mode uses the one shared SQLite connection. Install
   injects the stable config directory and service marker into launched argv and
-  copies service and companion executables into `<config-dir>/bin` before
-  registration; never point autostart at a mutable Cargo target or versioned
-  download-cache file. Remove superseded managed copies only after the
-  replacement registration and stored configuration succeed.
-  Its optional `desktop` feature owns the generic tray-icon event loop,
-  an Open/Quit menu, health tooltip, Wry system WebView on macOS/Windows, Linux
-  default-browser fallback, desktop capability probe, and callback-based
-  health/open customization. Consumer companion binaries supply identity, title,
-  icon, health URL, and open URL only; their served UI remains consumer-owned.
-  Consumers primarily provide a service name, port, executable behavior, and
-  invalid-runtime detector. It has no UniFFI surface or generated Node/Python
-  binding packages. Model proxy consumes it; lakebase proxy remains unchanged
-  until it adopts the lifecycle deliberately. Its hidden machine-readable
-  requirements command owns install argv parsing and companion capability
-  preflight; JavaScript release wrappers forward the returned argv and do not
-  duplicate lifecycle options, defaults, validation, or help.
+  copies the selected executable into `<config-dir>/bin` before registration;
+  never point autostart at a mutable Cargo target or versioned download-cache
+  file. Remove superseded managed copies only after replacement registration
+  and stored configuration succeed. Its hidden machine-readable requirements
+  command owns install argv parsing and desktop capability preflight; JavaScript
+  release wrappers forward the returned argv and do not duplicate lifecycle
+  options, defaults, validation, or help.
+- `packages/rs/service-desktop` is the public source-only Tauri shell crate. It
+  owns native tray creation, Open/Quit behavior, close-to-tray handling,
+  capability probing, and the debug-only MCP bridge seam. Consumers own their
+  commands, Specta contracts, runtime, icon, and frontend. It has no UniFFI or
+  generated Node/Python binding packages. Model proxy consumes it; Lakebase
+  remains headless until it adopts the shell deliberately. Linux release rows
+  install WebKitGTK, AppIndicator, and librsvg development packages for Tauri;
+  do not restore the browser fallback.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
   pgwire proxy for Databricks Lakebase. A startup user selects a Databricks
   profile only when that profile exists; otherwise standard Databricks auth
@@ -635,7 +605,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   explicit Mastra `requireApproval` setting.
 - `packages/js/node/rust-binary` owns the generated native release-command
   registry, GitHub release URL selection, exact-version installation through
-  `@dbx-tools/core`, and signal-preserving process execution. Runtime packages
+  `@dbx-tools/core`, and signal-preserving process execution. When the GitHub
+  archive is missing, `ensureReleaseBinary` runs `cargo install --version` into
+  the ensure temp directory (`temp/cargo`) and copies that `file://` binary.
+  Registry rows carry `crateName` and `cargoFeatures` for that fallback.
+  Runtime packages
   that need a native release binary depend on `@dbx-tools/rust-binary`, not the
   full CLI graph. Command registration and argument forwarding stay in
   `@dbx-tools/cli`.
@@ -819,6 +793,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   only assets produced by the selected target matrix.
   `@dbx-tools/rust-binary` owns the registry, release URL policy, exact-version
   installation through `@dbx-tools/core` `bin.ensure`, and process forwarding.
+  A missing GitHub archive falls back to `cargo install --version --root
+  <temp>/cargo` using generated `crateName` / `cargoFeatures`; `file://`
+  sources skip archive unpacking, and unstamped `0.0.0` binaries count as the
+  requested version.
   Server plugins import the narrow package directly; do not put product registry or
   release URL policy in core or restore a dependency on the umbrella CLI. Every
   UniFFI crate gets
@@ -1548,7 +1526,9 @@ package that imports it.
   delegates directly to the SDK, and its caller owns any broader refresh gate.
 
 Node-only equivalents live in `@dbx-tools/core` (`bin.ensure` for idempotent
-executable downloads, archive selection, version validation, and atomic install;
+executable downloads, local `file://` copies, archive selection, version
+validation, and atomic install - a URL thunk receives `{ tempDir }` after the
+install lock so a fallback such as `cargo install --root` can write there;
 `exec.spawn`/`spawnSync`;
 `project.root`/`name`/`repositoryUrl`/`npmRegistry`;
 `fileLock.withFileLock` for cross-process locking through one
@@ -2309,7 +2289,8 @@ Commander packages. `dbx model-proxy` and `dbx lakebase-proxy` look up the
 current platform through `@dbx-tools/rust-binary`, use `bin.ensure` to install
 the asset matching the binary component's generated version and tag at
 `~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`, then forward argv, stdio,
-signals, and exit status to the native process. Root help registers names
+signals, and exit status to the native process. A missing GitHub archive uses
+`cargo install` of the registered crate into a private temp root. Root help registers names
 without downloading assets. Add another native command through the Rust
 package's `cli` option, not another JavaScript package or handwritten CLI entry.
 

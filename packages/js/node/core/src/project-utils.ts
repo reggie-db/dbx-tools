@@ -302,6 +302,7 @@ export function repositoryUrl(cwd?: string, format: "https" | "npm" = "https"): 
 /** Public npm, used only after env, npmrc, bunfig, and pnpm yaml miss. */
 const DEFAULT_NPM_REGISTRY = "https://registry.npmjs.org/";
 
+/** Inputs that control active npm registry discovery. */
 export type NpmRegistryOptions = {
   /** Skip public npmjs.org so callers can detect a configured override. */
   overrideOnly?: boolean;

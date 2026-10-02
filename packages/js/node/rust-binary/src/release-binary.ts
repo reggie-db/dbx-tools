@@ -6,8 +6,9 @@
 import { spawn } from "node:child_process";
 import { constants as osConstants, homedir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { bin } from "@dbx-tools/core";
+import { bin, exec } from "@dbx-tools/core";
 import { json, object, stringUtils } from "@dbx-tools/shared-core";
 import { RELEASE_BINARY_COMMANDS } from "./_release-binaries.ts";
 
@@ -30,6 +31,10 @@ export interface ReleaseBinaryCommand {
   readonly tagPrefix: string;
   readonly tag: string;
   readonly repository: string;
+  /** Cargo package name used when a GitHub archive is unavailable. */
+  readonly crateName: string;
+  /** Cargo features required to build this binary, empty for the default target. */
+  readonly cargoFeatures: readonly string[];
   readonly assets: readonly ReleaseBinaryAsset[];
 }
 
@@ -101,7 +106,99 @@ function releaseBinaryTag(command: ReleaseBinaryCommand, version: string): strin
   return version === command.version ? command.tag : `${command.tagPrefix}${version}`;
 }
 
+/** Probe GitHub for the archive without downloading it. HEAD is preferred. */
+async function githubReleaseAvailable(url: string): Promise<boolean> {
+  const headers = {
+    "user-agent": "@dbx-tools/rust-binary",
+  };
+  try {
+    const head = await fetch(url, { method: "HEAD", headers, redirect: "follow" });
+    if (head.status === 405 || head.status === 501) {
+      const ranged = await fetch(url, {
+        method: "GET",
+        headers: { ...headers, range: "bytes=0-0" },
+        redirect: "follow",
+      });
+      return ranged.ok;
+    }
+    return head.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** `cargo install` argv targeting a private `--root` under the ensure temp directory. */
+function cargoInstallArgs(
+  command: ReleaseBinaryCommand,
+  version: string,
+  root: string,
+): string[] {
+  const args = [
+    "install",
+    command.crateName,
+    "--version",
+    version,
+    "--root",
+    root,
+    "--bin",
+    command.binaryName,
+    "--force",
+  ];
+  if (command.cargoFeatures.length > 0) {
+    args.push("--features", command.cargoFeatures.join(","));
+  }
+  return args;
+}
+
+/**
+ * Install the crate into `tempDir/cargo` and return a `file://` source.
+ * Unstamped local builds report `0.0.0`; `trustVersion` skips that check.
+ */
+async function cargoInstallSource(
+  command: ReleaseBinaryCommand,
+  version: string,
+  tempDir: string,
+): Promise<bin.BinSource> {
+  const probe = exec.spawnSync("cargo", ["--version"], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  if (probe.exitCode !== 0) {
+    throw new Error(`cargo is not available; cannot install ${command.binaryName}@${version}`);
+  }
+  const root = join(tempDir, "cargo");
+  const args = cargoInstallArgs(command, version, root);
+  const result = await exec.spawn("cargo", args, {
+    stdin: "ignore",
+    stdout: "inherit",
+    stderr: "inherit",
+    check: false,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `cargo install ${command.crateName}@${version} failed (exit ${result.exitCode})`,
+    );
+  }
+  const extension = process.platform === "win32" ? ".exe" : "";
+  const installed = join(root, "bin", `${command.binaryName}${extension}`);
+  return { url: pathToFileURL(installed).href, trustVersion: true };
+}
+
+/** Prefer a GitHub release archive; fall back to `cargo install --version`. */
 async function releaseBinarySource(
+  command: ReleaseBinaryCommand,
+  asset: ReleaseBinaryAsset,
+  version: string,
+  tempDir: string,
+): Promise<bin.BinSource> {
+  const github = await githubReleaseSource(command, asset, version);
+  if (await githubReleaseAvailable(github.url)) return github;
+  return cargoInstallSource(command, version, tempDir);
+}
+
+/** GitHub archive URL plus a SHA-256 digest when the release API exposes one. */
+async function githubReleaseSource(
   command: ReleaseBinaryCommand,
   asset: ReleaseBinaryAsset,
   version: string,
@@ -152,15 +249,20 @@ export async function ensureReleaseBinary(
     binDir,
     path: join(binDir, versionedBinaryName(command.binaryName, version, platform)),
   };
-  return bin.ensure(command.binaryName, () => releaseBinarySource(command, asset, version), {
-    autoUnpackage: true,
-    destination,
-    minVersion: version,
-    versionParser: (output) => {
-      const installed = bin.parseVersion(output);
-      return installed === version ? installed : undefined;
+  return bin.ensure(
+    command.binaryName,
+    ({ tempDir }) => releaseBinarySource(command, asset, version, tempDir),
+    {
+      autoUnpackage: true,
+      destination,
+      minVersion: version,
+      versionParser: (output) => {
+        const installed = bin.parseVersion(output);
+        if (installed === version || installed === "0.0.0") return version;
+        return undefined;
+      },
     },
-  });
+  );
 }
 
 function signalExitCode(signal: NodeJS.Signals): number {

@@ -47,12 +47,16 @@ const executable = await bin.ensure("tool", releaseUrl, {
 for a different layout. An existing executable returns immediately, so
 a URL resolver is only called when installation is necessary. Concurrent
 callers use a file lock with a check-lock-check-load sequence, preventing
-duplicate downloads across processes and worker threads. Direct downloads
-are selected by default. Zip, tar, tar.gz, and tgz archives can be unpacked
-automatically; a single-file archive needs no selector, while a selector can
-choose a binary from a larger archive. The selected file is normalized to mode
-`0755` and must report an acceptable version before it is atomically moved into
-place; the final renamed path runs the same validation again before returning.
+duplicate downloads across processes and worker threads. After the lock, a
+function URL receives `{ tempDir }` so a local installer can write under that
+directory. Direct HTTP downloads are selected by default. A `file://` URL is
+copied without fetching or unpacking. Zip, tar, tar.gz, and tgz archives can
+be unpacked automatically; a single-file archive needs no selector, while a
+selector can choose a binary from a larger archive. The selected file is
+normalized to mode `0755` and must report an acceptable version before it is
+atomically moved into place; the final renamed path runs the same validation
+again before returning. `trustVersion` on a `BinSource` skips `--version` when
+the producer already identified the requested version.
 
 Every candidate runs with `--version` before it is accepted. Set
 `versionArgument` for a different argument and `minVersion` to require a partial
@@ -356,8 +360,9 @@ this when a mirror or delayed proxy 404s versions that public npm already has.
 ## Modules
 
 - `exec` - async/sync process spawning, stdio handling, abort wiring, and shlex.
-- `bin` - executable download, optional archive extraction, selection, and
-  atomic installation.
+- `bin` - executable download, local `file://` copy, optional archive
+  extraction, selection, and atomic installation. URL thunks receive `{ tempDir }`
+  after the install lock.
 - `bundle` - asynchronous streaming of CLI-resolved Databricks bundle App resources.
 - `project` - cwd normalization, root discovery, project naming, git-remote
   parsing, and memoized npm registry resolution (env, npmrc, bunfig, pnpm yaml,

@@ -37,6 +37,7 @@ type PackageInfo = {
   dependencies: Record<string, Record<string, string>>;
 };
 
+/** Registry and traversal policy for dependency resolution. */
 export type DependencyResolverOptions = {
   /** Graph-walk attempts before giving up. Defaults to 100. */
   maxIterations?: number;

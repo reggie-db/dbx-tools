@@ -1,0 +1,11 @@
+{
+  "identifier": "mcp",
+  "description": "Debug-only localhost connector",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "connector:default"
+  ]
+}

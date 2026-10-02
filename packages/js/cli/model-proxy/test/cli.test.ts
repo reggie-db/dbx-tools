@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildProgram } from "../src/cli.ts";
+import { buildProgram, restoreInstallArgs } from "../src/cli.ts";
 
 describe("model proxy CLI", () => {
   it("leaves lifecycle options, validation, and help to Rust", () => {
@@ -18,5 +18,49 @@ describe("model proxy CLI", () => {
 
   it("keeps command construction lazy", () => {
     assert.doesNotThrow(() => buildProgram().helpInformation());
+  });
+
+  it("restores a Commander-stripped -- before server arguments", () => {
+    assert.deepEqual(
+      restoreInstallArgs(
+        ["service", "install", "--port", "4003"],
+        ["dbx", "model-proxy", "service", "install", "--", "--port", "4003"],
+      ),
+      ["--", "--port", "4003"],
+    );
+    assert.deepEqual(
+      restoreInstallArgs(
+        ["service", "install", "--config-dir", "/tmp/service", "--port", "4003"],
+        [
+          "dbx",
+          "model-proxy",
+          "service",
+          "install",
+          "--config-dir",
+          "/tmp/service",
+          "--",
+          "--port",
+          "4003",
+        ],
+      ),
+      ["--config-dir", "/tmp/service", "--", "--port", "4003"],
+    );
+  });
+
+  it("leaves install arguments unchanged when -- was not stripped", () => {
+    assert.deepEqual(
+      restoreInstallArgs(
+        ["service", "install", "--config-dir", "/tmp/service"],
+        ["dbx", "model-proxy", "service", "install", "--config-dir", "/tmp/service"],
+      ),
+      ["--config-dir", "/tmp/service"],
+    );
+    assert.deepEqual(
+      restoreInstallArgs(
+        ["service", "install", "--", "--port", "4003"],
+        ["dbx", "model-proxy", "service", "install", "--", "--", "--port", "4003"],
+      ),
+      ["--", "--port", "4003"],
+    );
   });
 });

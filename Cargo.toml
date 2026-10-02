@@ -6,12 +6,14 @@ members = [
   "packages/rs/lakebase-proxy",
   "packages/rs/model",
   "packages/rs/model-proxy",
-  "packages/rs/service"
+  "packages/rs/service",
+  "packages/rs/service-desktop"
 ]
 default-members = [
   "packages/rs/lakebase-proxy",
   "packages/rs/model-proxy",
-  "packages/rs/service"
+  "packages/rs/service",
+  "packages/rs/service-desktop"
 ]
 resolver = "2"
 
@@ -38,7 +40,6 @@ resolver = "2"
   httpdate = "1"
   mini-moka = "0.10"
   metrics = "0.24"
-  mime_guess = "2"
   open = "5"
   percent-encoding = "2"
   regex = "1"
@@ -51,11 +52,15 @@ resolver = "2"
   sha2 = "0.10"
   sysinfo = "0.37"
   tempfile = "3"
+  tauri-build = "=2.6.3"
+  tauri-plugin-connector = "=0.16.0"
   thiserror = "2"
   tokenx-rs = "=0.1.0"
   tokio-postgres = "0.7"
   tokio-rustls = "0.26"
   tracing = "0.1"
+  specta = "=2.0.0-rc.25"
+  specta-typescript = "=0.0.12"
   ts-rs = "=12.0.1"
   webpki-roots = "1"
   wiremock = "0.6"
@@ -73,10 +78,6 @@ resolver = "2"
     version = "0.25"
     default-features = false
     features = [ "jpeg", "png", "webp" ]
-
-    [workspace.dependencies.metrics-exporter-prometheus]
-    version = "0.17"
-    default-features = false
 
     [workspace.dependencies.oauth2]
     version = "5"
@@ -101,12 +102,17 @@ resolver = "2"
     version = "=0.39.0"
     features = [ "bundled" ]
 
-    [workspace.dependencies.rust-embed]
-    version = "8"
-    features = [ "debug-embed" ]
-
     [workspace.dependencies.serde]
     version = "1"
+    features = [ "derive" ]
+
+    [workspace.dependencies.tauri]
+    version = "=2.11.6"
+    default-features = false
+    features = [ "tray-icon", "wry" ]
+
+    [workspace.dependencies.tauri-specta]
+    version = "=2.0.0-rc.25"
     features = [ "derive" ]
 
     [workspace.dependencies.time]

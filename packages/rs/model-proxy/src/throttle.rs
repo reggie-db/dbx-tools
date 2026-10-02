@@ -231,6 +231,7 @@ impl ThrottleRejection {
 
 /// Result of cancelling current token-admission waiters for one exact model.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg(any(feature = "desktop", test))]
 pub(crate) struct ThrottleCancellation {
     pub(crate) model: String,
     pub(crate) cancelled_waiters: u64,
@@ -423,6 +424,7 @@ impl RequestThrottle {
     }
 
     /// Cancel current FIFO and token-capacity waiters for one exact model.
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) async fn cancel_waits(&self, model: &str) -> ThrottleCancellation {
         let key = ThrottleKey {
             workspace: self.workspace.clone(),
@@ -593,7 +595,7 @@ impl RequestThrottle {
             .fetch_add(1, Ordering::Relaxed);
     }
 
-    /// Snapshot process-local rate-limit counters.
+    #[cfg(test)]
     pub(crate) async fn counters(&self) -> ThrottleCounterSnapshot {
         let queues = self
             .queues
@@ -633,6 +635,7 @@ impl RequestThrottle {
     }
 
     /// Snapshot current token-window and queue capacity by actual model.
+    #[cfg(any(feature = "desktop", test))]
     pub(crate) async fn capacity_snapshots(&self) -> Vec<ThrottleModelSnapshot> {
         let queues = self
             .queues
@@ -732,6 +735,7 @@ struct ThrottleKey {
 }
 
 #[derive(Debug, Default)]
+#[cfg_attr(not(any(feature = "desktop", test)), allow(dead_code))]
 struct ThrottleCounters {
     automatic_activations: AtomicU64,
     automatic_tightenings: AtomicU64,
@@ -746,7 +750,7 @@ struct ThrottleCounters {
     fallback_window_delays: AtomicU64,
 }
 
-/// Process-local rate-limit counters exposed through the health route.
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ThrottleCounterSnapshot {
     pub(crate) automatic_activations: u64,
@@ -765,6 +769,7 @@ pub(crate) struct ThrottleCounterSnapshot {
 
 /// Live process-local capacity for one actual model queue.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg(any(feature = "desktop", test))]
 pub(crate) struct ThrottleModelSnapshot {
     pub(crate) model: String,
     pub(crate) active: bool,

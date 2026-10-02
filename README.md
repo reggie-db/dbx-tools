@@ -295,7 +295,8 @@ dbx model-proxy service status
 Then point the client at `http://127.0.0.1:4000/v1`.
 The installed per-user service starts at login, keeps non-secret settings and
 bounded aggregate metrics under `~/.dbx-tools/model-proxy`, and opens its local
-Metrics UI from a supported desktop tray.
+Tauri metrics UI from a supported desktop tray. The desktop owns the proxy
+runtime in one process and keeps controls off the HTTP listener.
 
 ### Authenticate With Databricks OAuth
 

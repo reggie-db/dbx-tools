@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Model Proxy desktop IPC",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}
