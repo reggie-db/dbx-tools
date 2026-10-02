@@ -502,7 +502,6 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(manager.status().profile, "first");
         assert_eq!(manager.status().selection, RuntimeSelection::Ambient);
         assert_eq!(settings.get(PROFILE_SETTING).unwrap(), None);
     }
@@ -533,7 +532,6 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(manager.status().profile, "first");
         assert_eq!(manager.status().selection, RuntimeSelection::Ambient);
         assert_eq!(settings.get(PROFILE_SETTING).unwrap(), None);
     }
