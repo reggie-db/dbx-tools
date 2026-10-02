@@ -515,17 +515,19 @@ function rustArtifactSteps(plan: RustReleasePlan, kind: RustBuildKind): JobStep[
   ];
 }
 
+/** Build a Bash loop that preserves matrix values across LF and CRLF runners. */
+function matrixArgumentLoop(variable: string, field: string, flag: string): string {
+  return `while IFS= read -r ${variable}; do ${variable}="\${${variable}%$'\\r'}"; ${variable}_ARGS+=(${flag} "$${variable}"); done < <(jq -r '.[]' <<<'\${{ toJSON(matrix.${field}) }}')`;
+}
+
 function rustCargoBuildCommand(plan: RustReleasePlan, kind: RustBuildKind): string {
   return [
     "PACKAGE_ARGS=()",
     "FEATURE_ARGS=()",
-    `while IFS= read -r PACKAGE; do PACKAGE_ARGS+=(--package "$PACKAGE"); done < <(jq -r '.[]' <<<'\${{ toJSON(matrix.packages) }}')`,
-    `while IFS= read -r FEATURE; do FEATURE_ARGS+=(--features "$FEATURE"); done < <(jq -r '.[]' <<<'\${{ toJSON(matrix.features) }}')`,
+    matrixArgumentLoop("PACKAGE", "packages", "--package"),
+    matrixArgumentLoop("FEATURE", "features", "--features"),
     ...(kind === "binaries"
-      ? [
-          "BINARY_ARGS=()",
-          `while IFS= read -r BINARY; do BINARY_ARGS+=(--bin "$BINARY"); done < <(jq -r '.[]' <<<'\${{ toJSON(matrix.binaries) }}')`,
-        ]
+      ? ["BINARY_ARGS=()", matrixArgumentLoop("BINARY", "binaries", "--bin")]
       : ["BINARY_ARGS=()"]),
     `cargo build --release --timings "\${PACKAGE_ARGS[@]}" "\${BINARY_ARGS[@]}" "\${FEATURE_ARGS[@]}"${
       plan.usesCargoLock ? " --locked" : ""
