@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/openapi-model-proxy";
-export const PACKAGE_VERSION = "0.9.16";
+export const PACKAGE_VERSION = "0.9.17";
 export * as client from "./src/client.ts";
 export * as schema from "./src/schema.ts";
 export type { paths, webhooks, components, $defs, operations } from "./src/schema.ts";
