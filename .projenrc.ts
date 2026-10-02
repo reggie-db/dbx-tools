@@ -66,6 +66,8 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "Server-side Microsoft Teams Adaptive Card runtime, agent tool, and AppKit plugin",
   "packages/js/node/tunnel":
     "In-process public Portr and FRP tunnels protected by the dbx-tools authentication gate",
+  "packages/js/openapi/model-proxy":
+    "Generated OpenAPI schema and client for dbx-tools-model-proxy",
   "packages/js/shared/auth":
     "Browser-safe schemas and types for the dbx-tools passwordless authentication gate",
   "packages/js/shared/core": "Browser-safe utility foundation for dbx-tools packages",
@@ -140,23 +142,6 @@ class BrandPackageAssets extends Component {
   }
 }
 
-/** Regenerate the committed Model Proxy desktop frontend after synthesis. */
-class ModelProxyDesktopAssets extends Component {
-  /**
-   * Rebuild the reviewed `desktop/dist` bundle and icon so the release input
-   * tracked in git always reflects the desktop frontend source, the same way
-   * branding assets are regenerated. The `model-proxy:desktop-check` gate then
-   * verifies the committed copy rather than being the only thing that produces it.
-   */
-  public override postSynthesize(): void {
-    execFileSync(
-      "bun",
-      [resolve(this.project.outdir, "scripts/model-proxy-desktop.mjs"), "--write"],
-      { stdio: "inherit" },
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Root construction
 // ---------------------------------------------------------------------------
@@ -182,7 +167,7 @@ const root = new project.DBXToolsNodeProject({
       },
     ],
   },
-  releaseDocs: {
+  releasePages: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",
     prepareSteps: [
@@ -230,6 +215,11 @@ const root = new project.DBXToolsNodeProject({
         run: "bun docs/scripts/generate-api-docs.mjs",
       },
       {
+        name: "Generate package indexes",
+        env: { GH_TOKEN: "${{ github.token }}" },
+        run: "bun docs/scripts/generate-package-indexes.mjs",
+      },
+      {
         name: "Save Rustdoc cache",
         if: "${{ steps.rustdoc-cache.outputs.cache-hit != 'true' }}",
         uses: "actions/cache/save@v5",
@@ -243,6 +233,7 @@ const root = new project.DBXToolsNodeProject({
         run: "bun docs/scripts/check-generated-titles.mjs",
       },
       { name: "Build docs", run: `bun run --cwd ${DOCS_BUILD_ROOT}/site build` },
+      { name: "Disable Jekyll", run: `touch ${DOCS_BUILD_ROOT}/dist/.nojekyll` },
       {
         name: "Check generated links",
         run: `bun run --cwd ${DOCS_BUILD_ROOT}/site check-links`,
@@ -250,11 +241,9 @@ const root = new project.DBXToolsNodeProject({
     ],
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
-  releasePythonRoot: PYTHON_ROOT,
   releaseValidationTasks: [
     "docs:check-source",
     "docs:check-readmes",
-    "model-proxy:desktop-check",
     "rs:release-fingerprint",
   ],
   releaseSyncBranch: "dev",
@@ -272,139 +261,14 @@ const root = new project.DBXToolsNodeProject({
   // workspace, so it links from source via `workspace:^`. `.projenrc.ts` imports it
   // by source path either way.
   devDeps: [
-    "@tauri-apps/api@2.11.0",
-    "@tauri-apps/cli@2.11.0",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/projen@workspace:^",
-    "@tanstack/react-table@catalog:",
-    "@types/react@catalog:",
-    "@types/react-dom@catalog:",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
-    "echarts@catalog:",
-    "echarts-for-react@catalog:",
-    "lucide-react@catalog:",
-    "react@catalog:",
-    "react-dom@catalog:",
     "ts-to-zod@5.1.0",
     "zod@catalog:",
   ],
-});
-
-const desktopAppConfig = {
-  "$schema": "https://schema.tauri.app/config/2",
-  productName: "Model Proxy",
-  identifier: "com.dbx-tools.model-proxy",
-  mainBinaryName: "dbx-model-proxy-desktop",
-  app: {
-    windows: [
-      {
-        label: "main",
-        title: "Model Proxy",
-        width: 1240,
-        height: 860,
-        minWidth: 920,
-        minHeight: 680,
-        center: true,
-        resizable: true,
-        visible: false,
-      },
-    ],
-    security: {
-      capabilities: ["default"],
-      csp: "default-src 'self'; connect-src ipc: http://ipc.localhost ws://127.0.0.1:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'",
-    },
-    withGlobalTauri: false,
-  },
-  bundle: { active: false },
-};
-
-new JsonFile(root, "packages/rs/model-proxy/tauri.conf.json", {
-  marker: false,
-  obj: {
-    ...desktopAppConfig,
-    bundle: {
-      active: false,
-      icon: ["desktop/src-tauri/icons/icon.png"],
-    },
-    build: {
-      beforeDevCommand: {
-        script: "bun --hot --port 3000 index.html",
-        cwd: "desktop",
-        wait: false,
-      },
-      beforeBuildCommand: {
-        script: "bun build index.html --outdir dist",
-        cwd: "desktop",
-        wait: true,
-      },
-      devUrl: "http://localhost:3000",
-      frontendDist: "desktop/dist",
-    },
-  },
-});
-
-new JsonFile(root, "packages/rs/model-proxy/desktop/src-tauri/tauri.conf.json", {
-  marker: false,
-  obj: {
-    ...desktopAppConfig,
-    bundle: {
-      active: false,
-      icon: ["icons/icon.png"],
-    },
-    build: {
-      beforeDevCommand: {
-        script: "bun --hot --port 3000 index.html",
-        cwd: "..",
-        wait: false,
-      },
-      beforeBuildCommand: {
-        script: "bun build index.html --outdir dist",
-        cwd: "..",
-        wait: true,
-      },
-      devUrl: "http://localhost:3000",
-      frontendDist: "../dist",
-    },
-  },
-});
-
-new JsonFile(root, "packages/rs/model-proxy/desktop/src-tauri/tauri.mcp.conf.json", {
-  marker: false,
-  obj: {
-    app: {
-      windows: [{ ...desktopAppConfig.app.windows[0], visible: true }],
-      security: {
-        capabilities: ["mcp"],
-        csp: desktopAppConfig.app.security.csp.replace(
-          "script-src 'self'",
-          "script-src 'self' 'unsafe-eval'",
-        ),
-      },
-      withGlobalTauri: true,
-    },
-  },
-});
-
-new JsonFile(root, "packages/rs/model-proxy/desktop/src-tauri/capabilities/default.json", {
-  marker: false,
-  obj: {
-    identifier: "default",
-    description: "Model Proxy desktop IPC",
-    windows: ["main"],
-    permissions: ["core:default"],
-  },
-});
-
-new JsonFile(root, "packages/rs/model-proxy/desktop/src-tauri/debug-capabilities/mcp.json", {
-  marker: false,
-  obj: {
-    identifier: "mcp",
-    description: "Debug-only localhost connector",
-    windows: ["main"],
-    permissions: ["core:default", "connector:default"],
-  },
 });
 
 const installerTest = root.addTask("test:installer", {
@@ -423,24 +287,6 @@ const readmeDocs = root.addTask("docs:check-readmes", {
   description: "Validate and generate documentation from package READMEs",
 });
 readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
-
-const modelProxyDesktopBindings = root.addTask("model-proxy:desktop-bindings", {
-  description: "Generate Specta bindings for the model-proxy desktop",
-});
-modelProxyDesktopBindings.exec(
-  "cargo run --package dbx-tools-model-proxy --example generate-desktop-bindings --features desktop-codegen",
-);
-
-const modelProxyDesktopBuild = root.addTask("model-proxy:desktop-build", {
-  description: "Build the no-manifest model-proxy desktop frontend",
-});
-modelProxyDesktopBuild.exec("bun scripts/model-proxy-desktop.mjs --write");
-
-const modelProxyDesktopCheck = root.addTask("model-proxy:desktop-check", {
-  description: "Validate Specta bindings and desktop frontend assets",
-});
-modelProxyDesktopCheck.exec("bun scripts/model-proxy-desktop.mjs");
-root.testTask.spawn(modelProxyDesktopCheck);
 
 // ---------------------------------------------------------------------------
 // JavaScript and Python lockfiles stay UNTRACKED
@@ -466,11 +312,8 @@ root.gitignore.addPatterns(
   ".worktrees/",
   ".home/",
   ".kanna/",
-  "packages/rs/model-proxy/gen/",
   "**/.logs/",
 );
-// Rust release rows embed reviewed desktop assets and do not build them.
-root.gitignore.addPatterns("!/packages/rs/model-proxy/desktop/dist/**");
 
 // ---------------------------------------------------------------------------
 // pnpm workspace: build-script allowances + version overrides
@@ -1318,8 +1161,18 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
   cliRegistryPath: "packages/js/node/rust-binary/src/_release-binaries.ts",
   pythonRoot: PYTHON_ROOT,
   workspaceDependencies: {
+    aide: {
+      version: "=0.15.1",
+      defaultFeatures: false,
+      features: ["axum", "axum-json", "axum-query", "axum-tokio", "scalar"],
+    },
     "async-trait": "0.1",
+    "async-stream": "0.3",
+    "async-graphql": "=7.0.17",
+    "async-graphql-axum": "=7.0.17",
     "auto-launcher": "=1.1.0",
+    axum: "0.8",
+    "axum-typed-routing": { version: "=0.4.7", features: ["aide"] },
     backon: { version: "=1.6.0", defaultFeatures: false, features: ["tokio-sleep"] },
     base64: "0.22",
     bytes: "1",
@@ -1340,6 +1193,7 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
     },
     "mini-moka": "0.10",
     metrics: "0.24",
+    "mime_guess": "2",
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
     "percent-encoding": "2",
@@ -1356,20 +1210,14 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
     rusqlite: { version: "=0.39.0", features: ["bundled"] },
     "rusqlite_migration": "=2.5.0",
     scraper: "0.24",
+    schemars: "=0.9.0",
     serde: { version: "1", features: ["derive"] },
     "serde_json": "1",
+    "serde_yaml": "=0.9.34",
     "service-manager": "=0.11.0",
     sha2: "0.10",
     sysinfo: "0.37",
     tempfile: "3",
-    tauri: {
-      version: "=2.11.6",
-      defaultFeatures: false,
-      features: ["tray-icon", "wry"],
-    },
-    "tauri-build": "=2.6.3",
-    "tauri-plugin-connector": "=0.16.0",
-    "tauri-specta": { version: "=2.0.0-rc.25", features: ["derive"] },
     thiserror: "2",
     time: { version: "0.3", features: ["serde", "formatting", "parsing"] },
     "tokenx-rs": "=0.1.0",
@@ -1382,8 +1230,6 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
     "tokio-rustls": "0.26",
     tracing: "0.1",
     "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
-    specta: "=2.0.0-rc.25",
-    "specta-typescript": "=0.0.12",
     "ts-rs": "=12.0.1",
     uniffi: { version: "=0.31", features: ["cli", "tokio"] },
     url: { version: "2", features: ["serde"] },
@@ -1467,96 +1313,108 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
     },
     service: {
       description:
-        "Reusable per-user service lifecycle, SQLite state, and desktop executable selection",
+        "Reusable per-user service lifecycle, tray runtime, SQLite state, GraphQL topics, and OpenAPI routing",
+      features: {
+        graphql: [
+          "dep:async-trait",
+          "dep:async-graphql",
+          "dep:async-graphql-axum",
+          "dep:axum",
+        ],
+        openapi: [
+          "dep:aide",
+          "dep:axum",
+          "dep:axum-typed-routing",
+          "dep:schemars",
+          "dep:serde_yaml",
+        ],
+        topics: ["dep:async-stream", "dep:futures", "dep:tokio"],
+        tray: ["dep:tray-icon"],
+      },
       dependencies: {
+        aide: { workspace: true, optional: true },
+        "async-stream": { workspace: true, optional: true },
+        "async-trait": { workspace: true, optional: true },
+        "async-graphql": { workspace: true, optional: true },
+        "async-graphql-axum": { workspace: true, optional: true },
         "auto-launcher": { workspace: true },
+        axum: { workspace: true, optional: true },
+        "axum-typed-routing": { workspace: true, optional: true },
         clap: { workspace: true },
         directories: { workspace: true },
+        futures: { workspace: true, optional: true },
         reqwest: { workspace: true, features: ["blocking"] },
         rusqlite: { workspace: true },
         "rusqlite_migration": { workspace: true },
+        schemars: { workspace: true, optional: true },
         serde: { workspace: true },
         "serde_json": { workspace: true },
+        "serde_yaml": { workspace: true, optional: true },
         "service-manager": { workspace: true },
         sysinfo: { workspace: true },
+        "tray-icon": {
+          version: "=0.25.1",
+          defaultFeatures: false,
+          features: ["ksni"],
+          optional: true,
+        },
+        tokio: { workspace: true, optional: true },
         tracing: { workspace: true },
+      },
+      targetDependencies: {
+        'cfg(any(target_os = "macos", target_os = "windows"))': {
+          tao: {
+            version: "=0.37.1",
+            defaultFeatures: false,
+            features: ["rwh_06"],
+          },
+        },
       },
       devDependencies: {
+        futures: { workspace: true },
         tempfile: { workspace: true },
-      },
-    },
-    "service-desktop": {
-      description: "Reusable Tauri shell for per-user dbx-tools services",
-      features: {
-        "debug-mcp": ["dep:tauri-plugin-connector"],
-      },
-      dependencies: {
-        tauri: { workspace: true },
-        "tauri-plugin-connector": { workspace: true, optional: true },
         tokio: { workspace: true },
-        "tokio-util": { workspace: true },
-        tracing: { workspace: true },
       },
     },
     "model-proxy": {
       description: "Multi-protocol Databricks model proxy",
+      openapi: { binary: "dbx-model-proxy" },
       release: true,
       cli: true,
       binaryName: "dbx-model-proxy",
       defaultRun: "dbx-model-proxy",
       defaultFeatures: ["metrics"],
       features: {
-        desktop: [
-          "metrics",
-          "dep:specta",
-          "dep:tauri",
-          "dep:tauri-specta",
-          `dep:${root.scope}-service-desktop`,
-          "tauri/custom-protocol",
-        ],
-        "desktop-codegen": ["desktop", "tauri-specta/typescript", "dep:specta-typescript"],
-        "desktop-debug": [
-          "desktop",
-          "dep:tauri-plugin-connector",
-          `${root.scope}-service-desktop/debug-mcp`,
-        ],
         metrics: ["dep:hdrhistogram", "dep:metrics"],
+        tray: [`${root.scope}-service/tray`],
       },
       binaries: [
         {
-          name: "dbx-model-proxy-desktop",
-          path: "src/bin/desktop.rs",
-          requiredFeatures: ["desktop"],
+          name: "dbx-model-proxy-tray",
+          path: "src/bin/tray.rs",
+          requiredFeatures: ["tray"],
           release: true,
-          description: "Native tray and desktop metrics application for dbx-model-proxy",
-          cli: { command: "model-proxy-desktop", hidden: true },
-        },
-      ],
-      buildDependencies: {
-        "tauri-build": { workspace: true },
-      },
-      examples: [
-        {
-          name: "generate-desktop-bindings",
-          path: "examples/generate-desktop-bindings.rs",
-          requiredFeatures: ["desktop-codegen"],
+          description: "Native tray controls for the dbx-model-proxy service",
+          cli: { command: "model-proxy-tray", hidden: true },
         },
       ],
       dependencies: {
+        aide: { workspace: true },
         "aigw-anthropic": "=0.6.0",
         "aigw-core": "=0.6.0",
         "aigw-openai": "=0.6.0",
         "async-stream": "0.3",
-        axum: "0.8",
+        "async-graphql": { workspace: true },
+        axum: { workspace: true },
+        "axum-typed-routing": { workspace: true },
         backon: { workspace: true },
         base64: { workspace: true },
         clap: { workspace: true },
         [`${root.scope}-core`]: { path: "../core" },
         [`${root.scope}-model`]: { path: "../model" },
-        [`${root.scope}-service`]: { path: "../service" },
-        [`${root.scope}-service-desktop`]: {
-          path: "../service-desktop",
-          optional: true,
+        [`${root.scope}-service`]: {
+          path: "../service",
+          features: ["graphql", "openapi", "topics"],
         },
         "eventsource-stream": "0.2",
         "futures-util": "0.3",
@@ -1564,19 +1422,15 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
         image: { workspace: true },
         httpdate: { workspace: true },
         metrics: { workspace: true, optional: true },
-        reqwest: { workspace: true, features: ["stream"] },
+        open: { workspace: true },
+        reqwest: { workspace: true, features: ["blocking", "stream"] },
+        schemars: { workspace: true },
         serde: { workspace: true },
         "serde_json": { workspace: true },
         sha2: { workspace: true },
-        specta: { workspace: true, optional: true },
-        "specta-typescript": { workspace: true, optional: true },
-        tauri: { workspace: true, optional: true },
-        "tauri-plugin-connector": { workspace: true, optional: true },
-        "tauri-specta": { workspace: true, optional: true },
         thiserror: { workspace: true },
         "tokenx-rs": { workspace: true },
         tokio: { workspace: true },
-        "tokio-util": { workspace: true },
         tracing: { workspace: true },
       },
       devDependencies: {
@@ -1699,7 +1553,6 @@ root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
 root.annotateGenerated("/packages/js/shared/model/src/generated/**");
 new BrandPackageAssets(root);
-new ModelProxyDesktopAssets(root);
 root.addTask("model:metadata", {
   exec: [
     "cargo run --quiet -p dbx-tools-model --example generate-model-metadata --",

@@ -1,6 +1,6 @@
 /** Filesystem-discovered Rust workspaces and UniFFI binding package wiring. */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, Project, TextFile, TomlFile, javascript } from "projen";
@@ -15,6 +15,7 @@ import {
   type DBXToolsRustProjectOptions as RustProjectOptions,
   type RustCrateOptions as RustCrateConfiguration,
   type RustCliOptions as RustCliConfiguration,
+  type RustOpenApiOptions as RustOpenApiConfiguration,
 } from "./_rust-project.ts";
 import {
   configureRustReleaseTask,
@@ -44,7 +45,7 @@ import { defaultReleaseUnitId, type ReleaseDependencyInput } from "./release-cat
 import {
   hasNodeRelease,
   independentReleaseSetupSteps,
-  registerIndependentPublicationJob,
+  registerPublicationJob,
   tryReleaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
@@ -57,6 +58,7 @@ export type CargoExampleOptions = RustCargoExampleOptions;
 export type DBXToolsRustProjectOptions = RustProjectOptions;
 export type RustCrateOptions = RustCrateConfiguration;
 export type RustCliOptions = RustCliConfiguration;
+export type RustOpenApiOptions = RustOpenApiConfiguration;
 
 /** Public Rust project facade; implementation lives apart from workspace/release coordination. */
 export class DBXToolsRustProject extends RustProject {
@@ -269,12 +271,23 @@ export interface RustBindingMapping {
   readonly dependencies?: readonly string[];
 }
 
+/** Persisted Rust OpenAPI producer consumed by the shared OpenAPI task. */
+export interface RustOpenApiMapping {
+  readonly crate: string;
+  readonly rust: string;
+  readonly output: string;
+  readonly binary?: string;
+  readonly features: readonly string[];
+  readonly noDefaultFeatures: boolean;
+}
+
 /** Persisted Rust workspace state consumed by `sync --watch`. */
 export interface RustWorkspaceMapping {
   readonly root: string;
   readonly crates: readonly string[];
   readonly bindings: readonly RustBindingMapping[];
   readonly binaries: readonly RustReleaseBinaryMapping[];
+  readonly openapi: readonly RustOpenApiMapping[];
 }
 
 /** One platform archive published for a Rust CLI binary. */
@@ -778,11 +791,26 @@ function createRustWorkspaceMapping(
   binaries: readonly RustReleaseBinaryMapping[],
   resolved: ResolvedRustWorkspaceOptions,
 ): RustWorkspaceMapping {
+  const openapiRoot = join(dirname(resolved.nodeRoot), "openapi");
   return {
     root: resolved.root,
     crates: packages.map((pkg) => `${resolved.root}/${pkg.packageOptions.directory}`),
     bindings,
     binaries,
+    openapi: packages.flatMap((pkg) => {
+      if (!pkg.packageOptions.openapi) return [];
+      const options = pkg.packageOptions.openapi === true ? {} : pkg.packageOptions.openapi;
+      return [
+        {
+          crate: pkg.crateName,
+          rust: `${resolved.root}/${pkg.packageOptions.directory}`,
+          output: toPosix(join(openapiRoot, pkg.packageOptions.directory)),
+          ...(options.binary ? { binary: options.binary } : {}),
+          features: [...(options.features ?? [])],
+          noDefaultFeatures: options.noDefaultFeatures ?? false,
+        },
+      ];
+    }),
   };
 }
 
@@ -895,7 +923,6 @@ function configureIndependentRustVersions(
     for (const [section, dependencies] of [
       ["dependencies", pkg.packageOptions.dependencies],
       ["dev-dependencies", pkg.packageOptions.devDependencies],
-      ["build-dependencies", pkg.packageOptions.buildDependencies],
     ] as const) {
       for (const [name, dependency] of Object.entries(dependencies ?? {})) {
         if (typeof dependency === "string" || !dependency.path) continue;
@@ -954,13 +981,6 @@ export class DBXToolsRustWorkspace extends Component {
               this.packages,
               pkg.packageOptions.devDependencies,
               true,
-            ),
-            ...rustReleaseDependencies(
-              project,
-              pkg,
-              this.packages,
-              pkg.packageOptions.buildDependencies,
-              false,
             ),
           ],
         });
@@ -1080,20 +1100,20 @@ export class DBXToolsRustWorkspace extends Component {
       }
       if (plan.publicCrates.length) {
         workflow.addJob("publish-cargo", independentRustCargoPublishJob(project, plan));
-        registerIndependentPublicationJob(workflow, "publish-cargo");
+        registerPublicationJob(workflow, "publish-cargo");
       }
-      if (plan.releaseBinaries.length) {
+      if (plan.releaseBinaries.length || plan.publicCrates.length) {
         workflow.addJob("publish-github-release", independentRustGitHubReleaseJob(project, plan));
-        registerIndependentPublicationJob(workflow, "publish-github-release");
+        registerPublicationJob(workflow, "publish-github-release");
       }
       if (plan.nodeBindings.length && hasNodeRelease(project)) {
         workflow.addJob("publish-native-npm", independentRustNativeNpmPublishJob(project));
-        registerIndependentPublicationJob(workflow, "publish-native-npm");
+        registerPublicationJob(workflow, "publish-native-npm");
         workflow.addJob(
           "publish-node-facades",
           independentRustNodeFacadePublishJob(project, plan.nodeBindings),
         );
-        registerIndependentPublicationJob(workflow, "publish-node-facades");
+        registerPublicationJob(workflow, "publish-node-facades");
       }
       return;
     }
@@ -1101,14 +1121,19 @@ export class DBXToolsRustWorkspace extends Component {
       workflow.addJob("rust-build", rustBuildJob(plan));
     }
     if (plan.publicCrates.length) {
-      workflow.addJob("publish-cargo", rustCargoPublishJob(plan, false));
-      workflow.addJob("publish-local-cargo", rustCargoPublishJob(plan, true));
+      workflow.addJob("publish-cargo", rustCargoPublishJob(project, plan));
+      registerPublicationJob(workflow, "publish-cargo");
     }
-    if (plan.releaseBinaries.length) {
-      workflow.addJob("publish-github-release", rustGitHubReleaseJob());
+    if (plan.releaseBinaries.length || plan.publicCrates.length) {
+      workflow.addJob(
+        "publish-github-release",
+        rustGitHubReleaseJob(plan.publicCrates.length > 0, plan.releaseBinaries.length > 0),
+      );
+      registerPublicationJob(workflow, "publish-github-release");
     }
     if (plan.nodeBindings.length && hasNodeRelease(project)) {
       workflow.addJob("publish-native-npm", rustNativeNpmPublishJob(project));
+      registerPublicationJob(workflow, "publish-native-npm");
       const nodeJob = workflow.getJob("publish-node");
       if ("uses" in nodeJob) throw new Error("publish-node must be a workflow job");
       workflow.updateJob("publish-node", {
@@ -1117,6 +1142,7 @@ export class DBXToolsRustWorkspace extends Component {
         needs: ["verify-context", "publish-native-npm"],
       });
       workflow.addJob("publish-node-facades", rustNodeFacadePublishJob(project, plan.nodeBindings));
+      registerPublicationJob(workflow, "publish-node-facades");
     }
   }
 }

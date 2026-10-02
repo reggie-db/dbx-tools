@@ -40,6 +40,7 @@
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
+    "registry": "https://registry.npmjs.org/",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
     "exports": {
@@ -50,7 +51,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.13",
+  "version": "0.9.14",
   "types": "index.ts",
   "type": "module",
   "exports": {

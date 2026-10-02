@@ -1,9 +1,9 @@
 /**
- * OpenAPI generator (tsoa-based).
+ * OpenAPI generator for tsoa controllers and code-first Rust producers.
  *
- * Scans `server`/`node` packages for modules that **import tsoa**
- * (`from 'tsoa'` / `from '@tsoa/runtime'`) and, for each package that has them,
- * generates a read-only `<root>/openapi/<name>` package:
+ * TypeScript packages are discovered from tsoa imports. Rust producers are
+ * recorded by `DBXToolsRustWorkspace`. Both feed the same optimized generated
+ * package:
  *
  *   - `openapi.json`   - the OpenAPI 3 spec (tsoa `generateSpec`, then Speakeasy
  *     optimization to extract duplicate inline schemas into components).
@@ -33,11 +33,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import * as bin from "@dbx-tools/core/bin";
 import { find } from "@dbx-tools/path";
-import { log, stringUtils } from "@dbx-tools/shared-core";
+import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated.ts";
@@ -48,6 +48,7 @@ import {
   toPosix,
   recordedPackages,
 } from "./packages.ts";
+import type { RustOpenApiMapping, RustWorkspaceMapping } from "./project-rs.ts";
 import type { ReleaseUnitGraph } from "./release-catalog.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -62,45 +63,95 @@ const SPEAKEASY_OPENAPI_RELEASE_URL = `https://github.com/speakeasy-api/openapi/
 const execFileAsync = promisify(execFile);
 
 // prettier-ignore
-const CLIENT_TEMPLATE = (
-  // ============================================================================
-  /*ts*/`
-  import createClient, { type ClientOptions } from "openapi-fetch";
-  import type { paths } from "./schema";
+const CLIENT_SRC =
+  stringUtils.dedent(
+    // ============================================================================
+    /*ts*/`
+    import createClient, { type ClientOptions } from "openapi-fetch";
+    import type { paths } from "./schema";
 
-  /** Create a typed OpenAPI client (openapi-fetch); safe to use in the browser. */
-  export function createApiClient(options?: ClientOptions) {
-    return createClient<paths>(options);
-  }
-  `
-  // ============================================================================
-);
-const CLIENT_SRC = stringUtils.dedent(CLIENT_TEMPLATE, { trimEnd: false });
+    /** Create a typed OpenAPI client (openapi-fetch); safe to use in the browser. */
+    export function createApiClient(options?: ClientOptions) {
+      return createClient<paths>(options);
+    }
+    `
+    // ============================================================================
+  ) + "\n";
 
 /** True if any module file in `<pkg>/src` matches {@link TSOA_IMPORT}. */
 function hasTsoaControllers(pkg: Pick<RecordedPackage, "dir">): boolean {
-  const srcDir = join(pkg.dir, "src");
-  return [...find.findFiles("**/*", { cwd: srcDir })]
+  const srcDir = tsoaSource(pkg);
+  return object
+    .sequence(find.findFiles("**/*", { cwd: srcDir }))
     .filter(isModuleFile)
-    .some((f) => TSOA_IMPORT.test(readFileSync(join(srcDir, f), "utf8")));
+    .some((file) => TSOA_IMPORT.test(readFileSync(join(srcDir, file), "utf8")));
+}
+
+function tsoaSource(pkg: Pick<RecordedPackage, "dir">): string {
+  return join(pkg.dir, "src");
+}
+
+function isTsoaCandidate(pkg: RecordedPackage): boolean {
+  return pkg.tags.includes("server") || pkg.tags.includes("node");
 }
 
 /** `server`/`node` packages (never the generated `openapi` tag) with a tsoa import. */
-function controllerPackages(): RecordedPackage[] {
-  return recordedPackages().filter(
-    (p) => (p.tags.includes("server") || p.tags.includes("node")) && hasTsoaControllers(p),
-  );
+function controllerPackages(): object.Sequence<RecordedPackage> {
+  return object.sequence(recordedPackages()).filter(isTsoaCandidate).filter(hasTsoaControllers);
 }
 
-/** True if the changed path is a source file that matches {@link TSOA_IMPORT}. */
-export function isTsoaController(path: string): boolean {
-  const posix = toPosix(path);
-  return (
-    !posix.includes(`/${OPENAPI_TAG}/`) &&
-    isModuleFile(path) &&
-    existsSync(path) &&
-    TSOA_IMPORT.test(readFileSync(path, "utf8"))
-  );
+function rustOpenapiMappings(): RustOpenApiMapping[] {
+  const manifest = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as unknown;
+  if (!object.isRecord(manifest)) return [];
+  const config = manifest.dbxToolsConfig;
+  if (!object.isRecord(config) || !object.isRecord(config.rust)) return [];
+  const mapping = config.rust as unknown as Partial<RustWorkspaceMapping>;
+  return Array.isArray(mapping.openapi) ? [...mapping.openapi] : [];
+}
+
+function inside(path: string, directory: string): boolean {
+  const child = relative(resolve(directory), resolve(path));
+  return child === "" || (!child.startsWith("..") && !isAbsolute(child));
+}
+
+/** Whether one changed source belongs to any producing package directory. */
+export function isOpenapiProducerSource(path: string, producers: readonly string[]): boolean {
+  const absolute = resolve(path);
+  return object.sequence(producers).some((producer) => inside(absolute, producer));
+}
+
+function rustOpenapiSources(mapping: RustOpenApiMapping): string[] {
+  return [resolve(repoRoot, mapping.rust, "src"), resolve(repoRoot, mapping.rust, "Cargo.toml")];
+}
+
+/** Source roots consumed by TypeScript and Rust OpenAPI producers. */
+export function openapiWatchRoots(): string[] {
+  return [
+    ...controllerPackages()
+      .map((pkg) => resolve(tsoaSource(pkg)))
+      .join(object.sequence(rustOpenapiMappings()).flatMap(rustOpenapiSources))
+      .distinct(),
+  ];
+}
+
+/** Whether one changed source belongs to an OpenAPI-producing package. */
+export function isOpenapiSource(path: string): boolean {
+  const absolute = resolve(path);
+  const segments = toPosix(relative(repoRoot, absolute)).split("/");
+  if (segments.includes(OPENAPI_TAG)) return false;
+  if (
+    object
+      .sequence(rustOpenapiMappings())
+      .flatMap(rustOpenapiSources)
+      .some((source) => inside(absolute, source))
+  ) {
+    return true;
+  }
+  return object
+    .sequence(recordedPackages())
+    .filter(isTsoaCandidate)
+    .filter((pkg) => inside(absolute, tsoaSource(pkg)))
+    .some(hasTsoaControllers);
 }
 
 /** GitHub release asset name for Speakeasy's OpenAPI binary. */
@@ -145,6 +196,59 @@ export async function optimizeOpenapiSpec(specPath: string, executable?: string)
   await execFileAsync(openapi, ["spec", "optimize", specPath, "--write", "--non-interactive"]);
 }
 
+/** Cargo arguments that export one Rust producer's aide document. */
+export function rustOpenapiArgs(
+  mapping: RustOpenApiMapping,
+  output: string,
+  targetDir = join(repoRoot, "target/openapi"),
+): string[] {
+  return [
+    "run",
+    "--quiet",
+    "--target-dir",
+    targetDir,
+    "--package",
+    mapping.crate,
+    ...(mapping.noDefaultFeatures ? ["--no-default-features"] : []),
+    ...(mapping.features.length ? ["--features", mapping.features.join(",")] : []),
+    ...(mapping.binary ? ["--bin", mapping.binary] : []),
+    "--",
+    "--generate-spec",
+    output,
+  ];
+}
+
+type OpenApiTypeTools = {
+  openapiTS: typeof import("openapi-typescript").default;
+  astToString: typeof import("openapi-typescript").astToString;
+};
+
+async function writeClientPackage(
+  outDir: string,
+  source: string,
+  tools: OpenApiTypeTools,
+): Promise<void> {
+  const srcDir = join(outDir, "src");
+  mkdirSync(srcDir, { recursive: true });
+  const specPath = join(outDir, "openapi.json");
+  const spec = JSON.parse(readFileSync(specPath, "utf8"));
+  const schemaPath = join(srcDir, "schema.ts");
+  makeWritable(schemaPath);
+  writeFileSync(schemaPath, tools.astToString(await tools.openapiTS(spec)));
+  stampGenerated(schemaPath, {
+    tool: "projen openapi (Speakeasy + openapi-typescript)",
+    source,
+  });
+
+  const clientPath = join(srcDir, "client.ts");
+  makeWritable(clientPath);
+  writeFileSync(clientPath, CLIENT_SRC);
+  stampGenerated(clientPath, {
+    tool: "projen openapi (openapi-fetch)",
+    source: "./schema",
+  });
+}
+
 /**
  * Regenerate the `openapi` packages from every server/node package with a tsoa
  * import. Returns the package dirs it wrote so the caller can rebuild their barrels.
@@ -152,35 +256,43 @@ export async function optimizeOpenapiSpec(specPath: string, executable?: string)
  * members in `pnpm-workspace.yaml`.
  */
 export async function generateOpenapi(): Promise<string[]> {
-  const pkgs = controllerPackages();
+  const pkgs = controllerPackages().toArray();
+  const rustMappings = rustOpenapiMappings();
   // Same reasoning as codegen's empty case: a workspace with no tsoa controllers
   // is not a condition worth a line on every synth.
-  if (pkgs.length === 0) {
-    logger.debug("no tsoa controllers found in any server/node package");
+  if (pkgs.length === 0 && rustMappings.length === 0) {
+    logger.debug("no TypeScript or Rust OpenAPI producers found");
     return [];
   }
 
   // Lazy, resilient loads: tsoa + typescript are CJS (require), openapi-typescript
   // is ESM (dynamic import).
-  const require = createRequire(import.meta.url);
-  const { generateSpec } = lazyRequire<typeof import("tsoa")>(
-    require,
-    "tsoa",
-    "openapi generation",
-  );
-  const tsRuntime = lazyRequire<typeof ts>(require, "typescript", "openapi generation");
   const { default: openapiTS, astToString } = await import("openapi-typescript");
+  const tools = { openapiTS, astToString };
 
-  // Read tsoa's controllers with decorator support; skipLibCheck keeps third-party
-  // `.d.ts` out of the spec-generation compile.
-  const compilerOptions: ts.CompilerOptions = {
-    experimentalDecorators: true,
-    target: tsRuntime.ScriptTarget.ES2022,
-    module: tsRuntime.ModuleKind.ESNext,
-    moduleResolution: tsRuntime.ModuleResolutionKind.Bundler,
-    esModuleInterop: true,
-    skipLibCheck: true,
-  };
+  const typescript =
+    pkgs.length > 0
+      ? (() => {
+          const require = createRequire(import.meta.url);
+          const { generateSpec } = lazyRequire<typeof import("tsoa")>(
+            require,
+            "tsoa",
+            "openapi generation",
+          );
+          const runtime = lazyRequire<typeof ts>(require, "typescript", "openapi generation");
+          return {
+            generateSpec,
+            compilerOptions: {
+              experimentalDecorators: true,
+              target: runtime.ScriptTarget.ES2022,
+              module: runtime.ModuleKind.ESNext,
+              moduleResolution: runtime.ModuleResolutionKind.Bundler,
+              esModuleInterop: true,
+              skipLibCheck: true,
+            } satisfies ts.CompilerOptions,
+          };
+        })()
+      : undefined;
 
   const releaseGraphPath = join(repoRoot, ".projen/release-units.json");
   const releaseGraph = existsSync(releaseGraphPath)
@@ -196,8 +308,7 @@ export async function generateOpenapi(): Promise<string[]> {
     // its npm name - `p.name` is the (possibly-overridden) manifest name.
     const leaf = p.relPath.split("/").pop() ?? p.relPath;
     const outDir = join(repoRoot, p.root, OPENAPI_TAG, leaf);
-    const srcDir = join(outDir, "src");
-    mkdirSync(srcDir, { recursive: true });
+    mkdirSync(outDir, { recursive: true });
 
     // 1) tsoa writes a temporary openapi.json, Speakeasy optimizes it there, then
     // the complete spec moves into place so readers never observe an intermediate file.
@@ -205,7 +316,7 @@ export async function generateOpenapi(): Promise<string[]> {
     const tempDir = mkdtempSync(join(outDir, ".openapi-"));
     const tempSpecPath = join(tempDir, "openapi.json");
     try {
-      await generateSpec(
+      await typescript!.generateSpec(
         {
           entryFile: "",
           noImplicitAdditionalProperties: "throw-on-extras",
@@ -216,7 +327,7 @@ export async function generateOpenapi(): Promise<string[]> {
           name: `${p.relPath} API`,
           version: specVersion,
         },
-        compilerOptions,
+        typescript!.compilerOptions,
       );
       await optimizeOpenapiSpec(tempSpecPath);
       makeWritable(specPath);
@@ -225,28 +336,29 @@ export async function generateOpenapi(): Promise<string[]> {
       rmSync(tempDir, { recursive: true, force: true });
     }
     makeReadonly(specPath);
-
-    // 2) src/schema.ts: types generated from the spec (openapi-typescript).
-    const spec = JSON.parse(readFileSync(specPath, "utf8"));
-    const schemaPath = join(srcDir, "schema.ts");
-    makeWritable(schemaPath);
-    writeFileSync(schemaPath, astToString(await openapiTS(spec)));
-    stampGenerated(schemaPath, {
-      tool: "projen openapi (tsoa + Speakeasy + openapi-typescript)",
-      source: `the tsoa controllers in ${p.relPath}`,
-    });
-
-    // 3) src/client.ts: a typed openapi-fetch client over those types.
-    const clientPath = join(srcDir, "client.ts");
-    makeWritable(clientPath);
-    writeFileSync(clientPath, CLIENT_SRC);
-    stampGenerated(clientPath, {
-      tool: "projen openapi (openapi-fetch)",
-      source: "./schema",
-    });
+    await writeClientPackage(outDir, `the tsoa controllers in ${p.relPath}`, tools);
 
     written.push(outDir);
     logger.success(`openapi/${leaf} (from ${p.relPath})`);
+  }
+  for (const mapping of rustMappings) {
+    const outDir = resolve(repoRoot, mapping.output);
+    mkdirSync(outDir, { recursive: true });
+    const specPath = join(outDir, "openapi.json");
+    const tempDir = mkdtempSync(join(outDir, ".openapi-"));
+    const tempSpecPath = join(tempDir, "openapi.json");
+    try {
+      await execFileAsync("cargo", rustOpenapiArgs(mapping, tempSpecPath), { cwd: repoRoot });
+      await optimizeOpenapiSpec(tempSpecPath);
+      makeWritable(specPath);
+      renameSync(tempSpecPath, specPath);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+    makeReadonly(specPath);
+    await writeClientPackage(outDir, `the aide routes in ${mapping.rust}`, tools);
+    written.push(outDir);
+    logger.success(`${mapping.output} (from ${mapping.rust})`);
   }
   return written;
 }

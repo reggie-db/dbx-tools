@@ -91,7 +91,6 @@ impl RateLimitPolicy {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(not(any(feature = "desktop", test)), allow(dead_code))]
 pub(crate) struct RateLimitGate {
     policy: RateLimitPolicy,
     gates: Arc<Mutex<HashMap<RateLimitKey, Arc<KeyGate>>>>,
@@ -289,7 +288,6 @@ impl RateLimitGate {
     }
 
     /// Cancel current cooldown waiters for one exact resolved model.
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) async fn cancel_waits(&self, model: &str) -> RateLimitCancellation {
         let gates = self.model_gates(model).await;
         let mut result = RateLimitCancellation {
@@ -316,7 +314,6 @@ impl RateLimitGate {
     }
 
     /// Expire cooldowns for one exact model while retaining their probe state.
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) async fn release_cooldowns(&self, model: &str) -> RateLimitRelease {
         let gates = self.model_gates(model).await;
         let mut result = RateLimitRelease {
@@ -343,7 +340,6 @@ impl RateLimitGate {
     }
 
     /// Return identity-free cooldown state aggregated by exact model name.
-    #[cfg(any(feature = "desktop", test))]
     pub(crate) async fn model_snapshots(&self) -> Vec<RateLimitModelSnapshot> {
         let gates = self
             .gates
@@ -396,15 +392,14 @@ impl RateLimitGate {
         snapshots
     }
 
-    #[cfg(test)]
-    fn control_counters(&self) -> RateLimitControlCounterSnapshot {
+    /// Return process-lifetime operator control counts for health output.
+    pub(crate) fn control_counters(&self) -> RateLimitControlCounterSnapshot {
         RateLimitControlCounterSnapshot {
             wait_cancellations: self.counters.wait_cancellations.load(Ordering::Relaxed),
             cooldown_releases: self.counters.cooldown_releases.load(Ordering::Relaxed),
         }
     }
 
-    #[cfg(any(feature = "desktop", test))]
     async fn model_gates(&self, model: &str) -> Vec<Arc<KeyGate>> {
         self.gates
             .lock()
@@ -455,7 +450,6 @@ struct RateLimitKey {
 }
 
 #[derive(Debug)]
-#[cfg_attr(not(any(feature = "desktop", test)), allow(dead_code))]
 struct KeyGate {
     state: Mutex<GateState>,
     notify: Arc<Notify>,
@@ -569,7 +563,6 @@ pub(crate) struct RateLimitWaitCancelled {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg(any(feature = "desktop", test))]
 pub(crate) struct RateLimitCancellation {
     pub(crate) model: String,
     pub(crate) matched_keys: u64,
@@ -577,7 +570,6 @@ pub(crate) struct RateLimitCancellation {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg(any(feature = "desktop", test))]
 pub(crate) struct RateLimitRelease {
     pub(crate) model: String,
     pub(crate) matched_keys: u64,
@@ -585,7 +577,6 @@ pub(crate) struct RateLimitRelease {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg(any(feature = "desktop", test))]
 pub(crate) struct RateLimitModelSnapshot {
     pub(crate) model: String,
     pub(crate) cooldown_keys: u64,
@@ -596,15 +587,13 @@ pub(crate) struct RateLimitModelSnapshot {
     pub(crate) cooldown_releases: u64,
 }
 
-#[cfg(test)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct RateLimitControlCounterSnapshot {
-    wait_cancellations: u64,
-    cooldown_releases: u64,
+pub(crate) struct RateLimitControlCounterSnapshot {
+    pub(crate) wait_cancellations: u64,
+    pub(crate) cooldown_releases: u64,
 }
 
 #[derive(Debug, Default)]
-#[cfg_attr(not(any(feature = "desktop", test)), allow(dead_code))]
 struct RateLimitControlCounters {
     wait_cancellations: AtomicU64,
     cooldown_releases: AtomicU64,

@@ -17,10 +17,13 @@ background services.
 - supplies typed install, start, stop, restart, status, and uninstall commands;
 - treats `remove` as an uninstall alias and retains configuration unless
   `--purge` is explicit;
-- selects a desktop executable as the one primary service process when
+- starts an optional native tray companion at login when
   `--systray auto|always` and capability probing permit it;
-- falls back to the headless executable for `--systray never` or an unsupported
-  `auto` session;
+- keeps the service headless for `--systray never` or an unsupported `auto`
+  session;
+- optionally supplies a generic no-WebView tray event loop, GraphQL query and
+  subscription routing, demand-aware retained topics, and aide OpenAPI
+  finalization behind Cargo features;
 - rejects every lifecycle operation in a consumer-defined invalid runtime such
   as a Databricks App.
 
@@ -32,17 +35,24 @@ use dbx_tools_service::{ServiceConfig, ServiceLifecycle};
 let service = ServiceLifecycle::new(ServiceConfig::new("example", 4000)?);
 ```
 
-Consumers provide the headless executable, optional desktop executable,
+Consumers provide the service executable, optional tray companion,
 default port, non-secret server argument resolver, and invalid-runtime
-detector. A desktop capability probe runs the candidate with `--probe`.
-`always` fails when the probe fails, while `auto` chooses the headless process.
-Only the selected executable is registered and started.
+detector. A tray capability probe runs the companion with `--probe`.
+`always` fails when the probe fails, while `auto` omits an unsupported
+companion. The service remains the registered process in every mode.
 
 Direct `auto` runtimes use memory. Installed services receive their stable
 configuration directory and service marker, so `auto` resolves to SQLite.
 Runtime selections and aggregates survive restart without persisting tokens,
 client secrets, or environment mutations.
 
-Desktop tray, window, and WebView behavior belongs to
-[`dbx-tools-service-desktop`](../service-desktop/README.md). This crate remains
-focused on service registration, process lifecycle, and persistence.
+The `tray` feature owns only native menu and event-loop plumbing. Consumers own
+their icon, menu, actions, and any user interface. The `graphql` feature owns
+query, mutation, configurable GraphiQL samples, and WebSocket subscription
+routing on a consumer-selected path. The `topics` feature provides typed live-only, latest,
+and bounded replay feeds; one `stored` flag enables SQLite durability when the
+runtime has storage. Live-only topics with no subscribers do no publication
+work. The `openapi` feature owns aide finalization, JSON and YAML documents,
+Scalar routing, and free-form JSON/event-stream documentation adapters.
+`graphql::validate_samples` type-checks configured examples without running
+resolvers, so consumers can fail startup or tests on stale examples.

@@ -6,19 +6,17 @@ members = [
   "packages/rs/lakebase-proxy",
   "packages/rs/model",
   "packages/rs/model-proxy",
-  "packages/rs/service",
-  "packages/rs/service-desktop"
+  "packages/rs/service"
 ]
 default-members = [
   "packages/rs/lakebase-proxy",
   "packages/rs/model-proxy",
-  "packages/rs/service",
-  "packages/rs/service-desktop"
+  "packages/rs/service"
 ]
 resolver = "2"
 
   [workspace.package]
-  version = "0.9.13"
+  version = "0.9.14"
   edition = "2021"
   rust-version = "1.90"
   license = "Apache-2.0"
@@ -26,7 +24,11 @@ resolver = "2"
 
   [workspace.dependencies]
   async-trait = "0.1"
+  async-stream = "0.3"
+  async-graphql = "=7.0.17"
+  async-graphql-axum = "=7.0.17"
   auto-launcher = "=1.1.0"
+  axum = "0.8"
   base64 = "0.22"
   bytes = "1"
   configparser = "3"
@@ -40,6 +42,7 @@ resolver = "2"
   httpdate = "1"
   mini-moka = "0.10"
   metrics = "0.24"
+  mime_guess = "2"
   open = "5"
   percent-encoding = "2"
   regex = "1"
@@ -47,23 +50,30 @@ resolver = "2"
   rustls = "0.23"
   rusqlite_migration = "=2.5.0"
   scraper = "0.24"
+  schemars = "=0.9.0"
   serde_json = "1"
+  serde_yaml = "=0.9.34"
   service-manager = "=0.11.0"
   sha2 = "0.10"
   sysinfo = "0.37"
   tempfile = "3"
-  tauri-build = "=2.6.3"
-  tauri-plugin-connector = "=0.16.0"
   thiserror = "2"
   tokenx-rs = "=0.1.0"
   tokio-postgres = "0.7"
   tokio-rustls = "0.26"
   tracing = "0.1"
-  specta = "=2.0.0-rc.25"
-  specta-typescript = "=0.0.12"
   ts-rs = "=12.0.1"
   webpki-roots = "1"
   wiremock = "0.6"
+
+    [workspace.dependencies.aide]
+    version = "=0.15.1"
+    default-features = false
+    features = [ "axum", "axum-json", "axum-query", "axum-tokio", "scalar" ]
+
+    [workspace.dependencies.axum-typed-routing]
+    version = "=0.4.7"
+    features = [ "aide" ]
 
     [workspace.dependencies.backon]
     version = "=1.6.0"
@@ -104,15 +114,6 @@ resolver = "2"
 
     [workspace.dependencies.serde]
     version = "1"
-    features = [ "derive" ]
-
-    [workspace.dependencies.tauri]
-    version = "=2.11.6"
-    default-features = false
-    features = [ "tray-icon", "wry" ]
-
-    [workspace.dependencies.tauri-specta]
-    version = "=2.0.0-rc.25"
     features = [ "derive" ]
 
     [workspace.dependencies.time]

@@ -9,9 +9,9 @@ export const RELEASE_BINARY_COMMANDS = [
     "hidden": false,
     "unit": "rs-lakebase-proxy",
     "component": "rs-lakebase-proxy",
-    "version": "0.9.13",
+    "version": "0.9.14",
     "tagPrefix": "v",
-    "tag": "v0.9.13",
+    "tag": "v0.9.14",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "crateName": "dbx-tools-lakebase-proxy",
     "cargoFeatures": [],
@@ -45,9 +45,9 @@ export const RELEASE_BINARY_COMMANDS = [
     "hidden": false,
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.13",
+    "version": "0.9.14",
     "tagPrefix": "v",
-    "tag": "v0.9.13",
+    "tag": "v0.9.14",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "crateName": "dbx-tools-model-proxy",
     "cargoFeatures": [],
@@ -85,50 +85,50 @@ export const RELEASE_BINARY_COMMANDS = [
     ]
   },
   {
-    "command": "model-proxy-desktop",
-    "description": "Native tray and desktop metrics application for dbx-model-proxy",
-    "binaryName": "dbx-model-proxy-desktop",
+    "command": "model-proxy-tray",
+    "description": "Native tray controls for the dbx-model-proxy service",
+    "binaryName": "dbx-model-proxy-tray",
     "hidden": true,
     "unit": "rs-model-proxy",
     "component": "rs-model-proxy",
-    "version": "0.9.13",
+    "version": "0.9.14",
     "tagPrefix": "v",
-    "tag": "v0.9.13",
+    "tag": "v0.9.14",
     "repository": "https://github.com/reggie-db/dbx-tools",
     "crateName": "dbx-tools-model-proxy",
     "cargoFeatures": [
-      "desktop"
+      "tray"
     ],
     "assets": [
       {
         "os": "linux",
         "cpu": "x64",
-        "name": "dbx-model-proxy-desktop-linux-x64-gnu.tar.gz"
+        "name": "dbx-model-proxy-tray-linux-x64-gnu.tar.gz"
       },
       {
         "os": "linux",
         "cpu": "arm64",
-        "name": "dbx-model-proxy-desktop-linux-arm64-gnu.tar.gz"
+        "name": "dbx-model-proxy-tray-linux-arm64-gnu.tar.gz"
       },
       {
         "os": "darwin",
         "cpu": "x64",
-        "name": "dbx-model-proxy-desktop-darwin-x64.tar.gz"
+        "name": "dbx-model-proxy-tray-darwin-x64.tar.gz"
       },
       {
         "os": "darwin",
         "cpu": "arm64",
-        "name": "dbx-model-proxy-desktop-darwin-arm64.tar.gz"
+        "name": "dbx-model-proxy-tray-darwin-arm64.tar.gz"
       },
       {
         "os": "win32",
         "cpu": "x64",
-        "name": "dbx-model-proxy-desktop-win32-x64-msvc.zip"
+        "name": "dbx-model-proxy-tray-win32-x64-msvc.zip"
       },
       {
         "os": "win32",
         "cpu": "arm64",
-        "name": "dbx-model-proxy-desktop-win32-arm64-msvc.zip"
+        "name": "dbx-model-proxy-tray-win32-arm64-msvc.zip"
       }
     ]
   }

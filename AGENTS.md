@@ -370,7 +370,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   horizon when local history cannot explain the workspace limit. Other 429s use
   BackON jittered exponential delay from one second to one minute. Exhaustion
   logs no future unslept delay. `/api/healthz` reports readiness and the active
-  runtime generation. Typed desktop metrics expose each bounded model label's
+  runtime generation. Typed GraphQL metrics expose each bounded model label's
   current limiter phase, penalty basis points, effective input budget, and
   fallback count. Log a returned `error.message` on every 429, including the
   final attempt. Use five request retries by default.
@@ -403,7 +403,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   their bytes. Record a semantic rate-limit failure as a 429 and another
   terminal failure as a 502 in completion logs and metrics even though the HTTP
   stream connected with 200. Local oversized-input and wait-budget rejections
-  also contribute to the dashboard's rate-limit totals. Forwarded headers and
+  also contribute to the metrics rate-limit totals. Forwarded headers and
   JWT claims partition the gate only; they do
   not replace the upstream credential held by the captured runtime generation.
   `RuntimeManager` captures one immutable `Arc` generation at request entry and
@@ -416,17 +416,43 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   remains process-wide with bounded idle eviction. Installed service mode
   persists only the successful non-secret selection through
   `dbx-tools-service`; direct CLI mode keeps it in memory. Switching is disabled
-  in Databricks Apps, and one global App OBO runtime is prohibited. The Tauri
-  desktop exposes status, secret-free profile discovery, ambient or exact-profile
-  switching, cancel-waits, and retry-now through generated Specta IPC only.
+  in Databricks Apps, and one global App OBO runtime is prohibited. A missing
+  or malformed persisted profile is cleared before normal core profile
+  resolution. `GET /api/auth`, `GET /api/auth/profiles?refresh=true`, and
+  `PUT /api/auth` expose status, secret-free profile discovery, and ambient or
+  exact-profile switching.
   A cancelled retry loop returns its latest original upstream 429 when one
   exists, otherwise a structured local 429.
   The normal release binary enables the `metrics` Cargo feature and defaults
   `METRICS` / `--metrics` to `auto`. Auto resolves to `off` in a Databricks App
   and `on` when metrics are compiled. `on` / `true` collect; `off` / `false`
-  remove collection and history. Do not restore metrics, Prometheus, SSE,
-  profile, or rate-limit control routes to Axum. The HTTP surface is `/v1/*`
-  plus `/api/healthz`.
+  remove collection and history. Metrics are strongly typed GraphQL at
+  `/graphql`: an HTML GET serves GraphiQL with model-proxy-owned sample
+  operations, each validated at startup without running resolvers. POST handles queries and
+  introspection, and WebSocket subscriptions stream typed events. The snapshot
+  owns rate-limit health and model state; `/api/healthz` stays limited to
+  readiness and runtime generation. Do not restore a metrics page, Prometheus
+  endpoint, metrics SSE route, or UI asset bundle.
+  Generic service topics support live-only, latest, or bounded replay state.
+  Optional SQLite storage is a topic flag. A live-only topic with no subscribers
+  performs no envelope allocation, serialization, or broadcast. Model-proxy
+  uses one live-only `requests` topic for client request, upstream request,
+  upstream response, and client response hops; replayable closed-window and
+  rate-limit feeds own their retained state. HTTP events share uniform request
+  and response shapes, request correlation, elapsed/hop timing, actual model,
+  protocol, host, and bodies. Each non-SSE hop emits one log-style event;
+  upstream and client SSE frames emit separate typed events without repeating
+  HTTP headers. GraphQL `include`, `exclude`, and `models` arguments filter the unified stream.
+  Every request and non-SSE response body is complete, demand-gated, uncapped,
+  live-only, and never persisted. `content` is parsed JSON, text, or a binary
+  data URL; `contentRaw` is always plain base64. SSE `data` follows the same
+  parsed JSON/text rule and `dataRaw` is plain base64. Complete headers are
+  captured only while the topic has subscribers. Authorization, cookie, token,
+  and API-key values read `[REDACTED]` unless the process starts with
+  `--show-sensitive`. This CLI flag is the sole visibility filter. Headers use
+  `{ name, values: [{ value, valueRaw }] }`; examples select `value` only, while
+  `valueRaw` is plain base64. Never expose sensitive headers by default or
+  persist any HTTP event.
   Retain five-second buckets for one hour, one-minute rollups for 24 hours, 32
   named model series plus `other`, and at most 16 MiB in process memory.
   Installed service mode stores only aggregate buckets and model snapshots in
@@ -436,19 +462,20 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `--metrics-store-max-bytes` defaults to 134217728; zero disables metric
   persistence while settings remain enabled. Prune oldest metric rows before
   writes and restore the current runtime's aggregates on startup.
-  `dbx-model-proxy-desktop` owns the proxy runtime in-process and uses Tauri 2
-  plus tauri-specta. One command/event registry owns runtime registration and
-  generated `desktop/src/bindings.ts`; never hand-maintain a TypeScript mirror.
-  The five-second event carries aggregate summaries, while a command loads one
-  selected model's bounded history. The React UI renders request/token/latency
-  trends, a reasoning pie chart, profile selection, model filtering, and
-  rate-limit actions from IPC. It does not use browser local storage.
-  The no-manifest frontend lives under `packages/rs/model-proxy/desktop`; root
-  Bun dependencies build it and Rust release rows embed the committed `dist`
-  without Bun. `bun run model-proxy:desktop-bindings`,
-  `model-proxy:desktop-build`, and `model-proxy:desktop-check` own generation
-  and validation. The debug-only localhost MCP bridge must never be present in
-  release features or capabilities.
+  `POST /api/rate-limits/models/:model/cancel-waits` cancels token-capacity and
+  cooldown waits; `retry-now` releases current cooldowns. Mutations exist only
+  on loopback and require same-origin plus `X-Model-Proxy-Control: 1`, with no
+  CORS.
+  aide and `axum_typed_routing` own the code-first REST contract. Serve the
+  preferred YAML document at `/api/openapi.yaml`, JSON at
+  `/api/openapi.json`, and Scalar for HTML requests at `/api` with `/api/docs`
+  as an alias. The binary's
+  `--generate-spec [path]` mode writes that same in-memory document and exits
+  without authentication or listener startup. Projen records Rust OpenAPI
+  producers, runs their export command, and feeds the result through the same
+  Speakeasy/openapi-typescript/openapi-fetch pipeline used by tsoa producers.
+  Generated clients live under `packages/js/openapi`; GraphQL remains outside
+  OpenAPI.
   Direct CLI runs remain memory-only by default; installed service mode enables
   the bounded aggregate SQLite store unless persistence is explicitly disabled.
   `dbx model-proxy` downloads and runs the release asset matching the installed
@@ -461,12 +488,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   capture only non-secret server
   options, retain `~/.dbx-tools/model-proxy` unless uninstall receives
   `--purge`, and accept `--config-dir` to replace that default. Systray policy
-  is `auto` by default, `always`, or `never`. Auto selects the hidden
-  `dbx-model-proxy-desktop` executable only when its Tauri capability probe
-  succeeds; always fails when the probe does not, and never selects the
-  headless executable. Exactly one executable is registered and started.
+  is `auto` by default, `always`, or `never`. Auto registers the hidden
+  `dbx-model-proxy-tray` companion only when its native capability probe
+  succeeds; always fails when the probe does not, and never starts a companion.
+  The headless service is always the registered server process.
   Every lifecycle command rejects Databricks App execution before touching
-  service or SQLite state. The generated release registry keeps the desktop
+  service or SQLite state. The generated release registry keeps the tray
   command hidden from root help while allowing service installation through
   `@dbx-tools/rust-binary`.
 - `packages/rs/service` is the source-only Rust service lifecycle crate. It
@@ -474,24 +501,25 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   SQLite opening and migrations, persisted non-secret launch configuration,
   reusable `--config-dir`, `--persistence auto|memory|sqlite`, installed-service
   detection, non-secret settings, aggregate storage, health status, typed Clap
-  lifecycle commands, and desktop executable selection. Direct auto mode uses
+  lifecycle commands, and companion autostart policy. Direct auto mode uses
   memory; installed auto mode uses the one shared SQLite connection. Install
   injects the stable config directory and service marker into launched argv and
-  copies the selected executable into `<config-dir>/bin` before registration;
+  copies service and companion executables into `<config-dir>/bin` before
+  registration;
   never point autostart at a mutable Cargo target or versioned download-cache
   file. Remove superseded managed copies only after replacement registration
   and stored configuration succeed. Its hidden machine-readable requirements
-  command owns install argv parsing and desktop capability preflight; JavaScript
+  command owns install argv parsing and companion capability preflight; JavaScript
   release wrappers forward the returned argv and do not duplicate lifecycle
   options, defaults, validation, or help.
-- `packages/rs/service-desktop` is the public source-only Tauri shell crate. It
-  owns native tray creation, Open/Quit behavior, close-to-tray handling,
-  capability probing, and the debug-only MCP bridge seam. Consumers own their
-  commands, Specta contracts, runtime, icon, and frontend. It has no UniFFI or
-  generated Node/Python binding packages. Model proxy consumes it; Lakebase
-  remains headless until it adopts the shell deliberately. Linux release rows
-  install WebKitGTK, AppIndicator, and librsvg development packages for Tauri;
-  do not restore the browser fallback.
+  Its optional `tray` feature owns a generic native menu event loop and
+  capability probe without a WebView or product UI. Its optional
+  `graphql`, `topics`, and `openapi` features own reusable GraphQL query and
+  subscription routing, configurable GraphiQL samples, demand-aware retained topics, optional
+  SQLite replay, aide finalization, JSON/YAML specs, Scalar routing, and free-form
+  protocol request/stream response documentation adapters. Consumers provide
+  their query/mutation/subscription roots, topic payloads and retention flags,
+  typed routes, tray menu, actions, and icon.
 - `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
   pgwire proxy for Databricks Lakebase. A startup user selects a Databricks
   profile only when that profile exists; otherwise standard Databricks auth
@@ -824,10 +852,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   workspace tests, while the main release owns the full cross-platform Rust
   matrix and reusable target caches.
   Repository-specific release guards belong in `releaseValidationTasks`; they
-  run in the release worktree before expensive tests, local publication, or
-  approval. This repository uses the source-JSDoc ratchet and README generation
-  checks there, so GitHub release jobs are not the first place docs failures
-  appear. Never auto-write a documentation baseline in CI.
+  run in the release worktree before expensive tests or approval. This
+  repository uses the source-JSDoc ratchet and README generation checks there,
+  so GitHub release jobs are not the first place docs failures appear. Never
+  auto-write a documentation baseline in CI.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
   without a `bindings` namespace. Python package roots export their generated
@@ -865,7 +893,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   never removes other workflow files. Consumers must explicitly delete exact
   workflow files they no longer want.
   GitHub's failed-job rerun reuses successful Rust artifacts from the same run.
-  Manual recovery selects `all`, `node`, `python`, or `docs`; a Node or Python
+  Manual recovery selects `all`, `node`, `python`, or `pages`; independent
+  release workflows additionally expose `rust` and `github`. A Node or Python
   recovery can name an earlier `release.yml` run whose commit must match the
   verified annotated tag. Dispatch the current default-branch workflow with the
   annotated tag and exact SHA as inputs; the workflow verifies both before
@@ -1917,7 +1946,7 @@ packages/js/
     src/
       bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
       cli.ts, bun.ts, root.ts             # CLI runtime helpers (bin/bun resolution, root init)
-  openapi/<name>/                        # generated from tsoa controllers, same root as the source
+  openapi/<name>/                        # generated from tsoa or recorded Rust OpenAPI producers
 projen/                                   # the projen engine (`@dbx-tools/projen`), a workspace member via extraWorkspaceMembers
   index.ts                                # generated barrel (public API surface)
   src/
@@ -1933,7 +1962,7 @@ projen/                                   # the projen engine (`@dbx-tools/proje
     scaffold.ts                           # runSynth({ post })
     release.ts                            # DBXToolsRelease: version/release-PR tasks + VERSION-gated publish workflow
     publish.ts                            # compiled publish surface: publishConfig + rootDir/prepack wiring (publishesCompiled excludes `ui`)
-    openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
+    openapi.ts                            # shared tsoa/Rust OpenAPI producer pipeline
     clean.ts, generated.ts, tsconfig.ts, bun-app.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
   tasks/                                  # projen task scripts (bump, sync, barrels, openapi, projenrc, clean, emit)
 packages/example/
@@ -2114,7 +2143,7 @@ bunx projen                  # synth all generated config (+ install + barrels)
 bun run sync                 # one-shot full synth through the sync task
 bun run sync --watch         # watch while editing (concurrently: projenrc + barrels + openapi watchers)
 bun run barrels              # rebuild every package's root index.ts barrel
-bun run openapi              # generate the openapi packages from tsoa controllers
+bun run openapi              # generate the OpenAPI packages from tsoa and Rust producers
 bun run clean                # remove generated files (read-only ones); interactive picker, -y to skip
 bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
@@ -2137,8 +2166,8 @@ export, and the tests catch behavior.
 Run `bun run build` inside one JavaScript package when you want its complete
 compile/test/pack lifecycle. The root `build` runs synth plus workspace compile
 and tests. The GitHub PR workflow deliberately invokes only synth plus compile;
-`bun run release` owns Rust tests, workspace type-checking, and local publication
-before opening its PR. JavaScript behavior tests remain explicit rather than
+`bun run release` owns Rust tests and workspace type-checking before opening its
+PR. JavaScript behavior tests remain explicit rather than
 making every release repeat the complete package test fan-out. Binding
 generation stays explicit during UniFFI API development. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
@@ -2176,11 +2205,9 @@ What is configured, and why:
 
 - **npm/bun -> local verdaccio** at `http://localhost:4873/` (`~/.npmrc`), which
   proxies the corp mirror `https://npm-proxy.dev.databricks.com/` as its `corp`
-  uplink and caches tarballs on disk. Two reasons it exists: the corp proxy is
-  slow enough to hang mid-transfer on large tarballs (its config carries a 180s
-  timeout and a wide socket pool for exactly that), and it accepts LOCAL
-  publishes (`publish.allow_offline: true`), so a `bun run release` candidate can
-  be installed and tested without waiting on a public release.
+  uplink and caches tarballs on disk. The corp proxy is slow enough to hang
+  mid-transfer on large tarballs, so Verdaccio carries a 180s timeout and a wide
+  socket pool.
 - **pip/uv -> local devpi** at `http://localhost:3141/reggie/dev/+simple/`,
   which inherits from the corporate PyPI mirror and supports local uploads. The
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
@@ -2188,13 +2215,12 @@ What is configured, and why:
 
 `bun run release` commits and pushes pending source work, creates a dedicated
 `release/v<version>` worktree, increments the single root `VERSION`, regenerates
-every owned version surface, runs release validation and local publication, then
-opens one pull request into `main`. Automatic merge is enabled by default after
+every owned version surface, runs release validation, then opens one pull request
+into `main`. Automatic merge is enabled by default after
 required checks pass, and the command waits for the exact merged-SHA release
 workflow to finish. Pass `--no-approve` to leave that PR for a human merge or
 `--no-wait` to return after requesting automatic merge. `--no-validate` skips
-repository tests/compile, while `--no-local-publish` skips all local registry
-preflight; both are explicit recovery shortcuts and are never defaults.
+repository tests and compilation.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
 Version resolution scans both repository `v<version>` tags and historical
 `<component>-v<version>` tags, so the first singular release automatically starts
@@ -2209,8 +2235,18 @@ singular release updates the generated release workflow's versioned run name.
 Merging the release PR is the only automatic publication signal. The generated
 workflow verifies that the triggering SHA is the exact `main` commit, creates one
 annotated `v<version>` tag, and publishes all public npm, PyPI, Cargo, native, and
-GitHub artifacts at that version. Manual recovery must provide the same annotated
-tag and exact expected SHA; it never calculates another version.
+GitHub artifacts at that version. npm packages publish to npmjs and GitHub
+Packages. Because the packages use the `@dbx-tools` scope while the repository
+owner is `reggie-db`, GitHub Packages publication uses the
+`PACKAGES_TOKEN` Actions secret. It must contain a classic token with
+`write:packages` access to the `dbx-tools` GitHub organization. Python wheels
+and Cargo archives remain attached to GitHub Releases.
+The Pages workflow rebuilds its PEP 503 and Cargo sparse indexes from those
+durable assets before deploying the documentation site. Manual recovery must
+provide the same annotated tag and exact expected SHA; it never calculates
+another version.
+The published uv index is `https://docs.dbx.tools/simple/`; the Cargo registry
+index is `sparse+https://docs.dbx.tools/cargo/`.
 
 This repository sets `releaseSyncBranch: "dev"`. After successful publication,
 the workflow fast-forwards `dev` when it is behind, does nothing when it already
@@ -2306,7 +2342,7 @@ Inside an established workspace the CLI only forwards, so prefer the
 
 - **`projen sync --watch` is the always-on watcher** (the generated `sync` task run
   with `--watch`, also the VS Code folder-open task). `sync`'s `receiveArgs` forwards
-  `--watch` to `tasks/sync.ts`, which does ONE initial full synth, then runs three
+  `--watch` to `tasks/sync.ts`, which does ONE initial full synth, then runs four
   focused watchers under `concurrently` - each its own task script sharing the generic
   `watchLoop`/`watchRoots` (`watch.ts`), each keyed to the smallest input that can
   invalidate its output: `tasks/projenrc.ts` (watches `.projenrc.ts` plus any
@@ -2314,12 +2350,17 @@ Inside an established workspace the CLI only forwards, so prefer the
   `dbxToolsConfig.syncResynthPaths`; on edit runs a full re-synth + install - the
   intelligent stand-in for stock `projen --watch`, which re-synths on ANY tree change),
   `tasks/barrels.ts --watch` (a source edit rebuilds just that package's barrel), and
-  `tasks/openapi.ts --watch` (a changed tsoa controller regenerates the openapi
-  packages). The concern-specific glue lives in the task; `watch.ts` only owns the
+  `tasks/openapi.ts --watch` (a changed tsoa controller or recorded Rust producer
+  regenerates its OpenAPI package), and `tasks/rust.ts --watch` (changed UniFFI
+  owners regenerate affected bindings). The concern-specific glue lives in the task;
+  `watch.ts` only owns the
   shared debounce/serialize/ignore-generated/SIGINT machinery. Every watcher
   mutation and release preparation share one repository-scoped cross-process
   file lock, so an active watcher waits instead of rewriting generated files
-  during a release merge. Touch `.projenrc.ts`
+  during a release merge. Keep each lock `check` backed by a lazy iterator or
+  short-circuit search so an owned Rust, OpenAPI, or barrel source returns true
+  before dependency ordering, complete package scans, or target collection.
+  Touch `.projenrc.ts`
   (or a listed `syncResynthPaths` file) to force a re-synth for a structural change
   it doesn't spell out (e.g. a new package folder). Stock `projen --watch` is
   deliberately NOT used: it `fs.watch`es the whole repo recursively and re-synths
@@ -2338,10 +2379,11 @@ Inside an established workspace the CLI only forwards, so prefer the
   what `bun run sync` does directly, so prefer that once a workspace exists.
 - **`bun run sync --watch`** forwards to `projen sync --watch`, which does one
   initial full synth, then (via `concurrently`) runs the projenrc watcher alongside
-  the barrel + openapi watchers. The projenrc watcher re-synths (+install) when
+  the barrel, OpenAPI, and Rust watchers. The projenrc watcher re-synths (+install) when
   `.projenrc.ts` or a configured `syncResynthPaths` entry changes; the barrel watcher
-  rebuilds just the edited package's barrel, and the openapi watcher regenerates the
-  `openapi` packages when a tsoa controller changes.
+  rebuilds just the edited package's barrel, and the OpenAPI watcher regenerates
+  the affected generated packages when a tsoa controller or recorded Rust
+  producer changes.
 - **Barrels regenerate on every full (post) synth**: a post-synth projen `Component`
   (`GeneratedBarrels` in `project.ts`) runs on any `runSynth({ post: true })` - the
   plain `bunx projen`, `sync`'s initial synth, and the projenrc watcher's
@@ -2745,22 +2787,25 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   The CLI package does exactly this so its own `package.json` stays writable.
   Source/sample files the developer owns (`.projenrc.ts`, each package's `README.md`,
   `src/*`) stay writable regardless.
-- **OpenAPI** (`openapi.ts`, `bun run openapi`): scans **every discovered**
-  `server`/`node` package for **tsoa** controllers (classes with
-  `@Route`/`@Get`/... - no JSDoc/YAML). For each, tsoa's `generateSpec` infers an
-  OpenAPI 3 spec from the decorators + TS types, then Speakeasy's
-  `openapi spec optimize` extracts duplicate inline schemas into reusable
-  `components.schemas`. Generation and optimization happen in a sibling
-  temporary directory; only the finished spec is moved to `openapi.json`, then openapi-typescript +
-  openapi-fetch produce a read-only `<sourcePackage root>/openapi/<name>`
-  package (`openapi.json` + `src/schema.ts` + `src/client.ts`) - colocated under
-  the SAME root as the controller it came from (`packages/example/server/
-api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
-  root. tsoa/typescript/openapi-typescript are lazy-loaded and Speakeasy's pinned
-  `openapi` binary is installed lazily through `@dbx-tools/core`'s `bin.ensure`
-  (only `bun run openapi` / a watched controller edit needs them). The openapi watcher (started by
-  `bun run sync --watch`, under `concurrently`) regenerates it automatically when a
-  controller changes.
+- **OpenAPI** (`openapi.ts`, `bun run openapi`) has TypeScript and Rust
+  producers feeding one package generator. Discovered `server`/`node` packages
+  use tsoa controllers (`@Route`/`@Get`/...); Rust crates opt in through
+  `RustCrateOptions.openapi` and expose `--generate-spec [path]` from the same
+  aide plus `axum_typed_routing` route source used at runtime. The persisted
+  Rust mapping owns Cargo package, binary, features, source root, and output.
+  Both paths write a temporary OpenAPI document, then Speakeasy's
+  `openapi spec optimize` extracts duplicate inline schemas before the complete
+  spec is moved into place. openapi-typescript plus openapi-fetch produce the
+  read-only `openapi.json`, `src/schema.ts`, and `src/client.ts` package.
+  TypeScript output remains colocated under the source package root
+  (`packages/example/server/api` generates `packages/example/openapi/api`);
+  workspace Rust output uses `packages/js/openapi/<crate-directory>`.
+  tsoa and TypeScript load only when a tsoa producer exists. The watcher scopes
+  itself to producer `src` roots and Rust producer manifests, excludes generated
+  OpenAPI packages, and uses short-circuit ownership checks before taking the
+  workspace mutation lock. Rust export runs use the isolated `target/openapi`
+  Cargo directory so a normal build cannot rewrite the executable while the
+  watcher launches it.
 - **Brand theming is a `[data-brand]` token bridge, opt-in by detection.**
   `@dbx-tools/ui-branding` writes portable `--brand-color-*` / `--brand-font-*`
   CSS vars, but the UI components style off AppKit's shadcn semantic tokens

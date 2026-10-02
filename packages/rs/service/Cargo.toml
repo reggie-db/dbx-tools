@@ -1,7 +1,7 @@
 
 [package]
 name = "dbx-tools-service"
-description = "Reusable per-user service lifecycle, SQLite state, and desktop executable selection"
+description = "Reusable per-user service lifecycle, tray runtime, SQLite state, GraphQL topics, and OpenAPI routing"
 
   [package.version]
   workspace = true
@@ -22,14 +22,63 @@ description = "Reusable per-user service lifecycle, SQLite state, and desktop ex
 name = "dbx_tools_service"
 path = "src/lib.rs"
 
+[features]
+graphql = [
+  "dep:async-trait",
+  "dep:async-graphql",
+  "dep:async-graphql-axum",
+  "dep:axum"
+]
+openapi = [
+  "dep:aide",
+  "dep:axum",
+  "dep:axum-typed-routing",
+  "dep:schemars",
+  "dep:serde_yaml"
+]
+topics = [ "dep:async-stream", "dep:futures", "dep:tokio" ]
+tray = [ "dep:tray-icon" ]
+
+[dependencies.aide]
+workspace = true
+optional = true
+
+[dependencies.async-stream]
+workspace = true
+optional = true
+
+[dependencies.async-trait]
+workspace = true
+optional = true
+
+[dependencies.async-graphql]
+workspace = true
+optional = true
+
+[dependencies.async-graphql-axum]
+workspace = true
+optional = true
+
 [dependencies.auto-launcher]
 workspace = true
+
+[dependencies.axum]
+workspace = true
+optional = true
+
+[dependencies.axum-typed-routing]
+workspace = true
+optional = true
 
 [dependencies.clap]
 workspace = true
 
 [dependencies.directories]
 workspace = true
+
+[dependencies.futures]
+workspace = true
+optional = true
 
 [dependencies.reqwest]
 workspace = true
@@ -41,11 +90,19 @@ workspace = true
 [dependencies.rusqlite_migration]
 workspace = true
 
+[dependencies.schemars]
+workspace = true
+optional = true
+
 [dependencies.serde]
 workspace = true
 
 [dependencies.serde_json]
 workspace = true
+
+[dependencies.serde_yaml]
+workspace = true
+optional = true
 
 [dependencies.service-manager]
 workspace = true
@@ -53,8 +110,29 @@ workspace = true
 [dependencies.sysinfo]
 workspace = true
 
+[dependencies.tray-icon]
+version = "=0.25.1"
+optional = true
+default-features = false
+features = [ "ksni" ]
+
+[dependencies.tokio]
+workspace = true
+optional = true
+
 [dependencies.tracing]
 workspace = true
 
+[target."cfg(any(target_os = \"macos\", target_os = \"windows\"))".dependencies.tao]
+version = "=0.37.1"
+default-features = false
+features = [ "rwh_06" ]
+
+[dev-dependencies.futures]
+workspace = true
+
 [dev-dependencies.tempfile]
+workspace = true
+
+[dev-dependencies.tokio]
 workspace = true

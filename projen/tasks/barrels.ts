@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 import { sep } from "node:path";
 import { parseArgs } from "node:util";
-import { log, stringUtils } from "@dbx-tools/shared-core";
+import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import { generateBarrels } from "../src/barrels.ts";
 import { recordedPackages } from "../src/packages.ts";
 import { watchLoop, watchRoots } from "../src/watch.ts";
@@ -17,41 +17,58 @@ const { values } = parseArgs({
 });
 
 /** The recorded package dir that owns `abs`, if any (for a targeted barrel rebuild). */
-function ownerPackageDir(abs: string, pkgDirs: string[]): string | undefined {
-  return pkgDirs.find((dir) => abs === dir || abs.startsWith(dir + sep));
+function ownerPackageDir(
+  abs: string,
+  packages: readonly { readonly dir: string; readonly tags: readonly string[] }[],
+): string | undefined {
+  // The OpenAPI task rebuilds generated-client barrels after writing its files.
+  return packages.find(
+    ({ dir, tags }) => !tags.includes("openapi") && (abs === dir || abs.startsWith(dir + sep)),
+  )?.dir;
+}
+
+function changedBarrelTargets(changed: readonly string[]): object.Sequence<string> {
+  const packages = recordedPackages();
+  return object
+    .sequence(changed)
+    .map((path) => ownerPackageDir(path, packages))
+    .nonNull()
+    .distinct();
+}
+
+function warnUnownedChanges(changed: readonly string[]): void {
+  if (changed.length) {
+    logger.warn(
+      `no recorded package owns ${stringUtils.pluralize(changed.length, "change")}; ` +
+        "run `bun run default` (or touch .projenrc.ts) to pick up a new package folder",
+    );
+  }
 }
 
 if (values.watch) {
   // Watch the package roots; a source edit inside a package rebuilds just that
   // package's `index.ts` barrel (no re-synth - the projenrc watcher owns that).
   // watchLoop already drops generated paths, so a barrel write never re-triggers us.
-  watchLoop("barrels", watchRoots(), (changed) => {
-    const pkgDirs = recordedPackages().map((p) => p.dir);
-    const dirs = new Set<string>();
-    const unowned: string[] = [];
-    for (const p of changed) {
-      const owner = ownerPackageDir(p, pkgDirs);
-      if (owner) dirs.add(owner);
-      else unowned.push(p);
-    }
-    // A change under a package root that no RECORDED package owns is almost always a
-    // NEW package folder: it has no `pnpm-workspace.yaml` member yet, so there is no
-    // barrel for this watcher to target and only a re-synth can create one. Say so,
-    // rather than rebuilding every barrel in the repo - the previous fallback, which
-    // did a full-repo sweep on behalf of a file it could not barrel anyway, and in
-    // doing so raced the projenrc watcher's own post-synth sweep.
-    if (dirs.size === 0) {
-      if (unowned.length) {
-        logger.warn(
-          `no recorded package owns ${stringUtils.pluralize(unowned.length, "change")}; ` +
-            "run `bun run default` (or touch .projenrc.ts) to pick up a new package folder",
-        );
-      }
-      return;
-    }
-    const n = generateBarrels({ dirs: [...dirs] });
-    if (n) logger.success(`rebuilt ${stringUtils.pluralize(n, "barrel")}`);
-  });
+  watchLoop(
+    "barrels",
+    watchRoots(),
+    (changed) => {
+      const n = generateBarrels({ dirs: [...changedBarrelTargets(changed)] });
+      if (n) logger.success(`rebuilt ${stringUtils.pluralize(n, "barrel")}`);
+    },
+    {
+      check: (changed) => {
+        const targets = changedBarrelTargets(changed);
+        // A change under a package root that no recorded package owns is a new
+        // folder: only a re-synth can create its barrel, so this watcher skips.
+        if (!targets.some(() => true)) {
+          warnUnownedChanges(changed);
+          return false;
+        }
+        return true;
+      },
+    },
+  );
 } else {
   const dirs = Array.isArray(values.dir)
     ? values.dir.filter((value): value is string => typeof value === "string")

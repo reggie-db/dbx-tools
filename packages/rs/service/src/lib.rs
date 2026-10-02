@@ -1,4 +1,13 @@
-//! Reusable per-user service lifecycle, state, and desktop executable selection.
+//! Reusable per-user service lifecycle, state, and companion autostart.
+
+#[cfg(feature = "graphql")]
+pub mod graphql;
+#[cfg(feature = "openapi")]
+pub mod openapi;
+#[cfg(feature = "topics")]
+pub mod topic;
+#[cfg(feature = "tray")]
+pub mod tray;
 
 use std::{
     collections::HashMap,
@@ -11,6 +20,9 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+
+#[cfg(feature = "topics")]
+use std::collections::VecDeque;
 
 use auto_launcher::{
     AutoLaunch, AutoLaunchBuilder, LinuxLaunchMode, MacOSLaunchMode, WindowsEnableMode,
@@ -54,12 +66,28 @@ const MIGRATIONS_SLICE: &[M<'_>] = &[
     CREATE INDEX aggregate_metrics_updated_at
         ON aggregate_metrics(updated_at_ms);",
     ),
+    M::up(
+        "CREATE TABLE topic_events (
+        scope TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        sequence INTEGER NOT NULL CHECK (sequence >= 0),
+        published_at_ms INTEGER NOT NULL CHECK (published_at_ms >= 0),
+        payload BLOB NOT NULL,
+        PRIMARY KEY (scope, topic, sequence)
+    );
+    CREATE INDEX topic_events_replay
+        ON topic_events(scope, topic, sequence DESC);",
+    ),
 ];
 const MIGRATIONS: Migrations<'_> = Migrations::from_slice(MIGRATIONS_SLICE);
 const DATABASE_NAME: &str = "service.sqlite3";
 const STARTUP_HEALTH_TIMEOUT: Duration = Duration::from_secs(10);
 const STARTUP_HEALTH_POLL: Duration = Duration::from_millis(250);
+const SERVICE_STOP_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPANION_PROCESS_ID_SETTING: &str = "service.companion-process-id";
+// Existing installations can retain this autostart identifier until the next
+// install or uninstall disables it.
+const LEGACY_COMPANION_LAUNCH_SUFFIX: &str = "desktop";
 #[cfg(target_os = "windows")]
 const WINDOWS_PROCESS_ID_SETTING: &str = "service.windows-process-id";
 
@@ -67,6 +95,7 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Runtime persistence selected for service-owned state.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, ValueEnum)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum PersistenceMode {
     /// Use memory for direct execution and SQLite for installed services.
@@ -143,7 +172,11 @@ impl ServiceConfig {
     }
 
     pub fn health_url(&self) -> String {
-        format!("http://{}:{}/api/healthz", self.host, self.port)
+        format!("{}/api/healthz", self.base_url())
+    }
+
+    pub fn base_url(&self) -> String {
+        format!("http://{}:{}", self.host, self.port)
     }
 
     pub fn database_path(&self) -> PathBuf {
@@ -159,7 +192,7 @@ impl ServiceConfig {
         self
     }
 
-    /// Reject service and desktop behavior in an unsupported managed runtime.
+    /// Reject service and native companion behavior in an unsupported managed runtime.
     pub fn ensure_runtime(&self) -> Result<()> {
         guard_invalid_runtime(self.invalid_runtime)
     }
@@ -170,8 +203,8 @@ pub struct ServiceDefinition {
     pub name: String,
     pub default_port: u16,
     pub executable: PathBuf,
-    pub desktop: Option<PathBuf>,
-    pub desktop_support_detector: fn(&Path) -> bool,
+    pub companion: Option<PathBuf>,
+    pub companion_support_detector: fn(&Path) -> bool,
     pub invalid_runtime_detector: fn() -> bool,
 }
 
@@ -181,8 +214,8 @@ impl ServiceDefinition {
             name: name.into(),
             default_port,
             executable: env::current_exe()?,
-            desktop: None,
-            desktop_support_detector: companion_supported,
+            companion: None,
+            companion_support_detector: companion_supported,
             invalid_runtime_detector: never_invalid_runtime,
         })
     }
@@ -194,7 +227,7 @@ fn service_config(
 ) -> Result<ServiceConfig> {
     let mut config = ServiceConfig::new(&definition.name, definition.default_port)?;
     config.invalid_runtime = definition.invalid_runtime_detector;
-    config.companion_support_detector = definition.desktop_support_detector;
+    config.companion_support_detector = definition.companion_support_detector;
     if let Some(config_dir) = config_dir {
         config.config_dir = std::path::absolute(config_dir)?;
     }
@@ -312,9 +345,9 @@ pub struct ServiceInstallCommand {
     /// Stable service executable path.
     #[arg(long)]
     pub executable: Option<PathBuf>,
-    /// Optional desktop executable path.
+    /// Optional native companion executable path.
     #[arg(long)]
-    pub desktop_executable: Option<PathBuf>,
+    pub companion: Option<PathBuf>,
     /// Systray startup policy.
     #[arg(long, value_enum, default_value_t = SystrayMode::Auto)]
     pub systray: SystrayMode,
@@ -338,9 +371,9 @@ pub struct ServiceUninstallCommand {
 
 #[derive(Clone, Debug, Args)]
 pub struct ServiceRequirementsCommand {
-    /// Desktop executable available for capability probing.
+    /// Companion executable available for capability probing.
     #[arg(long)]
-    pub desktop_executable: Option<PathBuf>,
+    pub companion: Option<PathBuf>,
     /// Original arguments supplied after `service install`.
     #[arg(last = true, allow_hyphen_values = true)]
     pub install_args: Vec<OsString>,
@@ -354,25 +387,25 @@ struct ServiceInstallParser {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct ServiceRequirements {
-    pub desktop_asset_required: bool,
-    pub desktop_supported: Option<bool>,
+    pub companion_asset_required: bool,
+    pub companion_supported: Option<bool>,
     pub install_args: Vec<String>,
 }
 
 impl ServiceCli {
-    /// Whether this command requests automatic or required desktop integration.
-    pub fn desktop_requested(&self) -> bool {
+    /// Whether this command requests automatic or required systray integration.
+    pub fn companion_requested(&self) -> bool {
         matches!(
             &self.command,
             ServiceCommand::Install(command) if command.systray != SystrayMode::Never
         )
     }
 
-    /// Whether install argv already provides an exact desktop executable.
-    pub fn desktop_supplied(&self) -> bool {
+    /// Whether install argv already provides an exact companion executable.
+    pub fn companion_supplied(&self) -> bool {
         matches!(
             &self.command,
-            ServiceCommand::Install(command) if command.desktop_executable.is_some()
+            ServiceCommand::Install(command) if command.companion.is_some()
         )
     }
 
@@ -387,39 +420,33 @@ impl ServiceCli {
         let mut parser_args = vec![OsString::from("service-install")];
         parser_args.extend_from_slice(&command.install_args);
         let install = ServiceInstallParser::try_parse_from(parser_args)?.install;
-        let desktop = install
-            .desktop_executable
-            .as_ref()
-            .or(command.desktop_executable.as_ref());
-        if let Some(desktop) = desktop {
-            require_absolute_existing(desktop, "desktop executable")?;
+        let companion = install.companion.as_ref().or(command.companion.as_ref());
+        if let Some(companion) = companion {
+            require_absolute_existing(companion, "companion executable")?;
         }
-        let desktop_supported = match (install.systray, desktop) {
+        let companion_supported = match (install.systray, companion) {
             (SystrayMode::Never, _) | (_, None) => None,
-            (_, Some(desktop)) => Some((definition.desktop_support_detector)(desktop)),
+            (_, Some(companion)) => Some((definition.companion_support_detector)(companion)),
         };
-        if install.systray == SystrayMode::Always && desktop_supported == Some(false) {
-            return Err("the desktop application is unsupported in this session".into());
+        if install.systray == SystrayMode::Always && companion_supported == Some(false) {
+            return Err("the native companion is unsupported in this session".into());
         }
         let mut install_args = os_strings(&command.install_args)?;
-        if install.desktop_executable.is_none() {
-            if let Some(desktop) = &command.desktop_executable {
+        if install.companion.is_none() {
+            if let Some(companion) = &command.companion {
                 let index = install_args
                     .iter()
                     .position(|argument| argument == "--")
                     .unwrap_or(install_args.len());
                 install_args.splice(
                     index..index,
-                    [
-                        "--desktop-executable".to_string(),
-                        path_text(desktop.as_path())?,
-                    ],
+                    ["--companion".to_string(), path_text(companion.as_path())?],
                 );
             }
         }
         Ok(Some(ServiceRequirements {
-            desktop_asset_required: install.systray != SystrayMode::Never && desktop.is_none(),
-            desktop_supported,
+            companion_asset_required: install.systray != SystrayMode::Never && companion.is_none(),
+            companion_supported,
             install_args,
         }))
     }
@@ -446,29 +473,21 @@ impl ServiceCli {
                 )?;
                 config.host = launch.host;
                 config.port = launch.port;
-                let desktop = command
-                    .desktop_executable
+                let companion = command
+                    .companion
                     .as_ref()
-                    .or(definition.desktop.as_ref());
-                let desktop_enabled = resolve_desktop_policy(
-                    command.systray,
-                    desktop.map(PathBuf::as_path),
-                    definition.desktop_support_detector,
-                )?;
-                let program = if desktop_enabled {
-                    desktop
-                        .cloned()
-                        .ok_or("desktop executable was not configured")?
-                } else {
-                    command
+                    .or(definition.companion.as_ref())
+                    .map(|program| CompanionConfig {
+                        program: program.clone(),
+                        args: vec![OsString::from("--url"), OsString::from(config.base_url())],
+                    });
+                ServiceLifecycle::new(config).install(InstallConfig {
+                    program: command
                         .executable
                         .clone()
-                        .unwrap_or_else(|| definition.executable.clone())
-                };
-                ServiceLifecycle::new(config).install(InstallConfig {
-                    program,
+                        .unwrap_or_else(|| definition.executable.clone()),
                     args: launch.args,
-                    companion: None,
+                    companion,
                     systray: command.systray,
                 })
             }
@@ -522,6 +541,7 @@ pub struct LifecycleStatus {
     pub config_dir: PathBuf,
     pub logs_dir: PathBuf,
     pub health_url: String,
+    pub url: String,
 }
 
 /// Non-secret key-value settings used by a service runtime.
@@ -575,6 +595,13 @@ pub struct ServiceStorage {
     connection: Arc<Mutex<Connection>>,
 }
 
+#[cfg(feature = "topics")]
+pub(crate) struct StoredTopicEvent {
+    pub(crate) sequence: u64,
+    pub(crate) published_at_ms: u64,
+    pub(crate) payload: Vec<u8>,
+}
+
 impl ServiceStorage {
     /// Open and migrate the database in one service configuration directory.
     pub fn open(config_dir: impl AsRef<Path>) -> Result<Self> {
@@ -584,6 +611,80 @@ impl ServiceStorage {
                 &config_dir.as_ref().join(DATABASE_NAME),
             )?)),
         })
+    }
+
+    #[cfg(feature = "topics")]
+    pub(crate) fn load_topic_events(
+        &self,
+        scope: &str,
+        topic: &str,
+        limit: usize,
+    ) -> Result<VecDeque<StoredTopicEvent>> {
+        if limit == 0 {
+            return Ok(VecDeque::new());
+        }
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "SQLite service storage lock is poisoned")?;
+        let mut statement = connection.prepare(
+            "SELECT sequence, published_at_ms, payload
+             FROM topic_events
+             WHERE scope = ?1 AND topic = ?2
+             ORDER BY sequence DESC
+             LIMIT ?3",
+        )?;
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let mut events = statement
+            .query_map(params![scope, topic, limit], |row| {
+                Ok(StoredTopicEvent {
+                    sequence: u64::try_from(row.get::<_, i64>(0)?).unwrap_or_default(),
+                    published_at_ms: u64::try_from(row.get::<_, i64>(1)?).unwrap_or_default(),
+                    payload: row.get(2)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        events.reverse();
+        Ok(events.into())
+    }
+
+    #[cfg(feature = "topics")]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn store_topic_event(
+        &self,
+        scope: &str,
+        topic: &str,
+        sequence: u64,
+        published_at_ms: u64,
+        payload: &[u8],
+        capacity: usize,
+    ) -> Result<()> {
+        let sequence = i64::try_from(sequence).unwrap_or(i64::MAX);
+        let published_at_ms = i64::try_from(published_at_ms).unwrap_or(i64::MAX);
+        let capacity = i64::try_from(capacity).unwrap_or(i64::MAX);
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "SQLite service storage lock is poisoned")?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "INSERT INTO topic_events (scope, topic, sequence, published_at_ms, payload)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![scope, topic, sequence, published_at_ms, payload],
+        )?;
+        transaction.execute(
+            "DELETE FROM topic_events
+             WHERE scope = ?1 AND topic = ?2
+               AND sequence NOT IN (
+                 SELECT sequence FROM topic_events
+                 WHERE scope = ?1 AND topic = ?2
+                 ORDER BY sequence DESC
+                 LIMIT ?3
+               )",
+            params![scope, topic, capacity],
+        )?;
+        transaction.commit()?;
+        Ok(())
     }
 
     /// Load the latest aggregate metrics for one hashed runtime key.
@@ -871,21 +972,20 @@ impl ServiceLifecycle {
     pub fn install(&self, install: InstallConfig) -> Result<LifecycleStatus> {
         self.guard_runtime()?;
         require_absolute_existing(&install.program, "service executable")?;
-        let desktop_enabled = is_desktop_program(&install.program);
-        if install.systray == SystrayMode::Always && !desktop_enabled && install.companion.is_none()
-        {
-            return Err("systray mode always requires a desktop executable".into());
+        if install.systray == SystrayMode::Always && install.companion.is_none() {
+            return Err("systray mode always requires a companion executable".into());
         }
         if let Some(companion) = &install.companion {
             require_absolute_existing(&companion.program, "companion executable")?;
         }
-        let companion_enabled = !desktop_enabled
-            && resolve_companion_policy(&install, self.config.companion_support_detector)?;
+        let companion_enabled =
+            resolve_companion_policy(&install, self.config.companion_support_detector)?;
         let store = ServiceStore::open(&self.config)?;
         let existing = store.load()?;
         stop_companion_process(&self.config, existing.as_ref())?;
         if registration_status(&self.config)? == "running" {
             stop_service(&self.config)?;
+            await_service_stopped(&self.config)?;
         }
         let mut install = install;
         install.program = install_managed_executable(&self.config, &install.program)?;
@@ -909,12 +1009,14 @@ impl ServiceLifecycle {
     pub fn stop(&self) -> Result<LifecycleStatus> {
         self.guard_runtime()?;
         stop_service(&self.config)?;
+        await_service_stopped(&self.config)?;
         self.status()
     }
 
     pub fn restart(&self) -> Result<LifecycleStatus> {
         self.guard_runtime()?;
         stop_service(&self.config)?;
+        await_service_stopped(&self.config)?;
         start_service(&self.config)?;
         start_registered_companion(&self.config)?;
         self.await_healthy_status()
@@ -929,21 +1031,16 @@ impl ServiceLifecycle {
             None
         };
         let effective = effective_config(&self.config, stored.as_ref());
-        let desktop_registered = stored
-            .as_ref()
-            .is_some_and(|stored| is_desktop_program(Path::new(&stored.program)));
-        let legacy_systray_registered = stored
+        let systray_registered = stored
             .as_ref()
             .and_then(|stored| companion_auto_launch(&self.config.name, stored))
             .map(|auto| auto.is_enabled())
             .transpose()?
             .unwrap_or(false);
-        let systray_registered = desktop_registered || legacy_systray_registered;
-        let systray = desktop_registered && registration == "running"
-            || legacy_systray_registered
-                && stored.as_ref().is_some_and(|stored| {
-                    companion_process(configured_companion(stored)).is_some()
-                });
+        let systray = systray_registered
+            && stored
+                .as_ref()
+                .is_some_and(|stored| companion_process(configured_companion(stored)).is_some());
         let healthy = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(2))
             .build()?
@@ -959,6 +1056,7 @@ impl ServiceLifecycle {
             config_dir: effective.config_dir.clone(),
             logs_dir: effective.logs_dir(),
             health_url: effective.health_url(),
+            url: effective.base_url(),
         })
     }
 
@@ -978,6 +1076,7 @@ impl ServiceLifecycle {
                 auto.disable()?;
             }
         }
+        disable_legacy_companion_launch(&self.config.name, stored.as_ref())?;
         unregister_service(&self.config, stored.as_ref())?;
         if let Some(stored) = &stored {
             remove_managed_executable(&self.config, Path::new(&stored.program))?;
@@ -1012,6 +1111,19 @@ fn guard_invalid_runtime(detector: fn() -> bool) -> Result<()> {
         return Err("OS service management is unavailable inside a Databricks App".into());
     }
     Ok(())
+}
+
+fn await_service_stopped(config: &ServiceConfig) -> Result<()> {
+    let deadline = Instant::now() + SERVICE_STOP_TIMEOUT;
+    loop {
+        if registration_status(config)? != "running" {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err("service did not stop within ten seconds".into());
+        }
+        std::thread::sleep(STARTUP_HEALTH_POLL);
+    }
 }
 
 fn path_text(path: &Path) -> Result<String> {
@@ -1378,13 +1490,6 @@ fn normalized_process_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn is_desktop_program(program: &Path) -> bool {
-    program
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name.ends_with("-desktop"))
-}
-
 fn stop_companion_process(
     config: &ServiceConfig,
     companion: Option<&StoredConfiguration>,
@@ -1417,7 +1522,7 @@ fn stop_companion_process(
     if let Some(process) = system.process(pid) {
         let stopped = process.kill_with(Signal::Term).unwrap_or(false) || process.kill();
         if !stopped {
-            return Err("desktop companion process could not be stopped".into());
+            return Err("native companion process could not be stopped".into());
         }
     }
     storage.remove(COMPANION_PROCESS_ID_SETTING)?;
@@ -1434,11 +1539,11 @@ fn start_companion_process(config: &ServiceConfig, companion: &CompanionConfig) 
     let stdout = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(config.logs_dir().join("desktop.log"))?;
+        .open(config.logs_dir().join("companion.log"))?;
     let stderr = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(config.logs_dir().join("desktop-error.log"))?;
+        .open(config.logs_dir().join("companion-error.log"))?;
     let child = Command::new(&companion.program)
         .args(&companion.args)
         .current_dir(&config.config_dir)
@@ -1491,6 +1596,7 @@ fn configure_companion(
     enabled: bool,
 ) -> Result<()> {
     stop_companion_process(config, existing)?;
+    disable_legacy_companion_launch(&config.name, existing)?;
     let Some(companion) = &install.companion else {
         if let Some(auto) = existing.and_then(|stored| companion_auto_launch(&config.name, stored))
         {
@@ -1530,32 +1636,8 @@ fn resolve_companion_policy(
         SystrayMode::Auto => Ok(companion_support_detector(&companion.program)),
         SystrayMode::Always if companion_support_detector(&companion.program) => Ok(true),
         SystrayMode::Always => Err(format!(
-            "the desktop companion is unsupported in this session: {}",
+            "the native companion is unsupported in this session: {}",
             companion.program.display()
-        )
-        .into()),
-    }
-}
-
-fn resolve_desktop_policy(
-    mode: SystrayMode,
-    desktop: Option<&Path>,
-    support_detector: fn(&Path) -> bool,
-) -> Result<bool> {
-    let Some(desktop) = desktop else {
-        return if mode == SystrayMode::Always {
-            Err("systray mode always requires a desktop executable".into())
-        } else {
-            Ok(false)
-        };
-    };
-    match mode {
-        SystrayMode::Never => Ok(false),
-        SystrayMode::Auto => Ok(support_detector(desktop)),
-        SystrayMode::Always if support_detector(desktop) => Ok(true),
-        SystrayMode::Always => Err(format!(
-            "the desktop application is unsupported in this session: {}",
-            desktop.display()
         )
         .into()),
     }
@@ -1604,7 +1686,25 @@ fn auto_launch(name: &str, program: &Path, args: &[String]) -> Result<AutoLaunch
 }
 
 fn companion_launch(name: &str, program: &Path, args: &[String]) -> Result<AutoLaunch> {
-    auto_launch(&format!("{name}-desktop"), program, args)
+    auto_launch(&format!("{name}-tray"), program, args)
+}
+
+fn disable_legacy_companion_launch(name: &str, stored: Option<&StoredConfiguration>) -> Result<()> {
+    let Some(stored) = stored else {
+        return Ok(());
+    };
+    let Some(companion) = stored_companion(stored) else {
+        return Ok(());
+    };
+    let auto = auto_launch(
+        &format!("{name}-{LEGACY_COMPANION_LAUNCH_SUFFIX}"),
+        &companion.program,
+        &os_strings(&companion.args)?,
+    )?;
+    if auto.is_enabled().unwrap_or(false) {
+        auto.disable()?;
+    }
+    Ok(())
 }
 
 fn companion_supported(program: &Path) -> bool {
@@ -1633,6 +1733,7 @@ mod tests {
         let root = tempdir().unwrap();
         let config = ServiceConfig::with_config_root("model-proxy", 4000, root.path()).unwrap();
         assert_eq!(config.config_dir, root.path().join("model-proxy"));
+        assert_eq!(config.base_url(), "http://127.0.0.1:4000");
         assert_eq!(config.health_url(), "http://127.0.0.1:4000/api/healthz");
 
         let definition = ServiceDefinition::new("model-proxy", 4000).unwrap();
@@ -1675,9 +1776,9 @@ mod tests {
         let directory = config.config_dir.join("bin");
         fs::create_dir_all(&directory).unwrap();
         let old_program = directory.join("proxy-old");
-        let old_companion = directory.join("desktop-old");
+        let old_companion = directory.join("tray-old");
         let new_program = directory.join("proxy-new");
-        let new_companion = directory.join("desktop-new");
+        let new_companion = directory.join("tray-new");
         for path in [&old_program, &old_companion, &new_program, &new_companion] {
             fs::write(path, b"binary").unwrap();
         }
@@ -1720,6 +1821,7 @@ mod tests {
         };
         let effective = effective_config(&config, Some(&stored));
 
+        assert_eq!(effective.base_url(), "http://127.0.0.2:4200");
         assert_eq!(effective.health_url(), "http://127.0.0.2:4200/api/healthz");
     }
 
@@ -1732,7 +1834,7 @@ mod tests {
             .connection()
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         assert!(config.database_path().is_file());
         assert!(MIGRATIONS.validate().is_ok());
     }
@@ -1893,31 +1995,31 @@ mod tests {
     }
 
     #[test]
-    fn desktop_policy_distinguishes_requested_and_supplied() {
+    fn companion_policy_distinguishes_requested_and_supplied() {
         let mut cli = ServiceCli {
             command: ServiceCommand::Install(ServiceInstallCommand {
                 config_dir: None,
                 executable: None,
-                desktop_executable: None,
+                companion: None,
                 systray: SystrayMode::Auto,
                 persistence: PersistenceMode::Auto,
                 server_args: Vec::new(),
             }),
         };
-        assert!(cli.desktop_requested());
-        assert!(!cli.desktop_supplied());
+        assert!(cli.companion_requested());
+        assert!(!cli.companion_supplied());
 
         if let ServiceCommand::Install(install) = &mut cli.command {
-            install.desktop_executable = Some(PathBuf::from("/desktop"));
+            install.companion = Some(PathBuf::from("/companion"));
         }
-        assert!(cli.desktop_supplied());
+        assert!(cli.companion_supplied());
     }
 
     #[test]
     fn requirements_reuse_install_parsing_and_defaults() {
         let cli = ServiceCli {
             command: ServiceCommand::Requirements(ServiceRequirementsCommand {
-                desktop_executable: None,
+                companion: None,
                 install_args: vec![
                     OsString::from("--config-dir"),
                     OsString::from("/custom/service"),
@@ -1925,11 +2027,11 @@ mod tests {
             }),
         };
         let mut definition = ServiceDefinition::new("fixture", 4100).unwrap();
-        definition.desktop_support_detector = |_| false;
+        definition.companion_support_detector = |_| false;
         let requirements = cli.requirements(&definition).unwrap().unwrap();
 
-        assert!(requirements.desktop_asset_required);
-        assert_eq!(requirements.desktop_supported, None);
+        assert!(requirements.companion_asset_required);
+        assert_eq!(requirements.companion_supported, None);
         assert_eq!(
             requirements.install_args,
             ["--config-dir", "/custom/service"]
@@ -1937,11 +2039,11 @@ mod tests {
     }
 
     #[test]
-    fn requirements_insert_desktop_before_server_arguments() {
+    fn requirements_insert_companion_before_server_arguments() {
         let executable = env::current_exe().unwrap();
         let cli = ServiceCli {
             command: ServiceCommand::Requirements(ServiceRequirementsCommand {
-                desktop_executable: Some(executable.clone()),
+                companion: Some(executable.clone()),
                 install_args: vec![
                     OsString::from("--config-dir"),
                     OsString::from("/custom/service"),
@@ -1952,18 +2054,18 @@ mod tests {
             }),
         };
         let mut definition = ServiceDefinition::new("fixture", 4100).unwrap();
-        definition.desktop_support_detector = |_| false;
+        definition.companion_support_detector = |_| false;
         let requirements = cli.requirements(&definition).unwrap().unwrap();
         let executable = executable.to_str().unwrap();
 
-        assert!(!requirements.desktop_asset_required);
-        assert_eq!(requirements.desktop_supported, Some(false));
+        assert!(!requirements.companion_asset_required);
+        assert_eq!(requirements.companion_supported, Some(false));
         assert_eq!(
             requirements.install_args,
             [
                 "--config-dir",
                 "/custom/service",
-                "--desktop-executable",
+                "--companion",
                 executable,
                 "--",
                 "--profile",

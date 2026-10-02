@@ -525,6 +525,7 @@ mod tests {
     async fn in_band_stream_rate_limit_updates_error_and_rate_limit_metrics() {
         let metrics = MetricsRuntime::new(crate::metrics::MetricsConfig {
             mode: crate::metrics::MetricsMode::On,
+            routes_visible: true,
         })
         .unwrap();
         metrics.activate_runtime("runtime".to_owned()).unwrap();

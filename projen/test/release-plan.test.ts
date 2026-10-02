@@ -89,7 +89,7 @@ describe("release plan", () => {
       python: false,
       node: true,
       github: false,
-      docs: true,
+      pages: true,
     });
     assert.deepEqual(plan.omittedStages, ["rust", "python", "github"]);
   });

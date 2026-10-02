@@ -7,7 +7,7 @@ import { stringUtils } from "@dbx-tools/shared-core";
 import { TextFile, javascript } from "projen";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import type { RustProject } from "./_rust-project.ts";
-import { BUN_VERSION } from "./bun-workflow.ts";
+import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import type { DBXToolsJavaScriptProject } from "./project-js.ts";
 import type {
   DBXToolsRustWorkspaceOptions,
@@ -24,6 +24,9 @@ import {
   releaseSourceSteps,
 } from "./release-dispatch.ts";
 import {
+  GITHUB_NPM_REGISTRY_URL,
+  githubPackagesPublishEnvironment,
+  githubPackagesSetupStep,
   independentReleaseSetupSteps,
   npmPublishEnvironment,
   nodeReleaseSetupSteps,
@@ -437,7 +440,7 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
   );
   return {
     if: independentSetup
-      ? "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'docs') }}"
+      ? "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'pages') }}"
       : "${{ github.event_name == 'push' || inputs.stage == 'all' }}",
     name: "${{ matrix.node }}",
     needs: [independentSetup ? "release-plan" : "verify-context"],
@@ -488,11 +491,16 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
       {
         name: "Install Linux native dependencies",
         if: "${{ matrix.os == 'linux' }}",
-        run: [
-          "sudo rm -f /etc/apt/sources.list.d/google-chrome.list",
-          "sudo apt-get update",
-          "sudo apt-get install --yes libappindicator3-dev libdbus-1-dev librsvg2-dev libwebkit2gtk-4.1-dev patchelf pkg-config",
-        ].join("\n"),
+        // prettier-ignore
+        run: stringUtils.dedent(
+          // ============================================================================
+          /*bash*/`
+            sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+            sudo apt-get update
+            sudo apt-get install --yes libdbus-1-dev pkg-config
+          `
+          // ============================================================================
+        ),
       },
       {
         name: "Verify Rust build fingerprint",
@@ -659,30 +667,43 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
   };
 }
 
-export function rustCargoPublishJob(plan: RustReleasePlan, local: boolean): Job {
-  const registry = local ? '"${{ vars.LOCAL_CARGO_REGISTRY }}"' : "crates-io";
+export function rustCargoPublishJob(
+  project: DBXToolsJavaScriptProject,
+  plan: RustReleasePlan,
+): Job {
   return {
-    if: local
-      ? "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}"
-      : "${{ github.event_name == 'push' }}",
+    if: "${{ github.event_name == 'push' }}",
     needs: ["verify-context", "rust-build"],
-    runsOn: [local ? "self-hosted" : "ubuntu-latest"],
+    runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
+    env: { BUN_VERSION },
     steps: [
       ...releaseSourceSteps(),
+      ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
       {
         name: "Setup Rust",
         uses: `dtolnay/rust-toolchain@${plan.releaseRustVersion}`,
       },
+      { name: "Install release helpers", run: "bun install" },
+      bunCacheSaveStep(),
       {
-        name: local ? "Publish Cargo crates locally" : "Publish public crates",
-        env: {
-          CARGO_REGISTRY_TOKEN: local
-            ? "${{ secrets.LOCAL_CARGO_TOKEN }}"
-            : "${{ secrets.CARGO_REGISTRY_TOKEN }}",
-        },
+        name: "Package public crates",
+        run: [
+          "bun node_modules/@dbx-tools/projen/tasks/package-cargo.ts",
+          ...plan.publicCrates.map((crate) => `  --crate ${JSON.stringify(crate)}`),
+          "  --output dist/cargo",
+        ].join(" \\\n"),
+      },
+      {
+        name: "Upload Cargo distributions",
+        uses: "actions/upload-artifact@v7",
+        with: { name: "cargo-distributions", path: "dist/cargo", "retention-days": 7 },
+      },
+      {
+        name: "Publish public crates",
+        env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
         run: plan.publicCrates
-          .map((crate) => `cargo publish --package "${crate}" --registry ${registry} --no-verify`)
+          .map((crate) => `cargo publish --package "${crate}" --registry crates-io --no-verify`)
           .join("\n"),
       },
     ],
@@ -720,6 +741,28 @@ export function independentRustCargoPublishJob(
         uses: `dtolnay/rust-toolchain@${plan.releaseRustVersion}`,
       },
       {
+        name: "Package affected Cargo crates",
+        shell: "bash",
+        run: [
+          "ARGS=()",
+          ...plan.publicCrates.map((crate) =>
+            [
+              `if jq -e --arg package "${crate}" '.rustPackages[] | select(.identity == $package)' dist/release-plan.json >/dev/null; then`,
+              `  ARGS+=(--crate "${crate}")`,
+              "fi",
+            ].join("\n"),
+          ),
+          'if [ "${#ARGS[@]}" -gt 0 ]; then',
+          '  bun node_modules/@dbx-tools/projen/tasks/package-cargo.ts "${ARGS[@]}" --output dist/cargo',
+          "fi",
+        ].join("\n"),
+      },
+      {
+        name: "Upload Cargo distributions",
+        uses: "actions/upload-artifact@v7",
+        with: { name: "cargo-distributions", path: "dist/cargo", "retention-days": 7 },
+      },
+      {
         name: "Publish affected Cargo crates",
         env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
         run: commands.join("\n"),
@@ -733,22 +776,26 @@ export function independentRustGitHubReleaseJob(
   plan: RustReleasePlan,
 ): Job {
   return {
-    if: "${{ needs.release-plan.outputs.github == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'github') }}",
-    needs: ["release-plan", "rust-build"],
+    if: "${{ (needs.release-plan.outputs.github == 'true' || needs.release-plan.outputs.rust == 'true') && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'github' || inputs.stage == 'rust') }}",
+    needs: ["release-plan", "rust-build", ...(plan.publicCrates.length ? ["publish-cargo"] : [])],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
     env: { BUN_VERSION },
     steps: [
       ...independentReleaseSetupSteps(project),
-      {
-        name: "Download release binaries",
-        uses: "actions/download-artifact@v8",
-        with: {
-          pattern: "*-binary",
-          path: "dist/rust-release",
-          "merge-multiple": true,
-        },
-      },
+      ...(plan.releaseBinaries.length
+        ? [
+            {
+              name: "Download release binaries",
+              uses: "actions/download-artifact@v8",
+              with: {
+                pattern: "*-binary",
+                path: "dist/rust-release",
+                "merge-multiple": true,
+              },
+            },
+          ]
+        : []),
       {
         name: "Download reusable raw Rust outputs",
         uses: "actions/download-artifact@v8",
@@ -758,6 +805,15 @@ export function independentRustGitHubReleaseJob(
           "merge-multiple": true,
         },
       },
+      ...(plan.publicCrates.length
+        ? [
+            {
+              name: "Download Cargo distributions",
+              uses: "actions/download-artifact@v8",
+              with: { name: "cargo-distributions", path: "dist/cargo" },
+            },
+          ]
+        : []),
       {
         name: "Upload affected GitHub release assets",
         env: { GH_TOKEN: "${{ github.token }}" },
@@ -774,27 +830,53 @@ export function independentRustGitHubReleaseJob(
           })
           .join("\n"),
       },
+      ...(plan.publicCrates.length
+        ? [
+            {
+              name: "Upload affected Cargo release assets",
+              env: { GH_TOKEN: "${{ github.token }}" },
+              shell: "bash",
+              run: plan.publicCrates
+                .map((crate) => {
+                  const unit = defaultReleaseUnitId("rust", crate);
+                  return [
+                    `VERSION="$(jq -r --arg package "${crate}" '.rustPackages[] | select(.identity == $package) | .version' dist/release-plan.json)"`,
+                    'if [ -n "$VERSION" ]; then',
+                    '  mkdir -p "dist/cargo/releases/$VERSION"',
+                    `  jq --arg crate "${crate}" '{ schemaVersion, packages: [.packages[] | select(.record.name == $crate)] }' dist/cargo/cargo-index.json > "dist/cargo/releases/$VERSION/cargo-index.json"`,
+                    `  gh release upload "${unit}-v$VERSION" "dist/cargo/crates/${crate}-$VERSION.crate" "dist/cargo/releases/$VERSION/cargo-index.json" --clobber`,
+                    "fi",
+                  ].join("\n");
+                })
+                .join("\n"),
+            },
+          ]
+        : []),
     ],
   };
 }
 
-export function rustGitHubReleaseJob(): Job {
+export function rustGitHubReleaseJob(includeCargo: boolean, includeBinaries: boolean): Job {
   return {
     if: "${{ github.event_name == 'push' }}",
-    needs: ["verify-context", "rust-build"],
+    needs: ["verify-context", "rust-build", ...(includeCargo ? ["publish-cargo"] : [])],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
     steps: [
       ...releaseSourceSteps(),
-      {
-        name: "Download release binaries",
-        uses: "actions/download-artifact@v8",
-        with: {
-          pattern: "*-binary",
-          path: "dist/rust-release",
-          "merge-multiple": true,
-        },
-      },
+      ...(includeBinaries
+        ? [
+            {
+              name: "Download release binaries",
+              uses: "actions/download-artifact@v8",
+              with: {
+                pattern: "*-binary",
+                path: "dist/rust-release",
+                "merge-multiple": true,
+              },
+            },
+          ]
+        : []),
       {
         name: "Download reusable raw Rust outputs",
         uses: "actions/download-artifact@v8",
@@ -804,11 +886,24 @@ export function rustGitHubReleaseJob(): Job {
           "merge-multiple": true,
         },
       },
+      ...(includeCargo
+        ? [
+            {
+              name: "Download Cargo distributions",
+              uses: "actions/download-artifact@v8",
+              with: { name: "cargo-distributions", path: "dist/cargo" },
+            },
+          ]
+        : []),
       {
         name: "Publish GitHub release assets",
         uses: "softprops/action-gh-release@v2",
         with: {
-          files: ["dist/rust-release/*", "dist/rust-raw/*"].join("\n"),
+          files: [
+            ...(includeBinaries ? ["dist/rust-release/*"] : []),
+            "dist/rust-raw/*",
+            ...(includeCargo ? ["dist/cargo/crates/*.crate", "dist/cargo/cargo-index.json"] : []),
+          ].join("\n"),
           body_path: RELEASE_SUMMARY_FILE,
           generate_release_notes: true,
           tag_name: RELEASE_TAG,
@@ -871,7 +966,11 @@ export function independentRustNativeNpmPublishJob(project: DBXToolsJavaScriptPr
     if: "${{ needs.release-plan.outputs.node == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
     needs: ["release-plan", "rust-build"],
     runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+    permissions: {
+      contents: JobPermission.READ,
+      idToken: JobPermission.WRITE,
+      packages: JobPermission.WRITE,
+    },
     timeoutMinutes: 15,
     env: { BUN_VERSION, CI: "true" },
     steps: [
@@ -886,9 +985,15 @@ export function independentRustNativeNpmPublishJob(project: DBXToolsJavaScriptPr
         },
       },
       {
-        name: "Publish affected native npm packages",
+        name: "Publish affected native npm packages to npmjs",
         env: npmPublishEnvironment(),
         run: "bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native",
+      },
+      githubPackagesSetupStep(project),
+      {
+        name: "Publish affected native npm packages to GitHub Packages",
+        env: githubPackagesPublishEnvironment(),
+        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --registry ${GITHUB_NPM_REGISTRY_URL}`,
       },
     ],
   };
@@ -902,13 +1007,17 @@ export function independentRustNodeFacadePublishJob(
     if: "${{ needs.release-plan.outputs.node == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
     needs: ["release-plan", "publish-node", "publish-native-npm"],
     runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+    permissions: {
+      contents: JobPermission.READ,
+      idToken: JobPermission.WRITE,
+      packages: JobPermission.WRITE,
+    },
     timeoutMinutes: 30,
     env: { BUN_VERSION, CI: "true" },
     steps: [
       ...independentReleaseSetupSteps(project),
       {
-        name: "Build and publish affected UniFFI npm facades",
+        name: "Build and publish affected UniFFI npm facades to npmjs",
         env: npmPublishEnvironment(),
         shell: "bash",
         run: bindings
@@ -921,6 +1030,25 @@ export function independentRustNodeFacadePublishJob(
               'if [ -n "$VERSION" ]; then',
               `  node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$VERSION" --output "${output}"`,
               `  bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$VERSION"`,
+              "fi",
+            ];
+          })
+          .join("\n"),
+      },
+      githubPackagesSetupStep(project),
+      {
+        name: "Publish affected UniFFI npm facades to GitHub Packages",
+        env: githubPackagesPublishEnvironment(),
+        shell: "bash",
+        run: bindings
+          .flatMap((binding) => {
+            if (!binding.node || !binding.nodePackage) return [];
+            const unit = defaultReleaseUnitId("rust", binding.crate);
+            const output = `dist/uniffi/facades/${binding.crate}`;
+            return [
+              `VERSION="$(jq -r --arg unit "${unit}" '.units[] | select(.id == $unit) | .newVersion' dist/release-plan.json)"`,
+              'if [ -n "$VERSION" ]; then',
+              `  bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$VERSION" --registry ${GITHUB_NPM_REGISTRY_URL}`,
               "fi",
             ];
           })
@@ -939,6 +1067,7 @@ export function rustNativeNpmPublishJob(project: DBXToolsJavaScriptProject): Job
       actions: JobPermission.READ,
       contents: JobPermission.READ,
       idToken: JobPermission.WRITE,
+      packages: JobPermission.WRITE,
     },
     timeoutMinutes: 15,
     env: { BUN_VERSION, CI: "true" },
@@ -951,9 +1080,15 @@ export function rustNativeNpmPublishJob(project: DBXToolsJavaScriptProject): Job
         path: "dist/uniffi/native",
       }),
       {
-        name: "Publish native npm packages",
+        name: "Publish native npm packages to npmjs",
         env: { RELEASE_VERSION, ...npmPublishEnvironment() },
         run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" $DRY_RUN',
+      },
+      githubPackagesSetupStep(project),
+      {
+        name: "Publish native npm packages to GitHub Packages",
+        env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
+        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`,
       },
     ],
   };
@@ -967,13 +1102,17 @@ export function rustNodeFacadePublishJob(
     if: releaseStageCondition("node"),
     needs: ["verify-context", "publish-node"],
     runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+    permissions: {
+      contents: JobPermission.READ,
+      idToken: JobPermission.WRITE,
+      packages: JobPermission.WRITE,
+    },
     timeoutMinutes: 30,
     env: { BUN_VERSION, CI: "true" },
     steps: [
       ...nodeReleaseSetupSteps(project),
       {
-        name: "Build and publish UniFFI npm facades",
+        name: "Build and publish UniFFI npm facades to npmjs",
         env: { RELEASE_VERSION, ...npmPublishEnvironment() },
         run: bindings
           .flatMap((binding) => {
@@ -982,6 +1121,17 @@ export function rustNodeFacadePublishJob(
               `node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "${output}"`,
               `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN`,
             ];
+          })
+          .join("\n"),
+      },
+      githubPackagesSetupStep(project),
+      {
+        name: "Publish UniFFI npm facades to GitHub Packages",
+        env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
+        run: bindings
+          .map((binding) => {
+            const output = `dist/uniffi/facades/${binding.crate}`;
+            return `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`;
           })
           .join("\n"),
       },

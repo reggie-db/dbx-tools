@@ -3,9 +3,8 @@
  * Prepare a reviewed release pull request from the current branch.
  *
  * Pending work is committed and the current branch is pushed first. A dedicated
- * release branch then receives the VERSION change, generated files, validation,
- * and local registry preflight. Public publication remains owned by the
- * main-branch release workflow.
+ * release branch then receives the VERSION change, generated files, and
+ * validation. Publication is owned by the main-branch release workflow.
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +13,6 @@ import * as exec from "@dbx-tools/core/exec";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { asyncUtils, json, log, object } from "@dbx-tools/shared-core";
 import { Command } from "commander";
-import { publishLocalRelease } from "./local-publish.ts";
 import { generateReleaseSummary } from "./release-summary.ts";
 import {
   releaseArchitectureOption,
@@ -247,16 +245,13 @@ function releaseSummaryProviders(
 
 const program = new Command();
 program
-  .description("Prepare, validate, locally publish, and open a reviewed release PR")
+  .description("Prepare, validate, and open a reviewed release PR")
   .addOption(releaseLevelOption())
   .option("--prefix <prefix>", "release tag prefix", "v")
   .option("--base <branch>", "release pull request base branch", "main")
   .option("--message <message>", "commit message for pending source work", "chore: prepare release")
   .addOption(releaseOperatingSystemOption())
   .addOption(releaseArchitectureOption())
-  .option("--local-registry <value>", "local npm registry: auto, false, or an explicit URL", "auto")
-  .option("--local-pypi <value>", "local PyPI index: auto, false, or an explicit URL", "auto")
-  .option("--python-root <path>", "Python workspace package root")
   .option(
     "--validate-task <task>",
     "repository task to run before release validation; repeatable",
@@ -269,8 +264,6 @@ program
     "comma-separated provider order: cursor,codex,claude",
   )
   .option("--no-validate", "skip repository validation tasks, Rust tests, and TypeScript compile")
-  .option("--no-local-publish", "skip local npm, PyPI, and Cargo publication")
-  .option("--no-local-cargo", "skip local Cargo publication")
   .option("--no-approve", "open the release pull request without enabling automatic merge")
   .option("--no-wait", "return after enabling automatic merge without watching publication")
   .option(
@@ -286,15 +279,10 @@ program
       message: string;
       os: ReleaseOs[];
       arch: ReleaseArch[];
-      localRegistry: string;
-      localPypi: string;
-      pythonRoot?: string;
       validateTask: string[];
       releaseSummary: boolean;
       releaseSummaryProviders?: string;
       validate: boolean;
-      localPublish: boolean;
-      localCargo: boolean;
       approve: boolean;
       wait: boolean;
       waitTimeoutMinutes: string;
@@ -428,19 +416,6 @@ program
           runTaskCommand(releaseRoot, process.execPath, ["run", "compile"]);
         } else {
           logger.warn("release validation skipped by --no-validate");
-        }
-        if (opts.localPublish) {
-          await publishLocalRelease({
-            root: releaseRoot,
-            version: next.version,
-            localRegistry: opts.localRegistry,
-            localPypi: opts.localPypi,
-            pythonRoot: opts.pythonRoot,
-            localCargo: opts.localCargo,
-            reuseValidatedNodeCompile: opts.validate,
-          });
-        } else {
-          logger.info("local publication skipped by --no-local-publish");
         }
         runTaskCommand(releaseRoot, process.execPath, [versionCheckScript]);
         const releaseSummary = opts.releaseSummary

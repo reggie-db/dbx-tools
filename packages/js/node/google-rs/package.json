@@ -33,6 +33,7 @@
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
+    "registry": "https://registry.npmjs.org/",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
     "exports": {
@@ -43,7 +44,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.13",
+  "version": "0.9.14",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -56,12 +57,12 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@dbx-tools/google-rs-linux-x64-gnu": "0.9.13",
-    "@dbx-tools/google-rs-linux-arm64-gnu": "0.9.13",
-    "@dbx-tools/google-rs-darwin-x64": "0.9.13",
-    "@dbx-tools/google-rs-darwin-arm64": "0.9.13",
-    "@dbx-tools/google-rs-win32-x64-msvc": "0.9.13",
-    "@dbx-tools/google-rs-win32-arm64-msvc": "0.9.13"
+    "@dbx-tools/google-rs-linux-x64-gnu": "0.9.14",
+    "@dbx-tools/google-rs-linux-arm64-gnu": "0.9.14",
+    "@dbx-tools/google-rs-darwin-x64": "0.9.14",
+    "@dbx-tools/google-rs-darwin-arm64": "0.9.14",
+    "@dbx-tools/google-rs-win32-x64-msvc": "0.9.14",
+    "@dbx-tools/google-rs-win32-arm64-msvc": "0.9.14"
   },
   "dbxToolsConfig": {
     "uniffi": true,

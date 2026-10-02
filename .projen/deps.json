@@ -16,33 +16,8 @@
       "type": "build"
     },
     {
-      "name": "@tanstack/react-table",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
-      "name": "@tauri-apps/api",
-      "version": "2.11.0",
-      "type": "build"
-    },
-    {
-      "name": "@tauri-apps/cli",
-      "version": "2.11.0",
-      "type": "build"
-    },
-    {
       "name": "@types/bun",
       "version": "1.3.14",
-      "type": "build"
-    },
-    {
-      "name": "@types/react-dom",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
-      "name": "@types/react",
-      "version": "catalog:",
       "type": "build"
     },
     {
@@ -63,16 +38,6 @@
     {
       "name": "constructs",
       "version": "^10.0.0",
-      "type": "build"
-    },
-    {
-      "name": "echarts-for-react",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
-      "name": "echarts",
-      "version": "catalog:",
       "type": "build"
     },
     {
@@ -97,27 +62,12 @@
       "type": "build"
     },
     {
-      "name": "lucide-react",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
       "name": "prettier",
       "type": "build"
     },
     {
       "name": "projen",
       "version": "^0.103.27",
-      "type": "build"
-    },
-    {
-      "name": "react-dom",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
-      "name": "react",
-      "version": "catalog:",
       "type": "build"
     },
     {

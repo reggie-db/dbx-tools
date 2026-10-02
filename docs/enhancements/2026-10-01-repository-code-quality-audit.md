@@ -13,13 +13,15 @@ current dependency lines.
 
 ## Executive summary
 
-- The model-proxy dashboard is a no-manifest React frontend hosted by the
-  in-process Tauri desktop. Generated Specta bindings replace HTTP polling and
-  SSE, ECharts renders timestamped traffic and reasoning views, and the model
-  table exposes typed profile and limiter controls
-  (`packages/rs/model-proxy/desktop/src/App.tsx`,
-  `packages/rs/model-proxy/src/desktop.rs`,
-  `packages/rs/model-proxy/src/operator.rs`).
+- The model proxy is an API-only headless service with a separate native tray
+  companion. Strongly typed GraphQL exposes bounded state plus demand-aware
+  query and subscription feeds, typed REST routes expose local controls, and
+  aide generates the runtime OpenAPI document and TypeScript client from the
+  same handlers
+  (`packages/rs/model-proxy/src/routes.rs`,
+  `packages/rs/service/src/graphql.rs`,
+  `packages/rs/service/src/topic.rs`,
+  `packages/rs/service/src/openapi.rs`).
 - Reasoning classification is owned by the Rust request boundary and aggregated
   by the existing bounded metrics store. The UI does not infer provider policy
   independently (`packages/rs/model-proxy/src/request_log.rs:64`,
@@ -36,11 +38,11 @@ current dependency lines.
   neutral defaults (`projen/src/project-rs.ts:80`,
   `projen/src/project-rs.ts:464`, `projen/src/project-rs.ts:1202`).
 - Node release publication now compiles selected publishable packages once from
-  the workspace root and packs with lifecycle scripts disabled. Local release
-  publication reuses only the immediately preceding validated compile and checks
-  that expected outputs exist (`projen/tasks/publish.ts:29`,
+  the workspace root and packs with lifecycle scripts disabled. npmjs and
+  GitHub Packages consume the same validated archives
+  (`projen/tasks/publish.ts:29`,
   `projen/tasks/publish.ts:343`, `projen/tasks/publish.ts:384`,
-  `projen/tasks/local-publish.ts:53`, `projen/tasks/release-pr.ts:486`).
+  `projen/src/release.ts:294`).
 - Projen, AppKit, Better Auth, and Mastra were reconciled to their current tested
   stable lines. Several Mastra packages publish alpha builds under the npm
   `latest` tag, so this repository intentionally pins the newest non-prerelease
@@ -71,9 +73,9 @@ reusable behavior belongs in the published engine.
 
 | ID   | Area                          | Severity | Status   | Finding and disposition                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ---- | ----------------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CQ01 | Metrics usability             | High     | Complete | Hand-drawn charts lacked a real time scale and exposed color names as legend text. The Tauri React desktop uses ECharts for timestamped traffic and reasoning views and keeps the legend accessible (`packages/rs/model-proxy/desktop/src/App.tsx`).                                                                                                                                                                                                             |
-| CQ02 | Metrics semantics             | Medium   | Complete | Open sockets were presented as active work even though keep-alive connections remain open while idle. The primary value is `active_requests`; connections and streams remain supporting context in the generated Specta snapshot (`packages/rs/model-proxy/src/metrics.rs`, `packages/rs/model-proxy/desktop/src/bindings.ts`).                                                                                                                                  |
-| CQ03 | Thinking observability        | Medium   | Complete | Request reasoning or thinking settings were not measurable. The request boundary normalizes supported wire shapes once, bounded snapshots retain distributions, and the desktop renders them as a pie chart (`packages/rs/model-proxy/src/request_log.rs`, `packages/rs/model-proxy/src/metrics.rs`, `packages/rs/model-proxy/desktop/src/App.tsx`).                                                                                                             |
+| CQ01 | Metrics usability             | High     | Complete | Presentation is consumer-owned instead of embedded in the proxy. Typed GraphQL exposes bounded history and filtered model rows for any operator client, with field descriptions available through introspection (`packages/rs/model-proxy/src/routes.rs`, `packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                             |
+| CQ02 | Metrics semantics             | Medium   | Complete | Open sockets are retained as supporting context while `active_requests` remains the primary work indicator. The same typed snapshot distinguishes connections, requests, and streams (`packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                                                                                                 |
+| CQ03 | Thinking observability        | Medium   | Complete | The request boundary normalizes supported reasoning settings once, bounded snapshots retain their distributions, and GraphQL exposes aggregate and per-model reasoning rows without a second contract (`packages/rs/model-proxy/src/request_log.rs`, `packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                                  |
 | CQ04 | Passkey UX                    | Medium   | Complete | A dedicated passkey button made passkey-first login an extra action. Conditional mediation now starts from the WebAuthn-enabled email input, with the button retained only for unsupported or failed conditional flows (`packages/js/ui/auth/src/react/auth-gate.tsx:51`, `packages/js/ui/auth/src/react/auth-gate.tsx:181`).                                                                                                                                    |
 | CQ05 | Release compilation           | High     | Complete | npm release publication could trigger each package's `prepack`, repeating `tsc --build` across local validation and publication. The publisher now selects compiled packages once, runs one filtered root compile, and uses `--ignore-scripts`; `--skip-compile` refuses missing outputs (`projen/tasks/publish.ts:29`, `projen/tasks/publish.ts:343`, `projen/tasks/publish.ts:384`).                                                                           |
 | CQ06 | Reusable Rust release tooling | High     | Complete | The previous private Rust helper made orchestration repository-specific and added a Cargo build before the actual release matrix. The same fingerprint and stamp contract now ships as a dependency-free Node helper generated by Projen (`projen/tasks/rust-release.mjs:1`, `projen/src/project-rs.ts:1202`).                                                                                                                                                   |
@@ -112,9 +114,11 @@ reusable behavior belongs in the published engine.
   retaining custom AppKit-facing behavior. Existing custom Mastra, Genie Agent
   Mode, durable approval, Graphiti MCP, and shutdown behavior remains where the
   public AppKit surface does not provide contract parity.
-- Tauri owns the desktop window and system tray, ECharts owns chart rendering,
-  and Specta owns the frontend IPC contract. No HTTP dashboard transport,
-  handwritten window runtime, or duplicated TypeScript contract remains.
+- `tray-icon` and Tao own the optional native tray event loop, while the model
+  proxy owns its menu and profile actions. async-graphql owns metrics schema
+  introspection, and aide plus axum typed routing own the REST contract.
+  No WebView, frontend asset pipeline, or handwritten TypeScript API mirror
+  remains.
 - Better Auth remains the passkey and session owner. The UI uses the browser's
   conditional-mediation capability and the existing auth client rather than
   introducing credential detection or storage (`packages/js/ui/auth/src/react/auth-gate.tsx:58`).
@@ -157,17 +161,14 @@ after wall time here, then archive this audit.
 
 ## Validation record
 
-- Projen synthesis completed without drift. The focused Rust-project,
-  release-helper, local-publication, release-summary, and packed external
-  consumer suites passed 27 tests.
-- The complete TypeScript workspace compiled, ESLint passed without warnings,
-  and the root JavaScript test task passed every package suite. The standalone
-  installer suite passed 27 tests and intentionally skipped its three opt-in
-  container cases.
-- Desktop binding and asset validation, the source-documentation ratchet, and
-  README synchronization passed.
-- Python Ruff validation passed, followed by 87 passing pytest cases.
-- `cargo test -p dbx-tools-model-proxy --all-features` passed 95 tests,
-  including Specta binding parity and JavaScript-safe metric projection.
-  Service lifecycle tests passed with single-process desktop selection, and
-  Clippy passed across model-proxy, service, and service-desktop.
+- Projen synthesis and the shared Rust OpenAPI generation completed without
+  drift. Focused Rust-project, OpenAPI, Rust watcher, barrel, workspace-lock,
+  and lazy sequence suites passed.
+- The complete TypeScript workspace compiled and passed every package test
+  suite. ESLint, the source-documentation ratchet, and README synchronization
+  passed.
+- `cargo test -p dbx-tools-service --all-features` passed 25 tests, including
+  reusable GraphQL subscriptions, retained topics, and OpenAPI coverage.
+- `cargo test -p dbx-tools-model-proxy --all-features` passed 111 tests, and
+  the metrics-free build passed. Clippy passed across the service and model
+  proxy with all targets and features.

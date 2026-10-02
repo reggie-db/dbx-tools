@@ -27,6 +27,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     error::ProxyError,
+    events::{HttpExchangeEvent, HttpResponseEvent, ProxyFeeds, ResponseHop, SseEvent},
     protocol::{ClientWire, TargetWire},
     request_log::RequestLogContext,
     runtime::RuntimeGeneration,
@@ -43,6 +44,10 @@ pub(crate) struct StreamLogContext {
     pub(crate) target: TargetWire,
     /// Shared request metadata and local token reservation.
     pub(crate) request: RequestLogContext,
+    /// Event feeds used to observe raw upstream chunks on demand.
+    pub(crate) feeds: ProxyFeeds,
+    /// Upstream body event template for this attempt.
+    pub(crate) upstream_event: HttpResponseEvent,
     /// Runtime lease retained until the response body completes or is dropped.
     pub(crate) _runtime: Arc<RuntimeGeneration>,
 }
@@ -71,13 +76,15 @@ struct NativeUsageObserver {
     event_size: SseEventSize,
     usage: ResponseTokenUsage,
     failure_status: Option<StatusCode>,
+    sse_events: Vec<SseEvent>,
     observing: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct NativeObservation {
     usage: ResponseTokenUsage,
     failure_status: Option<StatusCode>,
+    sse_events: Vec<SseEvent>,
 }
 
 #[derive(Default)]
@@ -130,6 +137,7 @@ impl Default for NativeUsageObserver {
             event_size: SseEventSize::default(),
             usage: ResponseTokenUsage::default(),
             failure_status: None,
+            sse_events: Vec::new(),
             observing: true,
         }
     }
@@ -170,6 +178,7 @@ impl NativeUsageObserver {
         NativeObservation {
             usage: self.usage,
             failure_status: self.failure_status,
+            sse_events: self.sse_events,
         }
     }
 
@@ -186,7 +195,13 @@ impl NativeUsageObserver {
         }
     }
 
+    fn take_sse_events(&mut self) -> Vec<SseEvent> {
+        std::mem::take(&mut self.sse_events)
+    }
+
     fn observe(&mut self, event: &str, data: &str) {
+        self.sse_events
+            .push(SseEvent::new(event.to_owned(), data.to_owned(), None));
         let Ok(payload) = serde_json::from_str::<Value>(data) else {
             return;
         };
@@ -303,6 +318,11 @@ pub(crate) fn stream_response(
     response_headers: HeaderMap,
     log_context: StreamLogContext,
 ) -> Result<Response, ProxyError> {
+    let event_feeds = log_context.feeds.clone();
+    let event_template = log_context.upstream_event.clone();
+    let _ = event_feeds
+        .http
+        .publish(HttpExchangeEvent::from_response(event_template.clone()));
     // Preserve native SSE framing when no protocol translation is required.
     if matches!(
         (client_wire, target),
@@ -316,6 +336,15 @@ pub(crate) fn stream_response(
                 match chunk {
                     Ok(chunk) => {
                         let chunk = usage.observe_chunk(chunk).await;
+                        for event in usage.take_sse_events() {
+                            publish_sse_event(
+                                &event_feeds,
+                                &event_template,
+                                client_wire,
+                                event,
+                                true,
+                            );
+                        }
                         completion.record_bytes(chunk.len());
                         yield Ok::<Bytes, io::Error>(chunk);
                     }
@@ -327,6 +356,15 @@ pub(crate) fn stream_response(
                 }
             }
             let observation = usage.finish().await;
+            for event in observation.sse_events.iter().cloned() {
+                publish_sse_event(
+                    &event_feeds,
+                    &event_template,
+                    client_wire,
+                    event,
+                    true,
+                );
+            }
             completion.usage = observation.usage;
             completion.reconcile().await;
             completion.finish(observation.failure_status);
@@ -357,10 +395,27 @@ pub(crate) fn stream_response(
                     break;
                 }
             };
+            publish_sse_event(
+                &event_feeds,
+                &event_template,
+                client_wire,
+                SseEvent::new(
+                    event.event.clone(),
+                    event.data.clone(),
+                    (!event.id.is_empty()).then_some(event.id.clone()),
+                ),
+                false,
+            );
             let parsed = match parser.parse_event(&event.event, &event.data) {
                 Ok(parsed) => parsed,
                 Err(error) => {
                     let frame = stream_error(client_wire, &error.to_string());
+                    publish_client_sse_frame(
+                        &event_feeds,
+                        &event_template,
+                        client_wire,
+                        &frame,
+                    );
                     completion.record_bytes(frame.len());
                     yield Ok(frame);
                     failed = true;
@@ -375,6 +430,12 @@ pub(crate) fn stream_response(
                     &mut chat,
                     canonical,
                 ) {
+                    publish_client_sse_frame(
+                        &event_feeds,
+                        &event_template,
+                        client_wire,
+                        &frame,
+                    );
                     completion.record_bytes(frame.len());
                     yield Ok(frame);
                 }
@@ -392,6 +453,12 @@ pub(crate) fn stream_response(
                             &mut chat,
                             canonical,
                         ) {
+                            publish_client_sse_frame(
+                                &event_feeds,
+                                &event_template,
+                                client_wire,
+                                &frame,
+                            );
                             completion.record_bytes(frame.len());
                             yield Ok(frame);
                         }
@@ -409,6 +476,109 @@ pub(crate) fn stream_response(
         completion.finish(failed.then_some(StatusCode::BAD_GATEWAY));
     };
     Ok(sse_response(Body::from_stream(stream), response_headers))
+}
+
+fn publish_sse_event(
+    feeds: &ProxyFeeds,
+    template: &HttpResponseEvent,
+    client_wire: ClientWire,
+    event: SseEvent,
+    include_client: bool,
+) {
+    let mut upstream = template.clone();
+    upstream.headers = None;
+    upstream.sse = Some(event.clone());
+    upstream.body = None;
+    let _ = feeds
+        .http
+        .publish(HttpExchangeEvent::from_response(upstream));
+    if include_client {
+        let _ = feeds
+            .http
+            .publish(HttpExchangeEvent::from_response(client_sse_event(
+                template,
+                client_wire,
+                event,
+            )));
+    }
+}
+
+fn publish_client_sse_frame(
+    feeds: &ProxyFeeds,
+    template: &HttpResponseEvent,
+    client_wire: ClientWire,
+    frame: &[u8],
+) {
+    if let Some(event) = parse_sse_frame(frame) {
+        let _ = feeds
+            .http
+            .publish(HttpExchangeEvent::from_response(client_sse_event(
+                template,
+                client_wire,
+                event,
+            )));
+    }
+}
+
+fn client_sse_event(
+    template: &HttpResponseEvent,
+    client_wire: ClientWire,
+    event: SseEvent,
+) -> HttpResponseEvent {
+    let path = match client_wire {
+        ClientWire::Chat => "/v1/chat/completions",
+        ClientWire::Responses => "/v1/responses",
+        ClientWire::Anthropic => "/v1/messages",
+    };
+    HttpResponseEvent {
+        request_id: template.request_id,
+        hop: ResponseHop::ProxyToClient,
+        elapsed_ms: template.elapsed_ms,
+        duration_ms: None,
+        attempt: None,
+        method: "POST".to_owned(),
+        host: None,
+        path: path.to_owned(),
+        status: template.status,
+        headers: None,
+        response_bytes: None,
+        client_protocol: Some(client_wire.label().to_owned()),
+        target_protocol: None,
+        preferred_model: template.preferred_model.clone(),
+        actual_model: template.actual_model.clone(),
+        streaming: Some(true),
+        fallback_step: template.fallback_step,
+        transport_error: None,
+        body: None,
+        sse: Some(event),
+    }
+}
+
+fn parse_sse_frame(frame: &[u8]) -> Option<SseEvent> {
+    let text = std::str::from_utf8(frame).ok()?;
+    let mut event = String::new();
+    let mut data = Vec::new();
+    let mut id = None;
+    for line in text.lines() {
+        if let Some(value) = line.strip_prefix("event:") {
+            event = value.trim_start().to_owned();
+        } else if let Some(value) = line.strip_prefix("data:") {
+            data.push(value.trim_start());
+        } else if let Some(value) = line.strip_prefix("id:") {
+            id = Some(value.trim_start().to_owned());
+        }
+    }
+    (!data.is_empty() || !event.is_empty()).then(|| {
+        SseEvent::new(
+            if event.is_empty() {
+                "message".to_owned()
+            } else {
+                event
+            },
+            data.join("\n"),
+            id,
+        )
+    })
 }
 
 fn sse_response(body: Body, mut headers: HeaderMap) -> Response {
@@ -553,6 +723,16 @@ mod tests {
             observer.observe_chunk(chunk).await;
         }
         observer.finish().await.usage
+    }
+
+    #[test]
+    fn parses_complete_sse_frames_for_response_events() {
+        let event =
+            parse_sse_frame(b"id: 42\nevent: response.completed\ndata: {\"ok\":true}\n\n").unwrap();
+        assert_eq!(event.id.as_deref(), Some("42"));
+        assert_eq!(event.event, "response.completed");
+        assert_eq!(event.data.0, serde_json::json!({"ok": true}));
+        assert_eq!(event.data_raw, "eyJvayI6dHJ1ZX0=");
     }
 
     #[tokio::test]

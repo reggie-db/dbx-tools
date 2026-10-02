@@ -29,6 +29,7 @@ packages:
   - packages/js/node/search
   - packages/js/node/teams
   - packages/js/node/tunnel
+  - packages/js/openapi/model-proxy
   - packages/js/shared/auth
   - packages/js/shared/core
   - packages/js/shared/email

@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.9.13";
+export const PACKAGE_VERSION = "0.9.14";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -57,11 +57,11 @@ export type { DBXToolsJavaScriptProject, DBXToolsReleaseMode, PullRequestTitlePo
 export { DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";
 export type { PythonRepositoryOptions, PythonPackageOptions, PythonTrustedPublisherOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
 export { DBXToolsRustProject, RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustWorkspace } from "./src/project-rs.ts";
-export type { CargoDependency, CargoDependencyOptions, CargoExampleOptions, DBXToolsRustProjectOptions, RustCrateOptions, RustCliOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping, RustReleaseBinaryAssetMapping, RustReleaseBinaryMapping } from "./src/project-rs.ts";
+export type { CargoDependency, CargoDependencyOptions, CargoExampleOptions, DBXToolsRustProjectOptions, RustCrateOptions, RustCliOptions, RustOpenApiOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustOpenApiMapping, RustWorkspaceMapping, RustReleaseBinaryAssetMapping, RustReleaseBinaryMapping } from "./src/project-rs.ts";
 export { PROJEN_VERSION } from "./src/projen-version.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
-export { DBXToolsRelease } from "./src/release.ts";
-export type { ReleaseStage, ReleaseDocsOptions, ReleaseSummaryOptions, DBXToolsReleaseOptions } from "./src/release.ts";
+export { GITHUB_NPM_REGISTRY_URL, DBXToolsRelease } from "./src/release.ts";
+export type { ReleaseStage, ReleasePagesOptions, ReleaseSummaryOptions, DBXToolsReleaseOptions } from "./src/release.ts";
 export { DBXToolsReleaseCatalog } from "./src/release-catalog.ts";
 export type { DBXToolsVersioningMode, ReleaseProjectLanguage, ReleaseArtifactKind, ReleaseEdgeKind, ReleasePropagation, ReleaseUnitRule, DBXToolsReleaseCatalogOptions, ReleaseDependencyInput, ReleaseProjectRegistration, ExternalReleaseProjectRegistration, ReleaseArtifactRegistration, ReleaseProjectNode, ReleaseArtifact, ReleaseDependencyEdge, ReleaseUnit, ReleaseUnitGraph } from "./src/release-catalog.ts";
 export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, RELEASE_SUMMARY_DIRECTORY, RELEASE_SUMMARY_PROVIDER_NAMES, RELEASE_SUMMARY_FILE } from "./src/release-dispatch.ts";
@@ -76,6 +76,7 @@ export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";
 export { makeDefaultedInterfaceParametersOptional, removeObsoleteInterfaceAliases, addTypeScriptExtensionsToBindingImports, addExplicitInterfaceReexports } from "./src/uniffi.ts";
 export type { TypeScriptBindingModule } from "./src/uniffi.ts";
 export { DBXToolsVsCode } from "./src/vscode.ts";
-export type { IgnoreGroupOptions } from "./src/watch.ts";
+export type { IgnoreGroupOptions, WatchLoopOptions } from "./src/watch.ts";
+export type { WorkspaceMutationLockOptions } from "./src/workspace-lock.ts";
 export { VERSION_FILE, DEFAULT_VERSION } from "./src/workspace-version.ts";
 export type { Semver, VersionLevel } from "./src/workspace-version.ts";

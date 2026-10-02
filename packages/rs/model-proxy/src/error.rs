@@ -124,6 +124,10 @@ impl IntoResponse for ProxyError {
     }
 }
 
+impl aide::OperationOutput for ProxyError {
+    type Inner = serde_json::Value;
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::to_bytes;

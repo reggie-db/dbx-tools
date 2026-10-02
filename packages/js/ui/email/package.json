@@ -40,9 +40,10 @@
   },
   "license": "Apache-2.0",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
-  "version": "0.9.13",
+  "version": "0.9.14",
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",

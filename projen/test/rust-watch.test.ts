@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { RustWorkspaceMapping } from "../src/project-rs.ts";
-import { affectedRustBindings, rustStructureChanged } from "../tasks/rust.ts";
+import {
+  affectedRustBindings,
+  changedRustBindings,
+  changedRustOwners,
+  rustStructureChanged,
+} from "../tasks/rust.ts";
 
 const directories: string[] = [];
 
@@ -34,6 +39,7 @@ function fixture(): { root: string; config: RustWorkspaceMapping } {
         },
       ],
       binaries: [],
+      openapi: [],
     },
   };
 }
@@ -53,6 +59,37 @@ describe("Rust watch structure detection", () => {
       affectedRustBindings(bindings, new Set(["consumer"])).map((binding) => binding.crate),
       ["consumer"],
     );
+  });
+
+  it("checks for an owned UniFFI path without walking dependents", () => {
+    const config: RustWorkspaceMapping = {
+      root: "packages/rs",
+      crates: ["packages/rs/shared", "packages/rs/consumer", "packages/rs/unrelated"],
+      bindings: [
+        { crate: "consumer", rust: "packages/rs/consumer", dependencies: ["shared"] },
+        { crate: "shared", rust: "packages/rs/shared" },
+        { crate: "unrelated", rust: "packages/rs/unrelated" },
+      ],
+      binaries: [],
+      openapi: [],
+    };
+    const changed = ["packages/rs/shared/src/lib.rs"];
+    assert.equal(
+      changedRustOwners(config, changed).some(() => true),
+      true,
+    );
+    assert.deepEqual(
+      changedRustBindings(config, changed)
+        .map((binding) => binding.crate)
+        .toArray(),
+      ["shared", "consumer"],
+    );
+    const unrelated = ["packages/rs/service/src/lib.rs"];
+    assert.equal(
+      changedRustOwners(config, unrelated).some(() => true),
+      false,
+    );
+    assert.deepEqual(changedRustBindings(config, unrelated).toArray(), []);
   });
   it("keeps ordinary UniFFI source edits on the targeted generation path", () => {
     const { root, config } = fixture();

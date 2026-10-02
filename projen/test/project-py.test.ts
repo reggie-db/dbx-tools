@@ -186,6 +186,23 @@ describe("DBXToolsPythonWorkspace", () => {
         .with?.["skip-existing"],
       true,
     );
+    const releaseAssets = release.jobs["publish-python-release-assets"]!;
+    assert.ok(releaseAssets.needs?.includes("publish-github-release"));
+    assert.ok(releaseAssets.needs?.includes("publish-pypi-core"));
+    assert.match(releaseAssets.if ?? "", /always\(\)/);
+    assert.match(releaseAssets.if ?? "", /publish-github-release.*skipped/);
+    assert.equal(
+      workflowStep(releaseAssets, "Checkout release commit").uses,
+      "actions/checkout@v6",
+    );
+    assert.equal(
+      workflowStep(releaseAssets, "Publish Python wheels to GitHub release").uses,
+      "softprops/action-gh-release@v2",
+    );
+    assert.equal(
+      workflowStep(releaseAssets, "Publish Python wheels to GitHub release").with?.files,
+      "dist/**/*.whl",
+    );
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
