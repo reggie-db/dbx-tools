@@ -128,11 +128,7 @@ async function githubReleaseAvailable(url: string): Promise<boolean> {
 }
 
 /** `cargo install` argv targeting a private `--root` under the ensure temp directory. */
-function cargoInstallArgs(
-  command: ReleaseBinaryCommand,
-  version: string,
-  root: string,
-): string[] {
+function cargoInstallArgs(command: ReleaseBinaryCommand, version: string, root: string): string[] {
   const args = [
     "install",
     command.crateName,

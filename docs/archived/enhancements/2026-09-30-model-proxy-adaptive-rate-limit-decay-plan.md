@@ -2,7 +2,9 @@
 
 Date: 2026-09-30
 
-Status: In progress
+Status: Completed. The embedded HTTP dashboard described here was subsequently
+consolidated into the typed Tauri desktop while retaining the bounded metrics
+and adaptive limiter behavior.
 
 ## Objective
 

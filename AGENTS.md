@@ -794,7 +794,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `@dbx-tools/rust-binary` owns the registry, release URL policy, exact-version
   installation through `@dbx-tools/core` `bin.ensure`, and process forwarding.
   A missing GitHub archive falls back to `cargo install --version --root
-  <temp>/cargo` using generated `crateName` / `cargoFeatures`; `file://`
+<temp>/cargo` using generated `crateName` / `cargoFeatures`; `file://`
   sources skip archive unpacking, and unstamped `0.0.0` binaries count as the
   requested version.
   Server plugins import the narrow package directly; do not put product registry or
@@ -1497,11 +1497,11 @@ package that imports it.
   and never writes the project. `missingDependencies` walks declared registry
   specifiers and each reachable packument `dependencies` map. `resolveVersion`
   accepts a name, `name@spec`, a specifier string, or `{ name, version?,
-  range? }` (`semver` aliases `version`) and returns a concrete version,
+range? }` (`semver` aliases `version`) and returns a concrete version,
   retaining a range when one was requested and a published version satisfies
   it. `resolveDependencies` reuses both; its dependency maps may be raw
   strings or those structured objects, and it returns `{ name, version,
-  range? }` maps. Packuments are fetched over HTTP; `registryUrl` defaults to
+range? }` maps. Packuments are fetched over HTTP; `registryUrl` defaults to
   `projectUtils.npmRegistry()`. No installer is invoked.
 - `projectUtils.npmRegistry` is memoized per cwd and options. It reads env
   (`npm_config_registry`, `NPM_CONFIG_REGISTRY`, `BUN_CONFIG_REGISTRY`), then

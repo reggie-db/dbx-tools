@@ -198,7 +198,7 @@ async fn track_active_request(
     request: Request,
     next: Next,
 ) -> Response {
-    if request.uri().path().starts_with("/metrics") || request.uri().path().starts_with("/api/") {
+    if request.uri().path().starts_with("/api/") {
         return next.run(request).await;
     }
     metrics.request_started();
@@ -2290,5 +2290,4 @@ mod tests {
         assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
         assert_eq!(response.headers()[header::RETRY_AFTER], "5");
     }
-
 }

@@ -603,7 +603,9 @@ async function loadVersionDependencies(
   version: string,
   registryUrl?: string | URL,
 ): Promise<Record<string, string>> {
-  const doc = await fetchRegistryJson(`${packumentUrl(name, registryUrl)}/${encodeURIComponent(version)}`);
+  const doc = await fetchRegistryJson(
+    `${packumentUrl(name, registryUrl)}/${encodeURIComponent(version)}`,
+  );
   if (!object.isRecord(doc)) return {};
   return stringMap(doc.dependencies);
 }

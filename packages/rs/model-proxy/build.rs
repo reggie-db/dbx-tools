@@ -18,8 +18,6 @@ fn main() {
         std::env::set_var("TAURI_CONFIG", &config);
         println!("cargo:rustc-env=TAURI_CONFIG={config}");
     }
-    tauri_build::try_build(
-        tauri_build::Attributes::new().capabilities_path_pattern(capabilities),
-    )
-    .expect("model-proxy Tauri configuration must be valid");
+    tauri_build::try_build(tauri_build::Attributes::new().capabilities_path_pattern(capabilities))
+        .expect("model-proxy Tauri configuration must be valid");
 }

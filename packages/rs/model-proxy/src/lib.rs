@@ -74,6 +74,7 @@ enum CliCommand {
     Service(ServiceCli),
 }
 
+/// Command-line server configuration shared by headless and desktop binaries.
 #[derive(Clone, Debug, Args)]
 pub struct ServerOptions {
     /// Enable debug request details when LOG_LEVEL is not set.
@@ -340,6 +341,7 @@ fn local_desktop_executable() -> Option<PathBuf> {
     desktop.is_file().then_some(desktop)
 }
 
+/// Bound proxy listener and immutable runtime state awaiting service.
 pub struct ProxyServer {
     state: AppState,
     listener: tokio::net::TcpListener,
@@ -348,6 +350,7 @@ pub struct ProxyServer {
 }
 
 impl ProxyServer {
+    /// Resolve Databricks runtime state and bind the configured listener.
     pub async fn bind(options: ServerOptions) -> Result<Self, Box<dyn std::error::Error>> {
         let ServerOptions {
             verbose: _,
@@ -373,7 +376,9 @@ impl ProxyServer {
             rate_limit_max_delay_ms,
         } = options;
         if rate_limit_initial_delay_ms > rate_limit_max_delay_ms {
-            return Err("RATE_LIMIT_INITIAL_DELAY_MS must not exceed RATE_LIMIT_MAX_DELAY_MS".into());
+            return Err(
+                "RATE_LIMIT_INITIAL_DELAY_MS must not exceed RATE_LIMIT_MAX_DELAY_MS".into(),
+            );
         }
         let in_databricks_app = dbx_tools_core::is_databricks_app();
         let metrics_config = MetricsConfig::resolve(metrics_requested, in_databricks_app)?;
@@ -417,9 +422,7 @@ impl ProxyServer {
                 model_fallback: ModelFallbackPolicy {
                     mode: rate_limit_model_fallback,
                     max_steps: rate_limit_model_fallback_max_steps as usize,
-                    threshold: Duration::from_millis(
-                        rate_limit_model_fallback_threshold_ms.get(),
-                    ),
+                    threshold: Duration::from_millis(rate_limit_model_fallback_threshold_ms.get()),
                 },
                 rate_limits: RateLimitPolicy {
                     max_retries: rate_limit_retries,
@@ -467,6 +470,7 @@ impl ProxyServer {
         })
     }
 
+    /// Return the bound socket address.
     pub fn address(&self) -> SocketAddr {
         self.address
     }
@@ -476,6 +480,7 @@ impl ProxyServer {
         self.state.clone()
     }
 
+    /// Serve proxy routes until shutdown and flush persistent aggregates.
     pub async fn serve(
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
@@ -495,6 +500,7 @@ impl ProxyServer {
     }
 }
 
+/// Run the headless proxy until the process receives its shutdown signal.
 pub async fn run_server(options: ServerOptions) -> Result<(), Box<dyn std::error::Error>> {
     ProxyServer::bind(options)
         .await?
@@ -502,6 +508,7 @@ pub async fn run_server(options: ServerOptions) -> Result<(), Box<dyn std::error
         .await
 }
 
+/// Parse and execute the headless command-line entry point.
 pub fn execute() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::from_arg_matches(&Cli::command().version(build_info::version()).get_matches())?;
     init_logging_with_verbose(cli.server.verbose)?;

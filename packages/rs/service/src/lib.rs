@@ -872,9 +872,7 @@ impl ServiceLifecycle {
         self.guard_runtime()?;
         require_absolute_existing(&install.program, "service executable")?;
         let desktop_enabled = is_desktop_program(&install.program);
-        if install.systray == SystrayMode::Always
-            && !desktop_enabled
-            && install.companion.is_none()
+        if install.systray == SystrayMode::Always && !desktop_enabled && install.companion.is_none()
         {
             return Err("systray mode always requires a desktop executable".into());
         }
@@ -943,9 +941,9 @@ impl ServiceLifecycle {
         let systray_registered = desktop_registered || legacy_systray_registered;
         let systray = desktop_registered && registration == "running"
             || legacy_systray_registered
-                && stored
-                    .as_ref()
-                    .is_some_and(|stored| companion_process(configured_companion(stored)).is_some());
+                && stored.as_ref().is_some_and(|stored| {
+                    companion_process(configured_companion(stored)).is_some()
+                });
         let healthy = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(2))
             .build()?

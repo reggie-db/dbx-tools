@@ -140,6 +140,23 @@ class BrandPackageAssets extends Component {
   }
 }
 
+/** Regenerate the committed Model Proxy desktop frontend after synthesis. */
+class ModelProxyDesktopAssets extends Component {
+  /**
+   * Rebuild the reviewed `desktop/dist` bundle and icon so the release input
+   * tracked in git always reflects the desktop frontend source, the same way
+   * branding assets are regenerated. The `model-proxy:desktop-check` gate then
+   * verifies the committed copy rather than being the only thing that produces it.
+   */
+  public override postSynthesize(): void {
+    execFileSync(
+      "bun",
+      [resolve(this.project.outdir, "scripts/model-proxy-desktop.mjs"), "--write"],
+      { stdio: "inherit" },
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Root construction
 // ---------------------------------------------------------------------------
@@ -1682,6 +1699,7 @@ root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
 root.annotateGenerated("/packages/js/shared/model/src/generated/**");
 new BrandPackageAssets(root);
+new ModelProxyDesktopAssets(root);
 root.addTask("model:metadata", {
   exec: [
     "cargo run --quiet -p dbx-tools-model --example generate-model-metadata --",

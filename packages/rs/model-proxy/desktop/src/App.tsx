@@ -62,9 +62,9 @@ function data<T>(result: CommandResult<T>): T {
 }
 
 function formatCount(value: number): string {
-  return new Intl.NumberFormat("en-US", { notation: value >= 10_000 ? "compact" : "standard" }).format(
-    value,
-  );
+  return new Intl.NumberFormat("en-US", {
+    notation: value >= 10_000 ? "compact" : "standard",
+  }).format(value);
 }
 
 function formatDuration(milliseconds: number): string {
@@ -153,11 +153,13 @@ export function App() {
   useEffect(() => {
     void load();
     let unlisten: (() => void) | undefined;
-    void events.metricsUpdated.listen((event) => {
-      setMetrics(event.payload.snapshot);
-    }).then((dispose) => {
-      unlisten = dispose;
-    });
+    void events.metricsUpdated
+      .listen((event) => {
+        setMetrics(event.payload.snapshot);
+      })
+      .then((dispose) => {
+        unlisten = dispose;
+      });
     return () => unlisten?.();
   }, [load]);
 
@@ -309,7 +311,11 @@ export function App() {
       {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="kpi-grid" aria-label="Proxy overview">
-        <Kpi label="Requests" value={formatCount(metrics.summary.totalRequests)} note="Current runtime" />
+        <Kpi
+          label="Requests"
+          value={formatCount(metrics.summary.totalRequests)}
+          note="Current runtime"
+        />
         <Kpi
           label="Success rate"
           value={formatPercent(success)}
@@ -334,7 +340,9 @@ export function App() {
           <div className="section-heading">
             <div>
               <h2 className="section-title">Traffic</h2>
-              <div className="section-subtitle">Last {metrics.retention.detailedSeconds / 60} minutes</div>
+              <div className="section-subtitle">
+                Last {metrics.retention.detailedSeconds / 60} minutes
+              </div>
             </div>
           </div>
           <ReactECharts className="chart" option={trafficOption} notMerge lazyUpdate />
@@ -345,7 +353,12 @@ export function App() {
             <div className="section-subtitle">By request setting</div>
           </div>
           <div className="reasoning-layout">
-            <ReactECharts className="reasoning-chart" option={reasoningOption} notMerge lazyUpdate />
+            <ReactECharts
+              className="reasoning-chart"
+              option={reasoningOption}
+              notMerge
+              lazyUpdate
+            />
             <div className="legend">
               {reasoning.length ? (
                 reasoning.map((level, index) => (
@@ -353,7 +366,9 @@ export function App() {
                     <span className="legend-label">
                       <span
                         className="legend-swatch"
-                        style={{ background: ["#0E538B", "#00A972", "#C26A00", "#618794"][index % 4] }}
+                        style={{
+                          background: ["#0E538B", "#00A972", "#C26A00", "#618794"][index % 4],
+                        }}
                       />
                       {level.level}
                     </span>
@@ -449,8 +464,7 @@ export function App() {
                             Cancel waits
                           </button>
                         ) : null}
-                        {!model.cooldownKeys &&
-                        !(model.capacityWaiters + model.cooldownWaiters) ? (
+                        {!model.cooldownKeys && !(model.capacityWaiters + model.cooldownWaiters) ? (
                           <span className="section-subtitle">-</span>
                         ) : null}
                       </div>

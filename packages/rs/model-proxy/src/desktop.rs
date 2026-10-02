@@ -18,8 +18,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     metrics::MetricsSnapshot,
     operator::{
-        AuthStatus, CooldownRelease, ModelControlInput, OperatorService, Profiles,
-        WaitCancellation,
+        AuthStatus, CooldownRelease, ModelControlInput, OperatorService, Profiles, WaitCancellation,
     },
     runtime::RuntimeSelection,
     ProxyServer, ServerOptions,
@@ -77,10 +76,7 @@ async fn get_auth_status(state: State<'_, DesktopState>) -> Result<AuthStatus, S
 
 #[tauri::command]
 #[specta::specta]
-async fn list_profiles(
-    state: State<'_, DesktopState>,
-    refresh: bool,
-) -> Result<Profiles, String> {
+async fn list_profiles(state: State<'_, DesktopState>, refresh: bool) -> Result<Profiles, String> {
     operator(&state)?.profiles(refresh)
 }
 
@@ -136,11 +132,13 @@ fn bindings() -> Builder<Wry> {
 }
 
 #[cfg(feature = "desktop-codegen")]
+/// Export TypeScript bindings from the same registry used by the runtime.
 pub fn export_bindings(path: impl AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
     bindings().export(specta_typescript::Typescript::default(), path)?;
     Ok(())
 }
 
+/// Run the Tauri shell with an optional in-process proxy server.
 pub fn run(
     server_options: Option<ServerOptions>,
     probe: bool,
@@ -183,9 +181,7 @@ pub fn run(
                     signal_cancellation.cancel();
                 });
                 tauri::async_runtime::spawn(async move {
-                    let result = server
-                        .serve(server_cancellation.cancelled_owned())
-                        .await;
+                    let result = server.serve(server_cancellation.cancelled_owned()).await;
                     if let Err(error) = result {
                         tracing::error!(%error, "model proxy desktop server stopped");
                         app_handle.exit(1);
@@ -261,8 +257,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("bindings.ts");
         export_bindings(&generated).unwrap();
-        let committed =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("desktop/src/bindings.ts");
+        let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("desktop/src/bindings.ts");
         assert_eq!(
             std::fs::read(generated).unwrap(),
             std::fs::read(committed).unwrap()

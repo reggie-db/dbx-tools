@@ -383,7 +383,10 @@ function* npmRegistryCandidates(cwd: string, envVars: boolean): Generator<string
   }
 }
 
-function toRegistryUrl(candidate: string | undefined, overrideOnly: boolean): net.UrlBuilder | undefined {
+function toRegistryUrl(
+  candidate: string | undefined,
+  overrideOnly: boolean,
+): net.UrlBuilder | undefined {
   const trimmed = stringUtils.trimToNull(candidate);
   if (!trimmed) return undefined;
   const url = net.urlBuilder(trimmed);
@@ -507,10 +510,7 @@ function unquoteIniValue(value: string): string {
   const trimmed = value.trim();
   const comment = trimmed.search(/\s+#/);
   const raw = comment === -1 ? trimmed : trimmed.slice(0, comment).trim();
-  if (
-    (raw.startsWith('"') && raw.endsWith('"')) ||
-    (raw.startsWith("'") && raw.endsWith("'"))
-  ) {
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
     return raw.slice(1, -1);
   }
   return raw;

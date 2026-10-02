@@ -30,14 +30,12 @@ use tokio::{
 };
 
 use crate::{adaptive::AutoTransition, request_log::RequestOutcome};
-#[cfg(any(feature = "desktop", test))]
-use crate::{
-    rate_limit::RateLimitModelSnapshot,
-    throttle::ThrottleModelSnapshot,
-};
 #[cfg(feature = "metrics")]
 use crate::{adaptive::AutoTransitionKind, request_log::ReasoningSetting};
+#[cfg(any(feature = "desktop", test))]
+use crate::{rate_limit::RateLimitModelSnapshot, throttle::ThrottleModelSnapshot};
 
+#[cfg(any(feature = "metrics", test))]
 const MODEL_SERIES_LIMIT: usize = 32;
 #[cfg(feature = "metrics")]
 const DETAILED_BUCKET_LIMIT: usize = 720;
@@ -45,6 +43,7 @@ const DETAILED_BUCKET_LIMIT: usize = 720;
 const ROLLUP_BUCKET_LIMIT: usize = 1_440;
 #[cfg(feature = "metrics")]
 const RATE_LIMIT_EVENT_LIMIT: usize = 128;
+#[cfg(any(feature = "metrics", test))]
 const RETENTION_TARGET_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Requested metrics behavior before build capabilities are resolved.
@@ -117,9 +116,7 @@ impl MetricsConfig {
             MetricsOption::Auto => MetricsMode::Off,
             MetricsOption::Off => MetricsMode::Off,
             MetricsOption::On if cfg!(feature = "metrics") => MetricsMode::On,
-            MetricsOption::On => {
-                return Err(MetricsError::CollectionUnavailable)
-            }
+            MetricsOption::On => return Err(MetricsError::CollectionUnavailable),
         };
         Ok(Self { mode })
     }
@@ -536,6 +533,7 @@ impl Drop for MetricsStream {
 }
 
 /// Current dashboard and JSON endpoint payload.
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -676,6 +674,7 @@ impl MetricsSnapshot {
     }
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -700,6 +699,7 @@ pub(crate) struct SummarySnapshot {
     pub(crate) cooldown_releases: u64,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -714,6 +714,7 @@ pub(crate) struct BucketSnapshot {
     pub(crate) maximum_latency_ms: u64,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -722,6 +723,7 @@ pub(crate) struct ReasoningLevelSnapshot {
     pub(crate) requests: u64,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -881,6 +883,7 @@ impl ModelSnapshot {
     }
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -890,6 +893,7 @@ pub(crate) struct RateLimitEvent {
     pub(crate) transition: AutoTransition,
 }
 
+#[cfg(any(feature = "metrics", test))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "desktop", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
@@ -2086,6 +2090,7 @@ impl ModelMetrics {
         }
     }
 
+    #[cfg(any(feature = "desktop", test))]
     fn reset_capacity(&mut self) {
         self.queue_depth = 0;
         self.capacity_waiters = 0;
@@ -2407,10 +2412,7 @@ mod tests {
 
     #[test]
     fn metrics_aliases_and_build_defaults_are_stable() {
-        assert_eq!(
-            "true".parse::<MetricsOption>().unwrap(),
-            MetricsOption::On
-        );
+        assert_eq!("true".parse::<MetricsOption>().unwrap(), MetricsOption::On);
         assert_eq!(
             "false".parse::<MetricsOption>().unwrap(),
             MetricsOption::Off

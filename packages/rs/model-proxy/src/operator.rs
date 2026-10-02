@@ -147,10 +147,7 @@ impl OperatorService {
             .map_err(|error| error.to_string())
     }
 
-    pub(crate) async fn switch(
-        &self,
-        selection: RuntimeSelection,
-    ) -> Result<AuthStatus, String> {
+    pub(crate) async fn switch(&self, selection: RuntimeSelection) -> Result<AuthStatus, String> {
         let status = self
             .state
             .runtime

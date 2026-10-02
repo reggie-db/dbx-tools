@@ -60,7 +60,10 @@ describe("npmRegistry", () => {
         resolve(project, "bunfig.toml"),
         `[install]\nregistry = "https://bun.example.test/"\n`,
       );
-      writeFileSync(resolve(project, "pnpm-workspace.yaml"), "registry: https://pnpm.example.test/\n");
+      writeFileSync(
+        resolve(project, "pnpm-workspace.yaml"),
+        "registry: https://pnpm.example.test/\n",
+      );
       assert.equal(
         spawnRegistry(project, home).hostname,
         "bun.example.test",
