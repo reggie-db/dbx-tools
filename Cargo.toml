@@ -142,7 +142,7 @@ resolver = "2"
 
     [workspace.dependencies.uniffi]
     version = "=0.31"
-    features = [ "cli", "tokio" ]
+    features = [ "tokio" ]
 
     [workspace.dependencies.url]
     version = "2"

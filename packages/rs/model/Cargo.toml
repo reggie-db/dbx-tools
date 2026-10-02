@@ -26,9 +26,11 @@ crate-type = [ "lib", "cdylib" ]
 [[bin]]
 name = "dbx-tools-model-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
+required-features = [ "uniffi-bindgen" ]
 
 [features]
 contract-generation = [ "dep:ts-rs" ]
+uniffi-bindgen = [ "uniffi/cli" ]
 
 [[example]]
 name = "generate-model-contracts"

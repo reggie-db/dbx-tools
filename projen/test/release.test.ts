@@ -551,7 +551,8 @@ describe("optional Node release stage", () => {
       assert.match(syncScript, /git merge --abort/);
       assert.match(syncScript, /no longer exists/);
       assert.equal("verify-context" in workflow.jobs, false);
-      assert.equal("rust-build" in workflow.jobs, false);
+      assert.equal("rust-uniffi" in workflow.jobs, false);
+      assert.equal("rust-binaries" in workflow.jobs, false);
       assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");
       const reconcile =
         step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "";

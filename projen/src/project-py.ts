@@ -465,9 +465,9 @@ export class DBXToolsPythonWorkspace extends Component {
     if (project.releaseCatalog.mode === "independent") {
       workflow.addJob("build-python", {
         if: usesRustArtifacts
-          ? "${{ always() && needs.release-plan.outputs.python == 'true' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
+          ? "${{ always() && needs.release-plan.outputs.python == 'true' && needs.rust-uniffi.result != 'failure' && needs.rust-uniffi.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
           : "${{ needs.release-plan.outputs.python == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}",
-        needs: ["release-plan", ...(usesRustArtifacts ? ["rust-build"] : [])],
+        needs: ["release-plan", ...(usesRustArtifacts ? ["rust-uniffi"] : [])],
         runsOn: ["ubuntu-latest"],
         permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
         timeoutMinutes: 20,
@@ -546,9 +546,9 @@ export class DBXToolsPythonWorkspace extends Component {
     }
     workflow.addJob("build-python", {
       if: usesRustArtifacts
-        ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
+        ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-uniffi.result != 'failure' && needs.rust-uniffi.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
         : releaseStageCondition("python"),
-      needs: ["verify-context", ...(usesRustArtifacts ? ["rust-build"] : [])],
+      needs: ["verify-context", ...(usesRustArtifacts ? ["rust-uniffi"] : [])],
       runsOn: ["ubuntu-latest"],
       permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
       timeoutMinutes: 20,

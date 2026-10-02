@@ -227,7 +227,9 @@ const facadeDependency = (name, dependency, catalog, workspaceVersions) => {
   if (dependency.startsWith("workspace:")) {
     const version = workspaceVersions.get(name);
     if (!version) throw new Error(`Missing workspace version for ${name}`);
-    return dependency === "workspace:*" ? version : `${dependency.slice("workspace:".length)}${version}`;
+    return dependency === "workspace:*"
+      ? version
+      : `${dependency.slice("workspace:".length)}${version}`;
   }
   if (!dependency.startsWith("catalog:")) return dependency;
   const resolved = catalog[name];
@@ -481,6 +483,8 @@ const build = () => {
       ...(existsSync(resolve(root, "Cargo.lock")) ? ["--locked"] : []),
       "--package",
       crate,
+      "--features",
+      "uniffi-bindgen",
       "--target",
       cargoTarget,
     ]);

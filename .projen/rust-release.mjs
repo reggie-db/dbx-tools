@@ -1248,7 +1248,7 @@ function stringify(obj, { maxDepth = 1000, numbersAsFloat = false } = {}) {
  */
 
 // src/_rust-release.ts
-var FINGERPRINT_SCHEMA = 3;
+var FINGERPRINT_SCHEMA = 4;
 var VERSION_SLOT_SCHEMA = 1;
 var VERSION_CAPACITY = 64;
 var MAGIC = Buffer.from("DBXVERSION\x00\x00", "binary");
@@ -1337,9 +1337,9 @@ function workspaceVersion(root) {
 function toPosix(path) {
   return path.split(sep).join("/");
 }
-function sourceRoots(root, metadata, sources) {
+function sourceRoots(root, metadata, sources, includeWorkspace) {
   const members = new Set(metadata.workspace_members);
-  const discovered = metadata.packages.filter((candidate) => members.has(candidate.id)).map((candidate) => dirname(candidate.manifest_path));
+  const discovered = includeWorkspace ? metadata.packages.filter((candidate) => members.has(candidate.id)).map((candidate) => dirname(candidate.manifest_path)) : [];
   return [...new Set([...discovered, ...sources.map((source) => resolve(root, source))])].map((path) => toPosix(relative(root, path)) || ".").sort();
 }
 function ignoredInput(path) {
@@ -1397,13 +1397,13 @@ function normalizedInput(root, file, content, packageNames) {
   }
   return content;
 }
-function sourceHash(root, sources = []) {
+function sourceHash(root, sources = [], includeWorkspace = true) {
   const resolvedRoot = resolve(root);
   const metadata = cargoMetadata(resolvedRoot);
   const members = new Set(metadata.workspace_members);
   const packageNames = new Set(metadata.packages.filter((candidate) => members.has(candidate.id)).map((candidate) => candidate.name));
   const hash = createHash("sha256");
-  for (const file of inputFiles(resolvedRoot, sourceRoots(resolvedRoot, metadata, sources))) {
+  for (const file of inputFiles(resolvedRoot, sourceRoots(resolvedRoot, metadata, sources, includeWorkspace))) {
     const absolute = join(resolvedRoot, file);
     const stat = lstatSync(absolute);
     hash.update(file);
@@ -1426,6 +1426,7 @@ function linkerIdentity(target) {
 }
 function targetKey({
   rustSourceHash,
+  namespace = "workspace",
   target,
   targetConfig = "",
   toolchain = "stable",
@@ -1435,6 +1436,7 @@ function targetKey({
   for (const value of [
     String(FINGERPRINT_SCHEMA),
     String(VERSION_SLOT_SCHEMA),
+    namespace,
     rustSourceHash,
     target,
     targetConfig,
@@ -1460,12 +1462,14 @@ function fingerprint({
   targets,
   toolchain = "stable",
   portable = false,
-  sources = []
+  sources = [],
+  sourceOnly = false,
+  namespace = "workspace"
 }) {
   if (!targets.length)
     throw new Error("at least one --target is required");
   const resolvedRoot = resolve(root);
-  const rustSourceHash = sourceHash(resolvedRoot, sources);
+  const rustSourceHash = sourceHash(resolvedRoot, sources, !sourceOnly);
   const rustc = portable ? undefined : rustcIdentity();
   const targetEntries = targets.map((specification) => {
     const separator = specification.indexOf("|");
@@ -1473,12 +1477,13 @@ function fingerprint({
     const targetConfig = separator < 0 ? "" : specification.slice(separator + 1);
     return [
       target,
-      targetKey({ rustSourceHash, target, targetConfig, toolchain, rustc })
+      targetKey({ rustSourceHash, namespace, target, targetConfig, toolchain, rustc })
     ];
   }).sort(([left], [right]) => left.localeCompare(right));
   const manifest = {
     schemaVersion: FINGERPRINT_SCHEMA,
     versionSlotSchema: VERSION_SLOT_SCHEMA,
+    namespace,
     rustSourceHash,
     targets: Object.fromEntries(targetEntries)
   };
@@ -1486,7 +1491,7 @@ function fingerprint({
   if (check) {
     const current = JSON.parse(readFileSync(outputPath, "utf8"));
     const targetsMatch = targetEntries.every(([target, key]) => current.targets?.[target] === key);
-    if (current.schemaVersion !== manifest.schemaVersion || current.versionSlotSchema !== manifest.versionSlotSchema || current.rustSourceHash !== manifest.rustSourceHash || !targetsMatch) {
+    if (current.schemaVersion !== manifest.schemaVersion || current.versionSlotSchema !== manifest.versionSlotSchema || current.namespace !== manifest.namespace || current.rustSourceHash !== manifest.rustSourceHash || !targetsMatch) {
       throw new Error(`${outputPath} does not match current Rust inputs`);
     }
   } else {
@@ -1635,7 +1640,9 @@ function fingerprintCommand(args) {
       target: { type: "string", multiple: true },
       toolchain: { type: "string", default: "stable" },
       portable: { type: "boolean", default: false },
-      source: { type: "string", multiple: true }
+      source: { type: "string", multiple: true },
+      "source-only": { type: "boolean", default: false },
+      namespace: { type: "string", default: "workspace" }
     },
     strict: true
   });
@@ -1646,7 +1653,9 @@ function fingerprintCommand(args) {
     targets: values.target ?? [],
     toolchain: values.toolchain,
     portable: values.portable,
-    sources: values.source ?? []
+    sources: values.source ?? [],
+    sourceOnly: values["source-only"],
+    namespace: values.namespace
   });
 }
 function stampCommand(args) {

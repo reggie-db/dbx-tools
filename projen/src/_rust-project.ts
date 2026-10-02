@@ -9,6 +9,8 @@ import type { RustReleaseOs } from "./project-rs.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
+export const UNIFFI_BINDGEN_FEATURE = "uniffi-bindgen";
+
 export interface CargoDependencyOptions {
   readonly version?: string;
   readonly workspace?: boolean;
@@ -306,7 +308,13 @@ export class RustProject extends Project implements DBXToolsProject {
         ? {
             bin: [
               ...(this.uniffi
-                ? [{ name: `${this.crateName}-uniffi-bindgen`, path: "uniffi-bindgen.rs" }]
+                ? [
+                    {
+                      name: `${this.crateName}-uniffi-bindgen`,
+                      path: "uniffi-bindgen.rs",
+                      "required-features": [UNIFFI_BINDGEN_FEATURE],
+                    },
+                  ]
                 : []),
               ...(binary ? [{ name: binaryName, path: "src/main.rs" }] : []),
               ...(options.binaries ?? []).map((target) => ({
@@ -319,11 +327,12 @@ export class RustProject extends Project implements DBXToolsProject {
             ],
           }
         : {}),
-      ...(options.features || options.defaultFeatures
+      ...(this.uniffi || options.features || options.defaultFeatures
         ? {
             features: {
               ...(options.defaultFeatures ? { default: [...options.defaultFeatures] } : {}),
               ...options.features,
+              ...(this.uniffi ? { [UNIFFI_BINDGEN_FEATURE]: ["uniffi/cli"] } : {}),
             },
           }
         : {}),

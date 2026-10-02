@@ -999,6 +999,9 @@ export class DBXToolsRustWorkspace extends Component {
           name: binary.binaryName,
           generated: true,
           data: {
+            binary: binary.binaryName,
+            crate: binary.crateName,
+            features: binary.cargoFeatures,
             targets: resolved.nativeTargets.filter((target) =>
               binary.assets.some((asset) => asset.os === target.os && asset.cpu === target.cpu),
             ),
@@ -1095,8 +1098,17 @@ export class DBXToolsRustWorkspace extends Component {
     }
     configureRustReleaseTask(project, plan);
     if (project.releaseCatalog.mode === "independent") {
-      if (plan.hasTargetOutputs && plan.targets.length) {
-        workflow.addJob("rust-build", rustBuildJob(plan, independentReleaseSetupSteps(project)));
+      if (plan.uniffiTargets.length) {
+        workflow.addJob(
+          "rust-uniffi",
+          rustBuildJob(plan, "uniffi", independentReleaseSetupSteps(project)),
+        );
+      }
+      if (plan.binaryTargets.length) {
+        workflow.addJob(
+          "rust-binaries",
+          rustBuildJob(plan, "binaries", independentReleaseSetupSteps(project)),
+        );
       }
       if (plan.publicCrates.length) {
         workflow.addJob("publish-cargo", independentRustCargoPublishJob(project, plan));
@@ -1117,15 +1129,18 @@ export class DBXToolsRustWorkspace extends Component {
       }
       return;
     }
-    if (plan.hasTargetOutputs && plan.targets.length) {
-      workflow.addJob("rust-build", rustBuildJob(plan));
+    if (plan.uniffiTargets.length) {
+      workflow.addJob("rust-uniffi", rustBuildJob(plan, "uniffi"));
+    }
+    if (plan.binaryTargets.length) {
+      workflow.addJob("rust-binaries", rustBuildJob(plan, "binaries"));
     }
     if (plan.publicCrates.length) {
       workflow.addJob("publish-cargo", rustCargoPublishJob(plan, false));
       workflow.addJob("publish-local-cargo", rustCargoPublishJob(plan, true));
     }
     if (plan.releaseBinaries.length) {
-      workflow.addJob("publish-github-release", rustGitHubReleaseJob());
+      workflow.addJob("publish-github-release", rustGitHubReleaseJob(plan));
     }
     if (plan.nodeBindings.length && hasNodeRelease(project)) {
       workflow.addJob("publish-native-npm", rustNativeNpmPublishJob(project));

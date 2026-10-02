@@ -184,8 +184,10 @@ Foreign callback adapters must first be wrapped in an object created by their
 own native library (`createStorageHandle` for auth), because callback registries
 are library-local. Release wheels replace sibling Git requirements with matching
 native-wheel versions, and dependent publishers wait for their dependencies.
-Each crate builds its own `<crate>-uniffi-bindgen` executable so a workspace
-build has no colliding binary outputs. Packaging runs that prebuilt executable.
+Each crate builds its own `<crate>-uniffi-bindgen` executable so one target row
+has no colliding binary outputs. The executable requires the generated
+`uniffi-bindgen` feature, which enables `uniffi/cli` only in the UniFFI matrix.
+Packaging runs that prebuilt executable.
 Cargo manifests, target config, and UniFFI config are generated from structured
 Projen `TomlFile` objects. Local and release Python generation share one
 dependency-free helper for generator arguments, target-specific executable
@@ -231,13 +233,16 @@ branch that already contains released `main`, and merges `main` into a diverged
 branch when the merge is conflict-free. Missing branches and conflicted merges
 are left untouched.
 
-The Rust matrix has one row per target. Each row installs native dependencies,
-builds the Cargo workspace once, then packages every discovered output from
-that shared build. Set a source-only crate's or
+Rust release generation creates separate UniFFI and binary matrices with one row
+per target. A UniFFI row builds all discovered binding packages together. A
+binary row builds all selected release binaries in one Cargo invocation with
+the union of their required features, so a feature-gated companion does not
+trigger a second compile graph. Each matrix has its own source-scoped
+fingerprint, raw bundle, and Cargo cache namespace. Set a source-only crate's or
 release-enabled binary's `releaseExcludeOs` package option to omit it from
-incompatible rows through Cargo `--exclude`. Release binary packaging and
-artifact upload are skipped in those rows. UniFFI crates cannot use this option
-because every configured target must produce their artifacts.
+incompatible binary rows. Release binary packaging and artifact upload are
+skipped in those rows. UniFFI crates cannot use this option because every
+configured target must produce their artifacts.
 Set a release binary's `cli` package option and the workspace
 `cliRegistryPath` to generate a typed `dbx` command registry from the same
 selected targets. The generated entries carry only the archives that the
@@ -250,17 +255,17 @@ Node facades. A binary-only row therefore installs no language package tool.
 `rustVersion` remains the MSRV recorded in package manifests, while
 `releaseRustVersion` independently defaults release compilation to `stable`.
 Stable Windows rows verify and use the hosted runner's installed Rust toolchain
-and select `rust-lld` for the workspace build. Rust release rows restore and
-update dependency-only Cargo caches in the release branch's cache scope. The
-cache key excludes workspace version changes, and manual tag recovery restores
-without saving a tag-scoped copy. There is no separate cache workflow or
-sccache layer. After publishing the current raw Rust bundles and build manifests,
+and select `rust-lld` for compilation. Rust release rows restore and update
+dependency-only Cargo caches in the release branch's category-and-target cache
+scope. The cache key excludes workspace version changes, and manual tag recovery
+restores without saving a tag-scoped copy. There is no separate cache workflow
+or sccache layer. After publishing the current raw Rust bundles and build manifests,
 the GitHub release job deletes those internal assets from published
 `vMAJOR.MINOR.PATCH` releases strictly lower than the current version while
 leaving versioned consumer binaries in place. Phase timings are written to each
 build log. Python generation executes the already-built
-`target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging therefore
-does no Rust compilation after the main workspace build.
+`target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging
+therefore does no Rust compilation after the UniFFI build.
 
 Artifacts identify their crate, target, and type. Rust jobs publish non-private
 Cargo crates with `cargo publish --no-verify` and upload requested binary assets

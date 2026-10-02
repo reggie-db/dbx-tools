@@ -809,12 +809,16 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   from the parent project, while `DBX_TOOLS_RELEASE_PLATFORMS` is parsed by the
   workspace when no explicit release targets are supplied. Generated Cargo and
   UniFFI outputs are ignored from discovered binding metadata rather than
-  hardcoded package paths. Release generation uses one matrix
-  row per selected target, builds the Cargo workspace once in that row, and
-  packages every discovered UniFFI binding and release-enabled binary from the
-  shared output. A source-only crate or release-enabled binary may set
+  hardcoded package paths. Release generation uses separate UniFFI and binary
+  matrices, each with one row per selected target. A UniFFI row builds every
+  discovered binding package together; a binary row builds every selected
+  release binary together with the union of their required features, so a main
+  binary and feature-gated companion share one Cargo invocation. The matrices
+  have separate source-scoped fingerprints, raw bundles, and Cargo cache
+  namespaces, so a binary-only source change does not invalidate UniFFI reuse.
+  A source-only crate or release-enabled binary may set
   `releaseExcludeOs` to stay out of incompatible release rows; the generator
-  adds Cargo `--exclude` arguments for those rows and skips binary packaging and
+  omits that package and its binaries from those rows and skips packaging and
   upload there. UniFFI crates cannot use exclusions because every configured
   target must produce their artifacts. A release binary with `cli: true`
   appears in the generated registry at `cliRegistryPath`; the registry includes
@@ -863,7 +867,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   available directly. Node generation fails on binding-name conflicts.
   Stable Windows release rows use the toolchain already installed on the hosted
   runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
-  Their workspace build selects `rust-lld`. Both MSVC targets use
+  Their Rust compilation selects `rust-lld`. Both MSVC targets use
   `target-feature=+crt-static`, so Node archives and Python wheels do not depend
   on a separately installed `VCRUNTIME140.dll`. An explicitly pinned
   `releaseRustVersion` still uses the setup action on Windows.
@@ -925,7 +929,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   unchanged workspace crate outputs when an exact raw-bundle hit is unavailable;
   Cargo's source hashing still rebuilds changed crates. Do not add a separate
   cache workflow or GitHub sccache layer because per-object entries can exhaust
-  the repository quota. A successful GitHub release keeps its raw Rust bundles
+  the repository quota. UniFFI and binary caches use distinct shared keys, and
+  their raw fingerprints hash only the workspace packages in that build graph
+  plus shared Cargo configuration. A successful GitHub release keeps its raw Rust bundles
   and build manifests, then deletes those internal assets from published
   `vMAJOR.MINOR.PATCH` releases strictly lower than the current version. Consumer
   binaries remain attached to their original versions. `Cargo.lock` and
@@ -934,8 +940,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
   Packaging must
-  execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace
-  build, never `cargo run`, so no Rust compilation occurs after the main build.
+  execute the target-specific `<crate>-uniffi-bindgen` binary produced by the
+  UniFFI matrix, never `cargo run`, so no Rust compilation occurs during packaging.
+  The generated bindgen binary requires the package's private
+  `uniffi-bindgen` feature, which is the only release surface that enables
+  `uniffi/cli`; runtime libraries and release binaries do not compile the
+  bindgen dependency graph.
   Cargo manifests, UniFFI configs, and target configs use Projen `TomlFile`
   objects with nested sections and array-of-table `bin` entries; do not restore
   a handwritten TOML renderer. Local and release Python binding placement share

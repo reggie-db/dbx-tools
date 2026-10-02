@@ -75,7 +75,8 @@ new Command()
       writeOutput("python_packages", plan.pythonPackages);
       writeOutput("rust_packages", plan.rustPackages);
       writeOutput("artifacts", plan.artifacts);
-      writeOutput("rust_targets", plan.rustTargets);
+      writeOutput("rust_uniffi_targets", plan.rustUniffiTargets);
+      writeOutput("rust_binary_targets", plan.rustBinaryTargets);
       writeOutput("stages", plan.stages);
       for (const [stage, enabled] of Object.entries(plan.stages)) {
         writeOutput(stage, enabled);

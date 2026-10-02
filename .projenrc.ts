@@ -1226,7 +1226,7 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
     tracing: "0.1",
     "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
     "ts-rs": "=12.0.1",
-    uniffi: { version: "=0.31", features: ["cli", "tokio"] },
+    uniffi: { version: "=0.31", features: ["tokio"] },
     url: { version: "2", features: ["serde"] },
     uuid: { version: "1", features: ["v4"] },
     "webpki-roots": "1",

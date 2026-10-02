@@ -591,7 +591,8 @@ function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
       python_packages: { stepId: "plan", outputName: "python_packages" },
       rust_packages: { stepId: "plan", outputName: "rust_packages" },
       artifacts: { stepId: "plan", outputName: "artifacts" },
-      rust_targets: { stepId: "plan", outputName: "rust_targets" },
+      rust_uniffi_targets: { stepId: "plan", outputName: "rust_uniffi_targets" },
+      rust_binary_targets: { stepId: "plan", outputName: "rust_binary_targets" },
     },
     steps: [
       {

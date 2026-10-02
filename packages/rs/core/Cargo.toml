@@ -26,6 +26,10 @@ crate-type = [ "lib", "cdylib" ]
 [[bin]]
 name = "dbx-tools-core-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
+required-features = [ "uniffi-bindgen" ]
+
+[features]
+uniffi-bindgen = [ "uniffi/cli" ]
 
 [dependencies.async-trait]
 workspace = true
