@@ -37,7 +37,7 @@ workspace = true
 workspace = true
 
 [dependencies.dbx-tools-core]
-version = "0.9.14"
+version = "0.9.15"
 path = "../core"
 
 [dependencies.futures]
