@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.9.15";
+export const PACKAGE_VERSION = "0.9.16";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -60,8 +60,8 @@ export { DBXToolsRustProject, RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARG
 export type { CargoDependency, CargoDependencyOptions, CargoExampleOptions, DBXToolsRustProjectOptions, RustCrateOptions, RustCliOptions, RustOpenApiOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustOpenApiMapping, RustWorkspaceMapping, RustReleaseBinaryAssetMapping, RustReleaseBinaryMapping } from "./src/project-rs.ts";
 export { PROJEN_VERSION } from "./src/projen-version.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
-export { GITHUB_NPM_REGISTRY_URL, DBXToolsRelease } from "./src/release.ts";
-export type { ReleaseStage, ReleasePagesOptions, ReleaseSummaryOptions, DBXToolsReleaseOptions } from "./src/release.ts";
+export { DBXToolsRelease } from "./src/release.ts";
+export type { ReleaseStage, ReleaseDocsOptions, ReleaseSummaryOptions, DBXToolsReleaseOptions } from "./src/release.ts";
 export { DBXToolsReleaseCatalog } from "./src/release-catalog.ts";
 export type { DBXToolsVersioningMode, ReleaseProjectLanguage, ReleaseArtifactKind, ReleaseEdgeKind, ReleasePropagation, ReleaseUnitRule, DBXToolsReleaseCatalogOptions, ReleaseDependencyInput, ReleaseProjectRegistration, ExternalReleaseProjectRegistration, ReleaseArtifactRegistration, ReleaseProjectNode, ReleaseArtifact, ReleaseDependencyEdge, ReleaseUnit, ReleaseUnitGraph } from "./src/release-catalog.ts";
 export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, RELEASE_SUMMARY_DIRECTORY, RELEASE_SUMMARY_PROVIDER_NAMES, RELEASE_SUMMARY_FILE } from "./src/release-dispatch.ts";

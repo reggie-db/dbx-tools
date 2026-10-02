@@ -119,6 +119,8 @@ if (!values["skip-build"]) {
     ...(existsSync(join(root, "Cargo.lock")) ? ["--locked"] : []),
     "--package",
     crate,
+    "--features",
+    "uniffi-bindgen",
     ...(values["cargo-target"] ? ["--target", values["cargo-target"]] : []),
   ]);
 }

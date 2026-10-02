@@ -15,17 +15,16 @@ import { readWorkspaceVersion } from "./workspace-version.ts";
 
 const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
-export const GITHUB_NPM_REGISTRY_URL = "https://npm.pkg.github.com";
 const nodeReleaseProjects = new WeakSet<DBXToolsJavaScriptProject>();
 const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
 const releaseWorkflows = new WeakMap<DBXToolsJavaScriptProject, GithubWorkflow>();
-const publicationJobs = new WeakMap<GithubWorkflow, Set<string>>();
+const independentPublicationJobs = new WeakMap<GithubWorkflow, Set<string>>();
 
 /** Independently recoverable portions of the release workflow. */
-export type ReleaseStage = "all" | "node" | "python" | "pages";
+export type ReleaseStage = "all" | "node" | "python" | "docs";
 
 /** GitHub Pages configuration included in the unified release workflow. */
-export interface ReleasePagesOptions {
+export interface ReleaseDocsOptions {
   readonly siteUrl: string;
   readonly base?: string;
   /** Repository-defined setup and generation steps run before saving the Bun cache. */
@@ -53,8 +52,10 @@ export interface DBXToolsReleaseOptions {
   /** Omit normal npm workspace publication while retaining other release jobs. */
   readonly nodeRelease?: boolean;
   /** Build and deploy generated documentation through GitHub Pages. */
-  readonly pages?: ReleasePagesOptions;
-  /** Repository task names run in the release worktree before validation. */
+  readonly docs?: ReleaseDocsOptions;
+  /** Python package root passed to local release preparation. */
+  readonly pythonRoot?: string;
+  /** Repository task names run in the release worktree before expensive validation and publication. */
   readonly validationTasks?: readonly string[];
   /**
    * Existing source branch safely fast-forwarded after publication.
@@ -81,11 +82,11 @@ export function tryReleaseWorkflow(project: DBXToolsJavaScriptProject): GithubWo
   return releaseWorkflows.get(project);
 }
 
-/** Register one job that must finish before the GitHub Page is rebuilt. */
-export function registerPublicationJob(workflow: GithubWorkflow, jobId: string): void {
-  const jobs = publicationJobs.get(workflow) ?? new Set<string>();
+/** Register one publication job for the independent release completion barrier. */
+export function registerIndependentPublicationJob(workflow: GithubWorkflow, jobId: string): void {
+  const jobs = independentPublicationJobs.get(workflow) ?? new Set<string>();
   jobs.add(jobId);
-  publicationJobs.set(workflow, jobs);
+  independentPublicationJobs.set(workflow, jobs);
 }
 
 /** Whether the unified workflow publishes the normal npm workspace. */
@@ -158,20 +159,6 @@ export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): reado
   ];
 }
 
-/** Reconfigure npm authentication for GitHub Packages publication. */
-export function githubPackagesSetupStep(project: DBXToolsJavaScriptProject): JobStep {
-  return {
-    name: "Setup Node.js for GitHub Packages",
-    uses: "actions/setup-node@v6",
-    with: {
-      "node-version": NODE_VERSION,
-      "registry-url": GITHUB_NPM_REGISTRY_URL,
-      "always-auth": true,
-      scope: `@${project.scope}`,
-    },
-  };
-}
-
 /** Authentication, provenance, and dry-run values shared by npm publishers. */
 export function npmPublishEnvironment(): Record<string, string> {
   return {
@@ -179,17 +166,6 @@ export function npmPublishEnvironment(): Record<string, string> {
       "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
     NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
     NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-    DRY_RUN:
-      "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
-  };
-}
-
-/** Authentication and dry-run values for GitHub Packages publication. */
-export function githubPackagesPublishEnvironment(): Record<string, string> {
-  return {
-    NPM_CONFIG_PROVENANCE: "false",
-    NPM_CONFIG_TOKEN: "${{ secrets.PACKAGES_TOKEN }}",
-    NODE_AUTH_TOKEN: "${{ secrets.PACKAGES_TOKEN }}",
     DRY_RUN:
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
   };
@@ -311,46 +287,31 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
     if: releaseStageCondition("node"),
     needs: ["verify-context"],
     runsOn: ["ubuntu-latest"],
-    permissions: {
-      contents: JobPermission.READ,
-      idToken: JobPermission.WRITE,
-      packages: JobPermission.WRITE,
-    },
+    permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
     timeoutMinutes: 30,
     env: { BUN_VERSION, CI: "true" },
     steps: [
       ...nodeReleaseSetupSteps(project),
       {
-        name: "Compile and package npm workspace",
-        env: { RELEASE_VERSION },
+        name: "Compile, package, and publish npm workspace",
+        env: { RELEASE_VERSION, ...npmPublishEnvironment() },
         run: [
           "chmod -R u+w . || true",
-          'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$RELEASE_VERSION" --pack-only --output dist/npm/workspace',
+          'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$RELEASE_VERSION" $DRY_RUN',
         ].join("\n"),
-      },
-      {
-        name: "Publish npm workspace to npmjs",
-        env: { RELEASE_VERSION, ...npmPublishEnvironment() },
-        run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --version "$RELEASE_VERSION" $DRY_RUN',
-      },
-      githubPackagesSetupStep(project),
-      {
-        name: "Publish npm workspace to GitHub Packages",
-        env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
-        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`,
       },
     ],
   };
 }
 
-function addPagesJobs(
+function addDocsJobs(
   workflow: GithubWorkflow,
   project: DBXToolsJavaScriptProject,
-  options: ReleasePagesOptions,
+  options: ReleaseDocsOptions,
 ): void {
-  workflow.addJob("build-pages", {
-    if: "${{ always() && needs['verify-context'].result == 'success' && needs['publication-complete'].result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'pages') }}",
-    needs: ["verify-context", "publication-complete"],
+  workflow.addJob("build-docs", {
+    if: releaseStageCondition("docs"),
+    needs: ["verify-context"],
     runsOn: ["ubuntu-latest"],
     permissions: {
       contents: JobPermission.READ,
@@ -376,9 +337,9 @@ function addPagesJobs(
       },
     ],
   });
-  workflow.addJob("deploy-pages", {
-    if: "${{ always() && needs['build-pages'].result == 'success' && (github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'pages'))) }}",
-    needs: ["build-pages"],
+  workflow.addJob("deploy-docs", {
+    if: releasePublishCondition("docs"),
+    needs: ["build-docs"],
     environment: {
       name: "github-pages",
       url: "${{ steps.deployment.outputs.page_url }}",
@@ -412,7 +373,7 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
       prs_created: { stepId: "release", outputName: "prs_created" },
       releases: { stepId: "release", outputName: "releases" },
       prs: { stepId: "release", outputName: "prs" },
-      pages_changed: { stepId: "changes", outputName: "pages_changed" },
+      docs_changed: { stepId: "changes", outputName: "docs_changed" },
       recovery_requested: { stepId: "recovery", outputName: "requested" },
       recovery_component: { stepId: "recovery", outputName: "component" },
       recovery_version: { stepId: "recovery", outputName: "version" },
@@ -438,14 +399,14 @@ function independentReleasePleaseJob(project: DBXToolsJavaScriptProject, branch:
         ].join("\n"),
       },
       {
-        name: "Detect Pages changes",
+        name: "Detect documentation changes",
         id: "changes",
         shell: "bash",
         run: [
           "if git diff --quiet HEAD^ HEAD -- README.md AGENTS.md ':(glob)**/README.md' docs ':(exclude)docs/releases/**' ':(exclude).release-notes/**'; then",
-          '  echo "pages_changed=false" >> "$GITHUB_OUTPUT"',
+          '  echo "docs_changed=false" >> "$GITHUB_OUTPUT"',
           "else",
-          '  echo "pages_changed=true" >> "$GITHUB_OUTPUT"',
+          '  echo "docs_changed=true" >> "$GITHUB_OUTPUT"',
           "fi",
         ].join("\n"),
       },
@@ -613,7 +574,7 @@ function configureReleaseRequestWorkflow(
 
 function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
   return {
-    if: "${{ always() && ((github.event_name == 'workflow_dispatch' && inputs.automatic != true) || needs.release-please.outputs.releases_created == 'true' || (needs.release-please.outputs.pages_changed == 'true' && needs.release-please.outputs.prs_created != 'true') || needs.release-please.outputs.recovery_requested == 'true') }}",
+    if: "${{ always() && ((github.event_name == 'workflow_dispatch' && inputs.automatic != true) || needs.release-please.outputs.releases_created == 'true' || (needs.release-please.outputs.docs_changed == 'true' && needs.release-please.outputs.prs_created != 'true') || needs.release-please.outputs.recovery_requested == 'true') }}",
     needs: ["release-please"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
@@ -625,12 +586,13 @@ function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
       python: { stepId: "plan", outputName: "python" },
       node: { stepId: "plan", outputName: "node" },
       github: { stepId: "plan", outputName: "github" },
-      pages: { stepId: "plan", outputName: "pages" },
+      docs: { stepId: "plan", outputName: "docs" },
       units: { stepId: "plan", outputName: "units" },
       python_packages: { stepId: "plan", outputName: "python_packages" },
       rust_packages: { stepId: "plan", outputName: "rust_packages" },
       artifacts: { stepId: "plan", outputName: "artifacts" },
-      rust_targets: { stepId: "plan", outputName: "rust_targets" },
+      rust_uniffi_targets: { stepId: "plan", outputName: "rust_uniffi_targets" },
+      rust_binary_targets: { stepId: "plan", outputName: "rust_binary_targets" },
     },
     steps: [
       {
@@ -650,12 +612,12 @@ function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
           COMPONENT:
             "${{ inputs.component || needs.release-please.outputs.recovery_component || '' }}",
           VERSION: "${{ inputs.version || needs.release-please.outputs.recovery_version || '' }}",
-          PAGES_CHANGED: "${{ needs.release-please.outputs.pages_changed || 'false' }}",
+          DOCS_CHANGED: "${{ needs.release-please.outputs.docs_changed || 'false' }}",
         },
         run: [
           "ARGS=()",
           'if [ -n "$COMPONENT" ]; then ARGS+=(--component "$COMPONENT" --version "$VERSION"); fi',
-          'if [ "$PAGES_CHANGED" = "true" ]; then ARGS+=(--pages); fi',
+          'if [ "$DOCS_CHANGED" = "true" ]; then ARGS+=(--docs); fi',
           'bun node_modules/@dbx-tools/projen/tasks/release-plan.ts "${ARGS[@]}"',
         ].join("\n"),
       },
@@ -699,29 +661,15 @@ function independentNodePublishJob(project: DBXToolsJavaScriptProject): Job {
     if: "${{ needs.release-plan.outputs.node == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
     needs: ["release-plan"],
     runsOn: ["ubuntu-latest"],
-    permissions: {
-      contents: JobPermission.READ,
-      idToken: JobPermission.WRITE,
-      packages: JobPermission.WRITE,
-    },
+    permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
     timeoutMinutes: 60,
     env: { BUN_VERSION, CI: "true" },
     steps: [
       ...independentReleaseSetupSteps(project),
       {
-        name: "Compile and package affected npm workspace",
-        run: "bun node_modules/@dbx-tools/projen/tasks/publish.ts --plan dist/release-plan.json --pack-only --output dist/npm/workspace",
-      },
-      {
-        name: "Publish affected npm packages to npmjs",
+        name: "Publish affected npm packages",
         env: npmPublishEnvironment(),
-        run: "bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace",
-      },
-      githubPackagesSetupStep(project),
-      {
-        name: "Publish affected npm packages to GitHub Packages",
-        env: githubPackagesPublishEnvironment(),
-        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --registry ${GITHUB_NPM_REGISTRY_URL}`,
+        run: "bun node_modules/@dbx-tools/projen/tasks/publish.ts --plan dist/release-plan.json",
       },
     ],
   };
@@ -775,13 +723,13 @@ function independentReleaseNotesJob(project: DBXToolsJavaScriptProject): Job {
   };
 }
 
-function addIndependentPagesJobs(
+function addIndependentDocsJobs(
   workflow: GithubWorkflow,
   project: DBXToolsJavaScriptProject,
-  options: ReleasePagesOptions,
+  options: ReleaseDocsOptions,
 ): void {
-  workflow.addJob("build-pages", {
-    if: "${{ always() && needs['release-plan'].outputs.pages == 'true' && needs['publication-complete'].result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'pages') }}",
+  workflow.addJob("build-docs", {
+    if: "${{ always() && needs['release-plan'].outputs.docs == 'true' && needs['publication-complete'].result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs') }}",
     needs: ["release-plan", "publication-complete"],
     runsOn: ["ubuntu-latest"],
     permissions: {
@@ -807,9 +755,9 @@ function addIndependentPagesJobs(
       },
     ],
   });
-  workflow.addJob("deploy-pages", {
-    if: "${{ always() && needs['build-pages'].result == 'success' }}",
-    needs: ["build-pages"],
+  workflow.addJob("deploy-docs", {
+    if: "${{ always() && needs['build-docs'].result == 'success' }}",
+    needs: ["build-docs"],
     environment: {
       name: "github-pages",
       url: "${{ steps.deployment.outputs.page_url }}",
@@ -901,15 +849,14 @@ function addIndependentBranchSyncJob(
   });
 }
 
-class ReleaseFinalizer extends Component {
+class IndependentReleaseFinalizer extends Component {
   private finalized = false;
 
   constructor(
     project: DBXToolsJavaScriptProject,
     private readonly workflow: GithubWorkflow,
-    private readonly pages: ReleasePagesOptions | undefined,
+    private readonly docs: ReleaseDocsOptions | undefined,
     private readonly syncBranch: string | undefined,
-    private readonly independent: boolean,
   ) {
     super(project);
   }
@@ -917,9 +864,9 @@ class ReleaseFinalizer extends Component {
   public override preSynthesize(): void {
     if (this.finalized) return;
     this.finalized = true;
-    const jobs = [...(publicationJobs.get(this.workflow) ?? [])].sort();
+    const jobs = [...(independentPublicationJobs.get(this.workflow) ?? [])].sort();
     const successful = jobs
-      .map((job) => `needs['${job}'].result != 'failure' && needs['${job}'].result != 'cancelled'`)
+      .map((job) => `needs.${job}.result != 'failure' && needs.${job}.result != 'cancelled'`)
       .join(" && ");
     this.workflow.addJob("publication-complete", {
       if: `\${{ always()${successful ? ` && ${successful}` : ""} }}`,
@@ -928,16 +875,8 @@ class ReleaseFinalizer extends Component {
       permissions: { contents: JobPermission.READ },
       steps: [{ name: "Confirm publication stages", run: "true" }],
     });
-    if (this.pages) {
-      if (this.independent) {
-        addIndependentPagesJobs(
-          this.workflow,
-          this.project as DBXToolsJavaScriptProject,
-          this.pages,
-        );
-      } else {
-        addPagesJobs(this.workflow, this.project as DBXToolsJavaScriptProject, this.pages);
-      }
+    if (this.docs) {
+      addIndependentDocsJobs(this.workflow, this.project as DBXToolsJavaScriptProject, this.docs);
     }
     if (this.syncBranch) {
       addIndependentBranchSyncJob(
@@ -1010,7 +949,7 @@ function configureIndependentRelease(
         stage: {
           description: "Publication target to recover",
           type: "choice",
-          options: ["all", "node", "python", "rust", "github", "pages"],
+          options: ["all", "node", "python", "rust", "github", "docs"],
           default: "all",
           required: true,
         },
@@ -1022,17 +961,17 @@ function configureIndependentRelease(
   workflow.addJob("release-please", independentReleasePleaseJob(project, branch));
   workflow.addJob("release-plan", independentReleasePlanJob(project));
   workflow.addJob("publish-release-notes", independentReleaseNotesJob(project));
-  registerPublicationJob(workflow, "publish-release-notes");
+  registerIndependentPublicationJob(workflow, "publish-release-notes");
   if (options.nodeRelease !== false) {
     workflow.addJob("publish-node", independentNodePublishJob(project));
-    registerPublicationJob(workflow, "publish-node");
+    registerIndependentPublicationJob(workflow, "publish-node");
   }
-  new ReleaseFinalizer(project, workflow, options.pages, options.syncBranch || undefined, true);
+  new IndependentReleaseFinalizer(project, workflow, options.docs, options.syncBranch || undefined);
   configureReleaseRequestWorkflow(project, branch);
   releaseWorkflows.set(project, workflow);
 }
 
-/** Owns the single release workflow and reviewed release preparation tasks. */
+/** Owns the single release workflow and local release preparation tasks. */
 export class DBXToolsRelease extends Component {
   constructor(project: DBXToolsJavaScriptProject, options: DBXToolsReleaseOptions = {}) {
     super(project);
@@ -1070,6 +1009,9 @@ export class DBXToolsRelease extends Component {
                 [
                   `--prefix ${tagPrefix}`,
                   `--base ${releaseBranch}`,
+                  ...(options.pythonRoot
+                    ? [`--python-root ${JSON.stringify(options.pythonRoot)}`]
+                    : []),
                   ...(options.validationTasks ?? []).map(
                     (task) => `--validate-task ${JSON.stringify(task)}`,
                   ),
@@ -1077,7 +1019,8 @@ export class DBXToolsRelease extends Component {
                 ].join(" "),
               ),
               receiveArgs: true,
-              description: "Prepare, validate, and automatically merge a release PR",
+              description:
+                "Prepare, validate, locally publish, and automatically merge a release PR",
             },
           }
         : {}),
@@ -1110,7 +1053,7 @@ export class DBXToolsRelease extends Component {
           stage: {
             description: "Release stage to build, validate, or recover",
             type: "choice",
-            options: ["all", "node", "python", "pages"],
+            options: ["all", "node", "python", "docs"],
             default: "all",
             required: true,
           },
@@ -1134,9 +1077,10 @@ export class DBXToolsRelease extends Component {
     workflow.addJob("verify-context", verifyContextJob(tagPrefix, releaseBranch));
     if (options.nodeRelease !== false) {
       workflow.addJob("publish-node", nodePublishJob(project));
-      registerPublicationJob(workflow, "publish-node");
     }
-    new ReleaseFinalizer(project, workflow, options.pages, undefined, false);
+    if (options.docs) {
+      addDocsJobs(workflow, project, options.docs);
+    }
     releaseWorkflows.set(project, workflow);
   }
 }

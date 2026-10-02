@@ -156,6 +156,10 @@ describe("Rust release helper", () => {
       targetKey({ ...options, rustc: "rustc 1.94.1" }),
       targetKey({ ...options, rustc: "rustc 1.95.0" }),
     );
+    assert.notEqual(
+      targetKey({ ...options, namespace: "uniffi" }),
+      targetKey({ ...options, namespace: "binaries" }),
+    );
   });
 
   it("stamps exact format sections, preserves modes, and re-signs Mach-O", () => {
@@ -279,5 +283,49 @@ describe("Rust release helper", () => {
     });
     assert.equal(first.rustSourceHash, second.rustSourceHash);
     assert.deepEqual(first.targets, second.targets);
+  });
+
+  it("isolates selected-source fingerprints from unrelated workspace crates", () => {
+    const directory = temporaryDirectory("rust-release-scoped-fingerprint-");
+    mkdirSync(join(directory, "native/core/src"), { recursive: true });
+    mkdirSync(join(directory, "native/tool/src"), { recursive: true });
+    writeFileSync(
+      join(directory, "Cargo.toml"),
+      '[workspace]\nmembers = ["native/core", "native/tool"]\n',
+    );
+    writeFileSync(
+      join(directory, "native/core/Cargo.toml"),
+      '[package]\nname = "core"\nversion = "0.1.0"\n',
+    );
+    writeFileSync(
+      join(directory, "native/tool/Cargo.toml"),
+      '[package]\nname = "tool"\nversion = "0.1.0"\n',
+    );
+    writeFileSync(join(directory, "native/core/src/lib.rs"), "pub fn core() {}\n");
+    writeFileSync(join(directory, "native/tool/src/lib.rs"), "pub fn tool() {}\n");
+    writeFileSync(join(directory, "Cargo.lock"), "version = 4\n");
+    execFileSync("git", ["init", "--quiet"], { cwd: directory });
+    execFileSync("git", ["add", "."], { cwd: directory });
+
+    const scoped = () =>
+      fingerprint({
+        root: directory,
+        output: join(directory, `.release/${Math.random()}.json`),
+        namespace: "uniffi",
+        targets: ["x86_64-unknown-linux-gnu|"],
+        portable: true,
+        sources: ["native/core"],
+        sourceOnly: true,
+      });
+    const first = scoped();
+    writeFileSync(join(directory, "native/tool/src/lib.rs"), "pub fn tool() { panic!() }\n");
+    const unrelatedChanged = scoped();
+    assert.equal(first.rustSourceHash, unrelatedChanged.rustSourceHash);
+    assert.deepEqual(first.targets, unrelatedChanged.targets);
+
+    writeFileSync(join(directory, "native/core/src/lib.rs"), "pub fn core() { panic!() }\n");
+    const selectedChanged = scoped();
+    assert.notEqual(first.rustSourceHash, selectedChanged.rustSourceHash);
+    assert.equal(first.namespace, "uniffi");
   });
 });

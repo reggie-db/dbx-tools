@@ -41,14 +41,8 @@ function normalizedRepository(value: unknown): string | undefined {
     .replace(/\/$/, "");
 }
 
-function registryUrl(registry: string, name: string): string {
-  return `${registry.replace(/\/$/, "")}/${encodeURIComponent(name)}`;
-}
-
-function registryHeaders(registry: string, url = registry): Record<string, string> {
-  const token = process.env.NPM_CONFIG_TOKEN ?? process.env.NODE_AUTH_TOKEN;
-  if (!token || new URL(registry).origin !== new URL(url).origin) return {};
-  return { authorization: `Bearer ${token}` };
+function registryUrl(registry: string, name: string, version: string): string {
+  return `${registry.replace(/\/$/, "")}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
 }
 
 export function npmReleaseMatches(
@@ -86,32 +80,25 @@ export async function publishedNpmRelease(
   version: string,
   registry = process.env.NPM_CONFIG_REGISTRY ?? DEFAULT_REGISTRY,
 ): Promise<NpmReleaseIdentity | undefined> {
-  const response = await fetch(registryUrl(registry, name), {
-    headers: { accept: "application/json", ...registryHeaders(registry) },
+  const response = await fetch(registryUrl(registry, name, version), {
+    headers: { accept: "application/json" },
   });
   if (response.status === 404) return undefined;
   if (!response.ok) {
     throw new Error(`npm registry lookup failed for ${name}@${version}: ${response.status}`);
   }
-  type VersionMetadata = {
+  const metadata = (await response.json()) as {
     dist?: { integrity?: string; tarball?: string };
     name?: string;
     repository?: unknown;
     version?: string;
   };
-  const packument = (await response.json()) as {
-    versions?: Record<string, VersionMetadata>;
-  };
-  const metadata = packument.versions?.[version];
-  if (!metadata) return undefined;
   if (!metadata.name || !metadata.version) {
     throw new Error(`npm registry returned an incomplete identity for ${name}@${version}`);
   }
   let contentDigest: string | undefined;
   if (metadata.dist?.tarball) {
-    const archive = await fetch(metadata.dist.tarball, {
-      headers: registryHeaders(registry, metadata.dist.tarball),
-    });
+    const archive = await fetch(metadata.dist.tarball);
     if (!archive.ok) {
       throw new Error(`npm tarball lookup failed for ${name}@${version}: ${archive.status}`);
     }

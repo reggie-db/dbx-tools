@@ -89,7 +89,7 @@ describe("release plan", () => {
       python: false,
       node: true,
       github: false,
-      pages: true,
+      docs: true,
     });
     assert.deepEqual(plan.omittedStages, ["rust", "python", "github"]);
   });
@@ -117,5 +117,108 @@ describe("release plan", () => {
       ["@example/core"],
     );
     assert.throws(() => buildRecoveryReleasePlan(current, "node-core", "9.9.9"), /does not match/);
+  });
+
+  it("separates UniFFI and binary target plans", () => {
+    const target = {
+      os: "linux",
+      cpu: "x64",
+      node: "linux-x64-gnu",
+      cargo: "x86_64-unknown-linux-gnu",
+      runner: "ubuntu-22.04",
+      python: "manylinux_2_35_x86_64",
+      libc: "glibc",
+    };
+    const releaseGraph: ReleaseUnitGraph = {
+      schemaVersion: 1,
+      mode: "independent",
+      units: [
+        {
+          id: "rust-core",
+          component: "rust-core",
+          version: "1.0.0",
+          projects: ["native/core"],
+          artifacts: ["rust-core:npm"],
+          sourceHash: "a".repeat(64),
+        },
+        {
+          id: "rust-tool",
+          component: "rust-tool",
+          version: "1.0.0",
+          projects: ["native/tool"],
+          artifacts: ["rust-tool:binary"],
+          sourceHash: "b".repeat(64),
+        },
+      ],
+      projects: [
+        {
+          id: "native/core",
+          identity: "fixture-core",
+          language: "rust",
+          path: "native/core",
+          unit: "rust-core",
+          publish: true,
+          sourceHash: "a".repeat(64),
+        },
+        {
+          id: "native/tool",
+          identity: "fixture-tool",
+          language: "rust",
+          path: "native/tool",
+          unit: "rust-tool",
+          publish: true,
+          sourceHash: "b".repeat(64),
+        },
+      ],
+      artifacts: [
+        {
+          id: "rust-core:npm",
+          unit: "rust-core",
+          kind: "npm",
+          name: "@fixture/core-native",
+          publish: true,
+          generated: true,
+          data: { targets: [target] },
+        },
+        {
+          id: "rust-tool:binary",
+          unit: "rust-tool",
+          kind: "github-binary",
+          name: "fixture-tool",
+          publish: true,
+          generated: true,
+          data: {
+            crate: "fixture-tool",
+            binary: "fixture-tool-tray",
+            features: ["tray"],
+            targets: [target],
+          },
+        },
+      ],
+      edges: [],
+      publishBatches: [["rust-core", "rust-tool"]],
+    };
+    const previous: ReleaseUnitGraph = {
+      ...releaseGraph,
+      units: releaseGraph.units.map((unit) => ({ ...unit, version: "0.9.0" })),
+    };
+
+    const plan = buildReleasePlan(releaseGraph, previous);
+    assert.deepEqual(plan.rustUniffiTargets[0], {
+      ...target,
+      packages: ["fixture-core"],
+      binaries: [],
+      features: ["fixture-core/uniffi-bindgen"],
+      fingerprintConfig:
+        '{"packages":["fixture-core"],"binaries":[],"features":["fixture-core/uniffi-bindgen"]}',
+    });
+    assert.deepEqual(plan.rustBinaryTargets[0], {
+      ...target,
+      packages: ["fixture-tool"],
+      binaries: ["fixture-tool-tray"],
+      features: ["fixture-tool/tray"],
+      fingerprintConfig:
+        '{"packages":["fixture-tool"],"binaries":["fixture-tool-tray"],"features":["fixture-tool/tray"]}',
+    });
   });
 });

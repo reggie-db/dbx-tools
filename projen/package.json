@@ -53,11 +53,7 @@
   },
   "main": "index.ts",
   "license": "Apache-2.0",
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
-  },
-  "version": "0.9.15",
+  "version": "0.9.16",
   "types": "index.ts",
   "type": "module",
   "exports": {

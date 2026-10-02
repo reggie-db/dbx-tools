@@ -8,7 +8,6 @@ import { after, before, describe, it } from "node:test";
 import {
   npmReleaseMatches,
   packNpmPackage,
-  publishedNpmRelease,
   readNpmArchiveIdentity,
   type NpmReleaseIdentity,
 } from "../tasks/publish-npm.ts";
@@ -65,39 +64,6 @@ describe("npm release recovery", () => {
 
   it("publishes an absent version", () => {
     assert.equal(npmReleaseMatches(identity, undefined), false);
-  });
-
-  it("authenticates GitHub Packages recovery lookups", async () => {
-    const originalFetch = globalThis.fetch;
-    const originalToken = process.env.NODE_AUTH_TOKEN;
-    let authorization: string | null = null;
-    let requestedUrl: string | undefined;
-    process.env.NODE_AUTH_TOKEN = "fixture-token";
-    globalThis.fetch = (async (input, init) => {
-      requestedUrl = String(input);
-      authorization = new Headers(init?.headers).get("authorization");
-      return new Response(
-        JSON.stringify({
-          versions: {
-            "1.2.3": {
-              name: "@fixture/native",
-              version: "1.2.3",
-              repository: identity.repository,
-            },
-          },
-        }),
-        { headers: { "content-type": "application/json" } },
-      );
-    }) as typeof fetch;
-    try {
-      await publishedNpmRelease("@fixture/native", "1.2.3", "https://npm.pkg.github.com");
-      assert.equal(authorization, "Bearer fixture-token");
-      assert.equal(requestedUrl, "https://npm.pkg.github.com/%40fixture%2Fnative");
-    } finally {
-      globalThis.fetch = originalFetch;
-      if (originalToken === undefined) delete process.env.NODE_AUTH_TOKEN;
-      else process.env.NODE_AUTH_TOKEN = originalToken;
-    }
   });
 
   it("matches equivalent package content despite different tar metadata", () => {

@@ -36,7 +36,7 @@ new Command()
   .option("--base-ref <ref>", "previous release graph ref", "HEAD^")
   .option("--component <component>", "component to recover")
   .option("--version <version>", "component version to recover")
-  .option("--pages", "include GitHub Pages without a package release")
+  .option("--docs", "include documentation without a package release")
   .option("--output <path>", "release plan output", "dist/release-plan.json")
   .action(
     (options: {
@@ -45,7 +45,7 @@ new Command()
       output: string;
       component?: string;
       version?: string;
-      pages?: boolean;
+      docs?: boolean;
     }) => {
       const root = resolve(options.root);
       const current = json.parse(
@@ -58,11 +58,11 @@ new Command()
         options.component && options.version
           ? buildRecoveryReleasePlan(current, options.component, options.version)
           : buildReleasePlan(current, graphAtRef(root, options.baseRef));
-      const plan = options.pages
+      const plan = options.docs
         ? {
             ...planned,
-            stages: { ...planned.stages, pages: true },
-            omittedStages: planned.omittedStages.filter((stage) => stage !== "pages"),
+            stages: { ...planned.stages, docs: true },
+            omittedStages: planned.omittedStages.filter((stage) => stage !== "docs"),
           }
         : planned;
       const output = resolve(root, options.output);
@@ -75,7 +75,8 @@ new Command()
       writeOutput("python_packages", plan.pythonPackages);
       writeOutput("rust_packages", plan.rustPackages);
       writeOutput("artifacts", plan.artifacts);
-      writeOutput("rust_targets", plan.rustTargets);
+      writeOutput("rust_uniffi_targets", plan.rustUniffiTargets);
+      writeOutput("rust_binary_targets", plan.rustBinaryTargets);
       writeOutput("stages", plan.stages);
       for (const [stage, enabled] of Object.entries(plan.stages)) {
         writeOutput(stage, enabled);

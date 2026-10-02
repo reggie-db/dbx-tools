@@ -47,26 +47,29 @@ export interface PlannedRustTarget {
   readonly runner: string;
   readonly python: string;
   readonly libc: string;
-  readonly cargoExcludes: string;
   readonly packages: readonly string[];
+  readonly binaries: readonly string[];
+  readonly features: readonly string[];
+  readonly fingerprintConfig: string;
 }
 
 /** Complete plan persisted as a workflow artifact and used for recovery. */
 export interface ReleasePlan {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly units: readonly PlannedReleaseUnit[];
   readonly publishBatches: readonly (readonly string[])[];
   readonly nodePackages: readonly PlannedPackage[];
   readonly pythonPackages: readonly PlannedPackage[];
   readonly rustPackages: readonly PlannedPackage[];
   readonly artifacts: readonly PlannedArtifact[];
-  readonly rustTargets: readonly PlannedRustTarget[];
+  readonly rustUniffiTargets: readonly PlannedRustTarget[];
+  readonly rustBinaryTargets: readonly PlannedRustTarget[];
   readonly stages: {
     readonly rust: boolean;
     readonly python: boolean;
     readonly node: boolean;
     readonly github: boolean;
-    readonly pages: boolean;
+    readonly docs: boolean;
   };
   readonly omittedStages: readonly string[];
 }
@@ -130,18 +133,53 @@ export function buildReleasePlan(
       ]);
     }
   }
-  const rustTargetsByKey = new Map<string, PlannedRustTarget>();
+  const rustTargetsByKind = {
+    uniffi: new Map<string, PlannedRustTarget>(),
+    binaries: new Map<string, PlannedRustTarget>(),
+  };
   for (const artifact of artifacts) {
     const targets = artifact.data?.targets;
     if (!Array.isArray(targets)) continue;
+    const kind = artifact.kind === "github-binary" ? "binaries" : "uniffi";
     for (const value of targets) {
       if (!value || typeof value !== "object" || Array.isArray(value)) continue;
       const target = value as Record<string, unknown>;
       const required = ["os", "cpu", "node", "cargo", "runner", "python"] as const;
       if (!required.every((field) => typeof target[field] === "string")) continue;
       const key = String(target.node);
-      const currentTarget = rustTargetsByKey.get(key);
-      rustTargetsByKey.set(key, {
+      const targetsByKey = rustTargetsByKind[kind];
+      const currentTarget = targetsByKey.get(key);
+      const packages = [
+        ...new Set([
+          ...(currentTarget?.packages ?? []),
+          ...(rustPackagesByUnit.get(artifact.unit) ?? []),
+        ]),
+      ].sort();
+      const binaries =
+        kind === "binaries"
+          ? [
+              ...new Set([
+                ...(currentTarget?.binaries ?? []),
+                ...(typeof artifact.data?.binary === "string" ? [artifact.data.binary] : []),
+              ]),
+            ].sort()
+          : [];
+      const configuredFeatures = Array.isArray(artifact.data?.features)
+        ? artifact.data.features.filter((feature): feature is string => typeof feature === "string")
+        : [];
+      const crate = typeof artifact.data?.crate === "string" ? artifact.data.crate : undefined;
+      const features =
+        kind === "uniffi"
+          ? packages.map((pkg) => `${pkg}/uniffi-bindgen`)
+          : [
+              ...new Set([
+                ...(currentTarget?.features ?? []),
+                ...(crate
+                  ? configuredFeatures.map((feature) => `${crate}/${feature}`)
+                  : configuredFeatures),
+              ]),
+            ].sort();
+      targetsByKey.set(key, {
         os: String(target.os),
         cpu: String(target.cpu),
         node: String(target.node),
@@ -149,17 +187,19 @@ export function buildReleasePlan(
         runner: String(target.runner),
         python: String(target.python),
         libc: typeof target.libc === "string" ? target.libc : "",
-        cargoExcludes: typeof target.cargoExcludes === "string" ? target.cargoExcludes : "",
-        packages: [
-          ...new Set([
-            ...(currentTarget?.packages ?? []),
-            ...(rustPackagesByUnit.get(artifact.unit) ?? []),
-          ]),
-        ].sort(),
+        packages,
+        binaries,
+        features,
+        fingerprintConfig: JSON.stringify({ packages, binaries, features }),
       });
     }
   }
-  const rustTargets = [...rustTargetsByKey.values()].sort((a, b) => a.node.localeCompare(b.node));
+  const rustUniffiTargets = [...rustTargetsByKind.uniffi.values()].sort((a, b) =>
+    a.node.localeCompare(b.node),
+  );
+  const rustBinaryTargets = [...rustTargetsByKind.binaries.values()].sort((a, b) =>
+    a.node.localeCompare(b.node),
+  );
   const publishBatches = current.publishBatches
     .map((batch) => batch.filter((unit) => selected.has(unit)))
     .filter((batch) => batch.length > 0);
@@ -173,20 +213,21 @@ export function buildReleasePlan(
     python: pythonPackages.length > 0 || artifacts.some((artifact) => artifact.kind === "pypi"),
     node: nodePackages.length > 0 || artifacts.some((artifact) => artifact.kind === "npm"),
     github: artifacts.some((artifact) => artifact.kind === "github-binary"),
-    pages: units.length > 0 || artifacts.some((artifact) => artifact.kind === "documentation"),
+    docs: units.length > 0 || artifacts.some((artifact) => artifact.kind === "documentation"),
   };
   const omittedStages = Object.entries(stages)
     .filter(([, enabled]) => !enabled)
     .map(([name]) => name);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     units,
     publishBatches,
     nodePackages,
     pythonPackages,
     rustPackages,
     artifacts,
-    rustTargets,
+    rustUniffiTargets,
+    rustBinaryTargets,
     stages,
     omittedStages,
   };

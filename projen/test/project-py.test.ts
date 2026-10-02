@@ -141,10 +141,10 @@ describe("DBXToolsPythonWorkspace", () => {
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
     const release = readWorkflow(outdir);
-    assert.ok(release.jobs["rust-build"]);
+    assert.ok(release.jobs["rust-uniffi"]);
     const buildPython = release.jobs["build-python"]!;
-    assert.deepEqual(buildPython.needs, ["verify-context", "rust-build"]);
-    assert.ok(buildPython.if?.includes("needs.rust-build.result != 'failure'"));
+    assert.deepEqual(buildPython.needs, ["verify-context", "rust-uniffi"]);
+    assert.ok(buildPython.if?.includes("needs.rust-uniffi.result != 'failure'"));
     assert.deepEqual(buildPython.permissions, { actions: "read", contents: "read" });
     assert.equal(buildPython.env?.BUN_VERSION, "1.3.14");
     assert.equal(workflowStep(buildPython, "Restore Bun cache").uses, "actions/cache/restore@v5");
@@ -185,23 +185,6 @@ describe("DBXToolsPythonWorkspace", () => {
       workflowStep(release.jobs["publish-pypi-native-rs"]!, "Publish fixture-native-rs to PyPI")
         .with?.["skip-existing"],
       true,
-    );
-    const releaseAssets = release.jobs["publish-python-release-assets"]!;
-    assert.ok(releaseAssets.needs?.includes("publish-github-release"));
-    assert.ok(releaseAssets.needs?.includes("publish-pypi-core"));
-    assert.match(releaseAssets.if ?? "", /always\(\)/);
-    assert.match(releaseAssets.if ?? "", /publish-github-release.*skipped/);
-    assert.equal(
-      workflowStep(releaseAssets, "Checkout release commit").uses,
-      "actions/checkout@v6",
-    );
-    assert.equal(
-      workflowStep(releaseAssets, "Publish Python wheels to GitHub release").uses,
-      "softprops/action-gh-release@v2",
-    );
-    assert.equal(
-      workflowStep(releaseAssets, "Publish Python wheels to GitHub release").with?.files,
-      "dist/**/*.whl",
     );
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);

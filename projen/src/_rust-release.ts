@@ -29,7 +29,7 @@ import { parseArgs } from "node:util";
 import * as exec from "@dbx-tools/core/exec";
 import { parse, stringify, type TomlTable } from "smol-toml";
 
-export const FINGERPRINT_SCHEMA = 3;
+export const FINGERPRINT_SCHEMA = 4;
 export const VERSION_SLOT_SCHEMA = 1;
 export const VERSION_CAPACITY = 64;
 
@@ -161,11 +161,18 @@ function toPosix(path: string): string {
   return path.split(sep).join("/");
 }
 
-function sourceRoots(root: string, metadata: CargoMetadata, sources: readonly string[]): string[] {
+function sourceRoots(
+  root: string,
+  metadata: CargoMetadata,
+  sources: readonly string[],
+  includeWorkspace: boolean,
+): string[] {
   const members = new Set(metadata.workspace_members);
-  const discovered = metadata.packages
-    .filter((candidate) => members.has(candidate.id))
-    .map((candidate) => dirname(candidate.manifest_path));
+  const discovered = includeWorkspace
+    ? metadata.packages
+        .filter((candidate) => members.has(candidate.id))
+        .map((candidate) => dirname(candidate.manifest_path))
+    : [];
   return [...new Set([...discovered, ...sources.map((source) => resolve(root, source))])]
     .map((path) => toPosix(relative(root, path)) || ".")
     .sort();
@@ -243,8 +250,12 @@ function normalizedInput(
   return content;
 }
 
-/** Hash Cargo-discovered members and every tracked or unignored file beneath them. */
-export function sourceHash(root: string, sources: readonly string[] = []): string {
+/** Hash shared Cargo inputs plus selected or Cargo-discovered workspace sources. */
+export function sourceHash(
+  root: string,
+  sources: readonly string[] = [],
+  includeWorkspace = true,
+): string {
   const resolvedRoot = resolve(root);
   const metadata = cargoMetadata(resolvedRoot);
   const members = new Set(metadata.workspace_members);
@@ -254,7 +265,10 @@ export function sourceHash(root: string, sources: readonly string[] = []): strin
       .map((candidate) => candidate.name),
   );
   const hash = createHash("sha256");
-  for (const file of inputFiles(resolvedRoot, sourceRoots(resolvedRoot, metadata, sources))) {
+  for (const file of inputFiles(
+    resolvedRoot,
+    sourceRoots(resolvedRoot, metadata, sources, includeWorkspace),
+  )) {
     const absolute = join(resolvedRoot, file);
     const stat = lstatSync(absolute);
     hash.update(file);
@@ -280,6 +294,7 @@ export function linkerIdentity(target: string): string {
 
 export interface TargetKeyOptions {
   readonly rustSourceHash: string;
+  readonly namespace?: string;
   readonly target: string;
   readonly targetConfig?: string;
   readonly toolchain?: string;
@@ -288,6 +303,7 @@ export interface TargetKeyOptions {
 
 export function targetKey({
   rustSourceHash,
+  namespace = "workspace",
   target,
   targetConfig = "",
   toolchain = "stable",
@@ -297,6 +313,7 @@ export function targetKey({
   for (const value of [
     String(FINGERPRINT_SCHEMA),
     String(VERSION_SLOT_SCHEMA),
+    namespace,
     rustSourceHash,
     target,
     targetConfig,
@@ -327,11 +344,14 @@ export interface FingerprintOptions {
   readonly toolchain?: string;
   readonly portable?: boolean;
   readonly sources?: readonly string[];
+  readonly sourceOnly?: boolean;
+  readonly namespace?: string;
 }
 
 export interface RustBuildFingerprint {
   readonly schemaVersion: number;
   readonly versionSlotSchema: number;
+  readonly namespace: string;
   readonly rustSourceHash: string;
   readonly targets: Readonly<Record<string, string>>;
 }
@@ -344,10 +364,12 @@ export function fingerprint({
   toolchain = "stable",
   portable = false,
   sources = [],
+  sourceOnly = false,
+  namespace = "workspace",
 }: FingerprintOptions): RustBuildFingerprint {
   if (!targets.length) throw new Error("at least one --target is required");
   const resolvedRoot = resolve(root);
-  const rustSourceHash = sourceHash(resolvedRoot, sources);
+  const rustSourceHash = sourceHash(resolvedRoot, sources, !sourceOnly);
   const rustc = portable ? undefined : rustcIdentity();
   const targetEntries = targets
     .map((specification) => {
@@ -356,13 +378,14 @@ export function fingerprint({
       const targetConfig = separator < 0 ? "" : specification.slice(separator + 1);
       return [
         target,
-        targetKey({ rustSourceHash, target, targetConfig, toolchain, rustc }),
+        targetKey({ rustSourceHash, namespace, target, targetConfig, toolchain, rustc }),
       ] as const;
     })
     .sort(([left], [right]) => left.localeCompare(right));
   const manifest = {
     schemaVersion: FINGERPRINT_SCHEMA,
     versionSlotSchema: VERSION_SLOT_SCHEMA,
+    namespace,
     rustSourceHash,
     targets: Object.fromEntries(targetEntries),
   };
@@ -373,6 +396,7 @@ export function fingerprint({
     if (
       current.schemaVersion !== manifest.schemaVersion ||
       current.versionSlotSchema !== manifest.versionSlotSchema ||
+      current.namespace !== manifest.namespace ||
       current.rustSourceHash !== manifest.rustSourceHash ||
       !targetsMatch
     ) {
@@ -538,6 +562,8 @@ function fingerprintCommand(args: readonly string[]): void {
       toolchain: { type: "string", default: "stable" },
       portable: { type: "boolean", default: false },
       source: { type: "string", multiple: true },
+      "source-only": { type: "boolean", default: false },
+      namespace: { type: "string", default: "workspace" },
     },
     strict: true,
   });
@@ -549,6 +575,8 @@ function fingerprintCommand(args: readonly string[]): void {
     toolchain: values.toolchain,
     portable: values.portable,
     sources: values.source ?? [],
+    sourceOnly: values["source-only"],
+    namespace: values.namespace,
   });
 }
 

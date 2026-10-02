@@ -809,12 +809,16 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   from the parent project, while `DBX_TOOLS_RELEASE_PLATFORMS` is parsed by the
   workspace when no explicit release targets are supplied. Generated Cargo and
   UniFFI outputs are ignored from discovered binding metadata rather than
-  hardcoded package paths. Release generation uses one matrix
-  row per selected target, builds the Cargo workspace once in that row, and
-  packages every discovered UniFFI binding and release-enabled binary from the
-  shared output. A source-only crate or release-enabled binary may set
+  hardcoded package paths. Release generation uses separate UniFFI and binary
+  matrices, each with one row per selected target. A UniFFI row builds every
+  discovered binding package together; a binary row builds every selected
+  release binary together with the union of their required features, so a main
+  binary and feature-gated companion share one Cargo invocation. The matrices
+  have separate source-scoped fingerprints, raw bundles, and Cargo cache
+  namespaces, so a binary-only source change does not invalidate UniFFI reuse.
+  A source-only crate or release-enabled binary may set
   `releaseExcludeOs` to stay out of incompatible release rows; the generator
-  adds Cargo `--exclude` arguments for those rows and skips binary packaging and
+  omits that package and its binaries from those rows and skips packaging and
   upload there. UniFFI crates cannot use exclusions because every configured
   target must produce their artifacts. A release binary with `cli: true`
   appears in the generated registry at `cliRegistryPath`; the registry includes
@@ -852,10 +856,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   workspace tests, while the main release owns the full cross-platform Rust
   matrix and reusable target caches.
   Repository-specific release guards belong in `releaseValidationTasks`; they
-  run in the release worktree before expensive tests or approval. This
-  repository uses the source-JSDoc ratchet and README generation checks there,
-  so GitHub release jobs are not the first place docs failures appear. Never
-  auto-write a documentation baseline in CI.
+  run in the release worktree before expensive tests, local publication, or
+  approval. This repository uses the source-JSDoc ratchet and README generation
+  checks there, so GitHub release jobs are not the first place docs failures
+  appear. Never auto-write a documentation baseline in CI.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
   without a `bindings` namespace. Python package roots export their generated
@@ -863,7 +867,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   available directly. Node generation fails on binding-name conflicts.
   Stable Windows release rows use the toolchain already installed on the hosted
   runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
-  Their workspace build selects `rust-lld`. Both MSVC targets use
+  Their Rust compilation selects `rust-lld`. Both MSVC targets use
   `target-feature=+crt-static`, so Node archives and Python wheels do not depend
   on a separately installed `VCRUNTIME140.dll`. An explicitly pinned
   `releaseRustVersion` still uses the setup action on Windows.
@@ -893,8 +897,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   never removes other workflow files. Consumers must explicitly delete exact
   workflow files they no longer want.
   GitHub's failed-job rerun reuses successful Rust artifacts from the same run.
-  Manual recovery selects `all`, `node`, `python`, or `pages`; independent
-  release workflows additionally expose `rust` and `github`. A Node or Python
+  Manual recovery selects `all`, `node`, `python`, or `docs`; a Node or Python
   recovery can name an earlier `release.yml` run whose commit must match the
   verified annotated tag. Dispatch the current default-branch workflow with the
   annotated tag and exact SHA as inputs; the workflow verifies both before
@@ -926,7 +929,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   unchanged workspace crate outputs when an exact raw-bundle hit is unavailable;
   Cargo's source hashing still rebuilds changed crates. Do not add a separate
   cache workflow or GitHub sccache layer because per-object entries can exhaust
-  the repository quota. A successful GitHub release keeps its raw Rust bundles
+  the repository quota. UniFFI and binary caches use distinct shared keys, and
+  their raw fingerprints hash only the workspace packages in that build graph
+  plus shared Cargo configuration. A successful GitHub release keeps its raw Rust bundles
   and build manifests, then deletes those internal assets from published
   `vMAJOR.MINOR.PATCH` releases strictly lower than the current version. Consumer
   binaries remain attached to their original versions. `Cargo.lock` and
@@ -935,8 +940,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
   Packaging must
-  execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace
-  build, never `cargo run`, so no Rust compilation occurs after the main build.
+  execute the target-specific `<crate>-uniffi-bindgen` binary produced by the
+  UniFFI matrix, never `cargo run`, so no Rust compilation occurs during packaging.
+  The generated bindgen binary requires the package's private
+  `uniffi-bindgen` feature, which is the only release surface that enables
+  `uniffi/cli`; runtime libraries and release binaries do not compile the
+  bindgen dependency graph.
   Cargo manifests, UniFFI configs, and target configs use Projen `TomlFile`
   objects with nested sections and array-of-table `bin` entries; do not restore
   a handwritten TOML renderer. Local and release Python binding placement share
@@ -953,10 +962,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `cargo publish --no-verify` job and upload prebuilt binaries to the GitHub
   release. Cargo crates publish in dependency order across both UniFFI and
   source-only crates, so a public binary can consume workspace libraries on its
-  first release. Package and publish each crate before packaging its dependents,
-  then wait for the new registry version to resolve. `cargo package` resolves
-  path dependencies through the registry and cannot package the complete unit
-  before any member has been published. They never publish npm or PyPI packages.
+  first release. They never publish npm or PyPI packages.
   `bun run release --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product in the release PR; omit both to restore the
   maintained full matrix. GitHub environments referenced by release jobs must
@@ -2169,8 +2175,8 @@ export, and the tests catch behavior.
 Run `bun run build` inside one JavaScript package when you want its complete
 compile/test/pack lifecycle. The root `build` runs synth plus workspace compile
 and tests. The GitHub PR workflow deliberately invokes only synth plus compile;
-`bun run release` owns Rust tests and workspace type-checking before opening its
-PR. JavaScript behavior tests remain explicit rather than
+`bun run release` owns Rust tests, workspace type-checking, and local publication
+before opening its PR. JavaScript behavior tests remain explicit rather than
 making every release repeat the complete package test fan-out. Binding
 generation stays explicit during UniFFI API development. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
@@ -2208,9 +2214,11 @@ What is configured, and why:
 
 - **npm/bun -> local verdaccio** at `http://localhost:4873/` (`~/.npmrc`), which
   proxies the corp mirror `https://npm-proxy.dev.databricks.com/` as its `corp`
-  uplink and caches tarballs on disk. The corp proxy is slow enough to hang
-  mid-transfer on large tarballs, so Verdaccio carries a 180s timeout and a wide
-  socket pool.
+  uplink and caches tarballs on disk. Two reasons it exists: the corp proxy is
+  slow enough to hang mid-transfer on large tarballs (its config carries a 180s
+  timeout and a wide socket pool for exactly that), and it accepts LOCAL
+  publishes (`publish.allow_offline: true`), so a `bun run release` candidate can
+  be installed and tested without waiting on a public release.
 - **pip/uv -> local devpi** at `http://localhost:3141/reggie/dev/+simple/`,
   which inherits from the corporate PyPI mirror and supports local uploads. The
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
@@ -2218,12 +2226,13 @@ What is configured, and why:
 
 `bun run release` commits and pushes pending source work, creates a dedicated
 `release/v<version>` worktree, increments the single root `VERSION`, regenerates
-every owned version surface, runs release validation, then opens one pull request
-into `main`. Automatic merge is enabled by default after
+every owned version surface, runs release validation and local publication, then
+opens one pull request into `main`. Automatic merge is enabled by default after
 required checks pass, and the command waits for the exact merged-SHA release
 workflow to finish. Pass `--no-approve` to leave that PR for a human merge or
 `--no-wait` to return after requesting automatic merge. `--no-validate` skips
-repository tests and compilation.
+repository tests/compile, while `--no-local-publish` skips all local registry
+preflight; both are explicit recovery shortcuts and are never defaults.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
 Version resolution scans both repository `v<version>` tags and historical
 `<component>-v<version>` tags, so the first singular release automatically starts
@@ -2238,18 +2247,8 @@ singular release updates the generated release workflow's versioned run name.
 Merging the release PR is the only automatic publication signal. The generated
 workflow verifies that the triggering SHA is the exact `main` commit, creates one
 annotated `v<version>` tag, and publishes all public npm, PyPI, Cargo, native, and
-GitHub artifacts at that version. npm packages publish to npmjs and GitHub
-Packages. Because the packages use the `@dbx-tools` scope while the repository
-owner is `reggie-db`, GitHub Packages publication uses the
-`PACKAGES_TOKEN` Actions secret. It must contain a classic token with
-`write:packages` access to the `dbx-tools` GitHub organization. Python wheels
-and Cargo archives remain attached to GitHub Releases.
-The Pages workflow rebuilds its PEP 503 and Cargo sparse indexes from those
-durable assets before deploying the documentation site. Manual recovery must
-provide the same annotated tag and exact expected SHA; it never calculates
-another version.
-The published uv index is `https://docs.dbx.tools/simple/`; the Cargo registry
-index is `sparse+https://docs.dbx.tools/cargo/`.
+GitHub artifacts at that version. Manual recovery must provide the same annotated
+tag and exact expected SHA; it never calculates another version.
 
 This repository sets `releaseSyncBranch: "dev"`. After successful publication,
 the workflow fast-forwards `dev` when it is behind, does nothing when it already
