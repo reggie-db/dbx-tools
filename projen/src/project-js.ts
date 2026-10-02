@@ -49,11 +49,7 @@ import {
   type ReleaseDependencyInput,
   type ReleaseUnitRule,
 } from "./release-catalog.ts";
-import {
-  DBXToolsRelease,
-  type ReleasePagesOptions,
-  type ReleaseSummaryOptions,
-} from "./release.ts";
+import { DBXToolsRelease, type ReleaseDocsOptions, type ReleaseSummaryOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
@@ -428,8 +424,9 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // the block to render, giving the root a `publishConfig` it does not have
     // today. Provenance is never written to a manifest here (projen only reads it
     // in its own `Publisher`, and `release: false` means none exists). The release
-    // workflow opts in for npmjs through `npm_config_provenance` and disables it
-    // for the matching GitHub Packages upload. See {@link DBXToolsRelease}.
+    // workflow opts in per run through `npm_config_provenance`, so local publishes
+    // to Verdaccio still work without a CI OIDC provider. See
+    // {@link DBXToolsRelease}.
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     workflowPackageCache: false,
     // The root build validates the whole workspace and must not also pack every
@@ -551,9 +548,9 @@ function validateReleaseOptions(options: DBXToolsJavaScriptProjectOptions): void
   }
   if (
     options.releaseMode === "disabled" &&
-    (options.releasePages !== undefined || options.nodeRelease !== undefined)
+    (options.releaseDocs !== undefined || options.nodeRelease !== undefined)
   ) {
-    throw new Error("releaseMode disabled cannot be combined with releasePages or nodeRelease");
+    throw new Error("releaseMode disabled cannot be combined with releaseDocs or nodeRelease");
   }
 }
 
@@ -623,9 +620,11 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
      */
     readonly syncResynthPaths?: readonly string[];
-    /** GitHub Page content included in the unified release workflow. */
-    readonly releasePages?: ReleasePagesOptions;
-    /** Repository task names run during reviewed release preparation. */
+    /** GitHub Pages documentation included in the unified release workflow. */
+    readonly releaseDocs?: ReleaseDocsOptions;
+    /** Python package root passed to local release preparation when configured. */
+    readonly releasePythonRoot?: string;
+    /** Repository task names run during local release preparation before publication. */
     readonly releaseValidationTasks?: readonly string[];
     /** Optional AI-generated release summary. Defaults to enabled. */
     readonly releaseSummary?: boolean | ReleaseSummaryOptions;
@@ -1622,7 +1621,8 @@ function initProject(
     new DBXToolsRelease(project, {
       tagPrefix: options.releaseTagPrefix,
       nodeRelease: options.nodeRelease,
-      pages: options.releasePages,
+      docs: options.releaseDocs,
+      pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
       summary: options.releaseSummary,
       syncBranch: options.releaseSyncBranch,

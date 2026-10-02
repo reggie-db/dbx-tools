@@ -36,7 +36,7 @@ new Command()
   .option("--base-ref <ref>", "previous release graph ref", "HEAD^")
   .option("--component <component>", "component to recover")
   .option("--version <version>", "component version to recover")
-  .option("--pages", "include GitHub Pages without a package release")
+  .option("--docs", "include documentation without a package release")
   .option("--output <path>", "release plan output", "dist/release-plan.json")
   .action(
     (options: {
@@ -45,7 +45,7 @@ new Command()
       output: string;
       component?: string;
       version?: string;
-      pages?: boolean;
+      docs?: boolean;
     }) => {
       const root = resolve(options.root);
       const current = json.parse(
@@ -58,11 +58,11 @@ new Command()
         options.component && options.version
           ? buildRecoveryReleasePlan(current, options.component, options.version)
           : buildReleasePlan(current, graphAtRef(root, options.baseRef));
-      const plan = options.pages
+      const plan = options.docs
         ? {
             ...planned,
-            stages: { ...planned.stages, pages: true },
-            omittedStages: planned.omittedStages.filter((stage) => stage !== "pages"),
+            stages: { ...planned.stages, docs: true },
+            omittedStages: planned.omittedStages.filter((stage) => stage !== "docs"),
           }
         : planned;
       const output = resolve(root, options.output);

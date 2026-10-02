@@ -23,7 +23,7 @@ before(() => {
     outdir,
     github: true,
     buildWorkflow: true,
-    releasePages: {
+    releaseDocs: {
       siteUrl: "https://docs.example.com",
       base: "/fixture/",
       prepareSteps: [
@@ -42,6 +42,7 @@ before(() => {
       ],
       artifactPath: "custom-site/dist",
     },
+    releasePythonRoot: "python/packages",
     releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
     pullRequestTitlePolicy: {
       types: ["feature", "maintenance"],
@@ -82,7 +83,7 @@ describe("unified release workflow", () => {
     assert.deepEqual(inputs.stage, {
       description: "Release stage to build, validate, or recover",
       type: "choice",
-      options: ["all", "node", "python", "pages"],
+      options: ["all", "node", "python", "docs"],
       default: "all",
       required: true,
     });
@@ -129,11 +130,7 @@ describe("unified release workflow", () => {
       job.if,
       "${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node' }}",
     );
-    assert.deepEqual(job.permissions, {
-      contents: "read",
-      "id-token": "write",
-      packages: "write",
-    });
+    assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
     assert.equal(job.env?.BUN_VERSION, "1.3.14");
     assert.deepEqual(step(job, "Setup Node.js").with, {
       "node-version": "lts/*",
@@ -142,9 +139,7 @@ describe("unified release workflow", () => {
     assert.equal(step(job, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.equal(step(job, "Save Bun cache").uses, "actions/cache/save@v5");
 
-    const pack = step(job, "Compile and package npm workspace");
-    assert.match(pack.run ?? "", /--pack-only --output dist\/npm\/workspace/);
-    const publish = step(job, "Publish npm workspace to npmjs");
+    const publish = step(job, "Compile, package, and publish npm workspace");
     assert.equal(
       publish.env?.NPM_CONFIG_PROVENANCE,
       "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
@@ -154,25 +149,15 @@ describe("unified release workflow", () => {
       publish.env?.DRY_RUN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
     );
-    assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
-    assert.equal(
-      step(job, "Setup Node.js for GitHub Packages").with?.["registry-url"],
-      "https://npm.pkg.github.com",
-    );
-    assert.equal(step(job, "Setup Node.js for GitHub Packages").with?.scope, "@release-fixture");
-    const github = step(job, "Publish npm workspace to GitHub Packages");
-    assert.equal(github.env?.NODE_AUTH_TOKEN, "${{ secrets.PACKAGES_TOKEN }}");
-    assert.equal(github.env?.NPM_CONFIG_PROVENANCE, "false");
-    assert.match(github.run ?? "", /--registry https:\/\/npm\.pkg\.github\.com/);
+    assert.ok(publish.run?.includes("tasks/publish.ts"));
   });
 
-  it("builds and selectively deploys GitHub Pages in the same workflow", () => {
-    const build = release.jobs["build-pages"]!;
+  it("builds and selectively deploys docs in the same workflow", () => {
+    const build = release.jobs["build-docs"]!;
     assert.equal(
       build.if,
-      "${{ always() && needs['verify-context'].result == 'success' && needs['publication-complete'].result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'pages') }}",
+      "${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs' }}",
     );
-    assert.deepEqual(build.needs, ["verify-context", "publication-complete"]);
     assert.deepEqual(build.permissions, {
       contents: "read",
       pages: "write",
@@ -193,10 +178,10 @@ describe("unified release workflow", () => {
       path: "custom-site/dist",
     });
 
-    const deploy = release.jobs["deploy-pages"]!;
+    const deploy = release.jobs["deploy-docs"]!;
     assert.equal(
       deploy.if,
-      "${{ always() && needs['build-pages'].result == 'success' && (github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'pages'))) }}",
+      "${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'docs')) }}",
     );
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
@@ -249,7 +234,7 @@ describe("release task contracts", () => {
     assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
     assert.match(
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
-      /tasks\/release-pr\.ts --prefix v --base main --validate-task "docs:check-source" --validate-task "docs:check-readmes"/,
+      /tasks\/release-pr\.ts --prefix v --base main --python-root "python\/packages" --validate-task "docs:check-source" --validate-task "docs:check-readmes"/,
     );
   });
 
@@ -290,14 +275,14 @@ describe("release task contracts", () => {
       driver.indexOf("compiling ${compiled.length}") <
         driver.indexOf("applyPublishConfig(manifestPath)"),
     );
-    assert.match(driver, /import \{[\s\S]*delimiter[\s\S]*\} from "node:path"/);
+    assert.match(driver, /import \{ delimiter,/);
     assert.doesNotMatch(driver, /split\(":"\)/);
     assert.match(driver, /\["publish",[\s\S]*archive\]/);
     assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
     assert.match(driver, /\["--access", access\]/);
   });
 
-  it("keeps bump pure and lets release preparation own git and validation", () => {
+  it("keeps bump pure and lets release preparation own git and local publication", () => {
     const bump = readFileSync(join(import.meta.dirname, "..", "tasks", "bump.ts"), "utf8");
     assert.ok(bump.includes("writeWorkspaceVersion(root, next.version)"));
     assert.ok(bump.includes('process.execPath, [".projenrc.ts"]'));
@@ -331,7 +316,17 @@ describe("release task contracts", () => {
     assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
     assert.doesNotMatch(releasePr, /process\.execPath, \["run", "test"\]/);
     assert.match(releasePr, /\["push", "--no-verify", "--set-upstream", "origin", releaseBranch\]/);
-    assert.doesNotMatch(releasePr, /publishLocalRelease|local-registry|local-pypi|local-cargo/);
+    assert.ok(
+      releasePr.indexOf("await publishLocalRelease") <
+        releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),
+    );
+    const localCargo = readFileSync(
+      join(import.meta.dirname, "..", "tasks", "publish-uniffi-local.ts"),
+      "utf8",
+    );
+    assert.match(localCargo, /"metadata", "--format-version", "1", "--no-deps", "--locked"/);
+    assert.match(localCargo, /"run",\s*"--no-project",\s*"python"/);
+    assert.ok(localCargo.includes("if (workspaceDependency) visit(workspaceDependency)"));
     assert.ok(
       releasePr.indexOf("generateReleaseSummary({") <
         releasePr.indexOf('git(releaseRoot, ["add", "-A"])'),
@@ -343,6 +338,7 @@ describe("release task contracts", () => {
     assert.ok(releasePr.includes('"--no-approve",'));
     assert.ok(releasePr.includes('"--no-wait",'));
     assert.ok(releasePr.includes('"--no-validate",'));
+    assert.ok(releasePr.includes('"--no-local-publish",'));
     assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--auto",\s*"--merge"/);
     assert.match(releasePr, /"pr",\s*"checks",[\s\S]*"--watch",[\s\S]*"--required"/);
     assert.match(releasePr, /"run",\s*"watch",\s*runId,\s*"--exit-status"/);
@@ -461,7 +457,7 @@ describe("optional Node release stage", () => {
       const workflow = readWorkflow(disabledOutdir, "release");
       assert.ok(workflow.jobs["verify-context"]);
       assert.equal(workflow.jobs["publish-node"], undefined);
-      assert.equal(workflow.jobs["build-pages"], undefined);
+      assert.equal(workflow.jobs["build-docs"], undefined);
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
     }
@@ -522,7 +518,7 @@ describe("optional Node release stage", () => {
         defaultTagMixins: false,
         versioningMode: "independent",
         releaseSyncBranch: "dev",
-        releasePages: {
+        releaseDocs: {
           siteUrl: "https://docs.example.com",
           base: "/",
           prepareSteps: [],
@@ -533,18 +529,18 @@ describe("optional Node release stage", () => {
       project.synth();
       const workflow = readWorkflow(independentOutdir);
       assert.ok(workflow.jobs["release-please"]);
-      const pagesDetection =
-        step(workflow.jobs["release-please"]!, "Detect Pages changes").run ?? "";
-      assert.match(pagesDetection, /exclude\)docs\/releases/);
-      assert.match(pagesDetection, /exclude\)\.release-notes/);
+      const docsDetection =
+        step(workflow.jobs["release-please"]!, "Detect documentation changes").run ?? "";
+      assert.match(docsDetection, /exclude\)docs\/releases/);
+      assert.match(docsDetection, /exclude\)\.release-notes/);
       assert.ok(workflow.jobs["release-plan"]);
       assert.ok(workflow.jobs["publish-node"]);
       assert.ok(workflow.jobs["publication-complete"]);
-      assert.equal(workflow.jobs["build-pages"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
-      assert.equal(workflow.jobs["build-pages"]?.env?.DOCS_BASE, "/");
+      assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
+      assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_BASE, "/");
       assert.equal(
-        workflow.jobs["deploy-pages"]?.if,
-        "${{ always() && needs['build-pages'].result == 'success' }}",
+        workflow.jobs["deploy-docs"]?.if,
+        "${{ always() && needs['build-docs'].result == 'success' }}",
       );
       const sync = workflow.jobs["sync-release-branch"];
       assert.equal(sync?.needs, "publication-complete");

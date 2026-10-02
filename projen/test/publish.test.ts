@@ -119,10 +119,6 @@ describe("compiled publish surface", () => {
     // Setting `publishConfig` REPLACES it wholesale, and projen puts `access`
     // there from `npmAccess`. Losing it publishes a scoped package restricted.
     assert.equal(manifest("packages/node/thing").publishConfig.access, "public");
-    assert.equal(
-      manifest("packages/node/thing").publishConfig.registry,
-      "https://registry.npmjs.org/",
-    );
   });
 
   it("ships the emitted output alongside the source", () => {
@@ -134,8 +130,6 @@ describe("compiled publish surface", () => {
   it("leaves UI packages publishing source", () => {
     const ui = manifest("packages/ui/app");
     assert.equal(ui.publishConfig?.main, undefined, "no compiled entry point");
-    assert.equal(ui.publishConfig?.exports, undefined, "workspace source exports remain active");
-    assert.equal(ui.publishConfig?.registry, "https://registry.npmjs.org/");
     assert.deepEqual(ui.exports, {
       "./react": "./src/react/index.ts",
       "./styles.css": "./src/styles.css",

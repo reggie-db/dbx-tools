@@ -135,17 +135,24 @@ curl -X POST http://localhost:6868/api/teams/messages \
 
 ## Setup
 
-This demo consumes `@dbx-tools/*` from the repository workspace.
+This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
 
-1. **Install the workspace.**
+1. **Make the packages available.** For local development, publish them to a local
+   registry (verdaccio) and point `.npmrc` at it (already the default):
 
    ```bash
-   bun install
+   # from the main repo root, publish the packages to your local registry:
+   pnpm -r --filter "./packages/js/**" publish \
+     --registry http://localhost:4873 --no-git-checks
    ```
 
-2. **Configure:**
+   Once the packages are on public npm, delete the `@dbx-tools:registry` line in
+   `.npmrc` (or point it at `https://registry.npmjs.org/`).
+
+2. **Install + configure:**
 
    ```bash
+   pnpm install                       # from this demo/ folder
    cp .env.example .env               # fill in the Databricks values (see below)
    databricks auth login --host "$DATABRICKS_HOST"
    ```

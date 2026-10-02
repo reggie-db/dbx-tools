@@ -45,7 +45,7 @@ import { defaultReleaseUnitId, type ReleaseDependencyInput } from "./release-cat
 import {
   hasNodeRelease,
   independentReleaseSetupSteps,
-  registerPublicationJob,
+  registerIndependentPublicationJob,
   tryReleaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
@@ -1100,20 +1100,20 @@ export class DBXToolsRustWorkspace extends Component {
       }
       if (plan.publicCrates.length) {
         workflow.addJob("publish-cargo", independentRustCargoPublishJob(project, plan));
-        registerPublicationJob(workflow, "publish-cargo");
+        registerIndependentPublicationJob(workflow, "publish-cargo");
       }
-      if (plan.releaseBinaries.length || plan.publicCrates.length) {
+      if (plan.releaseBinaries.length) {
         workflow.addJob("publish-github-release", independentRustGitHubReleaseJob(project, plan));
-        registerPublicationJob(workflow, "publish-github-release");
+        registerIndependentPublicationJob(workflow, "publish-github-release");
       }
       if (plan.nodeBindings.length && hasNodeRelease(project)) {
         workflow.addJob("publish-native-npm", independentRustNativeNpmPublishJob(project));
-        registerPublicationJob(workflow, "publish-native-npm");
+        registerIndependentPublicationJob(workflow, "publish-native-npm");
         workflow.addJob(
           "publish-node-facades",
           independentRustNodeFacadePublishJob(project, plan.nodeBindings),
         );
-        registerPublicationJob(workflow, "publish-node-facades");
+        registerIndependentPublicationJob(workflow, "publish-node-facades");
       }
       return;
     }
@@ -1121,19 +1121,14 @@ export class DBXToolsRustWorkspace extends Component {
       workflow.addJob("rust-build", rustBuildJob(plan));
     }
     if (plan.publicCrates.length) {
-      workflow.addJob("publish-cargo", rustCargoPublishJob(project, plan));
-      registerPublicationJob(workflow, "publish-cargo");
+      workflow.addJob("publish-cargo", rustCargoPublishJob(plan, false));
+      workflow.addJob("publish-local-cargo", rustCargoPublishJob(plan, true));
     }
-    if (plan.releaseBinaries.length || plan.publicCrates.length) {
-      workflow.addJob(
-        "publish-github-release",
-        rustGitHubReleaseJob(plan.publicCrates.length > 0, plan.releaseBinaries.length > 0),
-      );
-      registerPublicationJob(workflow, "publish-github-release");
+    if (plan.releaseBinaries.length) {
+      workflow.addJob("publish-github-release", rustGitHubReleaseJob());
     }
     if (plan.nodeBindings.length && hasNodeRelease(project)) {
       workflow.addJob("publish-native-npm", rustNativeNpmPublishJob(project));
-      registerPublicationJob(workflow, "publish-native-npm");
       const nodeJob = workflow.getJob("publish-node");
       if ("uses" in nodeJob) throw new Error("publish-node must be a workflow job");
       workflow.updateJob("publish-node", {
@@ -1142,7 +1137,6 @@ export class DBXToolsRustWorkspace extends Component {
         needs: ["verify-context", "publish-native-npm"],
       });
       workflow.addJob("publish-node-facades", rustNodeFacadePublishJob(project, plan.nodeBindings));
-      registerPublicationJob(workflow, "publish-node-facades");
     }
   }
 }

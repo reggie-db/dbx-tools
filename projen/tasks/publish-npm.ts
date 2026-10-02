@@ -45,12 +45,6 @@ function registryUrl(registry: string, name: string, version: string): string {
   return `${registry.replace(/\/$/, "")}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
 }
 
-function registryHeaders(registry: string, url = registry): Record<string, string> {
-  const token = process.env.NPM_CONFIG_TOKEN ?? process.env.NODE_AUTH_TOKEN;
-  if (!token || new URL(registry).origin !== new URL(url).origin) return {};
-  return { authorization: `Bearer ${token}` };
-}
-
 export function npmReleaseMatches(
   local: NpmReleaseIdentity,
   published: NpmReleaseIdentity | undefined,
@@ -87,7 +81,7 @@ export async function publishedNpmRelease(
   registry = process.env.NPM_CONFIG_REGISTRY ?? DEFAULT_REGISTRY,
 ): Promise<NpmReleaseIdentity | undefined> {
   const response = await fetch(registryUrl(registry, name, version), {
-    headers: { accept: "application/json", ...registryHeaders(registry) },
+    headers: { accept: "application/json" },
   });
   if (response.status === 404) return undefined;
   if (!response.ok) {
@@ -104,9 +98,7 @@ export async function publishedNpmRelease(
   }
   let contentDigest: string | undefined;
   if (metadata.dist?.tarball) {
-    const archive = await fetch(metadata.dist.tarball, {
-      headers: registryHeaders(registry, metadata.dist.tarball),
-    });
+    const archive = await fetch(metadata.dist.tarball);
     if (!archive.ok) {
       throw new Error(`npm tarball lookup failed for ${name}@${version}: ${archive.status}`);
     }
