@@ -53,6 +53,10 @@ export interface CargoExampleOptions {
 /** Cargo package, target, binding, and release behavior shared by every Rust project. */
 export interface RustCrateOptions {
   readonly description?: string;
+  /** Replace the default `cargo build` compile step with one native build command. */
+  readonly buildCommand?: string;
+  /** Add a development task for runtimes with their own native dev command. */
+  readonly devCommand?: string;
   /** Keep this crate unpublished and out of public docs. */
   readonly private?: boolean;
   /** Build this crate's binary for each target and attach it to the GitHub release. */
@@ -203,6 +207,8 @@ function packageOptions(
   return {
     directory: options.directory,
     ...(options.description !== undefined ? { description: options.description } : {}),
+    ...(options.buildCommand ? { buildCommand: options.buildCommand } : {}),
+    ...(options.devCommand ? { devCommand: options.devCommand } : {}),
     ...(options.private !== undefined ? { private: options.private } : {}),
     ...(options.release !== undefined ? { release: options.release } : {}),
     ...(options.releaseExcludeOs ? { releaseExcludeOs: options.releaseExcludeOs } : {}),
@@ -388,7 +394,13 @@ export class RustProject extends Project implements DBXToolsProject {
         ),
       });
     }
-    this.compileTask.reset("cargo build");
+    this.compileTask.reset(options.buildCommand ?? "cargo build");
+    if (options.devCommand) {
+      this.addTask("dev", {
+        description: "Run the native development runtime",
+        exec: options.devCommand,
+      });
+    }
     this.testTask.reset("cargo test");
     this.packageTask.reset("cargo package");
     this.lintTask = this.addTask("lint", {

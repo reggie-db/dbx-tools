@@ -55,7 +55,9 @@ The desktop target requires the `desktop` Cargo feature. It uses the reusable
 Tauri tray/window shell from `dbx-tools-service-desktop` and keeps Tauri, Wry,
 and platform WebView dependencies out of the headless executable. Its menu
 contains only `Open Model Proxy` and `Quit`. The React UI calls typed
-tauri-specta commands against the same process that owns the proxy listener.
+rspc procedures against the same process that owns the proxy listener. The
+native shell uses Tauri IPC, while the embedded dashboard can also be opened at
+the proxy's loopback HTTP address.
 
 macOS and Linux use the native user-level service manager. Windows uses
 current-user login startup plus the persisted exact executable and `sysinfo`
@@ -400,7 +402,8 @@ published limits. Set `PROVISIONED_THROUGHPUT=true` or pass
 `--provisioned-throughput` to disable both TPM windows. QPH remains enforced by
 Databricks because process-local tracking cannot coordinate a workspace across
 proxy replicas. `/api/healthz` reports readiness and the active runtime
-generation. Detailed model and limiter state is desktop IPC only.
+generation. The headless server does not expose model and limiter controls;
+the desktop runtime exposes them through its shared rspc router.
 
 ## Metrics And Desktop
 
@@ -408,8 +411,12 @@ The default `--metrics=auto` enables bounded collection outside a Databricks
 App and disables it inside an App. `on` and `true` enable collection
 explicitly; `off` and `false` disable it. `METRICS` accepts the same values.
 
-The Tauri desktop reads snapshots through generated tauri-specta commands and
-receives one typed update event every five seconds. It provides:
+The desktop owns one rspc router for status, metrics, profile switching, and
+rate-limit controls. `rspc-tauri` mounts it over native IPC, and the same router
+is available under `/rspc` on the loopback proxy server. The React Query client
+selects Tauri IPC inside the native shell and HTTP fetch in a browser, polling
+metrics every five seconds. The dashboard is available at the proxy root, such
+as `http://127.0.0.1:4000/`. It provides:
 
 - request, token, and latency trends;
 - a reasoning-level pie chart;
@@ -418,9 +425,10 @@ receives one typed update event every five seconds. It provides:
 - cancel-wait and retry-now controls;
 - secret-free profile discovery and atomic runtime switching.
 
-No metrics, Prometheus, SSE, authentication, or rate-limit control endpoint is
-mounted on Axum. The desktop process calls the same in-memory state graph that
-owns the proxy listener.
+The headless binary retains only `/v1/*` and `/api/healthz`. The dashboard and
+`/rspc` routes are compiled only into the desktop runtime and call the same
+in-memory state graph that owns the proxy listener. No Prometheus or SSE route
+is added.
 
 History remains bounded in process memory:
 
@@ -449,10 +457,17 @@ under `desktop/`; Tauri embeds the committed build output. Regenerate and
 validate it with:
 
 ```sh
-bun run model-proxy:desktop-bindings
 bun run model-proxy:desktop-build
+bun run model-proxy:desktop-dev
 bun run model-proxy:desktop-check
 ```
+
+The model-proxy Projen subproject replaces its standard `cargo build` compile
+task with `tauri build` and adds a native `tauri dev` task. Tauri's configured
+before-build command generates rspc bindings and bundles the frontend. Desktop
+assets are not generated during Projen synthesis. A generated Bun runner keeps
+Tauri on the desktop Cargo target without changing the crate's normal headless
+default-run target.
 
 ## Cargo Features
 
@@ -470,6 +485,7 @@ A metrics-free build resolves `--metrics=auto` to `off`, accepts explicit
 cargo build -p dbx-tools-model-proxy --no-default-features
 ```
 
-`desktop` adds Tauri, the shared service desktop shell, and IPC. The
-`desktop-codegen` feature adds Specta TypeScript export for the committed
-`desktop/src/bindings.ts`.
+`desktop` adds Tauri, the shared service desktop shell, rspc IPC and HTTP
+transports, and the embedded frontend. The `desktop-codegen` feature exports the
+shared router's committed `desktop/src/bindings.ts` with JavaScript-number
+representations for the existing metrics counters.

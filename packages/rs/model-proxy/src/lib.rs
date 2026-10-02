@@ -347,6 +347,8 @@ pub struct ProxyServer {
     listener: tokio::net::TcpListener,
     address: SocketAddr,
     max_request_bytes: NonZeroUsize,
+    #[cfg(feature = "desktop")]
+    desktop: Option<desktop::DesktopHttp>,
 }
 
 impl ProxyServer {
@@ -467,6 +469,8 @@ impl ProxyServer {
             listener,
             address,
             max_request_bytes,
+            #[cfg(feature = "desktop")]
+            desktop: None,
         })
     }
 
@@ -480,6 +484,12 @@ impl ProxyServer {
         self.state.clone()
     }
 
+    #[cfg(feature = "desktop")]
+    pub(crate) fn with_desktop(mut self, desktop: desktop::DesktopHttp) -> Self {
+        self.desktop = Some(desktop);
+        self
+    }
+
     /// Serve proxy routes until shutdown and flush persistent aggregates.
     pub async fn serve(
         self,
@@ -489,8 +499,13 @@ impl ProxyServer {
         let listener = self.state.metrics().track_listener(self.listener);
         let result = axum::serve(
             listener,
-            routes::routes(self.state, self.max_request_bytes)
-                .into_make_service_with_connect_info::<PeerAddr>(),
+            routes::routes(
+                self.state,
+                self.max_request_bytes,
+                #[cfg(feature = "desktop")]
+                self.desktop,
+            )
+            .into_make_service_with_connect_info::<PeerAddr>(),
         )
         .with_graceful_shutdown(shutdown)
         .await;

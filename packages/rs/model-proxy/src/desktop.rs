@@ -1,33 +1,60 @@
-//! Tauri desktop runtime and Specta IPC for the model proxy.
+//! Tauri desktop runtime and shared rspc transport for the model proxy.
 
 use std::sync::Arc;
 
 #[cfg(feature = "desktop-codegen")]
-use std::path::Path;
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::Path,
+};
 
+use axum::{
+    body::Bytes,
+    extract::{Path as AxumPath, Query},
+    http::{header, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router as AxumRouter,
+};
 use dbx_tools_service_desktop::{
     configure_debug, handle_window_event, plugin as desktop_plugin, DesktopIcon, DesktopOptions,
     QUIT_REQUESTED_EVENT,
 };
-use serde::Serialize;
+use rspc::{Error, ErrorCode, Router};
+use rust_embed::RustEmbed;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use specta::Type;
-use tauri::{AppHandle, Listener, State, Wry};
-use tauri_specta::{collect_commands, collect_events, Builder, Event};
+#[cfg(feature = "desktop-codegen")]
+use specta::{datatype::FunctionResultVariant, DataType, TypeMap};
+#[cfg(feature = "desktop-codegen")]
+use specta_typescript::{datatype, export_named_datatype, BigIntExportBehavior, Typescript};
+use tauri::Listener;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     metrics::MetricsSnapshot,
-    operator::{
-        AuthStatus, CooldownRelease, ModelControlInput, OperatorService, Profiles, WaitCancellation,
-    },
+    operator::{ModelControlInput, OperatorService},
+    routes::AppState,
     runtime::RuntimeSelection,
     ProxyServer, ServerOptions,
 };
 
+type DesktopRouter = Arc<rspc::Router<DesktopContext>>;
+
 #[derive(Clone)]
-struct DesktopState {
+struct DesktopContext {
     operator: Option<OperatorService>,
     address: Option<String>,
+}
+
+impl DesktopContext {
+    fn operator(&self) -> Result<OperatorService, Error> {
+        self.operator
+            .clone()
+            .ok_or_else(|| rpc_error("model proxy is not running"))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Type)]
@@ -37,139 +64,331 @@ struct DesktopStatus {
     address: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Type, Event)]
-#[serde(rename_all = "camelCase")]
-struct MetricsUpdated {
-    snapshot: MetricsSnapshot,
+#[derive(RustEmbed)]
+#[folder = "desktop/dist/"]
+struct DesktopAssets;
+
+#[derive(Clone)]
+pub(crate) struct DesktopHttp {
+    router: DesktopRouter,
+    context: DesktopContext,
 }
 
-#[tauri::command]
-#[specta::specta]
-async fn get_desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatus, String> {
-    Ok(DesktopStatus {
-        running: state.operator.is_some(),
-        address: state.address.clone(),
-    })
+impl DesktopHttp {
+    fn new(router: DesktopRouter, context: DesktopContext) -> Self {
+        Self { router, context }
+    }
+
+    pub(crate) fn routes(self) -> AxumRouter<AppState> {
+        let query_router = Arc::clone(&self.router);
+        let query_context = self.context.clone();
+        let mutation_router = self.router;
+        let mutation_context = self.context;
+        AxumRouter::new()
+            .route(
+                "/rspc/{*path}",
+                get(
+                    move |AxumPath(path): AxumPath<String>, Query(query): Query<RpcQuery>| {
+                        let router = Arc::clone(&query_router);
+                        let context = query_context.clone();
+                        async move {
+                            let input = query
+                                .input
+                                .map(|input| serde_json::from_str(&input))
+                                .transpose();
+                            rpc_response(router, context, rspc::ExecKind::Query, path, input).await
+                        }
+                    },
+                )
+                .post(move |AxumPath(path): AxumPath<String>, body: Bytes| {
+                    let router = Arc::clone(&mutation_router);
+                    let context = mutation_context.clone();
+                    async move {
+                        let input = (!body.is_empty())
+                            .then(|| serde_json::from_slice(&body))
+                            .transpose();
+                        rpc_response(router, context, rspc::ExecKind::Mutation, path, input).await
+                    }
+                }),
+            )
+            .route("/", get(http_index))
+            .fallback(get(http_asset))
+    }
 }
 
-#[tauri::command]
-#[specta::specta]
-async fn get_metrics(
-    state: State<'_, DesktopState>,
-    model: Option<String>,
-) -> Result<MetricsSnapshot, String> {
-    Ok(operator(&state)?
-        .metrics(
-            model
-                .as_deref()
-                .map(str::trim)
-                .filter(|model| !model.is_empty()),
-        )
-        .await)
+#[derive(Deserialize)]
+struct RpcQuery {
+    input: Option<String>,
 }
 
-#[tauri::command]
-#[specta::specta]
-async fn get_auth_status(state: State<'_, DesktopState>) -> Result<AuthStatus, String> {
-    Ok(operator(&state)?.auth_status())
+async fn rpc_response(
+    router: DesktopRouter,
+    context: DesktopContext,
+    kind: rspc::ExecKind,
+    path: String,
+    input: Result<Option<Value>, serde_json::Error>,
+) -> axum::Json<Value> {
+    let result = match input {
+        Ok(input) => router.exec(context, kind, path, input).await,
+        Err(error) => {
+            return axum::Json(json!({
+                "result": {
+                    "type": "error",
+                    "data": { "code": 400, "message": error.to_string() }
+                }
+            }));
+        }
+    };
+    match result {
+        Ok(data) => axum::Json(json!({
+            "result": { "type": "response", "data": data }
+        })),
+        Err(error) => axum::Json(json!({
+            "result": {
+                "type": "error",
+                "data": { "code": 500, "message": error.to_string() }
+            }
+        })),
+    }
 }
 
-#[tauri::command]
-#[specta::specta]
-async fn list_profiles(state: State<'_, DesktopState>, refresh: bool) -> Result<Profiles, String> {
-    operator(&state)?.profiles(refresh)
+fn router() -> DesktopRouter {
+    Router::<DesktopContext>::new()
+        .query("desktop.status", |t| {
+            t(|context, _: ()| async move {
+                Ok::<_, Error>(DesktopStatus {
+                    running: context.operator.is_some(),
+                    address: context.address,
+                })
+            })
+        })
+        .query("metrics.current", |t| {
+            t(|context, model: Option<String>| async move {
+                Ok::<MetricsSnapshot, Error>(
+                    context
+                        .operator()?
+                        .metrics(
+                            model
+                                .as_deref()
+                                .map(str::trim)
+                                .filter(|model| !model.is_empty()),
+                        )
+                        .await,
+                )
+            })
+        })
+        .query("auth.status", |t| {
+            t(|context, _: ()| async move { Ok::<_, Error>(context.operator()?.auth_status()) })
+        })
+        .query("auth.profiles", |t| {
+            t(|context, refresh: bool| async move {
+                context.operator()?.profiles(refresh).map_err(rpc_error)
+            })
+        })
+        .mutation("auth.switch", |t| {
+            t(|context, selection: RuntimeSelection| async move {
+                context
+                    .operator()?
+                    .switch(selection)
+                    .await
+                    .map_err(rpc_error)
+            })
+        })
+        .mutation("rateLimits.cancelWaits", |t| {
+            t(|context, input: ModelControlInput| async move {
+                context
+                    .operator()?
+                    .cancel_waits(input)
+                    .await
+                    .map_err(rpc_error)
+            })
+        })
+        .mutation("rateLimits.retryNow", |t| {
+            t(|context, input: ModelControlInput| async move {
+                context
+                    .operator()?
+                    .retry_now(input)
+                    .await
+                    .map_err(rpc_error)
+            })
+        })
+        .build()
+        .arced()
 }
 
-#[tauri::command]
-#[specta::specta]
-async fn switch_runtime(
-    state: State<'_, DesktopState>,
-    selection: RuntimeSelection,
-) -> Result<AuthStatus, String> {
-    operator(&state)?.switch(selection).await
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn cancel_model_waits(
-    state: State<'_, DesktopState>,
-    input: ModelControlInput,
-) -> Result<WaitCancellation, String> {
-    operator(&state)?.cancel_waits(input).await
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn retry_model_now(
-    state: State<'_, DesktopState>,
-    input: ModelControlInput,
-) -> Result<CooldownRelease, String> {
-    operator(&state)?.retry_now(input).await
-}
-
-fn operator(state: &DesktopState) -> Result<&OperatorService, String> {
-    state
-        .operator
-        .as_ref()
-        .ok_or_else(|| "model proxy is not running".to_owned())
-}
-
-fn bindings() -> Builder<Wry> {
-    let builder = Builder::<Wry>::new()
-        .commands(collect_commands![
-            get_desktop_status,
-            get_metrics,
-            get_auth_status,
-            list_profiles,
-            switch_runtime,
-            cancel_model_waits,
-            retry_model_now,
-        ])
-        .events(collect_events![MetricsUpdated]);
-    #[cfg(feature = "desktop-codegen")]
-    let builder = builder.dangerously_cast_bigints_to_number();
-    builder
+fn rpc_error(error: impl ToString) -> Error {
+    Error::new(ErrorCode::InternalServerError, error.to_string())
 }
 
 #[cfg(feature = "desktop-codegen")]
-/// Export TypeScript bindings from the same registry used by the runtime.
+fn bindings_path() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("desktop/src/bindings.ts")
+}
+
+#[cfg(feature = "desktop-codegen")]
+/// Export TypeScript bindings from the same router used by Tauri and Axum.
 pub fn export_bindings(path: impl AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
-    bindings().export(specta_typescript::Typescript::default(), path)?;
+    export_router_bindings(&router(), path.as_ref())?;
     Ok(())
 }
 
+#[cfg(feature = "desktop-codegen")]
+fn export_router_bindings(
+    router: &rspc::Router<DesktopContext>,
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(directory) = path.parent() {
+        fs::create_dir_all(directory)?;
+    }
+    let mut file = File::create(path)?;
+    writeln!(
+        file,
+        "// This file was generated by [rspc](https://github.com/specta-rs/rspc). Do not edit this file manually."
+    )?;
+
+    let config = Typescript::new().bigint(BigIntExportBehavior::Number);
+    let type_map = router.type_map();
+    let queries = generate_procedures_ts(
+        &config,
+        router
+            .queries()
+            .iter()
+            .map(|(key, procedure)| (key.as_str(), &procedure.ty.arg_ty, &procedure.ty.result_ty)),
+        &type_map,
+    )?;
+    let mutations = generate_procedures_ts(
+        &config,
+        router
+            .mutations()
+            .iter()
+            .map(|(key, procedure)| (key.as_str(), &procedure.ty.arg_ty, &procedure.ty.result_ty)),
+        &type_map,
+    )?;
+    let subscriptions = generate_procedures_ts(
+        &config,
+        router
+            .subscriptions()
+            .iter()
+            .map(|(key, procedure)| (key.as_str(), &procedure.ty.arg_ty, &procedure.ty.result_ty)),
+        &type_map,
+    )?;
+    writeln!(
+        file,
+        r#"
+export type Procedures = {{
+    queries:{queries},
+    mutations:{mutations},
+    subscriptions:{subscriptions}
+}};"#
+    )?;
+    for (_, ty) in type_map.iter() {
+        writeln!(file, "\n{}", export_named_datatype(&config, ty, &type_map)?)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "desktop-codegen")]
+fn generate_procedures_ts<'a>(
+    config: &Typescript,
+    procedures: impl Iterator<Item = (&'a str, &'a DataType, &'a DataType)>,
+    type_map: &TypeMap,
+) -> Result<String, specta_typescript::ExportError> {
+    let procedures = procedures
+        .map(|(key, input, result)| {
+            let input = match input {
+                DataType::Tuple(definition) if definition.elements().is_empty() => {
+                    "never".to_string()
+                }
+                input => datatype(
+                    config,
+                    &FunctionResultVariant::Value(input.clone()),
+                    type_map,
+                )?,
+            };
+            let result = datatype(
+                config,
+                &FunctionResultVariant::Value(result.clone()),
+                type_map,
+            )?;
+            Ok(format!(
+                r#"{{ key: "{key}", input: {input}, result: {result} }}"#
+            ))
+        })
+        .collect::<Result<Vec<_>, specta_typescript::ExportError>>()?;
+    Ok(if procedures.is_empty() {
+        " never".to_string()
+    } else {
+        format!("\n        {}", procedures.join(" |\n        "))
+    })
+}
+
+async fn http_index() -> Response {
+    embedded_asset("index.html")
+}
+
+async fn http_asset(uri: axum::http::Uri) -> Response {
+    embedded_asset(uri.path())
+}
+
+fn embedded_asset(path: &str) -> Response {
+    let normalized = path.trim_start_matches('/');
+    let Some(asset) = DesktopAssets::get(normalized) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let content_type = mime_guess::from_path(normalized)
+        .first_raw()
+        .unwrap_or("application/octet-stream");
+    let cache_control = if normalized == "index.html" {
+        "no-cache"
+    } else {
+        "public, max-age=31536000, immutable"
+    };
+    (
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static(content_type)),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(cache_control),
+            ),
+        ],
+        asset.data.into_owned(),
+    )
+        .into_response()
+}
+
 /// Run the Tauri shell with an optional in-process proxy server.
-pub fn run(
+pub async fn run(
     server_options: Option<ServerOptions>,
     probe: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let server = server_options
-        .map(|options| tauri::async_runtime::block_on(ProxyServer::bind(options)))
-        .transpose()?;
+    let server = match server_options {
+        Some(options) => Some(ProxyServer::bind(options).await?),
+        None => None,
+    };
     let operator = server
         .as_ref()
         .map(|server| OperatorService::new(server.state()));
-    let address = server.as_ref().map(|server| server.address().to_string());
-    let state = DesktopState {
-        operator: operator.clone(),
-        address,
+    let context = DesktopContext {
+        operator,
+        address: server.as_ref().map(|server| server.address().to_string()),
     };
+    let router = router();
+    #[cfg(all(debug_assertions, feature = "desktop-codegen"))]
+    export_router_bindings(&router, &bindings_path())?;
+    let server = server
+        .map(|server| server.with_desktop(DesktopHttp::new(Arc::clone(&router), context.clone())));
     let cancellation = CancellationToken::new();
-    let specta = Arc::new(bindings());
-    let invoke_handler = specta.invoke_handler();
     let desktop = DesktopOptions::new("Model Proxy", proxy_icon())
         .with_template_icon(cfg!(target_os = "macos"))
         .with_probe(probe);
+    let rspc_context = context.clone();
     let tauri = configure_debug(tauri::Builder::default())
-        .manage(state)
         .on_window_event(handle_window_event)
         .plugin(desktop_plugin(desktop))
-        .invoke_handler(invoke_handler);
-    let setup_specta = Arc::clone(&specta);
+        .plugin(rspc_tauri::plugin(router, move |_| rspc_context.clone()));
     let setup_cancellation = cancellation.clone();
     tauri
         .setup(move |app| {
-            setup_specta.mount_events(app);
             let quit_cancellation = setup_cancellation.clone();
             app.listen(QUIT_REQUESTED_EVENT, move |_| quit_cancellation.cancel());
             if let Some(server) = server {
@@ -190,33 +409,10 @@ pub fn run(
                     }
                 });
             }
-            if let Some(operator) = operator {
-                start_metrics_events(app.handle().clone(), operator);
-            }
             Ok(())
         })
         .run(tauri::generate_context!())?;
     Ok(())
-}
-
-fn start_metrics_events(app: AppHandle, operator: OperatorService) {
-    #[cfg(feature = "metrics")]
-    if let Some(mut receiver) = operator.subscribe() {
-        tauri::async_runtime::spawn(async move {
-            loop {
-                match receiver.recv().await {
-                    Ok(()) => {
-                        let _ = MetricsUpdated {
-                            snapshot: operator.metrics(None).await,
-                        }
-                        .emit(&app);
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-        });
-    }
 }
 
 fn proxy_icon() -> DesktopIcon {
@@ -253,14 +449,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn committed_bindings_match_the_command_registry() {
+    fn committed_bindings_match_the_rspc_router() {
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("bindings.ts");
         export_bindings(&generated).unwrap();
-        let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("desktop/src/bindings.ts");
         assert_eq!(
             std::fs::read(generated).unwrap(),
-            std::fs::read(committed).unwrap()
+            std::fs::read(bindings_path()).unwrap()
         );
     }
 }

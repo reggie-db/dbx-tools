@@ -175,6 +175,33 @@ describe("DBXToolsRustProject", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("supports native build and development commands", () => {
+    const directory = mkdtempSync(join(tmpdir(), "project-rs-native-build-"));
+    try {
+      mkdirSync(join(directory, "src"), { recursive: true });
+      writeFileSync(join(directory, "src/main.rs"), "fn main() {}\n");
+      const project = new DBXToolsRustProject({
+        name: "native-desktop",
+        outdir: directory,
+        buildCommand: "bunx tauri build --features desktop",
+        devCommand: "bunx tauri dev --features desktop-codegen",
+      });
+      project.synth();
+
+      const tasks = JSON.parse(readFileSync(join(directory, ".projen/tasks.json"), "utf8")) as {
+        tasks: Record<string, { steps: Array<{ exec?: string; spawn?: string }> }>;
+      };
+      assert.deepEqual(tasks.tasks.compile?.steps, [
+        { exec: "bunx tauri build --features desktop" },
+      ]);
+      assert.deepEqual(tasks.tasks.dev?.steps, [
+        { exec: "bunx tauri dev --features desktop-codegen" },
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("DBXToolsRustWorkspace", () => {

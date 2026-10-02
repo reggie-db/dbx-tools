@@ -425,8 +425,9 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `METRICS` / `--metrics` to `auto`. Auto resolves to `off` in a Databricks App
   and `on` when metrics are compiled. `on` / `true` collect; `off` / `false`
   remove collection and history. Do not restore metrics, Prometheus, SSE,
-  profile, or rate-limit control routes to Axum. The HTTP surface is `/v1/*`
-  plus `/api/healthz`.
+  profile, or rate-limit control routes to the headless server. Its HTTP
+  surface is `/v1/*` plus `/api/healthz`; the desktop feature additionally
+  serves the embedded dashboard at `/` and its shared router under `/rspc`.
   Retain five-second buckets for one hour, one-minute rollups for 24 hours, 32
   named model series plus `other`, and at most 16 MiB in process memory.
   Installed service mode stores only aggregate buckets and model snapshots in
@@ -437,18 +438,25 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   persistence while settings remain enabled. Prune oldest metric rows before
   writes and restore the current runtime's aggregates on startup.
   `dbx-model-proxy-desktop` owns the proxy runtime in-process and uses Tauri 2
-  plus tauri-specta. One command/event registry owns runtime registration and
-  generated `desktop/src/bindings.ts`; never hand-maintain a TypeScript mirror.
-  The five-second event carries aggregate summaries, while a command loads one
-  selected model's bounded history. The React UI renders request/token/latency
-  trends, a reasoning pie chart, profile selection, model filtering, and
-  rate-limit actions from IPC. It does not use browser local storage.
+  plus one rspc router. Mount that router through `rspc-tauri` for native IPC
+  and under `/rspc` for the loopback HTTP dashboard; do not maintain
+  separate command and HTTP contracts. The same router generates
+  `desktop/src/bindings.ts`. The React UI uses rspc React Query hooks with the
+  Tauri transport inside the native shell and the fetch transport in a browser.
+  It renders request/token/latency trends, a reasoning pie chart, profile
+  selection, model filtering, and rate-limit actions. It does not use browser
+  local storage.
   The no-manifest frontend lives under `packages/rs/model-proxy/desktop`; root
   Bun dependencies build it and Rust release rows embed the committed `dist`
-  without Bun. `bun run model-proxy:desktop-bindings`,
-  `model-proxy:desktop-build`, and `model-proxy:desktop-check` own generation
-  and validation. The debug-only localhost MCP bridge must never be present in
-  release features or capabilities.
+  without Bun. The model-proxy Rust subproject overrides its standard Projen
+  build with native `tauri build`, adds `tauri dev`, and exposes root aliases as
+  `bun run model-proxy:desktop-build`, `model-proxy:desktop-dev`, and
+  `model-proxy:desktop-check`. Tauri's configured before-build command owns
+  bindings and frontend generation. Keep the generated Bun Tauri runner because
+  the crate is multi-binary: it selects `dbx-model-proxy-desktop` while
+  presenting the default-run filename that Tauri renames. Do not restore a
+  post-synth desktop build hook. The debug-only localhost MCP bridge must never
+  be present in release features or capabilities.
   Direct CLI runs remain memory-only by default; installed service mode enables
   the bounded aggregate SQLite store unless persistence is explicitly disabled.
   `dbx model-proxy` downloads and runs the release asset matching the installed

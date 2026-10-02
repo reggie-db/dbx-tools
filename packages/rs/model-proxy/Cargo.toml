@@ -36,17 +36,16 @@ required-features = [ "desktop" ]
 default = [ "metrics" ]
 desktop = [
   "metrics",
+  "dep:mime_guess",
+  "dep:rspc",
+  "dep:rspc-tauri",
+  "dep:rust-embed",
   "dep:specta",
   "dep:tauri",
-  "dep:tauri-specta",
   "dep:dbx-tools-service-desktop",
   "tauri/custom-protocol"
 ]
-desktop-codegen = [
-  "desktop",
-  "tauri-specta/typescript",
-  "dep:specta-typescript"
-]
+desktop-codegen = [ "desktop", "dep:specta-typescript" ]
 desktop-debug = [
   "desktop",
   "dep:tauri-plugin-connector",
@@ -108,9 +107,25 @@ futures-util = "0.3"
   workspace = true
   optional = true
 
+  [dependencies.mime_guess]
+  workspace = true
+  optional = true
+
   [dependencies.reqwest]
   workspace = true
   features = [ "stream" ]
+
+  [dependencies.rspc]
+  workspace = true
+  optional = true
+
+  [dependencies.rspc-tauri]
+  workspace = true
+  optional = true
+
+  [dependencies.rust-embed]
+  workspace = true
+  optional = true
 
   [dependencies.serde]
   workspace = true
@@ -134,10 +149,6 @@ futures-util = "0.3"
   optional = true
 
   [dependencies.tauri-plugin-connector]
-  workspace = true
-  optional = true
-
-  [dependencies.tauri-specta]
   workspace = true
   optional = true
 

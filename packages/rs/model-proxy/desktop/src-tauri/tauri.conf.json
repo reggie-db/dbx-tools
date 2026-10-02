@@ -32,13 +32,14 @@
     ]
   },
   "build": {
+    "runner": "../tauri-runner.ts",
     "beforeDevCommand": {
       "script": "bun --hot --port 3000 index.html",
       "cwd": "..",
       "wait": false
     },
     "beforeBuildCommand": {
-      "script": "bun build index.html --outdir dist",
+      "script": "cargo run --package dbx-tools-model-proxy --example generate-desktop-bindings --features desktop-codegen && bun -e 'await import(\"node:fs/promises\").then(({ rm }) => rm(\"dist\", { recursive: true, force: true }))' && bun build index.html --outdir dist",
       "cwd": "..",
       "wait": true
     },

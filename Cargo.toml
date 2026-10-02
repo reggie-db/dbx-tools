@@ -40,12 +40,15 @@ resolver = "2"
   httpdate = "1"
   mini-moka = "0.10"
   metrics = "0.24"
+  mime_guess = "2"
   open = "5"
   percent-encoding = "2"
   regex = "1"
   rcgen = "0.14"
   rustls = "0.23"
   rusqlite_migration = "=2.5.0"
+  rspc = "=0.3.1"
+  rspc-tauri = "=0.1.1"
   scraper = "0.24"
   serde_json = "1"
   service-manager = "=0.11.0"
@@ -59,8 +62,8 @@ resolver = "2"
   tokio-postgres = "0.7"
   tokio-rustls = "0.26"
   tracing = "0.1"
-  specta = "=2.0.0-rc.25"
-  specta-typescript = "=0.0.12"
+  specta = "=2.0.0-rc.20"
+  specta-typescript = "=0.0.7"
   ts-rs = "=12.0.1"
   webpki-roots = "1"
   wiremock = "0.6"
@@ -102,6 +105,10 @@ resolver = "2"
     version = "=0.39.0"
     features = [ "bundled" ]
 
+    [workspace.dependencies.rust-embed]
+    version = "8"
+    features = [ "debug-embed" ]
+
     [workspace.dependencies.serde]
     version = "1"
     features = [ "derive" ]
@@ -110,10 +117,6 @@ resolver = "2"
     version = "=2.11.6"
     default-features = false
     features = [ "tray-icon", "wry" ]
-
-    [workspace.dependencies.tauri-specta]
-    version = "=2.0.0-rc.25"
-    features = [ "derive" ]
 
     [workspace.dependencies.time]
     version = "0.3"

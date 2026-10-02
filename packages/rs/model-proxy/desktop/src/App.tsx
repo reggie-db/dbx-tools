@@ -1,20 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ReactECharts from "echarts-for-react";
 
 import {
-  commands,
-  events,
-  type AuthStatus,
-  type DesktopStatus,
-  type MetricsSnapshot_Deserialize,
-  type ModelSnapshot_Deserialize,
-  type ProfileSummary,
+  type MetricsSnapshot,
+  type ModelSnapshot,
   type RuntimeSelection,
 } from "./bindings.ts";
+import { rspc } from "./rspc.ts";
 
-type CommandResult<T> = { status: "ok"; data: T } | { status: "error"; error: string };
-
-const EMPTY_METRICS: MetricsSnapshot_Deserialize = {
+const EMPTY_METRICS: MetricsSnapshot = {
   mode: "off",
   controlsEnabled: false,
   generatedAtMs: 0,
@@ -56,9 +50,11 @@ const EMPTY_METRICS: MetricsSnapshot_Deserialize = {
   },
 };
 
-function data<T>(result: CommandResult<T>): T {
-  if (result.status === "error") throw new Error(result.error);
-  return result.data;
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return String(error.message);
+  }
+  return String(error);
 }
 
 function formatCount(value: number): string {
@@ -76,12 +72,12 @@ function formatPercent(value: number): string {
   return `${value.toFixed(value >= 99.95 ? 0 : 1)}%`;
 }
 
-function successRate(model: ModelSnapshot_Deserialize): number {
+function successRate(model: ModelSnapshot): number {
   if (!model.requests) return 100;
   return ((model.requests - model.errors) * 100) / model.requests;
 }
 
-function limiterState(model: ModelSnapshot_Deserialize): {
+function limiterState(model: ModelSnapshot): {
   label: string;
   tone: "healthy" | "cooldown" | "waiting";
 } {
@@ -120,74 +116,58 @@ function Logo() {
 }
 
 export function App() {
-  const [desktop, setDesktop] = useState<DesktopStatus>();
-  const [metrics, setMetrics] = useState<MetricsSnapshot_Deserialize>(EMPTY_METRICS);
-  const [auth, setAuth] = useState<AuthStatus>();
-  const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
+  const desktopQuery = rspc.useQuery(["desktop.status"]);
+  const metricsQuery = rspc.useQuery(["metrics.current", null], {
+    refetchInterval: 5_000,
+  });
+  const authQuery = rspc.useQuery(["auth.status"]);
+  const profilesQuery = rspc.useQuery(["auth.profiles", false]);
+  const switchRuntime = rspc.useMutation("auth.switch");
+  const cancelWaits = rspc.useMutation("rateLimits.cancelWaits");
+  const retryNow = rspc.useMutation("rateLimits.retryNow");
+  const rspcUtils = rspc.useUtils();
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
   const [busyModel, setBusyModel] = useState<string>();
-  const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    try {
-      const [desktopStatus, snapshot, authStatus, profileList] = await Promise.all([
-        commands.getDesktopStatus(),
-        commands.getMetrics(null),
-        commands.getAuthStatus(),
-        commands.listProfiles(false),
-      ]);
-      setDesktop(data(desktopStatus));
-      setMetrics(data(snapshot));
-      setAuth(data(authStatus));
-      setProfiles(data(profileList).profiles);
-      setError(undefined);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    let unlisten: (() => void) | undefined;
-    void events.metricsUpdated
-      .listen((event) => {
-        setMetrics(event.payload.snapshot);
-      })
-      .then((dispose) => {
-        unlisten = dispose;
-      });
-    return () => unlisten?.();
-  }, [load]);
+  const [actionError, setActionError] = useState<string>();
+  const desktop = desktopQuery.data;
+  const metrics = metricsQuery.data ?? EMPTY_METRICS;
+  const auth = authQuery.data;
+  const profiles = profilesQuery.data?.profiles ?? [];
+  const queryError = [desktopQuery.error, metricsQuery.error, authQuery.error, profilesQuery.error].find(
+    Boolean,
+  );
+  const error = actionError ?? (queryError ? errorMessage(queryError) : undefined);
+  const loading = [desktopQuery, metricsQuery, authQuery, profilesQuery].some(
+    (query) => query.isLoading,
+  );
 
   const switchProfile = async (value: string) => {
     const selection: RuntimeSelection = value
       ? { kind: "profile", profile: value }
       : { kind: "ambient" };
     try {
-      setAuth(data(await commands.switchRuntime(selection)));
-      setMetrics(data(await commands.getMetrics(null)));
-      setError(undefined);
+      const status = await switchRuntime.mutateAsync(selection);
+      rspcUtils.setData(["auth.status"], status);
+      await metricsQuery.refetch();
+      setActionError(undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setActionError(errorMessage(cause));
     }
   };
 
-  const controlModel = async (model: ModelSnapshot_Deserialize, action: "cancel" | "retry") => {
+  const controlModel = async (model: ModelSnapshot, action: "cancel" | "retry") => {
     setBusyModel(model.model);
     try {
       if (action === "cancel") {
-        data(await commands.cancelModelWaits({ model: model.model }));
+        await cancelWaits.mutateAsync({ model: model.model });
       } else {
-        data(await commands.retryModelNow({ model: model.model }));
+        await retryNow.mutateAsync({ model: model.model });
       }
-      setMetrics(data(await commands.getMetrics(null)));
-      setError(undefined);
+      await metricsQuery.refetch();
+      setActionError(undefined);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setActionError(errorMessage(cause));
     } finally {
       setBusyModel(undefined);
     }
@@ -294,7 +274,7 @@ export function App() {
             <select
               id="profile"
               value={auth?.runtime.selection.kind === "profile" ? auth.runtime.profile : ""}
-              disabled={!auth?.runtime.switchingEnabled}
+              disabled={!auth?.runtime.switchingEnabled || switchRuntime.isPending}
               onChange={(event) => void switchProfile(event.target.value)}
             >
               <option value="">Ambient ({auth?.runtime.profile ?? "automatic"})</option>

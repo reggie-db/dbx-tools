@@ -16,6 +16,26 @@
       "type": "build"
     },
     {
+      "name": "@rspc/client",
+      "version": "0.3.1",
+      "type": "build"
+    },
+    {
+      "name": "@rspc/react-query",
+      "version": "0.3.1",
+      "type": "build"
+    },
+    {
+      "name": "@rspc/tauri",
+      "version": "0.3.1",
+      "type": "build"
+    },
+    {
+      "name": "@tanstack/react-query",
+      "version": "5.104.0",
+      "type": "build"
+    },
+    {
       "name": "@tanstack/react-table",
       "version": "catalog:",
       "type": "build"

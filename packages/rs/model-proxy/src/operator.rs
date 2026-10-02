@@ -213,11 +213,6 @@ impl OperatorService {
             released_cooldowns: released.released_cooldowns,
         })
     }
-
-    #[cfg(feature = "metrics")]
-    pub(crate) fn subscribe(&self) -> Option<tokio::sync::broadcast::Receiver<()>> {
-        self.state.metrics.subscribe()
-    }
 }
 
 fn normalized_model(model: String) -> Result<String, String> {

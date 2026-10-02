@@ -248,30 +248,33 @@
         }
       ]
     },
-    "model-proxy:desktop-bindings": {
-      "name": "model-proxy:desktop-bindings",
-      "description": "Generate Specta bindings for the model-proxy desktop",
-      "steps": [
-        {
-          "exec": "cargo run --package dbx-tools-model-proxy --example generate-desktop-bindings --features desktop-codegen"
-        }
-      ]
-    },
     "model-proxy:desktop-build": {
       "name": "model-proxy:desktop-build",
-      "description": "Build the no-manifest model-proxy desktop frontend",
+      "description": "Build the model-proxy desktop through Tauri",
       "steps": [
         {
-          "exec": "bun scripts/model-proxy-desktop.mjs --write"
+          "exec": "cd packages/rs/model-proxy && bunx projen compile"
         }
       ]
     },
     "model-proxy:desktop-check": {
       "name": "model-proxy:desktop-check",
-      "description": "Validate Specta bindings and desktop frontend assets",
+      "description": "Build and verify committed rspc bindings and desktop assets",
       "steps": [
         {
-          "exec": "bun scripts/model-proxy-desktop.mjs"
+          "spawn": "model-proxy:desktop-build"
+        },
+        {
+          "exec": "git diff --exit-code -- packages/rs/model-proxy/desktop/src/bindings.ts packages/rs/model-proxy/desktop/dist"
+        }
+      ]
+    },
+    "model-proxy:desktop-dev": {
+      "name": "model-proxy:desktop-dev",
+      "description": "Run the model-proxy desktop through Tauri",
+      "steps": [
+        {
+          "exec": "cd packages/rs/model-proxy && bunx projen dev"
         }
       ]
     },

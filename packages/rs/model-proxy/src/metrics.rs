@@ -22,7 +22,7 @@ use dbx_tools_service::ServiceStorage;
 #[cfg(feature = "metrics")]
 use hdrhistogram::Histogram;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "metrics")]
+#[cfg(test)]
 use tokio::sync::broadcast;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -415,7 +415,7 @@ impl MetricsRuntime {
         let _ = (snapshots, controls_enabled);
     }
 
-    #[cfg(all(feature = "metrics", any(feature = "desktop", test)))]
+    #[cfg(test)]
     pub(crate) fn subscribe(&self) -> Option<broadcast::Receiver<()>> {
         self.inner.as_ref().map(|inner| inner.events.subscribe())
     }
@@ -430,6 +430,7 @@ impl MetricsRuntime {
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
+                #[cfg(test)]
                 let _ = inner.events.send(());
                 let persistence = Arc::clone(&inner);
                 match tokio::task::spawn_blocking(move || persistence.persist()).await {
@@ -551,6 +552,7 @@ pub(crate) struct MetricsSnapshot {
     pub(crate) retention: RetentionSnapshot,
 }
 
+#[cfg(any(feature = "metrics", test))]
 impl MetricsSnapshot {
     #[cfg(any(feature = "desktop", test))]
     fn disabled(mode: MetricsMode) -> Self {
@@ -916,6 +918,7 @@ struct MetricsInner {
     connections: AtomicU64,
     active_requests: AtomicU64,
     active_streams: AtomicU64,
+    #[cfg(test)]
     events: broadcast::Sender<()>,
     active_runtime_key: Mutex<Option<String>>,
     persistence: Mutex<Option<MetricsPersistenceState>>,
@@ -941,6 +944,7 @@ struct PersistedMetrics {
 #[cfg(feature = "metrics")]
 impl MetricsInner {
     fn new(persistence: Option<MetricsPersistenceConfig>) -> Result<Arc<Self>, MetricsError> {
+        #[cfg(test)]
         let (events, _) = broadcast::channel(8);
         let mut timeline_base_ms = 0;
         let mut store = MetricsStore::new();
@@ -981,6 +985,7 @@ impl MetricsInner {
             connections: AtomicU64::new(0),
             active_requests: AtomicU64::new(0),
             active_streams: AtomicU64::new(0),
+            #[cfg(test)]
             events,
             active_runtime_key: Mutex::new(active_runtime_key),
             persistence: Mutex::new(persistence),

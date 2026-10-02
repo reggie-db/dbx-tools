@@ -27,7 +27,7 @@
       "description": "Only compile",
       "steps": [
         {
-          "exec": "cargo build"
+          "exec": "bunx tauri build --features desktop"
         }
       ]
     },
@@ -38,6 +38,15 @@
         {
           "exec": "npx projen default",
           "cwd": "../../.."
+        }
+      ]
+    },
+    "dev": {
+      "name": "dev",
+      "description": "Run the native development runtime",
+      "steps": [
+        {
+          "exec": "bunx tauri dev --features desktop-codegen"
         }
       ]
     },

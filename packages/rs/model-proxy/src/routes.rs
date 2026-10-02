@@ -137,7 +137,11 @@ struct UpstreamResult {
     upstream_attempt: u32,
 }
 
-pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router {
+pub(crate) fn routes(
+    state: AppState,
+    max_request_bytes: NonZeroUsize,
+    #[cfg(feature = "desktop")] desktop: Option<crate::desktop::DesktopHttp>,
+) -> Router {
     let metrics = state.metrics.clone();
     let mut router = Router::new()
         .route("/api/healthz", get(health))
@@ -182,6 +186,10 @@ pub(crate) fn routes(state: AppState, max_request_bytes: NonZeroUsize) -> Router
             metrics.clone(),
             track_active_request,
         ));
+    }
+    #[cfg(feature = "desktop")]
+    if let Some(desktop) = desktop {
+        router = router.merge(desktop.routes());
     }
     router.with_state(state)
 }

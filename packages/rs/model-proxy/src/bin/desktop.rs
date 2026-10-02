@@ -19,11 +19,13 @@ struct Cli {
     server: ServerOptions,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::from_arg_matches(&Cli::command().version(build_info::version()).get_matches())?;
     init_logging_with_verbose(cli.server.verbose())?;
     dbx_tools_model_proxy::desktop::run(
         (!cli.probe).then_some(cli.server.with_desktop_defaults()),
         cli.probe,
     )
+    .await
 }
