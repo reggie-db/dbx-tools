@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli";
-export const PACKAGE_VERSION = "0.9.10";
+export const PACKAGE_VERSION = "0.9.11";
 export * as bootstrap from "./src/bootstrap.ts";
 export * as bun from "./src/bun.ts";
 export * as cli from "./src/cli.ts";

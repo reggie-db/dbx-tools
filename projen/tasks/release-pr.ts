@@ -63,11 +63,7 @@ function git(
 }
 
 function pushCurrentBranch(root: string, branch: string): void {
-  const upstream = git(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], {
-    capture: true,
-    check: false,
-  });
-  git(root, upstream ? ["push"] : ["push", "--set-upstream", "origin", branch]);
+  git(root, ["push", "--set-upstream", "origin", `HEAD:${branch}`]);
 }
 
 function gitSucceeds(root: string, args: string[]): boolean {
