@@ -113,6 +113,10 @@ project.package.addField("version", PACKAGE_VERSION);
 project.package.addField("type", "module");
 project.package.addField("main", "index.ts");
 project.package.addField("types", "index.ts");
+project.package.addField("publishConfig", {
+  access: "public",
+  registry: "https://registry.npmjs.org/",
+});
 project.package.addField("exports", {
   ".": "./index.ts",
   "./package.json": "./package.json",

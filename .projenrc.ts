@@ -165,7 +165,7 @@ const root = new project.DBXToolsNodeProject({
       },
     ],
   },
-  releaseDocs: {
+  releasePages: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",
     prepareSteps: [
@@ -213,6 +213,11 @@ const root = new project.DBXToolsNodeProject({
         run: "bun docs/scripts/generate-api-docs.mjs",
       },
       {
+        name: "Generate package indexes",
+        env: { GH_TOKEN: "${{ github.token }}" },
+        run: "bun docs/scripts/generate-package-indexes.mjs",
+      },
+      {
         name: "Save Rustdoc cache",
         if: "${{ steps.rustdoc-cache.outputs.cache-hit != 'true' }}",
         uses: "actions/cache/save@v5",
@@ -226,6 +231,7 @@ const root = new project.DBXToolsNodeProject({
         run: "bun docs/scripts/check-generated-titles.mjs",
       },
       { name: "Build docs", run: `bun run --cwd ${DOCS_BUILD_ROOT}/site build` },
+      { name: "Disable Jekyll", run: `touch ${DOCS_BUILD_ROOT}/dist/.nojekyll` },
       {
         name: "Check generated links",
         run: `bun run --cwd ${DOCS_BUILD_ROOT}/site check-links`,
@@ -233,7 +239,6 @@ const root = new project.DBXToolsNodeProject({
     ],
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
-  releasePythonRoot: PYTHON_ROOT,
   releaseValidationTasks: [
     "docs:check-source",
     "docs:check-readmes",

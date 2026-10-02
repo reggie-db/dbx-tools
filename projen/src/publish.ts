@@ -34,6 +34,7 @@ import { addPackageFiles, applyCompilerOptions, applyIncludes } from "./project.
 
 /** Directory `tsc` emits into, and the root of every published entry point. */
 export const COMPILED_DIR = "lib";
+const NPM_REGISTRY_URL = "https://registry.npmjs.org/";
 
 /** An `exports`/`bin` target written as TypeScript source, i.e. with a compiled twin. */
 const TS_SOURCE = /\.tsx?$/;
@@ -91,10 +92,14 @@ function compiledTarget(target: string): { types: string; default: string } | un
  * export layouts - deriving it any earlier would mirror the constructor's bare
  * `.` entry and silently omit every subpath a tag added.
  */
-function publishConfig(pkg: javascript.NodeProject): Record<string, unknown> | undefined {
+function publishConfig(
+  pkg: javascript.NodeProject,
+  compiledOutput: boolean,
+): Record<string, unknown> | undefined {
   const exports = (pkg.package.manifest.exports ?? {}) as Record<string, string>;
-  const compiled = Object.entries(exports).map(
-    ([subpath, target]) => [subpath, compiledTarget(target) ?? target] as const,
+  const publishExports = Object.entries(exports).map(
+    ([subpath, target]) =>
+      [subpath, compiledOutput ? (compiledTarget(target) ?? target) : target] as const,
   );
 
   // A CLI's `bin` points at its `.ts` entry in-repo (Node strips types outside
@@ -107,26 +112,29 @@ function publishConfig(pkg: javascript.NodeProject): Record<string, unknown> | u
   const binField = pkg.package.manifest.bin as
     Record<string, string> | (() => Record<string, string>) | undefined;
   const bin = (typeof binField === "function" ? binField() : binField) ?? {};
-  const compiledBin = Object.entries(bin).flatMap(([name, target]) => {
+  const compiledBin = (compiledOutput ? Object.entries(bin) : []).flatMap(([name, target]) => {
     const stem = compiledStem(target);
     return stem ? [[name, `${stem}.js`] as const] : [];
   });
 
-  // Nothing to swap means the package ships no TypeScript entry point at all;
-  // leave its manifest alone rather than writing an inert `publishConfig`.
-  const swaps = compiled.some(([, target]) => typeof target !== "string");
-  if (!swaps && compiledBin.length === 0) return undefined;
+  // Nothing to swap means the package ships source entry points, but standalone
+  // publication still needs an explicit public registry default.
+  const swaps = publishExports.some(([, target]) => typeof target !== "string");
+  if (!swaps && compiledBin.length === 0) {
+    return { access: pkg.package.npmAccess, registry: NPM_REGISTRY_URL };
+  }
 
   // Setting this field REPLACES whatever projen renders into it, and what projen
   // renders is `access` - dropped, every scoped package here would publish as
   // restricted. It is not readable from `manifest` at preSynthesize (projen
   // emits it from `npmAccess` later), so carry it over from that source instead.
-  const root = compiled.find(([subpath]) => subpath === ".")?.[1];
+  const root = publishExports.find(([subpath]) => subpath === ".")?.[1];
   return {
     access: pkg.package.npmAccess,
+    registry: NPM_REGISTRY_URL,
     ...(typeof root === "object" ? { main: root.default, types: root.types } : {}),
     ...(compiledBin.length ? { bin: Object.fromEntries(compiledBin) } : {}),
-    exports: Object.fromEntries(compiled),
+    exports: Object.fromEntries(publishExports),
   };
 }
 
@@ -139,14 +147,14 @@ function publishConfig(pkg: javascript.NodeProject): Record<string, unknown> | u
  * agree.
  */
 export function applyCompiledPublish(pkg: javascript.NodeProject): void {
-  if (!publishesCompiled(pkg)) return;
+  const compiled = publishesCompiled(pkg);
+  const config = publishConfig(pkg, compiled);
+  if (config) pkg.package.addField("publishConfig", config);
+  if (!compiled) return;
 
   applyCompilerOptions(pkg, COMPILED_COMPILER_OPTIONS);
   applyIncludes(pkg, "index.ts");
   addPackageFiles(pkg, COMPILED_DIR);
-
-  const config = publishConfig(pkg);
-  if (config) pkg.package.addField("publishConfig", config);
 
   // The workspace publisher compiles every selected package once and disables
   // lifecycle scripts while packing. Keep `prepack` for a standalone package

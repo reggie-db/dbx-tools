@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { parse } from "smol-toml";
-import { stampPythonProjects } from "../tasks/publish-python.ts";
+import { stampPythonProjects } from "../tasks/stamp-python.ts";
 
 let outdir: string;
 
@@ -24,7 +24,7 @@ before(() => {
 
 after(() => rmSync(outdir, { recursive: true, force: true }));
 
-describe("local Python release stamping", () => {
+describe("Python release stamping", () => {
   it("stamps versions and sibling dependencies, then restores the workspace", () => {
     const appPath = join(outdir, "app", "pyproject.toml");
     const original = readFileSync(appPath, "utf8");

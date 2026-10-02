@@ -832,10 +832,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   workspace tests, while the main release owns the full cross-platform Rust
   matrix and reusable target caches.
   Repository-specific release guards belong in `releaseValidationTasks`; they
-  run in the release worktree before expensive tests, local publication, or
-  approval. This repository uses the source-JSDoc ratchet and README generation
-  checks there, so GitHub release jobs are not the first place docs failures
-  appear. Never auto-write a documentation baseline in CI.
+  run in the release worktree before expensive tests or approval. This
+  repository uses the source-JSDoc ratchet and README generation checks there,
+  so GitHub release jobs are not the first place docs failures appear. Never
+  auto-write a documentation baseline in CI.
   Node packages containing the complete `bindings.ts` / `_bindings.ts` /
   `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
   without a `bindings` namespace. Python package roots export their generated
@@ -873,7 +873,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   never removes other workflow files. Consumers must explicitly delete exact
   workflow files they no longer want.
   GitHub's failed-job rerun reuses successful Rust artifacts from the same run.
-  Manual recovery selects `all`, `node`, `python`, or `docs`; a Node or Python
+  Manual recovery selects `all`, `node`, `python`, or `pages`; independent
+  release workflows additionally expose `rust` and `github`. A Node or Python
   recovery can name an earlier `release.yml` run whose commit must match the
   verified annotated tag. Dispatch the current default-branch workflow with the
   annotated tag and exact SHA as inputs; the workflow verifies both before
@@ -2145,8 +2146,8 @@ export, and the tests catch behavior.
 Run `bun run build` inside one JavaScript package when you want its complete
 compile/test/pack lifecycle. The root `build` runs synth plus workspace compile
 and tests. The GitHub PR workflow deliberately invokes only synth plus compile;
-`bun run release` owns Rust tests, workspace type-checking, and local publication
-before opening its PR. JavaScript behavior tests remain explicit rather than
+`bun run release` owns Rust tests and workspace type-checking before opening its
+PR. JavaScript behavior tests remain explicit rather than
 making every release repeat the complete package test fan-out. Binding
 generation stays explicit during UniFFI API development. Child `package` uses
 `npm pack --ignore-scripts` because the enclosing build already compiled;
@@ -2184,11 +2185,9 @@ What is configured, and why:
 
 - **npm/bun -> local verdaccio** at `http://localhost:4873/` (`~/.npmrc`), which
   proxies the corp mirror `https://npm-proxy.dev.databricks.com/` as its `corp`
-  uplink and caches tarballs on disk. Two reasons it exists: the corp proxy is
-  slow enough to hang mid-transfer on large tarballs (its config carries a 180s
-  timeout and a wide socket pool for exactly that), and it accepts LOCAL
-  publishes (`publish.allow_offline: true`), so a `bun run release` candidate can
-  be installed and tested without waiting on a public release.
+  uplink and caches tarballs on disk. The corp proxy is slow enough to hang
+  mid-transfer on large tarballs, so Verdaccio carries a 180s timeout and a wide
+  socket pool.
 - **pip/uv -> local devpi** at `http://localhost:3141/reggie/dev/+simple/`,
   which inherits from the corporate PyPI mirror and supports local uploads. The
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
@@ -2196,13 +2195,12 @@ What is configured, and why:
 
 `bun run release` commits and pushes pending source work, creates a dedicated
 `release/v<version>` worktree, increments the single root `VERSION`, regenerates
-every owned version surface, runs release validation and local publication, then
-opens one pull request into `main`. Automatic merge is enabled by default after
+every owned version surface, runs release validation, then opens one pull request
+into `main`. Automatic merge is enabled by default after
 required checks pass, and the command waits for the exact merged-SHA release
 workflow to finish. Pass `--no-approve` to leave that PR for a human merge or
 `--no-wait` to return after requesting automatic merge. `--no-validate` skips
-repository tests/compile, while `--no-local-publish` skips all local registry
-preflight; both are explicit recovery shortcuts and are never defaults.
+repository tests and compilation.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
 Version resolution scans both repository `v<version>` tags and historical
 `<component>-v<version>` tags, so the first singular release automatically starts
@@ -2217,8 +2215,18 @@ singular release updates the generated release workflow's versioned run name.
 Merging the release PR is the only automatic publication signal. The generated
 workflow verifies that the triggering SHA is the exact `main` commit, creates one
 annotated `v<version>` tag, and publishes all public npm, PyPI, Cargo, native, and
-GitHub artifacts at that version. Manual recovery must provide the same annotated
-tag and exact expected SHA; it never calculates another version.
+GitHub artifacts at that version. npm packages publish to npmjs and GitHub
+Packages. Because the packages use the `@dbx-tools` scope while the repository
+owner is `reggie-db`, GitHub Packages publication uses the
+`GITHUB_PACKAGES_TOKEN` Actions secret. It must contain a classic token with
+`write:packages` access to the `dbx-tools` GitHub organization. Python wheels
+and Cargo archives remain attached to GitHub Releases.
+The Pages workflow rebuilds its PEP 503 and Cargo sparse indexes from those
+durable assets before deploying the documentation site. Manual recovery must
+provide the same annotated tag and exact expected SHA; it never calculates
+another version.
+The published uv index is `https://docs.dbx.tools/simple/`; the Cargo registry
+index is `sparse+https://docs.dbx.tools/cargo/`.
 
 This repository sets `releaseSyncBranch: "dev"`. After successful publication,
 the workflow fast-forwards `dev` when it is behind, does nothing when it already
