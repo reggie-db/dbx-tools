@@ -1113,11 +1113,11 @@ impl MetricsInner {
         let streaming = if outcome.streaming { "true" } else { "false" };
         let client = outcome
             .client_wire
-            .map(|wire| format!("{wire:?}").to_ascii_lowercase())
+            .map(|wire| wire.label().to_owned())
             .unwrap_or_else(|| "embedding".to_owned());
         let target = outcome
             .target
-            .map(|wire| format!("{wire:?}").to_ascii_lowercase())
+            .map(|wire| wire.label().to_owned())
             .unwrap_or_else(|| "invocations".to_owned());
         ::metrics::counter!(
             "dbx_model_proxy_requests_total",

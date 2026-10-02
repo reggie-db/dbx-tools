@@ -152,7 +152,8 @@ itself. Set `--image-resize-threshold-bytes` or
 and defaults to `info`. Pass `-v` or `--verbose` to select debug when
 `LOG_LEVEL` is absent. An explicit `LOG_LEVEL` always wins. Normal completions
 log only the resolved model, route or protocol pair, streaming mode, status,
-and total duration. Rate limiting, exhausted retries, upstream 5xx responses,
+and total duration. Protocols use lowercase wire labels such as `responses`,
+without Rust `Some(...)` or `None` wrappers. Rate limiting, exhausted retries, upstream 5xx responses,
 and recoverable transport failures log at `warn`.
 
 Debug completions add request and response byte counts, the immediate TCP peer,
