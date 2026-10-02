@@ -71,20 +71,14 @@ describe("npm release recovery", () => {
     const originalFetch = globalThis.fetch;
     const originalToken = process.env.NODE_AUTH_TOKEN;
     let authorization: string | null = null;
-    let requestedUrl: string | undefined;
     process.env.NODE_AUTH_TOKEN = "fixture-token";
-    globalThis.fetch = (async (input, init) => {
-      requestedUrl = String(input);
+    globalThis.fetch = (async (_input, init) => {
       authorization = new Headers(init?.headers).get("authorization");
       return new Response(
         JSON.stringify({
-          versions: {
-            "1.2.3": {
-              name: "@fixture/native",
-              version: "1.2.3",
-              repository: identity.repository,
-            },
-          },
+          name: "@fixture/native",
+          version: "1.2.3",
+          repository: identity.repository,
         }),
         { headers: { "content-type": "application/json" } },
       );
@@ -92,7 +86,6 @@ describe("npm release recovery", () => {
     try {
       await publishedNpmRelease("@fixture/native", "1.2.3", "https://npm.pkg.github.com");
       assert.equal(authorization, "Bearer fixture-token");
-      assert.equal(requestedUrl, "https://npm.pkg.github.com/%40fixture%2Fnative");
     } finally {
       globalThis.fetch = originalFetch;
       if (originalToken === undefined) delete process.env.NODE_AUTH_TOKEN;

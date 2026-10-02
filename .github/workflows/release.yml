@@ -625,10 +625,8 @@ jobs:
         with:
           path: ${{ steps.bun_cache_metadata.outputs.path }}
           key: ${{ steps.bun_cache.outputs.cache-primary-key }}
-      - name: Package and publish public crates
-        id: package_and_publish_public_crates
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Package public crates
+        id: package_public_crates
         run: |-
           bun node_modules/@dbx-tools/projen/tasks/package-cargo.ts \
             --crate "dbx-tools-core" \
@@ -636,8 +634,7 @@ jobs:
             --crate "dbx-tools-model" \
             --crate "dbx-tools-service" \
             --crate "dbx-tools-model-proxy" \
-            --output dist/cargo \
-            --publish
+            --output dist/cargo
       - name: Upload Cargo distributions
         id: upload_cargo_distributions
         uses: actions/upload-artifact@v7
@@ -645,6 +642,16 @@ jobs:
           name: cargo-distributions
           path: dist/cargo
           retention-days: 7
+      - name: Publish public crates
+        id: publish_public_crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |-
+          cargo publish --package "dbx-tools-core" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-google" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-model" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-service" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-model-proxy" --registry crates-io --no-verify
   publish-github-release:
     needs:
       - verify-context

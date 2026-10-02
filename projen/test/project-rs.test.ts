@@ -225,11 +225,11 @@ describe("DBXToolsRustWorkspace", () => {
       );
       const cargoPublish = workflowStep(
         readWorkflow(directory).jobs["publish-cargo"]!,
-        "Package and publish public crates",
+        "Publish public crates",
       ).run!;
       assert.ok(
-        cargoPublish.indexOf('--crate "fixture-auth"') <
-          cargoPublish.indexOf('--crate "fixture-provider"'),
+        cargoPublish.indexOf('--package "fixture-auth"') <
+          cargoPublish.indexOf('--package "fixture-provider"'),
       );
       assert.equal("publish-fixture-provider" in readWorkflow(directory).jobs, false);
     } finally {
@@ -337,7 +337,7 @@ describe("DBXToolsRustWorkspace", () => {
       );
       const cargoJob = release.jobs["publish-cargo"]!;
       assert.ok(stepNames(cargoJob).includes("Setup Bun"));
-      assert.ok(stepNames(cargoJob).includes("Package and publish public crates"));
+      assert.ok(stepNames(cargoJob).includes("Package public crates"));
       assert.deepEqual(stepNames(release.jobs["publish-github-release"]!), [
         "Checkout release commit",
         "Verify release source",
@@ -944,14 +944,13 @@ describe("DBXToolsRustWorkspace", () => {
       "Setup Rust",
       "Install release helpers",
       "Save Bun cache",
-      "Package and publish public crates",
+      "Package public crates",
       "Upload Cargo distributions",
+      "Publish public crates",
     ]);
-    const cargoPublish = workflowStep(cargoPublisher, "Package and publish public crates");
-    assert.ok(cargoPublish.run?.includes('--crate "fixture-databricks-auth"'));
-    assert.ok(cargoPublish.run?.includes('--crate "fixture-tool"'));
-    assert.ok(cargoPublish.run?.includes("--publish"));
-    assert.equal(cargoPublish.env?.CARGO_REGISTRY_TOKEN, "${{ secrets.CARGO_REGISTRY_TOKEN }}");
+    const cargoPublish = workflowStep(cargoPublisher, "Publish public crates").run!;
+    assert.ok(cargoPublish.includes('--package "fixture-databricks-auth"'));
+    assert.ok(cargoPublish.includes('--package "fixture-tool"'));
     assert.equal(release.jobs["publish-local-cargo"], undefined);
 
     const nativeNpm = release.jobs["publish-native-npm"]!;

@@ -953,10 +953,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `cargo publish --no-verify` job and upload prebuilt binaries to the GitHub
   release. Cargo crates publish in dependency order across both UniFFI and
   source-only crates, so a public binary can consume workspace libraries on its
-  first release. Package and publish each crate before packaging its dependents,
-  then wait for the new registry version to resolve. `cargo package` resolves
-  path dependencies through the registry and cannot package the complete unit
-  before any member has been published. They never publish npm or PyPI packages.
+  first release. They never publish npm or PyPI packages.
   `bun run release --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product in the release PR; omit both to restore the
   maintained full matrix. GitHub environments referenced by release jobs must
