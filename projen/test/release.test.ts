@@ -23,6 +23,7 @@ before(() => {
     outdir,
     github: true,
     buildWorkflow: true,
+    releaseGitHubPackages: true,
     releasePages: {
       siteUrl: "https://docs.example.com",
       base: "/fixture/",

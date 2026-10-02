@@ -27,6 +27,7 @@ import {
   GITHUB_NPM_REGISTRY_URL,
   githubPackagesPublishEnvironment,
   githubPackagesSetupStep,
+  hasGitHubPackagesRelease,
   independentReleaseSetupSteps,
   npmPublishEnvironment,
   nodeReleaseSetupSteps,
@@ -968,12 +969,16 @@ export function independentRustNativeNpmPublishJob(project: DBXToolsJavaScriptPr
         env: npmPublishEnvironment(),
         run: "bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native",
       },
-      githubPackagesSetupStep(project),
-      {
-        name: "Publish affected native npm packages to GitHub Packages",
-        env: githubPackagesPublishEnvironment(),
-        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --registry ${GITHUB_NPM_REGISTRY_URL}`,
-      },
+      ...(hasGitHubPackagesRelease(project)
+        ? [
+            githubPackagesSetupStep(project),
+            {
+              name: "Publish affected native npm packages to GitHub Packages",
+              env: githubPackagesPublishEnvironment(),
+              run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --registry ${GITHUB_NPM_REGISTRY_URL}`,
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -1014,25 +1019,29 @@ export function independentRustNodeFacadePublishJob(
           })
           .join("\n"),
       },
-      githubPackagesSetupStep(project),
-      {
-        name: "Publish affected UniFFI npm facades to GitHub Packages",
-        env: githubPackagesPublishEnvironment(),
-        shell: "bash",
-        run: bindings
-          .flatMap((binding) => {
-            if (!binding.node || !binding.nodePackage) return [];
-            const unit = defaultReleaseUnitId("rust", binding.crate);
-            const output = `dist/uniffi/facades/${binding.crate}`;
-            return [
-              `VERSION="$(jq -r --arg unit "${unit}" '.units[] | select(.id == $unit) | .newVersion' dist/release-plan.json)"`,
-              'if [ -n "$VERSION" ]; then',
-              `  bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$VERSION" --registry ${GITHUB_NPM_REGISTRY_URL}`,
-              "fi",
-            ];
-          })
-          .join("\n"),
-      },
+      ...(hasGitHubPackagesRelease(project)
+        ? [
+            githubPackagesSetupStep(project),
+            {
+              name: "Publish affected UniFFI npm facades to GitHub Packages",
+              env: githubPackagesPublishEnvironment(),
+              shell: "bash",
+              run: bindings
+                .flatMap((binding) => {
+                  if (!binding.node || !binding.nodePackage) return [];
+                  const unit = defaultReleaseUnitId("rust", binding.crate);
+                  const output = `dist/uniffi/facades/${binding.crate}`;
+                  return [
+                    `VERSION="$(jq -r --arg unit "${unit}" '.units[] | select(.id == $unit) | .newVersion' dist/release-plan.json)"`,
+                    'if [ -n "$VERSION" ]; then',
+                    `  bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$VERSION" --registry ${GITHUB_NPM_REGISTRY_URL}`,
+                    "fi",
+                  ];
+                })
+                .join("\n"),
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -1063,12 +1072,16 @@ export function rustNativeNpmPublishJob(project: DBXToolsJavaScriptProject): Job
         env: { RELEASE_VERSION, ...npmPublishEnvironment() },
         run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" $DRY_RUN',
       },
-      githubPackagesSetupStep(project),
-      {
-        name: "Publish native npm packages to GitHub Packages",
-        env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
-        run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`,
-      },
+      ...(hasGitHubPackagesRelease(project)
+        ? [
+            githubPackagesSetupStep(project),
+            {
+              name: "Publish native npm packages to GitHub Packages",
+              env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
+              run: `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`,
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -1103,17 +1116,21 @@ export function rustNodeFacadePublishJob(
           })
           .join("\n"),
       },
-      githubPackagesSetupStep(project),
-      {
-        name: "Publish UniFFI npm facades to GitHub Packages",
-        env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
-        run: bindings
-          .map((binding) => {
-            const output = `dist/uniffi/facades/${binding.crate}`;
-            return `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`;
-          })
-          .join("\n"),
-      },
+      ...(hasGitHubPackagesRelease(project)
+        ? [
+            githubPackagesSetupStep(project),
+            {
+              name: "Publish UniFFI npm facades to GitHub Packages",
+              env: { RELEASE_VERSION, ...githubPackagesPublishEnvironment() },
+              run: bindings
+                .map((binding) => {
+                  const output = `dist/uniffi/facades/${binding.crate}`;
+                  return `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$RELEASE_VERSION" --registry ${GITHUB_NPM_REGISTRY_URL} $DRY_RUN`;
+                })
+                .join("\n"),
+            },
+          ]
+        : []),
       {
         name: "Smoke test published UniFFI npm facades",
         if: "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",

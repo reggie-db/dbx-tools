@@ -210,23 +210,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
         run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --version "$RELEASE_VERSION" $DRY_RUN
-      - name: Setup Node.js for GitHub Packages
-        id: setup_node_js_for_github_packages
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          registry-url: https://npm.pkg.github.com
-          always-auth: true
-          scope: "@dbx-tools"
-      - name: Publish npm workspace to GitHub Packages
-        id: publish_npm_workspace_to_github_packages
-        env:
-          RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
-          NPM_CONFIG_PROVENANCE: "false"
-          NPM_CONFIG_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
-        run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm/workspace --version "$RELEASE_VERSION" --registry https://npm.pkg.github.com $DRY_RUN
     timeout-minutes: 30
   rust-build:
     name: ${{ matrix.node }}
@@ -839,23 +822,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
         run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" $DRY_RUN
-      - name: Setup Node.js for GitHub Packages
-        id: setup_node_js_for_github_packages
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          registry-url: https://npm.pkg.github.com
-          always-auth: true
-          scope: "@dbx-tools"
-      - name: Publish native npm packages to GitHub Packages
-        id: publish_native_npm_packages_to_github_packages
-        env:
-          RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
-          NPM_CONFIG_PROVENANCE: "false"
-          NPM_CONFIG_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
-        run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" --registry https://npm.pkg.github.com $DRY_RUN
     timeout-minutes: 15
   publish-node-facades:
     needs:
@@ -937,26 +903,6 @@ jobs:
           bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-google/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
           node .projen/uniffi-release.mjs facade --node "packages/js/node/model-rs" --node-package "@dbx-tools/model-rs" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-model"
           bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-model/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
-      - name: Setup Node.js for GitHub Packages
-        id: setup_node_js_for_github_packages
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          registry-url: https://npm.pkg.github.com
-          always-auth: true
-          scope: "@dbx-tools"
-      - name: Publish UniFFI npm facades to GitHub Packages
-        id: publish_uniffi_npm_facades_to_github_packages
-        env:
-          RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
-          NPM_CONFIG_PROVENANCE: "false"
-          NPM_CONFIG_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
-        run: |-
-          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-core/npm-facade" --version "$RELEASE_VERSION" --registry https://npm.pkg.github.com $DRY_RUN
-          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-google/npm-facade" --version "$RELEASE_VERSION" --registry https://npm.pkg.github.com $DRY_RUN
-          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-model/npm-facade" --version "$RELEASE_VERSION" --registry https://npm.pkg.github.com $DRY_RUN
       - name: Smoke test published UniFFI npm facades
         id: smoke_test_published_uniffi_npm_facades
         if: ${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}

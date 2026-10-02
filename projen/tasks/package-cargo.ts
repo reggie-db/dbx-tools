@@ -99,32 +99,30 @@ async function waitForCargoVersion(root: string, name: string, version: string):
 
 async function packageCrate(root: string, pkg: CargoPackage, publish: boolean): Promise<void> {
   const lock = existsSync(join(root, "Cargo.lock")) ? ["--locked"] : [];
-  if (!publish || cargoVersionPublished(root, pkg.name, pkg.version)) {
-    exec.spawnSync("cargo", ["package", "--package", pkg.name, "--no-verify", ...lock], {
-      cwd: root,
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: true,
-    });
-    return;
+  if (publish && !cargoVersionPublished(root, pkg.name, pkg.version)) {
+    const result = exec.spawnSync(
+      "cargo",
+      ["publish", "--package", pkg.name, "--registry", CARGO_REGISTRY, "--no-verify", ...lock],
+      {
+        cwd: root,
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "ignore",
+        check: false,
+      },
+    );
+    if (result.exitCode !== 0 && !cargoVersionPublished(root, pkg.name, pkg.version)) {
+      throw new Error(`cargo publish failed for ${pkg.name}@${pkg.version}`);
+    }
+    await waitForCargoVersion(root, pkg.name, pkg.version);
   }
-
-  const result = exec.spawnSync(
-    "cargo",
-    ["publish", "--package", pkg.name, "--registry", CARGO_REGISTRY, "--no-verify", ...lock],
-    {
-      cwd: root,
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: false,
-    },
-  );
-  if (result.exitCode !== 0 && !cargoVersionPublished(root, pkg.name, pkg.version)) {
-    throw new Error(`cargo publish failed for ${pkg.name}@${pkg.version}`);
-  }
-  await waitForCargoVersion(root, pkg.name, pkg.version);
+  exec.spawnSync("cargo", ["package", "--package", pkg.name, "--no-verify", ...lock], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "ignore",
+    check: true,
+  });
 }
 
 /** Translate Cargo metadata dependency ownership into sparse-index semantics. */

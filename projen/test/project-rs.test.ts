@@ -975,9 +975,9 @@ describe("DBXToolsRustWorkspace", () => {
         "publish-npm.ts",
       ),
     );
-    assert.match(
-      workflowStep(nativeNpm, "Publish native npm packages to GitHub Packages").run ?? "",
-      /npm\.pkg\.github\.com/,
+    assert.equal(
+      stepNames(nativeNpm).includes("Publish native npm packages to GitHub Packages"),
+      false,
     );
     assert.deepEqual(release.jobs["publish-node"]?.needs, ["verify-context", "publish-native-npm"]);
     assert.ok(release.jobs["publish-node"]?.if?.includes("needs.publish-native-npm.result"));
@@ -993,6 +993,10 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(
       facadePublish.env?.NPM_CONFIG_PROVENANCE,
       "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
+    );
+    assert.equal(
+      stepNames(nodeFacades).includes("Publish UniFFI npm facades to GitHub Packages"),
+      false,
     );
     const smoke = workflowStep(nodeFacades, "Smoke test published UniFFI npm facades");
     assert.equal(smoke["continue-on-error"], true);

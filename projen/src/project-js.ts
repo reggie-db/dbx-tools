@@ -428,8 +428,8 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // the block to render, giving the root a `publishConfig` it does not have
     // today. Provenance is never written to a manifest here (projen only reads it
     // in its own `Publisher`, and `release: false` means none exists). The release
-    // workflow opts in for npmjs through `npm_config_provenance` and disables it
-    // for the matching GitHub Packages upload. See {@link DBXToolsRelease}.
+    // workflow opts in for npmjs through `npm_config_provenance`; an optional
+    // GitHub Packages upload disables it. See {@link DBXToolsRelease}.
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     workflowPackageCache: false,
     // The root build validates the whole workspace and must not also pack every
@@ -551,9 +551,13 @@ function validateReleaseOptions(options: DBXToolsJavaScriptProjectOptions): void
   }
   if (
     options.releaseMode === "disabled" &&
-    (options.releasePages !== undefined || options.nodeRelease !== undefined)
+    (options.releasePages !== undefined ||
+      options.releaseGitHubPackages !== undefined ||
+      options.nodeRelease !== undefined)
   ) {
-    throw new Error("releaseMode disabled cannot be combined with releasePages or nodeRelease");
+    throw new Error(
+      "releaseMode disabled cannot be combined with releasePages, releaseGitHubPackages, or nodeRelease",
+    );
   }
 }
 
@@ -625,6 +629,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly syncResynthPaths?: readonly string[];
     /** GitHub Page content included in the unified release workflow. */
     readonly releasePages?: ReleasePagesOptions;
+    /** Also publish npm archives to GitHub Packages. */
+    readonly releaseGitHubPackages?: boolean;
     /** Repository task names run during reviewed release preparation. */
     readonly releaseValidationTasks?: readonly string[];
     /** Optional AI-generated release summary. Defaults to enabled. */
@@ -1621,6 +1627,7 @@ function initProject(
   if (options.releaseMode !== "disabled") {
     new DBXToolsRelease(project, {
       tagPrefix: options.releaseTagPrefix,
+      githubPackages: options.releaseGitHubPackages,
       nodeRelease: options.nodeRelease,
       pages: options.releasePages,
       validationTasks: options.releaseValidationTasks,
