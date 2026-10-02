@@ -4,7 +4,12 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
+import { asyncUtils } from "@dbx-tools/shared-core";
 import { Command } from "commander";
+
+const CARGO_REGISTRY = "crates-io";
+const REGISTRY_POLL_ATTEMPTS = 90;
+const REGISTRY_POLL_INTERVAL_MS = 2_000;
 
 export interface CargoDependency {
   readonly features: string[];
@@ -72,6 +77,56 @@ function sha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+function cargoVersionPublished(root: string, name: string, version: string): boolean {
+  return (
+    exec.spawnSync("cargo", ["info", `${name}@${version}`, "--registry", CARGO_REGISTRY], {
+      cwd: root,
+      stdout: "ignore",
+      stderr: "ignore",
+      stdin: "ignore",
+      check: false,
+    }).exitCode === 0
+  );
+}
+
+async function waitForCargoVersion(root: string, name: string, version: string): Promise<void> {
+  for (let attempt = 0; attempt < REGISTRY_POLL_ATTEMPTS; attempt += 1) {
+    if (cargoVersionPublished(root, name, version)) return;
+    await asyncUtils.sleep(REGISTRY_POLL_INTERVAL_MS);
+  }
+  throw new Error(`${name}@${version} did not appear in ${CARGO_REGISTRY}`);
+}
+
+async function packageCrate(root: string, pkg: CargoPackage, publish: boolean): Promise<void> {
+  const lock = existsSync(join(root, "Cargo.lock")) ? ["--locked"] : [];
+  if (!publish || cargoVersionPublished(root, pkg.name, pkg.version)) {
+    exec.spawnSync("cargo", ["package", "--package", pkg.name, "--no-verify", ...lock], {
+      cwd: root,
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "ignore",
+      check: true,
+    });
+    return;
+  }
+
+  const result = exec.spawnSync(
+    "cargo",
+    ["publish", "--package", pkg.name, "--registry", CARGO_REGISTRY, "--no-verify", ...lock],
+    {
+      cwd: root,
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "ignore",
+      check: false,
+    },
+  );
+  if (result.exitCode !== 0 && !cargoVersionPublished(root, pkg.name, pkg.version)) {
+    throw new Error(`cargo publish failed for ${pkg.name}@${pkg.version}`);
+  }
+  await waitForCargoVersion(root, pkg.name, pkg.version);
+}
+
 /** Translate Cargo metadata dependency ownership into sparse-index semantics. */
 export function cargoIndexDependency(
   dependency: CargoDependency,
@@ -94,11 +149,12 @@ export function cargoIndexDependency(
 }
 
 /** Package selected crates and write one release-local sparse-index manifest. */
-export function packageCargoCrates(options: {
+export async function packageCargoCrates(options: {
   readonly crates: readonly string[];
   readonly output: string;
+  readonly publish?: boolean;
   readonly root: string;
-}): CargoIndexManifest {
+}): Promise<CargoIndexManifest> {
   const root = resolve(options.root);
   const output = resolve(options.output);
   const metadataResult = exec.spawnSync(
@@ -118,31 +174,16 @@ export function packageCargoCrates(options: {
   const archives = join(output, "crates");
   mkdirSync(archives, { recursive: true });
 
-  const packaged = options.crates.map<CargoIndexPackage>((name) => {
+  const packaged: CargoIndexPackage[] = [];
+  for (const name of options.crates) {
     const pkg = packages.get(name);
     if (!pkg) throw new Error(`Cargo metadata does not contain ${name}`);
-    exec.spawnSync(
-      "cargo",
-      [
-        "package",
-        "--package",
-        name,
-        "--no-verify",
-        ...(existsSync(join(root, "Cargo.lock")) ? ["--locked"] : []),
-      ],
-      {
-        cwd: root,
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "ignore",
-        check: true,
-      },
-    );
+    await packageCrate(root, pkg, options.publish ?? false);
     const asset = `${pkg.name}-${pkg.version}.crate`;
     const source = join(metadata.target_directory, "package", asset);
     const destination = join(archives, asset);
     copyFileSync(source, destination);
-    return {
+    packaged.push({
       asset,
       record: {
         name: pkg.name,
@@ -158,8 +199,8 @@ export function packageCargoCrates(options: {
         ...(pkg.rust_version ? { rust_version: pkg.rust_version } : {}),
         v: 2,
       },
-    };
-  });
+    });
+  }
   const manifest: CargoIndexManifest = {
     schemaVersion: 1,
     packages: packaged,
@@ -178,13 +219,17 @@ if (import.meta.main) {
       [],
     )
     .option("--output <path>", "Distribution output directory", "dist/cargo")
+    .option("--publish", `Publish missing crates to ${CARGO_REGISTRY} in argument order`)
     .option("--root <path>", "Cargo workspace root", ".")
-    .action((options: { crate: string[]; output: string; root: string }) => {
-      packageCargoCrates({
-        crates: options.crate,
-        output: options.output,
-        root: options.root,
-      });
-    });
+    .action(
+      async (options: { crate: string[]; output: string; publish?: boolean; root: string }) => {
+        await packageCargoCrates({
+          crates: options.crate,
+          output: options.output,
+          publish: options.publish,
+          root: options.root,
+        });
+      },
+    );
   await program.parseAsync();
 }

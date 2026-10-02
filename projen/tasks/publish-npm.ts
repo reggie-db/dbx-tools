@@ -41,8 +41,8 @@ function normalizedRepository(value: unknown): string | undefined {
     .replace(/\/$/, "");
 }
 
-function registryUrl(registry: string, name: string, version: string): string {
-  return `${registry.replace(/\/$/, "")}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
+function registryUrl(registry: string, name: string): string {
+  return `${registry.replace(/\/$/, "")}/${encodeURIComponent(name)}`;
 }
 
 function registryHeaders(registry: string, url = registry): Record<string, string> {
@@ -86,19 +86,24 @@ export async function publishedNpmRelease(
   version: string,
   registry = process.env.NPM_CONFIG_REGISTRY ?? DEFAULT_REGISTRY,
 ): Promise<NpmReleaseIdentity | undefined> {
-  const response = await fetch(registryUrl(registry, name, version), {
+  const response = await fetch(registryUrl(registry, name), {
     headers: { accept: "application/json", ...registryHeaders(registry) },
   });
   if (response.status === 404) return undefined;
   if (!response.ok) {
     throw new Error(`npm registry lookup failed for ${name}@${version}: ${response.status}`);
   }
-  const metadata = (await response.json()) as {
+  type VersionMetadata = {
     dist?: { integrity?: string; tarball?: string };
     name?: string;
     repository?: unknown;
     version?: string;
   };
+  const packument = (await response.json()) as {
+    versions?: Record<string, VersionMetadata>;
+  };
+  const metadata = packument.versions?.[version];
+  if (!metadata) return undefined;
   if (!metadata.name || !metadata.version) {
     throw new Error(`npm registry returned an incomplete identity for ${name}@${version}`);
   }

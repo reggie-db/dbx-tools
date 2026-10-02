@@ -687,24 +687,19 @@ export function rustCargoPublishJob(
       { name: "Install release helpers", run: "bun install" },
       bunCacheSaveStep(),
       {
-        name: "Package public crates",
+        name: "Package and publish public crates",
+        env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
         run: [
           "bun node_modules/@dbx-tools/projen/tasks/package-cargo.ts",
           ...plan.publicCrates.map((crate) => `  --crate ${JSON.stringify(crate)}`),
           "  --output dist/cargo",
+          "  --publish",
         ].join(" \\\n"),
       },
       {
         name: "Upload Cargo distributions",
         uses: "actions/upload-artifact@v7",
         with: { name: "cargo-distributions", path: "dist/cargo", "retention-days": 7 },
-      },
-      {
-        name: "Publish public crates",
-        env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
-        run: plan.publicCrates
-          .map((crate) => `cargo publish --package "${crate}" --registry crates-io --no-verify`)
-          .join("\n"),
       },
     ],
   };
@@ -714,18 +709,6 @@ export function independentRustCargoPublishJob(
   project: DBXToolsJavaScriptProject,
   plan: RustReleasePlan,
 ): Job {
-  const commands = plan.publicCrates.map((crate) =>
-    [
-      `VERSION="$(jq -r --arg package "${crate}" '.rustPackages[] | select(.identity == $package) | .version' dist/release-plan.json)"`,
-      'if [ -n "$VERSION" ]; then',
-      `  if cargo info "${crate}@$VERSION" >/dev/null 2>&1; then`,
-      `    echo "skip published ${crate}@$VERSION"`,
-      "  else",
-      `    cargo publish --package "${crate}" --registry crates-io --no-verify`,
-      "  fi",
-      "fi",
-    ].join("\n"),
-  );
   return {
     if: plan.hasTargetOutputs
       ? "${{ always() && needs.release-plan.outputs.rust == 'true' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'rust') }}"
@@ -741,7 +724,8 @@ export function independentRustCargoPublishJob(
         uses: `dtolnay/rust-toolchain@${plan.releaseRustVersion}`,
       },
       {
-        name: "Package affected Cargo crates",
+        name: "Package and publish affected Cargo crates",
+        env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
         shell: "bash",
         run: [
           "ARGS=()",
@@ -753,7 +737,7 @@ export function independentRustCargoPublishJob(
             ].join("\n"),
           ),
           'if [ "${#ARGS[@]}" -gt 0 ]; then',
-          '  bun node_modules/@dbx-tools/projen/tasks/package-cargo.ts "${ARGS[@]}" --output dist/cargo',
+          '  bun node_modules/@dbx-tools/projen/tasks/package-cargo.ts "${ARGS[@]}" --output dist/cargo --publish',
           "fi",
         ].join("\n"),
       },
@@ -761,11 +745,6 @@ export function independentRustCargoPublishJob(
         name: "Upload Cargo distributions",
         uses: "actions/upload-artifact@v7",
         with: { name: "cargo-distributions", path: "dist/cargo", "retention-days": 7 },
-      },
-      {
-        name: "Publish affected Cargo crates",
-        env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
-        run: commands.join("\n"),
       },
     ],
   };
