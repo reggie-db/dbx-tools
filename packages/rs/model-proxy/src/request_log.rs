@@ -278,8 +278,8 @@ impl RequestLogContext {
             token_reservation_input = self.throttle.reserved_input_tokens,
             token_window_used_before = self.throttle.input_window_used_before,
             token_window_wait_ms = self.throttle.wait.as_millis(),
-            ?client_wire,
-            ?target,
+            client_wire = %client_wire.label(),
+            target = %target.label(),
             streaming = true,
             status = status.as_u16(),
             latency_ms = self.started.elapsed().as_millis(),
@@ -380,12 +380,20 @@ impl RequestLogContext {
 }
 
 fn emit_request_outcome(outcome: RequestOutcome) {
+    let client_wire = outcome
+        .client_wire
+        .map(ClientWire::label)
+        .unwrap_or("embedding");
+    let target = outcome
+        .target
+        .map(TargetWire::label)
+        .unwrap_or("invocations");
     match completion_level(&outcome) {
         CompletionLevel::Warn => tracing::warn!(
             resolved_model = %outcome.resolved_model,
             route = outcome.route,
-            client_wire = ?outcome.client_wire,
-            target = ?outcome.target,
+            client_wire = %client_wire,
+            target = %target,
             streaming = outcome.streaming,
             status = outcome.status.as_u16(),
             duration_ms = outcome.duration_ms,
@@ -396,8 +404,8 @@ fn emit_request_outcome(outcome: RequestOutcome) {
         CompletionLevel::Info => tracing::info!(
             resolved_model = %outcome.resolved_model,
             route = outcome.route,
-            client_wire = ?outcome.client_wire,
-            target = ?outcome.target,
+            client_wire = %client_wire,
+            target = %target,
             streaming = outcome.streaming,
             status = outcome.status.as_u16(),
             duration_ms = outcome.duration_ms,
@@ -410,8 +418,8 @@ fn emit_request_outcome(outcome: RequestOutcome) {
         requested_model = %outcome.requested_model,
         resolved_model = %outcome.resolved_model,
         route = outcome.route,
-        client_wire = ?outcome.client_wire,
-        target = ?outcome.target,
+        client_wire = %client_wire,
+        target = %target,
         reasoning_setting = outcome.reasoning_setting.map(ReasoningSetting::label).unwrap_or("not-applicable"),
         streaming = outcome.streaming,
         status = outcome.status.as_u16(),

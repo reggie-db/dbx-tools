@@ -292,7 +292,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   publish the crate to Cargo and attach the compiled binary for each selected
   platform to the GitHub release. Default info logs contain one compact
   payload-free completion with resolved model, route or protocol pair,
-  streaming mode, status, and duration. Rate limits, retry exhaustion,
+  streaming mode, status, and duration. Protocol fields use lowercase wire
+  labels directly, never Rust `Some(...)`/`None` debug wrappers. Rate limits, retry exhaustion,
   transport failures, and upstream 5xx responses log at warn. `-v` /
   `--verbose` selects debug only when `LOG_LEVEL` is absent. Debug adds the
   complete request, peer, byte, token, attempt, reservation, and stream fields
