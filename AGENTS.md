@@ -507,7 +507,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   injects the stable config directory and service marker into launched argv and
   copies service and companion executables into `<config-dir>/bin` before
   registration; never point autostart at a mutable Cargo target or versioned
-  download-cache file.
+  download-cache file. Remove superseded managed copies only after the
+  replacement registration and stored configuration succeed.
   Its optional `desktop` feature owns the generic tray-icon event loop,
   lifecycle/status menus, Wry system WebView on macOS/Windows, Linux default-
   browser fallback, desktop capability probe, and callback-based health/open

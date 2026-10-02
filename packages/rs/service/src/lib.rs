@@ -375,6 +375,14 @@ impl ServiceCli {
         )
     }
 
+    /// Whether install argv already provides an exact companion executable.
+    pub fn companion_supplied(&self) -> bool {
+        matches!(
+            &self.command,
+            ServiceCommand::Install(command) if command.companion.is_some()
+        )
+    }
+
     pub fn requirements(
         &self,
         definition: &ServiceDefinition,
@@ -884,6 +892,7 @@ impl ServiceLifecycle {
         register_service(&self.config, &install)?;
         configure_companion(&self.config, &install, existing.as_ref(), companion_enabled)?;
         store.save(&self.config, &install)?;
+        remove_superseded_managed_executables(&self.config, existing.as_ref(), &install)?;
         self.await_healthy_status()
     }
 
@@ -1082,6 +1091,30 @@ fn remove_managed_executable(config: &ServiceConfig, executable: &Path) -> Resul
         .is_ok_and(|mut entries| entries.next().is_none())
     {
         fs::remove_dir(directory)?;
+    }
+    Ok(())
+}
+
+fn remove_superseded_managed_executables(
+    config: &ServiceConfig,
+    existing: Option<&StoredConfiguration>,
+    installed: &InstallConfig,
+) -> Result<()> {
+    let Some(existing) = existing else {
+        return Ok(());
+    };
+    let previous_program = Path::new(&existing.program);
+    if previous_program != installed.program {
+        remove_managed_executable(config, previous_program)?;
+    }
+    if let Some(previous_companion) = configured_companion(existing) {
+        let current_companion = installed
+            .companion
+            .as_ref()
+            .map(|companion| companion.program.as_path());
+        if Some(previous_companion) != current_companion {
+            remove_managed_executable(config, previous_companion)?;
+        }
     }
     Ok(())
 }
@@ -1599,6 +1632,44 @@ mod tests {
     }
 
     #[test]
+    fn managed_upgrade_removes_only_superseded_executables() {
+        let root = tempdir().unwrap();
+        let config = ServiceConfig::with_config_root("fixture", 4100, root.path()).unwrap();
+        let directory = config.config_dir.join("bin");
+        fs::create_dir_all(&directory).unwrap();
+        let old_program = directory.join("proxy-old");
+        let old_companion = directory.join("desktop-old");
+        let new_program = directory.join("proxy-new");
+        let new_companion = directory.join("desktop-new");
+        for path in [&old_program, &old_companion, &new_program, &new_companion] {
+            fs::write(path, b"binary").unwrap();
+        }
+        let existing = StoredConfiguration {
+            program: path_text(&old_program).unwrap(),
+            arguments: Vec::new(),
+            companion_program: Some(path_text(&old_companion).unwrap()),
+            companion_arguments: Some(Vec::new()),
+            host: "127.0.0.1".into(),
+            port: 4100,
+        };
+        let installed = InstallConfig {
+            program: new_program.clone(),
+            args: Vec::new(),
+            companion: Some(CompanionConfig {
+                program: new_companion.clone(),
+                args: Vec::new(),
+            }),
+            systray: SystrayMode::Auto,
+        };
+
+        remove_superseded_managed_executables(&config, Some(&existing), &installed).unwrap();
+        assert!(!old_program.exists());
+        assert!(!old_companion.exists());
+        assert!(new_program.exists());
+        assert!(new_companion.exists());
+    }
+
+    #[test]
     fn stored_host_and_port_drive_service_status_urls() {
         let root = tempdir().unwrap();
         let config = ServiceConfig::with_config_root("fixture", 4100, root.path()).unwrap();
@@ -1783,6 +1854,27 @@ mod tests {
         assert_eq!(SystrayMode::default(), SystrayMode::Auto);
         assert_eq!("auto".parse(), Ok(SystrayMode::Auto));
         assert!("sometimes".parse::<SystrayMode>().is_err());
+    }
+
+    #[test]
+    fn companion_policy_distinguishes_requested_and_supplied() {
+        let mut cli = ServiceCli {
+            command: ServiceCommand::Install(ServiceInstallCommand {
+                config_dir: None,
+                executable: None,
+                companion: None,
+                systray: SystrayMode::Auto,
+                persistence: PersistenceMode::Auto,
+                server_args: Vec::new(),
+            }),
+        };
+        assert!(cli.companion_requested());
+        assert!(!cli.companion_supplied());
+
+        if let ServiceCommand::Install(install) = &mut cli.command {
+            install.companion = Some(PathBuf::from("/companion"));
+        }
+        assert!(cli.companion_supplied());
     }
 
     #[test]

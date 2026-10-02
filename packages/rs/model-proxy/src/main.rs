@@ -333,7 +333,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging_with_verbose(cli.server.verbose)?;
     if let Some(CliCommand::Service(service)) = cli.command {
         let definition = service_definition()?;
-        if service.companion_requested() && definition.companion.is_none() {
+        if service.companion_requested()
+            && !service.companion_supplied()
+            && definition.companion.is_none()
+        {
             warn!(
                 "desktop companion is unavailable; build dbx-model-proxy-desktop with the desktop feature or use dbx model-proxy service install"
             );

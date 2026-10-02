@@ -17,6 +17,8 @@ Reusable Rust lifecycle support for per-user dbx-tools background services.
 - copies service and companion executables into `<config-dir>/bin` before
   registration so Cargo builds and versioned download caches can change without
   mutating a launching executable;
+- removes superseded managed executable copies only after the replacement is
+  registered and its configuration is stored;
 - supplies reusable `--config-dir`, `--persistence auto|memory|sqlite`, and
   installed-service runtime options;
 - supplies `SettingsStore` with process-local memory and shared service-owned
