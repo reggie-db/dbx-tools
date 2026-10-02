@@ -57,10 +57,12 @@ from `dbx-tools-service` while keeping tray-icon, Wry, and platform WebView
 dependencies out of the headless `dbx-model-proxy` executable. The adapter
 supplies model-proxy identity, icon, health endpoint, and Metrics URL; the
 metrics HTML, CSS, JavaScript, and APIs remain served by model-proxy.
+Its menu contains only `Open Model Proxy` and `Quit`; current health remains in
+the tray tooltip.
 
 macOS and Linux use the native user-level service manager. Windows uses
-current-user login startup and reports `start`, `stop`, and `restart` as
-unsupported because auto-launcher does not supervise a running process.
+current-user login startup plus the persisted exact executable and `sysinfo`
+process control for functional `start`, `stop`, and `restart`.
 
 The proxy uses `aigw-openai` and `aigw-anthropic` as protocol adapters.
 OpenAI Chat Completions and Anthropic Messages requests can target either

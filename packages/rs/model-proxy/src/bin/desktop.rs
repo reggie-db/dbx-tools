@@ -47,20 +47,23 @@ fn proxy_icon() -> DesktopIcon {
     DesktopIcon::new(rgba, 32, 32)
 }
 
+fn desktop_config(service: ServiceConfig) -> DesktopConfig {
+    DesktopConfig::new(
+        service.clone(),
+        "Model Proxy",
+        service.metrics_url(),
+        service.health_url(),
+        proxy_icon(),
+    )
+    .with_template_icon(true)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::from_arg_matches(&Cli::command().version(build_info::version()).get_matches())?;
     init_logging_with_verbose(false)?;
     let service = ServiceConfig::new("model-proxy", 4000)?
         .with_invalid_runtime_detector(dbx_tools_core::is_databricks_app);
-    let config = DesktopConfig::new(
-        service.clone(),
-        "dbx model proxy",
-        service.metrics_url(),
-        service.health_url(),
-        proxy_icon(),
-    )
-    .with_template_icon(true);
-    run_desktop(cli.desktop, config)
+    run_desktop(cli.desktop, desktop_config(service))
 }
 
 #[cfg(test)]
@@ -71,9 +74,11 @@ mod tests {
     fn adapter_supplies_model_proxy_identity_and_endpoints() {
         let cli = Cli::try_parse_from(["dbx-model-proxy-desktop"]).unwrap();
         let service = ServiceConfig::with_config_root("model-proxy", 4000, "/tmp").unwrap();
+        let config = desktop_config(service.clone());
 
         assert_eq!(service.metrics_url(), "http://127.0.0.1:4000/metrics");
         assert_eq!(service.health_url(), "http://127.0.0.1:4000/api/healthz");
+        assert_eq!(config.title, "Model Proxy");
         assert!(!cli.desktop.probe);
         let icon = proxy_icon();
         let opaque = icon

@@ -34,8 +34,8 @@ Reusable Rust lifecycle support for per-user dbx-tools background services.
   original install argv, evaluates companion policy and capability, and returns
   the resolved argv to release-binary orchestrators;
 - provides an optional `desktop` feature with the shared tray-icon runtime,
-  native Wry window on macOS and Windows, Linux browser fallback, lifecycle
-  menu actions, health status, and callback-based health/open overrides;
+  native Wry window on macOS and Windows, Linux browser fallback, a minimal
+  Open/Quit menu, health tooltip, and callback-based health/open overrides;
 - reports registration, local health, metrics URL, systray autostart
   registration, and current systray process status.
 

@@ -511,10 +511,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   download-cache file. Remove superseded managed copies only after the
   replacement registration and stored configuration succeed.
   Its optional `desktop` feature owns the generic tray-icon event loop,
-  lifecycle/status menus, Wry system WebView on macOS/Windows, Linux default-
-  browser fallback, desktop capability probe, and callback-based health/open
-  customization. Consumer companion binaries supply identity, title, icon,
-  health URL, and open URL only; their served UI remains consumer-owned.
+  an Open/Quit menu, health tooltip, Wry system WebView on macOS/Windows, Linux
+  default-browser fallback, desktop capability probe, and callback-based
+  health/open customization. Consumer companion binaries supply identity, title,
+  icon, health URL, and open URL only; their served UI remains consumer-owned.
   Consumers primarily provide a service name, port, executable behavior, and
   invalid-runtime detector. It has no UniFFI surface or generated Node/Python
   binding packages. Model proxy consumes it; lakebase proxy remains unchanged

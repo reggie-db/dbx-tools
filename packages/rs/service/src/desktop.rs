@@ -8,7 +8,9 @@ use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder,
 };
 
-use crate::{Result, ServiceConfig, ServiceLifecycle};
+use crate::{Result, ServiceConfig};
+
+const QUIT_LABEL: &str = "Quit";
 
 pub type HealthCheck = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 pub type UrlOpener = Arc<dyn Fn(&str) -> Result<()> + Send + Sync>;
@@ -94,22 +96,14 @@ impl DesktopConfig {
 struct Tray {
     icon: TrayIcon,
     open: MenuItem,
-    status: MenuItem,
-    start: MenuItem,
-    stop: MenuItem,
-    restart: MenuItem,
     quit: MenuItem,
 }
 
 impl Tray {
     fn new(config: &DesktopConfig) -> Result<Self> {
-        let open = MenuItem::new(format!("Open {}", config.title), true, None);
-        let status = MenuItem::new("Service: checking", false, None);
-        let start = MenuItem::new("Start service", true, None);
-        let stop = MenuItem::new("Stop service", true, None);
-        let restart = MenuItem::new("Restart service", true, None);
-        let quit = MenuItem::new("Quit", true, None);
-        let menu = Menu::with_items(&[&open, &status, &start, &stop, &restart, &quit])?;
+        let open = MenuItem::new(open_label(&config.title), true, None);
+        let quit = MenuItem::new(QUIT_LABEL, true, None);
+        let menu = Menu::with_items(&[&open, &quit])?;
         let icon = TrayIconBuilder::new()
             .with_tooltip(&config.title)
             .with_icon(Icon::from_rgba(
@@ -120,50 +114,20 @@ impl Tray {
             .with_icon_as_template(config.icon_as_template)
             .with_menu(Box::new(menu))
             .build()?;
-        Ok(Self {
-            icon,
-            open,
-            status,
-            start,
-            stop,
-            restart,
-            quit,
-        })
+        Ok(Self { icon, open, quit })
     }
 
     fn set_status(&self, text: &str) {
-        self.status.set_text(format!("Service: {text}"));
         let _ = self.icon.set_tooltip(Some(format!("Service: {text}")));
     }
 
     fn set_healthy(&self, healthy: bool) {
         self.set_status(if healthy { "healthy" } else { "unavailable" });
     }
+}
 
-    fn handle_lifecycle(&self, event: &MenuEvent, config: &DesktopConfig) -> bool {
-        let lifecycle = ServiceLifecycle::new(config.service.clone());
-        let result = if event.id == *self.start.id() {
-            Some(lifecycle.start())
-        } else if event.id == *self.stop.id() {
-            Some(lifecycle.stop())
-        } else if event.id == *self.restart.id() {
-            Some(lifecycle.restart())
-        } else {
-            None
-        };
-        if let Some(result) = result {
-            match result {
-                Ok(status) => self.set_status(&status.registration),
-                Err(error) => {
-                    tracing::warn!(%error, "desktop lifecycle action failed");
-                    self.set_status(&format!("error: {error}"));
-                }
-            }
-            true
-        } else {
-            false
-        }
-    }
+fn open_label(title: &str) -> String {
+    format!("Open {title}")
 }
 
 fn default_health_check(url: &str) -> bool {
@@ -197,8 +161,6 @@ fn run(config: DesktopConfig, probe: bool) -> Result<()> {
                 (config.open_url)(&config.url)?;
             } else if event.id == *tray.quit.id() {
                 return Ok(());
-            } else {
-                tray.handle_lifecycle(&event, &config);
             }
         }
     }
@@ -269,8 +231,6 @@ fn run(config: DesktopConfig, probe: bool) -> Result<()> {
                     }
                 } else if event.id == *tray.quit.id() {
                     *control_flow = ControlFlow::Exit;
-                } else {
-                    tray.handle_lifecycle(&event, &config);
                 }
             }
             Event::WindowEvent {
@@ -330,5 +290,7 @@ mod tests {
         assert!(!config.icon_as_template);
         assert!(config.clone().with_template_icon(true).icon_as_template);
         assert!(!cli.probe);
+        assert_eq!(open_label("Model Proxy"), "Open Model Proxy");
+        assert_eq!(QUIT_LABEL, "Quit");
     }
 }
