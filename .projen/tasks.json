@@ -360,10 +360,10 @@
     },
     "release": {
       "name": "release",
-      "description": "Prepare, validate, locally publish, and automatically merge a release PR",
+      "description": "Prepare, validate, and automatically merge a release PR",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"rs:release-fingerprint\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\" --validate-task \"rs:release-fingerprint\"",
           "receiveArgs": true
         }
       ]

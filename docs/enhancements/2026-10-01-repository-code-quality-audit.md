@@ -38,11 +38,11 @@ current dependency lines.
   neutral defaults (`projen/src/project-rs.ts:80`,
   `projen/src/project-rs.ts:464`, `projen/src/project-rs.ts:1202`).
 - Node release publication now compiles selected publishable packages once from
-  the workspace root and packs with lifecycle scripts disabled. Local release
-  publication reuses only the immediately preceding validated compile and checks
-  that expected outputs exist (`projen/tasks/publish.ts:29`,
+  the workspace root and packs with lifecycle scripts disabled. npmjs and
+  GitHub Packages consume the same validated archives
+  (`projen/tasks/publish.ts:29`,
   `projen/tasks/publish.ts:343`, `projen/tasks/publish.ts:384`,
-  `projen/tasks/local-publish.ts:53`, `projen/tasks/release-pr.ts:486`).
+  `projen/src/release.ts:294`).
 - Projen, AppKit, Better Auth, and Mastra were reconciled to their current tested
   stable lines. Several Mastra packages publish alpha builds under the npm
   `latest` tag, so this repository intentionally pins the newest non-prerelease

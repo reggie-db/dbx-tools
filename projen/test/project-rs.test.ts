@@ -304,7 +304,7 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
-  it("builds binary-only releases without Bun, Node, or uv", () => {
+  it("builds binary-only Rust matrix rows without Bun, Node, or uv", () => {
     const binaryOutdir = mkdtempSync(join(tmpdir(), "project-rs-binary-"));
     try {
       mkdirSync(join(binaryOutdir, "packages/rs/tool/src"), { recursive: true });
@@ -336,15 +336,14 @@ describe("DBXToolsRustWorkspace", () => {
         false,
       );
       const cargoJob = release.jobs["publish-cargo"]!;
-      assert.equal(
-        stepNames(cargoJob).some((name) => /Setup Bun|Setup Node\.js|Setup uv/.test(name)),
-        false,
-      );
+      assert.ok(stepNames(cargoJob).includes("Setup Bun"));
+      assert.ok(stepNames(cargoJob).includes("Package public crates"));
       assert.deepEqual(stepNames(release.jobs["publish-github-release"]!), [
         "Checkout release commit",
         "Verify release source",
         "Download release binaries",
         "Download reusable raw Rust outputs",
+        "Download Cargo distributions",
         "Publish GitHub release assets",
         "Delete superseded raw Rust release assets",
       ]);
@@ -392,7 +391,7 @@ describe("DBXToolsRustWorkspace", () => {
       assert.equal(workflow.jobs["rust-build"]?.needs, "release-plan");
       assert.equal(
         workflow.jobs["rust-build"]?.if,
-        "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'docs') }}",
+        "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'pages') }}",
       );
       assert.ok(workflow.jobs["publish-cargo"]);
       assert.ok(workflow.jobs["publish-github-release"]);
@@ -939,13 +938,20 @@ describe("DBXToolsRustWorkspace", () => {
     assert.deepEqual(stepNames(cargoPublisher), [
       "Checkout release commit",
       "Verify release source",
+      "Setup Bun",
+      "Resolve Bun cache",
+      "Restore Bun cache",
       "Setup Rust",
+      "Install release helpers",
+      "Save Bun cache",
+      "Package public crates",
+      "Upload Cargo distributions",
       "Publish public crates",
     ]);
     const cargoPublish = workflowStep(cargoPublisher, "Publish public crates").run!;
     assert.ok(cargoPublish.includes('--package "fixture-databricks-auth"'));
     assert.ok(cargoPublish.includes('--package "fixture-tool"'));
-    assert.ok(release.jobs["publish-local-cargo"]);
+    assert.equal(release.jobs["publish-local-cargo"], undefined);
 
     const nativeNpm = release.jobs["publish-native-npm"]!;
     assert.deepEqual(nativeNpm.needs, ["verify-context", "rust-build"]);
@@ -953,23 +959,33 @@ describe("DBXToolsRustWorkspace", () => {
       actions: "read",
       contents: "read",
       "id-token": "write",
+      packages: "write",
     });
     assert.equal(
       workflowStep(nativeNpm, "Download recovered native npm packages").with?.["run-id"],
       "${{ inputs.source_run_id }}",
     );
     assert.equal(
-      workflowStep(nativeNpm, "Publish native npm packages").env?.NPM_CONFIG_PROVENANCE,
+      workflowStep(nativeNpm, "Publish native npm packages to npmjs").env?.NPM_CONFIG_PROVENANCE,
       "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
     );
     assert.ok(
-      workflowStep(nativeNpm, "Publish native npm packages").run?.includes("publish-npm.ts"),
+      workflowStep(nativeNpm, "Publish native npm packages to npmjs").run?.includes(
+        "publish-npm.ts",
+      ),
+    );
+    assert.match(
+      workflowStep(nativeNpm, "Publish native npm packages to GitHub Packages").run ?? "",
+      /npm\.pkg\.github\.com/,
     );
     assert.deepEqual(release.jobs["publish-node"]?.needs, ["verify-context", "publish-native-npm"]);
     assert.ok(release.jobs["publish-node"]?.if?.includes("needs.publish-native-npm.result"));
     const nodeFacades = release.jobs["publish-node-facades"]!;
     assert.deepEqual(nodeFacades.needs, ["verify-context", "publish-node"]);
-    const facadePublish = workflowStep(nodeFacades, "Build and publish UniFFI npm facades");
+    const facadePublish = workflowStep(
+      nodeFacades,
+      "Build and publish UniFFI npm facades to npmjs",
+    );
     assert.ok(facadePublish.run?.includes("uniffi-release.mjs facade"));
     assert.ok(facadePublish.run?.includes("publish-npm.ts"));
     assert.equal(facadePublish.run?.includes("--native-package"), false);
@@ -993,6 +1009,10 @@ describe("DBXToolsRustWorkspace", () => {
       path: "dist/rust-raw",
       "merge-multiple": true,
     });
+    assert.deepEqual(workflowStep(githubReleaseJob, "Download Cargo distributions").with, {
+      name: "cargo-distributions",
+      path: "dist/cargo",
+    });
     const githubRelease = workflowStep(githubReleaseJob, "Publish GitHub release assets");
     assert.equal(githubRelease.uses, "softprops/action-gh-release@v2");
     assert.equal(
@@ -1000,6 +1020,8 @@ describe("DBXToolsRustWorkspace", () => {
       "docs/releases/v${{ needs.verify-context.outputs.release_version }}.md",
     );
     assert.equal(githubRelease.with?.generate_release_notes, true);
+    assert.match(String(githubRelease.with?.files), /dist\/cargo\/crates\/\*\.crate/);
+    assert.match(String(githubRelease.with?.files), /dist\/cargo\/cargo-index\.json/);
     const rawAssetCleanup = workflowStep(
       githubReleaseJob,
       "Delete superseded raw Rust release assets",

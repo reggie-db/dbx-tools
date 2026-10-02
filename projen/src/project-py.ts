@@ -7,10 +7,16 @@ import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workf
 import { DBX_TOOLS_LICENSE, projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
-import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
+import {
+  RELEASE_SHA,
+  RELEASE_SUMMARY_FILE,
+  RELEASE_TAG,
+  RELEASE_VERSION,
+  releaseSourceSteps,
+} from "./release-dispatch.ts";
 import {
   independentReleaseSetupSteps,
-  registerIndependentPublicationJob,
+  registerPublicationJob,
   releaseArtifactSteps,
   releasePublishCondition,
   releaseStageCondition,
@@ -510,7 +516,9 @@ export class DBXToolsPythonWorkspace extends Component {
           (dependency) => `publish-pypi-${dependency}`,
         );
         const dependencyCondition = dependencyJobs
-          .map((job) => `needs.${job}.result != 'failure' && needs.${job}.result != 'cancelled'`)
+          .map(
+            (job) => `needs['${job}'].result != 'failure' && needs['${job}'].result != 'cancelled'`,
+          )
           .join(" && ");
         workflow.addJob(`publish-pypi-${publication.directory}`, {
           if: `\${{ always() && needs.build-python.result == 'success' && contains(needs.release-plan.outputs.python_packages, '"identity":"${publication.distribution}"') && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python')${dependencyCondition ? ` && ${dependencyCondition}` : ""} }}`,
@@ -540,8 +548,43 @@ export class DBXToolsPythonWorkspace extends Component {
             },
           ],
         });
-        registerIndependentPublicationJob(workflow, `publish-pypi-${publication.directory}`);
+        registerPublicationJob(workflow, `publish-pypi-${publication.directory}`);
       }
+      workflow.addJob("publish-python-release-assets", {
+        if: "${{ always() && needs.build-python.result == 'success' && needs.release-plan.outputs.python == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python' || inputs.stage == 'github') }}",
+        needs: [
+          "release-plan",
+          "build-python",
+          ...allPublications.map((publication) => `publish-pypi-${publication.directory}`),
+        ],
+        runsOn: ["ubuntu-latest"],
+        permissions: { contents: JobPermission.WRITE },
+        steps: [
+          ...independentReleaseSetupSteps(project),
+          {
+            name: "Download Python distributions",
+            uses: "actions/download-artifact@v8",
+            with: { name: "python-distributions", path: "dist" },
+          },
+          {
+            name: "Upload Python wheels to component releases",
+            env: { GH_TOKEN: "${{ github.token }}" },
+            shell: "bash",
+            run: allPublications
+              .map((publication) =>
+                [
+                  `UNIT="$(jq -r --arg package ${quote(publication.distribution)} '.pythonPackages[] | select(.identity == $package) | .unit' dist/release-plan.json)"`,
+                  'if [ -n "$UNIT" ]; then',
+                  '  TAG="$(jq -r --arg unit "$UNIT" \'.units[] | select(.id == $unit) | .tag\' dist/release-plan.json)"',
+                  `  gh release upload "$TAG" dist/${publication.directory}/*.whl --clobber`,
+                  "fi",
+                ].join("\n"),
+              )
+              .join("\n"),
+          },
+        ],
+      });
+      registerPublicationJob(workflow, "publish-python-release-assets");
       return;
     }
     workflow.addJob("build-python", {
@@ -637,7 +680,51 @@ export class DBXToolsPythonWorkspace extends Component {
           },
         ],
       });
+      registerPublicationJob(workflow, `publish-pypi-${publication.directory}`);
     }
+    let hasGitHubReleaseJob = false;
+    try {
+      workflow.getJob("publish-github-release");
+      hasGitHubReleaseJob = true;
+    } catch {
+      hasGitHubReleaseJob = false;
+    }
+    const pypiJobs = allPublications.map((publication) => `publish-pypi-${publication.directory}`);
+    const pypiSucceeded = pypiJobs.map((job) => `needs['${job}'].result == 'success'`).join(" && ");
+    const githubReleaseReady = hasGitHubReleaseJob
+      ? " && (needs['publish-github-release'].result == 'success' || needs['publish-github-release'].result == 'skipped')"
+      : "";
+    workflow.addJob("publish-python-release-assets", {
+      if: `\${{ always() && needs['build-python'].result == 'success'${pypiSucceeded ? ` && ${pypiSucceeded}` : ""}${githubReleaseReady} && (github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python'))) }}`,
+      needs: [
+        "verify-context",
+        "build-python",
+        ...pypiJobs,
+        ...(hasGitHubReleaseJob ? ["publish-github-release"] : []),
+      ],
+      runsOn: ["ubuntu-latest"],
+      permissions: { contents: JobPermission.WRITE },
+      steps: [
+        ...releaseSourceSteps(),
+        {
+          name: "Download Python distributions",
+          uses: "actions/download-artifact@v8",
+          with: { name: "python-distributions", path: "dist" },
+        },
+        {
+          name: "Publish Python wheels to GitHub release",
+          uses: "softprops/action-gh-release@v2",
+          with: {
+            files: "dist/**/*.whl",
+            body_path: RELEASE_SUMMARY_FILE,
+            generate_release_notes: true,
+            tag_name: RELEASE_TAG,
+            target_commitish: RELEASE_SHA,
+          },
+        },
+      ],
+    });
+    registerPublicationJob(workflow, "publish-python-release-assets");
   }
 
   private publications(options: PythonReleaseOptions): readonly PythonPublication[] {

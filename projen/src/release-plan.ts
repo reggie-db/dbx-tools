@@ -66,7 +66,7 @@ export interface ReleasePlan {
     readonly python: boolean;
     readonly node: boolean;
     readonly github: boolean;
-    readonly docs: boolean;
+    readonly pages: boolean;
   };
   readonly omittedStages: readonly string[];
 }
@@ -173,7 +173,7 @@ export function buildReleasePlan(
     python: pythonPackages.length > 0 || artifacts.some((artifact) => artifact.kind === "pypi"),
     node: nodePackages.length > 0 || artifacts.some((artifact) => artifact.kind === "npm"),
     github: artifacts.some((artifact) => artifact.kind === "github-binary"),
-    docs: units.length > 0 || artifacts.some((artifact) => artifact.kind === "documentation"),
+    pages: units.length > 0 || artifacts.some((artifact) => artifact.kind === "documentation"),
   };
   const omittedStages = Object.entries(stages)
     .filter(([, enabled]) => !enabled)

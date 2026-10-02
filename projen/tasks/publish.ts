@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun
 /**
- * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]`
+ * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile] [--pack-only --output <dir>]`
  * - verify every workspace member and the Bun lock carry the release version,
  * then pack and publish each package owned by the standard Node release.
  *
@@ -38,9 +38,11 @@
  *
  * `--dry-run` forwards to `bun publish`: it packs + validates
  * but uploads nothing, so the `release` workflow is testable end-to-end via a
- * `workflow_dispatch` run without anything reaching npm. `--registry` targets a
- * non-default registry (a local verdaccio); `--exclude <dir>` (repeatable,
- * repo-relative) skips a member owned by another publication flow.
+ * `workflow_dispatch` run without anything reaching npm. `--pack-only` writes
+ * every validated archive to `--output` so separate registry jobs can publish
+ * the exact same bytes. `--registry` targets a non-default registry;
+ * `--exclude <dir>` (repeatable, repo-relative) skips a member owned by another
+ * publication flow.
  *
  * `--no-restore` keeps the transient publishConfig edits on disk instead of
  * undoing them at exit.
@@ -55,7 +57,9 @@
  */
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -63,7 +67,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
 import ts from "typescript";
 import { parse } from "yaml";
@@ -234,7 +238,7 @@ const plan =
     : undefined;
 if (!version && !plan) {
   logger.error(
-    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]",
+    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile] [--pack-only --output <dir>]",
   );
   process.exit(1);
 }
@@ -242,6 +246,11 @@ const registryIdx = rest.indexOf("--registry");
 const registry = registryIdx >= 0 ? rest[registryIdx + 1] : undefined;
 const dryRun = rest.includes("--dry-run");
 const skipCompile = rest.includes("--skip-compile");
+const packOnly = rest.includes("--pack-only");
+const outputIdx = rest.indexOf("--output");
+const output = outputIdx >= 0 ? resolve(root, rest[outputIdx + 1]) : undefined;
+if (packOnly && !output) throw new Error("--pack-only requires --output");
+if (output) mkdirSync(output, { recursive: true });
 const concurrencyIdx = rest.indexOf("--concurrency");
 const parsedConcurrency = Number(concurrencyIdx >= 0 ? rest[concurrencyIdx + 1] : 4);
 if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
@@ -371,7 +380,7 @@ for (const { dir } of publishable) {
 }
 
 logger.info(
-  `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
+  `${packOnly ? "packing" : dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
 await asyncUtils.mapConcurrent(
   publishable,
@@ -390,6 +399,8 @@ await asyncUtils.mapConcurrent(
           `Packed npm access ${String(local.access)} does not match ${String(access)} for ${name}`,
         );
       }
+      if (output) copyFileSync(archive, join(output, basename(archive)));
+      if (packOnly) return;
       if (!dryRun) {
         const published = await publishedNpmRelease(local.name, local.version, registry);
         if (npmReleaseMatches(local, published)) {
@@ -410,4 +421,6 @@ await asyncUtils.mapConcurrent(
   },
   { concurrency, errorMode: "settle" },
 );
-logger.success(`${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages`);
+logger.success(
+  `${packOnly ? "packed" : dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages`,
+);
