@@ -42,7 +42,7 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "packages/js/node/auth-gate":
     "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
   "packages/js/node/core":
-    "Node helpers for layered configuration, binary installation, process execution, locking, and project discovery",
+    "Node helpers for layered configuration, binary installation, process execution, locking, project discovery, and npm dependency resolution",
   "packages/js/node/core-rs": "Node bindings for dbx-tools-core",
   "packages/js/node/databricks":
     "Databricks workspace, filesystem, cloud, and network utilities",
@@ -431,6 +431,9 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // (node types + ES2022 lib, no DOM). shared-core stays browser-safe; anything
 // needing child_process / fs / process depends on node-core instead. zod is here
 // for `config.ts`, which validates `databricks bundle validate` output.
+// `dependency-resolver.ts` turns a parsed package.json into registry
+// specifiers from HTTP packuments, without writing the caller's project or
+// running an installer.
 // shared-core is listed in the explicit source-dependent rule above. YAML
 // belongs here because `config.ts` owns both
 // bundle and app.yaml config-source parsing.
@@ -439,17 +442,19 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
     "./bin": "./src/bin.ts",
     "./exec": "./src/exec.ts",
     "./file-lock": "./src/file-lock.ts",
+    "./dependency-resolver": "./src/dependency-resolver.ts",
     "./project-utils": "./src/project-utils.ts",
   });
   p.addDeps(
     "@dbx-tools/core-rs@workspace:^",
     "extract-zip@^2.0.1",
     "proper-lockfile@^4.1.2",
+    "semver@^7.7.3",
     "tar@^7.5.22",
     "yaml",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/proper-lockfile@^4.1.4");
+  p.addDevDeps("@types/proper-lockfile@^4.1.4", "@types/semver@^7.7.1");
 });
 
 // node-appkit: the base for Node-side AppKit helpers and the legacy SDK
