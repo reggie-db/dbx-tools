@@ -39,12 +39,16 @@ Service installation injects the stable configuration directory and service
 mode into the launched arguments. `--persistence=auto` uses memory for a direct
 CLI run and `service.sqlite3` for an installed service. Explicit `memory` and
 `sqlite` values override that selection. The same SQLite connection owns
-non-secret settings and aggregate metric snapshots.
+non-secret settings and aggregate metric snapshots. The service runs a managed
+copy under `<config-dir>/bin`; the companion is copied beside it. Neither
+autostart entry points at a mutable Cargo target or download cache.
 
 The systray policy is `auto`, `always`, or `never`. Auto is the default and
 registers the companion only when its tray-icon capability probe succeeds.
 Always turns an unsupported desktop session into an error. Never disables
-companion autostart. Every lifecycle command fails inside a Databricks App,
+companion autostart. Enabled companions start immediately and write
+`desktop.log` / `desktop-error.log` under `<config-dir>/logs`. Every lifecycle
+command fails inside a Databricks App,
 where host OS service management is unavailable.
 
 The companion is the `dbx-model-proxy-desktop` binary target in this crate. It
@@ -53,10 +57,12 @@ from `dbx-tools-service` while keeping tray-icon, Wry, and platform WebView
 dependencies out of the headless `dbx-model-proxy` executable. The adapter
 supplies model-proxy identity, icon, health endpoint, and Metrics URL; the
 metrics HTML, CSS, JavaScript, and APIs remain served by model-proxy.
+Its menu contains only `Open Model Proxy` and `Quit`; current health remains in
+the tray tooltip.
 
 macOS and Linux use the native user-level service manager. Windows uses
-current-user login startup and reports `start`, `stop`, and `restart` as
-unsupported because auto-launcher does not supervise a running process.
+current-user login startup plus the persisted exact executable and `sysinfo`
+process control for functional `start`, `stop`, and `restart`.
 
 The proxy uses `aigw-openai` and `aigw-anthropic` as protocol adapters.
 OpenAI Chat Completions and Anthropic Messages requests can target either
@@ -148,7 +154,8 @@ itself. Set `--image-resize-threshold-bytes` or
 and defaults to `info`. Pass `-v` or `--verbose` to select debug when
 `LOG_LEVEL` is absent. An explicit `LOG_LEVEL` always wins. Normal completions
 log only the resolved model, route or protocol pair, streaming mode, status,
-and total duration. Rate limiting, exhausted retries, upstream 5xx responses,
+and total duration. Protocols use lowercase wire labels such as `responses`,
+without Rust `Some(...)` or `None` wrappers. Rate limiting, exhausted retries, upstream 5xx responses,
 and recoverable transport failures log at `warn`.
 
 Debug completions add request and response byte counts, the immediate TCP peer,

@@ -302,6 +302,7 @@ describe("release task contracts", () => {
       releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
         releasePr.indexOf('git(root, ["worktree", "add"'),
     );
+    assert.ok(releasePr.includes('["push", "--set-upstream", "origin", `HEAD:${branch}`]'));
     assert.match(releasePr, /\["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"\]/);
     assert.doesNotMatch(releasePr, /worktree", "add", "--branch"/);
     assert.ok(releasePr.includes('git(root, ["merge", "--no-edit", `origin/${opts.base}`])'));
@@ -324,6 +325,7 @@ describe("release task contracts", () => {
       "utf8",
     );
     assert.match(localCargo, /"metadata", "--format-version", "1", "--no-deps", "--locked"/);
+    assert.match(localCargo, /"run",\s*"--no-project",\s*"python"/);
     assert.ok(localCargo.includes("if (workspaceDependency) visit(workspaceDependency)"));
     assert.ok(
       releasePr.indexOf("generateReleaseSummary({") <

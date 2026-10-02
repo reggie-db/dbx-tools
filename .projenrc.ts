@@ -1322,17 +1322,16 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
         serde: { workspace: true },
         "serde_json": { workspace: true },
         "service-manager": { workspace: true },
+        sysinfo: { workspace: true },
         "tray-icon": {
           version: "=0.25.1",
           defaultFeatures: false,
           features: ["ksni"],
           optional: true,
         },
+        tracing: { workspace: true },
       },
       targetDependencies: {
-        'cfg(target_os = "windows")': {
-          sysinfo: { workspace: true },
-        },
         'cfg(any(target_os = "macos", target_os = "windows"))': {
           tao: {
             version: "=0.37.1",

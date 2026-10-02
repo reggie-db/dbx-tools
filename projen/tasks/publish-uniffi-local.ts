@@ -42,6 +42,7 @@ function pythonTag(): string {
     "uv",
     [
       "run",
+      "--no-project",
       "python",
       "-c",
       "import sysconfig; print(sysconfig.get_platform().replace('-', '_').replace('.', '_'))",

@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-teams";
-export const PACKAGE_VERSION = "0.9.7";
+export const PACKAGE_VERSION = "0.9.12";
 export * as card from "./src/card.ts";
 export * as teamsActivity from "./src/teams-activity.ts";
 export { ADAPTIVE_CARD_VERSION, ADAPTIVE_CARD_SCHEMA_URL, cardFactSchema, cardActionSchema, cardSpecSchema, adaptiveCardSchema, cardResultSchema } from "./src/card.ts";

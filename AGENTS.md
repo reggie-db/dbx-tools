@@ -292,7 +292,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   publish the crate to Cargo and attach the compiled binary for each selected
   platform to the GitHub release. Default info logs contain one compact
   payload-free completion with resolved model, route or protocol pair,
-  streaming mode, status, and duration. Rate limits, retry exhaustion,
+  streaming mode, status, and duration. Protocol fields use lowercase wire
+  labels directly, never Rust `Some(...)`/`None` debug wrappers. Rate limits, retry exhaustion,
   transport failures, and upstream 5xx responses log at warn. `-v` /
   `--verbose` selects debug only when `LOG_LEVEL` is absent. Debug adds the
   complete request, peer, byte, token, attempt, reservation, and stream fields
@@ -504,12 +505,16 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   detection, non-secret settings, aggregate storage, health status, typed Clap
   lifecycle commands, and companion autostart policy. Direct auto mode uses
   memory; installed auto mode uses the one shared SQLite connection. Install
-  injects the stable config directory and service marker into launched argv.
+  injects the stable config directory and service marker into launched argv and
+  copies service and companion executables into `<config-dir>/bin` before
+  registration; never point autostart at a mutable Cargo target or versioned
+  download-cache file. Remove superseded managed copies only after the
+  replacement registration and stored configuration succeed.
   Its optional `desktop` feature owns the generic tray-icon event loop,
-  lifecycle/status menus, Wry system WebView on macOS/Windows, Linux default-
-  browser fallback, desktop capability probe, and callback-based health/open
-  customization. Consumer companion binaries supply identity, title, icon,
-  health URL, and open URL only; their served UI remains consumer-owned.
+  an Open/Quit menu, health tooltip, Wry system WebView on macOS/Windows, Linux
+  default-browser fallback, desktop capability probe, and callback-based
+  health/open customization. Consumer companion binaries supply identity, title,
+  icon, health URL, and open URL only; their served UI remains consumer-owned.
   Consumers primarily provide a service name, port, executable behavior, and
   invalid-runtime detector. It has no UniFFI surface or generated Node/Python
   binding packages. Model proxy consumes it; lakebase proxy remains unchanged
