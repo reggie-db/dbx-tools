@@ -42,7 +42,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.17",
+  "version": "0.9.18",
   "types": "index.ts",
   "type": "module",
   "exports": {
