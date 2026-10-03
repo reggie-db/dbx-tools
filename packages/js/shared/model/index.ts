@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-model";
-export const PACKAGE_VERSION = "0.9.18";
+export const PACKAGE_VERSION = "0.9.19";
 export * as display from "./src/display.ts";
 export * as model from "./src/model.ts";
 export * as openaiChat from "./src/openai-chat.ts";
