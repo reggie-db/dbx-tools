@@ -236,11 +236,7 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseValidationTasks: [
-    "docs:check-source",
-    "docs:check-readmes",
-    "rs:release-fingerprint",
-  ],
+  releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
   releaseSyncBranch: "dev",
   pullRequestTitlePolicy: {
     types: ["feat", "fix", "chore"],

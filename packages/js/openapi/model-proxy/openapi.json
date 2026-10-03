@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "dbx-tools model proxy",
-    "version": "0.9.15"
+    "version": "0.9.17"
   },
   "paths": {
     "/api/healthz": {
