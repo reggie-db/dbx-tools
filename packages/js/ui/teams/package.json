@@ -41,7 +41,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.9.16",
+  "version": "0.9.17",
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",
