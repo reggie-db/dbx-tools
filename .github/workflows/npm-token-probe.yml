@@ -67,7 +67,7 @@ jobs:
 
             collaborators="$(mktemp)"
             if npm access list collaborators "$package" --json --registry=https://registry.npmjs.org >"$collaborators" 2>/dev/null; then
-              jq -c --arg actor "$actor" '{actorAccess: .[$actor] // "none"}' "$collaborators"
+              jq -c --arg actor "$actor" '{actorAccess: (.[$actor] // "none")}' "$collaborators"
             else
               printf '%s\n' '{"actorAccess":"unavailable"}'
             fi
