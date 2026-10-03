@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { parse } from "smol-toml";
-import { stampPythonProjects } from "../tasks/publish-python.ts";
+import { pythonDistributionPaths, stampPythonProjects } from "../tasks/publish-python.ts";
 
 let outdir: string;
 
@@ -25,6 +25,21 @@ before(() => {
 after(() => rmSync(outdir, { recursive: true, force: true }));
 
 describe("local Python release stamping", () => {
+  it("selects only publishable distributions", () => {
+    const directory = mkdtempSync(join(tmpdir(), "python-distributions-"));
+    try {
+      for (const file of ["fixture-1.2.3.tar.gz", "fixture-1.2.3-py3-none-any.whl", ".gitignore"]) {
+        writeFileSync(join(directory, file), "fixture");
+      }
+      assert.deepEqual(pythonDistributionPaths(directory), [
+        join(directory, "fixture-1.2.3-py3-none-any.whl"),
+        join(directory, "fixture-1.2.3.tar.gz"),
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("stamps versions and sibling dependencies, then restores the workspace", () => {
     const appPath = join(outdir, "app", "pyproject.toml");
     const original = readFileSync(appPath, "utf8");
