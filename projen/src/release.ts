@@ -251,9 +251,6 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
           fi
           BUILD_MODE="$(git log -1 --format=%B -- VERSION | sed -n 's/^Release-Build: //p' | tail -1)"
           case "$BUILD_MODE" in local|remote) ;; *) BUILD_MODE="remote" ;; esac
-          if [ "$BUILD_MODE" = "local" ] && ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --draft --title "$RELEASE_TAG" --target "$RELEASE_SHA"
-          fi
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "expected_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
@@ -261,6 +258,21 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
         `
           // ============================================================================
         ),
+      },
+      {
+        name: "Prepare local draft release",
+        if: "${{ steps.release.outputs.build_mode == 'local' }}",
+        env: {
+          GH_TOKEN: "${{ github.token }}",
+          GH_REPO: "${{ github.repository }}",
+          RELEASE_SHA: "${{ steps.release.outputs.expected_sha }}",
+          RELEASE_TAG: "${{ steps.release.outputs.release_tag }}",
+        },
+        run: [
+          'if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then',
+          '  gh release create "$RELEASE_TAG" --draft --title "$RELEASE_TAG" --target "$RELEASE_SHA"',
+          "fi",
+        ].join("\n"),
       },
       {
         name: "Verify source artifact run",

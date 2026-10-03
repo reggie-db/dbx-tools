@@ -541,13 +541,14 @@ export function rustAssetsJob(): Job {
     if: "${{ always() && needs.verify-context.result == 'success' && (needs.verify-context.outputs.build_mode == 'local' || needs.rust-build.result == 'success') }}",
     needs: ["verify-context", "rust-build"],
     runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.READ },
+    permissions: { contents: JobPermission.WRITE },
     steps: [
       {
         name: "Wait for locally uploaded release assets",
         if: "${{ needs.verify-context.outputs.build_mode == 'local' }}",
         env: {
           GH_TOKEN: "${{ github.token }}",
+          GH_REPO: "${{ github.repository }}",
           RELEASE_TAG: RELEASE_TAG,
         },
         shell: "bash",

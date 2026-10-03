@@ -113,14 +113,23 @@ jobs:
           fi
           BUILD_MODE="$(git log -1 --format=%B -- VERSION | sed -n 's/^Release-Build: //p' | tail -1)"
           case "$BUILD_MODE" in local|remote) ;; *) BUILD_MODE="remote" ;; esac
-          if [ "$BUILD_MODE" = "local" ] && ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --draft --title "$RELEASE_TAG" --target "$RELEASE_SHA"
-          fi
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "expected_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "build_mode=$BUILD_MODE" >> "$GITHUB_OUTPUT"
         shell: bash
+      - name: Prepare local draft release
+        id: prepare_local_draft_release
+        if: ${{ steps.release.outputs.build_mode == 'local' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_SHA: ${{ steps.release.outputs.expected_sha }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+        run: |-
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --draft --title "$RELEASE_TAG" --target "$RELEASE_SHA"
+          fi
       - name: Verify source artifact run
         id: verify_source_artifact_run
         if: ${{ inputs.source_run_id != '' }}
@@ -700,7 +709,7 @@ jobs:
       - rust-build
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     if: ${{ always() && needs.verify-context.result == 'success' && (needs.verify-context.outputs.build_mode == 'local' || needs.rust-build.result == 'success') }}
     steps:
       - name: Wait for locally uploaded release assets
@@ -708,6 +717,7 @@ jobs:
         if: ${{ needs.verify-context.outputs.build_mode == 'local' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.verify-context.outputs.release_tag }}
         run: |-
           mkdir -p dist/local-release
