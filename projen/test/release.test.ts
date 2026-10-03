@@ -144,6 +144,10 @@ describe("unified release workflow", () => {
       "${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
     assert.equal(
+      publish.env?.ACCEPT_STAGED,
+      "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && '--accept-staged' || '' }}",
+    );
+    assert.equal(
       publish.env?.NODE_AUTH_TOKEN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && secrets.NPM_TOKEN || '' }}",
     );
@@ -157,6 +161,7 @@ describe("unified release workflow", () => {
     );
     assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
     assert.ok(publish.run?.includes("export NPM_CONFIG_PROVENANCE=false"));
+    assert.ok(publish.run?.includes("$ACCEPT_STAGED"));
   });
 
   it("builds and selectively deploys docs in the same workflow", () => {
