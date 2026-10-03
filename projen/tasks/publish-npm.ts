@@ -84,6 +84,11 @@ export function npmReleaseMatches(
   return true;
 }
 
+/** Whether npm rejected a retry because the exact version is awaiting staged approval. */
+export function isStagedNpmConflict(output: string): boolean {
+  return /Cannot publish over previously staged version/i.test(output);
+}
+
 export async function publishedNpmRelease(
   name: string,
   version: string,
@@ -263,6 +268,7 @@ export function packNpmPackage(
 }
 
 export async function publishNpmArchives(options: {
+  readonly acceptStaged?: boolean;
   readonly directory: string;
   readonly dryRun?: boolean;
   readonly registry?: string;
@@ -291,23 +297,40 @@ export async function publishNpmArchives(options: {
         continue;
       }
     }
-    exec.spawnSync(
-      "npm",
-      [
-        "publish",
-        archive,
-        ...(local.access ? ["--access", local.access] : []),
-        ...(options.registry ? ["--registry", options.registry] : []),
-        ...(options.dryRun ? ["--dry-run"] : []),
-      ],
-      {
+    const args = [
+      "publish",
+      archive,
+      ...(local.access ? ["--access", local.access] : []),
+      ...(options.registry ? ["--registry", options.registry] : []),
+      ...(options.dryRun ? ["--dry-run"] : []),
+    ];
+    if (!options.acceptStaged) {
+      exec.spawnSync("npm", args, {
         cwd: process.cwd(),
         stdout: "inherit",
         stderr: "inherit",
         stdin: "ignore",
         check: true,
-      },
-    );
+      });
+      continue;
+    }
+    const result = exec.spawnSync("npm", args, {
+      cwd: process.cwd(),
+      stdout: "capture",
+      stderr: "capture",
+      stdin: "ignore",
+      check: false,
+    });
+    if (result.exitCode === 0) {
+      logger.info(`staged ${local.name}@${local.version}`);
+      continue;
+    }
+    const output = `${result.stdout}\n${result.stderr}`;
+    if (isStagedNpmConflict(output)) {
+      logger.info(`skip staged ${local.name}@${local.version}`);
+      continue;
+    }
+    throw new Error(output.replace(/[^\x09\x0a\x0d\x20-\x7e]/g, ""));
   }
 }
 
@@ -315,12 +338,18 @@ if (import.meta.main) {
   const program = new Command();
   program
     .requiredOption("--directory <path>", "Directory containing npm archives")
+    .option("--accept-staged", "Treat an exact staged version as an idempotent success")
     .option("--version <version>", "Expected npm release version")
     .option("--registry <url>", "npm registry URL")
     .option("--dry-run", "Validate archives without publishing")
     .action(
-      (options: { directory: string; dryRun?: boolean; registry?: string; version?: string }) =>
-        publishNpmArchives(options),
+      (options: {
+        acceptStaged?: boolean;
+        directory: string;
+        dryRun?: boolean;
+        registry?: string;
+        version?: string;
+      }) => publishNpmArchives(options),
     );
   await program.parseAsync();
 }

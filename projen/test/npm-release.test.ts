@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import {
+  isStagedNpmConflict,
   npmReleaseMatches,
   packNpmPackage,
   readNpmArchiveIdentity,
@@ -41,6 +42,16 @@ after(() => {
 });
 
 describe("npm release recovery", () => {
+  it("recognizes an exact staged-version conflict", () => {
+    assert.equal(
+      isStagedNpmConflict(
+        'npm error 409 Conflict - Cannot publish over previously staged version "1.2.3".',
+      ),
+      true,
+    );
+    assert.equal(isStagedNpmConflict("npm error 403 Forbidden"), false);
+  });
+
   it("reads and matches an exact staged archive", () => {
     assert.equal(identity.name, "@fixture/native");
     assert.equal(identity.version, "1.2.3");
