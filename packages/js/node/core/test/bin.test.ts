@@ -300,7 +300,10 @@ describe("bin.ensure", () => {
     const root = await mkdtemp(join(tmpdir(), "dbx-bin-file-"));
     const homeDir = join(root, "home");
     const sourcePath = join(root, "local-tool");
-    await writeFile(sourcePath, '#!/bin/sh\necho "file source"\n');
+    await writeFile(
+      sourcePath,
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "example 9.9.9"; else echo "file source"; fi\n',
+    );
     await chmod(sourcePath, 0o755);
     let seenTemp: string | undefined;
 
@@ -309,14 +312,14 @@ describe("bin.ensure", () => {
         "example",
         ({ tempDir }) => {
           seenTemp = tempDir;
-          return { url: pathToFileURL(sourcePath).href, trustVersion: true };
+          return { url: pathToFileURL(sourcePath).href };
         },
         { homeDir, autoUnpackage: true, minVersion: "9.9.9" },
       );
 
       assert.ok(seenTemp);
       assert.match(seenTemp, /example-/);
-      assert.equal(await readFile(installed.path, "utf8"), '#!/bin/sh\necho "file source"\n');
+      assert.match(await readFile(installed.path, "utf8"), /example 9\.9\.9/);
       await access(installed.path, constants.X_OK);
     } finally {
       await rm(root, { recursive: true, force: true });

@@ -20,13 +20,12 @@ export interface PythonProjectInfo {
 /** Read the project identity and publication flag from parsed TOML metadata. */
 export function pythonProjectInfo(source: string, toml: TomlCodec): PythonProjectInfo;
 
-/** Stamp a temporary publication version and exact sibling dependencies. */
-export function stampPythonProject(
+/** Project registry-compatible sibling requirements onto a temporary package copy. */
+export function preparePythonProjectForPublication(
   source: string,
   options: {
     readonly packages: readonly PythonPackageMapping[];
     readonly rewriteDependencies?: boolean;
-    readonly usePackageVersions?: boolean;
     readonly toml: TomlCodec;
     readonly version: string;
   },

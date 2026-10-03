@@ -8,22 +8,17 @@
  * DEFAULT_VERSION} when it is absent on a fresh tree); it never rewrites it, so an
  * ordinary `bunx projen` cannot move a package version up or down.
  *
- * Only two callers change the number: the pure `bump` task used while preparing
- * a reviewed release PR, and the one-time bootstrap of a workspace that has no
- * `VERSION` yet. Both resolve the base from remote git tags first ({@link
- * resolveRemoteVersion}) so a release cut elsewhere is respected, and fall back
- * to the local file (or {@link DEFAULT_VERSION}) when the remote is unreachable
- * or has no tags. The remote is consulted only on those paths.
+ * Only the pure `bump` task changes the number. It increments the checked-in
+ * file while release preparation owns the surrounding Git transaction.
  */
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseVersion } from "semver";
-import { captureTaskCommand } from "./_task-command.ts";
 
 /** Name of the repo-root file holding the workspace version. */
 export const VERSION_FILE = "VERSION";
 
-/** Version a fresh workspace starts at when no `VERSION` file and no remote tag exist. */
+/** Version a fresh workspace reads before its first explicit VERSION write. */
 export const DEFAULT_VERSION = "0.0.1";
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
@@ -115,127 +110,20 @@ export function syncWorkspaceManifestVersion(manifestPath: string, version: stri
   return true;
 }
 
-/** Run git in `cwd`, capturing stdout and swallowing failure (offline, no repo). */
-function gitCapture(cwd: string, args: string[]): string {
-  try {
-    return captureTaskCommand(cwd, "git", args);
-  } catch {
-    return "";
-  }
-}
-
-/** Highest tag matching `<prefix><semver>` in the local tag list, or `undefined`. */
-export function latestTagVersion(cwd: string, prefix: string): Semver | undefined {
-  const out = gitCapture(cwd, [
-    "-c",
-    "versionsort.suffix=-",
-    "tag",
-    "--sort=-version:refname",
-    "--list",
-    `${prefix}*`,
-  ]);
-  for (const tag of out.split("\n")) {
-    if (!tag.startsWith(prefix)) continue;
-    const v = parseSemver(tag.slice(prefix.length));
-    if (v) return v;
-  }
-  return undefined;
-}
-
-/** Highest historical `<component>-<prefix><semver>` tag, or `undefined`. */
-export function latestComponentTagVersion(cwd: string, prefix: string): Semver | undefined {
-  const marker = `-${prefix}`;
-  const out = gitCapture(cwd, [
-    "-c",
-    "versionsort.suffix=-",
-    "tag",
-    "--sort=-version:refname",
-    "--list",
-    `*${marker}*`,
-  ]);
-  let best: Semver | undefined;
-  for (const tag of out.split("\n")) {
-    const index = tag.lastIndexOf(marker);
-    const raw = index >= 0 ? tag.slice(index + marker.length) : "";
-    if (!/^\d+\.\d+\.\d+$/.test(raw)) continue;
-    const version = parseSemver(raw);
-    if (version && (!best || compareSemver(version, best) > 0)) best = version;
-  }
-  return best;
-}
-
-/**
- * Highest published version across repository and historical component tags,
- * or `undefined` when the remote is unreachable or no matching tag exists.
- * Fetches tags first (best effort) so a release made elsewhere is respected; a
- * fetch failure just means the local tag list is used, and callers fall back to
- * the `VERSION` file.
- */
-export function resolveRemoteVersion(
-  cwd: string,
-  prefixes: readonly string[],
-  {
-    fetch = true,
-    includeComponentTags = true,
-  }: { fetch?: boolean; includeComponentTags?: boolean } = {},
-): string | undefined {
-  if (fetch) gitCapture(cwd, ["fetch", "--tags", "--quiet"]);
-  let best: Semver | undefined;
-  for (const prefix of prefixes) {
-    const versions = [
-      latestTagVersion(cwd, prefix),
-      ...(includeComponentTags ? [latestComponentTagVersion(cwd, prefix)] : []),
-    ];
-    for (const version of versions) {
-      if (version && (!best || compareSemver(version, best) > 0)) best = version;
-    }
-  }
-  return best ? best.join(".") : undefined;
-}
-
-/**
- * The base version a `bump` increments from: the highest remote tag if any exists
- * (a local file that is ahead does NOT win), else the local `VERSION` file, else
- * {@link DEFAULT_VERSION}.
- */
-export function resolveBaseVersion(
-  root: string,
-  prefixes: readonly string[],
-  options: { fetch?: boolean; includeComponentTags?: boolean } = {},
-): { version: string; source: "remote" | "local" } {
-  const remote = resolveRemoteVersion(root, prefixes, options);
-  if (remote) return { version: remote, source: "remote" };
-  return { version: readWorkspaceVersion(root), source: "local" };
+/** The checked-in version a release increment starts from. */
+export function resolveBaseVersion(root: string): string {
+  return readWorkspaceVersion(root);
 }
 
 /** Resolve the next release version without mutating the workspace. */
 export function resolveNextVersion(
   root: string,
-  prefixes: readonly string[],
   level: VersionLevel,
-  options: { fetch?: boolean; includeComponentTags?: boolean } = {},
-): { base: string; version: string; source: "remote" | "local" } {
-  const base = resolveBaseVersion(root, prefixes, options);
-  const parsed = parseSemver(base.version) ?? [0, 0, 1];
+): { base: string; version: string } {
+  const base = resolveBaseVersion(root);
+  const parsed = parseSemver(base) ?? [0, 0, 1];
   return {
     base: parsed.join("."),
     version: incrementSemver(parsed, level).join("."),
-    source: base.source,
   };
-}
-
-/**
- * Create the `VERSION` file when it does not yet exist, seeding it from the remote
- * tags (or {@link DEFAULT_VERSION} when the remote is unreachable / has no tag). An
- * existing file is left untouched - only `bump` moves an established version, so
- * bootstrap never upgrades or downgrades one. Returns the current version.
- */
-export function ensureWorkspaceVersion(
-  root: string,
-  { prefixes = ["v"], fetch = true }: { prefixes?: readonly string[]; fetch?: boolean } = {},
-): string {
-  if (!existsSync(versionPath(root))) {
-    writeWorkspaceVersion(root, resolveRemoteVersion(root, prefixes, { fetch }) ?? DEFAULT_VERSION);
-  }
-  return readWorkspaceVersion(root);
 }

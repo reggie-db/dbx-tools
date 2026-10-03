@@ -1,7 +1,17 @@
 #!/usr/bin/env -S bun
-import { chmodSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { arch, platform } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import {
+  cpSync,
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { arch, platform, tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { json, log, object } from "@dbx-tools/shared-core";
@@ -12,33 +22,21 @@ import type { RustBindingMapping, RustWorkspaceMapping } from "../src/project-rs
 
 const logger = log.logger("projen:publish-uniffi-local");
 
-const parsed = parseArgs({
-  options: {
-    version: { type: "string" },
-    registry: { type: "string" },
-    "pypi-publish-url": { type: "string" },
-    "cargo-registry": { type: "string" },
-  },
-});
-
-function run(command: string, args: string[], capture = false): string {
-  if (capture) return captureTaskCommand(repoRoot, command, args, { check: true });
-  runTaskCommand(repoRoot, command, args);
-  return "";
-}
-
 function commandAvailable(command: string): boolean {
   return taskCommandSucceeds(repoRoot, command, ["--version"]);
 }
 
 function rustHost(): string {
-  const host = run("rustc", ["-vV"], true).match(/^host:\s+(.+)$/m)?.[1];
+  const host = captureTaskCommand(repoRoot, "rustc", ["-vV"], { check: true }).match(
+    /^host:\s+(.+)$/m,
+  )?.[1];
   if (!host) throw new Error("Unable to detect the local Rust target from rustc -vV");
   return host;
 }
 
 function pythonTag(): string {
-  const value = run(
+  const value = captureTaskCommand(
+    repoRoot,
     "uv",
     [
       "run",
@@ -47,7 +45,7 @@ function pythonTag(): string {
       "-c",
       "import sysconfig; print(sysconfig.get_platform().replace('-', '_').replace('.', '_'))",
     ],
-    true,
+    { check: true },
   );
   if (!value) throw new Error("Unable to detect the local Python wheel platform tag");
   return value;
@@ -99,12 +97,18 @@ interface CargoMetadataPackage {
   dependencies: Array<{ name: string; source?: string | null }>;
   manifest_path: string;
   name: string;
+  version: string;
 }
 
-function orderedCargoManifests(config: RustWorkspaceMapping): string[] {
-  const configured = new Set(config.crates.map((crate) => resolve(repoRoot, crate, "Cargo.toml")));
+function orderedCargoManifests(root: string, config: RustWorkspaceMapping): CargoMetadataPackage[] {
+  const configured = new Set(config.crates.map((crate) => resolve(root, crate, "Cargo.toml")));
   const metadata = json.parseRecord(
-    run("cargo", ["metadata", "--format-version", "1", "--no-deps", "--locked"], true),
+    captureTaskCommand(
+      root,
+      "cargo",
+      ["metadata", "--format-version", "1", "--no-deps", "--locked"],
+      { check: true },
+    ),
   );
   if (!metadata || !Array.isArray(metadata.packages)) {
     throw new Error("Cargo metadata did not return workspace packages");
@@ -112,6 +116,7 @@ function orderedCargoManifests(config: RustWorkspaceMapping): string[] {
   const packages = metadata.packages.filter(object.isRecord).map((pkg) => {
     if (
       typeof pkg.name !== "string" ||
+      typeof pkg.version !== "string" ||
       typeof pkg.manifest_path !== "string" ||
       !Array.isArray(pkg.dependencies)
     ) {
@@ -119,6 +124,7 @@ function orderedCargoManifests(config: RustWorkspaceMapping): string[] {
     }
     return {
       name: pkg.name,
+      version: pkg.version,
       manifest_path: resolve(pkg.manifest_path),
       dependencies: pkg.dependencies.filter(object.isRecord).map((dependency) => {
         if (typeof dependency.name !== "string") {
@@ -161,79 +167,103 @@ function orderedCargoManifests(config: RustWorkspaceMapping): string[] {
     ordered.push(pkg);
   };
   for (const pkg of publishable.values()) visit(pkg);
-  return ordered.map((pkg) => pkg.manifest_path);
+  return ordered;
 }
 
-function publishCargo(config: RustWorkspaceMapping, registry: string, version: string): void {
-  const manifests = orderedCargoManifests(config);
-  const originals = new Map(
-    manifests.map((manifest) => [manifest, readFileSync(manifest, "utf8")]),
-  );
-  try {
-    const crateNames = manifests.map((manifest) => {
-      const document = parse(readFileSync(manifest, "utf8")) as {
-        package?: { name?: string };
-      };
-      if (!document.package?.name) {
-        throw new Error(`Cargo manifest has no package name: ${manifest}`);
-      }
-      return document.package.name;
-    });
-    for (const manifest of manifests) {
-      const mode = statSync(manifest).mode;
-      const document = parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
-      for (const crateName of crateNames) {
-        if (!crateName) continue;
-        for (const sectionName of ["dependencies", "dev-dependencies", "build-dependencies"]) {
-          const section = document[sectionName];
-          if (!section || typeof section !== "object" || Array.isArray(section)) continue;
-          const dependency = (section as Record<string, unknown>)[crateName];
-          if (!dependency || typeof dependency !== "object" || Array.isArray(dependency)) {
-            continue;
-          }
-          (dependency as Record<string, unknown>).registry = registry;
-        }
-      }
-      chmodSync(manifest, mode | 0o200);
-      writeFileSync(manifest, `${stringify(document).trimEnd()}\n`);
-      chmodSync(manifest, mode);
-    }
+function copyCargoWorkspace(config: RustWorkspaceMapping): string {
+  const root = mkdtempSync(join(tmpdir(), "dbx-tools-local-cargo-"));
+  for (const path of ["Cargo.toml", "Cargo.lock", "LICENSE", "README.md", "rust-toolchain.toml"]) {
+    const source = join(repoRoot, path);
+    if (!existsSync(source)) continue;
+    cpSync(source, join(root, path));
+  }
+  const cargoConfig = join(repoRoot, ".cargo");
+  if (existsSync(cargoConfig)) cpSync(cargoConfig, join(root, ".cargo"), { recursive: true });
+  for (const crate of config.crates) {
+    const source = resolve(repoRoot, crate);
+    const destination = resolve(root, relative(repoRoot, source));
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(source, destination, { recursive: true });
+  }
+  return root;
+}
+
+export function projectCargoRegistry(
+  document: Record<string, unknown>,
+  crateNames: ReadonlySet<string>,
+  registry: string,
+): void {
+  const sections: unknown[] = [
+    document.dependencies,
+    document["dev-dependencies"],
+    document["build-dependencies"],
+  ];
+  const workspace = document.workspace;
+  if (workspace && typeof workspace === "object" && !Array.isArray(workspace)) {
+    sections.push((workspace as Record<string, unknown>).dependencies);
+  }
+  for (const value of sections) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const section = value as Record<string, unknown>;
     for (const crateName of crateNames) {
-      if (!crateName) continue;
-      if (cargoVersionExists(crateName, version, registry)) {
-        logger.info(`skip published ${crateName} @ ${version}`);
-        continue;
-      }
-      run("cargo", [
-        "publish",
-        "--package",
-        crateName,
-        "--registry",
-        registry,
-        "--allow-dirty",
-        "--no-verify",
-      ]);
-    }
-  } finally {
-    for (const [manifest, source] of originals) {
-      const mode = statSync(manifest).mode;
-      chmodSync(manifest, mode | 0o200);
-      writeFileSync(manifest, source);
-      chmodSync(manifest, mode);
+      const dependency = section[crateName];
+      if (!dependency || typeof dependency !== "object" || Array.isArray(dependency)) continue;
+      const record = dependency as Record<string, unknown>;
+      if (record.workspace === true) continue;
+      record.registry = registry;
     }
   }
 }
 
-function buildAndPublish(binding: RustBindingMapping, version: string): void {
-  const registry = parsed.values.registry;
-  const pypiPublishUrl = parsed.values["pypi-publish-url"];
+function publishCargo(config: RustWorkspaceMapping, registry: string, version: string): void {
+  const root = copyCargoWorkspace(config);
+  try {
+    const packages = orderedCargoManifests(root, config);
+    const crateNames = new Set(packages.map((pkg) => pkg.name));
+    for (const pkg of packages) {
+      if (pkg.version !== version) {
+        throw new Error(`${pkg.name} version ${pkg.version} does not match release ${version}`);
+      }
+    }
+    const manifests = [join(root, "Cargo.toml"), ...packages.map((pkg) => pkg.manifest_path)];
+    for (const manifest of manifests) {
+      const document = parse(readFileSync(manifest, "utf8")) as Record<string, unknown>;
+      projectCargoRegistry(document, crateNames, registry);
+      chmodSync(manifest, 0o644);
+      writeFileSync(manifest, `${stringify(document).trimEnd()}\n`);
+    }
+    for (const pkg of packages) {
+      if (cargoVersionExists(pkg.name, version, registry)) {
+        logger.info(`skip published ${pkg.name} @ ${version}`);
+        continue;
+      }
+      runTaskCommand(root, "cargo", [
+        "publish",
+        "--manifest-path",
+        pkg.manifest_path,
+        "--registry",
+        registry,
+        "--locked",
+      ]);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function buildAndPublish(
+  binding: RustBindingMapping,
+  version: string,
+  registry: string | undefined,
+  pypiPublishUrl: string | undefined,
+): void {
   const includeNode = Boolean(registry && binding.node && binding.nodePackage);
   const includePython = Boolean(pypiPublishUrl && binding.python && binding.pythonPackage);
   if (!includeNode && !includePython) return;
 
   const target = nativeTarget();
   const output = resolve(repoRoot, "dist/uniffi");
-  run("node", [
+  runTaskCommand(repoRoot, "node", [
     resolve(dirname(fileURLToPath(import.meta.url)), "uniffi-release.mjs"),
     "build",
     "--crate",
@@ -272,7 +302,7 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
     const publishNpmScript = resolve(dirname(fileURLToPath(import.meta.url)), "publish-npm.ts");
     for (const directory of [join(output, "npm"), join(output, "npm-facade")]) {
       if (artifacts(directory, ".tgz").length === 0) continue;
-      run(process.execPath, [
+      runTaskCommand(repoRoot, process.execPath, [
         publishNpmScript,
         "--directory",
         directory,
@@ -286,7 +316,7 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
   if (includePython) {
     const wheels = artifacts(join(output, "python"), ".whl");
     if (wheels.length === 0) throw new Error(`No wheel produced for ${binding.crate}`);
-    run("uvx", [
+    runTaskCommand(repoRoot, "uvx", [
       "--from",
       "devpi-client",
       "devpi",
@@ -299,16 +329,31 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
   }
 }
 
-const version = parsed.values.version;
-if (!version) throw new Error("Missing --version");
-const config = rustConfig();
-if (config?.bindings.length) {
-  if (!commandAvailable("cargo") || !commandAvailable("rustc")) {
-    throw new Error("Cargo and rustc are required because UniFFI Rust projects were detected");
+function main(args: string[] = process.argv.slice(2)): void {
+  const parsed = parseArgs({
+    args,
+    options: {
+      version: { type: "string" },
+      registry: { type: "string" },
+      "pypi-publish-url": { type: "string" },
+      "cargo-registry": { type: "string" },
+    },
+  });
+  const version = parsed.values.version;
+  if (!version) throw new Error("Missing --version");
+  const config = rustConfig();
+  if (config?.bindings.length) {
+    if (!commandAvailable("cargo") || !commandAvailable("rustc")) {
+      throw new Error("Cargo and rustc are required because UniFFI Rust projects were detected");
+    }
+    for (const binding of config.bindings) {
+      buildAndPublish(binding, version, parsed.values.registry, parsed.values["pypi-publish-url"]);
+    }
   }
-  for (const binding of config.bindings) buildAndPublish(binding, version);
+  const cargoRegistry = parsed.values["cargo-registry"];
+  if (cargoRegistry && config?.crates.length) {
+    publishCargo(config, cargoRegistry, version);
+  }
 }
-const cargoRegistry = parsed.values["cargo-registry"];
-if (cargoRegistry && config?.crates.length) {
-  publishCargo(config, cargoRegistry, version);
-}
+
+if (import.meta.main) main();

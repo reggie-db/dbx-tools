@@ -137,48 +137,6 @@ describe("DBXToolsReleaseCatalog", () => {
     }
   });
 
-  it("reads independent versions from Release Please state", () => {
-    const outdir = mkdtempSync(join(tmpdir(), "release-catalog-independent-"));
-    try {
-      writeFileSync(
-        join(outdir, ".release-please-manifest.json"),
-        `${JSON.stringify({ ".release-units/node-app": "2.4.1" }, null, 2)}\n`,
-      );
-      const root = new Project({ name: "root", outdir });
-      const catalog = new DBXToolsReleaseCatalog(root, { mode: "independent" });
-      const app = child(root, "packages/app", "export const app = true;");
-      catalog.registerProject(app, {
-        language: "javascript",
-        identity: "@example/app",
-      });
-
-      assert.equal(catalog.versionFor(app), "2.4.1");
-      root.synth();
-      const graph = JSON.parse(
-        readFileSync(join(outdir, ".projen/release-units.json"), "utf8"),
-      ) as { units: Array<{ version: string }> };
-      assert.equal(graph.units[0]?.version, "2.4.1");
-      const marker = JSON.parse(
-        readFileSync(join(outdir, ".release-units/node-app/source.json"), "utf8"),
-      ) as { unit: string; component: string; sourceHash: string };
-      assert.equal(marker.unit, "node-app");
-      assert.equal(marker.component, "node-app");
-      assert.match(marker.sourceHash, /^[a-f0-9]{64}$/);
-      const config = JSON.parse(
-        readFileSync(join(outdir, "release-please-config.json"), "utf8"),
-      ) as { packages: Record<string, { component: string; "release-type": string }> };
-      assert.deepEqual(config.packages[".release-units/node-app"], {
-        "release-type": "simple",
-        "package-name": "node-app",
-        component: "node-app",
-        "changelog-path": "CHANGELOG.md",
-        "version-file": "version.txt",
-      });
-    } finally {
-      rmSync(outdir, { recursive: true, force: true });
-    }
-  });
-
   it("rejects unknown internal projects and publication cycles", () => {
     const { outdir, root, catalog } = fixture();
     try {
@@ -214,64 +172,16 @@ describe("DBXToolsReleaseCatalog", () => {
     assert.equal(defaultReleasePropagation("development"), "never");
   });
 
-  it("renders independent package versions while private roots use a development version", () => {
-    const outdir = mkdtempSync(join(tmpdir(), "release-catalog-project-"));
-    const previousDisablePost = process.env.PROJEN_DISABLE_POST;
-    process.env.PROJEN_DISABLE_POST = "1";
-    try {
-      mkdirSync(join(outdir, "packages/tool/src"), { recursive: true });
-      writeFileSync(join(outdir, "packages/tool/src/tool.ts"), "export const tool = true;\n");
-      writeFileSync(
-        join(outdir, ".release-please-manifest.json"),
-        `${JSON.stringify({ ".release-units/node-tool": "2.3.4" }, null, 2)}\n`,
-      );
-      const project = new DBXToolsNodeProject({
-        name: "fixture",
-        scope: "fixture",
-        outdir,
-        packageRoots: ["packages"],
-        defaultTagMixins: false,
-        releaseMode: "disabled",
-        versioningMode: "independent",
-      });
-      project.synth();
-
-      const rootManifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
-        version: string;
-      };
-      const packageManifest = JSON.parse(
-        readFileSync(join(outdir, "packages/tool/package.json"), "utf8"),
-      ) as { version: string };
-      assert.equal(rootManifest.version, "0.0.0");
-      assert.equal(packageManifest.version, "2.3.4");
-      const first = readFileSync(join(outdir, "packages/tool/package.json"), "utf8");
-      project.synth();
-      assert.equal(readFileSync(join(outdir, "packages/tool/package.json"), "utf8"), first);
-    } finally {
-      if (previousDisablePost === undefined) delete process.env.PROJEN_DISABLE_POST;
-      else process.env.PROJEN_DISABLE_POST = previousDisablePost;
-      rmSync(outdir, { recursive: true, force: true });
-    }
-  });
-
-  it("renders independent Python and Rust package versions", () => {
+  it("renders the root VERSION across Node, Python, and Rust packages", () => {
     const outdir = mkdtempSync(join(tmpdir(), "release-catalog-polyglot-"));
     const previousDisablePost = process.env.PROJEN_DISABLE_POST;
     process.env.PROJEN_DISABLE_POST = "1";
     try {
+      writeFileSync(join(outdir, "VERSION"), "3.1.4\n");
+      mkdirSync(join(outdir, "packages/js/tool/src"), { recursive: true });
+      writeFileSync(join(outdir, "packages/js/tool/src/tool.ts"), "export const tool = true;\n");
       mkdirSync(join(outdir, "packages/rs/core/src"), { recursive: true });
       writeFileSync(join(outdir, "packages/rs/core/src/lib.rs"), "pub fn value() -> u8 { 1 }\n");
-      writeFileSync(
-        join(outdir, ".release-please-manifest.json"),
-        `${JSON.stringify(
-          {
-            ".release-units/python-core": "3.1.4",
-            ".release-units/rs-core": "4.2.0",
-          },
-          null,
-          2,
-        )}\n`,
-      );
       const project = new DBXToolsNodeProject({
         name: "@dbx-tools/root",
         scope: "dbx-tools",
@@ -279,7 +189,6 @@ describe("DBXToolsReleaseCatalog", () => {
         packageRoots: ["packages/js"],
         defaultTagMixins: false,
         releaseMode: "disabled",
-        versioningMode: "independent",
         repository: "https://github.com/example/repository.git",
       });
       new DBXToolsRustWorkspace(project, {
@@ -303,6 +212,12 @@ describe("DBXToolsReleaseCatalog", () => {
       });
       project.synth();
 
+      const rootManifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
+        version: string;
+      };
+      const packageManifest = JSON.parse(
+        readFileSync(join(outdir, "packages/js/tool/package.json"), "utf8"),
+      ) as { version: string };
       const python = readFileSync(join(outdir, "packages/py/core/pyproject.toml"), "utf8");
       const rust = readFileSync(join(outdir, "packages/rs/core/Cargo.toml"), "utf8");
       const rootCargo = readFileSync(join(outdir, "Cargo.toml"), "utf8");
@@ -310,10 +225,12 @@ describe("DBXToolsReleaseCatalog", () => {
         join(outdir, ".projen/pypi-trusted-publisher-instructions.mjs"),
         "utf8",
       );
+      assert.equal(rootManifest.version, "3.1.4");
+      assert.equal(packageManifest.version, "3.1.4");
       assert.match(python, /version = "3\.1\.4"/);
-      assert.match(rust, /version = "4\.2\.0"/);
-      assert.doesNotMatch(rootCargo, /\\[workspace\\.package\\][\\s\\S]*version =/);
-      assert.match(publisherInstructions, /GitHub environment tag: \*-v\*/);
+      assert.match(rust, /\[package\.version\][\s\S]*workspace = true/);
+      assert.match(rootCargo, /\[workspace\.package\][\s\S]*version = "3\.1\.4"/);
+      assert.match(publisherInstructions, /GitHub environment tag: v\*/);
     } finally {
       if (previousDisablePost === undefined) delete process.env.PROJEN_DISABLE_POST;
       else process.env.PROJEN_DISABLE_POST = previousDisablePost;

@@ -104,12 +104,12 @@ when Honcho exits.
 
 This package's `@dbx-tools/*` deps are `workspace:*` and its third-party deps are
 `catalog:`, neither of which resolves when the Databricks Apps platform installs
-the uploaded source. Staging reads the generated release-unit graph and converts
-each `@dbx-tools/*` dependency to that package's independently published version:
+the uploaded source. Staging reads the root `VERSION` file and converts every
+`@dbx-tools/*` dependency to that exact workspace version:
 
 ```bash
 bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves
-bun stage-deploy.ts                                     # reads release-unit versions
+bun stage-deploy.ts                                     # reads the root VERSION
 cd "$(dirname "$(mktemp -u)")/dbx-tools-deploy-app"     # printed by stage-deploy
 databricks bundle validate --profile FEVM-REGGIE-PIERCE-AWS
 databricks bundle deploy --profile FEVM-REGGIE-PIERCE-AWS
@@ -122,16 +122,16 @@ the bundle sets `PYTHON=./.venv/bin/python` so the Graphiti plugin uses that
 Python 3.11 environment. The launcher then pins upstream Graphiti's `uv`
 project to the same interpreter minor. `UV_PYTHON=3.11` remains as an
 explicit override. Caddy installs through mise on first start.
-Staging replaces each workspace dependency with its exact release-unit version
-and writes `dbx-tools-graphiti==<python-graphiti-version>`. Uncommitted package
-changes are not included unless the corresponding component version has been
-published.
+Staging replaces each workspace dependency with the exact root version and writes
+the matching `dbx-tools-graphiti==<version>` requirement. The staged app expects
+that version to exist in npm and PyPI; local source changes are not bundled as
+package substitutes.
 
 Two things worth knowing before changing this flow:
 
 - **Stage outside the repo.** `stage-deploy.ts` writes to the OS temp dir on
-  purpose. The bundle CLI filters its upload through the enclosing worktree's
-  `.gitignore`, and this repo ignores every `dist` directory — staged there,
+  purpose. The bundle CLI filters its upload through the repository checkout's
+  `.gitignore`, and this repo ignores every `dist` directory. If staging happens there,
   `bundle deploy` warns "There are no files to sync" and ships an app with no
   source.
 - **Pass the FEVM profile explicitly.** `DATABRICKS_CONFIG_PROFILE` overrides

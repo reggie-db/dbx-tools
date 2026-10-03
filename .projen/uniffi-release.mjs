@@ -19,9 +19,9 @@ import { parseArgs } from "node:util";
 import { spawnSync } from "node:child_process";
 import {
   installPythonBindings,
+  preparePythonProjectForPublication,
   pythonBindingGeneratorArgs,
   pythonBindingGeneratorName,
-  stampPythonProject,
 } from "./uniffi-python.js";
 
 const require = createRequire(import.meta.url);
@@ -328,14 +328,12 @@ const packageNodeFacade = ({ output, nodeDirectory, nodePackage, version, native
   mkdirSync(output, { recursive: true });
   cpSync(resolve(root, nodeDirectory), facadeDirectory, { recursive: true });
   const barrel = join(facadeDirectory, "index.ts");
-  writable(barrel);
-  writeFileSync(
-    barrel,
-    readFileSync(barrel, "utf8").replace(
-      /^export const PACKAGE_VERSION = .*;$/m,
-      `export const PACKAGE_VERSION = ${JSON.stringify(version)};`,
-    ),
-  );
+  const barrelVersion = /^export const PACKAGE_VERSION = "([^"]+)";$/m.exec(
+    readFileSync(barrel, "utf8"),
+  )?.[1];
+  if (barrelVersion !== version) {
+    throw new Error(`Facade PACKAGE_VERSION ${String(barrelVersion)} does not match ${version}`);
+  }
   for (const file of readdirSync(join(facadeDirectory, "src"))) {
     if (/\.(dll|dylib|so)$/.test(file)) {
       rmSync(join(facadeDirectory, "src", file), { force: true });
@@ -358,11 +356,18 @@ const packageNodeFacade = ({ output, nodeDirectory, nodePackage, version, native
   const workspaceManifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const catalog = workspaceManifest.catalog ?? {};
   const workspaceVersions = localWorkspacePackages();
-  manifest.version = version;
-  manifest.private = false;
+  if (manifest.version !== version) {
+    throw new Error(`Facade package version ${String(manifest.version)} does not match ${version}`);
+  }
+  if (manifest.private === true) throw new Error(`${manifest.name} is private`);
   manifest.license = manifest.license === "UNLICENSED" ? "Apache-2.0" : manifest.license;
   manifest.optionalDependencies = Object.fromEntries(
-    Object.keys(manifest.optionalDependencies ?? {}).map((name) => [name, version]),
+    Object.entries(manifest.optionalDependencies ?? {}).map(([name, dependency]) => {
+      if (dependency !== version) {
+        throw new Error(`${manifest.name} optional dependency ${name} does not match ${version}`);
+      }
+      return [name, dependency];
+    }),
   );
   manifest.dependencies = Object.fromEntries(
     Object.entries(manifest.dependencies ?? {}).map(([name, dependency]) => [
@@ -435,7 +440,7 @@ const packagePython = ({
     [];
   writeFileSync(
     pyproject,
-    stampPythonProject(readFileSync(pyproject, "utf8"), {
+    preparePythonProjectForPublication(readFileSync(pyproject, "utf8"), {
       packages: workspaceBindings.flatMap((binding) =>
         binding.pythonPackage && binding.python
           ? [{ name: binding.pythonPackage, directory: binding.python }]

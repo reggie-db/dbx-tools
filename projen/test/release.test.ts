@@ -79,12 +79,7 @@ describe("unified release workflow", () => {
       default: true,
       required: true,
     });
-    assert.deepEqual(inputs.npm_bootstrap, {
-      description: "Use NPM_TOKEN for one-time package creation before trusted publishing",
-      type: "boolean",
-      default: false,
-      required: true,
-    });
+    assert.equal(inputs.npm_bootstrap, undefined);
     assert.deepEqual(inputs.stage, {
       description: "Published release stage to validate or recover",
       type: "choice",
@@ -134,18 +129,15 @@ describe("unified release workflow", () => {
       "registry-url": "https://registry.npmjs.org",
       "package-manager-cache": false,
     });
+    assert.equal(
+      step(job, "Install npm trusted-publishing CLI").run,
+      "npm install --global npm@11.19.0",
+    );
     assert.equal(step(job, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.equal(step(job, "Save Bun cache").uses, "actions/cache/save@v5");
-    assert.deepEqual(step(job, "Checkout npm recovery automation").with, {
-      ref: "${{ github.workflow_sha }}",
-      path: ".release-automation",
-      "sparse-checkout": "projen/tasks/publish-npm.ts",
-      "sparse-checkout-cone-mode": false,
-      "persist-credentials": false,
-    });
     assert.equal(
-      step(job, "Checkout npm recovery automation").if,
-      "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap }}",
+      job.steps.some((candidate) => candidate.name === "Checkout npm recovery automation"),
+      false,
     );
 
     assert.ok(step(job, "Download approved npm archives").run?.includes("release-manifest.ts"));
@@ -154,26 +146,18 @@ describe("unified release workflow", () => {
       publish.env?.NPM_CONFIG_PROVENANCE,
       "${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
-    assert.equal(
-      publish.env?.ACCEPT_STAGED,
-      "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && '--accept-staged' || '' }}",
-    );
-    assert.equal(
-      publish.env?.NODE_AUTH_TOKEN,
-      "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && secrets.NPM_TOKEN || '' }}",
-    );
-    assert.equal(
-      publish.env?.NPM_BOOTSTRAP,
-      "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && 'true' || 'false' }}",
-    );
+    assert.equal(publish.env?.ACCEPT_STAGED, undefined);
+    assert.equal(publish.env?.NODE_AUTH_TOKEN, undefined);
+    assert.equal(publish.env?.NPM_BOOTSTRAP, undefined);
     assert.equal(
       publish.env?.DRY_RUN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
     );
     assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
-    assert.ok(publish.run?.includes("export NPM_CONFIG_PROVENANCE=false"));
-    assert.ok(publish.run?.includes(".release-automation/projen/tasks/publish-npm.ts"));
-    assert.ok(publish.run?.includes("$ACCEPT_STAGED"));
+    assert.doesNotMatch(
+      publish.run ?? "",
+      /NPM_CONFIG_PROVENANCE=false|release-automation|ACCEPT_STAGED/,
+    );
   });
 
   it("builds and selectively deploys docs in the same workflow", () => {
@@ -293,12 +277,13 @@ describe("release task contracts", () => {
     }
   });
 
-  it("compiles before applying publish configuration", () => {
+  it("compiles before projecting publish configuration into archives", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.ok(
       driver.indexOf("compiling ${compiled.length}") <
-        driver.indexOf("applyPublishConfig(manifestPath)"),
+        driver.indexOf("packNpmPackage(dir, packed, path, applyPublishConfig)"),
     );
+    assert.doesNotMatch(driver, /applyPublishConfig\(manifestPath\)/);
     assert.match(driver, /import \{ delimiter,/);
     assert.doesNotMatch(driver, /split\(":"\)/);
     assert.match(driver, /\["publish",[\s\S]*archive\]/);
@@ -319,30 +304,32 @@ describe("release task contracts", () => {
     );
     assert.ok(releasePr.includes("await withWorkspaceMutationLock(root, async () =>"));
     assert.ok(
-      releasePr.indexOf('git(root, ["commit", "-m", opts.message])') <
+      releasePr.indexOf('runGitTaskCommand(root, ["commit", "-m", opts.message])') <
         releasePr.indexOf("pushCurrentBranch(root, currentBranch)"),
     );
     assert.ok(
       releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
-        releasePr.indexOf('git(root, ["worktree", "add"'),
+        releasePr.indexOf('runGitTaskCommand(root, ["switch", "-c", releaseBranch])'),
     );
     assert.ok(releasePr.includes('["push", "--set-upstream", "origin", `HEAD:${branch}`]'));
-    assert.match(releasePr, /\["worktree", "add", "-b", releaseBranch, releaseRoot, "HEAD"\]/);
-    assert.doesNotMatch(releasePr, /worktree", "add", "--branch"/);
-    assert.ok(releasePr.includes('git(root, ["merge", "--no-edit", `origin/${opts.base}`])'));
-    assert.match(releasePr, /"stash",\s*"push",\s*"--include-untracked"/);
-    assert.doesNotMatch(releasePr, /git\(root, \["switch"/);
+    assert.doesNotMatch(releasePr, /\bworktree\b/);
     assert.ok(
-      releasePr.indexOf("if (opts.approve)") < releasePr.indexOf('git(root, ["worktree", "remove"'),
+      releasePr.includes('runGitTaskCommand(root, ["merge", "--no-edit", `origin/${opts.base}`])'),
     );
+    assert.match(releasePr, /"stash",\s*"push",\s*"--include-untracked"/);
+    assert.match(releasePr, /runGitTaskCommand\(root, \["switch", "--detach", mergeSha\]\)/);
+    assert.match(releasePr, /runGitTaskCommand\(root, \["switch", currentBranch\]\)/);
     assert.match(releasePr, /"test",\s*"--workspace"/);
     assert.doesNotMatch(releasePr, /cargo",\s*\["metadata"/);
     assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
     assert.doesNotMatch(releasePr, /process\.execPath, \["run", "test"\]/);
-    assert.match(releasePr, /\["push", "--no-verify", "--set-upstream", "origin", releaseBranch\]/);
     assert.ok(
-      releasePr.indexOf("await publishLocalRelease") <
-        releasePr.indexOf("`chore(release): ${next.version}`"),
+      releasePr.indexOf("runTaskCommand(root, process.execPath, candidateArguments") <
+        releasePr.indexOf('"node_modules/@dbx-tools/projen/tasks/local-publish.ts"'),
+    );
+    assert.ok(
+      releasePr.indexOf('"node_modules/@dbx-tools/projen/tasks/local-publish.ts"') <
+        releasePr.indexOf('...candidateArguments, "--upload-existing"'),
     );
     const localCargo = readFileSync(
       join(import.meta.dirname, "..", "tasks", "publish-uniffi-local.ts"),
@@ -351,9 +338,12 @@ describe("release task contracts", () => {
     assert.match(localCargo, /"metadata", "--format-version", "1", "--no-deps", "--locked"/);
     assert.match(localCargo, /"run",\s*"--no-project",\s*"python"/);
     assert.ok(localCargo.includes("if (workspaceDependency) visit(workspaceDependency)"));
+    assert.ok(localCargo.includes('mkdtempSync(join(tmpdir(), "dbx-tools-local-cargo-")'));
+    assert.match(localCargo, /"--manifest-path",\s*pkg\.manifest_path/);
+    assert.doesNotMatch(localCargo, /const originals|--allow-dirty|--no-verify/);
     assert.ok(
       releasePr.indexOf("generateReleaseSummary({") <
-        releasePr.indexOf('git(releaseRoot, ["add", "-A"])'),
+        releasePr.lastIndexOf('runGitTaskCommand(root, ["add", "-A"])'),
     );
     assert.ok(
       releasePr.indexOf("generateReleaseSummary({") < releasePr.indexOf("if (opts.approve)"),
@@ -368,7 +358,7 @@ describe("release task contracts", () => {
     assert.match(releasePr, /"pr",\s*"checks",[\s\S]*"--watch",[\s\S]*"--required"/);
     assert.ok(releasePr.includes("release-candidate.ts"));
     assert.ok(releasePr.includes('"--sha",\n              mergeSha'));
-    assert.ok(releasePr.includes('"--upload"'));
+    assert.ok(releasePr.includes('"--upload-existing"'));
     assert.doesNotMatch(
       releasePr,
       /repos\/\$\{account\.owner\}\/\$\{account\.repository\}\/merges/,
@@ -379,7 +369,7 @@ describe("release task contracts", () => {
   it("publishes reviewed versions without repairing manifests", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.doesNotMatch(driver, /--stamp-only|pm", "pkg", "set/);
-    assert.ok(driver.includes("workspace manifests do not match the reviewed release plan"));
+    assert.ok(driver.includes("workspace manifests do not match release ${version}; run projen"));
   });
 });
 
@@ -532,18 +522,16 @@ describe("optional Node release stage", () => {
     }
   });
 
-  it("generates Release Please planning without allocating Rust jobs for Node-only roots", () => {
-    const independentOutdir = mkdtempSync(join(tmpdir(), "release-independent-"));
+  it("generates one fixed-version promotion workflow for Node-only roots", () => {
+    const fixedOutdir = mkdtempSync(join(tmpdir(), "release-fixed-node-"));
     try {
-      writeFileSync(join(independentOutdir, ".release-please-manifest.json"), "{}\n");
+      writeFileSync(join(fixedOutdir, "VERSION"), "1.2.3\n");
       const project = new DBXToolsNodeProject({
-        name: "independent-release-fixture",
-        outdir: independentOutdir,
+        name: "fixed-release-fixture",
+        outdir: fixedOutdir,
         github: true,
         buildWorkflow: true,
         defaultTagMixins: false,
-        versioningMode: "independent",
-        releaseSyncBranch: "dev",
         releaseDocs: {
           siteUrl: "https://docs.example.com",
           base: "/",
@@ -553,69 +541,27 @@ describe("optional Node release stage", () => {
         },
       });
       project.synth();
-      const workflow = readWorkflow(independentOutdir);
-      assert.ok(workflow.jobs["release-please"]);
-      const docsDetection =
-        step(workflow.jobs["release-please"]!, "Detect documentation changes").run ?? "";
-      assert.match(docsDetection, /exclude\)docs\/releases/);
-      assert.match(docsDetection, /exclude\)\.release-notes/);
-      assert.ok(workflow.jobs["release-plan"]);
-      assert.ok(workflow.jobs["publish-node"]);
-      assert.ok(workflow.jobs["publication-complete"]);
+
+      const workflow = readWorkflow(fixedOutdir);
+      assert.ok(workflow.jobs["verify-context"]);
+      assert.equal(workflow.jobs["publish-node"]?.needs, "verify-context");
+      assert.equal(workflow.jobs["build-docs"]?.needs, "verify-context");
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_BASE, "/");
-      assert.equal(
-        workflow.jobs["deploy-docs"]?.if,
-        "${{ always() && needs['build-docs'].result == 'success' }}",
-      );
-      const sync = workflow.jobs["sync-release-branch"];
-      assert.equal(sync?.needs, "publication-complete");
-      const syncScript = step(sync!, "Safely sync dev").run ?? "";
-      assert.match(syncScript, /merge-base --is-ancestor/);
-      assert.match(syncScript, /origin\/\$RELEASE_BRANCH/);
-      assert.match(syncScript, /git merge --no-ff --no-edit/);
-      assert.match(syncScript, /git merge --abort/);
-      assert.match(syncScript, /no longer exists/);
-      assert.equal("verify-context" in workflow.jobs, false);
-      assert.equal("rust-uniffi" in workflow.jobs, false);
-      assert.equal("rust-binaries" in workflow.jobs, false);
-      assert.equal(workflow.jobs["publish-node"]?.needs, "release-plan");
-      const reconcile =
-        step(workflow.jobs["release-please"]!, "Reconcile generated release PR files").run ?? "";
-      assert.match(reconcile, /gh pr merge "\$BRANCH" --merge/);
-      assert.match(reconcile, /attempt \$ATTEMPT\/15/);
-      assert.match(reconcile, /gh workflow run release\.yml.*automatic=true/);
-      assert.match(workflow.jobs["release-please"]?.if ?? "", /inputs\.automatic/);
-      assert.match(workflow.jobs["release-plan"]?.if ?? "", /inputs\.automatic != true/);
-      const requestWorkflow = readWorkflow(independentOutdir, "release-request");
-      assert.match(
-        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
-          "",
-        /gh pr create/,
-      );
-      assert.match(
-        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
-          "",
-        /gh pr merge "\$PR" --merge/,
-      );
-      assert.match(
-        step(requestWorkflow.jobs.request!, "Create, merge, and release source pull request").run ??
-          "",
-        /gh workflow run release\.yml.*automatic=true/,
-      );
-      const tasks = JSON.parse(
-        readFileSync(join(independentOutdir, ".projen/tasks.json"), "utf8"),
-      ) as { tasks: Record<string, { steps?: Array<{ exec?: string }> }> };
-      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-request\.ts/);
-      assert.match(tasks.tasks["release:refresh"]?.steps?.[0]?.exec ?? "", /release-please\.ts/);
-      const build = readWorkflow(independentOutdir, "build");
-      const pullRequest = workflowTrigger(build, "pull_request") as {
-        paths?: string[];
+      assert.equal(workflow.jobs["deploy-docs"]?.needs, "build-docs");
+      assert.equal("release-please" in workflow.jobs, false);
+      assert.equal("release-plan" in workflow.jobs, false);
+      assert.equal("rust-build" in workflow.jobs, false);
+      assert.equal("publish-github-release" in workflow.jobs, false);
+      const tasks = JSON.parse(readFileSync(join(fixedOutdir, ".projen/tasks.json"), "utf8")) as {
+        tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
       };
-      assert.ok(pullRequest.paths?.includes("!.release-units/**"));
-      assert.ok(pullRequest.paths?.includes("!**/package.json"));
+      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-pr\.ts/);
+      assert.equal(tasks.tasks["release:refresh"], undefined);
+      const build = readWorkflow(fixedOutdir, "build");
+      assert.ok(workflowTrigger(build, "pull_request"));
     } finally {
-      rmSync(independentOutdir, { recursive: true, force: true });
+      rmSync(fixedOutdir, { recursive: true, force: true });
     }
   });
 });

@@ -356,24 +356,20 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
-  it("gates independent Rust jobs on the affected release plan", () => {
-    const independentOutdir = mkdtempSync(join(tmpdir(), "project-rs-independent-"));
+  it("keeps Rust binaries in the approved candidate and promotes Cargo from VERSION", () => {
+    const fixedOutdir = mkdtempSync(join(tmpdir(), "project-rs-fixed-release-"));
     try {
-      mkdirSync(join(independentOutdir, "packages/rs/tool/src"), { recursive: true });
-      writeFileSync(join(independentOutdir, "packages/rs/tool/src/main.rs"), "fn main() {}\n");
-      writeFileSync(
-        join(independentOutdir, ".release-please-manifest.json"),
-        `${JSON.stringify({ ".release-units/rs-fixture-tool": "1.4.0" }, null, 2)}\n`,
-      );
+      writeFileSync(join(fixedOutdir, "VERSION"), "1.4.0\n");
+      mkdirSync(join(fixedOutdir, "packages/rs/tool/src"), { recursive: true });
+      writeFileSync(join(fixedOutdir, "packages/rs/tool/src/main.rs"), "fn main() {}\n");
       const project = new DBXToolsNodeProject({
         name: "@fixture/root",
         scope: "fixture",
-        outdir: independentOutdir,
+        outdir: fixedOutdir,
         packageRoots: ["packages/js"],
         defaultTagMixins: false,
         github: true,
         nodeRelease: false,
-        versioningMode: "independent",
         repository: "https://github.com/example/fixture.git",
       });
       new DBXToolsRustWorkspace(project, {
@@ -388,23 +384,19 @@ describe("DBXToolsRustWorkspace", () => {
       });
       project.synth();
 
-      const workflow = readWorkflow(independentOutdir);
-      assert.equal(workflow.jobs["rust-build"]?.needs, "release-plan");
-      assert.equal(
-        workflow.jobs["rust-build"]?.if,
-        "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'docs') }}",
-      );
+      const workflow = readWorkflow(fixedOutdir);
+      assert.equal(workflow.jobs["rust-build"], undefined);
+      assert.equal(workflow.jobs["publish-github-release"], undefined);
+      assert.ok(workflow.jobs["verify-context"]);
       assert.ok(workflow.jobs["publish-cargo"]);
-      assert.ok(workflow.jobs["publish-github-release"]);
-      assert.equal("verify-context" in workflow.jobs, false);
       const registry = readFileSync(
-        join(independentOutdir, "packages/js/node/rust-binary/src/_registry.ts"),
+        join(fixedOutdir, "packages/js/node/rust-binary/src/_registry.ts"),
         "utf8",
       );
-      assert.match(registry, /"tagPrefix": "rs-fixture-tool-v"/);
-      assert.match(registry, /"tag": "rs-fixture-tool-v1\.4\.0"/);
+      assert.match(registry, /"tagPrefix": "v"/);
+      assert.match(registry, /"tag": "v1\.4\.0"/);
     } finally {
-      rmSync(independentOutdir, { recursive: true, force: true });
+      rmSync(fixedOutdir, { recursive: true, force: true });
     }
   });
 
@@ -874,6 +866,8 @@ describe("DBXToolsRustWorkspace", () => {
     assert.ok(cargoPublish.includes('--package "fixture-databricks-auth"'));
     assert.ok(cargoPublish.includes('--package "fixture-tool"'));
     assert.ok(cargoPublish.includes("cargo info"));
+    assert.ok(cargoPublish.includes("--registry crates-io --locked"));
+    assert.doesNotMatch(cargoPublish, /--no-verify/);
     assert.equal(release.jobs["publish-local-cargo"], undefined);
     assert.equal(release.jobs["publish-native-npm"], undefined);
     assert.equal(release.jobs["publish-node-facades"], undefined);
@@ -897,7 +891,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /generatorTarget \?\? cargoTarget/);
     assert.match(packager, /"generator-target"/);
     assert.match(packager, /installPythonBindings/);
-    assert.match(packager, /stampPythonProject/);
+    assert.match(packager, /preparePythonProjectForPublication/);
     assert.doesNotMatch(packager, /resolve\(\s*root,\s*"target",\s*cargoTarget/);
     assert.equal(packager.includes('required("ubrn")'), false);
     assert.equal(packager.includes('run("cargo", ["run"'), false);

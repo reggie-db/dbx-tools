@@ -12,6 +12,10 @@ date and final status.
 
 ## Active plans
 
+- [npm trusted-publisher cutover](2026-10-03-npm-trusted-publisher-cutover.md)
+  - Approves the nine remaining `0.9.19` npm stages and verifies direct GitHub
+    OIDC publication for all 63 packages from `release.yml`.
+
 - [Repository code-quality audit](2026-10-01-repository-code-quality-audit.md)
   - Records the model-proxy metrics redesign, conditional passkey flow, reusable
     Rust Projen project and release helper, release compile ownership, dependency
@@ -21,11 +25,10 @@ date and final status.
     contention through conservative activation, clean-traffic evidence,
     stepwise relaxation, and eventual deactivation; add concise logging, bounded
     metrics, optional persistence, and a Figma-designed embedded dashboard.
-- [Singular version and content-addressed Rust release plan](2026-09-30-singular-version-content-addressed-rust-release-plan.md)
-  - Implemented singular-version release flow: one reviewed PR into `main`, one
-    repository version, exact-key reuse of checksummed raw Rust target bundles,
-    structured binary version stamping, Cargo timings, and existing-runner
-    documentation parallelism/cache improvements.
+- [Singular-version draft-promotion release architecture](2026-09-30-singular-version-content-addressed-rust-release-plan.md)
+  - Tracks the implemented one-checkout transaction, root `VERSION` ownership,
+    immutable candidate manifest, manual GitHub Release approval, and
+    `release.published` registry promotion.
 
 ## Cross-repository suggestions
 

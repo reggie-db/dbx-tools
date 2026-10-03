@@ -19,7 +19,7 @@ Key features:
   files based on package predicates.
 - OpenAPI client generation from tsoa controllers and zod schema generation from
   `.d.ts` inputs.
-- Read-only generated-file stamping, cleanup, and watch-loop helpers.
+- Read-only generated-file ownership, cleanup, and watch-loop helpers.
 
 ## Define A Workspace Root
 
@@ -59,7 +59,7 @@ Repository policy stays in the consuming `.projenrc.ts`:
 - `releasePythonRoot` passes the actual Python package root to local release
   preparation. Omit it when the workspace has no standard Python packages.
 - `releaseValidationTasks` names repository tasks that must pass in the release
-  worktree before Cargo tests, compilation, local publication, or approval.
+  branch before Cargo tests, compilation, local publication, or approval.
   Use it for repository-specific guards that also run in release CI.
 - `releaseSummary` controls versioned release notes. It defaults to Cursor,
   Codex, Claude fallback order and writes a deterministic Git summary when every
@@ -90,8 +90,9 @@ without turning Python packages into JavaScript workspace projects. It generates
 the root and member `pyproject.toml` files, standard `py:*` tasks, the VS Code
 interpreter setting, and an optional manual PyPI trusted-publishing workflow.
 Projen's native `PyprojectTomlFile` owns generated TOML formatting. Temporary
-publication stamping uses parsed TOML, changes versions and sibling
-dependencies structurally, and restores the original files byte-for-byte.
+release packaging copies each project to an isolated directory and projects
+sibling registry requirements there with parsed TOML. Source manifests already
+carry the root `VERSION` and are never rewritten for publication.
 
 ```ts
 import { project, projectPy } from "@dbx-tools/projen";
@@ -206,62 +207,54 @@ a host Rust build. Regenerate bindings through the focused watcher or explicit
 task while changing a UniFFI API. Release preparation runs Cargo workspace tests
 without invoking UBRN.
 
-Rust fingerprinting and binary version stamping use the dependency-free Node
-helper generated at `.projen/rust-release.mjs`. The implementation ships with
-`@dbx-tools/projen`, so consumers do not need a repository-specific helper
-crate, a crates.io publication, or an extra Cargo build before release
-orchestration can start.
+Rust release configuration is generated at `.projen/rust-release.json` from the
+workspace model. The release tasks consume that file directly, so consumers do
+not need a repository-specific helper crate or handwritten target matrix.
 
-The workspace generates one `release.yml` workflow for every ecosystem. One
+The workspace generates one `release.yml` workflow for every ecosystem. The
 root `VERSION` drives every Node, Python, Cargo, native, and GitHub artifact.
 `bun run release` prepares one reviewed PR into `main`; it enables automatic
-merge by default and accepts `--no-approve` for a human-controlled merge. One
-non-cancelling `release` concurrency group serializes publication.
+merge by default and accepts `--no-approve` for a human-controlled merge.
 
 Release generation writes `release.yml` without scanning for or removing other
 workflow files. Consumers explicitly delete exact workflow files they no longer
 want.
 
-The release workflow accepts stage-specific manual recovery only for the exact
-annotated tag and expected SHA. npm retries compare archive content and
-repository identity, PyPI uses hash-aware existing-file behavior, Cargo checks
-existing versions, and GitHub assets upload to the single repository release.
+Release preparation uses one checkout. It commits and pushes pending source
+work, switches to `release/v<version>`, increments `VERSION`, synthesizes and
+validates the repository, and opens the release PR. After merge it detaches at
+the exact merge SHA, builds the complete candidate once, optionally publishes
+that candidate to local registries, uploads the same files to a draft GitHub
+Release, and restores the original branch. A failed transaction stores
+uncommitted release-branch state in a `release-resume:<branch>` stash. No Git
+worktree or second production build is involved.
 
-Set `releaseSyncBranch` when a repository retains a long-lived source branch.
-After publication the workflow fast-forwards a branch that is behind, skips a
-branch that already contains released `main`, and merges `main` into a diverged
-branch when the merge is conflict-free. Missing branches and conflicted merges
-are left untouched.
+The draft contains `release-manifest.json`, `SHA256SUMS`, every npm archive,
+every Python distribution, every native binding archive, and every Rust binary.
+The manifest records the version, annotated tag, exact Git commit SHA, file size,
+and SHA-256 for each artifact. Publishing the GitHub Release is the production
+promotion event.
 
-Rust release generation creates one uncached matrix with one row per target.
-Each row builds all discovered bindings and selected release binaries together
-with the union of their required features, then packages every native artifact
-from that one Cargo output. Set a source-only crate's or release-enabled
-binary's `releaseExcludeOs` package option to omit it from incompatible rows.
-Release binary packaging and artifact upload are skipped in those rows. UniFFI
-crates cannot use this option because every configured target must produce
-their artifacts.
-Set a release binary's `cli` package option and the workspace
-`cliRegistryPath` to generate a typed `dbx` command registry from the same
-selected targets. The generated entries carry only the archives that the
-release matrix publishes, so an excluded operating system fails locally before
-any download is attempted. The runtime command uses `@dbx-tools/core`
-`bin.ensure`; the core installer itself contains no product registry.
-Rust rows prepare native npm
-archives and Python wheels; they do not install Bun or UBRN and do not build
-Node facades. A binary-only row therefore installs no language package tool.
-`rustVersion` remains the MSRV recorded in package manifests, while
-`releaseRustVersion` independently defaults release compilation to `stable`.
-Rows use the target runner's standard Rust toolchain without sccache, Cargo
-cache actions, source fingerprints, or reusable raw bundles. Phase timings are
-written to each build log. GitHub-hosted Python generation executes the
-already-built `target/<triple>/release/<crate>-uniffi-bindgen` directly. A local
-macOS build compiles one host generator and reuses it while packaging the
-Darwin, Linux, and Windows libraries.
+`release.yml` runs on `release.published`. Its context job resolves the annotated
+tag, verifies main ancestry, checks out the exact commit, checks `VERSION`, and
+downloads and verifies the approved candidate. npm publishes the approved
+archives through GitHub Actions OIDC Trusted Publishing with provenance. The
+job pins npm `11.19.0` so trusted-publisher support does not depend on the npm
+version bundled with the runner's Node release. PyPI
+publishes the approved distributions through trusted-publisher environments.
+Cargo publishes from the verified source checkout with `cargo publish --locked`.
+GitHub-hosted runners do not rebuild native release artifacts.
 
-Artifacts identify their crate, target, and type. Rust jobs publish non-private
-Cargo crates with `cargo publish --no-verify` and upload requested binary assets
-to the GitHub release. Rust jobs never publish npm or PyPI packages.
+The workflow accepts stage-specific manual recovery only for an existing
+published tag. npm compares archive identity and content, PyPI uses hash-aware
+existing-file behavior, Cargo checks existing versions, and every stage remains
+bound to the same tag and SHA. Manual runs default to dry-run.
+
+Set a release binary's `cli` package option and the workspace `cliRegistryPath`
+to generate a typed `dbx` command registry from the configured release targets.
+The runtime command uses `@dbx-tools/core` `bin.ensure`; the core installer
+contains no product registry. `releaseExcludeOs` omits a release binary from an
+incompatible target. UniFFI crates still produce every configured target.
 
 Set `LOCAL_CARGO_REGISTRY` to a named Cargo registry such as a loopback
 [Kellnr](https://kellnr.io/) instance and provide `LOCAL_CARGO_TOKEN`. Public
@@ -274,18 +267,10 @@ architecture. Omit both filters to regenerate the complete maintained matrix.
 `DBX_TOOLS_RELEASE_PLATFORMS` can select the generated matrix without repeating
 environment parsing in a consumer.
 
-`bun run release` always prepares the production candidate locally. After the
-reviewed release pull request merges, the local process checks out the exact
-merge commit, builds the complete npm, Python, native binding, and Rust binary
-artifact set, then creates an annotated tag and draft GitHub Release. The draft
-contains `release-manifest.json`, `SHA256SUMS`, and every registry or binary
-artifact bound to that commit. A manager can rebuild an interrupted draft from
-the exact source with
+A manager can rebuild an interrupted candidate from the exact source with
 `bun run release:assets --version <version> --tag <tag> --sha <commit> --upload`.
-Publishing the draft is the production promotion event; `release.yml` verifies
-the tag, commit, version, manifest, checksums, and asset set before publishing
-the approved npm archives, Python distributions, and Cargo crates. GitHub-hosted
-runners never rebuild native release artifacts for singular-version releases.
+Candidate upload is separate from candidate construction, so retries use the
+already-verified files rather than rebuilding them.
 
 Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
 manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
@@ -469,10 +454,9 @@ file contract as the CLI.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
 - `openapi` - tsoa/OpenAPI package generation.
-- `releaseCatalog` / `releasePlan` / `releasePlease` - cross-language ownership,
-  affected planning, and Release Please graph propagation.
+- `releaseCatalog` - cross-language package ownership and publication order.
 - `bunApp` / `tsconfig` / `vscode` - generated support files/components.
-- `generated` / `clean` / `watch` / `scaffold` - read-only file stamping,
+- `generated` / `clean` / `watch` / `scaffold` - read-only file ownership,
   cleanup, watchers, and synth orchestration.
 - `publish` - packaging and tag-based release helpers.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
@@ -502,17 +486,15 @@ list, so a new package is covered without a re-synth. Work from the root:
 | `bun run release`              | validate, open, and automatically merge a release PR |
 | `bun run release --no-approve` | open the release PR without automatic merge          |
 
-`release` commits and pushes pending source work, creates a release worktree,
-increments `VERSION`, synthesizes manifests and registries, runs validation and
-local publication, writes the release summary, and opens one PR. It enables
-automatic merge unless `--no-approve` is supplied. The merged `VERSION` change
-starts publication from the exact `main` SHA and creates one `v<version>` tag;
-the command waits for that workflow by default. Use `--no-wait` to return after
-requesting auto-merge, `--no-validate` to skip repository tests/compile, or
-`--no-local-publish` to skip local registry preflight.
-Version resolution considers both repository tags and historical
-`<component>-v<version>` tags, ensuring a singular release starts above every
-component version left by an independent-version migration.
+`release` commits and pushes pending source work, switches to a release branch,
+increments `VERSION`, synthesizes manifests and registries, runs validation,
+writes the release summary, and opens one PR. After automatic merge it builds
+the candidate from the exact merge SHA, optionally publishes the same candidate
+to local registries, uploads it to a draft GitHub Release, and returns to the
+original branch. Publishing the draft starts registry deployment. Use
+`--no-approve` to leave the PR for manual merge, `--no-validate` to skip
+repository tests/compile, or `--no-local-publish` to skip local registry
+preflight. `VERSION` is the only base used to calculate the next version.
 The repository host and owner are derived from the Git remote. If the GitHub CLI
 has multiple accounts for that host, release preparation selects the first
 authenticated account with write access to the detected repository. Classic
@@ -526,9 +508,10 @@ preparation has already run Rust tests, workspace type-checking, and local
 package preflight before opening the PR. JavaScript behavior tests remain an
 explicit developer task.
 
-The generated workflow publishes the complete public workspace at the singular
-version. Rust, Python, Node, GitHub asset, and docs stages share the verified tag
-and SHA. Documentation generation runs only on this version-triggered workflow.
+The generated workflow publishes the complete public workspace after the draft
+GitHub Release is published. Cargo, PyPI, npm, and docs share the verified tag,
+commit, manifest, and checksums. Documentation deployment runs only in this
+promotion workflow.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:

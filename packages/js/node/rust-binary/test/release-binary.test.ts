@@ -158,38 +158,6 @@ describe("Rust release binaries", () => {
     }
   });
 
-  it("reuses an unstamped 0.0.0 executable as the requested version", async () => {
-    const homeDir = await mkdtemp(join(tmpdir(), "dbx-rust-bin-unstamped-"));
-    const version = PACKAGE_VERSION.replace(/[^0-9A-Za-z]+/g, "_");
-    const binDir = join(homeDir, ".dbx-tools", "bin");
-    const path = join(binDir, `fixture-bin_${version}`);
-    try {
-      await mkdir(binDir, { recursive: true });
-      await writeFile(
-        path,
-        `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "fixture-bin 0.0.0"; exit 0; fi\nexit 3\n`,
-      );
-      await chmod(path, 0o755);
-
-      const installed = await ensureReleaseBinary(COMMAND, {
-        homeDir,
-        platform: "linux",
-        arch: "x64",
-      });
-      assert.equal(installed.path, path);
-      assert.equal(
-        await runReleaseBinary(COMMAND, ["value"], {
-          homeDir,
-          platform: "linux",
-          arch: "x64",
-        }),
-        3,
-      );
-    } finally {
-      await rm(homeDir, { recursive: true, force: true });
-    }
-  });
-
   it(
     "maps a binary signal exit to the conventional process code",
     { skip: process.platform === "win32" },

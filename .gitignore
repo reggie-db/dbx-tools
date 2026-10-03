@@ -87,7 +87,6 @@ jspm_packages/
 !/.github/workflows/release.yml
 .docs-build/
 .astro/
-.worktrees/
 .home/
 .kanna/
 **/.logs/

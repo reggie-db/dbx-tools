@@ -825,8 +825,8 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   installation through `@dbx-tools/core` `bin.ensure`, and process forwarding.
   A missing GitHub archive falls back to `cargo install --version --root
 <temp>/cargo` using generated `crateName` / `cargoFeatures`; `file://`
-  sources skip archive unpacking, and unstamped `0.0.0` binaries count as the
-  requested version.
+  sources skip archive unpacking. Every installed binary must report the exact
+  requested version before it is accepted.
   Server plugins import the narrow package directly; do not put product registry or
   release URL policy in core or restore a dependency on the umbrella CLI. Every
   UniFFI crate gets
@@ -862,7 +862,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   candidate through `bun run release:assets --version <version> --tag <tag>
 --sha <commit> --upload` from the matching source.
   Repository-specific release guards belong in `releaseValidationTasks`; they
-  run in the release worktree before expensive tests, local publication, or
+  run on the release branch before expensive tests, local publication, or
   approval. This repository uses the source-JSDoc ratchet and README generation
   checks there, so GitHub release jobs are not the first place docs failures
   appear. Never auto-write a documentation baseline in CI.
@@ -944,11 +944,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   errors must report `spawnSync.error` instead of presenting a meaningless null
   exit status.
   Artifact names identify crate, target, and type (`npm`, `python-wheel`, or
-  `binary`). Rust jobs publish non-private Cargo crates from a source-only
-  `cargo publish --no-verify` job and upload prebuilt binaries to the GitHub
-  release. Cargo crates publish in dependency order across both UniFFI and
-  source-only crates, so a public binary can consume workspace libraries on its
-  first release. They never publish npm or PyPI packages.
+  `binary`). The locally built candidate already contains every native archive.
+  After promotion, GitHub Actions publishes non-private Cargo crates from the
+  verified release commit with `cargo publish --locked`. Cargo crates publish in
+  dependency order across both UniFFI and source-only crates, so a public binary
+  can consume workspace libraries on its first release. Cargo jobs never rebuild
+  binaries or publish npm or PyPI packages.
   `bun run release --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product in the release PR; omit both to restore the
   maintained full matrix. GitHub environments referenced by release jobs must
@@ -1630,9 +1631,10 @@ packages/py`, and `uv run ruff format packages/py` for Python validation and
 formatting. `uv.lock` and `bun.lock` are local install artifacts and must remain
 untracked; `.venv/`, Python caches, and built wheels are ignored too.
 Projen's native `PyprojectTomlFile` owns generated `pyproject.toml` formatting.
-Do not override its protected synthesizer for cosmetic table layout. Temporary
-publication stamping parses and serializes TOML with `smol-toml`, restores the
-original bytes afterward, and is tested by parsed semantic equivalence.
+Do not override its protected synthesizer for cosmetic table layout. Release
+packaging copies each Python project to a temporary directory, projects registry
+dependency requirements in that copy with `smol-toml`, and never rewrites the
+source manifest.
 
 `bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
 does not exclude `packages/js/`. Some committed files predate the current
@@ -2212,21 +2214,23 @@ What is configured, and why:
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
   restores the corporate index when it is unavailable.
 
-`bun run release` commits and pushes pending source work, creates a dedicated
-`release/v<version>` worktree, increments the single root `VERSION`, regenerates
-every owned version surface, runs release validation and local publication, then
-opens one pull request into `main`. Automatic merge is enabled by default after
-required checks pass, and the command waits for the exact merged-SHA release
-candidate to finish building and uploading. Pass `--no-approve` to leave that PR
-for a human merge. Automatic merge cannot be combined with `--no-wait`, because
-the local process must receive the exact merge SHA before it can build the draft
-candidate. `--no-validate` skips repository tests/compile, while
-`--no-local-publish` skips all local registry preflight; both are explicit
-recovery shortcuts and are never defaults.
-`--os` and `--arch` remain repeatable filters for a narrowed release validation.
-Version resolution scans both repository `v<version>` tags and historical
-`<component>-v<version>` tags, so the first singular release automatically starts
-above every independently published component version.
+`bun run release` uses the current checkout as one transaction. It commits and
+pushes pending source work, switches to `release/v<version>`, increments the root
+`VERSION`, regenerates every owned version surface, runs validation, and opens one
+pull request into `main`. Automatic merge is enabled by default after required
+checks pass. The command then detaches at the exact merge SHA, builds the complete
+candidate once, optionally publishes that candidate to configured local npm,
+PyPI, and Cargo mirrors, creates an annotated tag and draft GitHub Release, uploads
+the candidate, and returns to the original branch. It does not create a Git
+worktree or rebuild artifacts between local validation and GitHub upload. If the
+transaction fails, uncommitted release-branch state is saved in a
+`release-resume:<branch>` stash before the original branch is restored.
+Pass `--no-approve` to leave the release PR for a human merge. Automatic merge
+cannot be combined with `--no-wait`, because the local process must receive the
+exact merge SHA before it can build the draft candidate. `--no-validate` skips
+repository tests/compile, while `--no-local-publish` skips local registry
+preflight; both are explicit recovery shortcuts and are never defaults. `--os`
+and `--arch` remain repeatable filters for a narrowed release candidate.
 Repository owner and host come from the configured Git remote. When several
 GitHub CLI accounts exist on that host, release preparation probes them in
 active-first order and uses the first token with write access to that repository;
@@ -2235,19 +2239,13 @@ OAuth/PAT credentials must also expose the `workflow` scope because every
 singular release updates the generated release workflow's versioned run name.
 
 Merging the release PR prepares but does not publish a production release. Local
-release tooling verifies the exact merged `main` commit, builds the complete
-candidate, creates one annotated `v<version>` tag and draft GitHub Release, and
-uploads the SHA-bound candidate manifest and checksums. Publishing that draft is
-the only production publication signal. The generated workflow verifies the tag,
-commit, version, manifest, and artifact hashes before publishing npm, PyPI, and
-Cargo packages. Manual recovery names the same published tag and never calculates
-another version or rebuilds a candidate.
-
-This repository sets `releaseSyncBranch: "dev"`. After successful publication,
-the workflow fast-forwards `dev` when it is behind, does nothing when it already
-contains released `main`, and cleanly merges `main` into a diverged `dev`.
-Missing branches and conflicted merges are left untouched without opening a PR
-or forcing history.
+release tooling verifies the exact merged `main` commit and binds every candidate
+file to that SHA in `release-manifest.json` and `SHA256SUMS`. Publishing the draft
+GitHub Release is the only production publication signal. The generated workflow
+resolves the annotated tag, checks out its exact commit, verifies `VERSION`, the
+manifest, every checksum, and main ancestry, then publishes the approved npm,
+PyPI, Cargo, and documentation stages. Manual recovery names the same published
+tag and never calculates another version or rebuilds a candidate.
 
 Historical summaries under `docs/releases/` do not trigger a release. Expensive
 API documentation generation runs only in the version-triggered release workflow,
@@ -2494,8 +2492,15 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   GitHub's `release.yml` uses npm Trusted Publishing with OIDC and enables npm
   provenance for public npmjs publication, including native archives and UniFFI
   facades. Do not restore `NPM_TOKEN` or `NODE_AUTH_TOKEN` to the production
-  workflow. Local Verdaccio publication must not enable provenance because
-  Verdaccio does not support it.
+  workflow. Production npm publication is OIDC-only: do not add a token
+  bootstrap input, staged-publish fallback, or package creation to the release
+  workflow. Every npm package must authorize `reggie-db/dbx-tools` and
+  `release.yml` as a trusted publisher with direct `npm publish` permission
+  before its first promoted release. New packages use npm's pending trusted
+  publisher administration once, outside GitHub Actions. npm stage approval and
+  trust administration require interactive npm authentication and 2FA; they are
+  not release workflow jobs. Local Verdaccio publication must not enable
+  provenance because Verdaccio does not support it.
 - **The release workflow is testable without publication.** `release.yml`
   accepts a verified published tag through `workflow_dispatch` and defaults to
   `dry_run: true`. It revalidates the approved candidate and exercises exact npm
@@ -2560,7 +2565,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 - **Dot-paths that must stay out of git are named explicitly.** The engine adds
   the secrets and editor set (`.env`, `.env.*` with `!.env.example` /
   `!.env.sample`, `.idea/*`); `.projenrc.ts` adds this repo's generated
-  dot-directories (`.docs-build/`, `.astro/`, `.worktrees/`). A generated
+  dot-directories (`.docs-build/`, `.astro/`). A generated
   dot-directory needs a line in one of those two places - it will otherwise show
   up as untracked, which makes the omission visible.
 - **The published tarball is an ALLOWLIST, not everything on disk.** Every

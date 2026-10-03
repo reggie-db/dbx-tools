@@ -63,10 +63,9 @@ describe("workspace version synthesis", () => {
     const outdir = mkdtempSync(join(tmpdir(), "workspace-next-version-"));
     try {
       writeWorkspaceVersion(outdir, "1.2.3");
-      assert.deepEqual(resolveNextVersion(outdir, ["v"], "minor", { fetch: false }), {
+      assert.deepEqual(resolveNextVersion(outdir, "minor"), {
         base: "1.2.3",
         version: "1.3.0",
-        source: "local",
       });
       assert.equal(readFileSync(join(outdir, "VERSION"), "utf8"), "1.2.3\n");
     } finally {
@@ -74,7 +73,7 @@ describe("workspace version synthesis", () => {
     }
   });
 
-  it("increments from historical component tags when they exceed repository tags", () => {
+  it("increments only from the checked-in VERSION file", () => {
     const outdir = mkdtempSync(join(tmpdir(), "workspace-component-version-"));
     try {
       writeWorkspaceVersion(outdir, "0.6.230");
@@ -91,22 +90,10 @@ describe("workspace version synthesis", () => {
       execFileSync("git", ["commit", "-m", "initial"], { cwd: outdir, stdio: "ignore" });
       execFileSync("git", ["tag", "v0.6.230"], { cwd: outdir, stdio: "ignore" });
       execFileSync("git", ["tag", "projen-cli-v0.9.2"], { cwd: outdir, stdio: "ignore" });
-      assert.deepEqual(resolveNextVersion(outdir, ["v"], "patch", { fetch: false }), {
-        base: "0.9.2",
-        version: "0.9.3",
-        source: "remote",
+      assert.deepEqual(resolveNextVersion(outdir, "patch"), {
+        base: "0.6.230",
+        version: "0.6.231",
       });
-      assert.deepEqual(
-        resolveNextVersion(outdir, ["v"], "patch", {
-          fetch: false,
-          includeComponentTags: false,
-        }),
-        {
-          base: "0.6.230",
-          version: "0.6.231",
-          source: "remote",
-        },
-      );
     } finally {
       rmSync(outdir, { recursive: true, force: true });
     }

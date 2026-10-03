@@ -2,9 +2,11 @@
 
 Date: 2026-10-01
 
-Status: Implementation complete. Keep this audit active through the first
-observed release using the consolidated Node publication compile, then archive
-it after comparing the release log with the baseline captured below.
+Updated: 2026-10-03
+
+Status: Implementation complete. Keep this audit active through the npm
+trusted-publisher cutover and the first draft-promotion release, then archive it
+after recording the production workflow result.
 
 Scope: repository-wide architecture, package boundaries, generated Projen
 behavior, release workflows, AppKit and Mastra reuse, Rust ownership, tunnel
@@ -43,6 +45,13 @@ current dependency lines.
   that expected outputs exist (`projen/tasks/publish.ts:29`,
   `projen/tasks/publish.ts:343`, `projen/tasks/publish.ts:384`,
   `projen/tasks/local-publish.ts:53`, `projen/tasks/release-pr.ts:486`).
+- Release preparation now uses one checkout and one candidate. The root
+  `VERSION` file drives every generated version, the candidate is built at the
+  exact merge SHA, and publishing the draft GitHub Release promotes the approved
+  npm, PyPI, Cargo, and documentation stages. No worktree, component tag,
+  manifest repair, binary byte injection, or hosted native rebuild remains
+  (`projen/tasks/release-pr.ts`, `projen/tasks/release-candidate.ts`,
+  `projen/src/release.ts`).
 - Projen, AppKit, Better Auth, and Mastra were reconciled to their current tested
   stable lines. Several Mastra packages publish alpha builds under the npm
   `latest` tag, so this repository intentionally pins the newest non-prerelease
@@ -64,26 +73,29 @@ dbx-tools packages add Databricks-specific policy only where those frameworks do
 not provide equivalent public contracts.
 
 The release path is intentionally singular: one reviewed repository version,
-one generated workflow, one Cargo build per selected target, and one root-owned
-Node compile before package publication. Generated files remain outputs of the
-Projen engine; repository-specific behavior belongs in `.projenrc.ts`, while
-reusable behavior belongs in the published engine.
+one merge commit, one local candidate build, and one generated promotion
+workflow. Generated files remain outputs of the Projen engine;
+repository-specific behavior belongs in `.projenrc.ts`, while reusable behavior
+belongs in the published engine.
 
 ## Findings and disposition
 
-| ID   | Area                          | Severity | Status   | Finding and disposition                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---- | ----------------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CQ01 | Metrics usability             | High     | Complete | Presentation is consumer-owned instead of embedded in the proxy. Typed GraphQL exposes bounded history and filtered model rows for any operator client, with field descriptions available through introspection (`packages/rs/model-proxy/src/routes.rs`, `packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                             |
-| CQ02 | Metrics semantics             | Medium   | Complete | Open sockets are retained as supporting context while `active_requests` remains the primary work indicator. The same typed snapshot distinguishes connections, requests, and streams (`packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                                                                                                 |
-| CQ03 | Thinking observability        | Medium   | Complete | The request boundary normalizes supported reasoning settings once, bounded snapshots retain their distributions, and GraphQL exposes aggregate and per-model reasoning rows without a second contract (`packages/rs/model-proxy/src/request_log.rs`, `packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                                  |
-| CQ04 | Passkey UX                    | Medium   | Complete | A dedicated passkey button made passkey-first login an extra action. Conditional mediation now starts from the WebAuthn-enabled email input, with the button retained only for unsupported or failed conditional flows (`packages/js/ui/auth/src/react/auth-gate.tsx:51`, `packages/js/ui/auth/src/react/auth-gate.tsx:181`).                                                                                                                                    |
-| CQ05 | Release compilation           | High     | Complete | npm release publication could trigger each package's `prepack`, repeating `tsc --build` across local validation and publication. The publisher now selects compiled packages once, runs one filtered root compile, and uses `--ignore-scripts`; `--skip-compile` refuses missing outputs (`projen/tasks/publish.ts:29`, `projen/tasks/publish.ts:343`, `projen/tasks/publish.ts:384`).                                                                           |
-| CQ06 | Reusable Rust release tooling | High     | Complete | The previous private Rust helper made orchestration repository-specific and added a Cargo build before the actual release matrix. The same fingerprint and stamp contract now ships as a dependency-free Node helper generated by Projen (`projen/tasks/rust-release.mjs:1`, `projen/src/project-rs.ts:1202`).                                                                                                                                                   |
-| CQ07 | Projen project parity         | High     | Complete | Rust members behaved as Projen projects but exposed a positional constructor and did not apply the workspace `private` option. `DBXToolsRustProject` now accepts object-style options, inherits scope and root defaults, and applies a workspace publication default with package overrides (`projen/src/project-rs.ts:80`, `projen/src/project-rs.ts:474`, `projen/src/project-rs.ts:105`).                                                                     |
-| CQ08 | Consumer Projen runtime       | High     | Complete | A bundled second Projen runtime can break Projen's remaining `instanceof` checks. The engine centralizes the tested version, exposes Projen as a peer, and the packed-consumer test proves that consumer roots and generated Rust members share the same `Project` class (`projen/src/projen-version.ts:1`, `projen/package.json:23`, `projen/package.json:27`, `projen/test/packed-consumer.test.ts:69`).                                                       |
-| CQ09 | Framework upgrades            | Medium   | Complete | Projen, AppKit, Mastra, and Better Auth were behind the current tested stable surface. The catalog now uses Projen 0.103.27, AppKit 0.81.0, Better Auth 1.7.6, and the newest non-prerelease Mastra package versions (`package.json:156`, `package.json:162`, `package.json:175`, `projen/package.json:23`).                                                                                                                                                     |
-| CQ10 | Documentation drift           | Low      | Complete | The active Rust release plan still described the removed helper crate, and the archived AppKit review contained title typos. Both now describe the implemented architecture and current names (`docs/enhancements/2026-09-30-singular-version-content-addressed-rust-release-plan.md:45`, `docs/archived/enhancements/2026-09-29-latest-appkit-reuse-plan.md:1`).                                                                                                |
-| CQ11 | Generator concentration       | Medium   | Observe  | `projen/src/project-rs.ts` remains a 2,120-line concentration point spanning Cargo project modeling and release workflow generation (`projen/src/project-rs.ts:464`, `projen/src/project-rs.ts:1202`). The reusable Node helper removed one concrete responsibility. Do not split the file solely by line count; extract the release workflow builder only when the next material Rust release change can preserve generated output with focused snapshot tests. |
+| ID   | Area                          | Severity | Status   | Finding and disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---- | ----------------------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CQ01 | Metrics usability             | High     | Complete | Presentation is consumer-owned instead of embedded in the proxy. Typed GraphQL exposes bounded history and filtered model rows for any operator client, with field descriptions available through introspection (`packages/rs/model-proxy/src/routes.rs`, `packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                                                          |
+| CQ02 | Metrics semantics             | Medium   | Complete | Open sockets are retained as supporting context while `active_requests` remains the primary work indicator. The same typed snapshot distinguishes connections, requests, and streams (`packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                                                                                                                              |
+| CQ03 | Thinking observability        | Medium   | Complete | The request boundary normalizes supported reasoning settings once, bounded snapshots retain their distributions, and GraphQL exposes aggregate and per-model reasoning rows without a second contract (`packages/rs/model-proxy/src/request_log.rs`, `packages/rs/model-proxy/src/metrics.rs`).                                                                                                                                                                                               |
+| CQ04 | Passkey UX                    | Medium   | Complete | A dedicated passkey button made passkey-first login an extra action. Conditional mediation now starts from the WebAuthn-enabled email input, with the button retained only for unsupported or failed conditional flows (`packages/js/ui/auth/src/react/auth-gate.tsx:51`, `packages/js/ui/auth/src/react/auth-gate.tsx:181`).                                                                                                                                                                 |
+| CQ05 | Release compilation           | High     | Complete | npm release publication could trigger each package's `prepack`, repeating `tsc --build` across local validation and publication. The publisher now selects compiled packages once, runs one filtered root compile, and uses `--ignore-scripts`; `--skip-compile` refuses missing outputs (`projen/tasks/publish.ts:29`, `projen/tasks/publish.ts:343`, `projen/tasks/publish.ts:384`).                                                                                                        |
+| CQ06 | Reusable Rust release tooling | High     | Complete | Repository-specific Rust release orchestration duplicated target and package policy. Projen now generates `.projen/rust-release.json` from the workspace model, and shared release tasks consume it to build one local candidate without another helper crate (`projen/src/_rust-release-workflow.ts`, `projen/tasks/release-assets.ts`).                                                                                                                                                     |
+| CQ07 | Projen project parity         | High     | Complete | Rust members behaved as Projen projects but exposed a positional constructor and did not apply the workspace `private` option. `DBXToolsRustProject` now accepts object-style options, inherits scope and root defaults, and applies a workspace publication default with package overrides (`projen/src/project-rs.ts:80`, `projen/src/project-rs.ts:474`, `projen/src/project-rs.ts:105`).                                                                                                  |
+| CQ08 | Consumer Projen runtime       | High     | Complete | A bundled second Projen runtime can break Projen's remaining `instanceof` checks. The engine centralizes the tested version, exposes Projen as a peer, and the packed-consumer test proves that consumer roots and generated Rust members share the same `Project` class (`projen/src/projen-version.ts:1`, `projen/package.json:23`, `projen/package.json:27`, `projen/test/packed-consumer.test.ts:69`).                                                                                    |
+| CQ09 | Framework upgrades            | Medium   | Complete | Projen, AppKit, Mastra, and Better Auth were behind the current tested stable surface. The catalog now uses Projen 0.103.27, AppKit 0.81.0, Better Auth 1.7.6, and the newest non-prerelease Mastra package versions (`package.json:156`, `package.json:162`, `package.json:175`, `projen/package.json:23`).                                                                                                                                                                                  |
+| CQ10 | Documentation drift           | Low      | Complete | The active Rust release plan still described the removed helper crate, and the archived AppKit review contained title typos. Both now describe the implemented architecture and current names (`docs/enhancements/2026-09-30-singular-version-content-addressed-rust-release-plan.md:45`, `docs/archived/enhancements/2026-09-29-latest-appkit-reuse-plan.md:1`).                                                                                                                             |
+| CQ11 | Generator concentration       | Medium   | Observe  | `projen/src/project-rs.ts` remains a 2,120-line concentration point spanning Cargo project modeling and release workflow generation (`projen/src/project-rs.ts:464`, `projen/src/project-rs.ts:1202`). The reusable Node helper removed one concrete responsibility. Do not split the file solely by line count; extract the release workflow builder only when the next material Rust release change can preserve generated output with focused snapshot tests.                              |
+| CQ12 | Release version ownership     | High     | Complete | Historical component-tag lookup and manifest repair allowed more than one effective version source. Release increments now start only from root `VERSION`; Projen projects that value into every language manifest, and version checks reject drift (`projen/src/workspace-version.ts`, `projen/tasks/version-check.ts`, `projen/src/release-catalog.ts`).                                                                                                                                    |
+| CQ13 | Release artifact integrity    | High     | Complete | Previous flows could rebuild remotely, publish from rewritten source manifests, or accept placeholder binary versions. One merge-SHA candidate now supplies local preflight and the draft Release; Node, Python, and Cargo registry projections occur only in temporary copies, and binaries require the exact version (`projen/tasks/release-candidate.ts`, `projen/tasks/publish-python.ts`, `projen/tasks/publish-uniffi-local.ts`, `packages/js/node/rust-binary/src/release-binary.ts`). |
+| CQ14 | Release subprocess policy     | Medium   | Complete | Release tasks duplicated checked execution, capture, quiet probes, and Git wrappers. `_task-command.ts` now owns those policies, including normalized third-party output; release tasks call the shared helpers directly (`projen/src/_task-command.ts`, `projen/tasks/release-assets.ts`, `projen/tasks/release-candidate.ts`, `projen/tasks/release-pr.ts`).                                                                                                                                |
 
 ## Package and contract review
 
@@ -127,7 +139,7 @@ reusable behavior belongs in the published engine.
   synthesis ownership (`projen/src/project-rs.ts:464`,
   `projen/src/project-rs.ts:1932`).
 
-## Release compile baseline
+## Release observation baseline
 
 Before this audit, release logs showed 32 publishable TypeScript packages each
 entering their own `compile` task after an earlier local validation compile.
@@ -139,9 +151,18 @@ has two explicit modes:
 2. local release publication passes `--skip-compile` only when the release
    command has just completed its validation compile.
 
-The first production release after this change should confirm one publication
-compile block and no per-package `prepack` compile blocks. Record the before and
-after wall time here, then archive this audit.
+The first production release after this change should confirm:
+
+1. one root-owned Node compile during candidate construction;
+2. no per-package `prepack` compile blocks;
+3. no native Rust build in GitHub Actions;
+4. npm publication through OIDC without `NPM_TOKEN`;
+5. exact npm and Python archive publication from the approved manifest;
+6. Cargo publication from the verified commit with `--locked`;
+7. documentation deployment from the same published tag.
+
+Record the production run and candidate build duration here, then archive this
+audit with the release architecture plan.
 
 ## Things that look questionable but are intentional
 
@@ -153,22 +174,28 @@ after wall time here, then archive this audit.
   metrics modules represent distinct hot-path state machines with focused Rust
   tests. Line count alone is not evidence that another package or abstraction
   would improve them.
-- The release workflow has separate native npm, normal npm, facade npm, PyPI,
-  Cargo, GitHub asset, and docs jobs. These are different trust, runner, and
-  artifact boundaries; merging them would couple credentials and recovery.
+- The promotion workflow retains separate npm, PyPI, Cargo, and docs jobs. These
+  are different trust, environment, and recovery boundaries; merging them would
+  couple credentials and failure handling.
 - Mastra package pins do not follow every npm `latest` tag because those tags can
   resolve to alpha builds. Exact stable pins make the co-tested surface explicit.
 
 ## Validation record
 
-- Projen synthesis and the shared Rust OpenAPI generation completed without
-  drift. Focused Rust-project, OpenAPI, Rust watcher, barrel, workspace-lock,
-  and lazy sequence suites passed.
-- The complete TypeScript workspace compiled and passed every package test
-  suite. ESLint, the source-documentation ratchet, and README synchronization
-  passed.
-- `cargo test -p dbx-tools-service --all-features` passed 25 tests, including
-  reusable GraphQL subscriptions, retained topics, and OpenAPI coverage.
-- `cargo test -p dbx-tools-model-proxy --all-features` passed 111 tests, and
-  the metrics-free build passed. Clippy passed across the service and model
-  proxy with all targets and features.
+- Root and Projen self-synthesis completed without unexpected drift. Projen
+  compilation passed, and its complete suite passed 195 tests across 36 files.
+- `bun run compile` type-checked 47 workspaces. `bun run test` passed the
+  installer suite and every package test task, including the packed Projen
+  consumer lifecycle. ESLint passed.
+- README synchronization generated the site from 54 package READMEs, title
+  validation passed, and the source-documentation ratchet reported no new debt.
+- `bun run version:check` confirmed every generated Node, Python, Cargo, and
+  binding version matches root `VERSION` `0.9.19`.
+- `bun run py:test` passed 88 tests. Ruff passed all Python packages, examples,
+  and notebooks.
+- `bun run rs:test` passed the complete Cargo workspace, including 113
+  model-proxy tests and 26 service tests. `bun run rs:lint` passed Clippy for the
+  workspace with all targets and features.
+- The npm cutover helper passed `bash -n`. Final stale-pattern searches found no
+  active Release Please path, release worktree checkout, hosted Rust build,
+  npm token consumption, `--no-verify`, or binary version bypass.

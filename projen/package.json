@@ -43,7 +43,6 @@
     "is-identifier": "^1",
     "openapi-typescript": "^7.13.0",
     "oxc-parser": "^0.90.0",
-    "release-please": "17.11.2",
     "semver": "^7.7.3",
     "smol-toml": "1.8.0",
     "ts-to-zod": "^5.1.0",

@@ -1,38 +1,30 @@
 #!/usr/bin/env -S bun
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
+import { basename, dirname, join, resolve } from "node:path";
 import { Command } from "commander";
 import { parse, stringify } from "smol-toml";
-import { pythonProjectInfo, stampPythonProject } from "./uniffi-python.js";
-import type { ReleasePlan } from "../src/release-plan.ts";
+import { preparePythonProjectForPublication, pythonProjectInfo } from "./uniffi-python.js";
+import { runTaskCommand } from "../src/_task-command.ts";
 
 interface PythonProjectFile {
   readonly directory: string;
-  readonly mode: number;
   readonly name: string;
   readonly version: string;
   readonly path: string;
   readonly private: boolean;
   readonly source: string;
   readonly uniffi: boolean;
-}
-
-export interface StampPythonProjectsOptions {
-  readonly excludeUniFFI?: boolean;
-  readonly rewriteDependencies?: boolean;
-  readonly versions?: ReadonlyMap<string, string>;
 }
 
 /** Python wheel and source archives accepted by Twine and package indexes. */
@@ -43,16 +35,7 @@ export function pythonDistributionPaths(directory: string): string[] {
     .map((file) => join(directory, file));
 }
 
-export interface RestorePythonProjects {
-  (): void;
-  readonly paths: readonly string[];
-}
-
-export function stampPythonProjects(
-  root: string,
-  version: string,
-  options: StampPythonProjectsOptions = {},
-): RestorePythonProjects {
+function pythonProjects(root: string): PythonProjectFile[] {
   const packageFiles = readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => resolve(root, entry.name, "pyproject.toml"))
@@ -63,7 +46,6 @@ export function stampPythonProjects(
     const info = pythonProjectInfo(source, { parse, stringify });
     return {
       directory: basename(resolve(path, "..")),
-      mode: statSync(path).mode,
       name: info.name,
       version: info.version,
       path,
@@ -72,47 +54,7 @@ export function stampPythonProjects(
       uniffi: info.uniffi,
     };
   });
-  const projects = allProjects.filter(
-    (project) =>
-      !project.private &&
-      (!options.excludeUniFFI || !project.uniffi) &&
-      (!options.versions || options.versions.has(project.directory)),
-  );
-  if (projects.length === 0) throw new Error(`No Python packages found under ${root}`);
-
-  try {
-    for (const project of projects) {
-      const stamped = stampPythonProject(project.source, {
-        packages: allProjects,
-        rewriteDependencies: options.rewriteDependencies,
-        usePackageVersions: options.versions !== undefined,
-        toml: { parse, stringify },
-        version: options.versions?.get(project.directory) ?? version,
-      });
-      chmodSync(project.path, project.mode | 0o200);
-      writeFileSync(project.path, stamped);
-      chmodSync(project.path, project.mode);
-    }
-  } catch (error) {
-    for (const project of projects) {
-      chmodSync(project.path, project.mode | 0o200);
-      writeFileSync(project.path, project.source);
-      chmodSync(project.path, project.mode);
-    }
-    throw error;
-  }
-
-  const restore = () => {
-    for (const project of projects) {
-      chmodSync(project.path, project.mode | 0o200);
-      writeFileSync(project.path, project.source);
-      chmodSync(project.path, project.mode);
-    }
-  };
-  Object.defineProperty(restore, "paths", {
-    value: projects.map((project) => project.path),
-  });
-  return restore as RestorePythonProjects;
+  return allProjects;
 }
 
 export function publishPythonProjects(options: {
@@ -121,12 +63,12 @@ export function publishPythonProjects(options: {
   readonly publishUrl: string;
   readonly root: string;
   readonly version: string;
-  readonly plan?: ReleasePlan;
 }): void {
   const output = mkdtempSync(join(tmpdir(), "projen-python-publish-"));
   try {
     buildPythonProjects({ ...options, output });
-    exec.spawnSync(
+    runTaskCommand(
+      process.cwd(),
       "uvx",
       [
         "--from",
@@ -139,14 +81,7 @@ export function publishPythonProjects(options: {
         ...(options.dryRun ? ["--dry-run"] : []),
         output,
       ],
-      {
-        cwd: process.cwd(),
-        env: { ...process.env, UV_DEFAULT_INDEX: options.indexUrl },
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "ignore",
-        check: true,
-      },
+      { env: { ...process.env, UV_DEFAULT_INDEX: options.indexUrl } },
     );
   } finally {
     rmSync(output, { recursive: true, force: true });
@@ -160,113 +95,76 @@ export function buildPythonProjects(options: {
   readonly output: string;
   readonly root: string;
   readonly version: string;
-  readonly plan?: ReleasePlan;
 }): void {
   const root = resolve(options.root);
   const output = resolve(options.output);
   rmSync(output, { recursive: true, force: true });
-  const standardProjects = options.excludeUniFFI
-    ? readdirSync(root, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => resolve(root, entry.name, "pyproject.toml"))
-        .filter(existsSync)
-        .map((path) => pythonProjectInfo(readFileSync(path, "utf8"), { parse, stringify }))
-        .filter((project) => !project.private && !project.uniffi)
-    : undefined;
-  if (standardProjects?.length === 0 && options.allowEmpty) {
+  const allProjects = pythonProjects(root);
+  const projects = allProjects.filter(
+    (project) => !project.private && (!options.excludeUniFFI || !project.uniffi),
+  );
+  if (projects.length === 0 && options.allowEmpty) {
     mkdirSync(output, { recursive: true });
     return;
   }
-  const planned = new Map(
-    options.plan?.pythonPackages.map((pkg) => [pkg.path.replace(/^.*\//, ""), pkg.version]) ?? [],
-  );
-  const stamp = stampPythonProjects(root, options.version, {
-    excludeUniFFI: options.excludeUniFFI,
-    ...(options.plan ? { versions: planned } : {}),
-  });
+  if (projects.length === 0) throw new Error(`No Python packages found under ${root}`);
+
+  const temporaryRoot = mkdtempSync(join(tmpdir(), "projen-python-release-"));
   try {
-    const packages = options.plan?.pythonPackages ?? [];
-    if (packages.length > 0) {
-      for (const pkg of packages) {
-        exec.spawnSync("uv", ["build", "--package", pkg.identity, "--out-dir", output], {
-          cwd: process.cwd(),
-          stdout: "inherit",
-          stderr: "inherit",
-          stdin: "ignore",
-          check: true,
-        });
-      }
-    } else if (options.excludeUniFFI) {
-      for (const project of standardProjects ?? []) {
-        exec.spawnSync("uv", ["build", "--package", project.name, "--out-dir", output], {
-          cwd: process.cwd(),
-          stdout: "inherit",
-          stderr: "inherit",
-          stdin: "ignore",
-          check: true,
-        });
-      }
-    } else {
-      exec.spawnSync("uv", ["build", "--all-packages", "--out-dir", output], {
-        cwd: process.cwd(),
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "ignore",
-        check: true,
-      });
+    mkdirSync(output, { recursive: true });
+    for (const project of projects) {
+      const packageRoot = join(temporaryRoot, project.directory);
+      cpSync(dirname(project.path), packageRoot, { recursive: true });
+      const manifestPath = join(packageRoot, "pyproject.toml");
+      chmodSync(manifestPath, 0o644);
+      writeFileSync(
+        manifestPath,
+        preparePythonProjectForPublication(project.source, {
+          packages: allProjects,
+          toml: { parse, stringify },
+          version: options.version,
+        }),
+      );
+      runTaskCommand(root, "uv", ["build", "--out-dir", output, packageRoot]);
     }
     const distributions = pythonDistributionPaths(output);
     if (distributions.length === 0) {
       throw new Error(`No Python distributions found in ${output}`);
     }
-    exec.spawnSync("uvx", ["twine", "check", ...distributions], {
-      cwd: process.cwd(),
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: true,
-    });
+    runTaskCommand(process.cwd(), "uvx", ["twine", "check", ...distributions]);
   } finally {
-    stamp();
+    rmSync(temporaryRoot, { recursive: true, force: true });
   }
 }
 
 if (import.meta.main) {
   const program = new Command();
   program
-    .argument("[version]", "Python package version")
+    .argument("<version>", "Python package version")
     .requiredOption("--index-url <url>", "devpi Simple API URL")
     .requiredOption("--publish-url <url>", "devpi writable index URL")
     .option("--root <path>", "Python workspace package root", "packages/py")
-    .option("--plan <path>", "affected release plan")
     .option("--output <path>", "Build distributions into a directory without publishing")
     .option("--dry-run", "build and inspect distributions without uploading")
     .action(
       (
-        version: string | undefined,
+        version: string,
         options: {
           dryRun?: boolean;
           indexUrl: string;
           publishUrl: string;
           root: string;
-          plan?: string;
           output?: string;
         },
       ) => {
-        const plan = options.plan
-          ? (JSON.parse(readFileSync(options.plan, "utf8")) as ReleasePlan)
-          : undefined;
-        const fallbackVersion = version ?? plan?.pythonPackages[0]?.version;
-        if (!fallbackVersion) throw new Error("Python publication requires a version or plan");
         if (options.output) {
           buildPythonProjects({
             output: options.output,
             root: options.root,
-            version: fallbackVersion,
-            plan,
+            version,
           });
         } else {
-          publishPythonProjects({ ...options, version: fallbackVersion, plan });
+          publishPythonProjects({ ...options, version });
         }
       },
     );

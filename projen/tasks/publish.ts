@@ -18,14 +18,14 @@
  *     version. When Bun's workspace lock already carries the version, its
  *     refresh is skipped;
  *   - **`publishConfig` substitution** (compiled `lib/` entry points) is done
- *     HERE, by {@link applyPublishConfig}, NOT by bun: unlike pnpm/npm, `bun
+ *     inside the temporary archive, NOT in the checkout: unlike pnpm/npm, `bun
  *     publish`/`bun pm pack` do NOT fold `publishConfig`'s `main`/`types`/`bin`/
  *     `exports` into the packed manifest (verified: the packed manifest keeps the
  *     raw `.ts` source paths and an inert `publishConfig`). Left unsubstituted, a
  *     published CLI's `bin` points at `./bin/x.ts`, and because the bin runs via
  *     its `#!/usr/bin/env node` shebang, node chokes on the `.ts`
  *     (ERR_UNKNOWN_FILE_EXTENSION). We merge `publishConfig` onto the top-level
- *     manifest before packing so the tarball advertises the compiled `lib/` tree;
+ *     manifest after packing so the tarball advertises the compiled `lib/` tree;
  *   - **compiled output** is emitted once, before packing, by one root-level
  *     filtered `bun run` that fans out to every publishable member in parallel.
  *     Every package is then packed once with lifecycle scripts disabled. The
@@ -42,28 +42,10 @@
  * non-default registry (a local verdaccio); `--exclude <dir>` (repeatable,
  * repo-relative) skips a member owned by another publication flow.
  *
- * `--no-restore` keeps the transient publishConfig edits on disk instead of
- * undoing them at exit.
- *
- * The disk manifests carry the workspace `VERSION` (projen owns them, read-only);
- * this unlocks each only long enough to fold in the `publishConfig` entry points
- * and publish, then RESTORES every one it touched
- * byte-for-byte (and re-locks the mode) on the way out - see
- * {@link restoreManifests}. Restore returns each manifest to its committed
- * content, which already equals the release version, so the worktree is never
- * left regressed.
+ * The checkout remains byte-for-byte unchanged. A stale manifest or lockfile is
+ * a release error rather than something publication repairs.
  */
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
@@ -77,24 +59,8 @@ import {
 } from "./publish-npm.ts";
 import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
 import { toPosix } from "../src/packages.ts";
-import type { ReleasePlan } from "../src/release-plan.ts";
 
 const logger = log.logger("projen:publish");
-
-/** A manifest's on-disk bytes + mode, captured before this task edits it. */
-interface ManifestBackup {
-  readonly content: string;
-  readonly mode: number;
-}
-
-/**
- * Original state of every manifest this task has unlocked, keyed by path.
- *
- * Bun does not apply `publishConfig` while packing, so publication temporarily
- * projects those entry points onto projen-owned manifests. The projection is
- * only meant for the packed tarball and is restored before the process exits.
- */
-const manifestBackups = new Map<string, ManifestBackup>();
 
 /**
  * Workspace member dirs (absolute), read from the root `pnpm-workspace.yaml` - the
@@ -109,18 +75,13 @@ function workspaceMembers(root: string): string[] {
   return (doc?.packages ?? []).map((m) => resolve(root, m));
 }
 
-/** Whether selected workspace members carry their planned versions. */
-function manifestsMatchVersions(
-  root: string,
-  members: readonly string[],
-  expected: ReadonlyMap<string, string>,
-): boolean {
+/** Whether selected workspace members carry the reviewed workspace version. */
+function manifestsMatchVersion(members: readonly string[], version: string): boolean {
   return members.every((dir) => {
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
       version?: string;
     };
-    const path = toPosix(dir.slice(resolve(root).length + 1));
-    return pkg.version === expected.get(path);
+    return pkg.version === version;
   });
 }
 
@@ -146,41 +107,6 @@ function lockfileMatchesManifestVersions(root: string, members: readonly string[
   }
 }
 
-/**
- * Make a projen-readonly manifest writable so the publishConfig projection can
- * edit it, recording its original bytes and mode for {@link restoreManifests}
- * the first time it is seen.
- */
-function unlockManifest(pkgPath: string): void {
-  const mode = statSync(pkgPath).mode;
-  if (!manifestBackups.has(pkgPath)) {
-    manifestBackups.set(pkgPath, { content: readFileSync(pkgPath, "utf8"), mode });
-  }
-  chmodSync(pkgPath, mode | 0o200);
-}
-
-/**
- * Put every manifest this task edited back exactly as it was found, mode included.
- *
- * Runs from an `exit` handler so a clean finish and a failure partway through the
- * publish loop are covered alike - a `bun publish` that dies on package 12 of 34
- * must not leave the first 11 projected. Best-effort per file: one unwritable
- * manifest is logged and the rest are still restored, since a partial restore
- * beats none.
- */
-function restoreManifests(): void {
-  for (const [pkgPath, backup] of manifestBackups) {
-    try {
-      chmodSync(pkgPath, backup.mode | 0o200);
-      writeFileSync(pkgPath, backup.content);
-      chmodSync(pkgPath, backup.mode);
-    } catch (cause) {
-      logger.warn(`could not restore ${pkgPath}`, { cause });
-    }
-  }
-  manifestBackups.clear();
-}
-
 /** Entry-point fields projen writes as `.ts` source in-repo and rewrites to `lib/` for publish. */
 const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const;
 
@@ -195,23 +121,18 @@ function compiledPublishTargets(value: unknown): string[] {
 /**
  * Fold a package's `publishConfig` entry-point fields onto the top-level manifest,
  * the way pnpm/npm do at pack time but `bun publish` does NOT (see the module
- * doc). Idempotent, writes only when something changes, and leaves `publishConfig`
- * in place (npm ignores it once the top-level fields already point at `lib/`). The
- * manifest must already be unlocked. {@link restoreManifests} puts the `.ts` entry
- * points back at exit, so this only ever affects the packed tarball.
+ * doc). The input is the temporary archive manifest, never the checkout.
  */
-function applyPublishConfig(pkgPath: string): void {
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
+export function applyPublishConfig(
+  source: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const pkg = { ...source };
   const publishConfig = pkg.publishConfig as Record<string, unknown> | undefined;
-  if (!publishConfig) return;
-  let changed = false;
+  if (!publishConfig) return pkg;
   for (const field of PUBLISH_CONFIG_ENTRY_FIELDS) {
-    if (field in publishConfig) {
-      pkg[field] = publishConfig[field];
-      changed = true;
-    }
+    if (field in publishConfig) pkg[field] = publishConfig[field];
   }
-  if (changed) writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  return pkg;
 }
 
 /**
@@ -229,14 +150,9 @@ const argv = process.argv.slice(2);
 const version = argv[0] && !argv[0].startsWith("--") ? argv[0] : undefined;
 const rest = version ? argv.slice(1) : argv;
 const root = process.cwd();
-const planIdx = rest.indexOf("--plan");
-const plan =
-  planIdx >= 0
-    ? (JSON.parse(readFileSync(resolve(root, rest[planIdx + 1]), "utf8")) as ReleasePlan)
-    : undefined;
-if (!version && !plan) {
+if (!version) {
   logger.error(
-    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--output <dir>] [--exclude <dir>] [--dry-run] [--skip-compile]",
+    "usage: bun tasks/publish.ts <version> [--registry <url>] [--output <dir>] [--exclude <dir>] [--dry-run] [--skip-compile]",
   );
   process.exit(1);
 }
@@ -252,46 +168,25 @@ if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
   throw new Error(`--concurrency must be a positive integer, got ${String(parsedConcurrency)}`);
 }
 const concurrency = parsedConcurrency;
-// Undo transient publishConfig edits at exit.
-const restore = !rest.includes("--no-restore");
 const excluded = new Set(
   rest.reduce<string[]>((acc, arg, i) => (arg === "--exclude" ? [...acc, rest[i + 1]] : acc), []),
 );
 
 const path = enrichedPath(root);
-// Registered BEFORE the first manifest edit so no exit path can skip it: a clean
-// finish and a `bun publish` failure mid-loop both land here, so a publish that
-// dies partway does not leave half the workspace stamped.
-if (restore) process.on("exit", restoreManifests);
 const allMembers = workspaceMembers(root)
   .filter((dir) => existsSync(join(dir, "package.json")))
   .filter((dir) => !excluded.has(resolve(root, dir).replace(`${resolve(root)}/`, "")));
-const expectedVersions = new Map(
-  plan
-    ? plan.nodePackages.map((pkg) => [pkg.path, pkg.version] as const)
-    : allMembers.map((dir) => [toPosix(dir.slice(resolve(root).length + 1)), version!]),
-);
-const members = plan
-  ? allMembers.filter((dir) => expectedVersions.has(toPosix(dir.slice(resolve(root).length + 1))))
-  : allMembers;
+const members = allMembers;
 
-if (!manifestsMatchVersions(root, members, expectedVersions)) {
-  throw new Error("workspace manifests do not match the reviewed release plan; run projen");
+if (!manifestsMatchVersion(members, version)) {
+  throw new Error(`workspace manifests do not match release ${version}; run projen`);
 }
 logger.info(`validated ${members.length} selected member manifests`);
 
-// Ensure the lockfile resolves each `workspace:*` to the release version.
-// `bun publish`/`pm pack` reads workspace versions from the LOCKFILE, not just
-// live manifests. A normal bump's synth/install already makes it current; after
-// fallback stamping, deleting it before install is what forces re-resolution.
-const lockfile = join(root, "bun.lock");
-if (lockfileMatchesManifestVersions(root, allMembers)) {
-  logger.info("workspace lock already resolves live member versions");
-} else {
-  if (existsSync(lockfile)) rmSync(lockfile);
-  logger.info("refreshing lockfile so workspace deps resolve to the release version");
-  runTaskCommand(root, "bun", ["install"], { env: { ...process.env, PATH: path } });
+if (!lockfileMatchesManifestVersions(root, allMembers)) {
+  throw new Error("bun.lock does not match workspace versions; run bun install and commit it");
 }
+logger.info("validated workspace lock versions");
 
 const publishArgs = [
   "--ignore-scripts",
@@ -365,15 +260,6 @@ if (compiled.length > 0) {
   }
 }
 
-// Compile against workspace source exports first. Switching manifests to their
-// publishConfig entries before compilation makes consumers resolve sibling
-// `lib/*.d.ts` files that have not been emitted yet in a clean checkout.
-for (const { dir } of publishable) {
-  const manifestPath = join(dir, "package.json");
-  unlockManifest(manifestPath);
-  applyPublishConfig(manifestPath);
-}
-
 logger.info(
   `${output ? "packing" : dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
@@ -386,7 +272,7 @@ await asyncUtils.mapConcurrent(
   async ({ dir, name, version: packageVersion, access }) => {
     const packed = mkdtempSync(join(tmpdir(), "projen-npm-release-"));
     try {
-      const archive = packNpmPackage(dir, packed, path);
+      const archive = packNpmPackage(dir, packed, path, applyPublishConfig);
       const local = readNpmArchiveIdentity(archive);
       if (local.name !== name || local.version !== packageVersion) {
         throw new Error(

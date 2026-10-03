@@ -95,11 +95,6 @@ export interface BinUrlResolveContext {
 export interface BinSource {
   url: string;
   sha256?: string;
-  /**
-   * Skip `--version` on this candidate. Use when the source already identified
-   * the requested version, such as `cargo install --version`.
-   */
-  trustVersion?: boolean;
 }
 
 /** A download source resolved only when the executable is not already installed. */
@@ -400,13 +395,8 @@ export async function ensure(
       logger.debug("resolved binary source", { name, from });
       const selected = await selectedBin(destination, source, temp, options);
       await chmod(selected, 0o755);
-      const accepted = source.trustVersion ? { ...options, skipVersionCheck: true } : options;
-      if (!(await isValidBin(selected, accepted))) {
-        throw new Error(
-          source.trustVersion
-            ? `selected binary is not executable: ${selected}`
-            : `selected binary has no acceptable version: ${selected}`,
-        );
+      if (!(await isValidBin(selected, options))) {
+        throw new Error(`selected binary has no acceptable version: ${selected}`);
       }
 
       await mkdir(destination.binDir, { recursive: true });
@@ -415,7 +405,7 @@ export async function ensure(
       await chmod(staged, 0o755);
       await rename(staged, destination.path);
       staged = undefined;
-      if (!(await isValidBin(destination.path, accepted))) {
+      if (!(await isValidBin(destination.path, options))) {
         throw new Error(`installed binary is invalid after rename: ${destination.path}`);
       }
       logger.info("installed binary", {

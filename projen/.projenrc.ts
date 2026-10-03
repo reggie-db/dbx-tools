@@ -16,12 +16,9 @@ import { fileURLToPath } from "node:url";
 import { javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
 import { PROJEN_VERSION } from "./src/projen-version.ts";
-import { readReleaseUnitVersion } from "./src/release-catalog.ts";
+import { readWorkspaceVersion } from "./src/workspace-version.ts";
 
-const PACKAGE_VERSION = readReleaseUnitVersion(
-  fileURLToPath(new URL("..", import.meta.url)),
-  "projen-cli",
-);
+const PACKAGE_VERSION = readWorkspaceVersion(fileURLToPath(new URL("..", import.meta.url)));
 
 const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
@@ -81,7 +78,6 @@ const project = new typescript.TypeScriptProject({
     "is-identifier@^1",
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
-    "release-please@17.11.2",
     "semver@^7.7.3",
     "smol-toml@1.8.0",
     "ts-to-zod@^5.1.0",

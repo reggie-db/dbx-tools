@@ -28,11 +28,6 @@ on:
         type: boolean
         default: true
         required: true
-      npm_bootstrap:
-        description: Use NPM_TOKEN for one-time package creation before trusted publishing
-        type: boolean
-        default: false
-        required: true
 concurrency:
   group: release-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
@@ -138,6 +133,9 @@ jobs:
           node-version: "24"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+      - name: Install npm trusted-publishing CLI
+        id: install_npm_trusted-publishing_cli
+        run: npm install --global npm@11.19.0
       - name: Install
         id: install
         run: bun install
@@ -167,32 +165,13 @@ jobs:
             --kind npm \
             --output dist/npm-release
         shell: bash
-      - name: Checkout npm recovery automation
-        id: checkout_npm_recovery_automation
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap }}
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .release-automation
-          sparse-checkout: projen/tasks/publish-npm.ts
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
       - name: Publish approved npm archives
         id: publish_approved_npm_archives
         env:
           RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
-          ACCEPT_STAGED: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && '--accept-staged' || '' }}
-          NPM_BOOTSTRAP: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && 'true' || 'false' }}
-          NODE_AUTH_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && secrets.NPM_TOKEN || '' }}
           NPM_CONFIG_PROVENANCE: ${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
-        run: |-
-          PUBLISH_TASK="node_modules/@dbx-tools/projen/tasks/publish-npm.ts"
-          if [ "$NPM_BOOTSTRAP" = "true" ]; then
-            export NPM_CONFIG_PROVENANCE=false
-            PUBLISH_TASK=".release-automation/projen/tasks/publish-npm.ts"
-          fi
-          bun "$PUBLISH_TASK" --directory dist/npm-release --version "$RELEASE_VERSION" $ACCEPT_STAGED $DRY_RUN
+        run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $DRY_RUN
     timeout-minutes: 30
   build-docs:
     needs: verify-context
@@ -363,27 +342,27 @@ jobs:
           if cargo info "dbx-tools-core@$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "skip published dbx-tools-core@$RELEASE_VERSION"
           else
-            cargo publish --package "dbx-tools-core" --registry crates-io --no-verify
+            cargo publish --package "dbx-tools-core" --registry crates-io --locked
           fi
           if cargo info "dbx-tools-google@$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "skip published dbx-tools-google@$RELEASE_VERSION"
           else
-            cargo publish --package "dbx-tools-google" --registry crates-io --no-verify
+            cargo publish --package "dbx-tools-google" --registry crates-io --locked
           fi
           if cargo info "dbx-tools-model@$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "skip published dbx-tools-model@$RELEASE_VERSION"
           else
-            cargo publish --package "dbx-tools-model" --registry crates-io --no-verify
+            cargo publish --package "dbx-tools-model" --registry crates-io --locked
           fi
           if cargo info "dbx-tools-service@$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "skip published dbx-tools-service@$RELEASE_VERSION"
           else
-            cargo publish --package "dbx-tools-service" --registry crates-io --no-verify
+            cargo publish --package "dbx-tools-service" --registry crates-io --locked
           fi
           if cargo info "dbx-tools-model-proxy@$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "skip published dbx-tools-model-proxy@$RELEASE_VERSION"
           else
-            cargo publish --package "dbx-tools-model-proxy" --registry crates-io --no-verify
+            cargo publish --package "dbx-tools-model-proxy" --registry crates-io --locked
           fi
   build-python:
     needs: verify-context

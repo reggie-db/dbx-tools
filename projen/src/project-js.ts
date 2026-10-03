@@ -15,7 +15,7 @@ import { type IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { BuildWorkflow } from "projen/lib/build";
 import { AutoMerge } from "projen/lib/github";
-import { JobPermission, type JobStep, type Triggers } from "projen/lib/github/workflows-model";
+import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
 import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
@@ -44,7 +44,6 @@ import { PROJEN_VERSION } from "./projen-version.ts";
 import { applyCompiledPublish } from "./publish.ts";
 import {
   DBXToolsReleaseCatalog,
-  type DBXToolsVersioningMode,
   type ExternalReleaseProjectRegistration,
   type ReleaseDependencyInput,
   type ReleaseUnitRule,
@@ -628,18 +627,12 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releaseValidationTasks?: readonly string[];
     /** Optional AI-generated release summary. Defaults to enabled. */
     readonly releaseSummary?: boolean | ReleaseSummaryOptions;
-    /** Existing source branch safely fast-forwarded after an independent release. */
-    readonly releaseSyncBranch?: string | false;
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
     readonly releaseMode?: DBXToolsReleaseMode;
-    /** Package version ownership mode. Defaults to `fixed`. */
-    readonly versioningMode?: DBXToolsVersioningMode;
     /** Explicit stable release-unit grouping rules. */
     readonly releaseUnits?: readonly ReleaseUnitRule[];
-    /** Commit before the first independent Release Please history. */
-    readonly releaseBootstrapSha?: string;
     /** Publishable workspace members synthesized outside the attached project tree. */
     readonly externalReleaseProjects?: readonly ExternalReleaseProjectRegistration[];
     /** Prefix for generated release tags. Defaults to `v`. */
@@ -723,10 +716,8 @@ export class DBXToolsNodeProject
     // (its build phase installs with pnpm and reads catalog + `allowBuilds`).
     pnpmWorkspace.attachWorkspaceFile(this);
     this.releaseCatalog = new DBXToolsReleaseCatalog(this, {
-      mode: options.versioningMode,
       units: options.releaseUnits,
       externalProjects: options.externalReleaseProjects,
-      bootstrapSha: options.releaseBootstrapSha,
     });
     registerJavaScriptReleaseProject(this);
     this.package.addField("version", () => this.releaseCatalog.versionFor(this));
@@ -862,10 +853,8 @@ export class DBXToolsTypeScriptProject
       (parent instanceof DBXToolsNodeProject || parent instanceof DBXToolsTypeScriptProject)
         ? parent.releaseCatalog
         : new DBXToolsReleaseCatalog(this, {
-            mode: options.versioningMode,
             units: options.releaseUnits,
             externalProjects: options.externalReleaseProjects,
-            bootstrapSha: options.releaseBootstrapSha,
           });
     // Pairs with `jsx` in SHARED_COMPILER_OPTIONS: projen's default `include` is
     // `src/**/*.ts` only, which silently omits a `.tsx` file from the program
@@ -937,35 +926,7 @@ function configureBuildWorkflow(
   });
   validation.exec("bunx projen default");
   validation.exec("bun run compile");
-  const configured = {
-    ...options.buildWorkflowOptions,
-    ...(!options.buildWorkflowOptions?.workflowTriggers &&
-    project.releaseCatalog.mode === "independent"
-      ? {
-          workflowTriggers: {
-            pullRequest: {
-              types: ["opened", "synchronize", "reopened", "closed"],
-              paths: [
-                "**",
-                "!.projen/release-units.json",
-                "!.release-please-manifest.json",
-                "!.release-units/**",
-                "!.release-notes/**",
-                "!docs/releases/**",
-                "!Cargo.lock",
-                "!**/Cargo.toml",
-                "!**/package.json",
-                "!**/pyproject.toml",
-                "!**/index.ts",
-                "!packages/js/node/rust-binary/src/_release-binaries.ts",
-                "!packages/js/node/appkit-graphiti/src/_python-runtime.ts",
-              ],
-            },
-            workflowDispatch: {},
-          } satisfies Triggers,
-        }
-      : {}),
-  };
+  const configured = { ...options.buildWorkflowOptions };
   const compatibility = nodeWorkflowCompatibility(project);
   const configuredRunner = configured.runsOn !== undefined || configured.runsOnGroup !== undefined;
   const workflow = new BuildWorkflow(project, {
@@ -1620,7 +1581,6 @@ function initProject(
       pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
       summary: options.releaseSummary,
-      syncBranch: options.releaseSyncBranch,
     });
   }
 }

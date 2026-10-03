@@ -15,6 +15,7 @@ import { join, relative, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
+import { runTaskCommand } from "../src/_task-command.ts";
 
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 const logger = log.logger("projen:publish-npm");
@@ -29,6 +30,7 @@ export interface NpmReleaseIdentity {
 }
 
 interface NpmArchiveManifest {
+  readonly [key: string]: unknown;
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly optionalDependencies?: Readonly<Record<string, string>>;
   readonly name?: string;
@@ -36,6 +38,10 @@ interface NpmArchiveManifest {
   readonly repository?: unknown;
   readonly version?: string;
 }
+
+export type NpmArchiveManifestTransform = (
+  manifest: NpmArchiveManifest,
+) => Readonly<Record<string, unknown>>;
 
 function normalizedRepository(value: unknown): string | undefined {
   const url =
@@ -82,11 +88,6 @@ export function npmReleaseMatches(
     throw new Error(`Published npm integrity does not match ${local.name}@${local.version}`);
   }
   return true;
-}
-
-/** Whether npm rejected a retry because the exact version is awaiting staged approval. */
-export function isStagedNpmConflict(output: string): boolean {
-  return /Cannot publish over previously staged version/i.test(output);
 }
 
 export async function publishedNpmRelease(
@@ -246,6 +247,7 @@ export function packNpmPackage(
   directory: string,
   destination: string,
   path = process.env.PATH ?? "",
+  transformManifest?: NpmArchiveManifestTransform,
 ): string {
   const executable = process.versions.bun ? process.execPath : "bun";
   exec.spawnSync(
@@ -264,11 +266,36 @@ export function packNpmPackage(
   if (archives.length !== 1) {
     throw new Error(`Expected one packed npm archive, found ${archives.length}`);
   }
-  return join(destination, archives[0]);
+  const archive = join(destination, archives[0]);
+  if (!transformManifest) return archive;
+
+  const temp = mkdtempSync(join(tmpdir(), "projen-npm-project-"));
+  try {
+    exec.spawnSync("tar", ["-xzf", archive, "-C", temp], {
+      cwd: process.cwd(),
+      stdout: "ignore",
+      stderr: "inherit",
+      stdin: "ignore",
+      check: true,
+    });
+    const manifestPath = join(temp, "package", "package.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as NpmArchiveManifest;
+    writeFileSync(manifestPath, `${JSON.stringify(transformManifest(manifest), null, 2)}\n`);
+    rmSync(archive, { force: true });
+    exec.spawnSync("tar", ["-czf", archive, "-C", temp, "package"], {
+      cwd: process.cwd(),
+      stdout: "ignore",
+      stderr: "inherit",
+      stdin: "ignore",
+      check: true,
+    });
+    return archive;
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
 }
 
 export async function publishNpmArchives(options: {
-  readonly acceptStaged?: boolean;
   readonly directory: string;
   readonly dryRun?: boolean;
   readonly registry?: string;
@@ -297,40 +324,13 @@ export async function publishNpmArchives(options: {
         continue;
       }
     }
-    const args = [
+    runTaskCommand(process.cwd(), "npm", [
       "publish",
       archive,
       ...(local.access ? ["--access", local.access] : []),
       ...(options.registry ? ["--registry", options.registry] : []),
       ...(options.dryRun ? ["--dry-run"] : []),
-    ];
-    if (!options.acceptStaged) {
-      exec.spawnSync("npm", args, {
-        cwd: process.cwd(),
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "ignore",
-        check: true,
-      });
-      continue;
-    }
-    const result = exec.spawnSync("npm", args, {
-      cwd: process.cwd(),
-      stdout: "capture",
-      stderr: "capture",
-      stdin: "ignore",
-      check: false,
-    });
-    if (result.exitCode === 0) {
-      logger.info(`staged ${local.name}@${local.version}`);
-      continue;
-    }
-    const output = `${result.stdout}\n${result.stderr}`;
-    if (isStagedNpmConflict(output)) {
-      logger.info(`skip staged ${local.name}@${local.version}`);
-      continue;
-    }
-    throw new Error(output.replace(/[^\x09\x0a\x0d\x20-\x7e]/g, ""));
+    ]);
   }
 }
 
@@ -338,18 +338,12 @@ if (import.meta.main) {
   const program = new Command();
   program
     .requiredOption("--directory <path>", "Directory containing npm archives")
-    .option("--accept-staged", "Treat an exact staged version as an idempotent success")
     .option("--version <version>", "Expected npm release version")
     .option("--registry <url>", "npm registry URL")
     .option("--dry-run", "Validate archives without publishing")
     .action(
-      (options: {
-        acceptStaged?: boolean;
-        directory: string;
-        dryRun?: boolean;
-        registry?: string;
-        version?: string;
-      }) => publishNpmArchives(options),
+      (options: { directory: string; dryRun?: boolean; registry?: string; version?: string }) =>
+        publishNpmArchives(options),
     );
   await program.parseAsync();
 }
