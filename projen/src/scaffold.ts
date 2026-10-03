@@ -2,7 +2,7 @@
  * Runs a projen re-synth, for the `sync` task and its watchers.
  */
 import { join } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
+import { runTaskCommand } from "./_task-command.ts";
 import { repoRoot } from "./packages.ts";
 
 /**
@@ -34,9 +34,5 @@ export function runSynth(options: { post?: boolean } = {}): void {
   else env.PROJEN_DISABLE_POST = "true";
   const projenrc = join(repoRoot, ".projenrc.ts");
   const args = process.versions.bun ? [projenrc] : ["--import", "tsx", projenrc];
-  exec.spawnSync(process.execPath, args, {
-    cwd: repoRoot,
-    env,
-    check: true,
-  });
+  runTaskCommand(repoRoot, process.execPath, args, { env });
 }

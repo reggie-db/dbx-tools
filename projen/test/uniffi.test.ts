@@ -19,11 +19,12 @@ import {
   makeDefaultedInterfaceParametersOptional,
   removeObsoleteInterfaceAliases,
 } from "../src/uniffi.ts";
+import { projectCargoRegistry } from "../tasks/publish-uniffi-local.ts";
 import {
   installPythonBindings,
   pythonBindingGeneratorArgs,
   pythonBindingGeneratorName,
-  stampPythonProject,
+  preparePythonProjectForPublication,
 } from "../tasks/uniffi-python.js";
 
 describe("UniFFI binding repair", () => {
@@ -168,7 +169,7 @@ export class StorageAdapterImpl implements StorageAdapter {}`;
       "",
       "[project]",
       'name = "fixture-app"',
-      'version = "0.0.0"',
+      'version = "1.2.3"',
       "dependencies = [",
       '  "fixture-core @ git+https://example.invalid/repo.git@main#subdirectory=python/core",',
       '  "external>=1",',
@@ -180,13 +181,43 @@ export class StorageAdapterImpl implements StorageAdapter {}`;
       toml: { parse, stringify },
       version: "1.2.3",
     };
-    const local = stampPythonProject(source, options);
-    const release = stampPythonProject(source, options);
+    const local = preparePythonProjectForPublication(source, options);
+    const release = preparePythonProjectForPublication(source, options);
     assert.equal(local, release);
     assert.deepEqual(parse(local).project, {
       name: "fixture-app",
       version: "1.2.3",
       dependencies: ["fixture-core==1.2.3", "external>=1"],
     });
+  });
+
+  it("projects Cargo registry metadata without rewriting dependency ownership", () => {
+    const document = parse(`
+[workspace.dependencies]
+dbx-tools-core = { path = "packages/rs/core", version = "1.2.3" }
+
+[dependencies]
+dbx-tools-core = { workspace = true }
+dbx-tools-model = { path = "../model", version = "1.2.3" }
+serde = "1"
+
+[dev-dependencies]
+dbx-tools-model = { path = "../model", version = "1.2.3" }
+`) as Record<string, unknown>;
+
+    projectCargoRegistry(document, new Set(["dbx-tools-core", "dbx-tools-model"]), "local");
+
+    const workspace = document.workspace as {
+      dependencies: Record<string, Record<string, unknown>>;
+    };
+    const dependencies = document.dependencies as Record<string, Record<string, unknown>>;
+    const development = document["dev-dependencies"] as Record<string, Record<string, unknown>>;
+    assert.equal(workspace.dependencies["dbx-tools-core"]?.registry, "local");
+    assert.equal(dependencies["dbx-tools-core"]?.registry, undefined);
+    assert.equal(dependencies["dbx-tools-core"]?.workspace, true);
+    assert.equal(dependencies["dbx-tools-model"]?.registry, "local");
+    assert.equal(dependencies["dbx-tools-model"]?.path, "../model");
+    assert.equal(development["dbx-tools-model"]?.registry, "local");
+    assert.equal(dependencies.serde?.registry, undefined);
   });
 });

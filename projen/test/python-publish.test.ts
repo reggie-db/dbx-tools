@@ -1,30 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
-import { parse } from "smol-toml";
-import { pythonDistributionPaths, stampPythonProjects } from "../tasks/publish-python.ts";
+import { describe, it } from "node:test";
+import { parse, stringify } from "smol-toml";
+import { pythonDistributionPaths } from "../tasks/publish-python.ts";
+import { preparePythonProjectForPublication } from "../tasks/uniffi-python.js";
 
-let outdir: string;
-
-before(() => {
-  outdir = mkdtempSync(join(tmpdir(), "python-publish-"));
-  for (const [directory, source] of [
-    ["core", `[project]\nname = "fixture-core"\nversion = "0.0.0"\ndependencies = []\n`],
-    [
-      "app",
-      `[project]\nname = "fixture-app"\nversion = "0.0.0"\ndependencies = ["fixture-core @ git+https://example.invalid/repo.git@main#subdirectory=python/core"]\n`,
-    ],
-  ] as const) {
-    mkdirSync(join(outdir, directory), { recursive: true });
-    writeFileSync(join(outdir, directory, "pyproject.toml"), source);
-  }
-});
-
-after(() => rmSync(outdir, { recursive: true, force: true }));
-
-describe("local Python release stamping", () => {
+describe("Python release packaging", () => {
   it("selects only publishable distributions", () => {
     const directory = mkdtempSync(join(tmpdir(), "python-distributions-"));
     try {
@@ -40,63 +23,34 @@ describe("local Python release stamping", () => {
     }
   });
 
-  it("stamps versions and sibling dependencies, then restores the workspace", () => {
-    const appPath = join(outdir, "app", "pyproject.toml");
-    const original = readFileSync(appPath, "utf8");
-    const restore = stampPythonProjects(outdir, "1.2.3");
-    const stamped = readFileSync(appPath, "utf8");
-    assert.deepEqual(parse(stamped).project, {
+  it("projects sibling registry dependencies without changing the release version", () => {
+    const prepared = preparePythonProjectForPublication(
+      `[project]\nname = "fixture-app"\nversion = "1.2.3"\ndependencies = ["fixture-core @ git+https://example.invalid/repo.git@main#subdirectory=python/core"]\n`,
+      {
+        packages: [{ directory: "core", name: "fixture-core", version: "1.2.3", uniffi: false }],
+        toml: { parse, stringify },
+        version: "1.2.3",
+      },
+    );
+    assert.deepEqual((parse(prepared) as { project: unknown }).project, {
       name: "fixture-app",
       version: "1.2.3",
       dependencies: ["fixture-core==1.2.3"],
     });
-    restore();
-    assert.equal(readFileSync(appPath, "utf8"), original);
   });
 
-  it("accepts projects already carrying the release version", () => {
-    const corePath = join(outdir, "core", "pyproject.toml");
-    const original = readFileSync(corePath, "utf8");
-    const restore = stampPythonProjects(outdir, "0.0.0");
-    assert.equal(readFileSync(corePath, "utf8"), original);
-    restore();
-    assert.equal(readFileSync(corePath, "utf8"), original);
-  });
-
-  it("stamps versions without replacing standalone Git dependencies when asked", () => {
-    const appPath = join(outdir, "app", "pyproject.toml");
-    const original = readFileSync(appPath, "utf8");
-    const restore = stampPythonProjects(outdir, "1.2.3", {
-      rewriteDependencies: false,
-    });
-    const stamped = parse(readFileSync(appPath, "utf8")).project as {
-      dependencies: string[];
-      version: string;
-    };
-    assert.equal(stamped.version, "1.2.3");
-    assert.deepEqual(stamped.dependencies, [
-      "fixture-core @ git+https://example.invalid/repo.git@main#subdirectory=python/core",
-    ]);
-    assert.deepEqual([...restore.paths].sort(), [
-      join(outdir, "app", "pyproject.toml"),
-      join(outdir, "core", "pyproject.toml"),
-    ]);
-    restore();
-    assert.equal(readFileSync(appPath, "utf8"), original);
-  });
-
-  it("restores every project when structured stamping fails", () => {
-    const appPath = join(outdir, "app", "pyproject.toml");
-    const corePath = join(outdir, "core", "pyproject.toml");
-    const appOriginal = readFileSync(appPath, "utf8");
-    const coreOriginal = readFileSync(corePath, "utf8");
-    writeFileSync(corePath, `[project]\nname = "fixture-core"\ndependencies = []\n`);
-    assert.throws(() => stampPythonProjects(outdir, "1.2.3"), /Missing Python project version/);
-    assert.equal(readFileSync(appPath, "utf8"), appOriginal);
-    assert.equal(
-      readFileSync(corePath, "utf8"),
-      `[project]\nname = "fixture-core"\ndependencies = []\n`,
+  it("rejects a package whose generated version differs from the release", () => {
+    assert.throws(
+      () =>
+        preparePythonProjectForPublication(
+          `[project]\nname = "fixture-core"\nversion = "0.0.0"\ndependencies = []\n`,
+          {
+            packages: [],
+            toml: { parse, stringify },
+            version: "1.2.3",
+          },
+        ),
+      /does not match release 1\.2\.3/,
     );
-    writeFileSync(corePath, coreOriginal);
   });
 });

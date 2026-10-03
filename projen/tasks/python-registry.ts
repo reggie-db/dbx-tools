@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
 import { net } from "@dbx-tools/shared-core";
+import { captureTaskCommand } from "../src/_task-command.ts";
 
 export interface LocalPythonRegistry {
   readonly indexUrl: string;
@@ -126,14 +126,7 @@ function splitIndexList(value: string | undefined): string[] {
 
 /** Read a `pip config get <key>`, treating pip's literal "undefined" as unset. */
 function pipConfig(key: string): string | undefined {
-  const res = exec.spawnSync("python", ["-m", "pip", "config", "get", key], {
-    cwd: process.cwd(),
-    stdout: "capture",
-    stderr: "ignore",
-    stdin: "ignore",
-    check: false,
-  });
-  const out = res.stdout?.trim();
+  const out = captureTaskCommand(process.cwd(), "python", ["-m", "pip", "config", "get", key]);
   return out && out !== "undefined" ? out : undefined;
 }
 

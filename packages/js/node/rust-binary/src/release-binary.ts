@@ -146,10 +146,7 @@ function cargoInstallArgs(command: ReleaseBinaryCommand, version: string, root: 
   return args;
 }
 
-/**
- * Install the crate into `tempDir/cargo` and return a `file://` source.
- * Unstamped local builds report `0.0.0`; `trustVersion` skips that check.
- */
+/** Install the exact crate version into `tempDir/cargo` and return a `file://` source. */
 async function cargoInstallSource(
   command: ReleaseBinaryCommand,
   version: string,
@@ -178,7 +175,7 @@ async function cargoInstallSource(
   }
   const extension = process.platform === "win32" ? ".exe" : "";
   const installed = join(root, "bin", `${command.binaryName}${extension}`);
-  return { url: pathToFileURL(installed).href, trustVersion: true };
+  return { url: pathToFileURL(installed).href };
 }
 
 /** Prefer a GitHub release archive; fall back to `cargo install --version`. */
@@ -254,8 +251,7 @@ export async function ensureReleaseBinary(
       minVersion: version,
       versionParser: (output) => {
         const installed = bin.parseVersion(output);
-        if (installed === version || installed === "0.0.0") return version;
-        return undefined;
+        return installed === version ? installed : undefined;
       },
     },
   );

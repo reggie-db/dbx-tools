@@ -85,10 +85,6 @@ export type ReleaseSummaryRunner = (
   prompt: string,
 ) => string | undefined | Promise<string | undefined>;
 
-function capture(root: string, command: string, args: string[]): string {
-  return captureTaskCommand(root, command, args);
-}
-
 function contentText(value: unknown): string | undefined {
   if (typeof value === "string") return stringUtils.trimToNull(value) ?? undefined;
   if (!Array.isArray(value)) return undefined;
@@ -162,7 +158,7 @@ async function runProvider(
   root: string,
   prompt: string,
 ): Promise<string | undefined> {
-  if (!capture(root, provider.command, [...provider.probeArgs])) return undefined;
+  if (!captureTaskCommand(root, provider.command, [...provider.probeArgs])) return undefined;
   let summary: string | undefined;
   let previousEventKey: string | undefined;
   const textOutput: string[] = [];
@@ -317,15 +313,17 @@ export async function generateReleaseSummary(options: {
   const output = join(options.root, relativeOutput);
   if (existsSync(output)) rmSync(output);
   const target =
-    options.toRef && capture(options.root, "git", ["rev-parse", "--verify", options.toRef])
+    options.toRef &&
+    captureTaskCommand(options.root, "git", ["rev-parse", "--verify", options.toRef])
       ? options.toRef
       : "HEAD";
   const range =
-    options.fromRef && capture(options.root, "git", ["rev-parse", "--verify", options.fromRef])
+    options.fromRef &&
+    captureTaskCommand(options.root, "git", ["rev-parse", "--verify", options.fromRef])
       ? `${options.fromRef}..${target}`
       : target;
   const scopedPaths = options.paths?.length ? [...options.paths] : ["."];
-  const commits = capture(options.root, "git", [
+  const commits = captureTaskCommand(options.root, "git", [
     "log",
     "--no-merges",
     "--format=%s%n%b",
@@ -333,7 +331,7 @@ export async function generateReleaseSummary(options: {
     "--",
     ...scopedPaths,
   ]);
-  const changedFiles = capture(options.root, "git", [
+  const changedFiles = captureTaskCommand(options.root, "git", [
     "diff",
     "--name-status",
     range,
@@ -341,7 +339,7 @@ export async function generateReleaseSummary(options: {
     ...scopedPaths,
     `:(exclude)${relativeOutput}`,
   ]);
-  const diffStat = capture(options.root, "git", [
+  const diffStat = captureTaskCommand(options.root, "git", [
     "diff",
     "--stat",
     range,

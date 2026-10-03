@@ -55,8 +55,7 @@ be unpacked automatically; a single-file archive needs no selector, while a
 selector can choose a binary from a larger archive. The selected file is
 normalized to mode `0755` and must report an acceptable version before it is
 atomically moved into place; the final renamed path runs the same validation
-again before returning. `trustVersion` on a `BinSource` skips `--version` when
-the producer already identified the requested version.
+again before returning.
 
 Every candidate runs with `--version` before it is accepted. Set
 `versionArgument` for a different argument and `minVersion` to require a partial

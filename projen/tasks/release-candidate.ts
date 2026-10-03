@@ -4,50 +4,22 @@
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as exec from "@dbx-tools/core/exec";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { json, log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
-import type { RustReleaseConfiguration } from "../src/_rust-release-workflow.ts";
-import { buildPythonProjects } from "./publish-python.ts";
 import { readNpmArchiveIdentity } from "./publish-npm.ts";
+import { buildPythonProjects } from "./publish-python.ts";
 import { buildReleaseAssets } from "./release-assets.ts";
 import {
   type ReleaseArtifactInput,
   type ReleaseArtifactRole,
+  verifyReleaseManifest,
   writeReleaseManifest,
 } from "./release-manifest.ts";
+import type { RustReleaseConfiguration } from "../src/_rust-release-workflow.ts";
+import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:release-candidate");
-
-function run(root: string, command: string, args: readonly string[], env = process.env): void {
-  exec.spawnSync(command, [...args], {
-    cwd: root,
-    env,
-    stdin: "ignore",
-    stdout: "inherit",
-    stderr: "inherit",
-    check: true,
-  });
-}
-
-function capture(
-  root: string,
-  command: string,
-  args: readonly string[],
-  env = process.env,
-): string {
-  return exec
-    .spawnSync(command, [...args], {
-      cwd: root,
-      env,
-      stdin: "ignore",
-      stdout: "capture",
-      stderr: "inherit",
-      check: true,
-    })
-    .stdout.trim();
-}
 
 function files(directory: string): string[] {
   if (!existsSync(directory)) return [];
@@ -123,17 +95,17 @@ function pruneDraftAssets(
   desired: ReadonlySet<string>,
   env: NodeJS.ProcessEnv,
 ): void {
-  const current = capture(
+  const current = captureTaskCommand(
     root,
     "gh",
     ["release", "view", tag, "--json", "assets", "--jq", ".assets[].name"],
-    env,
+    { env, check: true, stderr: "inherit" },
   )
     .split(/\r?\n/)
     .filter(Boolean);
   for (const name of current) {
     if (!desired.has(name)) {
-      run(root, "gh", ["release", "delete-asset", tag, name, "--yes"], env);
+      runTaskCommand(root, "gh", ["release", "delete-asset", tag, name, "--yes"], { env });
     }
   }
 }
@@ -150,7 +122,7 @@ function buildFacades(root: string, version: string): void {
   if (!configuration) return;
   for (const binding of configuration.bindings) {
     if (!binding.node || !binding.nodePackage) continue;
-    run(root, "node", [
+    runTaskCommand(root, "node", [
       ".projen/uniffi-release.mjs",
       "facade",
       "--node",
@@ -174,90 +146,98 @@ function ensureDraftRelease(options: {
   readonly notesFile?: string;
   readonly env: NodeJS.ProcessEnv;
 }): void {
-  const existingTag = exec.spawnSync("git", ["rev-parse", "--verify", `${options.tag}^{commit}`], {
-    cwd: options.root,
-    env: options.env,
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "ignore",
-    check: false,
-  });
-  if (existingTag.exitCode === 0) {
-    if (existingTag.stdout.trim() !== options.sha) {
+  const existingTag = captureTaskCommand(
+    options.root,
+    "git",
+    ["rev-parse", "--verify", `${options.tag}^{commit}`],
+    { env: options.env },
+  );
+  if (existingTag) {
+    if (existingTag !== options.sha) {
       throw new Error(`Release tag ${options.tag} does not point to ${options.sha}`);
     }
-    if (capture(options.root, "git", ["cat-file", "-t", options.tag], options.env) !== "tag") {
+    if (
+      captureTaskCommand(options.root, "git", ["cat-file", "-t", options.tag], {
+        env: options.env,
+        check: true,
+        stderr: "inherit",
+      }) !== "tag"
+    ) {
       throw new Error(`Release tag ${options.tag} must be annotated`);
     }
   } else {
-    run(
+    runTaskCommand(
       options.root,
       "git",
       ["tag", "-a", options.tag, options.sha, "-m", options.tag],
-      options.env,
+      { env: options.env },
     );
   }
-  const remoteTag = exec.spawnSync(
+  const remoteTag = taskCommandSucceeds(
+    options.root,
     "git",
     ["ls-remote", "--exit-code", "--tags", "origin", `refs/tags/${options.tag}`],
-    {
-      cwd: options.root,
-      env: options.env,
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      check: false,
-    },
+    { env: options.env },
   );
-  if (remoteTag.exitCode === 0) {
-    run(
+  if (remoteTag) {
+    runTaskCommand(
       options.root,
       "git",
       ["fetch", "--force", "origin", `+refs/tags/${options.tag}:refs/tags/${options.tag}`],
-      options.env,
+      { env: options.env },
     );
     if (
-      capture(options.root, "git", ["rev-parse", `${options.tag}^{commit}`], options.env) !==
-      options.sha
+      captureTaskCommand(options.root, "git", ["rev-parse", `${options.tag}^{commit}`], {
+        env: options.env,
+        check: true,
+        stderr: "inherit",
+      }) !== options.sha
     ) {
       throw new Error(`Remote release tag ${options.tag} does not point to ${options.sha}`);
     }
-    if (capture(options.root, "git", ["cat-file", "-t", options.tag], options.env) !== "tag") {
+    if (
+      captureTaskCommand(options.root, "git", ["cat-file", "-t", options.tag], {
+        env: options.env,
+        check: true,
+        stderr: "inherit",
+      }) !== "tag"
+    ) {
       throw new Error(`Remote release tag ${options.tag} must be annotated`);
     }
   } else {
-    run(options.root, "git", ["push", "origin", `refs/tags/${options.tag}`], options.env);
+    runTaskCommand(options.root, "git", ["push", "origin", `refs/tags/${options.tag}`], {
+      env: options.env,
+    });
   }
 
-  const release = exec.spawnSync("gh", ["release", "view", options.tag, "--json", "isDraft"], {
-    cwd: options.root,
-    env: options.env,
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "ignore",
-    check: false,
-  });
-  if (release.exitCode === 0) {
-    const state = JSON.parse(release.stdout) as { isDraft?: boolean };
-    if (state.isDraft !== true)
+  const release = captureTaskCommand(
+    options.root,
+    "gh",
+    ["release", "view", options.tag, "--json", "isDraft"],
+    { env: options.env },
+  );
+  if (release) {
+    const state = JSON.parse(release) as { isDraft?: boolean };
+    if (state.isDraft !== true) {
       throw new Error(`GitHub Release ${options.tag} is already published`);
+    }
     if (options.notesFile) {
-      run(
+      runTaskCommand(
         options.root,
         "gh",
         ["release", "edit", options.tag, "--title", options.tag, "--notes-file", options.notesFile],
-        options.env,
+        { env: options.env },
       );
     }
     return;
   }
   const notes =
     options.notesFile && existsSync(options.notesFile) ? ["--notes-file", options.notesFile] : [];
-  run(
+  runTaskCommand(
     options.root,
     "gh",
     ["release", "create", options.tag, "--draft", "--verify-tag", "--title", options.tag, ...notes],
-    options.env,
+    { env: options.env },
   );
 }
 
@@ -273,13 +253,24 @@ export function buildReleaseCandidate(options: {
 }): void {
   const root = resolve(options.root);
   const env = options.env ?? process.env;
-  if (capture(root, "git", ["rev-parse", "HEAD"], env) !== options.sha) {
+  if (
+    captureTaskCommand(root, "git", ["rev-parse", "HEAD"], {
+      env,
+      check: true,
+      stderr: "inherit",
+    }) !== options.sha
+  ) {
     throw new Error(`Release candidate must be built from ${options.sha}`);
   }
   if (readFileSync(join(root, "VERSION"), "utf8").trim() !== options.version) {
     throw new Error(`VERSION does not match ${options.version}`);
   }
-  const status = capture(root, "git", ["status", "--porcelain=v1", "--untracked-files=all"], env);
+  const status = captureTaskCommand(
+    root,
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all"],
+    { env, check: true, stderr: "inherit" },
+  );
   if (status) throw new Error("Release candidate source contains tracked changes");
 
   rmSync(join(root, "dist/release"), { recursive: true, force: true });
@@ -288,7 +279,7 @@ export function buildReleaseCandidate(options: {
     buildFacades(root, options.version);
   }
   const publishScript = fileURLToPath(new URL("./publish.ts", import.meta.url));
-  run(root, process.execPath, [
+  runTaskCommand(root, process.execPath, [
     publishScript,
     options.version,
     "--output",
@@ -318,6 +309,27 @@ export function buildReleaseCandidate(options: {
     tag: options.tag,
   });
   if (!options.upload) return;
+  uploadReleaseCandidate(options);
+}
+
+/** Attach an already-built and verified candidate to its draft GitHub Release. */
+export function uploadReleaseCandidate(options: {
+  readonly root: string;
+  readonly sha: string;
+  readonly tag: string;
+  readonly version: string;
+  readonly notesFile?: string;
+  readonly env?: NodeJS.ProcessEnv;
+}): void {
+  const root = resolve(options.root);
+  const env = options.env ?? process.env;
+  const uploadDirectory = join(root, "dist/release/upload");
+  verifyReleaseManifest({
+    directory: uploadDirectory,
+    gitSha: options.sha,
+    tag: options.tag,
+    version: options.version,
+  });
   const notesFile = join(root, "dist/release/release-notes.md");
   const summary =
     options.notesFile && existsSync(resolve(root, options.notesFile))
@@ -348,7 +360,9 @@ export function buildReleaseCandidate(options: {
     return priority(left) - priority(right) || left.localeCompare(right);
   });
   pruneDraftAssets(root, options.tag, new Set(uploadFiles.map((path) => basename(path))), env);
-  run(root, "gh", ["release", "upload", options.tag, ...uploadFiles, "--clobber"], env);
+  runTaskCommand(root, "gh", ["release", "upload", options.tag, ...uploadFiles, "--clobber"], {
+    env,
+  });
   logger.success(`uploaded draft release candidate ${options.tag}`);
 }
 
@@ -359,7 +373,8 @@ if (import.meta.main) {
     .requiredOption("--sha <sha>", "exact release commit")
     .option("--root <path>", "repository root")
     .option("--notes-file <path>", "draft release notes file")
-    .option("--upload", "create or update the draft GitHub Release")
+    .option("--upload", "create or update the draft GitHub Release after building")
+    .option("--upload-existing", "upload the existing verified candidate without rebuilding")
     .action(
       (options: {
         version: string;
@@ -368,15 +383,17 @@ if (import.meta.main) {
         root?: string;
         notesFile?: string;
         upload?: boolean;
+        uploadExisting?: boolean;
       }) => {
-        buildReleaseCandidate({
+        const candidateOptions = {
           root: options.root ?? projectUtils.root() ?? process.cwd(),
           sha: options.sha,
           tag: options.tag,
           version: options.version,
           ...(options.notesFile ? { notesFile: options.notesFile } : {}),
-          upload: options.upload,
-        });
+        };
+        if (options.uploadExisting) uploadReleaseCandidate(candidateOptions);
+        else buildReleaseCandidate({ ...candidateOptions, upload: options.upload });
       },
     )
     .parse();

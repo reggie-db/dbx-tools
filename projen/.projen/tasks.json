@@ -204,7 +204,6 @@
             "is-identifier",
             "openapi-typescript",
             "oxc-parser",
-            "release-please",
             "semver",
             "smol-toml",
             "ts-to-zod",

@@ -14,8 +14,6 @@ import {
   releaseSourceSteps,
 } from "./release-dispatch.ts";
 import {
-  independentReleaseSetupSteps,
-  registerIndependentPublicationJob,
   releaseTagPattern,
   releasePublishCondition,
   releaseStageCondition,
@@ -113,8 +111,6 @@ const DEFAULT_DEV_DEPENDENCIES = [
   "pyyaml>=6.0,<7",
   "ruff>=0.12,<1",
 ] as const;
-
-const quote = (value: string): string => JSON.stringify(value);
 
 /** Repository-relative path for a Python package directory. */
 export function pythonPackagePath(repository: PythonRepositoryOptions, directory: string): string {
@@ -279,10 +275,7 @@ export class DBXToolsPythonWorkspace extends Component {
     }));
     const resolvedOptions = { ...options, packages };
     this.requiresPython = options.requiresPython ?? ">=3.10";
-    this.version =
-      isDBXToolsJavaScriptProject()(project) && project.releaseCatalog.mode === "independent"
-        ? "0.0.0"
-        : readWorkspaceVersion(project.outdir);
+    this.version = readWorkspaceVersion(project.outdir);
     this.file = this.emitWorkspace(project, resolvedOptions, scope);
     this.packages = packages.map(
       (pkg) =>
@@ -462,92 +455,9 @@ export class DBXToolsPythonWorkspace extends Component {
     const uniffiPublications = this.uniffiPublications(options);
     const allPublications = [...publications, ...uniffiPublications];
     if (allPublications.length === 0) return;
-    const usesRustArtifacts = uniffiPublications.length > 0;
     const workflow = tryReleaseWorkflow(project);
     if (!workflow) {
       throw new Error("Python release requires the root dbx-tools release mode");
-    }
-    if (project.releaseCatalog.mode === "independent") {
-      workflow.addJob("build-python", {
-        if: usesRustArtifacts
-          ? "${{ always() && needs.release-plan.outputs.python == 'true' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
-          : "${{ needs.release-plan.outputs.python == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}",
-        needs: ["release-plan", ...(usesRustArtifacts ? ["rust-build"] : [])],
-        runsOn: ["ubuntu-latest"],
-        permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
-        timeoutMinutes: 20,
-        env: { BUN_VERSION },
-        steps: [
-          ...independentReleaseSetupSteps(project),
-          { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
-          ...uniffiPublications.map((publication) => ({
-            name: `Download ${publication.distribution} native wheels`,
-            uses: "actions/download-artifact@v8",
-            with: {
-              pattern: `${publication.distribution}--*--python-wheel`,
-              path: `dist/${publication.directory}`,
-              "merge-multiple": true,
-            },
-          })),
-          {
-            name: "Build affected distributions",
-            shell: "bash",
-            run: publications
-              .map(
-                (publication) =>
-                  `if jq -e --arg package ${quote(publication.distribution)} '.pythonPackages[] | select(.identity == $package)' dist/release-plan.json >/dev/null; then uv build --package ${quote(publication.distribution)} --out-dir dist/${publication.directory}; fi`,
-              )
-              .join("\n"),
-          },
-          {
-            name: "Validate affected distributions",
-            run: "find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) -print0 | xargs -0 uvx twine check",
-          },
-          {
-            name: "Upload distributions",
-            uses: "actions/upload-artifact@v7",
-            with: { name: "python-distributions", path: "dist", "retention-days": 7 },
-          },
-        ],
-      });
-      for (const publication of allPublications) {
-        const dependencyJobs = (publication.dependencies ?? []).map(
-          (dependency) => `publish-pypi-${dependency}`,
-        );
-        const dependencyCondition = dependencyJobs
-          .map((job) => `needs.${job}.result != 'failure' && needs.${job}.result != 'cancelled'`)
-          .join(" && ");
-        workflow.addJob(`publish-pypi-${publication.directory}`, {
-          if: `\${{ always() && needs.build-python.result == 'success' && contains(needs.release-plan.outputs.python_packages, '"identity":"${publication.distribution}"') && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python')${dependencyCondition ? ` && ${dependencyCondition}` : ""} }}`,
-          needs: ["release-plan", "build-python", ...dependencyJobs],
-          environment: {
-            name: publication.environment,
-            url:
-              options.environmentUrl ??
-              `https://pypi.org/project/${publication.distribution.replaceAll("_", "-")}/`,
-          },
-          runsOn: ["ubuntu-latest"],
-          permissions: { idToken: JobPermission.WRITE },
-          timeoutMinutes: 10,
-          steps: [
-            {
-              name: "Download distributions",
-              uses: "actions/download-artifact@v8",
-              with: { name: "python-distributions", path: "dist" },
-            },
-            {
-              name: `Publish ${publication.distribution} to PyPI`,
-              uses: "pypa/gh-action-pypi-publish@release/v1",
-              with: {
-                "packages-dir": `dist/${publication.directory}`,
-                "skip-existing": true,
-              },
-            },
-          ],
-        });
-        registerIndependentPublicationJob(workflow, `publish-pypi-${publication.directory}`);
-      }
-      return;
     }
     workflow.addJob("build-python", {
       if: releaseStageCondition("python", ["needs.verify-context.result == 'success'"]),
@@ -697,11 +607,10 @@ export class DBXToolsPythonWorkspace extends Component {
   ): void {
     const repository = this.githubRepository();
     const publications = this.trustedPublisherPublications(options);
-    const releaseTag = isDBXToolsJavaScriptProject()(project)
-      ? project.releaseCatalog.mode === "independent"
-        ? "*-v*"
-        : releaseTagPattern(project)
-      : "v*";
+    const releaseTag =
+      isDBXToolsJavaScriptProject()(project) && tryReleaseWorkflow(project)
+        ? releaseTagPattern(project)
+        : "v*";
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",

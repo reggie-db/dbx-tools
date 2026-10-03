@@ -237,7 +237,6 @@ const root = new project.DBXToolsNodeProject({
   },
   releasePythonRoot: PYTHON_ROOT,
   releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
-  releaseSyncBranch: "dev",
   pullRequestTitlePolicy: {
     types: ["feat", "fix", "chore"],
     requireScope: false,
@@ -300,7 +299,6 @@ readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
 root.gitignore.addPatterns(
   ".docs-build/",
   ".astro/",
-  ".worktrees/",
   ".home/",
   ".kanna/",
   "**/.logs/",

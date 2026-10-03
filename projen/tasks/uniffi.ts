@@ -1,5 +1,4 @@
 #!/usr/bin/env -S bun
-import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -16,6 +15,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { installPythonBindings } from "./uniffi-python.js";
+import { captureTaskCommand, runLoggedTaskCommand } from "../src/_task-command.ts";
 import { makeReadonly, makeWritable, stampGenerated } from "../src/generated.ts";
 import type { RustWorkspaceMapping } from "../src/project-rs.ts";
 import {
@@ -62,31 +62,22 @@ const normalizedOutput = (value: string): string =>
     .replace(/[ \t]+$/gm, "")
     .trim();
 const run = (command: string, args: string[]) => {
-  const result = spawnSync(command, args, { cwd: root, encoding: "utf8" });
-  const stdout = normalizedOutput(result.stdout ?? "");
-  const stderr = normalizedOutput(result.stderr ?? "");
-  if (stdout) process.stdout.write(`${stdout}\n`);
-  if (stderr) process.stderr.write(`${stderr}\n`);
-  if (result.error) {
-    throw new Error(`${command} failed: ${result.error.message}`, { cause: result.error });
-  }
-  if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
+  runLoggedTaskCommand(root, command, args, {
+    onLine: (line) => {
+      const normalized = normalizedOutput(line);
+      if (normalized) process.stdout.write(`${normalized}\n`);
+    },
+  });
 };
 
-const cargoMetadata = spawnSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
-  cwd: root,
-  encoding: "utf8",
-});
-if (cargoMetadata.error) {
-  throw new Error(`cargo metadata failed: ${cargoMetadata.error.message}`, {
-    cause: cargoMetadata.error,
-  });
-}
-if (cargoMetadata.status !== 0) {
-  throw new Error(`cargo metadata exited with ${cargoMetadata.status}`);
-}
-const cargoTargetRoot = (JSON.parse(cargoMetadata.stdout) as { target_directory?: unknown })
-  .target_directory;
+const cargoTargetRoot = (
+  JSON.parse(
+    captureTaskCommand(root, "cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+      check: true,
+      stderr: "inherit",
+    }),
+  ) as { target_directory?: unknown }
+).target_directory;
 if (typeof cargoTargetRoot !== "string" || !cargoTargetRoot) {
   throw new Error("cargo metadata returned no target_directory");
 }

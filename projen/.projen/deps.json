@@ -86,11 +86,6 @@
       "type": "runtime"
     },
     {
-      "name": "release-please",
-      "version": "17.11.2",
-      "type": "runtime"
-    },
-    {
       "name": "semver",
       "version": "^7.7.3",
       "type": "runtime"

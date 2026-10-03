@@ -20,13 +20,8 @@ import {
 } from "./_rust-project.ts";
 import {
   configureRustReleaseTask,
-  independentRustCargoPublishJob,
-  independentRustGitHubReleaseJob,
-  independentRustNativeNpmPublishJob,
-  independentRustNodeFacadePublishJob,
   orderRustBindings,
   planRustRelease,
-  rustBuildJob,
   rustCargoPublishJob,
 } from "./_rust-release-workflow.ts";
 import { toPosix } from "./packages.ts";
@@ -39,12 +34,7 @@ import {
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
 import { defaultReleaseUnitId, type ReleaseDependencyInput } from "./release-catalog.ts";
-import {
-  hasNodeRelease,
-  independentReleaseSetupSteps,
-  registerIndependentPublicationJob,
-  tryReleaseWorkflow,
-} from "./release.ts";
+import { tryReleaseWorkflow } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 export { discoverRustCrates, hasUniFFIBindings } from "./_rust-project.ts";
 export { orderRustBindings } from "./_rust-release-workflow.ts";
@@ -454,10 +444,7 @@ function planRustReleaseBinaries(
             component: defaultReleaseUnitId("rust", pkg.crateName),
             version: readWorkspaceVersion(project.outdir),
           };
-      const tagPrefix =
-        isDBXToolsJavaScriptProject()(project) && project.releaseCatalog.mode === "independent"
-          ? `${identity.component}-v`
-          : "v";
+      const tagPrefix = "v";
       return {
         command,
         description,
@@ -666,14 +653,6 @@ function createRustPackages(
       ...resolved.packageOptions[directory],
     };
     const name = `${resolved.scope}-${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`;
-    const version =
-      isDBXToolsJavaScriptProject()(project) && project.releaseCatalog.mode === "independent"
-        ? project.releaseCatalog.versionForRegistration(
-            "rust",
-            name,
-            `${resolved.root}/${directory}`,
-          )
-        : undefined;
     return new DBXToolsRustProject({
       parent: project,
       outdir: `${resolved.root}/${directory}`,
@@ -682,7 +661,6 @@ function createRustPackages(
       workspaceRoot: resolved.root,
       workspace: true,
       scope: resolved.scope,
-      ...(version ? { version } : {}),
       ...configured,
     });
   });
@@ -828,9 +806,7 @@ function configureRustWorkspaceFiles(
         .map((pkg) => `${resolved.root}/${pkg.packageOptions.directory}`),
       resolver: "2",
       package: {
-        ...(!isDBXToolsJavaScriptProject()(project) || project.releaseCatalog.mode === "fixed"
-          ? { version: readWorkspaceVersion(project.outdir) }
-          : {}),
+        version: readWorkspaceVersion(project.outdir),
         edition: options.edition ?? "2021",
         "rust-version": options.rustVersion ?? "1.82",
         license: options.license ?? DBX_TOOLS_LICENSE,
@@ -915,29 +891,6 @@ function rustReleaseDependencies(
   });
 }
 
-function configureIndependentRustVersions(
-  project: DBXToolsJavaScriptProject,
-  packages: readonly DBXToolsRustProject[],
-): void {
-  for (const pkg of packages) {
-    for (const [section, dependencies] of [
-      ["dependencies", pkg.packageOptions.dependencies],
-      ["dev-dependencies", pkg.packageOptions.devDependencies],
-    ] as const) {
-      for (const [name, dependency] of Object.entries(dependencies ?? {})) {
-        if (typeof dependency === "string" || !dependency.path) continue;
-        const dependencyPath = resolve(pkg.outdir, dependency.path);
-        const target = packages.find((candidate) => resolve(candidate.outdir) === dependencyPath);
-        if (!target) continue;
-        pkg.manifestFile.addOverride(
-          `${section}.${name}.version`,
-          project.releaseCatalog.versionFor(target),
-        );
-      }
-    }
-  }
-}
-
 /** Generated Rust workspace plus convention-derived UniFFI binding packages. */
 export class DBXToolsRustWorkspace extends Component {
   readonly packages: readonly DBXToolsRustProject[];
@@ -984,9 +937,6 @@ export class DBXToolsRustWorkspace extends Component {
             ),
           ],
         });
-      }
-      if (project.releaseCatalog.mode === "independent") {
-        configureIndependentRustVersions(project, this.packages);
       }
     }
     this.releaseBinaries = planRustReleaseBinaries(project, this.packages, resolved);
@@ -1097,29 +1047,6 @@ export class DBXToolsRustWorkspace extends Component {
       throw new Error("Rust release requires the root dbx-tools release mode");
     }
     configureRustReleaseTask(project, plan);
-    if (project.releaseCatalog.mode === "independent") {
-      if (plan.targets.length) {
-        workflow.addJob("rust-build", rustBuildJob(plan, independentReleaseSetupSteps(project)));
-      }
-      if (plan.publicCrates.length) {
-        workflow.addJob("publish-cargo", independentRustCargoPublishJob(project, plan));
-        registerIndependentPublicationJob(workflow, "publish-cargo");
-      }
-      if (plan.releaseBinaries.length) {
-        workflow.addJob("publish-github-release", independentRustGitHubReleaseJob(project, plan));
-        registerIndependentPublicationJob(workflow, "publish-github-release");
-      }
-      if (plan.nodeBindings.length && hasNodeRelease(project)) {
-        workflow.addJob("publish-native-npm", independentRustNativeNpmPublishJob(project));
-        registerIndependentPublicationJob(workflow, "publish-native-npm");
-        workflow.addJob(
-          "publish-node-facades",
-          independentRustNodeFacadePublishJob(project, plan.nodeBindings),
-        );
-        registerIndependentPublicationJob(workflow, "publish-node-facades");
-      }
-      return;
-    }
     if (plan.publicCrates.length) {
       workflow.addJob("publish-cargo", rustCargoPublishJob(plan));
     }

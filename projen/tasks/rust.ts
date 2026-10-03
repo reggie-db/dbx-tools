@@ -1,9 +1,9 @@
 #!/usr/bin/env -S bun
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { log, object } from "@dbx-tools/shared-core";
+import { runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import {
   discoverRustCrates,
@@ -27,7 +27,7 @@ function rustConfig(): RustWorkspaceMapping | undefined {
 }
 
 function cargoAvailable(): boolean {
-  return spawnSync("cargo", ["--version"], { stdio: "ignore" }).status === 0;
+  return taskCommandSucceeds(repoRoot, "cargo", ["--version"]);
 }
 
 function currentStructure(config: RustWorkspaceMapping): RustWorkspaceMapping {
@@ -74,17 +74,12 @@ function generate(binding: RustBindingMapping): void {
       ? ["--python", binding.python, "--python-module", binding.pythonModule ?? ""]
       : []),
   ];
-  const result = spawnSync(
-    process.execPath,
-    [
-      resolve(dirname(fileURLToPath(import.meta.url)), "uniffi.ts"),
-      "--crate",
-      binding.crate,
-      ...targets,
-    ],
-    { cwd: repoRoot, stdio: "inherit" },
-  );
-  if (result.status !== 0) throw new Error(`binding generation exited with ${result.status}`);
+  runTaskCommand(repoRoot, process.execPath, [
+    resolve(dirname(fileURLToPath(import.meta.url)), "uniffi.ts"),
+    "--crate",
+    binding.crate,
+    ...targets,
+  ]);
 }
 
 function* iterateAffectedRustBindings(

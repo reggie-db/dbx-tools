@@ -67,23 +67,18 @@ export const pythonProjectInfo = (source, toml) => {
   };
 };
 
-const compatibleRequirement = (version) => {
-  const [major, minor] = version.split(".").map(Number);
-  const upper = major === 0 ? `0.${minor + 1}.0` : `${major + 1}.0.0`;
-  return `>=${version},<${upper}`;
-};
-
-export const stampPythonProject = (
+export const preparePythonProjectForPublication = (
   source,
-  { packages, rewriteDependencies = true, usePackageVersions = false, toml, version },
+  { packages, rewriteDependencies = true, toml, version },
 ) => {
   const marker = source.startsWith("# ") ? source.slice(0, source.indexOf("\n")) : undefined;
   const document = toml.parse(source);
   const project = projectTable(document);
-  if (typeof project.version !== "string") {
-    throw new Error("Missing Python project version");
+  if (project.version !== version) {
+    throw new Error(
+      `Python project version ${String(project.version)} does not match release ${version}`,
+    );
   }
-  project.version = version;
   if (rewriteDependencies) {
     const dependencies = project.dependencies;
     if (dependencies !== undefined && !Array.isArray(dependencies)) {
@@ -95,15 +90,7 @@ export const stampPythonProject = (
           throw new Error("Python project dependencies must be strings");
         }
         const sibling = packages.find((candidate) => directSibling(dependency, candidate));
-        return sibling
-          ? `${sibling.name}${
-              usePackageVersions
-                ? sibling.uniffi
-                  ? `==${sibling.version}`
-                  : compatibleRequirement(sibling.version)
-                : `==${version}`
-            }`
-          : dependency;
+        return sibling ? `${sibling.name}==${version}` : dependency;
       });
     }
   }

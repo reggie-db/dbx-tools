@@ -14,7 +14,6 @@ import {
 } from "node:fs";
 import { platform } from "node:os";
 import { basename, delimiter, dirname, join, relative, resolve } from "node:path";
-import * as exec from "@dbx-tools/core/exec";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { json, log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
@@ -23,6 +22,11 @@ import type {
   RustReleaseConfiguration,
   RustReleaseTargetPlan,
 } from "../src/_rust-release-workflow.ts";
+import {
+  captureTaskCommand,
+  runLoggedTaskCommand,
+  taskCommandSucceeds,
+} from "../src/_task-command.ts";
 
 const logger = log.logger("projen:release-assets");
 const emoji = /[\p{Extended_Pictographic}\uFE0F\u200D]/gu;
@@ -39,55 +43,8 @@ interface ReleaseAsset {
   readonly size: number;
 }
 
-function run(
-  root: string,
-  command: string,
-  args: readonly string[],
-  env: NodeJS.ProcessEnv = process.env,
-): void {
-  const result = exec.spawnSync(command, [...args], {
-    cwd: root,
-    env,
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "capture",
-    check: false,
-  });
-  for (const line of `${result.stdout}\n${result.stderr}`.split(/\r?\n/)) {
-    if (line) logger.info(line.replace(emoji, ""));
-  }
-  if (result.exitCode !== 0) {
-    throw new Error(`${command} exited with ${result.exitCode}`);
-  }
-}
-
-function capture(
-  root: string,
-  command: string,
-  args: readonly string[],
-  env: NodeJS.ProcessEnv,
-): string {
-  return exec.spawnSync(command, [...args], {
-    cwd: root,
-    env,
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "inherit",
-    check: true,
-  }).stdout;
-}
-
-function commandSucceeds(root: string, command: string, args: readonly string[]): boolean {
-  return (
-    exec.spawnSync(command, [...args], {
-      cwd: root,
-      env: { ...process.env, PATH: releasePath() },
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      check: false,
-    }).exitCode === 0
-  );
+function logReleaseOutput(line: string): void {
+  logger.info(line.replace(emoji, ""));
 }
 
 function releasePath(): string {
@@ -110,7 +67,12 @@ export function missingLocalReleaseTools(root: string): string[] {
     ["zip", "zip", ["-v"]],
   ];
   return checks
-    .filter(([, command, args]) => !commandSucceeds(root, command, args))
+    .filter(
+      ([, command, args]) =>
+        !taskCommandSucceeds(root, command, args, {
+          env: { ...process.env, PATH: releasePath() },
+        }),
+    )
     .map(([name]) => name);
 }
 
@@ -205,7 +167,11 @@ function targetBuildEnvironment(
 
 function cargoTargetRoot(root: string, env: NodeJS.ProcessEnv): string {
   const metadata = json.parseRecord(
-    capture(root, "cargo", ["metadata", "--format-version", "1", "--no-deps"], env),
+    captureTaskCommand(root, "cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+      env,
+      check: true,
+      stderr: "inherit",
+    }),
   );
   if (typeof metadata?.target_directory !== "string") {
     throw new Error("Cargo metadata returned no target directory");
@@ -214,7 +180,13 @@ function cargoTargetRoot(root: string, env: NodeJS.ProcessEnv): string {
 }
 
 function rustHostTarget(root: string, env: NodeJS.ProcessEnv): string {
-  const host = /^host:\s+(.+)$/m.exec(capture(root, "rustc", ["-vV"], env))?.[1];
+  const host = /^host:\s+(.+)$/m.exec(
+    captureTaskCommand(root, "rustc", ["-vV"], {
+      env,
+      check: true,
+      stderr: "inherit",
+    }),
+  )?.[1];
   if (!host) throw new Error("rustc did not report a host target");
   return host;
 }
@@ -226,7 +198,7 @@ function buildBindingGenerators(
   env: NodeJS.ProcessEnv,
 ): void {
   if (configuration.bindings.length === 0) return;
-  run(
+  runLoggedTaskCommand(
     root,
     "cargo",
     [
@@ -241,7 +213,7 @@ function buildBindingGenerators(
       "--target",
       hostTarget,
     ],
-    env,
+    { env, onLine: logReleaseOutput },
   );
 }
 
@@ -255,7 +227,7 @@ function generatePythonBindings(
   for (const binding of configuration.bindings) {
     if (!binding.python) continue;
     const output = join(root, "dist/local-bindings", binding.crate);
-    run(
+    runLoggedTaskCommand(
       root,
       "node",
       [
@@ -270,7 +242,7 @@ function generatePythonBindings(
         "--output",
         output,
       ],
-      env,
+      { env, onLine: logReleaseOutput },
     );
     generated.set(binding.crate, join(output, `${binding.crate.replaceAll("-", "_")}.py`));
   }
@@ -286,7 +258,7 @@ function packageBindings(
   env: NodeJS.ProcessEnv,
 ): void {
   for (const binding of configuration.bindings) {
-    run(
+    runLoggedTaskCommand(
       root,
       "node",
       [
@@ -325,7 +297,7 @@ function packageBindings(
           ? ["--python-bindings", pythonBindings.get(binding.crate)!]
           : []),
       ],
-      env,
+      { env, onLine: logReleaseOutput },
     );
   }
 }
@@ -352,9 +324,15 @@ function packageBinaries(
     const output = join(root, "dist/release", binary.crate, target.node, "binary");
     const asset = join(output, releaseBinaryAssetName(binary.binary, target.node, target.os));
     if (target.os === "win32") {
-      run(root, "zip", ["-j", asset, source], env);
+      runLoggedTaskCommand(root, "zip", ["-j", asset, source], {
+        env,
+        onLine: logReleaseOutput,
+      });
     } else {
-      run(root, "tar", ["-C", dirname(source), "-czf", asset, basename(source)], env);
+      runLoggedTaskCommand(root, "tar", ["-C", dirname(source), "-czf", asset, basename(source)], {
+        env,
+        onLine: logReleaseOutput,
+      });
     }
   }
 }
@@ -418,8 +396,15 @@ function uploadAssets(
   assets: readonly ReleaseAsset[],
   manifest: string,
 ): void {
-  run(root, "gh", ["release", "upload", tag, ...assets.map((asset) => asset.path), "--clobber"]);
-  run(root, "gh", ["release", "upload", tag, manifest, "--clobber"]);
+  runLoggedTaskCommand(
+    root,
+    "gh",
+    ["release", "upload", tag, ...assets.map((asset) => asset.path), "--clobber"],
+    { onLine: logReleaseOutput },
+  );
+  runLoggedTaskCommand(root, "gh", ["release", "upload", tag, manifest, "--clobber"], {
+    onLine: logReleaseOutput,
+  });
 }
 
 /** Build all configured targets sequentially and optionally upload them. */
@@ -443,11 +428,17 @@ export function buildReleaseAssets(options: {
   buildBindingGenerators(root, configuration, hostTarget, env);
   const pythonBindings = generatePythonBindings(root, configuration, hostTarget, env);
   for (const target of configuration.targets) {
-    run(root, "rustup", ["target", "add", target.cargo], env);
+    runLoggedTaskCommand(root, "rustup", ["target", "add", target.cargo], {
+      env,
+      onLine: logReleaseOutput,
+    });
     const invocation = localTargetCommand(configuration, target);
     const buildEnv = targetBuildEnvironment(root, target, env);
     logger.info("building Rust release target", { target: target.cargo });
-    run(root, invocation.command, invocation.args, buildEnv);
+    runLoggedTaskCommand(root, invocation.command, invocation.args, {
+      env: buildEnv,
+      onLine: logReleaseOutput,
+    });
     packageBindings(root, configuration, target, options.version, pythonBindings, env);
     packageBinaries(root, configuration, target, targetRoot, env);
   }

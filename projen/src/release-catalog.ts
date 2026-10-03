@@ -1,24 +1,20 @@
 /**
  * Cross-language release-unit ownership and dependency graph.
  *
- * The catalog is the version lookup and release-planning seam shared by every
- * generated project. Fixed mode preserves the root VERSION contract while the
- * same registrations and graph are exercised before independent versions are
- * enabled.
+ * The catalog owns cross-language package identity, release grouping, and
+ * publication order. Every registered project reads its version from the root
+ * VERSION file.
  *
  * @module
  */
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
-import { Component, JsonFile, type Project } from "projen";
+import { Component, type Project } from "projen";
+import { probeTaskCommand } from "./_task-command.ts";
 import { toPosix } from "./packages.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
-
-/** Version source used by the generated workspace. */
-export type DBXToolsVersioningMode = "fixed" | "independent";
 
 /** Runtime family represented by a release project. */
 export type ReleaseProjectLanguage = "javascript" | "python" | "rust";
@@ -51,11 +47,6 @@ export interface ReleaseUnitRule {
 
 /** Root catalog configuration. */
 export interface DBXToolsReleaseCatalogOptions {
-  readonly mode?: DBXToolsVersioningMode;
-  readonly manifestFile?: string;
-  readonly graphFile?: string;
-  readonly releasePleaseConfigFile?: string;
-  readonly bootstrapSha?: string;
   readonly units?: readonly ReleaseUnitRule[];
   readonly externalProjects?: readonly ExternalReleaseProjectRegistration[];
 }
@@ -151,7 +142,6 @@ export interface ReleaseUnit {
 /** Generated execution graph consumed by validation and release tasks. */
 export interface ReleaseUnitGraph {
   readonly schemaVersion: 1;
-  readonly mode: DBXToolsVersioningMode;
   readonly units: readonly ReleaseUnit[];
   readonly projects: readonly ReleaseProjectNode[];
   readonly artifacts: readonly ReleaseArtifact[];
@@ -219,22 +209,6 @@ export function defaultPublishOrder(kind: ReleaseEdgeKind): boolean {
   return !["test", "development"].includes(kind);
 }
 
-/** Read one component version, falling back to fixed workspace compatibility. */
-export function readReleaseUnitVersion(
-  root: string,
-  component: string,
-  manifestFile = ".release-please-manifest.json",
-): string {
-  const path = resolve(root, manifestFile);
-  if (!existsSync(path)) return readWorkspaceVersion(root);
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  const version = parsed[`.release-units/${component}`];
-  if (typeof version !== "string") {
-    throw new Error(`Release Please manifest is missing .release-units/${component}`);
-  }
-  return version;
-}
-
 /**
  * Root release catalog shared by every generated language project.
  *
@@ -243,12 +217,6 @@ export function readReleaseUnitVersion(
  * after project construction.
  */
 export class DBXToolsReleaseCatalog extends Component {
-  readonly mode: DBXToolsVersioningMode;
-  readonly manifestFile: string;
-  readonly graphFile: string;
-  readonly releasePleaseConfigFile: string;
-  readonly bootstrapSha?: string;
-
   private readonly projects = new Map<Project, RegisteredProject>();
   private readonly externalProjects = new Map<string, ExternalReleaseProjectRegistration>();
   private readonly artifacts = new Map<string, RegisteredArtifact>();
@@ -257,37 +225,11 @@ export class DBXToolsReleaseCatalog extends Component {
     dependency: ReleaseDependencyInput;
   }> = [];
   private readonly rules: ReleaseUnitRule[];
-  private readonly markerFiles = new Set<string>();
 
   constructor(project: Project, options: DBXToolsReleaseCatalogOptions = {}) {
     super(project);
-    this.mode = options.mode ?? "fixed";
-    this.manifestFile = options.manifestFile ?? ".release-please-manifest.json";
-    this.graphFile = options.graphFile ?? ".projen/release-units.json";
-    this.releasePleaseConfigFile = options.releasePleaseConfigFile ?? "release-please-config.json";
-    this.bootstrapSha = options.bootstrapSha;
     this.rules = [...(options.units ?? [])];
     for (const external of options.externalProjects ?? []) this.registerExternalProject(external);
-    if (this.mode === "independent") {
-      new JsonFile(project, this.graphFile, {
-        marker: false,
-        readonly: true,
-        obj: () => this.graph(),
-      });
-      new JsonFile(project, this.releasePleaseConfigFile, {
-        marker: false,
-        readonly: true,
-        obj: () => this.releasePleaseConfig(),
-      });
-      project
-        .addTask("release:bootstrap", {
-          description: "Bootstrap Release Please state from release units",
-        })
-        .exec("bun node_modules/@dbx-tools/projen/tasks/release-bootstrap.ts");
-    } else {
-      project.tryRemoveFile(this.graphFile);
-      project.tryRemoveFile(this.releasePleaseConfigFile);
-    }
   }
 
   /** Register one attached Projen project. */
@@ -349,10 +291,7 @@ export class DBXToolsReleaseCatalog extends Component {
   versionFor(project: Project): string {
     const registered = this.projects.get(project);
     if (!registered) throw new Error(`Release project is not registered: ${project.outdir}`);
-    if (!resolveValue(registered.registration.publish ?? true)) {
-      return this.mode === "independent" ? "0.0.0" : readWorkspaceVersion(this.project.outdir);
-    }
-    return this.versionForUnit(this.unitFor(registered));
+    return this.workspaceVersion();
   }
 
   /** Stable unit, component, and version identity for a registered project. */
@@ -372,58 +311,23 @@ export class DBXToolsReleaseCatalog extends Component {
   }
 
   /** Current version for a project selected by its repository-relative path. */
-  versionForPath(path: string): string {
-    const normalized = toPosix(path).replace(/^\.\//, "") || ".";
-    const attached = [...this.projects.values()].find(
-      (registered) => this.projectId(registered.project) === normalized,
-    );
-    if (attached) return this.versionFor(attached.project);
-    const external = this.externalProjects.get(normalized);
-    if (!external) {
-      if (this.mode === "fixed") return readWorkspaceVersion(this.project.outdir);
-      throw new Error(`Release project path is not registered: ${normalized}`);
-    }
-    if (external.publish === false) {
-      return this.mode === "independent" ? "0.0.0" : readWorkspaceVersion(this.project.outdir);
-    }
-    const unit =
-      external.unit ??
-      this.rules.find(
-        (rule) =>
-          rule.projectPaths?.includes(normalized) ||
-          rule.projectIdentities?.includes(external.identity),
-      )?.id ??
-      defaultReleaseUnitId(external.language, external.identity);
-    return this.versionForUnit(unit);
+  versionForPath(_path: string): string {
+    return this.workspaceVersion();
   }
 
   /** Resolve a version before the corresponding Projen project is constructed. */
   versionForRegistration(
-    language: ReleaseProjectLanguage,
-    identity: string,
-    path: string,
-    unit?: string,
+    _language: ReleaseProjectLanguage,
+    _identity: string,
+    _path: string,
+    _unit?: string,
   ): string {
-    const normalized = toPosix(path).replace(/^\.\//, "") || ".";
-    const resolvedUnit =
-      unit ??
-      this.rules.find(
-        (rule) =>
-          rule.projectPaths?.includes(normalized) || rule.projectIdentities?.includes(identity),
-      )?.id ??
-      defaultReleaseUnitId(language, identity);
-    return this.versionForUnit(resolvedUnit);
+    return this.workspaceVersion();
   }
 
   /** Current version for a release unit. */
-  versionForUnit(unit: string): string {
-    if (this.mode === "fixed") return readWorkspaceVersion(this.project.outdir);
-    const component = this.rules.find((rule) => rule.id === unit)?.component ?? unit;
-    const versions = this.readIndependentVersions();
-    const key = `.release-units/${component}`;
-    const version = versions[key];
-    if (!version) throw new Error(`Release Please manifest is missing ${key}`);
-    return version;
+  versionForUnit(_unit: string): string {
+    return this.workspaceVersion();
   }
 
   /** Build and validate the normalized release graph. */
@@ -510,7 +414,7 @@ export class DBXToolsReleaseCatalog extends Component {
         return {
           id,
           component: unit.component,
-          version: this.versionForResolvedUnit(id, unit.component),
+          version: this.workspaceVersion(),
           projects: [...unit.projects].sort(),
           artifacts: [...unit.artifacts].sort(),
           sourceHash: hashStrings(hashes),
@@ -520,62 +424,12 @@ export class DBXToolsReleaseCatalog extends Component {
 
     return {
       schemaVersion: 1,
-      mode: this.mode,
       units: serializedUnits,
       projects,
       artifacts,
       edges,
       publishBatches: batches,
     };
-  }
-
-  /** Generated Release Please manifest-mode configuration. */
-  releasePleaseConfig(): Record<string, unknown> {
-    return {
-      $schema:
-        "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-      "release-type": "simple",
-      "separate-pull-requests": false,
-      "include-component-in-tag": true,
-      "include-v-in-tag": true,
-      ...(this.bootstrapSha ? { "bootstrap-sha": this.bootstrapSha } : {}),
-      packages: Object.fromEntries(
-        this.graph().units.map((unit) => [
-          `.release-units/${unit.component}`,
-          {
-            "release-type": "simple",
-            "package-name": unit.id,
-            component: unit.component,
-            "changelog-path": "CHANGELOG.md",
-            "version-file": "version.txt",
-          },
-        ]),
-      ),
-    };
-  }
-
-  public override preSynthesize(): void {
-    const graph = this.graph();
-    if (this.mode === "fixed") return;
-    for (const unit of graph.units) {
-      const path = `.release-units/${unit.component}/source.json`;
-      if (this.markerFiles.has(path)) continue;
-      this.markerFiles.add(path);
-      new JsonFile(this.project, path, {
-        marker: false,
-        readonly: true,
-        obj: () => {
-          const current = this.graph().units.find((candidate) => candidate.id === unit.id);
-          if (!current) throw new Error(`Release unit disappeared during synthesis: ${unit.id}`);
-          return {
-            schemaVersion: 1,
-            unit: current.id,
-            component: current.component,
-            sourceHash: current.sourceHash,
-          };
-        },
-      });
-    }
   }
 
   private projectNode(registered: RegisteredProject): ReleaseProjectNode {
@@ -651,6 +505,10 @@ export class DBXToolsReleaseCatalog extends Component {
     return toPosix(relative(this.project.outdir, project.outdir)) || ".";
   }
 
+  private workspaceVersion(): string {
+    return readWorkspaceVersion(this.project.outdir);
+  }
+
   private dependencies(
     byIdentity: ReadonlyMap<string, readonly ReleaseProjectNode[]>,
     byId: ReadonlyMap<string, ReleaseProjectNode>,
@@ -719,31 +577,6 @@ export class DBXToolsReleaseCatalog extends Component {
       [a.from, a.to, a.kind].join("\0").localeCompare([b.from, b.to, b.kind].join("\0")),
     );
   }
-
-  private versionForResolvedUnit(unit: string, component: string): string {
-    if (this.mode === "fixed") return readWorkspaceVersion(this.project.outdir);
-    const key = `.release-units/${component}`;
-    const version = this.readIndependentVersions()[key];
-    if (!version) throw new Error(`Release Please manifest is missing ${key} for ${unit}`);
-    return version;
-  }
-
-  private readIndependentVersions(): Record<string, string> {
-    const path = resolve(this.project.outdir, this.manifestFile);
-    if (!existsSync(path)) throw new Error(`Independent version manifest not found: ${path}`);
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error(`Independent version manifest must contain an object: ${path}`);
-    }
-    return Object.fromEntries(
-      Object.entries(parsed).map(([key, value]) => {
-        if (typeof value !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value)) {
-          throw new Error(`Invalid independent version for ${key}: ${String(value)}`);
-        }
-        return [key, value];
-      }),
-    );
-  }
 }
 
 /** Publish dependency batches ordered with dependencies before dependents. */
@@ -795,22 +628,23 @@ function hashPaths(root: string, paths: readonly string[]): string {
 
 function gitReleaseFiles(root: string, paths: readonly string[]): string[] | undefined {
   const relativePaths = paths.map((path) => toPosix(relative(root, path)));
-  try {
-    const output = execFileSync(
-      "git",
-      ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...relativePaths],
-      { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-    );
-    return output
-      .split("\0")
-      .filter(Boolean)
-      .map((path) => resolve(root, path))
-      .filter((path) => existsSync(path))
-      .filter((path) => paths.some((sourcePath) => trackedReleaseFile(sourcePath, path)))
-      .sort();
-  } catch {
-    return undefined;
-  }
+  const output = probeTaskCommand(root, "git", [
+    "ls-files",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+    "-z",
+    "--",
+    ...relativePaths,
+  ]);
+  if (output === undefined) return undefined;
+  return output
+    .split("\0")
+    .filter(Boolean)
+    .map((path) => resolve(root, path))
+    .filter((path) => existsSync(path))
+    .filter((path) => paths.some((sourcePath) => trackedReleaseFile(sourcePath, path)))
+    .sort();
 }
 
 function trackedReleaseFile(sourcePath: string, path: string): boolean {
