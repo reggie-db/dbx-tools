@@ -1,5 +1,10 @@
 {
   "name": "@dbx-tools/projen",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reggie-db/dbx-tools.git",
+    "directory": "projen"
+  },
   "scripts": {
     "build": "projen build",
     "clobber": "projen clobber",
