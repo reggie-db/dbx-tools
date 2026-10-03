@@ -79,6 +79,12 @@ describe("unified release workflow", () => {
       default: true,
       required: true,
     });
+    assert.deepEqual(inputs.npm_bootstrap, {
+      description: "Use NPM_TOKEN for one-time package creation before trusted publishing",
+      type: "boolean",
+      default: false,
+      required: true,
+    });
     assert.deepEqual(inputs.stage, {
       description: "Published release stage to validate or recover",
       type: "choice",
@@ -137,7 +143,10 @@ describe("unified release workflow", () => {
       publish.env?.NPM_CONFIG_PROVENANCE,
       "${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
-    assert.equal(publish.env?.NODE_AUTH_TOKEN, undefined);
+    assert.equal(
+      publish.env?.NODE_AUTH_TOKEN,
+      "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && secrets.NPM_TOKEN || '' }}",
+    );
     assert.equal(
       publish.env?.DRY_RUN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
