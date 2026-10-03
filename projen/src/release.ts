@@ -256,7 +256,12 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
       },
       {
         name: "Publish approved npm archives",
-        env: { RELEASE_VERSION, ...npmPublishEnvironment() },
+        env: {
+          RELEASE_VERSION,
+          NODE_AUTH_TOKEN:
+            "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && secrets.NPM_TOKEN || '' }}",
+          ...npmPublishEnvironment(),
+        },
         run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $DRY_RUN',
       },
     ],
@@ -1025,11 +1030,18 @@ export class DBXToolsRelease extends Component {
             default: "true",
             required: true,
           },
+          npm_bootstrap: {
+            description: "Use NPM_TOKEN for one-time package creation before trusted publishing",
+            type: "boolean",
+            default: "false",
+            required: true,
+          },
         },
       },
     });
     workflow.file?.addOverride("permissions.contents", "read");
     workflow.file?.addOverride("on.workflow_dispatch.inputs.dry_run.default", true);
+    workflow.file?.addOverride("on.workflow_dispatch.inputs.npm_bootstrap.default", false);
     workflow.addJob("verify-context", verifyContextJob(tagPrefix, releaseBranch));
     if (options.nodeRelease !== false) {
       workflow.addJob("publish-node", nodePublishJob(project));
