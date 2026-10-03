@@ -136,6 +136,17 @@ describe("unified release workflow", () => {
     });
     assert.equal(step(job, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.equal(step(job, "Save Bun cache").uses, "actions/cache/save@v5");
+    assert.deepEqual(step(job, "Checkout npm recovery automation").with, {
+      ref: "${{ github.workflow_sha }}",
+      path: ".release-automation",
+      "sparse-checkout": "projen/tasks/publish-npm.ts",
+      "sparse-checkout-cone-mode": false,
+      "persist-credentials": false,
+    });
+    assert.equal(
+      step(job, "Checkout npm recovery automation").if,
+      "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap }}",
+    );
 
     assert.ok(step(job, "Download approved npm archives").run?.includes("release-manifest.ts"));
     const publish = step(job, "Publish approved npm archives");
@@ -161,6 +172,7 @@ describe("unified release workflow", () => {
     );
     assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
     assert.ok(publish.run?.includes("export NPM_CONFIG_PROVENANCE=false"));
+    assert.ok(publish.run?.includes(".release-automation/projen/tasks/publish-npm.ts"));
     assert.ok(publish.run?.includes("$ACCEPT_STAGED"));
   });
 

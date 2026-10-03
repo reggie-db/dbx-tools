@@ -255,6 +255,18 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
         ].join("\n"),
       },
       {
+        name: "Checkout npm recovery automation",
+        if: "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap }}",
+        uses: "actions/checkout@v6",
+        with: {
+          ref: "${{ github.workflow_sha }}",
+          path: ".release-automation",
+          "sparse-checkout": "projen/tasks/publish-npm.ts",
+          "sparse-checkout-cone-mode": false,
+          "persist-credentials": false,
+        },
+      },
+      {
         name: "Publish approved npm archives",
         env: {
           RELEASE_VERSION,
@@ -267,8 +279,12 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
           ...npmPublishEnvironment(),
         },
         run: [
-          'if [ "$NPM_BOOTSTRAP" = "true" ]; then export NPM_CONFIG_PROVENANCE=false; fi',
-          'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $ACCEPT_STAGED $DRY_RUN',
+          'PUBLISH_TASK="node_modules/@dbx-tools/projen/tasks/publish-npm.ts"',
+          'if [ "$NPM_BOOTSTRAP" = "true" ]; then',
+          "  export NPM_CONFIG_PROVENANCE=false",
+          '  PUBLISH_TASK=".release-automation/projen/tasks/publish-npm.ts"',
+          "fi",
+          'bun "$PUBLISH_TASK" --directory dist/npm-release --version "$RELEASE_VERSION" $ACCEPT_STAGED $DRY_RUN',
         ].join("\n"),
       },
     ],
