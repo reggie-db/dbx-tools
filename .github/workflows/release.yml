@@ -739,7 +739,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}
     steps:
       - name: Checkout release commit
         id: checkout_release_commit
@@ -817,7 +817,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}
     steps:
       - name: Checkout release commit
         id: checkout_release_commit

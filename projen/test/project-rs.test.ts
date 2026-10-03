@@ -952,6 +952,10 @@ describe("DBXToolsRustWorkspace", () => {
       "Setup Rust",
       "Publish public crates",
     ]);
+    assert.equal(
+      cargoPublisher.if,
+      "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
+    );
     const cargoPublish = workflowStep(cargoPublisher, "Publish public crates").run!;
     assert.ok(cargoPublish.includes('--package "fixture-databricks-auth"'));
     assert.ok(cargoPublish.includes('--package "fixture-tool"'));
@@ -994,6 +998,10 @@ describe("DBXToolsRustWorkspace", () => {
       "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",
     );
     const githubReleaseJob = release.jobs["publish-github-release"]!;
+    assert.equal(
+      githubReleaseJob.if,
+      "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
+    );
     assert.equal(
       workflowStep(githubReleaseJob, "Checkout release commit").uses,
       "actions/checkout@v6",
