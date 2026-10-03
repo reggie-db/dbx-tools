@@ -16,7 +16,7 @@ default-members = [
 resolver = "2"
 
   [workspace.package]
-  version = "0.9.17"
+  version = "0.9.18"
   edition = "2021"
   rust-version = "1.90"
   license = "Apache-2.0"
@@ -88,6 +88,10 @@ resolver = "2"
     version = "0.25"
     default-features = false
     features = [ "jpeg", "png", "webp" ]
+
+    [workspace.dependencies.openssl-sys]
+    version = "0.9"
+    features = [ "vendored" ]
 
     [workspace.dependencies.oauth2]
     version = "5"

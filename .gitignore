@@ -103,7 +103,7 @@ packages/py/google-rs/src/dbx_tools/google_rs/*dbx_tools_google.*
 packages/js/node/model-rs/src/*dbx_tools_model.*
 !/Cargo.toml
 !/.cargo/config.toml
-!/.projen/rust-release.mjs
+!/.projen/rust-release.json
 !/.projen/uniffi-release.mjs
 !/.projen/uniffi-python.js
 !/.projen/smol-toml.cjs

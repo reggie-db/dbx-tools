@@ -71,6 +71,8 @@ export interface RustCrateOptions {
   readonly release?: boolean;
   /** Omit this crate and any release binary artifact from these operating systems. */
   readonly releaseExcludeOs?: readonly RustReleaseOs[];
+  /** Cargo features used only by the macOS cross-platform release builder. */
+  readonly releaseLocalFeatures?: readonly string[];
   readonly dependencies?: Readonly<Record<string, CargoDependency>>;
   /** Cargo dependencies scoped by a target cfg expression. */
   readonly targetDependencies?: Readonly<Record<string, Readonly<Record<string, CargoDependency>>>>;
@@ -221,6 +223,7 @@ function packageOptions(
     ...(options.private !== undefined ? { private: options.private } : {}),
     ...(options.release !== undefined ? { release: options.release } : {}),
     ...(options.releaseExcludeOs ? { releaseExcludeOs: options.releaseExcludeOs } : {}),
+    ...(options.releaseLocalFeatures ? { releaseLocalFeatures: options.releaseLocalFeatures } : {}),
     ...(options.dependencies ? { dependencies: options.dependencies } : {}),
     ...(options.targetDependencies ? { targetDependencies: options.targetDependencies } : {}),
     ...(options.devDependencies ? { devDependencies: options.devDependencies } : {}),

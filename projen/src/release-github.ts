@@ -28,6 +28,29 @@ export interface GithubAuthenticatedAccount {
   scopes: string[];
 }
 
+/** Repository capabilities returned for one authenticated actor. */
+export interface GithubRepositoryPermissions {
+  readonly push: boolean;
+  readonly maintain: boolean;
+  readonly admin: boolean;
+}
+
+/** Read normalized repository permissions from a GitHub repository response. */
+export function githubRepositoryPermissions(value: unknown): GithubRepositoryPermissions {
+  const repository = object.isRecord(value) ? value : undefined;
+  const permissions = object.isRecord(repository?.permissions) ? repository.permissions : undefined;
+  return {
+    push: permissions?.push === true,
+    maintain: permissions?.maintain === true,
+    admin: permissions?.admin === true,
+  };
+}
+
+/** Whether the actor can manage releases rather than only push source. */
+export function githubRepositoryCanManage(permissions: GithubRepositoryPermissions): boolean {
+  return permissions.maintain || permissions.admin;
+}
+
 /** Parse successful GitHub CLI accounts with the active account first. */
 export function githubAuthenticatedAccounts(
   statusOutput: string,

@@ -3,5 +3,5 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/core-rs";
-export const PACKAGE_VERSION = "0.9.17";
+export const PACKAGE_VERSION = "0.9.18";
 export * from "./src/bindings.ts";

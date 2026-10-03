@@ -117,6 +117,7 @@ export function releaseArtifactSteps(options: {
   readonly recoveredName: string;
   readonly pattern: string;
   readonly path: string;
+  readonly condition?: string;
 }): readonly JobStep[] {
   const shared = {
     pattern: options.pattern,
@@ -126,13 +127,13 @@ export function releaseArtifactSteps(options: {
   return [
     {
       name: options.currentName,
-      if: "${{ inputs.source_run_id == '' }}",
+      if: `\${{ ${options.condition ? `${options.condition} && ` : ""}inputs.source_run_id == '' }}`,
       uses: "actions/download-artifact@v8",
       with: shared,
     },
     {
       name: options.recoveredName,
-      if: "${{ inputs.source_run_id != '' }}",
+      if: `\${{ ${options.condition ? `${options.condition} && ` : ""}inputs.source_run_id != '' }}`,
       uses: "actions/download-artifact@v8",
       with: {
         ...shared,
@@ -179,6 +180,7 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
       release_tag: { stepId: "release", outputName: "release_tag" },
       expected_sha: { stepId: "release", outputName: "expected_sha" },
       release_version: { stepId: "release", outputName: "release_version" },
+      build_mode: { stepId: "release", outputName: "build_mode" },
     },
     steps: [
       {
@@ -186,7 +188,7 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
         uses: "actions/checkout@v6",
         with: {
           ref: "${{ github.event_name == 'push' && github.sha || inputs.expected_sha }}",
-          "fetch-depth": 2,
+          "fetch-depth": 0,
         },
       },
       {
@@ -205,6 +207,7 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
           EXPECTED_SHA:
             "${{ github.event_name == 'workflow_dispatch' && inputs.expected_sha || '' }}",
           DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
+          GH_TOKEN: "${{ github.token }}",
         },
         // prettier-ignore
         run: stringUtils.dedent(
@@ -246,9 +249,15 @@ function verifyContextJob(tagPrefix: string, releaseBranch: string): Job {
               case "\${{ inputs.source_run_id }}" in *[!0-9]*|"") exit 1 ;; esac
             fi
           fi
+          BUILD_MODE="$(git log -1 --format=%B -- VERSION | sed -n 's/^Release-Build: //p' | tail -1)"
+          case "$BUILD_MODE" in local|remote) ;; *) BUILD_MODE="remote" ;; esac
+          if [ "$BUILD_MODE" = "local" ] && ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --draft --title "$RELEASE_TAG" --target "$RELEASE_SHA"
+          fi
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "expected_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_mode=$BUILD_MODE" >> "$GITHUB_OUTPUT"
         `
           // ============================================================================
         ),
@@ -591,8 +600,7 @@ function independentReleasePlanJob(project: DBXToolsJavaScriptProject): Job {
       python_packages: { stepId: "plan", outputName: "python_packages" },
       rust_packages: { stepId: "plan", outputName: "rust_packages" },
       artifacts: { stepId: "plan", outputName: "artifacts" },
-      rust_uniffi_targets: { stepId: "plan", outputName: "rust_uniffi_targets" },
-      rust_binary_targets: { stepId: "plan", outputName: "rust_binary_targets" },
+      rust_targets: { stepId: "plan", outputName: "rust_targets" },
     },
     steps: [
       {
@@ -1021,6 +1029,11 @@ export class DBXToolsRelease extends Component {
               receiveArgs: true,
               description:
                 "Prepare, validate, locally publish, and automatically merge a release PR",
+            },
+            "release:assets": {
+              exec: taskScript(project, "release-assets.ts"),
+              receiveArgs: true,
+              description: "Build and upload native assets for an existing GitHub Release",
             },
           }
         : {}),

@@ -236,11 +236,7 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseValidationTasks: [
-    "docs:check-source",
-    "docs:check-readmes",
-    "rs:release-fingerprint",
-  ],
+  releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
   releaseSyncBranch: "dev",
   pullRequestTitlePolicy: {
     types: ["feat", "fix", "chore"],
@@ -1186,6 +1182,7 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
       defaultFeatures: false,
       features: ["jpeg", "png", "webp"],
     },
+    "openssl-sys": { version: "0.9", features: ["vendored"] },
     "mini-moka": "0.10",
     metrics: "0.24",
     "mime_guess": "2",
@@ -1264,10 +1261,13 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
     },
     google: {
       description: "Google integrations including Application Default Credentials",
+      releaseLocalFeatures: ["local-cross"],
+      features: { "local-cross": ["dep:openssl-sys"] },
       dependencies: {
         "async-trait": { workspace: true },
         [`${root.scope}-core`]: { path: "../core" },
         "google-cloud-auth": { workspace: true },
+        "openssl-sys": { workspace: true, optional: true },
         time: { workspace: true },
         tokio: { workspace: true },
         uniffi: { workspace: true },

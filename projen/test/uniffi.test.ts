@@ -102,6 +102,14 @@ export class StorageAdapterImpl implements StorageAdapter {}`;
         const legacy = join(packageRoot, "src", "fixture", "core_rs", "_generated");
         mkdirSync(legacy, { recursive: true });
         writeFileSync(join(legacy, "old.py"), "old");
+        const staleLibrary = join(
+          packageRoot,
+          "src",
+          "fixture",
+          "core_rs",
+          "libfixture_core.dylib",
+        );
+        writeFileSync(staleLibrary, "stale");
         const calls: Array<{ command: string; args: string[] }> = [];
         const result = installPythonBindings({
           crate,
@@ -124,6 +132,7 @@ export class StorageAdapterImpl implements StorageAdapter {}`;
           readonly: (statSync(result.bindings).mode & 0o200) === 0,
           calls,
           legacyExists: existsSync(legacy),
+          staleLibraryExists: existsSync(staleLibrary),
         };
       };
 
@@ -145,6 +154,8 @@ export class StorageAdapterImpl implements StorageAdapter {}`;
       );
       assert.equal(local.legacyExists, false);
       assert.equal(release.legacyExists, false);
+      assert.equal(local.staleLibraryExists, false);
+      assert.equal(release.staleLibraryExists, false);
     } finally {
       chmodSync(root, 0o755);
       rmSync(root, { recursive: true, force: true });

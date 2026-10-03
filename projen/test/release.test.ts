@@ -101,6 +101,8 @@ describe("unified release workflow", () => {
 
     const verifyJob = release.jobs["verify-context"]!;
     assert.deepEqual(verifyJob.permissions, { actions: "read", contents: "write" });
+    assert.equal(verifyJob.outputs?.build_mode, "${{ steps.release.outputs.build_mode }}");
+    assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
     const verify = step(verifyJob, "Verify release context");
     assert.equal(
       verify.env?.DRY_RUN,
@@ -118,6 +120,8 @@ describe("unified release workflow", () => {
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
     assert.ok(verify.run?.includes('test "$RELEASE_SHA" = "$EXPECTED_SHA"'));
+    assert.ok(verify.run?.includes("git log -1 --format=%B -- VERSION"));
+    assert.ok(verify.run?.includes('gh release create "$RELEASE_TAG" --draft'));
     assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_TYPE" = "tag"/);
     assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_NAME" = "\$RELEASE_TAG"/);
     assert.ok(verify.run?.includes("inputs.source_run_id"));
@@ -318,7 +322,7 @@ describe("release task contracts", () => {
     assert.match(releasePr, /\["push", "--no-verify", "--set-upstream", "origin", releaseBranch\]/);
     assert.ok(
       releasePr.indexOf("await publishLocalRelease") <
-        releasePr.indexOf('git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`])'),
+        releasePr.indexOf("`chore(release): ${next.version}`"),
     );
     const localCargo = readFileSync(
       join(import.meta.dirname, "..", "tasks", "publish-uniffi-local.ts"),
@@ -337,6 +341,7 @@ describe("release task contracts", () => {
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('"--no-approve",'));
     assert.ok(releasePr.includes('"--no-wait",'));
+    assert.ok(releasePr.includes('"--build <mode>"'));
     assert.ok(releasePr.includes('"--no-validate",'));
     assert.ok(releasePr.includes('"--no-local-publish",'));
     assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--auto",\s*"--merge"/);
