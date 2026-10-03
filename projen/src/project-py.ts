@@ -624,13 +624,16 @@ export class DBXToolsPythonWorkspace extends Component {
       ],
     });
     for (const publication of allPublications) {
+      const dependencyJobs = (publication.dependencies ?? []).map(
+        (dependency) => `publish-pypi-${dependency}`,
+      );
       workflow.addJob(`publish-pypi-${publication.directory}`, {
-        if: releasePublishCondition("python"),
-        needs: [
-          "verify-context",
-          "build-python",
-          ...(publication.dependencies ?? []).map((dependency) => `publish-pypi-${dependency}`),
-        ],
+        if: releasePublishCondition("python", [
+          "needs.verify-context.result == 'success'",
+          "needs.build-python.result == 'success'",
+          ...dependencyJobs.map((job) => `needs['${job}'].result == 'success'`),
+        ]),
+        needs: ["verify-context", "build-python", ...dependencyJobs],
         environment: {
           name: publication.environment,
           url:

@@ -954,7 +954,7 @@ describe("DBXToolsRustWorkspace", () => {
     ]);
     assert.equal(
       cargoPublisher.if,
-      "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
+      "${{ always() && needs.verify-context.result == 'success' && needs.rust-assets.result == 'success' && (github.event_name == 'push' || (inputs.dry_run != true && inputs.stage == 'all')) }}",
     );
     const cargoPublish = workflowStep(cargoPublisher, "Publish public crates").run!;
     assert.ok(cargoPublish.includes('--package "fixture-databricks-auth"'));
@@ -974,7 +974,7 @@ describe("DBXToolsRustWorkspace", () => {
     );
     assert.equal(
       workflowStep(nativeNpm, "Publish native npm packages").env?.NPM_CONFIG_PROVENANCE,
-      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
+      "${{ (github.event_name == 'push' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
     assert.ok(
       workflowStep(nativeNpm, "Publish native npm packages").run?.includes("publish-npm.ts"),
@@ -983,13 +983,17 @@ describe("DBXToolsRustWorkspace", () => {
     assert.ok(release.jobs["publish-node"]?.if?.includes("needs.publish-native-npm.result"));
     const nodeFacades = release.jobs["publish-node-facades"]!;
     assert.deepEqual(nodeFacades.needs, ["verify-context", "publish-node"]);
+    assert.equal(
+      nodeFacades.if,
+      "${{ always() && (needs.verify-context.result == 'success') && (needs.publish-node.result == 'success') && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
+    );
     const facadePublish = workflowStep(nodeFacades, "Build and publish UniFFI npm facades");
     assert.ok(facadePublish.run?.includes("uniffi-release.mjs facade"));
     assert.ok(facadePublish.run?.includes("publish-npm.ts"));
     assert.equal(facadePublish.run?.includes("--native-package"), false);
     assert.equal(
       facadePublish.env?.NPM_CONFIG_PROVENANCE,
-      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
+      "${{ (github.event_name == 'push' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
     const smoke = workflowStep(nodeFacades, "Smoke test published UniFFI npm facades");
     assert.equal(smoke["continue-on-error"], true);
@@ -1000,7 +1004,7 @@ describe("DBXToolsRustWorkspace", () => {
     const githubReleaseJob = release.jobs["publish-github-release"]!;
     assert.equal(
       githubReleaseJob.if,
-      "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
+      "${{ always() && needs.verify-context.result == 'success' && needs.rust-assets.result == 'success' && (github.event_name == 'push' || (inputs.dry_run != true && inputs.stage == 'all')) }}",
     );
     assert.equal(
       workflowStep(githubReleaseJob, "Checkout release commit").uses,

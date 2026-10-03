@@ -179,7 +179,7 @@ describe("DBXToolsPythonWorkspace", () => {
     });
     assert.equal(
       release.jobs["publish-pypi-native-rs"]?.if,
-      "${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}",
+      "${{ always() && (needs.verify-context.result == 'success') && (needs.build-python.result == 'success') && (github.event_name == 'push' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'python'))) }}",
     );
     assert.equal(
       workflowStep(release.jobs["publish-pypi-native-rs"]!, "Publish fixture-native-rs to PyPI")
