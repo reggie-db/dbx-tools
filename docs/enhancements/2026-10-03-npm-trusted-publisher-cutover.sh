@@ -10,7 +10,7 @@ readonly release_sha="a426a0dbf8aa0acfed0ba8566101dc1cdad38d1b"
 readonly expected_package_count="63"
 readonly npm_version="11.19.0"
 
-readonly expected_stages=(
+readonly cutover_packages=(
   "@dbx-tools/appkit-mastra@0.9.19"
   "@dbx-tools/appkit-web-search@0.9.19"
   "@dbx-tools/cli-tunnel@0.9.19"
@@ -88,35 +88,50 @@ npm_cmd login --auth-type=web --registry="$registry"
 stages_json="$temporary_directory/stages.json"
 npm_cmd stage list --json --registry="$registry" >"$stages_json"
 
-for spec in "${expected_stages[@]}"; do
+approved_stage_count=0
+for spec in "${cutover_packages[@]}"; do
   package="${spec%@*}"
   version="${spec##*@}"
-  stage_id="$(
-    jq -r --arg package "$package" --arg version "$version" '
-      [.[] | select(.packageName == $package and .version == $version) | .id] |
-      if length == 1 then .[0] else empty end
-    ' "$stages_json"
+  stage_count="$(
+    jq --arg package "$package" --arg version "$version" \
+      '[.[] | select(.packageName == $package and .version == $version)] | length' \
+      "$stages_json"
   )"
-  if [[ -z "$stage_id" ]]; then
-    printf 'Expected exactly one staged release for %s\n' "$spec" >&2
+  if [[ "$stage_count" -gt 1 ]]; then
+    printf 'Found multiple staged releases for %s\n' "$spec" >&2
     exit 1
   fi
-  printf 'Approving %s (%s)\n' "$spec" "$stage_id"
-  npm_cmd stage approve "$stage_id" --registry="$registry"
+  if [[ "$stage_count" == "1" ]]; then
+    stage_id="$(
+      jq -r --arg package "$package" --arg version "$version" \
+        '.[] | select(.packageName == $package and .version == $version) | .id' \
+        "$stages_json"
+    )"
+    printf 'Approving %s (%s)\n' "$spec" "$stage_id"
+    npm_cmd stage approve "$stage_id" --registry="$registry"
+    approved_stage_count=$((approved_stage_count + 1))
+    continue
+  fi
+
+  published_version="$(npm_cmd view "$spec" version --json --registry="$registry")"
+  if [[ "$(jq -r . <<<"$published_version")" != "$version" ]]; then
+    printf 'Neither a stage nor the published version exists for %s\n' "$spec" >&2
+    exit 1
+  fi
+  printf 'Already published: %s\n' "$spec"
 done
 
 while IFS= read -r package; do
   trust_json="$temporary_directory/trust.json"
-  if npm_cmd trust list "$package" --json --registry="$registry" >"$trust_json" 2>/dev/null; then
-    if trust_matches <"$trust_json"; then
-      printf 'Trusted publisher already configured for %s\n' "$package"
-      continue
-    fi
-    if [[ "$(jq 'length' "$trust_json" 2>/dev/null || printf '1')" != "0" ]]; then
-      printf 'Conflicting trusted publisher configuration for %s:\n' "$package" >&2
-      cat "$trust_json" >&2
-      exit 1
-    fi
+  npm_cmd trust list "$package" --json --registry="$registry" >"$trust_json"
+  if trust_matches <"$trust_json"; then
+    printf 'Trusted publisher already configured for %s\n' "$package"
+    continue
+  fi
+  if [[ "$(jq 'length' "$trust_json")" != "0" ]]; then
+    printf 'Conflicting trusted publisher configuration for %s:\n' "$package" >&2
+    cat "$trust_json" >&2
+    exit 1
   fi
 
   printf 'Configuring trusted publisher for %s\n' "$package"
@@ -137,7 +152,7 @@ while IFS= read -r package; do
 done <"$packages"
 
 npm_cmd stage list --json --registry="$registry" >"$stages_json"
-for spec in "${expected_stages[@]}"; do
+for spec in "${cutover_packages[@]}"; do
   package="${spec%@*}"
   version="${spec##*@}"
   if jq -e --arg package "$package" --arg version "$version" \
@@ -146,7 +161,13 @@ for spec in "${expected_stages[@]}"; do
     printf 'Stage still pending for %s\n' "$spec" >&2
     exit 1
   fi
+
+  published_version="$(npm_cmd view "$spec" version --json --registry="$registry")"
+  if [[ "$(jq -r . <<<"$published_version")" != "$version" ]]; then
+    printf 'Published version verification failed for %s\n' "$spec" >&2
+    exit 1
+  fi
 done
 
-printf 'Approved %s staged packages and verified %s trusted publishers.\n' \
-  "${#expected_stages[@]}" "$package_count"
+printf 'Approved %s pending stages, verified %s cutover versions, and verified %s trusted publishers.\n' \
+  "$approved_stage_count" "${#cutover_packages[@]}" "$package_count"
