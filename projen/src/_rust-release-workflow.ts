@@ -576,7 +576,7 @@ export function rustCargoPublishJob(plan: RustReleasePlan, local: boolean): Job 
   return {
     if: local
       ? "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}"
-      : "${{ github.event_name == 'push' }}",
+      : "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
     needs: ["verify-context", ...(plan.hasTargetOutputs ? ["rust-assets"] : [])],
     runsOn: [local ? "self-hosted" : "ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
@@ -684,7 +684,7 @@ export function independentRustGitHubReleaseJob(
 
 export function rustGitHubReleaseJob(plan: RustReleasePlan): Job {
   return {
-    if: "${{ github.event_name == 'push' }}",
+    if: "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
     needs: ["verify-context", ...(plan.hasTargetOutputs ? ["rust-assets"] : [])],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
