@@ -938,7 +938,12 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(stepNames(rustBuild).includes("Setup sccache"), false);
     assert.equal(existsSync(join(outdir, ".projen/rust-release.json")), true);
     assert.equal(existsSync(join(outdir, ".projen/rust-release.mjs")), false);
-    assert.ok(release.jobs["rust-assets"]);
+    const rustAssets = release.jobs["rust-assets"]!;
+    assert.deepEqual(rustAssets.permissions, { contents: "write" });
+    assert.equal(
+      workflowStep(rustAssets, "Wait for locally uploaded release assets").env?.GH_REPO,
+      "${{ github.repository }}",
+    );
     assert.equal(existsSync(join(outdir, ".github/workflows/rust-cache.yml")), false);
     const cargoPublisher = release.jobs["publish-cargo"]!;
     assert.deepEqual(stepNames(cargoPublisher), [

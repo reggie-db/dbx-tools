@@ -121,7 +121,11 @@ describe("unified release workflow", () => {
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
     assert.ok(verify.run?.includes('test "$RELEASE_SHA" = "$EXPECTED_SHA"'));
     assert.ok(verify.run?.includes("git log -1 --format=%B -- VERSION"));
-    assert.ok(verify.run?.includes('gh release create "$RELEASE_TAG" --draft'));
+    assert.doesNotMatch(verify.run ?? "", /gh release create/);
+    const draft = step(verifyJob, "Prepare local draft release");
+    assert.equal(draft.if, "${{ steps.release.outputs.build_mode == 'local' }}");
+    assert.equal(draft.env?.GH_REPO, "${{ github.repository }}");
+    assert.ok(draft.run?.includes('gh release create "$RELEASE_TAG" --draft'));
     assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_TYPE" = "tag"/);
     assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_NAME" = "\$RELEASE_TAG"/);
     assert.ok(verify.run?.includes("inputs.source_run_id"));
