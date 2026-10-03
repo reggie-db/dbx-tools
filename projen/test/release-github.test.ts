@@ -5,7 +5,9 @@ import {
   githubAccountSupportsWorkflowChanges,
   githubAuthenticatedAccounts,
   githubRepositoryApiPath,
+  githubRepositoryCanManage,
   githubRepositoryIdentity,
+  githubRepositoryPermissions,
   githubRepositorySpecifier,
   githubTokenArguments,
   githubTokenEnvironmentName,
@@ -98,5 +100,17 @@ describe("release GitHub identity", () => {
     assert.equal(githubRepositorySpecifier(identity), "github.corp.example/collaborator/repo");
     assert.equal(githubTokenEnvironmentName("github.corp.example"), "GH_ENTERPRISE_TOKEN");
     assert.equal(githubTokenEnvironmentName("tenant.ghe.com"), "GH_TOKEN");
+  });
+
+  it("distinguishes release managers from source writers", () => {
+    const writer = githubRepositoryPermissions({
+      permissions: { push: true, maintain: false, admin: false },
+    });
+    const manager = githubRepositoryPermissions({
+      permissions: { push: true, maintain: true, admin: false },
+    });
+    assert.deepEqual(writer, { push: true, maintain: false, admin: false });
+    assert.equal(githubRepositoryCanManage(writer), false);
+    assert.equal(githubRepositoryCanManage(manager), true);
   });
 });

@@ -119,7 +119,7 @@ describe("release plan", () => {
     assert.throws(() => buildRecoveryReleasePlan(current, "node-core", "9.9.9"), /does not match/);
   });
 
-  it("separates UniFFI and binary target plans", () => {
+  it("combines UniFFI and binary inputs into one target plan", () => {
     const target = {
       os: "linux",
       cpu: "x64",
@@ -204,21 +204,12 @@ describe("release plan", () => {
     };
 
     const plan = buildReleasePlan(releaseGraph, previous);
-    assert.deepEqual(plan.rustUniffiTargets[0], {
+    assert.deepEqual(plan.rustTargets[0], {
       ...target,
-      packages: ["fixture-core"],
-      binaries: [],
-      features: ["fixture-core/uniffi-bindgen"],
-      fingerprintConfig:
-        '{"packages":["fixture-core"],"binaries":[],"features":["fixture-core/uniffi-bindgen"]}',
-    });
-    assert.deepEqual(plan.rustBinaryTargets[0], {
-      ...target,
-      packages: ["fixture-tool"],
+      glibcVersion: "",
+      packages: ["fixture-core", "fixture-tool"],
       binaries: ["fixture-tool-tray"],
-      features: ["fixture-tool/tray"],
-      fingerprintConfig:
-        '{"packages":["fixture-tool"],"binaries":["fixture-tool-tray"],"features":["fixture-tool/tray"]}',
+      features: ["fixture-core/uniffi-bindgen", "fixture-tool/tray"],
     });
   });
 });

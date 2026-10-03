@@ -29,6 +29,7 @@ path = "uniffi-bindgen.rs"
 required-features = [ "uniffi-bindgen" ]
 
 [features]
+local-cross = [ "dep:openssl-sys" ]
 uniffi-bindgen = [ "uniffi/cli" ]
 
 [dependencies.async-trait]
@@ -40,6 +41,10 @@ path = "../core"
 
 [dependencies.google-cloud-auth]
 workspace = true
+
+[dependencies.openssl-sys]
+workspace = true
+optional = true
 
 [dependencies.time]
 workspace = true

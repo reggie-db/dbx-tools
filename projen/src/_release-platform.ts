@@ -22,6 +22,16 @@ export type ReleaseArch = (typeof RELEASE_ARCHES)[number];
 
 export type { VersionLevel } from "./workspace-version.ts";
 
+/** Stable archive name for one native release binary. */
+export function releaseBinaryAssetName(
+  binaryName: string,
+  nodeTarget: string,
+  operatingSystem: ReleaseOs,
+): string {
+  const extension = operatingSystem === "win32" ? "zip" : "tar.gz";
+  return `${binaryName}-${nodeTarget}.${extension}`;
+}
+
 function collectValue<T extends string>(value: T, previous: T[]): T[] {
   return [...previous, value];
 }

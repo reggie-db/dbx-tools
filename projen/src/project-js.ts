@@ -1064,18 +1064,14 @@ class GeneratedSource extends Component {
  *
  * projen gives a monorepo root empty `compile`/`test` tasks - a child's tasks
  * are the child's business - so `bun run build` at the root type-checked nothing
- * and ran no package tests. The fan-out is delegated to bun's own workspace
- * filter rather than one `exec` per member, which matters three ways: bun runs
- * the members in PARALLEL (measured ~2.5x faster across this repo than the
- * sequential per-`cwd` form), a member that does not define the script is
- * skipped instead of needing a guard, and the filter reads the workspace from
- * `package.json` - so it stays correct when a package is added without a
- * re-synth. A non-zero member exit still fails the run.
+ * and ran no package tests. Compilation groups ordinary `tsc --build` members
+ * into a few TypeScript processes and runs custom compile tasks alongside them. Tests
+ * still use Bun's filtered workspace fan-out. Both read the current workspace
+ * list from `package.json`, so a newly added member needs no re-synth.
  *
- * `*` matches every workspace MEMBER and never the root itself, so the root
+ * `*` matches every workspace MEMBER and never the root itself, so the test
  * task delegating to it cannot recurse. Members declared outside the scanned
- * package roots (`extraWorkspaceMembers`) are workspace members too, so they are
- * covered by the same filter.
+ * package roots (`extraWorkspaceMembers`) are covered by both tasks.
  */
 class WorkspaceValidationTasks extends Component {
   private configured = false;
@@ -1087,9 +1083,8 @@ class WorkspaceValidationTasks extends Component {
     if (project.subprojects.length === 0 && project.extraWorkspaceMembers.length === 0) {
       return;
     }
-    for (const task of [project.compileTask, project.testTask]) {
-      task.exec(`bun run --filter '*' ${task.name}`);
-    }
+    project.compileTask.exec(taskScript(project, "compile-workspace.ts"));
+    project.testTask.exec("bun run --filter '*' test");
   }
 }
 

@@ -17,7 +17,12 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { parseArgs } from "node:util";
 import { spawnSync } from "node:child_process";
-import { installPythonBindings, stampPythonProject } from "./uniffi-python.js";
+import {
+  installPythonBindings,
+  pythonBindingGeneratorArgs,
+  pythonBindingGeneratorName,
+  stampPythonProject,
+} from "./uniffi-python.js";
 
 const require = createRequire(import.meta.url);
 const bundledToml = fileURLToPath(new URL("./smol-toml.cjs", import.meta.url));
@@ -34,7 +39,9 @@ const parsed = parseArgs({
     "native-package": { type: "string" },
     "python-package": { type: "string" },
     "python-module": { type: "string" },
+    "python-bindings": { type: "string" },
     "cargo-target": { type: "string" },
+    "generator-target": { type: "string" },
     "node-triple": { type: "string" },
     "python-tag": { type: "string" },
     os: { type: "string" },
@@ -414,8 +421,10 @@ const packagePython = ({
   pythonTag,
   version,
   cargoTarget,
+  generatorTarget,
   os,
   pythonModule,
+  pythonBindings,
 }) => {
   const pythonRoot = resolve(output, "python-root");
   cpSync(resolve(root, pythonDirectory), pythonRoot, { recursive: true });
@@ -442,8 +451,9 @@ const packagePython = ({
     module: pythonModule,
     packageRoot: pythonRoot,
     platform: os,
+    generatedSource: pythonBindings,
     run,
-    targetDirectory: resolve(cargoTargetRoot, cargoTarget, "release"),
+    targetDirectory: resolve(cargoTargetRoot, generatorTarget ?? cargoTarget, "release"),
   });
 
   const wheelDirectory = resolve(output, "python");
@@ -461,6 +471,25 @@ const packagePython = ({
     pythonTag,
     join(wheelDirectory, wheels[0]),
   ]);
+};
+
+const generatePython = () => {
+  const crate = required("crate");
+  const cargoTarget = required("cargo-target");
+  const os = required("os");
+  const output = resolve(root, required("output"));
+  const generator = resolve(
+    cargoTargetRoot,
+    cargoTarget,
+    "release",
+    pythonBindingGeneratorName(crate, os),
+  );
+  const library = libraryPath(crate, cargoTarget, os);
+  if (!existsSync(generator)) throw new Error(`Missing UniFFI generator ${generator}`);
+  if (!existsSync(library)) throw new Error(`Missing native library ${library}`);
+  rmSync(output, { recursive: true, force: true });
+  mkdirSync(output, { recursive: true });
+  run(generator, pythonBindingGeneratorArgs({ crate, library, output }));
 };
 
 const build = () => {
@@ -517,14 +546,18 @@ const build = () => {
       pythonTag,
       version,
       cargoTarget,
+      generatorTarget: parsed.values["generator-target"],
       os,
       pythonModule: required("python-module"),
+      pythonBindings: parsed.values["python-bindings"],
     });
   }
 };
 
 if (parsed.positionals[0] === "build") {
   build();
+} else if (parsed.positionals[0] === "generate-python") {
+  generatePython();
 } else if (parsed.positionals[0] === "facade") {
   packageNodeFacade({
     output: resolve(root, required("output")),

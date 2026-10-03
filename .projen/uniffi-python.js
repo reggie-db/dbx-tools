@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -130,6 +131,7 @@ export const installPythonBindings = ({
   module,
   packageRoot,
   platform,
+  generatedSource,
   readonly = false,
   run,
   targetDirectory,
@@ -137,20 +139,25 @@ export const installPythonBindings = ({
   const packageName = module.split(".").at(-1);
   if (!packageName) throw new Error(`Invalid Python module ${module}`);
   const packageDirectory = resolve(packageRoot, "src", ...module.split("."));
-  const generatedDirectory = mkdtempSync(join(tmpdir(), `${packageName}-python-`));
+  const generatedDirectory = generatedSource
+    ? undefined
+    : mkdtempSync(join(tmpdir(), `${packageName}-python-`));
   const generator = resolve(targetDirectory, pythonBindingGeneratorName(crate, platform));
-  if (!existsSync(generator)) throw new Error(`Missing UniFFI generator ${generator}`);
 
   try {
-    run(
-      generator,
-      pythonBindingGeneratorArgs({
-        crate,
-        library,
-        output: generatedDirectory,
-      }),
-    );
-    const generated = join(generatedDirectory, `${crate.replaceAll("-", "_")}.py`);
+    if (!generatedSource) {
+      if (!existsSync(generator)) throw new Error(`Missing UniFFI generator ${generator}`);
+      run(
+        generator,
+        pythonBindingGeneratorArgs({
+          crate,
+          library,
+          output: generatedDirectory,
+        }),
+      );
+    }
+    const generated =
+      generatedSource ?? join(generatedDirectory, `${crate.replaceAll("-", "_")}.py`);
     if (!existsSync(generated)) throw new Error(`Missing generated binding ${generated}`);
     mkdirSync(packageDirectory, { recursive: true });
 
@@ -162,6 +169,11 @@ export const installPythonBindings = ({
     setWritable(init);
     writeFileSync(init, `${generatedHeader(crate)}from .bindings import *\n`);
 
+    for (const candidate of readdirSync(packageDirectory)) {
+      if (/\.(?:dll|dylib|so)$/.test(candidate)) {
+        rmSync(join(packageDirectory, candidate), { force: true });
+      }
+    }
     const nativeLibrary = join(packageDirectory, basename(library));
     setWritable(nativeLibrary);
     cpSync(library, nativeLibrary);
@@ -174,6 +186,6 @@ export const installPythonBindings = ({
     rmSync(join(packageDirectory, "_generated"), { recursive: true, force: true });
     return { bindings, init, library: nativeLibrary };
   } finally {
-    rmSync(generatedDirectory, { recursive: true, force: true });
+    if (generatedDirectory) rmSync(generatedDirectory, { recursive: true, force: true });
   }
 };

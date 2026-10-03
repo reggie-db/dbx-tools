@@ -15,6 +15,7 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { asyncUtils, json, log, object } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { publishLocalRelease } from "./local-publish.ts";
+import { hasLocalReleaseTargets, missingLocalReleaseTools } from "./release-assets.ts";
 import { generateReleaseSummary } from "./release-summary.ts";
 import {
   releaseArchitectureOption,
@@ -38,7 +39,9 @@ import {
   githubAccountSupportsWorkflowChanges,
   githubAuthenticatedAccounts,
   githubRepositoryApiPath,
+  githubRepositoryCanManage,
   githubRepositoryIdentity,
+  githubRepositoryPermissions,
   githubRepositorySpecifier,
   githubTokenArguments,
   githubTokenEnvironmentName,
@@ -51,6 +54,41 @@ import {
 } from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
+
+export type ReleaseBuildMode = "auto" | "local" | "remote";
+
+/** Resolve an explicit or environment-sensitive native release build mode. */
+export function resolveReleaseBuildMode(options: {
+  readonly requested: ReleaseBuildMode;
+  readonly canManage: boolean;
+  readonly localTools: readonly string[];
+  readonly hasLocalTargets: boolean;
+  readonly approve: boolean;
+  readonly wait: boolean;
+  readonly hostPlatform?: NodeJS.Platform;
+}): Exclude<ReleaseBuildMode, "auto"> {
+  const local =
+    options.canManage &&
+    options.hasLocalTargets &&
+    (options.hostPlatform ?? process.platform) === "darwin" &&
+    options.localTools.length === 0 &&
+    options.approve &&
+    options.wait;
+  if (options.requested === "auto") return local ? "local" : "remote";
+  if (options.requested === "remote") return "remote";
+  if (!options.canManage) throw new Error("--build local requires maintain or admin permission");
+  if (!options.hasLocalTargets) throw new Error("--build local requires Rust release targets");
+  if ((options.hostPlatform ?? process.platform) !== "darwin") {
+    throw new Error("--build local requires macOS");
+  }
+  if (options.localTools.length > 0) {
+    throw new Error(`--build local requires: ${options.localTools.join(", ")}`);
+  }
+  if (!options.approve || !options.wait) {
+    throw new Error("--build local requires automatic merge and waiting");
+  }
+  return "local";
+}
 
 function git(
   root: string,
@@ -151,12 +189,27 @@ async function waitForReleaseWorkflow(
   });
 }
 
+async function waitForGitHubRelease(
+  root: string,
+  tag: string,
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (taskCommandSucceeds(root, "gh", ["release", "view", tag], { env })) return;
+    await asyncUtils.sleep(2_000);
+  }
+  throw new Error(`GitHub Release ${tag} did not appear within ${timeoutMs}ms`);
+}
+
 function githubAccount(root: string): {
   hostname: string;
   owner: string;
   repository: string;
   login: string;
   token: string;
+  canManage: boolean;
 } {
   const repository = projectUtils.repositoryUrl(root);
   if (!repository) throw new Error("Release preparation requires a GitHub repository");
@@ -199,21 +252,20 @@ function githubAccount(root: string): {
     });
     const repositoryData =
       repositoryResult.exitCode === 0 ? json.parseRecord(repositoryResult.stdout ?? "") : undefined;
-    const permissions = object.isRecord(repositoryData?.permissions)
-      ? repositoryData.permissions
-      : undefined;
-    if (
-      permissions?.push !== true &&
-      permissions?.maintain !== true &&
-      permissions?.admin !== true
-    ) {
+    const permissions = githubRepositoryPermissions(repositoryData);
+    if (!permissions.push && !permissions.maintain && !permissions.admin) {
       continue;
     }
     logger.info("selected GitHub CLI account", {
       login: account.login,
       repository: `${identity.owner}/${identity.repository}`,
     });
-    return { ...identity, login: account.login, token };
+    return {
+      ...identity,
+      login: account.login,
+      token,
+      canManage: githubRepositoryCanManage(permissions),
+    };
   }
   const detected =
     accounts
@@ -271,6 +323,7 @@ program
   .option("--no-validate", "skip repository validation tasks, Rust tests, and TypeScript compile")
   .option("--no-local-publish", "skip local npm, PyPI, and Cargo publication")
   .option("--no-local-cargo", "skip local Cargo publication")
+  .option("--build <mode>", "native release build: auto, local, or remote", "auto")
   .option("--no-approve", "open the release pull request without enabling automatic merge")
   .option("--no-wait", "return after enabling automatic merge without watching publication")
   .option(
@@ -295,6 +348,7 @@ program
       validate: boolean;
       localPublish: boolean;
       localCargo: boolean;
+      build: ReleaseBuildMode;
       approve: boolean;
       wait: boolean;
       waitTimeoutMinutes: string;
@@ -316,6 +370,26 @@ program
         const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
         if (!currentBranch) throw new Error("Release preparation requires a local branch");
         const account = githubAccount(root);
+        if (!["auto", "local", "remote"].includes(opts.build)) {
+          throw new Error("--build must be auto, local, or remote");
+        }
+        const inspectLocalTools =
+          opts.build === "local" || (opts.build === "auto" && account.canManage);
+        const localTools = inspectLocalTools ? missingLocalReleaseTools(root) : [];
+        const buildMode = resolveReleaseBuildMode({
+          requested: opts.build,
+          canManage: account.canManage,
+          localTools,
+          hasLocalTargets: hasLocalReleaseTargets(root),
+          approve: opts.approve,
+          wait: opts.wait,
+        });
+        logger.info("selected native release build", {
+          requested: opts.build,
+          resolved: buildMode,
+          manager: account.canManage,
+          ...(localTools.length > 0 ? { missing: localTools } : {}),
+        });
         git(root, ["fetch", "--tags", "origin", opts.base]);
         const comparisonBase = resolveBaseVersion(root, [opts.prefix], {
           fetch: false,
@@ -455,7 +529,13 @@ program
         git(releaseRoot, ["add", "-A"]);
         const staged = git(releaseRoot, ["diff", "--cached", "--name-only"], { capture: true });
         if (staged) {
-          git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`]);
+          git(releaseRoot, [
+            "commit",
+            "-m",
+            `chore(release): ${next.version}`,
+            "-m",
+            `Release-Build: ${buildMode}`,
+          ]);
         } else if (!worktreeExists) {
           throw new Error("Release preparation produced no changes");
         }
@@ -471,6 +551,8 @@ program
           `Source commit: ${git(releaseRoot, ["rev-parse", `${releaseBranch}^`], { capture: true })}`,
           "",
           "Merging this PR updates VERSION on main and starts the public release workflow.",
+          "",
+          `Native build: ${buildMode}.`,
           ...(releaseSummary ? ["", releaseSummary] : []),
         ].join("\n");
         const githubEnvironment = {
@@ -511,8 +593,6 @@ program
             env: githubEnvironment,
           });
         }
-        git(root, ["worktree", "remove", "--force", releaseRoot]);
-        git(root, ["branch", "--delete", "--force", releaseBranch]);
         if (opts.approve && opts.wait) {
           const mergeSha = await waitForPullRequestMerge(
             root,
@@ -521,10 +601,39 @@ program
             waitTimeoutMs,
           );
           logger.info("release pull request merged", { releaseBranch, mergeSha });
+          if (buildMode === "local") {
+            git(root, ["fetch", "origin", opts.base]);
+            git(releaseRoot, ["switch", "--detach", mergeSha]);
+            runTaskCommand(releaseRoot, process.execPath, ["install"]);
+            await waitForGitHubRelease(root, releaseTag, githubEnvironment, waitTimeoutMs);
+            const releaseAssetsScript = join(
+              releaseRoot,
+              "node_modules/@dbx-tools/projen/tasks/release-assets.ts",
+            );
+            runTaskCommand(
+              releaseRoot,
+              process.execPath,
+              [
+                releaseAssetsScript,
+                "--root",
+                releaseRoot,
+                "--version",
+                next.version,
+                "--tag",
+                releaseTag,
+                "--upload",
+              ],
+              { env: githubEnvironment },
+            );
+          }
+          git(root, ["worktree", "remove", "--force", releaseRoot]);
+          git(root, ["branch", "--delete", "--force", releaseBranch]);
           await waitForReleaseWorkflow(root, opts.base, mergeSha, githubEnvironment, waitTimeoutMs);
           logger.success(`published ${releaseTag} from ${mergeSha}`);
           return;
         }
+        git(root, ["worktree", "remove", "--force", releaseRoot]);
+        git(root, ["branch", "--delete", "--force", releaseBranch]);
         logger.success(
           `${
             opts.approve ? "enabled automatic merge for" : "opened"
@@ -534,4 +643,4 @@ program
     },
   );
 
-await program.parseAsync();
+if (import.meta.main) await program.parseAsync();

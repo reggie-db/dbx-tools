@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, Project, TextFile, TomlFile, javascript } from "projen";
+import { releaseBinaryAssetName } from "./_release-platform.ts";
 import {
   RustProject,
   type CargoExampleOptions as RustCargoExampleOptions,
@@ -18,6 +19,7 @@ import {
   type RustOpenApiOptions as RustOpenApiConfiguration,
 } from "./_rust-project.ts";
 import {
+  rustAssetsJob,
   configureRustReleaseTask,
   independentRustCargoPublishJob,
   independentRustGitHubReleaseJob,
@@ -25,7 +27,6 @@ import {
   independentRustNodeFacadePublishJob,
   orderRustBindings,
   planRustRelease,
-  releaseBinaryAssetName,
   rustBuildJob,
   rustCargoPublishJob,
   rustGitHubReleaseJob,
@@ -118,6 +119,7 @@ export interface UniFFIReleaseTarget {
   readonly os: RustReleaseOs;
   readonly cpu: RustReleaseCpu;
   readonly libc?: "glibc";
+  readonly glibcVersion?: string;
 }
 
 /** Native targets built on matching GitHub-hosted runners. */
@@ -130,6 +132,7 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
     os: RustReleaseOs.LINUX,
     cpu: RustReleaseCpu.X64,
     libc: "glibc",
+    glibcVersion: "2.35",
   },
   {
     runner: "ubuntu-24.04-arm",
@@ -139,6 +142,7 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
     os: RustReleaseOs.LINUX,
     cpu: RustReleaseCpu.ARM64,
     libc: "glibc",
+    glibcVersion: "2.39",
   },
   {
     runner: "macos-15-intel",
@@ -1098,17 +1102,8 @@ export class DBXToolsRustWorkspace extends Component {
     }
     configureRustReleaseTask(project, plan);
     if (project.releaseCatalog.mode === "independent") {
-      if (plan.uniffiTargets.length) {
-        workflow.addJob(
-          "rust-uniffi",
-          rustBuildJob(plan, "uniffi", independentReleaseSetupSteps(project)),
-        );
-      }
-      if (plan.binaryTargets.length) {
-        workflow.addJob(
-          "rust-binaries",
-          rustBuildJob(plan, "binaries", independentReleaseSetupSteps(project)),
-        );
+      if (plan.targets.length) {
+        workflow.addJob("rust-build", rustBuildJob(plan, independentReleaseSetupSteps(project)));
       }
       if (plan.publicCrates.length) {
         workflow.addJob("publish-cargo", independentRustCargoPublishJob(project, plan));
@@ -1129,17 +1124,15 @@ export class DBXToolsRustWorkspace extends Component {
       }
       return;
     }
-    if (plan.uniffiTargets.length) {
-      workflow.addJob("rust-uniffi", rustBuildJob(plan, "uniffi"));
-    }
-    if (plan.binaryTargets.length) {
-      workflow.addJob("rust-binaries", rustBuildJob(plan, "binaries"));
+    if (plan.targets.length) {
+      workflow.addJob("rust-build", rustBuildJob(plan));
+      workflow.addJob("rust-assets", rustAssetsJob());
     }
     if (plan.publicCrates.length) {
       workflow.addJob("publish-cargo", rustCargoPublishJob(plan, false));
       workflow.addJob("publish-local-cargo", rustCargoPublishJob(plan, true));
     }
-    if (plan.releaseBinaries.length) {
+    if (plan.hasTargetOutputs) {
       workflow.addJob("publish-github-release", rustGitHubReleaseJob(plan));
     }
     if (plan.nodeBindings.length && hasNodeRelease(project)) {

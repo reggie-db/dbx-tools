@@ -64,14 +64,13 @@ describe("workspace validation tasks", () => {
   const tasks = synthTasks();
 
   // A projen monorepo root gets EMPTY compile/test tasks, so `bun run build`
-  // validated nothing. The root now delegates to bun's workspace filter instead
-  // of emitting one `exec` per member: bun runs them in parallel, skips a member
-  // that lacks the script, and reads the member list from `package.json` (so a
-  // new package needs no re-synth to be covered).
-  it("delegates root compile and test to every workspace member", () => {
+  // validated nothing. Compile batches plain TypeScript members in a few processes,
+  // while tests delegate to Bun's workspace filter. Both read the current
+  // package.json member list, so a new package needs no re-synth.
+  it("covers every workspace member from root compile and test", () => {
     assert.deepEqual(
       tasks.root.tasks.compile.steps?.map((step) => step.exec),
-      ["bun run --filter '*' compile"],
+      ["bun node_modules/@dbx-tools/projen/tasks/compile-workspace.ts"],
     );
     assert.deepEqual(
       tasks.root.tasks.test.steps?.map((step) => step.exec ?? `spawn:${step.spawn}`),

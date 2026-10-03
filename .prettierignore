@@ -62,7 +62,7 @@ packages/py/graphiti/pyproject.toml
 .projen/deps.json
 .projen/files.json
 .projen/pypi-trusted-publisher-instructions.mjs
-.projen/rust-release.mjs
+.projen/rust-release.json
 .projen/smol-toml.cjs
 .projen/smol-toml.LICENSE
 .projen/tasks.json

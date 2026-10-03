@@ -233,16 +233,14 @@ branch that already contains released `main`, and merges `main` into a diverged
 branch when the merge is conflict-free. Missing branches and conflicted merges
 are left untouched.
 
-Rust release generation creates separate UniFFI and binary matrices with one row
-per target. A UniFFI row builds all discovered binding packages together. A
-binary row builds all selected release binaries in one Cargo invocation with
-the union of their required features, so a feature-gated companion does not
-trigger a second compile graph. Each matrix has its own source-scoped
-fingerprint, raw bundle, and Cargo cache namespace. Set a source-only crate's or
-release-enabled binary's `releaseExcludeOs` package option to omit it from
-incompatible binary rows. Release binary packaging and artifact upload are
-skipped in those rows. UniFFI crates cannot use this option because every
-configured target must produce their artifacts.
+Rust release generation creates one uncached matrix with one row per target.
+Each row builds all discovered bindings and selected release binaries together
+with the union of their required features, then packages every native artifact
+from that one Cargo output. Set a source-only crate's or release-enabled
+binary's `releaseExcludeOs` package option to omit it from incompatible rows.
+Release binary packaging and artifact upload are skipped in those rows. UniFFI
+crates cannot use this option because every configured target must produce
+their artifacts.
 Set a release binary's `cli` package option and the workspace
 `cliRegistryPath` to generate a typed `dbx` command registry from the same
 selected targets. The generated entries carry only the archives that the
@@ -254,18 +252,12 @@ archives and Python wheels; they do not install Bun or UBRN and do not build
 Node facades. A binary-only row therefore installs no language package tool.
 `rustVersion` remains the MSRV recorded in package manifests, while
 `releaseRustVersion` independently defaults release compilation to `stable`.
-Stable Windows rows verify and use the hosted runner's installed Rust toolchain
-and select `rust-lld` for compilation. Rust release rows restore and update
-dependency-only Cargo caches in the release branch's category-and-target cache
-scope. The cache key excludes workspace version changes, and manual tag recovery
-restores without saving a tag-scoped copy. There is no separate cache workflow
-or sccache layer. After publishing the current raw Rust bundles and build manifests,
-the GitHub release job deletes those internal assets from published
-`vMAJOR.MINOR.PATCH` releases strictly lower than the current version while
-leaving versioned consumer binaries in place. Phase timings are written to each
-build log. Python generation executes the already-built
-`target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging
-therefore does no Rust compilation after the UniFFI build.
+Rows use the target runner's standard Rust toolchain without sccache, Cargo
+cache actions, source fingerprints, or reusable raw bundles. Phase timings are
+written to each build log. GitHub-hosted Python generation executes the
+already-built `target/<triple>/release/<crate>-uniffi-bindgen` directly. A local
+macOS build compiles one host generator and reuses it while packaging the
+Darwin, Linux, and Windows libraries.
 
 Artifacts identify their crate, target, and type. Rust jobs publish non-private
 Cargo crates with `cargo publish --no-verify` and upload requested binary assets
@@ -281,6 +273,16 @@ selectors; every selected operating system is crossed with every selected
 architecture. Omit both filters to regenerate the complete maintained matrix.
 `DBX_TOOLS_RELEASE_PLATFORMS` can select the generated matrix without repeating
 environment parsing in a consumer.
+
+`bun run release --build auto` is the default. It selects a local build when
+the chosen GitHub CLI account has maintain/admin access, the host is macOS, and
+Cargo, Zig, cargo-zigbuild, cargo-xwin, LLVM, uv, and zip are available.
+Otherwise it selects the GitHub matrix. `--build local` and `--build remote`
+force the choice. Local mode builds the exact merged release SHA and uploads
+the archives plus a checksum manifest to the draft GitHub Release before
+registry publication continues. A manager can rerun an interrupted upload with
+`bun run release:assets --version <version> --tag <tag> --upload` from the
+matching release source.
 
 Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
 manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
@@ -483,14 +485,15 @@ bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 
 ## Run Tasks From The ROOT
 
-Every repo-wide task lives on the root, and the root's `compile` / `test`
-delegate with `bun run --filter '*'` rather than emitting a step per member - so
-a new package is covered without a re-synth. Work from the root:
+Every repo-wide task lives on the root. `compile` batches ordinary TypeScript
+packages in up to four `tsc --build` processes and runs custom compile tasks alongside them;
+`test` delegates with `bun run --filter '*'`. Both read the current workspace
+list, so a new package is covered without a re-synth. Work from the root:
 
 | Task                           | What it does                                         |
 | ------------------------------ | ---------------------------------------------------- |
 | `bun run build`                | synth + workspace compile and tests                  |
-| `bun run compile`              | `tsc --build` in each member, in parallel            |
+| `bun run compile`              | Batched `tsc --build` plus custom member compiles    |
 | `bun run test`                 | `eslint` once, then each member's tests              |
 | `bun run sync`                 | re-synth (`--watch` to keep synthing)                |
 | `bun run barrels`              | regenerate the read-only `index.ts` barrels          |

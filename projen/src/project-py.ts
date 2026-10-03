@@ -7,7 +7,7 @@ import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workf
 import { DBX_TOOLS_LICENSE, projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
-import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
+import { RELEASE_TAG, RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
 import {
   independentReleaseSetupSteps,
   registerIndependentPublicationJob,
@@ -465,9 +465,9 @@ export class DBXToolsPythonWorkspace extends Component {
     if (project.releaseCatalog.mode === "independent") {
       workflow.addJob("build-python", {
         if: usesRustArtifacts
-          ? "${{ always() && needs.release-plan.outputs.python == 'true' && needs.rust-uniffi.result != 'failure' && needs.rust-uniffi.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
+          ? "${{ always() && needs.release-plan.outputs.python == 'true' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
           : "${{ needs.release-plan.outputs.python == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}",
-        needs: ["release-plan", ...(usesRustArtifacts ? ["rust-uniffi"] : [])],
+        needs: ["release-plan", ...(usesRustArtifacts ? ["rust-build"] : [])],
         runsOn: ["ubuntu-latest"],
         permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
         timeoutMinutes: 20,
@@ -546,9 +546,9 @@ export class DBXToolsPythonWorkspace extends Component {
     }
     workflow.addJob("build-python", {
       if: usesRustArtifacts
-        ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-uniffi.result != 'failure' && needs.rust-uniffi.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
+        ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-assets.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
         : releaseStageCondition("python"),
-      needs: ["verify-context", ...(usesRustArtifacts ? ["rust-uniffi"] : [])],
+      needs: ["verify-context", ...(usesRustArtifacts ? ["rust-assets"] : [])],
       runsOn: ["ubuntu-latest"],
       permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
       timeoutMinutes: 20,
@@ -567,8 +567,27 @@ export class DBXToolsPythonWorkspace extends Component {
             recoveredName: `Download recovered ${publication.distribution} native wheels`,
             pattern: `${publication.distribution}--*--python-wheel`,
             path: `dist/${publication.directory}`,
+            condition: "needs.verify-context.outputs.build_mode == 'remote'",
           }),
         ),
+        ...(uniffiPublications.length
+          ? [
+              {
+                name: "Download locally built native wheels",
+                if: "${{ needs.verify-context.outputs.build_mode == 'local' }}",
+                env: { GH_TOKEN: "${{ github.token }}", RELEASE_TAG },
+                shell: "bash",
+                run: [
+                  "mkdir -p dist/local-wheels",
+                  'gh release download "$RELEASE_TAG" --pattern "*.whl" --dir dist/local-wheels',
+                  ...uniffiPublications.flatMap((publication) => [
+                    `mkdir -p dist/${publication.directory}`,
+                    `cp dist/local-wheels/${publication.distribution.replaceAll("-", "_")}-*.whl dist/${publication.directory}/`,
+                  ]),
+                ].join("\n"),
+              },
+            ]
+          : []),
         {
           name: "Stamp workspace versions",
           env: { VERSION: RELEASE_VERSION },

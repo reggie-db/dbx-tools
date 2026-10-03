@@ -66,7 +66,7 @@ export { DBXToolsReleaseCatalog } from "./src/release-catalog.ts";
 export type { DBXToolsVersioningMode, ReleaseProjectLanguage, ReleaseArtifactKind, ReleaseEdgeKind, ReleasePropagation, ReleaseUnitRule, DBXToolsReleaseCatalogOptions, ReleaseDependencyInput, ReleaseProjectRegistration, ExternalReleaseProjectRegistration, ReleaseArtifactRegistration, ReleaseProjectNode, ReleaseArtifact, ReleaseDependencyEdge, ReleaseUnit, ReleaseUnitGraph } from "./src/release-catalog.ts";
 export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, RELEASE_SUMMARY_DIRECTORY, RELEASE_SUMMARY_PROVIDER_NAMES, RELEASE_SUMMARY_FILE } from "./src/release-dispatch.ts";
 export type { ReleaseSummaryProviderName } from "./src/release-dispatch.ts";
-export type { GithubRepositoryIdentity, GithubAuthenticatedAccount } from "./src/release-github.ts";
+export type { GithubRepositoryIdentity, GithubAuthenticatedAccount, GithubRepositoryPermissions } from "./src/release-github.ts";
 export type { ReleaseReason, PlannedReleaseUnit, PlannedPackage, PlannedArtifact, PlannedRustTarget, ReleasePlan } from "./src/release-plan.ts";
 export { ReleaseUnitWorkspacePlugin } from "./src/release-please.ts";
 export type { ReleaseUnitWorkspacePluginOptions } from "./src/release-please.ts";

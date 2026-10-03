@@ -141,10 +141,10 @@ describe("DBXToolsPythonWorkspace", () => {
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
     const release = readWorkflow(outdir);
-    assert.ok(release.jobs["rust-uniffi"]);
+    assert.ok(release.jobs["rust-build"]);
     const buildPython = release.jobs["build-python"]!;
-    assert.deepEqual(buildPython.needs, ["verify-context", "rust-uniffi"]);
-    assert.ok(buildPython.if?.includes("needs.rust-uniffi.result != 'failure'"));
+    assert.deepEqual(buildPython.needs, ["verify-context", "rust-assets"]);
+    assert.ok(buildPython.if?.includes("needs.rust-assets.result == 'success'"));
     assert.deepEqual(buildPython.permissions, { actions: "read", contents: "read" });
     assert.equal(buildPython.env?.BUN_VERSION, "1.3.14");
     assert.equal(workflowStep(buildPython, "Restore Bun cache").uses, "actions/cache/restore@v5");

@@ -809,13 +809,11 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   from the parent project, while `DBX_TOOLS_RELEASE_PLATFORMS` is parsed by the
   workspace when no explicit release targets are supplied. Generated Cargo and
   UniFFI outputs are ignored from discovered binding metadata rather than
-  hardcoded package paths. Release generation uses separate UniFFI and binary
-  matrices, each with one row per selected target. A UniFFI row builds every
-  discovered binding package together; a binary row builds every selected
-  release binary together with the union of their required features, so a main
-  binary and feature-gated companion share one Cargo invocation. The matrices
-  have separate source-scoped fingerprints, raw bundles, and Cargo cache
-  namespaces, so a binary-only source change does not invalidate UniFFI reuse.
+  hardcoded package paths. Release generation uses one Rust matrix with one row
+  per selected target. Each row builds the union of binding packages, release
+  binaries, and required features in one plain Cargo invocation, then packages
+  UniFFI archives and binaries from those outputs. Rust release rows do not use
+  sccache, Cargo cache actions, source fingerprints, or reusable raw bundles.
   A source-only crate or release-enabled binary may set
   `releaseExcludeOs` to stay out of incompatible release rows; the generator
   omits that package and its binaries from those rows and skips packaging and
@@ -853,8 +851,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   compiling Rust. Regenerate bindings while changing a UniFFI API through the
   focused watcher or `bun run rs:bindings`; release preparation does not invoke
   UBRN or download its build-time dependencies. `bun run release` runs Cargo
-  workspace tests, while the main release owns the full cross-platform Rust
-  matrix and reusable target caches.
+  workspace tests. `--build auto` uses a complete local macOS build when the
+  selected GitHub account has maintain/admin access and the required tools are
+  available, otherwise it uses the GitHub Rust matrix. `--build local` and
+  `--build remote` force either path. A manager can rerun an interrupted local
+  upload through `bun run release:assets --version <version> --tag <tag>
+--upload` from the matching source.
   Repository-specific release guards belong in `releaseValidationTasks`; they
   run in the release worktree before expensive tests, local publication, or
   approval. This repository uses the source-JSDoc ratchet and README generation
@@ -916,32 +918,20 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   builds facades from committed generated TypeScript and publishes them in
   binding dependency order. Python combines every platform wheel with standard
   wheel and source builds, and publishes each distribution through its own PyPI
-  trusted-publisher environment. Rust release rows cache the Cargo registry and
-  dependency artifacts through `Swatinem/rust-cache`. The release itself runs on
-  the default branch, so each release can restore and update the same cache scope;
-  manual tag recovery restores that default-branch cache without writing a
-  tag-scoped copy. The action's environment hash includes the Rust toolchain,
-  compiler environment, Cargo manifests, lockfile dependencies, and Cargo
-  configuration while normalizing workspace package versions and path
-  dependencies. Keep it enabled: a `shared-key` causes the action to ignore its
-  separate `key` input, and disabling the environment hash would leave one
-  immutable stale cache per target. `cache-workspace-crates: true` retains
-  unchanged workspace crate outputs when an exact raw-bundle hit is unavailable;
-  Cargo's source hashing still rebuilds changed crates. Do not add a separate
-  cache workflow or GitHub sccache layer because per-object entries can exhaust
-  the repository quota. UniFFI and binary caches use distinct shared keys, and
-  their raw fingerprints hash only the workspace packages in that build graph
-  plus shared Cargo configuration. A successful GitHub release keeps its raw Rust bundles
-  and build manifests, then deletes those internal assets from published
-  `vMAJOR.MINOR.PATCH` releases strictly lower than the current version. Consumer
-  binaries remain attached to their original versions. `Cargo.lock` and
-  `--locked` keep dependency resolution reproducible.
+  trusted-publisher environment. Local release builds run Cargo natively for
+  Darwin, cargo-zigbuild for Linux, and cargo-xwin with the clang backend for
+  Windows. They build the exact merged release SHA, then a maintain/admin GitHub
+  account uploads archives and a checksum manifest to the draft GitHub Release.
+  GitHub-hosted builds use the same target/package plan and publish through
+  workflow artifacts. `Cargo.lock` and `--locked` keep dependency resolution
+  reproducible.
   Set
   `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
   optional nonblocking registry install and import check after facade publication.
-  Packaging must
-  execute the target-specific `<crate>-uniffi-bindgen` binary produced by the
-  UniFFI matrix, never `cargo run`, so no Rust compilation occurs during packaging.
+  GitHub-hosted packaging executes the target-specific
+  `<crate>-uniffi-bindgen` binary produced by the Rust matrix. Local macOS
+  packaging builds one host generator and uses it for every target library.
+  Neither path uses `cargo run`, so packaging starts no additional Rust build.
   The generated bindgen binary requires the package's private
   `uniffi-bindgen` feature, which is the only release surface that enables
   `uniffi/cli`; runtime libraries and release binaries do not compile the
@@ -2160,7 +2150,9 @@ bun run test:installer       # standalone installer tests; RUN_DOCKER_INSTALL_TE
 bun run model:metadata       # refresh committed model capability, retirement, and limit snapshots
   bun run bump                 # increment VERSION and synchronize generated versions only
   bun run version:check        # verify every package and generated version against VERSION
-  bun run release              # prepare a release PR and enable automatic merge after checks
+  bun run release              # prepare a release PR; native build defaults to auto
+  bun run release --build local  # require a manager-authorized local native build
+  bun run release --build remote # require the GitHub-hosted Rust matrix
   bun run release --no-approve # prepare the same PR but leave merging to a human
 bun run eslint               # check lint across package roots and projen
 bun run eslint:fix           # explicitly apply supported lint fixes
@@ -2287,22 +2279,9 @@ Hard rules:
   package receives the same version.
 - GitHub publication is scoped to `main` and exact SHA equality. A matching tag
   on another commit is an error.
-- Rust build reuse must be content-addressed and version-independent. Reuse only
-  an exact target-key match from a previously successful GitHub Release, verify
-  checksums and provenance, then stamp the dedicated structured version section.
-  The committed manifest uses portable target keys for review; each target runner
-  validates the committed source hash and derives the reusable asset key with its
-  actual compiler identity. The GitHub Release job downloads every
-  `*-raw` matrix artifact and attaches its tarball plus checksum to the durable
-  release; listing `dist/rust-raw/*` without that download leaves an empty glob
-  and silently defeats future reuse.
-- Never patch arbitrary binary strings or use `sed` against executables.
-- `@dbx-tools/projen` owns the Rust release helper as Node source and emits one
-  standalone generated `.mjs` file for release runners. It discovers Cargo
-  members through structured manifests and `cargo metadata`, fingerprints every
-  declared build input including embedded assets, and updates exactly one
-  recognized version section through `llvm-objcopy`. Do not restore a private
-  Rust helper crate, regex TOML parsing, or magic-byte scanning.
+- Native binaries report the Cargo package version compiled from the reviewed
+  release manifests. Do not restore post-link version patching, source
+  fingerprints, raw output caches, or binary magic-byte scanning.
 - `DBXToolsRustProject` is the single Projen project type for standalone crates
   and workspace members. Its options-object constructor owns Cargo metadata,
   dependency aliases, features, feature-gated examples, binary settings,
