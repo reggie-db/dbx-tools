@@ -115,6 +115,34 @@ async function waitForPullRequestMerge(
   env: NodeJS.ProcessEnv,
   timeoutMs: number,
 ): Promise<string> {
+  const checksDeadline = Date.now() + timeoutMs;
+  let checksReported = false;
+  while (Date.now() < checksDeadline) {
+    const count = Number(
+      captureTaskCommand(
+        root,
+        "gh",
+        [
+          "pr",
+          "view",
+          releaseBranch,
+          "--json",
+          "statusCheckRollup",
+          "--jq",
+          ".statusCheckRollup | length",
+        ],
+        { env },
+      ),
+    );
+    if (Number.isInteger(count) && count > 0) {
+      checksReported = true;
+      break;
+    }
+    await asyncUtils.sleep(2_000);
+  }
+  if (!checksReported) {
+    throw new Error(`Release pull request reported no checks within ${timeoutMs}ms`);
+  }
   await runTaskCommandAsync(
     root,
     "gh",
