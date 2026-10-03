@@ -4,14 +4,19 @@ import { stringUtils } from "@dbx-tools/shared-core";
 import { Component, License, TextFile, type Project, javascript, python, vscode } from "projen";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
-import { DBX_TOOLS_LICENSE, projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
+import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
-import { RELEASE_TAG, RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
+import {
+  RELEASE_SHA,
+  RELEASE_TAG,
+  RELEASE_VERSION,
+  releaseSourceSteps,
+} from "./release-dispatch.ts";
 import {
   independentReleaseSetupSteps,
   registerIndependentPublicationJob,
-  releaseArtifactSteps,
+  releaseTagPattern,
   releasePublishCondition,
   releaseStageCondition,
   tryReleaseWorkflow,
@@ -545,12 +550,10 @@ export class DBXToolsPythonWorkspace extends Component {
       return;
     }
     workflow.addJob("build-python", {
-      if: usesRustArtifacts
-        ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-assets.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
-        : releaseStageCondition("python"),
-      needs: ["verify-context", ...(usesRustArtifacts ? ["rust-assets"] : [])],
+      if: releaseStageCondition("python", ["needs.verify-context.result == 'success'"]),
+      needs: ["verify-context"],
       runsOn: ["ubuntu-latest"],
-      permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
+      permissions: { contents: JobPermission.READ },
       timeoutMinutes: 20,
       env: { BUN_VERSION },
       steps: [
@@ -561,65 +564,46 @@ export class DBXToolsPythonWorkspace extends Component {
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
         { name: "Install release helpers", run: "bun install" },
         bunCacheSaveStep(),
-        ...uniffiPublications.flatMap((publication) =>
-          releaseArtifactSteps({
-            currentName: `Download ${publication.distribution} native wheels`,
-            recoveredName: `Download recovered ${publication.distribution} native wheels`,
-            pattern: `${publication.distribution}--*--python-wheel`,
-            path: `dist/${publication.directory}`,
-            condition: "needs.verify-context.outputs.build_mode == 'remote'",
-          }),
-        ),
-        ...(uniffiPublications.length
-          ? [
-              {
-                name: "Download locally built native wheels",
-                if: "${{ needs.verify-context.outputs.build_mode == 'local' }}",
-                env: { GH_TOKEN: "${{ github.token }}", RELEASE_TAG },
-                shell: "bash",
-                run: [
-                  "mkdir -p dist/local-wheels",
-                  'gh release download "$RELEASE_TAG" --pattern "*.whl" --dir dist/local-wheels',
-                  ...uniffiPublications.flatMap((publication) => [
-                    `mkdir -p dist/${publication.directory}`,
-                    `cp dist/local-wheels/${publication.distribution.replaceAll("-", "_")}-*.whl dist/${publication.directory}/`,
-                  ]),
-                ].join("\n"),
-              },
-            ]
-          : []),
         {
-          name: "Stamp workspace versions",
-          env: { VERSION: RELEASE_VERSION },
-          run: `bun node_modules/@dbx-tools/projen/tasks/stamp-python.ts "$VERSION" --root ${quote(this.repository.root)}`,
-        },
-        {
-          name: "Build distributions",
-          run: publications
-            .map(
-              (publication) =>
-                `uv build --package ${publication.distribution} --out-dir dist/${publication.directory}`,
-            )
-            .join("\n"),
-        },
-        {
-          name: "Validate distributions",
+          name: "Download approved Python distributions",
+          env: { GH_TOKEN: "${{ github.token }}", RELEASE_TAG },
           run: [
-            ...publications.map(
-              (publication) =>
-                `test "$(find dist/${publication.directory} -maxdepth 1 -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq 2`,
-            ),
-            ...uniffiPublications.map(
-              (publication) =>
-                `find dist/${publication.directory} -maxdepth 1 -name '*.whl' -print -quit | grep -q .`,
-            ),
-            "find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) -print0 | xargs -0 uvx twine check",
+            "rm -rf dist/release-download",
+            "mkdir -p dist/release-download",
+            'gh release download "$RELEASE_TAG" --pattern release-manifest.json --pattern SHA256SUMS --pattern "*.whl" --pattern "*.tar.gz" --dir dist/release-download',
           ].join("\n"),
+        },
+        ...allPublications.map((publication) => ({
+          name: `Select ${publication.distribution} distributions`,
+          env: {
+            PACKAGE_NAME: publication.distribution.replaceAll("_", "-").toLowerCase(),
+            RELEASE_SHA,
+            RELEASE_TAG,
+            RELEASE_VERSION,
+          },
+          run: [
+            "bun node_modules/@dbx-tools/projen/tasks/release-manifest.ts verify \\",
+            "  --directory dist/release-download \\",
+            '  --tag "$RELEASE_TAG" \\',
+            '  --sha "$RELEASE_SHA" \\',
+            '  --version "$RELEASE_VERSION" \\',
+            "  --kind pypi \\",
+            '  --package "$PACKAGE_NAME" \\',
+            `  --output dist/${publication.directory}`,
+          ].join("\n"),
+        })),
+        {
+          name: "Validate approved distributions",
+          run: `find ${allPublications.map((publication) => `dist/${publication.directory}`).join(" ")} -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) -print0 | xargs -0 uvx twine check`,
         },
         {
           name: "Upload distributions",
           uses: "actions/upload-artifact@v7",
-          with: { name: "python-distributions", path: "dist", "retention-days": 7 },
+          with: {
+            name: "python-distributions",
+            path: allPublications.map((publication) => `dist/${publication.directory}`).join("\n"),
+            "retention-days": 7,
+          },
         },
       ],
     });
@@ -713,15 +697,17 @@ export class DBXToolsPythonWorkspace extends Component {
   ): void {
     const repository = this.githubRepository();
     const publications = this.trustedPublisherPublications(options);
-    const releaseBranch = isDBXToolsJavaScriptProject()(project)
-      ? projectReleaseBranch(project)
-      : "main";
+    const releaseTag = isDBXToolsJavaScriptProject()(project)
+      ? project.releaseCatalog.mode === "independent"
+        ? "*-v*"
+        : releaseTagPattern(project)
+      : "v*";
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
       "Use the system browser to audit and configure the PyPI trusted publishers below.",
       "Do not use an in-app browser or embedded webview.",
-      "Do not visit GitHub or use the GitHub API or CLI. Every required GitHub owner, repository, workflow, environment, and branch value is provided below and is authoritative.",
+      "Do not visit GitHub or use the GitHub API or CLI. Every required GitHub owner, repository, workflow, environment, and tag value is provided below and is authoritative.",
       "Use only PyPI pages for this task.",
       "",
       "## Audit and confirmation",
@@ -739,7 +725,7 @@ export class DBXToolsPythonWorkspace extends Component {
       "",
       "## GitHub environment policy",
       "",
-      `- The supplied branch policy value is ${releaseBranch}.`,
+      `- The supplied deployment tag policy value is ${releaseTag}.`,
       "- Do not inspect or configure GitHub environments during this task.",
       "- GitHub environment administration is a separate task; use the supplied values only when comparing PyPI publisher entries.",
       "",
@@ -780,7 +766,7 @@ export class DBXToolsPythonWorkspace extends Component {
           `- Repository name: ${repository.name}`,
           "- Workflow name: release.yml",
           `- Environment name: ${publication.environment}`,
-          `- GitHub environment branch: ${releaseBranch}`,
+          `- GitHub environment tag: ${releaseTag}`,
           ...(publication.artifacts ? [`- Artifacts: ${publication.artifacts}`] : []),
           "",
         ];

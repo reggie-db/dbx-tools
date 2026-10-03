@@ -55,7 +55,9 @@
  */
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -234,12 +236,14 @@ const plan =
     : undefined;
 if (!version && !plan) {
   logger.error(
-    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]",
+    "usage: bun tasks/publish.ts <version> [--plan <path>] [--registry <url>] [--output <dir>] [--exclude <dir>] [--dry-run] [--skip-compile]",
   );
   process.exit(1);
 }
 const registryIdx = rest.indexOf("--registry");
 const registry = registryIdx >= 0 ? rest[registryIdx + 1] : undefined;
+const outputIdx = rest.indexOf("--output");
+const output = outputIdx >= 0 ? resolve(root, rest[outputIdx + 1]) : undefined;
 const dryRun = rest.includes("--dry-run");
 const skipCompile = rest.includes("--skip-compile");
 const concurrencyIdx = rest.indexOf("--concurrency");
@@ -371,8 +375,12 @@ for (const { dir } of publishable) {
 }
 
 logger.info(
-  `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
+  `${output ? "packing" : dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
+if (output) {
+  rmSync(output, { recursive: true, force: true });
+  mkdirSync(output, { recursive: true });
+}
 await asyncUtils.mapConcurrent(
   publishable,
   async ({ dir, name, version: packageVersion, access }) => {
@@ -389,6 +397,15 @@ await asyncUtils.mapConcurrent(
         throw new Error(
           `Packed npm access ${String(local.access)} does not match ${String(access)} for ${name}`,
         );
+      }
+      if (output) {
+        const destination = join(output, archive.split(/[\\/]/).at(-1)!);
+        if (existsSync(destination)) {
+          throw new Error(`Duplicate npm archive name: ${destination}`);
+        }
+        copyFileSync(archive, destination);
+        logger.info(`packed ${name} @ ${packageVersion}`);
+        return;
       }
       if (!dryRun) {
         const published = await publishedNpmRelease(local.name, local.version, registry);
@@ -410,4 +427,6 @@ await asyncUtils.mapConcurrent(
   },
   { concurrency, errorMode: "settle" },
 );
-logger.success(`${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages`);
+logger.success(
+  `${output || dryRun ? "packed" : "published"} ${publishable.length} packages${output ? ` to ${output}` : ""}`,
+);

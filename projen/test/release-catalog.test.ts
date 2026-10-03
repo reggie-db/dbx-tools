@@ -306,9 +306,14 @@ describe("DBXToolsReleaseCatalog", () => {
       const python = readFileSync(join(outdir, "packages/py/core/pyproject.toml"), "utf8");
       const rust = readFileSync(join(outdir, "packages/rs/core/Cargo.toml"), "utf8");
       const rootCargo = readFileSync(join(outdir, "Cargo.toml"), "utf8");
+      const publisherInstructions = readFileSync(
+        join(outdir, ".projen/pypi-trusted-publisher-instructions.mjs"),
+        "utf8",
+      );
       assert.match(python, /version = "3\.1\.4"/);
       assert.match(rust, /version = "4\.2\.0"/);
       assert.doesNotMatch(rootCargo, /\\[workspace\\.package\\][\\s\\S]*version =/);
+      assert.match(publisherInstructions, /GitHub environment tag: \*-v\*/);
     } finally {
       if (previousDisablePost === undefined) delete process.env.PROJEN_DISABLE_POST;
       else process.env.PROJEN_DISABLE_POST = previousDisablePost;

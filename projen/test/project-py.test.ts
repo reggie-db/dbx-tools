@@ -141,26 +141,23 @@ describe("DBXToolsPythonWorkspace", () => {
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
     const release = readWorkflow(outdir);
-    assert.ok(release.jobs["rust-build"]);
+    assert.equal(release.jobs["rust-build"], undefined);
     const buildPython = release.jobs["build-python"]!;
-    assert.deepEqual(buildPython.needs, ["verify-context", "rust-assets"]);
-    assert.ok(buildPython.if?.includes("needs.rust-assets.result == 'success'"));
-    assert.deepEqual(buildPython.permissions, { actions: "read", contents: "read" });
+    assert.equal(buildPython.needs, "verify-context");
+    assert.ok(buildPython.if?.includes("github.event_name == 'release'"));
+    assert.deepEqual(buildPython.permissions, { contents: "read" });
     assert.equal(buildPython.env?.BUN_VERSION, "1.3.14");
     assert.equal(workflowStep(buildPython, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.equal(workflowStep(buildPython, "Save Bun cache").uses, "actions/cache/save@v5");
     assert.ok(
-      workflowStep(buildPython, "Stamp workspace versions").run?.includes("stamp-python.ts"),
+      workflowStep(buildPython, "Download approved Python distributions").run?.includes(
+        "gh release download",
+      ),
     );
-    assert.equal(
-      workflowStep(buildPython, "Download fixture-native-rs native wheels").with?.pattern,
-      "fixture-native-rs--*--python-wheel",
-    );
-    assert.equal(
-      workflowStep(buildPython, "Download recovered fixture-native-rs native wheels").with?.[
-        "run-id"
-      ],
-      "${{ inputs.source_run_id }}",
+    assert.ok(
+      workflowStep(buildPython, "Select fixture-native-rs distributions").run?.includes(
+        "release-manifest.ts verify",
+      ),
     );
     assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
       name: "pypi-fixture-core",
@@ -179,7 +176,7 @@ describe("DBXToolsPythonWorkspace", () => {
     });
     assert.equal(
       release.jobs["publish-pypi-native-rs"]?.if,
-      "${{ always() && (needs.verify-context.result == 'success') && (needs.build-python.result == 'success') && (github.event_name == 'push' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'python'))) }}",
+      "${{ always() && (needs.verify-context.result == 'success') && (needs.build-python.result == 'success') && (github.event_name == 'release' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'python'))) }}",
     );
     assert.equal(
       workflowStep(release.jobs["publish-pypi-native-rs"]!, "Publish fixture-native-rs to PyPI")
@@ -215,8 +212,8 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /Do not use an in-app browser or embedded webview/);
     assert.match(instructions, /Do not visit GitHub or use the GitHub API or CLI/);
     assert.match(instructions, /Every required GitHub owner, repository, workflow, environment/);
-    assert.match(instructions, /supplied branch policy value is main/);
-    assert.match(instructions, /GitHub environment branch: main/);
+    assert.match(instructions, /supplied deployment tag policy value is v\*/);
+    assert.match(instructions, /GitHub environment tag: v\*/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
     assert.match(instructions, /Reuse an existing PyPI tab in the system browser/);
@@ -263,7 +260,8 @@ describe("optional Python release stages", () => {
       project.synth();
       const workflow = readWorkflow(directOutdir);
       assert.deepEqual(workflow.concurrency, {
-        group: "release",
+        group:
+          "release-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}",
         "cancel-in-progress": false,
       });
       assert.ok(workflow.jobs["build-python"]);

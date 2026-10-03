@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import type {
@@ -7,7 +10,7 @@ import type {
 } from "../src/_rust-release-workflow.ts";
 import { RustReleaseOs } from "../src/project-rs.ts";
 import { localTargetCommand } from "../tasks/release-assets.ts";
-import { resolveReleaseBuildMode } from "../tasks/release-pr.ts";
+import { verifyReleaseManifest, writeReleaseManifest } from "../tasks/release-manifest.ts";
 
 const configuration: RustReleaseConfiguration = {
   releaseRustVersion: "stable",
@@ -61,23 +64,78 @@ describe("local Rust release assets", () => {
     }
   });
 
-  it("uses local mode only for a prepared repository manager", () => {
-    const base = {
-      requested: "auto" as const,
-      canManage: true,
-      hasLocalTargets: true,
-      localTools: [],
-      approve: true,
-      wait: true,
-      hostPlatform: "darwin" as const,
-    };
-    assert.equal(resolveReleaseBuildMode(base), "local");
-    assert.equal(resolveReleaseBuildMode({ ...base, canManage: false }), "remote");
-    assert.equal(resolveReleaseBuildMode({ ...base, localTools: ["zig"] }), "remote");
-    assert.equal(resolveReleaseBuildMode({ ...base, wait: false }), "remote");
-    assert.throws(
-      () => resolveReleaseBuildMode({ ...base, requested: "local", canManage: false }),
-      /maintain or admin/,
-    );
+  it("binds exact candidate assets to the release tag and commit", () => {
+    const directory = mkdtempSync(join(tmpdir(), "release-manifest-"));
+    try {
+      const npm = join(directory, "fixture-1.2.3.tgz");
+      const wheel = join(directory, "fixture-1.2.3-py3-none-any.whl");
+      writeFileSync(npm, "npm");
+      writeFileSync(wheel, "python");
+      const upload = join(directory, "upload");
+      const manifest = writeReleaseManifest({
+        artifacts: [
+          {
+            kind: "npm",
+            packageName: "@fixture/core",
+            packageVersion: "1.2.3",
+            path: npm,
+            role: "workspace",
+          },
+          {
+            kind: "pypi",
+            packageName: "fixture-core",
+            packageVersion: "1.2.3",
+            path: wheel,
+            role: "workspace",
+          },
+        ],
+        directory: upload,
+        gitSha: "a".repeat(40),
+        tag: "v1.2.3",
+        version: "1.2.3",
+      });
+      assert.equal(manifest.artifacts.length, 2);
+      assert.match(readFileSync(join(upload, "SHA256SUMS"), "utf8"), /fixture-1\.2\.3/);
+      const selected = verifyReleaseManifest({
+        directory: upload,
+        gitSha: "a".repeat(40),
+        kind: "npm",
+        output: join(directory, "npm"),
+        tag: "v1.2.3",
+        version: "1.2.3",
+      });
+      assert.deepEqual(
+        selected.map((artifact) => artifact.packageName),
+        ["@fixture/core"],
+      );
+      assert.throws(
+        () =>
+          verifyReleaseManifest({
+            directory: upload,
+            gitSha: "different",
+            tag: "v1.2.3",
+            version: "1.2.3",
+          }),
+        /does not match/,
+      );
+      const manifestPath = join(upload, "release-manifest.json");
+      const unsafe = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        artifacts: Array<{ name: string }>;
+      };
+      unsafe.artifacts[0]!.name = "../fixture-1.2.3.tgz";
+      writeFileSync(manifestPath, `${JSON.stringify(unsafe)}\n`);
+      assert.throws(
+        () =>
+          verifyReleaseManifest({
+            directory: upload,
+            gitSha: "a".repeat(40),
+            tag: "v1.2.3",
+            version: "1.2.3",
+          }),
+        /Invalid release artifact/,
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

@@ -55,41 +55,6 @@ import {
 
 const logger = log.logger("projen:release");
 
-export type ReleaseBuildMode = "auto" | "local" | "remote";
-
-/** Resolve an explicit or environment-sensitive native release build mode. */
-export function resolveReleaseBuildMode(options: {
-  readonly requested: ReleaseBuildMode;
-  readonly canManage: boolean;
-  readonly localTools: readonly string[];
-  readonly hasLocalTargets: boolean;
-  readonly approve: boolean;
-  readonly wait: boolean;
-  readonly hostPlatform?: NodeJS.Platform;
-}): Exclude<ReleaseBuildMode, "auto"> {
-  const local =
-    options.canManage &&
-    options.hasLocalTargets &&
-    (options.hostPlatform ?? process.platform) === "darwin" &&
-    options.localTools.length === 0 &&
-    options.approve &&
-    options.wait;
-  if (options.requested === "auto") return local ? "local" : "remote";
-  if (options.requested === "remote") return "remote";
-  if (!options.canManage) throw new Error("--build local requires maintain or admin permission");
-  if (!options.hasLocalTargets) throw new Error("--build local requires Rust release targets");
-  if ((options.hostPlatform ?? process.platform) !== "darwin") {
-    throw new Error("--build local requires macOS");
-  }
-  if (options.localTools.length > 0) {
-    throw new Error(`--build local requires: ${options.localTools.join(", ")}`);
-  }
-  if (!options.approve || !options.wait) {
-    throw new Error("--build local requires automatic merge and waiting");
-  }
-  return "local";
-}
-
 function git(
   root: string,
   args: string[],
@@ -171,64 +136,6 @@ async function waitForPullRequestMerge(
     await asyncUtils.sleep(2_000);
   }
   throw new Error(`Release pull request did not merge within ${timeoutMs}ms`);
-}
-
-/** Find and watch the release workflow for an exact merged commit. */
-async function waitForReleaseWorkflow(
-  root: string,
-  baseBranch: string,
-  mergeSha: string,
-  env: NodeJS.ProcessEnv,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let runId = "";
-  while (Date.now() < deadline) {
-    runId = captureTaskCommand(
-      root,
-      "gh",
-      [
-        "run",
-        "list",
-        "--workflow",
-        "release.yml",
-        "--branch",
-        baseBranch,
-        "--event",
-        "push",
-        "--commit",
-        mergeSha,
-        "--limit",
-        "1",
-        "--json",
-        "databaseId",
-        "--jq",
-        ".[0].databaseId // empty",
-      ],
-      { env },
-    );
-    if (runId) break;
-    await asyncUtils.sleep(5_000);
-  }
-  if (!runId) throw new Error(`Release workflow did not start within ${timeoutMs}ms`);
-  await runTaskCommandAsync(root, "gh", ["run", "watch", runId, "--exit-status"], {
-    env,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-}
-
-async function waitForGitHubRelease(
-  root: string,
-  tag: string,
-  env: NodeJS.ProcessEnv,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (taskCommandSucceeds(root, "gh", ["release", "view", tag], { env })) return;
-    await asyncUtils.sleep(2_000);
-  }
-  throw new Error(`GitHub Release ${tag} did not appear within ${timeoutMs}ms`);
 }
 
 function githubAccount(root: string): {
@@ -351,12 +258,11 @@ program
   .option("--no-validate", "skip repository validation tasks, Rust tests, and TypeScript compile")
   .option("--no-local-publish", "skip local npm, PyPI, and Cargo publication")
   .option("--no-local-cargo", "skip local Cargo publication")
-  .option("--build <mode>", "native release build: auto, local, or remote", "auto")
   .option("--no-approve", "open the release pull request without enabling automatic merge")
   .option("--no-wait", "return after enabling automatic merge without watching publication")
   .option(
     "--wait-timeout-minutes <minutes>",
-    "maximum time for pull request checks, merge, and publication",
+    "maximum time for pull request checks and merge",
     "120",
   )
   .action(
@@ -376,7 +282,6 @@ program
       validate: boolean;
       localPublish: boolean;
       localCargo: boolean;
-      build: ReleaseBuildMode;
       approve: boolean;
       wait: boolean;
       waitTimeoutMinutes: string;
@@ -395,29 +300,21 @@ program
           throw new Error("--wait-timeout-minutes must be a positive integer");
         }
         const waitTimeoutMs = waitTimeoutMinutes * 60_000;
+        if (opts.approve && !opts.wait) {
+          throw new Error("automatic merge requires waiting so the draft candidate can be built");
+        }
         const currentBranch = git(root, ["branch", "--show-current"], { capture: true });
         if (!currentBranch) throw new Error("Release preparation requires a local branch");
         const account = githubAccount(root);
-        if (!["auto", "local", "remote"].includes(opts.build)) {
-          throw new Error("--build must be auto, local, or remote");
+        if (!account.canManage) {
+          throw new Error("Release preparation requires maintain or admin permission");
         }
-        const inspectLocalTools =
-          opts.build === "local" || (opts.build === "auto" && account.canManage);
-        const localTools = inspectLocalTools ? missingLocalReleaseTools(root) : [];
-        const buildMode = resolveReleaseBuildMode({
-          requested: opts.build,
-          canManage: account.canManage,
-          localTools,
-          hasLocalTargets: hasLocalReleaseTargets(root),
-          approve: opts.approve,
-          wait: opts.wait,
-        });
-        logger.info("selected native release build", {
-          requested: opts.build,
-          resolved: buildMode,
-          manager: account.canManage,
-          ...(localTools.length > 0 ? { missing: localTools } : {}),
-        });
+        if (hasLocalReleaseTargets(root)) {
+          const localTools = missingLocalReleaseTools(root);
+          if (localTools.length > 0) {
+            throw new Error(`Local release candidate build requires: ${localTools.join(", ")}`);
+          }
+        }
         git(root, ["fetch", "--tags", "origin", opts.base]);
         const comparisonBase = resolveBaseVersion(root, [opts.prefix], {
           fetch: false,
@@ -557,13 +454,7 @@ program
         git(releaseRoot, ["add", "-A"]);
         const staged = git(releaseRoot, ["diff", "--cached", "--name-only"], { capture: true });
         if (staged) {
-          git(releaseRoot, [
-            "commit",
-            "-m",
-            `chore(release): ${next.version}`,
-            "-m",
-            `Release-Build: ${buildMode}`,
-          ]);
+          git(releaseRoot, ["commit", "-m", `chore(release): ${next.version}`]);
         } else if (!worktreeExists) {
           throw new Error("Release preparation produced no changes");
         }
@@ -578,9 +469,7 @@ program
           "",
           `Source commit: ${git(releaseRoot, ["rev-parse", `${releaseBranch}^`], { capture: true })}`,
           "",
-          "Merging this PR updates VERSION on main and starts the public release workflow.",
-          "",
-          `Native build: ${buildMode}.`,
+          "Merging this PR updates VERSION on main and prepares a draft GitHub Release.",
           ...(releaseSummary ? ["", releaseSummary] : []),
         ].join("\n");
         const githubEnvironment = {
@@ -629,35 +518,35 @@ program
             waitTimeoutMs,
           );
           logger.info("release pull request merged", { releaseBranch, mergeSha });
-          if (buildMode === "local") {
-            git(root, ["fetch", "origin", opts.base]);
-            git(releaseRoot, ["switch", "--detach", mergeSha]);
-            runTaskCommand(releaseRoot, process.execPath, ["install"]);
-            await waitForGitHubRelease(root, releaseTag, githubEnvironment, waitTimeoutMs);
-            const releaseAssetsScript = join(
+          git(root, ["fetch", "origin", opts.base]);
+          git(releaseRoot, ["switch", "--detach", mergeSha]);
+          runTaskCommand(releaseRoot, process.execPath, ["install"]);
+          const releaseCandidateScript = join(
+            releaseRoot,
+            "node_modules/@dbx-tools/projen/tasks/release-candidate.ts",
+          );
+          runTaskCommand(
+            releaseRoot,
+            process.execPath,
+            [
+              releaseCandidateScript,
+              "--root",
               releaseRoot,
-              "node_modules/@dbx-tools/projen/tasks/release-assets.ts",
-            );
-            runTaskCommand(
-              releaseRoot,
-              process.execPath,
-              [
-                releaseAssetsScript,
-                "--root",
-                releaseRoot,
-                "--version",
-                next.version,
-                "--tag",
-                releaseTag,
-                "--upload",
-              ],
-              { env: githubEnvironment },
-            );
-          }
+              "--version",
+              next.version,
+              "--tag",
+              releaseTag,
+              "--sha",
+              mergeSha,
+              "--notes-file",
+              `docs/releases/v${next.version}.md`,
+              "--upload",
+            ],
+            { env: githubEnvironment },
+          );
           git(root, ["worktree", "remove", "--force", releaseRoot]);
           git(root, ["branch", "--delete", "--force", releaseBranch]);
-          await waitForReleaseWorkflow(root, opts.base, mergeSha, githubEnvironment, waitTimeoutMs);
-          logger.success(`published ${releaseTag} from ${mergeSha}`);
+          logger.success(`prepared draft ${releaseTag} from ${mergeSha}`);
           return;
         }
         git(root, ["worktree", "remove", "--force", releaseRoot]);

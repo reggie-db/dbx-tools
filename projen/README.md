@@ -274,28 +274,28 @@ architecture. Omit both filters to regenerate the complete maintained matrix.
 `DBX_TOOLS_RELEASE_PLATFORMS` can select the generated matrix without repeating
 environment parsing in a consumer.
 
-`bun run release --build auto` is the default. It selects a local build when
-the chosen GitHub CLI account has maintain/admin access, the host is macOS, and
-Cargo, Zig, cargo-zigbuild, cargo-xwin, LLVM, uv, and zip are available.
-Otherwise it selects the GitHub matrix. `--build local` and `--build remote`
-force the choice. Local mode builds the exact merged release SHA and uploads
-the archives plus a checksum manifest to the draft GitHub Release before
-registry publication continues. A manager can rerun an interrupted upload with
-`bun run release:assets --version <version> --tag <tag> --upload` from the
-matching release source.
+`bun run release` always prepares the production candidate locally. After the
+reviewed release pull request merges, the local process checks out the exact
+merge commit, builds the complete npm, Python, native binding, and Rust binary
+artifact set, then creates an annotated tag and draft GitHub Release. The draft
+contains `release-manifest.json`, `SHA256SUMS`, and every registry or binary
+artifact bound to that commit. A manager can rebuild an interrupted draft from
+the exact source with
+`bun run release:assets --version <version> --tag <tag> --sha <commit> --upload`.
+Publishing the draft is the production promotion event; `release.yml` verifies
+the tag, commit, version, manifest, checksums, and asset set before publishing
+the approved npm archives, Python distributions, and Cargo crates. GitHub-hosted
+runners never rebuild native release artifacts for singular-version releases.
 
 Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
 manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
-Node jobs consume same-run artifacts, publish native archives first with npm
-provenance, compile and publish normal workspace packages including the Projen
-engine, then build facades from committed generated TypeScript without UBRN and
-publish them in binding dependency order. Local Verdaccio publication does not
-enable provenance. Set the `UNIFFI_FACADE_SMOKE` repository variable to `true`
-to run the optional nonblocking registry install and import check after facade
-publication. Python combines same-run platform wheels with standard wheel and
-source builds, then publishes each distribution through its own PyPI
-trusted-publisher environment. Binding publishers wait for their dependencies.
-Trusted-publisher instructions name `release.yml` and the release branch policy.
+approved npm archives are dependency-ordered and published through npm OIDC
+Trusted Publishing with provenance. Local Verdaccio publication does not enable
+provenance. Python publishes the exact approved wheels and source distributions
+through package-specific PyPI trusted-publisher environments; binding publishers
+wait for their dependencies. Trusted-publisher instructions name `release.yml`
+and the `v*` deployment tag policy. Cargo publication checks the approved source
+commit and skips an already-published version during recovery.
 The docs jobs generate README and TypeScript API content and deploy GitHub Pages
 from the same workflow. When a conventional Node binding path already belongs
 to a root subproject, Rust mapping reuses that project and adds binding

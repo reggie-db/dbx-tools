@@ -360,7 +360,7 @@
     },
     "release": {
       "name": "release",
-      "description": "Prepare, validate, locally publish, and automatically merge a release PR",
+      "description": "Prepare, validate, locally publish, and upload a draft release candidate",
       "steps": [
         {
           "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
@@ -370,10 +370,10 @@
     },
     "release:assets": {
       "name": "release:assets",
-      "description": "Build and upload native assets for an existing GitHub Release",
+      "description": "Rebuild and upload a complete draft release candidate",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-assets.ts",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-candidate.ts",
           "receiveArgs": true
         }
       ]
