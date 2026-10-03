@@ -573,10 +573,14 @@ export function rustAssetsJob(): Job {
 
 export function rustCargoPublishJob(plan: RustReleasePlan, local: boolean): Job {
   const registry = local ? '"${{ vars.LOCAL_CARGO_REGISTRY }}"' : "crates-io";
+  const prerequisites = [
+    "needs.verify-context.result == 'success'",
+    ...(plan.hasTargetOutputs ? ["needs.rust-assets.result == 'success'"] : []),
+  ].join(" && ");
   return {
     if: local
-      ? "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}"
-      : "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
+      ? `\${{ always() && ${prerequisites} && github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}`
+      : `\${{ always() && ${prerequisites} && (github.event_name == 'push' || (inputs.dry_run != true && inputs.stage == 'all')) }}`,
     needs: ["verify-context", ...(plan.hasTargetOutputs ? ["rust-assets"] : [])],
     runsOn: [local ? "self-hosted" : "ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
@@ -683,8 +687,12 @@ export function independentRustGitHubReleaseJob(
 }
 
 export function rustGitHubReleaseJob(plan: RustReleasePlan): Job {
+  const prerequisites = [
+    "needs.verify-context.result == 'success'",
+    ...(plan.hasTargetOutputs ? ["needs.rust-assets.result == 'success'"] : []),
+  ].join(" && ");
   return {
-    if: "${{ github.event_name == 'push' || (inputs.dry_run == false && inputs.stage == 'all') }}",
+    if: `\${{ always() && ${prerequisites} && (github.event_name == 'push' || (inputs.dry_run != true && inputs.stage == 'all')) }}`,
     needs: ["verify-context", ...(plan.hasTargetOutputs ? ["rust-assets"] : [])],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.WRITE },
@@ -834,7 +842,10 @@ export function rustNodeFacadePublishJob(
   bindings: readonly RustReleaseBinding[],
 ): Job {
   return {
-    if: releaseStageCondition("node"),
+    if: releaseStageCondition("node", [
+      "needs.verify-context.result == 'success'",
+      "needs.publish-node.result == 'success'",
+    ]),
     needs: ["verify-context", "publish-node"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },

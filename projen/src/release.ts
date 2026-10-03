@@ -102,13 +102,31 @@ export function releaseTagPattern(project: DBXToolsJavaScriptProject): string {
 }
 
 /** Run a release stage on default-branch pushes or when selected for manual recovery. */
-export function releaseStageCondition(stage: Exclude<ReleaseStage, "all">): string {
-  return `\${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == '${stage}' }}`;
+export function releaseStageCondition(
+  stage: Exclude<ReleaseStage, "all">,
+  prerequisites: readonly string[] = [],
+): string {
+  if (prerequisites.length === 0) {
+    return `\${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == '${stage}' }}`;
+  }
+  const prefix = prerequisites.length
+    ? `always() && ${prerequisites.map((condition) => `(${condition})`).join(" && ")} && `
+    : "";
+  return `\${{ ${prefix}(github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == '${stage}') }}`;
 }
 
 /** Publish a selected stage unless a manual run remains in dry-run mode. */
-export function releasePublishCondition(stage: Exclude<ReleaseStage, "all">): string {
-  return `\${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == '${stage}')) }}`;
+export function releasePublishCondition(
+  stage: Exclude<ReleaseStage, "all">,
+  prerequisites: readonly string[] = [],
+): string {
+  if (prerequisites.length === 0) {
+    return `\${{ github.event_name == 'push' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == '${stage}')) }}`;
+  }
+  const prefix = prerequisites.length
+    ? `always() && ${prerequisites.map((condition) => `(${condition})`).join(" && ")} && `
+    : "";
+  return `\${{ ${prefix}(github.event_name == 'push' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == '${stage}'))) }}`;
 }
 
 /** Download release artifacts from this run or a verified earlier run. */
@@ -164,7 +182,7 @@ export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): reado
 export function npmPublishEnvironment(): Record<string, string> {
   return {
     NPM_CONFIG_PROVENANCE:
-      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
+      "${{ (github.event_name == 'push' || inputs.dry_run != true) && 'true' || 'false' }}",
     NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
     NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
     DRY_RUN:

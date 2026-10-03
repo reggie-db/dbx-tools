@@ -150,7 +150,7 @@ describe("unified release workflow", () => {
     const publish = step(job, "Compile, package, and publish npm workspace");
     assert.equal(
       publish.env?.NPM_CONFIG_PROVENANCE,
-      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
+      "${{ (github.event_name == 'push' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
     assert.equal(publish.env?.NODE_AUTH_TOKEN, "${{ secrets.NPM_TOKEN }}");
     assert.equal(
@@ -189,7 +189,7 @@ describe("unified release workflow", () => {
     const deploy = release.jobs["deploy-docs"]!;
     assert.equal(
       deploy.if,
-      "${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'docs')) }}",
+      "${{ github.event_name == 'push' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'docs')) }}",
     );
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
