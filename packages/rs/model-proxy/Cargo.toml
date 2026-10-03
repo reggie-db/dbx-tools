@@ -63,15 +63,15 @@ futures-util = "0.3"
   workspace = true
 
   [dependencies.dbx-tools-core]
-  version = "0.9.18"
+  version = "0.9.19"
   path = "../core"
 
   [dependencies.dbx-tools-model]
-  version = "0.9.18"
+  version = "0.9.19"
   path = "../model"
 
   [dependencies.dbx-tools-service]
-  version = "0.9.18"
+  version = "0.9.19"
   path = "../service"
   features = [ "graphql", "openapi", "topics" ]
 
