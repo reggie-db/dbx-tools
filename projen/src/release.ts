@@ -258,11 +258,16 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
         name: "Publish approved npm archives",
         env: {
           RELEASE_VERSION,
+          NPM_BOOTSTRAP:
+            "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && 'true' || 'false' }}",
           NODE_AUTH_TOKEN:
             "${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap && secrets.NPM_TOKEN || '' }}",
           ...npmPublishEnvironment(),
         },
-        run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $DRY_RUN',
+        run: [
+          'if [ "$NPM_BOOTSTRAP" = "true" ]; then export NPM_CONFIG_PROVENANCE=false; fi',
+          'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $DRY_RUN',
+        ].join("\n"),
       },
     ],
   };

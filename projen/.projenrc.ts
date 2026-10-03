@@ -107,6 +107,11 @@ const project = new typescript.TypeScriptProject({
 // constructor's `version` option is ignored when `release: false`, so write the
 // generated manifest field explicitly.
 project.package.addField("version", PACKAGE_VERSION);
+project.package.addField("repository", {
+  type: "git",
+  url: "git+https://github.com/reggie-db/dbx-tools.git",
+  directory: "projen",
+});
 
 // This package is consumed as TS source; publish the source subpaths, not a
 // compiled `lib/`.
