@@ -28,6 +28,15 @@ export interface NpmReleaseIdentity {
   readonly version: string;
 }
 
+interface NpmArchiveManifest {
+  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly optionalDependencies?: Readonly<Record<string, string>>;
+  readonly name?: string;
+  readonly publishConfig?: { readonly access?: unknown };
+  readonly repository?: unknown;
+  readonly version?: string;
+}
+
 function normalizedRepository(value: unknown): string | undefined {
   const url =
     typeof value === "string"
@@ -120,7 +129,7 @@ export async function publishedNpmRelease(
   };
 }
 
-export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
+function readNpmArchiveManifest(path: string): NpmArchiveManifest {
   const result = exec.spawnSync("tar", ["-xOf", path, "package/package.json"], {
     cwd: process.cwd(),
     stdout: "capture",
@@ -131,12 +140,11 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
   if (result.exitCode !== 0 || !result.stdout) {
     throw new Error(`Cannot read npm package manifest from ${path}: ${result.stderr}`);
   }
-  const manifest = JSON.parse(result.stdout) as {
-    name?: string;
-    publishConfig?: { access?: unknown };
-    repository?: unknown;
-    version?: string;
-  };
+  return JSON.parse(result.stdout) as NpmArchiveManifest;
+}
+
+export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
+  const manifest = readNpmArchiveManifest(path);
   if (!manifest.name || !manifest.version) {
     throw new Error(`npm archive has no package name or version: ${path}`);
   }
@@ -152,6 +160,48 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
     repository: manifest.repository,
     version: manifest.version,
   };
+}
+
+function orderNpmArchives(archives: readonly string[]): string[] {
+  const byName = new Map(
+    archives.map((archive) => {
+      const manifest = readNpmArchiveManifest(archive);
+      if (!manifest.name) throw new Error(`npm archive has no package name: ${archive}`);
+      return [manifest.name, { archive, manifest }] as const;
+    }),
+  );
+  if (byName.size !== archives.length) throw new Error("Release contains duplicate npm packages");
+  const remaining = new Map(
+    [...byName].map(([name, value]) => [
+      name,
+      new Set(
+        [
+          ...Object.keys(value.manifest.dependencies ?? {}),
+          ...Object.keys(value.manifest.optionalDependencies ?? {}),
+        ].filter((dependency) => byName.has(dependency)),
+      ),
+    ]),
+  );
+  const ordered: string[] = [];
+  while (remaining.size > 0) {
+    const ready = [...remaining]
+      .filter(([, dependencies]) => dependencies.size === 0)
+      .map(([name]) => name)
+      .sort();
+    if (ready.length === 0) {
+      throw new Error(
+        `Cyclic npm release dependencies: ${[...remaining.keys()].sort().join(", ")}`,
+      );
+    }
+    for (const name of ready) {
+      ordered.push(byName.get(name)!.archive);
+      remaining.delete(name);
+    }
+    for (const dependencies of remaining.values()) {
+      for (const name of ready) dependencies.delete(name);
+    }
+  }
+  return ordered;
 }
 
 /** Hash paths, executable bits, symlink targets, and bytes while ignoring tar metadata. */
@@ -219,10 +269,12 @@ export async function publishNpmArchives(options: {
   readonly version?: string;
 }): Promise<void> {
   const directory = resolve(options.directory);
-  const archives = readdirSync(directory)
-    .filter((file) => file.endsWith(".tgz"))
-    .sort()
-    .map((file) => join(directory, file));
+  const archives = orderNpmArchives(
+    readdirSync(directory)
+      .filter((file) => file.endsWith(".tgz"))
+      .sort()
+      .map((file) => join(directory, file)),
+  );
   if (archives.length === 0) throw new Error(`No npm archives found in ${directory}`);
 
   for (const archive of archives) {

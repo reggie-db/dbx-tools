@@ -19,7 +19,6 @@ import {
   type RustOpenApiOptions as RustOpenApiConfiguration,
 } from "./_rust-project.ts";
 import {
-  rustAssetsJob,
   configureRustReleaseTask,
   independentRustCargoPublishJob,
   independentRustGitHubReleaseJob,
@@ -29,9 +28,6 @@ import {
   planRustRelease,
   rustBuildJob,
   rustCargoPublishJob,
-  rustGitHubReleaseJob,
-  rustNativeNpmPublishJob,
-  rustNodeFacadePublishJob,
 } from "./_rust-release-workflow.ts";
 import { toPosix } from "./packages.ts";
 import {
@@ -1124,27 +1120,8 @@ export class DBXToolsRustWorkspace extends Component {
       }
       return;
     }
-    if (plan.targets.length) {
-      workflow.addJob("rust-build", rustBuildJob(plan));
-      workflow.addJob("rust-assets", rustAssetsJob());
-    }
     if (plan.publicCrates.length) {
-      workflow.addJob("publish-cargo", rustCargoPublishJob(plan, false));
-      workflow.addJob("publish-local-cargo", rustCargoPublishJob(plan, true));
-    }
-    if (plan.hasTargetOutputs) {
-      workflow.addJob("publish-github-release", rustGitHubReleaseJob(plan));
-    }
-    if (plan.nodeBindings.length && hasNodeRelease(project)) {
-      workflow.addJob("publish-native-npm", rustNativeNpmPublishJob(project));
-      const nodeJob = workflow.getJob("publish-node");
-      if ("uses" in nodeJob) throw new Error("publish-node must be a workflow job");
-      workflow.updateJob("publish-node", {
-        ...nodeJob,
-        if: "${{ always() && needs.verify-context.result == 'success' && needs.publish-native-npm.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
-        needs: ["verify-context", "publish-native-npm"],
-      });
-      workflow.addJob("publish-node-facades", rustNodeFacadePublishJob(project, plan.nodeBindings));
+      workflow.addJob("publish-cargo", rustCargoPublishJob(plan));
     }
   }
 }

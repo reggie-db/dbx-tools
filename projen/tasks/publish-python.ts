@@ -2,6 +2,7 @@
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -29,6 +30,7 @@ interface PythonProjectFile {
 }
 
 export interface StampPythonProjectsOptions {
+  readonly excludeUniFFI?: boolean;
   readonly rewriteDependencies?: boolean;
   readonly versions?: ReadonlyMap<string, string>;
 }
@@ -63,7 +65,10 @@ export function stampPythonProjects(
     };
   });
   const projects = allProjects.filter(
-    (project) => !project.private && (!options.versions || options.versions.has(project.directory)),
+    (project) =>
+      !project.private &&
+      (!options.excludeUniFFI || !project.uniffi) &&
+      (!options.versions || options.versions.has(project.directory)),
   );
   if (projects.length === 0) throw new Error(`No Python packages found under ${root}`);
 
@@ -110,35 +115,9 @@ export function publishPythonProjects(options: {
   readonly version: string;
   readonly plan?: ReleasePlan;
 }): void {
-  const root = resolve(options.root);
   const output = mkdtempSync(join(tmpdir(), "projen-python-publish-"));
-  const planned = new Map(
-    options.plan?.pythonPackages.map((pkg) => [pkg.path.replace(/^.*\//, ""), pkg.version]) ?? [],
-  );
-  const stamp = stampPythonProjects(root, options.version, {
-    ...(options.plan ? { versions: planned } : {}),
-  });
   try {
-    const packages = options.plan?.pythonPackages ?? [];
-    if (packages.length > 0) {
-      for (const pkg of packages) {
-        exec.spawnSync("uv", ["build", "--package", pkg.identity, "--out-dir", output], {
-          cwd: process.cwd(),
-          stdout: "inherit",
-          stderr: "inherit",
-          stdin: "ignore",
-          check: true,
-        });
-      }
-    } else {
-      exec.spawnSync("uv", ["build", "--all-packages", "--out-dir", output], {
-        cwd: process.cwd(),
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "ignore",
-        check: true,
-      });
-    }
+    buildPythonProjects({ ...options, output });
     exec.spawnSync(
       "uvx",
       [
@@ -162,8 +141,85 @@ export function publishPythonProjects(options: {
       },
     );
   } finally {
-    stamp();
     rmSync(output, { recursive: true, force: true });
+  }
+}
+
+/** Build the exact Python release distributions without publishing them. */
+export function buildPythonProjects(options: {
+  readonly allowEmpty?: boolean;
+  readonly excludeUniFFI?: boolean;
+  readonly output: string;
+  readonly root: string;
+  readonly version: string;
+  readonly plan?: ReleasePlan;
+}): void {
+  const root = resolve(options.root);
+  const output = resolve(options.output);
+  rmSync(output, { recursive: true, force: true });
+  const standardProjects = options.excludeUniFFI
+    ? readdirSync(root, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => resolve(root, entry.name, "pyproject.toml"))
+        .filter(existsSync)
+        .map((path) => pythonProjectInfo(readFileSync(path, "utf8"), { parse, stringify }))
+        .filter((project) => !project.private && !project.uniffi)
+    : undefined;
+  if (standardProjects?.length === 0 && options.allowEmpty) {
+    mkdirSync(output, { recursive: true });
+    return;
+  }
+  const planned = new Map(
+    options.plan?.pythonPackages.map((pkg) => [pkg.path.replace(/^.*\//, ""), pkg.version]) ?? [],
+  );
+  const stamp = stampPythonProjects(root, options.version, {
+    excludeUniFFI: options.excludeUniFFI,
+    ...(options.plan ? { versions: planned } : {}),
+  });
+  try {
+    const packages = options.plan?.pythonPackages ?? [];
+    if (packages.length > 0) {
+      for (const pkg of packages) {
+        exec.spawnSync("uv", ["build", "--package", pkg.identity, "--out-dir", output], {
+          cwd: process.cwd(),
+          stdout: "inherit",
+          stderr: "inherit",
+          stdin: "ignore",
+          check: true,
+        });
+      }
+    } else if (options.excludeUniFFI) {
+      for (const project of standardProjects ?? []) {
+        exec.spawnSync("uv", ["build", "--package", project.name, "--out-dir", output], {
+          cwd: process.cwd(),
+          stdout: "inherit",
+          stderr: "inherit",
+          stdin: "ignore",
+          check: true,
+        });
+      }
+    } else {
+      exec.spawnSync("uv", ["build", "--all-packages", "--out-dir", output], {
+        cwd: process.cwd(),
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "ignore",
+        check: true,
+      });
+    }
+    exec.spawnSync(
+      "uvx",
+      ["twine", "check", ...readdirSync(output).map((file) => join(output, file))],
+      {
+        cwd: process.cwd(),
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "ignore",
+        check: true,
+      },
+    );
+  } finally {
+    stamp();
   }
 }
 
@@ -175,6 +231,7 @@ if (import.meta.main) {
     .requiredOption("--publish-url <url>", "devpi writable index URL")
     .option("--root <path>", "Python workspace package root", "packages/py")
     .option("--plan <path>", "affected release plan")
+    .option("--output <path>", "Build distributions into a directory without publishing")
     .option("--dry-run", "build and inspect distributions without uploading")
     .action(
       (
@@ -185,6 +242,7 @@ if (import.meta.main) {
           publishUrl: string;
           root: string;
           plan?: string;
+          output?: string;
         },
       ) => {
         const plan = options.plan
@@ -192,7 +250,16 @@ if (import.meta.main) {
           : undefined;
         const fallbackVersion = version ?? plan?.pythonPackages[0]?.version;
         if (!fallbackVersion) throw new Error("Python publication requires a version or plan");
-        publishPythonProjects({ ...options, version: fallbackVersion, plan });
+        if (options.output) {
+          buildPythonProjects({
+            output: options.output,
+            root: options.root,
+            version: fallbackVersion,
+            plan,
+          });
+        } else {
+          publishPythonProjects({ ...options, version: fallbackVersion, plan });
+        }
       },
     );
   await program.parseAsync();

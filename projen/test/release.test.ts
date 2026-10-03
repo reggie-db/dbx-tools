@@ -60,15 +60,14 @@ after(() => {
 });
 
 describe("unified release workflow", () => {
-  it("releases the default branch with an annotated tag and supports manual recovery", () => {
+  it("promotes a published draft release and supports manual recovery", () => {
     assert.equal(release.name, "release");
     assert.equal(
       release["run-name"],
-      "release 0.0.1 ${{ github.event_name == 'push' && github.sha || inputs.release_tag }}",
+      "release 0.0.1 ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}",
     );
-    assert.deepEqual(workflowTrigger<{ branches: string[]; paths: string[] }>(release, "push"), {
-      branches: ["main"],
-      paths: ["VERSION"],
+    assert.deepEqual(workflowTrigger<{ types: string[] }>(release, "release"), {
+      types: ["published"],
     });
     const inputs = workflowTrigger<{ inputs: Record<string, unknown> }>(
       release,
@@ -81,90 +80,76 @@ describe("unified release workflow", () => {
       required: true,
     });
     assert.deepEqual(inputs.stage, {
-      description: "Release stage to build, validate, or recover",
+      description: "Published release stage to validate or recover",
       type: "choice",
-      options: ["all", "node", "python", "docs"],
+      options: ["all", "node", "python", "cargo", "docs"],
       default: "all",
       required: true,
     });
-    assert.deepEqual(inputs.source_run_id, {
-      description: "Earlier release workflow run containing Rust artifacts",
-      type: "string",
-      default: "",
-      required: false,
-    });
+    assert.equal(inputs.expected_sha, undefined);
+    assert.equal(inputs.source_run_id, undefined);
     assert.deepEqual(release.concurrency, {
-      group: "release",
+      group:
+        "release-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}",
       "cancel-in-progress": false,
     });
     assert.deepEqual(release.permissions, { contents: "read" });
 
     const verifyJob = release.jobs["verify-context"]!;
-    assert.deepEqual(verifyJob.permissions, { actions: "read", contents: "write" });
-    assert.equal(verifyJob.outputs?.build_mode, "${{ steps.release.outputs.build_mode }}");
+    assert.deepEqual(verifyJob.permissions, { contents: "read" });
+    assert.equal(verifyJob.outputs?.build_mode, undefined);
     assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
     const verify = step(verifyJob, "Verify release context");
     assert.equal(
-      verify.env?.DRY_RUN,
-      "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
+      verify.env?.RELEASE_TAG,
+      "${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}",
     );
-    assert.ok(verify.run?.includes('test "$GITHUB_REF_NAME" = "main"'));
-    assert.ok(verify.run?.includes('RELEASE_VERSION="$(tr -d'));
-    assert.ok(verify.run?.includes('PREVIOUS_VERSION="$(git show'));
-    assert.ok(verify.run?.includes('test "$PREVIOUS_VERSION" != "$RELEASE_VERSION"'));
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
-    assert.ok(verify.run?.includes("--assert-next"));
     assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
-    assert.ok(verify.run?.includes('git tag -a "$RELEASE_TAG"'));
-    assert.ok(verify.run?.includes('git push origin "refs/tags/$RELEASE_TAG"'));
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
-    assert.ok(verify.run?.includes('test "$RELEASE_SHA" = "$EXPECTED_SHA"'));
-    assert.ok(verify.run?.includes("git log -1 --format=%B -- VERSION"));
+    assert.ok(verify.run?.includes('git merge-base --is-ancestor "$RELEASE_SHA" "origin/main"'));
+    assert.ok(verify.run?.includes('gh release view "$RELEASE_TAG" --json isDraft'));
+    assert.ok(verify.run?.includes("tasks/release-manifest.ts verify"));
+    assert.ok(verify.run?.includes('gh release download "$RELEASE_TAG"'));
     assert.doesNotMatch(verify.run ?? "", /gh release create/);
-    const draft = step(verifyJob, "Prepare local draft release");
-    assert.equal(draft.if, "${{ steps.release.outputs.build_mode == 'local' }}");
-    assert.equal(draft.env?.GH_REPO, "${{ github.repository }}");
-    assert.ok(draft.run?.includes('gh release create "$RELEASE_TAG" --draft'));
-    assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_TYPE" = "tag"/);
-    assert.doesNotMatch(verify.run ?? "", /GITHUB_REF_NAME" = "\$RELEASE_TAG"/);
-    assert.ok(verify.run?.includes("inputs.source_run_id"));
-    assert.equal(step(verifyJob, "Verify source artifact run").uses, "actions/github-script@v8");
   });
 
   it("publishes npm through the shared authenticated driver", () => {
     const job = release.jobs["publish-node"]!;
     assert.equal(
       job.if,
-      "${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node' }}",
+      "${{ github.event_name == 'release' || inputs.stage == 'all' || inputs.stage == 'node' }}",
     );
     assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
     assert.equal(job.env?.BUN_VERSION, "1.3.14");
     assert.deepEqual(step(job, "Setup Node.js").with, {
-      "node-version": "lts/*",
+      "node-version": "24",
       "registry-url": "https://registry.npmjs.org",
+      "package-manager-cache": false,
     });
     assert.equal(step(job, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.equal(step(job, "Save Bun cache").uses, "actions/cache/save@v5");
 
-    const publish = step(job, "Compile, package, and publish npm workspace");
+    assert.ok(step(job, "Download approved npm archives").run?.includes("release-manifest.ts"));
+    const publish = step(job, "Publish approved npm archives");
     assert.equal(
       publish.env?.NPM_CONFIG_PROVENANCE,
-      "${{ (github.event_name == 'push' || inputs.dry_run != true) && 'true' || 'false' }}",
+      "${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
-    assert.equal(publish.env?.NODE_AUTH_TOKEN, "${{ secrets.NPM_TOKEN }}");
+    assert.equal(publish.env?.NODE_AUTH_TOKEN, undefined);
     assert.equal(
       publish.env?.DRY_RUN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
     );
-    assert.ok(publish.run?.includes("tasks/publish.ts"));
+    assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
   });
 
   it("builds and selectively deploys docs in the same workflow", () => {
     const build = release.jobs["build-docs"]!;
     assert.equal(
       build.if,
-      "${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs' }}",
+      "${{ github.event_name == 'release' || inputs.stage == 'all' || inputs.stage == 'docs' }}",
     );
     assert.deepEqual(build.permissions, {
       contents: "read",
@@ -189,7 +174,7 @@ describe("unified release workflow", () => {
     const deploy = release.jobs["deploy-docs"]!;
     assert.equal(
       deploy.if,
-      "${{ github.event_name == 'push' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'docs')) }}",
+      "${{ github.event_name == 'release' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'docs')) }}",
     );
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
@@ -345,13 +330,14 @@ describe("release task contracts", () => {
     assert.match(releasePr, /"pr",\s*"create"/);
     assert.ok(releasePr.includes('"--no-approve",'));
     assert.ok(releasePr.includes('"--no-wait",'));
-    assert.ok(releasePr.includes('"--build <mode>"'));
+    assert.doesNotMatch(releasePr, /"--build <mode>"/);
     assert.ok(releasePr.includes('"--no-validate",'));
     assert.ok(releasePr.includes('"--no-local-publish",'));
     assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--auto",\s*"--merge"/);
     assert.match(releasePr, /"pr",\s*"checks",[\s\S]*"--watch",[\s\S]*"--required"/);
-    assert.match(releasePr, /"run",\s*"watch",\s*runId,\s*"--exit-status"/);
-    assert.match(releasePr, /"--commit",\s*mergeSha/);
+    assert.ok(releasePr.includes("release-candidate.ts"));
+    assert.ok(releasePr.includes('"--sha",\n              mergeSha'));
+    assert.ok(releasePr.includes('"--upload"'));
     assert.doesNotMatch(
       releasePr,
       /repos\/\$\{account\.owner\}\/\$\{account\.repository\}\/merges/,

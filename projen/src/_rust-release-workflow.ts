@@ -17,19 +17,11 @@ import type {
   UniFFIReleaseTarget,
 } from "./project-rs.ts";
 import { defaultReleaseUnitId } from "./release-catalog.ts";
-import {
-  RELEASE_SHA,
-  RELEASE_SUMMARY_FILE,
-  RELEASE_TAG,
-  RELEASE_VERSION,
-  releaseSourceSteps,
-} from "./release-dispatch.ts";
+import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
 import {
   independentReleaseSetupSteps,
   npmPublishEnvironment,
-  nodeReleaseSetupSteps,
-  releaseArtifactSteps,
-  releaseStageCondition,
+  releasePublishCondition,
 } from "./release.ts";
 
 const require = createRequire(import.meta.url);
@@ -460,32 +452,24 @@ function rustCargoBuildCommand(plan: RustReleasePlan): string {
   ].join("\n");
 }
 
-export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly JobStep[]): Job {
-  const independent = Boolean(independentSetup);
-  const bindingCommands = rustBindingCommands(plan, independent);
-  const binaryCommands = rustBinaryCommands(plan, independent);
+export function rustBuildJob(plan: RustReleasePlan, setup: readonly JobStep[]): Job {
+  const bindingCommands = rustBindingCommands(plan, true);
+  const binaryCommands = rustBinaryCommands(plan, true);
   return {
-    if: independentSetup
-      ? "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'docs') }}"
-      : "${{ needs.verify-context.outputs.build_mode == 'remote' && (github.event_name == 'push' || inputs.stage == 'all') }}",
+    if: "${{ needs.release-plan.outputs.rust_targets != '[]' && (github.event_name == 'push' || inputs.stage != 'docs') }}",
     name: "Rust / ${{ matrix.node }}",
-    needs: [independentSetup ? "release-plan" : "verify-context"],
+    needs: ["release-plan"],
     runsOn: ["${{ matrix.runner }}"],
     permissions: { contents: JobPermission.READ },
-    env: {
-      ...RUST_BUILD_ENV,
-      ...(independentSetup ? { BUN_VERSION } : {}),
-    },
+    env: { ...RUST_BUILD_ENV, BUN_VERSION },
     strategy: {
       failFast: false,
       matrix: {
-        include: independentSetup
-          ? ("${{ fromJSON(needs.release-plan.outputs.rust_targets) }}" as never)
-          : ([...plan.targets] as never),
+        include: "${{ fromJSON(needs.release-plan.outputs.rust_targets) }}" as never,
       },
     },
     steps: [
-      ...(independentSetup ?? releaseSourceSteps()),
+      ...setup,
       ...(plan.hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
       {
         name: "Setup Rust",
@@ -516,7 +500,6 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
             {
               name: "Package UniFFI outputs",
               shell: "bash",
-              ...(independentSetup ? {} : { env: { VERSION: RELEASE_VERSION } }),
               run: timedBash("uniffi_packaging", bindingCommands.join("\n")),
             },
           ]
@@ -535,54 +518,11 @@ export function rustBuildJob(plan: RustReleasePlan, independentSetup?: readonly 
   };
 }
 
-/** Wait for the selected local or GitHub-hosted native build source. */
-export function rustAssetsJob(): Job {
+export function rustCargoPublishJob(plan: RustReleasePlan): Job {
   return {
-    if: "${{ always() && needs.verify-context.result == 'success' && (needs.verify-context.outputs.build_mode == 'local' || needs.rust-build.result == 'success') }}",
-    needs: ["verify-context", "rust-build"],
+    if: releasePublishCondition("cargo", ["needs.verify-context.result == 'success'"]),
+    needs: ["verify-context"],
     runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.WRITE },
-    steps: [
-      {
-        name: "Wait for locally uploaded release assets",
-        if: "${{ needs.verify-context.outputs.build_mode == 'local' }}",
-        env: {
-          GH_TOKEN: "${{ github.token }}",
-          GH_REPO: "${{ github.repository }}",
-          RELEASE_TAG: RELEASE_TAG,
-        },
-        shell: "bash",
-        run: [
-          "mkdir -p dist/local-release",
-          "for ATTEMPT in $(seq 1 360); do",
-          '  if gh release download "$RELEASE_TAG" --pattern rust-assets.json --dir dist/local-release --clobber; then exit 0; fi',
-          '  echo "waiting for local release assets ($ATTEMPT/360)"',
-          "  sleep 5",
-          "done",
-          'echo "::error::local release assets were not uploaded"',
-          "exit 1",
-        ].join("\n"),
-      },
-      {
-        name: "Confirm native release assets",
-        run: "true",
-      },
-    ],
-  };
-}
-
-export function rustCargoPublishJob(plan: RustReleasePlan, local: boolean): Job {
-  const registry = local ? '"${{ vars.LOCAL_CARGO_REGISTRY }}"' : "crates-io";
-  const prerequisites = [
-    "needs.verify-context.result == 'success'",
-    ...(plan.hasTargetOutputs ? ["needs.rust-assets.result == 'success'"] : []),
-  ].join(" && ");
-  return {
-    if: local
-      ? `\${{ always() && ${prerequisites} && github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}`
-      : `\${{ always() && ${prerequisites} && (github.event_name == 'push' || (inputs.dry_run != true && inputs.stage == 'all')) }}`,
-    needs: ["verify-context", ...(plan.hasTargetOutputs ? ["rust-assets"] : [])],
-    runsOn: [local ? "self-hosted" : "ubuntu-latest"],
     permissions: { contents: JobPermission.READ },
     steps: [
       ...releaseSourceSteps(),
@@ -591,14 +531,21 @@ export function rustCargoPublishJob(plan: RustReleasePlan, local: boolean): Job 
         uses: `dtolnay/rust-toolchain@${plan.releaseRustVersion}`,
       },
       {
-        name: local ? "Publish Cargo crates locally" : "Publish public crates",
+        name: "Publish public crates",
         env: {
-          CARGO_REGISTRY_TOKEN: local
-            ? "${{ secrets.LOCAL_CARGO_TOKEN }}"
-            : "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+          RELEASE_VERSION,
+          CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}",
         },
         run: plan.publicCrates
-          .map((crate) => `cargo publish --package "${crate}" --registry ${registry} --no-verify`)
+          .map((crate) =>
+            [
+              `if cargo info "${crate}@$RELEASE_VERSION" >/dev/null 2>&1; then`,
+              `  echo "skip published ${crate}@$RELEASE_VERSION"`,
+              "else",
+              `  cargo publish --package "${crate}" --registry crates-io --no-verify`,
+              "fi",
+            ].join("\n"),
+          )
           .join("\n"),
       },
     ],
@@ -686,54 +633,6 @@ export function independentRustGitHubReleaseJob(
   };
 }
 
-export function rustGitHubReleaseJob(plan: RustReleasePlan): Job {
-  const prerequisites = [
-    "needs.verify-context.result == 'success'",
-    ...(plan.hasTargetOutputs ? ["needs.rust-assets.result == 'success'"] : []),
-  ].join(" && ");
-  return {
-    if: `\${{ always() && ${prerequisites} && (github.event_name == 'push' || (inputs.dry_run != true && inputs.stage == 'all')) }}`,
-    needs: ["verify-context", ...(plan.hasTargetOutputs ? ["rust-assets"] : [])],
-    runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.WRITE },
-    steps: [
-      ...releaseSourceSteps(),
-      {
-        name: "Download release binaries",
-        if: "${{ needs.verify-context.outputs.build_mode == 'remote' }}",
-        uses: "actions/download-artifact@v8",
-        with: {
-          pattern: "*-binary",
-          path: "dist/rust-release",
-          "merge-multiple": true,
-        },
-      },
-      {
-        name: "Publish GitHub release assets",
-        if: "${{ needs.verify-context.outputs.build_mode == 'remote' }}",
-        uses: "softprops/action-gh-release@v2",
-        with: {
-          files: "dist/rust-release/*",
-          body_path: RELEASE_SUMMARY_FILE,
-          generate_release_notes: true,
-          tag_name: RELEASE_TAG,
-          target_commitish: RELEASE_SHA,
-        },
-      },
-      {
-        name: "Publish locally built GitHub release",
-        if: "${{ needs.verify-context.outputs.build_mode == 'local' }}",
-        env: {
-          GH_TOKEN: "${{ github.token }}",
-          RELEASE_NOTES: RELEASE_SUMMARY_FILE,
-          RELEASE_TAG,
-        },
-        run: 'gh release edit "$RELEASE_TAG" --draft=false --latest --notes-file "$RELEASE_NOTES"',
-      },
-    ],
-  };
-}
-
 export function independentRustNativeNpmPublishJob(project: DBXToolsJavaScriptProject): Job {
   return {
     if: "${{ needs.release-plan.outputs.node == 'true' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
@@ -793,94 +692,6 @@ export function independentRustNodeFacadePublishJob(
             ];
           })
           .join("\n"),
-      },
-    ],
-  };
-}
-
-export function rustNativeNpmPublishJob(project: DBXToolsJavaScriptProject): Job {
-  return {
-    if: "${{ always() && needs.verify-context.result == 'success' && needs.rust-assets.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
-    needs: ["verify-context", "rust-assets"],
-    runsOn: ["ubuntu-latest"],
-    permissions: {
-      actions: JobPermission.READ,
-      contents: JobPermission.READ,
-      idToken: JobPermission.WRITE,
-    },
-    timeoutMinutes: 15,
-    env: { BUN_VERSION, CI: "true" },
-    steps: [
-      ...nodeReleaseSetupSteps(project),
-      ...releaseArtifactSteps({
-        currentName: "Download native npm packages",
-        recoveredName: "Download recovered native npm packages",
-        pattern: "*-npm",
-        path: "dist/uniffi/native",
-        condition: "needs.verify-context.outputs.build_mode == 'remote'",
-      }),
-      {
-        name: "Download locally built native npm packages",
-        if: "${{ needs.verify-context.outputs.build_mode == 'local' }}",
-        env: { GH_TOKEN: "${{ github.token }}", RELEASE_TAG },
-        run: [
-          "mkdir -p dist/uniffi/native",
-          'gh release download "$RELEASE_TAG" --pattern "*.tgz" --dir dist/uniffi/native',
-        ].join("\n"),
-      },
-      {
-        name: "Publish native npm packages",
-        env: { RELEASE_VERSION, ...npmPublishEnvironment() },
-        run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" $DRY_RUN',
-      },
-    ],
-  };
-}
-
-export function rustNodeFacadePublishJob(
-  project: DBXToolsJavaScriptProject,
-  bindings: readonly RustReleaseBinding[],
-): Job {
-  return {
-    if: releaseStageCondition("node", [
-      "needs.verify-context.result == 'success'",
-      "needs.publish-node.result == 'success'",
-    ]),
-    needs: ["verify-context", "publish-node"],
-    runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
-    timeoutMinutes: 30,
-    env: { BUN_VERSION, CI: "true" },
-    steps: [
-      ...nodeReleaseSetupSteps(project),
-      {
-        name: "Build and publish UniFFI npm facades",
-        env: { RELEASE_VERSION, ...npmPublishEnvironment() },
-        run: bindings
-          .flatMap((binding) => {
-            const output = `dist/uniffi/facades/${binding.crate}`;
-            return [
-              `node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "${output}"`,
-              `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN`,
-            ];
-          })
-          .join("\n"),
-      },
-      {
-        name: "Smoke test published UniFFI npm facades",
-        if: "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",
-        continueOnError: true,
-        env: { RELEASE_VERSION },
-        run: [
-          'SMOKE_DIR="$(mktemp -d)"',
-          "trap 'rm -rf \"$SMOKE_DIR\"' EXIT",
-          'cd "$SMOKE_DIR"',
-          "npm init --yes >/dev/null",
-          ...bindings.flatMap((binding) => [
-            `npm install --ignore-scripts --no-audit --no-fund --package-lock=false "${binding.nodePackage}@$RELEASE_VERSION"`,
-            `node -e 'import("${binding.nodePackage}")'`,
-          ]),
-        ].join("\n"),
       },
     ],
   };

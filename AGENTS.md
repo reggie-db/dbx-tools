@@ -851,12 +851,16 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   compiling Rust. Regenerate bindings while changing a UniFFI API through the
   focused watcher or `bun run rs:bindings`; release preparation does not invoke
   UBRN or download its build-time dependencies. `bun run release` runs Cargo
-  workspace tests. `--build auto` uses a complete local macOS build when the
-  selected GitHub account has maintain/admin access and the required tools are
-  available, otherwise it uses the GitHub Rust matrix. `--build local` and
-  `--build remote` force either path. A manager can rerun an interrupted local
-  upload through `bun run release:assets --version <version> --tag <tag>
---upload` from the matching source.
+  workspace tests, publishes the reviewed candidate to configured local npm,
+  PyPI, and Cargo mirrors, then builds every production npm archive, Python
+  distribution, native binding, and Rust binary locally from the exact merged
+  release commit. The command creates an annotated `v*` tag and a draft GitHub
+  Release only after those artifacts exist, and uploads the artifacts with
+  `release-manifest.json` and `SHA256SUMS`. Publishing that draft is the sole
+  production promotion event. GitHub-hosted runners never rebuild native release
+  artifacts as an automatic fallback. A manager can rebuild an interrupted
+  candidate through `bun run release:assets --version <version> --tag <tag>
+--sha <commit> --upload` from the matching source.
   Repository-specific release guards belong in `releaseValidationTasks`; they
   run in the release worktree before expensive tests, local publication, or
   approval. This repository uses the source-JSDoc ratchet and README generation
@@ -873,17 +877,17 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `target-feature=+crt-static`, so Node archives and Python wheels do not depend
   on a separately installed `VCRUNTIME140.dll`. An explicitly pinned
   `releaseRustVersion` still uses the setup action on Windows.
-  One generated `.github/workflows/release.yml` owns Rust, npm, PyPI, GitHub
-  binary, and documentation publication. A push to the configured release branch
-  starts it only when `VERSION` changed, so ordinary merges do not publish. The
-  release PR contains the reviewed version and generated files. The context job
-  requires the version to differ from its parent and exceed the latest tag, then
-  creates the annotated `v*` tag or verifies that an existing tag points to the
-  same commit. Every source job repeats the shallow checkout and tag
-  verification. A manual run requires the same tag and commit plus dry-run mode,
-  so it builds and validates without publishing packages or deploying
-  documentation. The workflow uses one non-cancelling `release` concurrency
-  group so a later release cannot interrupt an earlier publication.
+  One generated `.github/workflows/release.yml` owns Cargo, npm, PyPI, and
+  documentation promotion. It runs on `release.published`, not on a branch push.
+  The context job resolves the published release's annotated tag to its commit,
+  requires that commit to be on the configured release branch, checks out that
+  exact SHA, verifies `VERSION`, downloads the approved release assets, and
+  validates every size and SHA-256 recorded in `release-manifest.json` and
+  `SHA256SUMS`. Registry jobs publish those exact npm and Python files; they do
+  not repack them. Cargo publishes from the same verified checkout. Manual
+  recovery accepts an existing published tag and can select one registry stage.
+  The workflow uses a non-cancelling per-tag concurrency group so a later release
+  cannot interrupt an earlier promotion.
   After local validation, release preparation writes
   `docs/releases/v<version>.md` by trying the installed Cursor agent, Codex, then
   Claude in that order. Each invocation is non-interactive and read-only. An
@@ -898,13 +902,12 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Release workflow generation is non-destructive: it writes `release.yml` and
   never removes other workflow files. Consumers must explicitly delete exact
   workflow files they no longer want.
-  GitHub's failed-job rerun reuses successful Rust artifacts from the same run.
-  Manual recovery selects `all`, `node`, `python`, or `docs`; a Node or Python
-  recovery can name an earlier `release.yml` run whose commit must match the
-  verified annotated tag. Dispatch the current default-branch workflow with the
-  annotated tag and exact SHA as inputs; the workflow verifies both before
-  checking out the immutable release boundary. Manual runs default to dry-run,
-  while clearing `dry_run` permits the selected publication stage. npm
+  Manual recovery selects `all`, `node`, `python`, `cargo`, or `docs` and names
+  the already-published annotated tag. The workflow resolves that tag to its
+  exact commit, requires the commit on `main`, verifies the complete draft
+  candidate manifest and checksums, and checks out only that immutable source.
+  Manual runs default to dry-run, while clearing `dry_run` permits the selected
+  publication stage. npm
   recovery compares canonical extracted paths, executable bits, bytes, and
   repository identity before skipping an exact published version; read-only
   generator modes, tar timestamps, and gzip metadata do not make equivalent
@@ -912,26 +915,19 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   packages are packed with Bun for the same check. PyPI publishers use Twine's
   hash-aware existing-file check, so matching
   files are skipped and a same-name content mismatch fails.
-  The Rust matrix uploads native npm archives, Python wheels, and explicit
-  binaries as same-run artifacts. Node publishes native packages first with npm
-  provenance, publishes normal workspace packages including Projen next, then
-  builds facades from committed generated TypeScript and publishes them in
-  binding dependency order. Python combines every platform wheel with standard
-  wheel and source builds, and publishes each distribution through its own PyPI
-  trusted-publisher environment. Local release builds run Cargo natively for
-  Darwin, cargo-zigbuild for Linux, and cargo-xwin with the clang backend for
-  Windows. They build the exact merged release SHA, then a maintain/admin GitHub
-  account uploads archives and a checksum manifest to the draft GitHub Release.
-  GitHub-hosted builds use the same target/package plan and publish through
-  workflow artifacts. `Cargo.lock` and `--locked` keep dependency resolution
-  reproducible.
-  Set
-  `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
-  optional nonblocking registry install and import check after facade publication.
-  GitHub-hosted packaging executes the target-specific
-  `<crate>-uniffi-bindgen` binary produced by the Rust matrix. Local macOS
-  packaging builds one host generator and uses it for every target library.
-  Neither path uses `cargo run`, so packaging starts no additional Rust build.
+  Local release builds run Cargo natively for Darwin, cargo-zigbuild for Linux,
+  and cargo-xwin with the clang backend for Windows. They build the exact merged
+  release SHA, package native npm archives, Python wheels, UniFFI facades,
+  workspace npm archives, Python source distributions, and explicit binaries,
+  then upload the complete candidate plus `release-manifest.json` and
+  `SHA256SUMS` to a draft GitHub Release. GitHub-hosted publication never rebuilds
+  native outputs. Node publishes the exact approved archives in dependency order
+  through npm Trusted Publishing with provenance. Python publishes the exact
+  approved distributions through package-specific PyPI trusted publishers.
+  `Cargo.lock` and `--locked` keep local dependency resolution reproducible.
+  Local macOS packaging builds one host `<crate>-uniffi-bindgen` generator and
+  uses it for every target library. It does not use `cargo run`, so packaging
+  starts no additional Rust build.
   The generated bindgen binary requires the package's private
   `uniffi-bindgen` feature, which is the only release surface that enables
   `uniffi/cli`; runtime libraries and release binaries do not compile the
@@ -956,7 +952,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   `bun run release --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product in the release PR; omit both to restore the
   maintained full matrix. GitHub environments referenced by release jobs must
-  permit the configured release branch. Every PyPI trusted publisher, including
+  permit the configured `v*` release tag pattern. Every PyPI trusted publisher, including
   UniFFI wheels, uses `release.yml`.
 - **Python workspace roots** — `DBXToolsPythonWorkspace.root` defaults to
   `packages/py`; consumers may place packages elsewhere without changing the
@@ -2150,10 +2146,10 @@ bun run test:installer       # standalone installer tests; RUN_DOCKER_INSTALL_TE
 bun run model:metadata       # refresh committed model capability, retirement, and limit snapshots
   bun run bump                 # increment VERSION and synchronize generated versions only
   bun run version:check        # verify every package and generated version against VERSION
-  bun run release              # prepare a release PR; native build defaults to auto
-  bun run release --build local  # require a manager-authorized local native build
-  bun run release --build remote # require the GitHub-hosted Rust matrix
+  bun run release              # prepare a release PR and upload the merged draft candidate
   bun run release --no-approve # prepare the same PR but leave merging to a human
+  bun run release:assets --version <version> --tag <tag> --sha <commit> --upload
+                               # rebuild a draft candidate from its exact commit
 bun run eslint               # check lint across package roots and projen
 bun run eslint:fix           # explicitly apply supported lint fixes
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
@@ -2221,10 +2217,12 @@ What is configured, and why:
 every owned version surface, runs release validation and local publication, then
 opens one pull request into `main`. Automatic merge is enabled by default after
 required checks pass, and the command waits for the exact merged-SHA release
-workflow to finish. Pass `--no-approve` to leave that PR for a human merge or
-`--no-wait` to return after requesting automatic merge. `--no-validate` skips
-repository tests/compile, while `--no-local-publish` skips all local registry
-preflight; both are explicit recovery shortcuts and are never defaults.
+candidate to finish building and uploading. Pass `--no-approve` to leave that PR
+for a human merge. Automatic merge cannot be combined with `--no-wait`, because
+the local process must receive the exact merge SHA before it can build the draft
+candidate. `--no-validate` skips repository tests/compile, while
+`--no-local-publish` skips all local registry preflight; both are explicit
+recovery shortcuts and are never defaults.
 `--os` and `--arch` remain repeatable filters for a narrowed release validation.
 Version resolution scans both repository `v<version>` tags and historical
 `<component>-v<version>` tags, so the first singular release automatically starts
@@ -2236,11 +2234,14 @@ it never assumes the repository owner is the authenticated login. Classic
 OAuth/PAT credentials must also expose the `workflow` scope because every
 singular release updates the generated release workflow's versioned run name.
 
-Merging the release PR is the only automatic publication signal. The generated
-workflow verifies that the triggering SHA is the exact `main` commit, creates one
-annotated `v<version>` tag, and publishes all public npm, PyPI, Cargo, native, and
-GitHub artifacts at that version. Manual recovery must provide the same annotated
-tag and exact expected SHA; it never calculates another version.
+Merging the release PR prepares but does not publish a production release. Local
+release tooling verifies the exact merged `main` commit, builds the complete
+candidate, creates one annotated `v<version>` tag and draft GitHub Release, and
+uploads the SHA-bound candidate manifest and checksums. Publishing that draft is
+the only production publication signal. The generated workflow verifies the tag,
+commit, version, manifest, and artifact hashes before publishing npm, PyPI, and
+Cargo packages. Manual recovery names the same published tag and never calculates
+another version or rebuilds a candidate.
 
 This repository sets `releaseSyncBranch: "dev"`. After successful publication,
 the workflow fast-forwards `dev` when it is behind, does nothing when it already
@@ -2490,14 +2491,16 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   During local release preparation, the npm/Verdaccio and Python/devpi publishers run in
   parallel because they mutate disjoint JS and Python package trees; each still
   completes its own build before uploading.
-  GitHub's `release.yml` enables npm provenance for public npmjs publication,
-  including native archives and UniFFI facades. Local Verdaccio publication
-  must not enable provenance because Verdaccio does not support it.
+  GitHub's `release.yml` uses npm Trusted Publishing with OIDC and enables npm
+  provenance for public npmjs publication, including native archives and UniFFI
+  facades. Do not restore `NPM_TOKEN` or `NODE_AUTH_TOKEN` to the production
+  workflow. Local Verdaccio publication must not enable provenance because
+  Verdaccio does not support it.
 - **The release workflow is testable without publication.** `release.yml`
-  accepts a verified annotated tag and commit through `workflow_dispatch` and
-  requires `dry_run: true`. It exercises Rust packaging, npm packing, Python
-  distribution validation, and docs generation while package publication,
-  GitHub binary upload, and Pages deployment remain disabled.
+  accepts a verified published tag through `workflow_dispatch` and defaults to
+  `dry_run: true`. It revalidates the approved candidate and exercises exact npm
+  and Python archive publication commands plus documentation generation without
+  rebuilding native artifacts or modifying registries.
 - **`bootstrap.ts` pins the engine version explicitly.** `bootstrap.ts` asks for
   `@dbx-tools/projen@^<this CLI's own version>` (see `defaultProjenSpecifier`)
   rather than `@latest`, so the installed engine matches the CLI. The CLI and
