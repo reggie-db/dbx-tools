@@ -35,6 +35,14 @@ export interface StampPythonProjectsOptions {
   readonly versions?: ReadonlyMap<string, string>;
 }
 
+/** Python wheel and source archives accepted by Twine and package indexes. */
+export function pythonDistributionPaths(directory: string): string[] {
+  return readdirSync(directory)
+    .filter((file) => file.endsWith(".whl") || file.endsWith(".tar.gz"))
+    .sort()
+    .map((file) => join(directory, file));
+}
+
 export interface RestorePythonProjects {
   (): void;
   readonly paths: readonly string[];
@@ -207,17 +215,17 @@ export function buildPythonProjects(options: {
         check: true,
       });
     }
-    exec.spawnSync(
-      "uvx",
-      ["twine", "check", ...readdirSync(output).map((file) => join(output, file))],
-      {
-        cwd: process.cwd(),
-        stdout: "inherit",
-        stderr: "inherit",
-        stdin: "ignore",
-        check: true,
-      },
-    );
+    const distributions = pythonDistributionPaths(output);
+    if (distributions.length === 0) {
+      throw new Error(`No Python distributions found in ${output}`);
+    }
+    exec.spawnSync("uvx", ["twine", "check", ...distributions], {
+      cwd: process.cwd(),
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "ignore",
+      check: true,
+    });
   } finally {
     stamp();
   }
