@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -10,6 +10,7 @@ import type {
 } from "../src/_rust-release-workflow.ts";
 import { RustReleaseOs } from "../src/project-rs.ts";
 import { localTargetCommand } from "../tasks/release-assets.ts";
+import { releaseArtifacts } from "../tasks/release-candidate.ts";
 import { verifyReleaseManifest, writeReleaseManifest } from "../tasks/release-manifest.ts";
 
 const configuration: RustReleaseConfiguration = {
@@ -136,6 +137,19 @@ describe("local Rust release assets", () => {
       );
     } finally {
       rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores package build residue outside final artifact directories", () => {
+    const root = mkdtempSync(join(tmpdir(), "release-candidate-"));
+    try {
+      const staging = join(root, "dist/release/fixture/facade/facade-node/dist/js");
+      mkdirSync(staging, { recursive: true });
+      writeFileSync(join(staging, "fixture-0.0.1.tgz"), "stale");
+
+      assert.deepEqual(releaseArtifacts(root, "1.2.3"), []);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

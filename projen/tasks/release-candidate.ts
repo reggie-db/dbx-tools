@@ -46,12 +46,24 @@ function role(path: string): ReleaseArtifactRole {
   return "native";
 }
 
-function releaseArtifacts(root: string, version: string): ReleaseArtifactInput[] {
+export function releaseArtifacts(root: string, version: string): ReleaseArtifactInput[] {
   const releaseRoot = join(root, "dist/release");
   return files(releaseRoot)
     .filter((path) => !path.includes(`${join(releaseRoot, "upload")}/`))
     .flatMap((path): ReleaseArtifactInput[] => {
       const normalized = path.split("\\").join("/");
+      if (
+        ![
+          "/binary/",
+          "/npm/",
+          "/npm-facade/",
+          "/npm-workspace/",
+          "/python/",
+          "/python-workspace/",
+        ].some((directory) => normalized.includes(directory))
+      ) {
+        return [];
+      }
       if (path.endsWith(".tgz")) {
         const identity = readNpmArchiveIdentity(path);
         if (identity.version !== version) {
