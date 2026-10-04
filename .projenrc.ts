@@ -1515,9 +1515,9 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey",
     internalDependencies: [],
     dependencies: ["filelock>=3.16,<4", "httpx>=0.28,<1", "pythonmonkey>=1.3,<2"],
-    generatedSources: ["src/dbx_tools/auth/_runtime.js", "src/dbx_tools/auth/node_bindings.py"],
     nodeBindings: {
       package: "@dbx-tools/auth",
+      layout: "package",
       shimRoot: "projen/shims/python-node",
       functionOverrides: [
         {

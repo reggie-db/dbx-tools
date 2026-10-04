@@ -1324,7 +1324,7 @@ class PublishedPackageDescriptionValidation extends Component {
  * fail with ERR_MODULE_NOT_FOUND after such an update. bun runs the `.ts`
  * directly (no tsx, no build step).
  */
-export function taskScript(_project: javascript.NodeProject, script: string, args = ""): string {
+export function taskScript(_project: Project, script: string, args = ""): string {
   const scriptPath = toPosix(join("node_modules", "@dbx-tools", "projen", "tasks", script));
   return args ? `bun ${scriptPath} ${args}` : `bun ${scriptPath}`;
 }

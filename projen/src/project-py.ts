@@ -35,6 +35,8 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly directory: string;
   readonly name?: string;
   readonly module?: string;
+  /** Python import root. Defaults to `generated-src` for generated packages, otherwise `src`. */
+  readonly moduleRoot?: string;
   readonly description: string;
   readonly dependencies?: readonly string[];
   /** Workspace package directories rendered as standalone Git dependencies. */
@@ -197,7 +199,8 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
         uv: {
           buildBackend: {
             moduleName: pkg.module,
-            moduleRoot: "src",
+            moduleRoot:
+              pkg.moduleRoot ?? (pkg.nodeBindings?.layout === "package" ? "generated-src" : "src"),
             namespace: true,
           },
         },
@@ -220,6 +223,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.nodeBindings) {
       this.uv.file.addOverride("tool.dbx_tools.node_bindings", {
         package: pkg.nodeBindings.package,
+        ...(pkg.nodeBindings.layout ? { layout: pkg.nodeBindings.layout } : {}),
         ...(pkg.nodeBindings.shimRoot ? { shim_root: pkg.nodeBindings.shimRoot } : {}),
         ...(pkg.nodeBindings.functionOverrides?.length
           ? {
@@ -393,7 +397,9 @@ export class DBXToolsPythonWorkspace extends Component {
 
   private emitWorkspace(
     project: javascript.NodeProject,
-    options: DBXToolsPythonWorkspaceOptions,
+    options: Omit<DBXToolsPythonWorkspaceOptions, "packages"> & {
+      readonly packages: readonly ResolvedPythonPackageOptions[];
+    },
     scope: string,
   ): python.PyprojectTomlFile {
     const testPaths = options.testPaths ?? [this.repository.root];
@@ -437,7 +443,7 @@ export class DBXToolsPythonWorkspace extends Component {
     const projectExcludes = [
       ...(options.pyreflyProjectExcludes ?? []),
       ...options.packages.flatMap((pkg) =>
-        (pkg.generatedSources ?? []).map(
+        [...(pkg.generatedSources ?? []), ...pythonNodeGeneratedSources(pkg)].map(
           (source) => `${this.repository.root}/${pkg.directory}/${source}`,
         ),
       ),
@@ -750,4 +756,18 @@ export class DBXToolsPythonWorkspace extends Component {
     }
     return { owner: match[1], name: match[2] };
   }
+}
+
+function pythonNodeGeneratedSources(pkg: ResolvedPythonPackageOptions): string[] {
+  if (!pkg.nodeBindings) return [];
+  const moduleRoot =
+    pkg.moduleRoot ?? (pkg.nodeBindings.layout === "package" ? "generated-src" : "src");
+  const moduleDirectory = `${moduleRoot}/${pkg.module.replaceAll(".", "/")}`;
+  const generatedDirectory =
+    pkg.nodeBindings.layout === "package" ? moduleDirectory : `${moduleDirectory}/_generated`;
+  return [
+    `${generatedDirectory}/_runtime.js`,
+    `${generatedDirectory}/node_bindings.py`,
+    `${generatedDirectory}/__init__.py`,
+  ];
 }

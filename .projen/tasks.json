@@ -27,7 +27,7 @@
       "description": "Generate Node bindings for Python package auth",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --project packages/py/auth"
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/auth"
         }
       ]
     },
@@ -36,7 +36,7 @@
       "description": "Verify generated Node bindings for Python package auth",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --project packages/py/auth --check"
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/auth --check"
         }
       ]
     },
@@ -45,7 +45,7 @@
       "description": "Regenerate Node bindings for Python package auth on changes",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings-watch.ts --project packages/py/auth"
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/auth"
         }
       ]
     },

@@ -1,107 +1,78 @@
 # `dbx-tools-auth`
 
-Python access to the provider-neutral authentication lifecycle owned by
-`@dbx-tools/auth`. The package embeds a CommonJS bundle and executes it through
-PythonMonkey's SpiderMonkey runtime. Token refresh, check-lock-recheck
-coordination, login policy, and rejected-token handling stay in the JavaScript
-implementation instead of being copied into Python.
+Python access to the authentication lifecycle implemented by `@dbx-tools/auth`.
+The Python distribution is generated from the Node package and runs its bundled
+CommonJS runtime through PythonMonkey. There is no separate Python auth
+implementation to keep in sync.
 
-The committed Bun build aliases normal Node imports to PythonMonkey shims that
-call Python's standard library directly:
-
-- `node:fs` supplies the exact synchronous profile-file operations auth uses.
-- `node:os`, `node:path`, and `node:crypto` supply home, path, and SHA-256 operations.
-- Shared build-time shims cover only the Node built-ins reached by the auth
-  graph. Third-party libraries and workspace packages otherwise run unchanged.
-- The Python build explicitly replaces `@dbx-tools/core/file-lock`'s
-  `acquireFileLock` export with a `filelock.FileLock` handler. It keeps the same
-  lease API and check-lock-recheck behavior while using the host Python
-  process's OS lock instead of emulating a Node file descriptor.
-- Shared TypeScript handles App detection and semantic CLI version checks; the
-  auth source contains no Python-specific runtime callbacks.
-- `create_databricks_cli_auth()` keeps credentials in process memory by default.
-  `MemoryCredentialStore` and `FileCredentialStore` remain Python-facing
-  adapters, and passing a file store opts into persistence. The bundled
-  JavaScript store uses the registered Python flock override when it updates
-  the shared token cache.
-- The bundled TypeScript owns profile resolution, CLI U2M, PAT selection,
-  lifecycle caching, and request-header generation.
-- PAT profiles use their configured token directly without invoking the CLI.
-- `create_databricks_cli_auth()` applies the same JavaScript profile-selection
-  rules, including implicit preference for one matching CLI profile.
-
-The embedded profile logic uses the same maintained `ini` parser and enhanced
-default selection as the Node package: `__settings__.default_profile`, then
-`DEFAULT`, then a sole profile, with an optional unique matching CLI-U2M
-preference over an implicit M2M default. The JavaScript lifecycle adds the same
-in-process token cache, check-lock-recheck acquisition, automatic CLI login, and
-rejected-token handling used by Node callers.
-
-## Example
+## Usage
 
 ```python
-from dbx_tools.auth import AuthClient, MemoryCredentialStore
+from dbx_tools.auth import create_persistent_auth
 
-auth = AuthClient("profile", provider, MemoryCredentialStore())
+auth = await create_persistent_auth()
 token = await auth.token()
-```
-
-For Databricks CLI-backed authentication:
-
-```python
-from dbx_tools.auth import create_databricks_cli_auth
-
-auth = await create_databricks_cli_auth(profile="DEFAULT")
 headers = await auth.authenticate()
 ```
 
-To persist lifecycle credentials explicitly:
+Generated function names use `snake_case`. Objects returned by JavaScript are
+proxied automatically, so JavaScript methods such as `workspaceId()` and
+`requestHeadersForUrl()` are available as async Python methods named
+`workspace_id()` and `request_headers_for_url()`.
+
+Authentication uses process memory by default. Pass `"file"` as the second
+factory argument to use the shared Databricks token cache:
 
 ```python
-from pathlib import Path
-
-from dbx_tools.auth import FileCredentialStore, create_databricks_cli_auth
-
-auth = await create_databricks_cli_auth(
-    profile="DEFAULT",
-    store=FileCredentialStore(Path.home() / ".databricks"),
+auth = await create_persistent_auth(
+    {"profile": "DEFAULT"},
+    "file",
 )
 ```
 
-Custom provider and storage methods may still be native Python coroutines.
-PythonMonkey converts them to JavaScript promises, then converts resolved token
-records back to Python dictionaries.
+The generated runtime keeps the Node package's profile selection, lazy
+Databricks CLI resolution, automatic login policy, token refresh, rejected-token
+handling, and request-header generation. The Python build replaces the shared
+file-lock function with `filelock.FileLock`, preserving the same
+check-lock-recheck lifecycle with a native host-process lock.
 
-Regenerate the committed SpiderMonkey bundle after changing its TypeScript
-entry point or the shared lifecycle:
+`authenticate()` returns all request headers, including
+`X-Databricks-Workspace-Id` when the resolved profile supplies a workspace ID.
+
+## Generation
+
+The package uses the full-package layout:
+
+```toml
+[tool.uv.build-backend]
+module-name = "dbx_tools.auth"
+module-root = "generated-src"
+
+[tool.dbx_tools.node_bindings]
+package = "@dbx-tools/auth"
+layout = "package"
+shim_root = "projen/shims/python-node"
+```
+
+Regenerate or verify the committed package from the repository root:
 
 ```sh
 bun run auth:python-runtime
+bun run auth:python-runtime:check
 ```
 
-Tests and release preparation run `bun run auth:python-runtime:check` so a
-lifecycle change cannot publish a stale embedded runtime.
+`bun run sync --watch` also regenerates the package when a workspace-backed Node
+dependency, binding configuration, shim, or function override changes.
 
-## Debug logging
+## Debugging
 
-Set `LOG_LEVEL=debug` before starting Python to receive the same structured
-JavaScript lifecycle logs through PythonMonkey's console bridge:
+Set `LOG_LEVEL=debug` to receive the shared JavaScript lifecycle logs through
+PythonMonkey:
 
 ```sh
 LOG_LEVEL=debug uv run python packages/py/auth/tests/auth_cli.py both --no-login
 ```
 
-The output covers profile selection, provider and CLI decisions, locks, cache
-reuse, refresh/login fallback, and generated header names. Credentials, client
-secrets, authorization values, raw headers, cache contents, and HTTP bodies are
-never logged.
-
-## Modules
-
-- `client` loads the bundled runtime and exposes the async `AuthClient` facade.
-- `databricks_auth` resolves profiles and exposes CLI U2M, PAT, and complete
-  request-header behavior from the bundled TypeScript implementation.
-- `node_bindings` is generated from plain public functions exported by the
-  configured Node package, using snake_case async Python wrappers.
-- `types` defines the provider, storage, token, and lifecycle contracts.
-- `storage` provides memory and file-backed adapters.
+The diagnostic command reports environment selection, the resolved profile,
+token metadata, and generated headers. It redacts access tokens and
+authorization headers unless `--show-sensitive` is passed.

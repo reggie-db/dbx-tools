@@ -23,11 +23,12 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "dbx_tools.auth"
-module-root = "src"
+module-root = "generated-src"
 namespace = true
 
 [tool.dbx_tools.node_bindings]
 package = "@dbx-tools/auth"
+layout = "package"
 shim_root = "projen/shims/python-node"
 
   [[tool.dbx_tools.node_bindings.function_overrides]]

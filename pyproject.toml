@@ -58,6 +58,7 @@ project-excludes = [
   "packages/py/core-rs/src/dbx_tools/core_rs/__init__.py",
   "packages/py/google-rs/src/dbx_tools/google_rs/bindings.py",
   "packages/py/google-rs/src/dbx_tools/google_rs/__init__.py",
-  "packages/py/auth/src/dbx_tools/auth/_runtime.js",
-  "packages/py/auth/src/dbx_tools/auth/node_bindings.py"
+  "packages/py/auth/generated-src/dbx_tools/auth/_runtime.js",
+  "packages/py/auth/generated-src/dbx_tools/auth/node_bindings.py",
+  "packages/py/auth/generated-src/dbx_tools/auth/__init__.py"
 ]

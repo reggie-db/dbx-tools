@@ -1,4 +1,5 @@
 import { Component, type Project, type Task } from "projen";
+import { taskScript } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 
 /** One function replaced only in a generated PythonMonkey bundle. */
@@ -17,6 +18,8 @@ export interface PythonNodeFunctionOverride {
 export interface PythonNodeBindingsOptions {
   /** Public Node package specifier, such as `@dbx-tools/auth`. */
   readonly package: string;
+  /** Generated bindings own the package or live under `_generated`. Defaults to `submodule`. */
+  readonly layout?: "package" | "submodule";
   /** Repository-relative directory containing Node built-in shims. */
   readonly shimRoot?: string;
   /** Functions replaced only while generating the Python runtime. */
@@ -43,12 +46,11 @@ export class PythonNodeBundle extends Component {
 
   constructor(project: Project, options: PythonNodeBundleOptions) {
     super(project);
-    const command = [
-      "bun",
-      "projen/tasks/python-node-bindings.ts",
-      "--project",
-      shellQuote(options.projectDirectory),
-    ].join(" ");
+    const command = taskScript(
+      project,
+      "python-node-bindings.ts",
+      `--project ${shellQuote(options.projectDirectory)}`,
+    );
     this.buildTask = project.addTask(`${options.name}:python-runtime`, {
       description: `Generate Node bindings for Python package ${options.name}`,
       exec: command,
@@ -61,12 +63,11 @@ export class PythonNodeBundle extends Component {
     if (options.watch) {
       this.watchTask = project.addTask(`${options.name}:python-runtime:watch`, {
         description: `Regenerate Node bindings for Python package ${options.name} on changes`,
-        exec: [
-          "bun",
-          "projen/tasks/python-node-bindings-watch.ts",
-          "--project",
-          shellQuote(options.projectDirectory),
-        ].join(" "),
+        exec: taskScript(
+          project,
+          "python-node-bindings-watch.ts",
+          `--project ${shellQuote(options.projectDirectory)}`,
+        ),
       });
       if (isDBXToolsJavaScriptProject()(project)) {
         const configured = project.dbxToolsConfig.pythonNodeBindings;

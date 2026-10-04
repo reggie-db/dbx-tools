@@ -257,6 +257,7 @@ describe("DBXToolsPythonWorkspace", () => {
             description: "Fixture auth bindings",
             nodeBindings: {
               package: "@fixture/auth",
+              layout: "package",
               shimRoot: "projen/shims/python-node",
               functionOverrides: [
                 {
@@ -279,14 +280,17 @@ describe("DBXToolsPythonWorkspace", () => {
           dbx_tools: {
             node_bindings: {
               package: string;
+              layout: string;
               shim_root: string;
               function_overrides: Array<Record<string, string>>;
             };
           };
+          uv: { "build-backend": { "module-root": string } };
         };
       };
       assert.deepEqual(pyproject.tool.dbx_tools.node_bindings, {
         package: "@fixture/auth",
+        layout: "package",
         shim_root: "projen/shims/python-node",
         function_overrides: [
           {
@@ -296,6 +300,7 @@ describe("DBXToolsPythonWorkspace", () => {
           },
         ],
       });
+      assert.equal(pyproject.tool.uv["build-backend"]["module-root"], "generated-src");
       const manifest = JSON.parse(readFileSync(join(bindingsOutdir, "package.json"), "utf8")) as {
         dbxToolsConfig?: { pythonNodeBindings?: string[] };
       };
@@ -304,7 +309,7 @@ describe("DBXToolsPythonWorkspace", () => {
       assert.ok(project.tasks.tryFind("auth:python-runtime:check"));
       assert.equal(
         project.tasks.tryFind("auth:python-runtime:watch")?.steps[0]?.exec,
-        "bun projen/tasks/python-node-bindings-watch.ts --project python/packages/auth",
+        "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project python/packages/auth",
       );
     } finally {
       rmSync(bindingsOutdir, { recursive: true, force: true });

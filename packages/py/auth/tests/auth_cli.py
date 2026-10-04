@@ -7,7 +7,7 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from dbx_tools.auth import create_databricks_cli_auth
+from dbx_tools.auth import create_persistent_auth
 
 PROFILE_ENVIRONMENT_KEYS = (
     "DATABRICKS_CONFIG_PROFILE",
@@ -67,18 +67,19 @@ def _environment(environment: Mapping[str, str], show_sensitive: bool) -> dict[s
 async def _main() -> None:
     arguments = _arguments()
     environment = dict(os.environ)
-    auth = await create_databricks_cli_auth(environment=environment)
+    auth = await create_persistent_auth({}, "memory", {"environment": environment})
+    status = await auth.status()
     output: dict[str, Any] = {
         "command": arguments.command,
         "login": arguments.login,
         "environment": _environment(environment, arguments.show_sensitive),
         "resolved": {
-            "profile": auth.status().profile,
-            "host": auth.status().host,
-            "workspaceId": auth.workspace_id(),
-            "storage": auth.status().storage,
-            "authKind": auth.auth_kind(),
-            "principal": auth.principal(),
+            "profile": status["profile"],
+            "host": status["host"],
+            "workspaceId": await auth.workspace_id(),
+            "storage": status["storage"],
+            "authKind": await auth.auth_kind(),
+            "principal": await auth.principal(),
         },
     }
     if arguments.command in {"token", "both"}:

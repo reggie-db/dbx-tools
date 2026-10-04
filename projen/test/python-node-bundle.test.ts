@@ -29,12 +29,12 @@ describe("PythonNodeBundle", () => {
 
     assert.equal(
       bundle.buildTask.steps[0]?.exec,
-      "bun projen/tasks/python-node-bindings.ts --project packages/py/auth",
+      "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/auth",
     );
     assert.equal(bundle.checkTask.steps[0]?.exec, `${bundle.buildTask.steps[0]?.exec} --check`);
     assert.equal(
       bundle.watchTask?.steps[0]?.exec,
-      "bun projen/tasks/python-node-bindings-watch.ts --project packages/py/auth",
+      "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/auth",
     );
     assert.ok(project.testTask.steps.some((step) => step.spawn === bundle.checkTask.name));
   });
@@ -69,8 +69,9 @@ describe("PythonNodeBundle", () => {
     const result = runBindingTask(directory);
     assert.equal(result.exitCode, 0, result.stderr.toString());
 
-    const runtimePath = join(directory, "python/src/fixture/runtime/_runtime.js");
-    const bindingsPath = join(directory, "python/src/fixture/runtime/node_bindings.py");
+    const runtimePath = join(directory, "python/src/fixture/runtime/_generated/_runtime.js");
+    const bindingsPath = join(directory, "python/src/fixture/runtime/_generated/node_bindings.py");
+    const packagePath = join(directory, "python/src/fixture/runtime/_generated/__init__.py");
     const runtime = (await import(pathToFileURL(runtimePath).href)) as {
       createSession(): Promise<string>;
       preserved: string;
@@ -84,10 +85,39 @@ describe("PythonNodeBundle", () => {
     assert.match(bindings, /async def create_session\(\*args: Any\) -> Any:/);
     assert.match(bindings, /async def replaced\(\*args: Any\) -> Any:/);
     assert.match(bindings, /_invoke\("createSession", \*args\)/);
+    assert.match(bindings, /class _NodeObject:/);
+    assert.match(bindings, /Reflect\.apply\(target\[name\], target, args\)/);
     assert.doesNotMatch(bindings, /preserved/);
+    assert.match(readFileSync(packagePath, "utf8"), /from \.node_bindings import/);
 
     const check = runBindingTask(directory, "--check");
     assert.equal(check.exitCode, 0, check.stderr.toString());
+  });
+
+  it("can generate an entire Python package under a dedicated source root", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      "export function createSession(): { token(): string } { return { token: () => 'token' }; }\n",
+    );
+    writeFixturePyproject(directory, ['package = "fixture-entry"', 'layout = "package"'], {
+      moduleRoot: "generated-src",
+    });
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+
+    const generatedPackageDirectory = join(directory, "python/generated-src/fixture/runtime");
+    assert.ok(readFileSync(join(generatedPackageDirectory, "_runtime.js"), "utf8").length > 0);
+    assert.match(
+      readFileSync(join(generatedPackageDirectory, "node_bindings.py"), "utf8"),
+      /async def create_session/,
+    );
+    assert.match(
+      readFileSync(join(generatedPackageDirectory, "__init__.py"), "utf8"),
+      /create_session/,
+    );
   });
 
   it("fails when JavaScript exports collide in Python", () => {
@@ -154,7 +184,11 @@ function packageDirectory(root: string, name: string): string {
   return directory;
 }
 
-function writeFixturePyproject(root: string, nodeBindings: readonly string[]): void {
+function writeFixturePyproject(
+  root: string,
+  nodeBindings: readonly string[],
+  options: { readonly moduleRoot?: string } = {},
+): void {
   const directory = join(root, "python");
   mkdirSync(directory, { recursive: true });
   writeFileSync(
@@ -162,7 +196,7 @@ function writeFixturePyproject(root: string, nodeBindings: readonly string[]): v
     [
       "[tool.uv.build-backend]",
       'module-name = "fixture.runtime"',
-      'module-root = "src"',
+      `module-root = ${JSON.stringify(options.moduleRoot ?? "src")}`,
       "",
       "[tool.dbx_tools.node_bindings]",
       ...nodeBindings,

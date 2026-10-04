@@ -14,9 +14,11 @@ export interface ResolvedPythonNodeFunctionOverride {
 }
 
 export interface ResolvedPythonNodeBindings {
+  readonly bindingsPackageOutput: string;
   readonly bindingsOutput: string;
   readonly functionOverrides: readonly ResolvedPythonNodeFunctionOverride[];
   readonly moduleDirectory: string;
+  readonly layout: "package" | "submodule";
   readonly package: string;
   readonly project: string;
   readonly projectDirectory: string;
@@ -40,6 +42,7 @@ export function resolvePythonNodeBindings(
   const uv = record(tool.uv, "tool.uv");
   const backend = record(uv["build-backend"], "tool.uv.build-backend");
   const packageName = requiredString(bindings.package, "tool.dbx_tools.node_bindings.package");
+  const layout = nodeBindingsLayout(bindings.layout);
   const moduleName = requiredString(backend["module-name"], "tool.uv.build-backend.module-name");
   const moduleRoot = requiredString(backend["module-root"], "tool.uv.build-backend.module-root");
   const configuredOverrides = bindings.function_overrides ?? [];
@@ -47,15 +50,19 @@ export function resolvePythonNodeBindings(
     throw new Error("tool.dbx_tools.node_bindings.function_overrides must be an array");
   }
   const moduleDirectory = resolve(projectDirectory, moduleRoot, ...moduleName.split("."));
+  const generatedDirectory =
+    layout === "package" ? moduleDirectory : join(moduleDirectory, "_generated");
   const shimRoot = optionalString(bindings.shim_root, "tool.dbx_tools.node_bindings.shim_root");
   return {
     project,
     projectDirectory,
     pyproject,
     package: packageName,
+    layout,
     moduleDirectory,
-    runtimeOutput: join(moduleDirectory, "_runtime.js"),
-    bindingsOutput: join(moduleDirectory, "node_bindings.py"),
+    runtimeOutput: join(generatedDirectory, "_runtime.js"),
+    bindingsOutput: join(generatedDirectory, "node_bindings.py"),
+    bindingsPackageOutput: join(generatedDirectory, "__init__.py"),
     ...(shimRoot ? { shimRoot: resolve(root, shimRoot) } : {}),
     functionOverrides: configuredOverrides.map((candidate, index) => {
       const path = `tool.dbx_tools.node_bindings.function_overrides[${index}]`;
@@ -71,6 +78,12 @@ export function resolvePythonNodeBindings(
     }),
     workspaceDirectories: workspaceDependencyDirectories(packageName, root),
   };
+}
+
+function nodeBindingsLayout(value: unknown): "package" | "submodule" {
+  if (value === undefined) return "submodule";
+  if (value === "package" || value === "submodule") return value;
+  throw new Error("tool.dbx_tools.node_bindings.layout must be package or submodule");
 }
 
 /** All paths that can change a workspace-backed generated Node runtime. */
