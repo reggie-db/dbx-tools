@@ -1,6 +1,9 @@
 //! Shared request-completion logging for buffered and streaming routes.
 
-use std::{net::SocketAddr, time::Instant};
+use std::{
+    net::SocketAddr,
+    time::{Duration, Instant},
+};
 
 use axum::http::StatusCode;
 use dbx_tools_model::ReasoningEffort;
@@ -64,6 +67,18 @@ pub(crate) struct RequestLogMetadata {
     pub(crate) started: Instant,
     pub(crate) reasoning_setting: Option<ReasoningSetting>,
     pub(crate) fallback_step: usize,
+}
+
+/// Payload-free state recorded when an upstream stream stops producing bytes.
+pub(crate) struct StreamIdleDiagnostic<'a> {
+    pub(crate) client_wire: ClientWire,
+    pub(crate) target: TargetWire,
+    pub(crate) response_bytes: u64,
+    pub(crate) observed_sse_events: u64,
+    pub(crate) last_sse_event: Option<&'a str>,
+    pub(crate) idle: Duration,
+    pub(crate) timeout: Duration,
+    pub(crate) timed_out: bool,
 }
 
 /// Bounded reasoning classification retained by logs and aggregate metrics.
@@ -284,6 +299,23 @@ impl RequestLogContext {
             status = status.as_u16(),
             latency_ms = self.started.elapsed().as_millis(),
             "model stream connected"
+        );
+    }
+
+    /// Log an upstream stream that has stopped producing bytes.
+    pub(crate) fn stream_idle(&self, diagnostic: StreamIdleDiagnostic<'_>) {
+        tracing::warn!(
+            resolved_model = %self.resolved_model,
+            client_wire = %diagnostic.client_wire.label(),
+            target = %diagnostic.target.label(),
+            streaming = true,
+            response_bytes = diagnostic.response_bytes,
+            observed_sse_events = diagnostic.observed_sse_events,
+            last_sse_event = diagnostic.last_sse_event.unwrap_or("none"),
+            stream_idle_ms = diagnostic.idle.as_millis(),
+            stream_idle_timeout_ms = diagnostic.timeout.as_millis(),
+            timed_out = diagnostic.timed_out,
+            "model stream idle"
         );
     }
 

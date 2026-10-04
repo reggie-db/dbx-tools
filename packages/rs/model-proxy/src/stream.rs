@@ -6,7 +6,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use aigw_anthropic::translate::{stream_event_to_anthropic_sse, NativeSseContext};
@@ -29,12 +29,46 @@ use crate::{
     error::ProxyError,
     events::{HttpExchangeEvent, HttpResponseEvent, ProxyFeeds, ResponseHop, SseEvent},
     protocol::{ClientWire, TargetWire},
-    request_log::RequestLogContext,
+    request_log::{RequestLogContext, StreamIdleDiagnostic},
     runtime::RuntimeGeneration,
     throttle::{response_token_usage, ResponseTokenUsage},
 };
 
 const MAX_OBSERVED_SSE_EVENT_BYTES: usize = 1024 * 1024;
+const STREAM_IDLE_WARNING_AFTER: Duration = Duration::from_secs(30);
+
+async fn next_with_idle_timeout<S, F>(
+    stream: &mut S,
+    warning_after: Duration,
+    timeout: Duration,
+    on_idle: F,
+) -> Result<Option<S::Item>, Duration>
+where
+    S: Stream + Unpin,
+    F: FnOnce(Duration),
+{
+    let next = stream.next();
+    tokio::pin!(next);
+    if warning_after < timeout {
+        if let Ok(value) = tokio::time::timeout(warning_after, next.as_mut()).await {
+            return Ok(value);
+        }
+        on_idle(warning_after);
+        return tokio::time::timeout(timeout - warning_after, next)
+            .await
+            .map_err(|_| timeout);
+    }
+    tokio::time::timeout(timeout, next)
+        .await
+        .map_err(|_| timeout)
+}
+
+fn stream_idle_message(idle: Duration) -> String {
+    format!(
+        "upstream SSE stream produced no bytes for {} ms",
+        idle.as_millis()
+    )
+}
 
 /// Request metadata emitted when an SSE body completes or is dropped.
 pub(crate) struct StreamLogContext {
@@ -145,7 +179,7 @@ impl Default for NativeUsageObserver {
 
 impl NativeUsageObserver {
     /// Observe one upstream chunk and return the exact bytes supplied by the caller.
-    async fn observe_chunk(&mut self, chunk: Bytes) -> Bytes {
+    fn observe_chunk(&mut self, chunk: Bytes) -> Bytes {
         if !self.observing {
             return chunk;
         }
@@ -156,7 +190,7 @@ impl NativeUsageObserver {
         let Some(sender) = self.sender.as_ref() else {
             return chunk;
         };
-        if sender.send(chunk.clone()).await.is_err() {
+        if sender.try_send(chunk.clone()).is_err() {
             self.stop();
             return chunk;
         }
@@ -250,6 +284,8 @@ fn native_failure_status(event: &str, payload: &Value) -> Option<StatusCode> {
 struct StreamCompletion {
     context: StreamLogContext,
     response_bytes: u64,
+    observed_sse_events: u64,
+    last_sse_event: Option<String>,
     usage: ResponseTokenUsage,
     status: StatusCode,
     finished: bool,
@@ -260,6 +296,8 @@ impl StreamCompletion {
         Self {
             context,
             response_bytes: 0,
+            observed_sse_events: 0,
+            last_sse_event: None,
             usage: ResponseTokenUsage::default(),
             status: StatusCode::OK,
             finished: false,
@@ -283,6 +321,24 @@ impl StreamCompletion {
                     .unwrap_or_else(|| input.saturating_add(output)),
             };
         }
+    }
+
+    fn observe_sse(&mut self, event: &SseEvent) {
+        self.observed_sse_events = self.observed_sse_events.saturating_add(1);
+        self.last_sse_event = Some(event.event.clone());
+    }
+
+    fn log_idle(&self, idle: Duration, timeout: Duration, timed_out: bool) {
+        self.context.request.stream_idle(StreamIdleDiagnostic {
+            client_wire: self.context.client_wire,
+            target: self.context.target,
+            response_bytes: self.response_bytes,
+            observed_sse_events: self.observed_sse_events,
+            last_sse_event: self.last_sse_event.as_deref(),
+            idle,
+            timeout,
+            timed_out,
+        });
     }
 
     fn finish(&mut self, failure_status: Option<StatusCode>) {
@@ -316,6 +372,7 @@ pub(crate) fn stream_response(
     upstream: reqwest::Response,
     model: String,
     response_headers: HeaderMap,
+    idle_timeout: Duration,
     log_context: StreamLogContext,
 ) -> Result<Response, ProxyError> {
     let event_feeds = log_context.feeds.clone();
@@ -332,11 +389,39 @@ pub(crate) fn stream_response(
         let stream = async_stream::stream! {
             let mut completion = StreamCompletion::new(log_context);
             let mut usage = NativeUsageObserver::default();
-            while let Some(chunk) = upstream.next().await {
+            loop {
+                let chunk = match next_with_idle_timeout(
+                    &mut upstream,
+                    STREAM_IDLE_WARNING_AFTER,
+                    idle_timeout,
+                    |idle| completion.log_idle(idle, idle_timeout, false),
+                )
+                .await
+                {
+                    Ok(Some(chunk)) => chunk,
+                    Ok(None) => break,
+                    Err(idle) => {
+                        completion.log_idle(idle, idle_timeout, true);
+                        let frame = stream_error(client_wire, &stream_idle_message(idle));
+                        publish_client_sse_frame(
+                            &event_feeds,
+                            &event_template,
+                            client_wire,
+                            &frame,
+                        );
+                        completion.record_bytes(frame.len());
+                        completion.usage = usage.usage;
+                        completion.reconcile().await;
+                        completion.finish(Some(StatusCode::GATEWAY_TIMEOUT));
+                        yield Ok::<Bytes, io::Error>(frame);
+                        return;
+                    }
+                };
                 match chunk {
                     Ok(chunk) => {
-                        let chunk = usage.observe_chunk(chunk).await;
+                        let chunk = usage.observe_chunk(chunk);
                         for event in usage.take_sse_events() {
+                            completion.observe_sse(&event);
                             publish_sse_event(
                                 &event_feeds,
                                 &event_template,
@@ -349,6 +434,8 @@ pub(crate) fn stream_response(
                         yield Ok::<Bytes, io::Error>(chunk);
                     }
                     Err(error) => {
+                        completion.usage = usage.usage;
+                        completion.reconcile().await;
                         completion.finish(Some(StatusCode::BAD_GATEWAY));
                         yield Err(io::Error::other(error.to_string()));
                         return;
@@ -357,6 +444,7 @@ pub(crate) fn stream_response(
             }
             let observation = usage.finish().await;
             for event in observation.sse_events.iter().cloned() {
+                completion.observe_sse(&event);
                 publish_sse_event(
                     &event_feeds,
                     &event_template,
@@ -382,28 +470,61 @@ pub(crate) fn stream_response(
         let mut completion = StreamCompletion::new(log_context);
         let mut anthropic = NativeSseContext::with_pinned_model(model.clone());
         let mut chat = ChatSseContext::new(model);
-        let mut failed = false;
+        let mut failure_status = None;
 
-        while let Some(event) = events.next().await {
+        loop {
+            let event = match next_with_idle_timeout(
+                &mut events,
+                STREAM_IDLE_WARNING_AFTER,
+                idle_timeout,
+                |idle| completion.log_idle(idle, idle_timeout, false),
+            )
+            .await
+            {
+                Ok(Some(event)) => event,
+                Ok(None) => break,
+                Err(idle) => {
+                    completion.log_idle(idle, idle_timeout, true);
+                    let frame = stream_error(client_wire, &stream_idle_message(idle));
+                    publish_client_sse_frame(
+                        &event_feeds,
+                        &event_template,
+                        client_wire,
+                        &frame,
+                    );
+                    completion.record_bytes(frame.len());
+                    yield Ok::<Bytes, io::Error>(frame);
+                    failure_status = Some(StatusCode::GATEWAY_TIMEOUT);
+                    break;
+                }
+            };
             let event = match event {
                 Ok(event) => event,
                 Err(error) => {
                     let frame = stream_error(client_wire, &error.to_string());
+                    publish_client_sse_frame(
+                        &event_feeds,
+                        &event_template,
+                        client_wire,
+                        &frame,
+                    );
                     completion.record_bytes(frame.len());
                     yield Ok::<Bytes, io::Error>(frame);
-                    failed = true;
+                    failure_status = Some(StatusCode::BAD_GATEWAY);
                     break;
                 }
             };
+            let observed_event = SseEvent::new(
+                event.event.clone(),
+                event.data.clone(),
+                (!event.id.is_empty()).then_some(event.id.clone()),
+            );
+            completion.observe_sse(&observed_event);
             publish_sse_event(
                 &event_feeds,
                 &event_template,
                 client_wire,
-                SseEvent::new(
-                    event.event.clone(),
-                    event.data.clone(),
-                    (!event.id.is_empty()).then_some(event.id.clone()),
-                ),
+                observed_event,
                 false,
             );
             let parsed = match parser.parse_event(&event.event, &event.data) {
@@ -418,7 +539,7 @@ pub(crate) fn stream_response(
                     );
                     completion.record_bytes(frame.len());
                     yield Ok(frame);
-                    failed = true;
+                    failure_status = Some(StatusCode::BAD_GATEWAY);
                     break;
                 }
             };
@@ -441,7 +562,7 @@ pub(crate) fn stream_response(
                 }
             }
         }
-        if !failed {
+        if failure_status.is_none() {
             // Parsers can buffer terminal usage or completion events until EOF.
             match parser.finish() {
                 Ok(parsed) => {
@@ -465,15 +586,21 @@ pub(crate) fn stream_response(
                     }
                 }
                 Err(error) => {
-                    failed = true;
+                    failure_status = Some(StatusCode::BAD_GATEWAY);
                     let frame = stream_error(client_wire, &error.to_string());
+                    publish_client_sse_frame(
+                        &event_feeds,
+                        &event_template,
+                        client_wire,
+                        &frame,
+                    );
                     completion.record_bytes(frame.len());
                     yield Ok(frame);
                 }
             }
         }
         completion.reconcile().await;
-        completion.finish(failed.then_some(StatusCode::BAD_GATEWAY));
+        completion.finish(failure_status);
     };
     Ok(sse_response(Body::from_stream(stream), response_headers))
 }
@@ -713,6 +840,8 @@ impl ChatSseContext {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use aigw_core::model::{FinishReason, Usage};
 
     use super::*;
@@ -720,9 +849,42 @@ mod tests {
     async fn observed_usage(chunks: impl IntoIterator<Item = Bytes>) -> ResponseTokenUsage {
         let mut observer = NativeUsageObserver::default();
         for chunk in chunks {
-            observer.observe_chunk(chunk).await;
+            observer.observe_chunk(chunk);
         }
         observer.finish().await.usage
+    }
+
+    #[tokio::test]
+    async fn stream_wait_returns_available_items_without_idle_warning() {
+        let mut stream = futures_util::stream::iter([1_u8]);
+        let warned = Cell::new(false);
+        let item = next_with_idle_timeout(
+            &mut stream,
+            Duration::from_millis(1),
+            Duration::from_millis(5),
+            |_| warned.set(true),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(item, Some(1));
+        assert!(!warned.get());
+    }
+
+    #[tokio::test]
+    async fn stream_wait_warns_before_reaching_the_idle_deadline() {
+        let mut stream = futures_util::stream::pending::<u8>();
+        let warned = Cell::new(false);
+        let result = next_with_idle_timeout(
+            &mut stream,
+            Duration::from_millis(1),
+            Duration::from_millis(5),
+            |_| warned.set(true),
+        )
+        .await;
+
+        assert_eq!(result, Err(Duration::from_millis(5)));
+        assert!(warned.get());
     }
 
     #[test]
@@ -744,9 +906,24 @@ mod tests {
         let mut observer = NativeUsageObserver::default();
         let mut forwarded = Vec::new();
         for chunk in chunks.iter().cloned() {
-            forwarded.push(observer.observe_chunk(chunk).await);
+            forwarded.push(observer.observe_chunk(chunk));
         }
         assert_eq!(forwarded, chunks);
+    }
+
+    #[test]
+    fn native_usage_observer_disables_itself_instead_of_backpressuring() {
+        let mut observer = NativeUsageObserver::default();
+        observer
+            .sender
+            .as_ref()
+            .unwrap()
+            .try_send(Bytes::from_static(b"partial"))
+            .unwrap();
+        let next = Bytes::from_static(b"data: next\n\n");
+
+        assert_eq!(observer.observe_chunk(next.clone()), next);
+        assert!(!observer.observing);
     }
 
     #[tokio::test]
@@ -758,22 +935,19 @@ mod tests {
 data: {"type":"response.failed","response":{"status":"failed","error":{"code":"rate_limit_exceeded","message":"Too many requests"}}}
 
 "#,
-            ))
-            .await;
+            ));
         assert_eq!(
             rate_limit.finish().await.failure_status,
             Some(StatusCode::TOO_MANY_REQUESTS)
         );
 
         let mut failure = NativeUsageObserver::default();
-        failure
-            .observe_chunk(Bytes::from_static(
-                br#"event: response.failed
+        failure.observe_chunk(Bytes::from_static(
+            br#"event: response.failed
 data: {"type":"response.failed","response":{"status":"failed","error":{"code":"server_error"}}}
 
 "#,
-            ))
-            .await;
+        ));
         assert_eq!(
             failure.finish().await.failure_status,
             Some(StatusCode::BAD_GATEWAY)

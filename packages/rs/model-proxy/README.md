@@ -163,16 +163,24 @@ compaction state, signatures, and embedded image, file, audio, and screenshot
 payloads. Streams emit their connection event at debug and one completion event
 at info or warn.
 
+An upstream SSE body may remain idle for at most two minutes by default.
+Thirty seconds without a byte logs one payload-free warning with the byte count,
+observed-event count, and last SSE event name. Reaching the deadline emits a
+downstream SSE error, records the request as a semantic 504, reconciles its token
+reservation, and closes the upstream body without replaying the request. Set
+`--stream-idle-timeout-ms` or `STREAM_IDLE_TIMEOUT_MS` to change the deadline.
+
 Pass-through usage comes from complete parsed SSE events while the original
 chunks are forwarded unchanged. Observation is capped at 1 MB per event; a
-malformed or larger event safely retains the estimate. Reported usage
-reconciles process-local reservations across Chat Completions, Responses, Codex,
-Anthropic translations, and embeddings. Unused output reservations are
-credited immediately, and actual output is recorded when no maximum was
-specified. Each workspace/model queue admits requests FIFO and wakes its head
-when reconciliation frees capacity, without blocking unrelated models. After
-three consistent samples outside a five-percent noise band, a bounded per-model
-exponential moving ratio calibrates raw input estimates against actual usage.
+malformed, larger, or unexpectedly queued event disables observation and safely
+retains the estimate instead of applying backpressure. Reported usage reconciles
+process-local reservations across Chat Completions, Responses, Codex, Anthropic
+translations, and embeddings. Unused output reservations are credited
+immediately, and actual output is recorded when no maximum was specified. Each
+workspace/model queue admits requests FIFO and wakes its head when reconciliation
+frees capacity, without blocking unrelated models. After three consistent
+samples outside a five-percent noise band, a bounded per-model exponential
+moving ratio calibrates raw input estimates against actual usage.
 Streaming Chat Completions defaults
 `stream_options.include_usage` to `true`; an explicit caller value is
 preserved.
