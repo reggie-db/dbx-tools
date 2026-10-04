@@ -3,6 +3,7 @@
 # Hand edits are overwritten; this file is read-only.
 
 from .node_bindings import (
+    authenticate,
     config_profile_exists,
     create_persistent_auth,
     create_persistent_auth_with_storage,
@@ -12,9 +13,11 @@ from .node_bindings import (
     parse_databricks_config,
     resolve_config_file,
     resolve_databricks_profile,
+    token,
 )
 
 __all__ = [
+    "authenticate",
     "config_profile_exists",
     "create_persistent_auth",
     "create_persistent_auth_with_storage",
@@ -24,4 +27,5 @@ __all__ = [
     "parse_databricks_config",
     "resolve_config_file",
     "resolve_databricks_profile",
+    "token",
 ]

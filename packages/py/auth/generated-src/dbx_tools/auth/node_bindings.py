@@ -92,6 +92,10 @@ async def _invoke(name: str, *args: Any) -> Any:
     return await _resolve(_runtime()[name](*[_to_javascript(arg) for arg in args]))
 
 
+async def authenticate(*args: Any) -> Any:
+    return await _invoke("authenticate", *args)
+
+
 async def config_profile_exists(*args: Any) -> Any:
     return await _invoke("configProfileExists", *args)
 
@@ -128,7 +132,12 @@ async def resolve_databricks_profile(*args: Any) -> Any:
     return await _invoke("resolveDatabricksProfile", *args)
 
 
+async def token(*args: Any) -> Any:
+    return await _invoke("token", *args)
+
+
 __all__ = [
+    "authenticate",
     "config_profile_exists",
     "create_persistent_auth",
     "create_persistent_auth_with_storage",
@@ -138,4 +147,5 @@ __all__ = [
     "parse_databricks_config",
     "resolve_config_file",
     "resolve_databricks_profile",
+    "token",
 ]

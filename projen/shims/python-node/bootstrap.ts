@@ -11,6 +11,7 @@ const globals = globalThis as typeof globalThis & {
   Headers?: typeof Headers;
   Request?: typeof Request;
   Response?: typeof Response;
+  structuredClone?: typeof structuredClone;
   TextDecoder?: typeof TextDecoder;
   TextEncoder?: typeof TextEncoder;
   fetch?: typeof fetch;
@@ -105,6 +106,7 @@ class PythonResponse {
 }
 
 globals.Response ??= PythonResponse as unknown as typeof Response;
+globals.structuredClone ??= ((value: unknown) => cloneStructured(value)) as typeof structuredClone;
 globals.TextEncoder ??= class TextEncoder {
   encode(value: string): Uint8Array {
     const encoded = unescape(encodeURIComponent(String(value)));
@@ -137,3 +139,23 @@ globals.fetch ??= (async (input: string | URL | Request, init: RequestInit = {})
     headers: response.headers,
   });
 }) as typeof fetch;
+
+function cloneStructured(value: unknown, seen = new Map<object, unknown>()): unknown {
+  if (value === null || typeof value !== "object") return value;
+  const cached = seen.get(value);
+  if (cached !== undefined) return cached;
+  if (value instanceof Date) return new Date(value.getTime());
+  if (Array.isArray(value)) {
+    const clone: unknown[] = [];
+    seen.set(value, clone);
+    for (const item of value) clone.push(cloneStructured(item, seen));
+    return clone;
+  }
+  if (Object.getPrototypeOf(value) === Object.prototype) {
+    const clone: Record<string, unknown> = {};
+    seen.set(value, clone);
+    for (const [key, item] of Object.entries(value)) clone[key] = cloneStructured(item, seen);
+    return clone;
+  }
+  throw new TypeError(`PythonMonkey structuredClone does not support ${value.constructor.name}`);
+}

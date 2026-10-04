@@ -29,6 +29,17 @@ import {
 } from "./types.ts";
 
 const logger = authLogger("databricks");
+let ambientAuth: Promise<PersistentAuth> | undefined;
+
+/** Return a token from the process-wide ambient Databricks authentication lifecycle. */
+export async function token(login?: boolean) {
+  return (await ambientPersistentAuth()).token(login);
+}
+
+/** Return request headers from the process-wide ambient Databricks authentication lifecycle. */
+export async function authenticate(login?: boolean): Promise<Record<string, string>> {
+  return (await ambientPersistentAuth()).authenticate(login);
+}
 
 /** Injectable host capabilities for Databricks authentication. */
 export interface DatabricksAuthDependencies {
@@ -167,6 +178,11 @@ export class PersistentAuth implements PersistentAuthLike {
       hasWorkspaceId: Boolean(this.profileValue.workspaceId),
     };
   }
+}
+
+function ambientPersistentAuth(): Promise<PersistentAuth> {
+  ambientAuth ??= createPersistentAuth();
+  return ambientAuth;
 }
 
 /** Resolve a Databricks profile and open built-in credential storage. */

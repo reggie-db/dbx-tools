@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from dbx_tools.auth import create_persistent_auth, normalize_host
@@ -13,6 +16,40 @@ async def test_generated_function_wrapper_calls_embedded_runtime() -> None:
     assert await normalize_host("https://example.cloud.databricks.com/") == (
         "https://example.cloud.databricks.com"
     )
+
+
+def test_generated_package_exposes_ambient_token_and_authenticate() -> None:
+    script = """
+import asyncio
+import json
+from dbx_tools.auth import authenticate, token
+
+async def main():
+    print(json.dumps({
+        "token": await token(False),
+        "headers": await authenticate(False),
+    }, sort_keys=True))
+
+asyncio.run(main())
+"""
+    environment = {
+        **os.environ,
+        "DATABRICKS_AUTH_TYPE": "pat",
+        "DATABRICKS_CONFIG_FILE": "/tmp/dbx-tools-auth-ambient-test-missing",
+        "DATABRICKS_HOST": "https://example.cloud.databricks.com",
+        "DATABRICKS_TOKEN": "ambient-token",
+    }
+    environment.pop("DATABRICKS_WORKSPACE_ID", None)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    output = json.loads(result.stdout)
+    assert output["token"]["accessToken"] == "ambient-token"
+    assert output["headers"] == {"authorization": "Bearer ambient-token"}
 
 
 async def test_generated_object_proxy_exposes_authentication_methods() -> None:

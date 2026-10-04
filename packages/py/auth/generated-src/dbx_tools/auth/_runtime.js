@@ -20079,6 +20079,7 @@ var require_ini = __commonJS((exports2, module2) => {
 var exports_dbx_tools_python_entry = {};
 __export(exports_dbx_tools_python_entry, {
   types: () => exports_types,
+  token: () => token,
   storage: () => exports_storage,
   servicePrincipal: () => exports_service_principal,
   resolveDatabricksProfile: () => resolveDatabricksProfile,
@@ -20098,6 +20099,7 @@ __export(exports_dbx_tools_python_entry, {
   createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
   createPersistentAuth: () => createPersistentAuth,
   configProfileExists: () => configProfileExists,
+  authenticate: () => authenticate,
   WORKSPACE_ID_HEADER: () => WORKSPACE_ID_HEADER,
   TargetKind: () => TargetKind,
   Storage: () => Storage,
@@ -20209,6 +20211,7 @@ class PythonResponse {
   }
 }
 globals.Response ??= PythonResponse;
+globals.structuredClone ??= (value) => cloneStructured(value);
 globals.TextEncoder ??= class TextEncoder2 {
   encode(value) {
     const encoded = unescape(encodeURIComponent(String(value)));
@@ -20231,12 +20234,38 @@ globals.fetch ??= async (input, init = {}) => {
     headers: response.headers
   });
 };
+function cloneStructured(value, seen = new Map) {
+  if (value === null || typeof value !== "object")
+    return value;
+  const cached = seen.get(value);
+  if (cached !== undefined)
+    return cached;
+  if (value instanceof Date)
+    return new Date(value.getTime());
+  if (Array.isArray(value)) {
+    const clone = [];
+    seen.set(value, clone);
+    for (const item of value)
+      clone.push(cloneStructured(item, seen));
+    return clone;
+  }
+  if (Object.getPrototypeOf(value) === Object.prototype) {
+    const clone = {};
+    seen.set(value, clone);
+    for (const [key, item] of Object.entries(value))
+      clone[key] = cloneStructured(item, seen);
+    return clone;
+  }
+  throw new TypeError(`PythonMonkey structuredClone does not support ${value.constructor.name}`);
+}
 
 // packages/js/node/auth/src/databricks-auth.ts
 var exports_databricks_auth = {};
 __export(exports_databricks_auth, {
+  token: () => token,
   createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
   createPersistentAuth: () => createPersistentAuth,
+  authenticate: () => authenticate,
   PersistentAuth: () => PersistentAuth
 });
 
@@ -27693,6 +27722,13 @@ async function withTimeout(promise, timeoutMs, message) {
 
 // packages/js/node/auth/src/databricks-auth.ts
 var logger13 = authLogger("databricks");
+var ambientAuth;
+async function token(login) {
+  return (await ambientPersistentAuth()).token(login);
+}
+async function authenticate(login) {
+  return (await ambientPersistentAuth()).authenticate(login);
+}
 
 class PersistentAuth {
   profileValue;
@@ -27721,15 +27757,15 @@ class PersistentAuth {
     return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().tokenWithLogin(login);
   }
   async authenticate(login) {
-    const token = await this.token(login);
+    const token2 = await this.token(login);
     const headers = {
-      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
+      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token2.tokenType} ${token2.accessToken}`,
       ...this.profileValue.workspaceId ? { [WORKSPACE_ID_HEADER]: this.profileValue.workspaceId } : {}
     };
     logger13.debug("generated Databricks authentication headers", {
       ...this.context(),
       headerNames: Object.keys(headers),
-      token: tokenMetadata(token)
+      token: tokenMetadata(token2)
     });
     return headers;
   }
@@ -27802,6 +27838,10 @@ class PersistentAuth {
       hasWorkspaceId: Boolean(this.profileValue.workspaceId)
     };
   }
+}
+function ambientPersistentAuth() {
+  ambientAuth ??= createPersistentAuth();
+  return ambientAuth;
 }
 async function createPersistentAuth(options = { preferUserToMachine: true }, storage = "auto" /* Auto */, dependencies = {}) {
   const environment = dependencies.environment ?? process.env;

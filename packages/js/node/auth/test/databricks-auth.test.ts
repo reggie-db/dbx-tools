@@ -2,13 +2,43 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { describe, it } from "node:test";
 
-import { createPersistentAuth } from "../src/databricks-auth.ts";
+import {
+  authenticate as authenticateAmbient,
+  createPersistentAuth,
+  token as ambientToken,
+} from "../src/databricks-auth.ts";
 import { DatabricksClient } from "../src/http-client.ts";
 import { DatabricksAuthOptions, Storage } from "../src/types.ts";
 
 const APP_ENV = { DBX_TOOLS_DATABRICKS_APP_ENV: "true" };
 
 describe("Databricks provider construction", () => {
+  it("exposes cached ambient token and authenticate helpers", async () => {
+    const environment = {
+      DATABRICKS_AUTH_TYPE: process.env.DATABRICKS_AUTH_TYPE,
+      DATABRICKS_CONFIG_FILE: process.env.DATABRICKS_CONFIG_FILE,
+      DATABRICKS_HOST: process.env.DATABRICKS_HOST,
+      DATABRICKS_TOKEN: process.env.DATABRICKS_TOKEN,
+      DATABRICKS_WORKSPACE_ID: process.env.DATABRICKS_WORKSPACE_ID,
+    };
+    process.env.DATABRICKS_AUTH_TYPE = "pat";
+    process.env.DATABRICKS_CONFIG_FILE = "/tmp/dbx-tools-auth-ambient-test-missing";
+    process.env.DATABRICKS_HOST = "https://example.cloud.databricks.com";
+    process.env.DATABRICKS_TOKEN = "ambient-token";
+    delete process.env.DATABRICKS_WORKSPACE_ID;
+    try {
+      assert.equal((await ambientToken(false)).accessToken, "ambient-token");
+      assert.deepEqual(await authenticateAmbient(false), {
+        authorization: "Bearer ambient-token",
+      });
+    } finally {
+      for (const [name, value] of Object.entries(environment)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
+
   it("returns authorization and workspace headers for App OBO", async () => {
     const options = DatabricksAuthOptions.create({
       host: "https://example.cloud.databricks.com",

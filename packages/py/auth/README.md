@@ -8,12 +8,21 @@ implementation to keep in sync.
 ## Usage
 
 ```python
-from dbx_tools.auth import create_persistent_auth
+from dbx_tools.auth import authenticate, create_persistent_auth, token
+
+access_token = await token()
+headers = await authenticate()
 
 auth = await create_persistent_auth()
-token = await auth.token()
-headers = await auth.authenticate()
+profile_token = await auth.token()
+profile_headers = await auth.authenticate()
 ```
+
+Use the top-level `token()` and `authenticate()` functions for normal ambient
+authentication. They share one process-wide `PersistentAuth` instance, so
+profile resolution, token caching, locking, and refresh state are reused.
+Create an explicit auth object when you need custom options, storage, or injected
+dependencies.
 
 Generated function names use `snake_case`. Objects returned by JavaScript are
 proxied automatically, so JavaScript methods such as `workspaceId()` and
