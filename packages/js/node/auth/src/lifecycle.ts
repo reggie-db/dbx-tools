@@ -90,7 +90,12 @@ export class AuthClient {
         token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
       }
     } else if (this.provider.canAuthenticateSilently()) {
-      token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
+      try {
+        token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
+      } catch (error) {
+        if (!login) throw error;
+        token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+      }
     } else if (login) {
       token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
     } else {

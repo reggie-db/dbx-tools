@@ -136,7 +136,13 @@ class AuthClient {
         token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
       }
     } else if (this.provider.canAuthenticateSilently()) {
-      token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
+      try {
+        token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
+      } catch (error) {
+        if (!login)
+          throw error;
+        token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+      }
     } else if (login) {
       token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
     } else {
@@ -367,11 +373,12 @@ function resolveDatabricksCliProfile(configSource, requested, preferUserToMachin
   const name = resolveProfileName(selected, Boolean(selected), config, preferUserToMachine);
   const profile = loadRawProfile(config, name);
   const authKind = resolveAuthKind(profile.authType, profile.clientId, profile.clientSecret, profile.accessToken);
-  if (authKind !== "user-to-machine" /* UserToMachine */) {
-    throw new AuthError("config", `Profile ${name} does not use Databricks CLI authentication`);
+  if (!["user-to-machine" /* UserToMachine */, "personal-access-token" /* PersonalAccessToken */].includes(authKind)) {
+    throw new AuthError("config", `Profile ${name} cannot expose a bearer token through the Databricks CLI`);
   }
   return {
     name,
+    authKind,
     ...profile.host ? { host: normalizeHost(profile.host, name) } : {},
     ...profile.workspaceId ? { workspaceId: profile.workspaceId } : {}
   };

@@ -40,7 +40,7 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "packages/js/node/appkit-web-search":
     "Server-side web search runtime, Mastra tools, and AppKit plugin",
   "packages/js/node/auth":
-    "Persistent Databricks authentication with CLI-first OAuth, profile resolution, and portable storage adapters",
+    "Persistent Databricks authentication with CLI-owned user credentials, App auth, profile resolution, and portable storage adapters",
   "packages/js/node/auth-gate":
     "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
   "packages/js/node/core":
@@ -450,7 +450,7 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDevDeps("@types/proper-lockfile@^4.1.4", "@types/semver@^7.7.1");
 });
 
-// node-auth: dependency-light Databricks and generic OAuth lifecycle. The
+// node-auth: dependency-light Databricks authentication lifecycle. The
 // package uses only platform APIs plus node-core's portable file-lock lease so
 // Python/FFI consumers can reuse the same engine without an SDK dependency.
 project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
@@ -459,11 +459,13 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
     "@dbx-tools/bindings@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "oauth4webapi@^3.8.8",
-    "open@^11.0.1",
   );
   p.tasks
     .tryFind("pre-compile")
     ?.exec("bun ../../../../projen/tasks/databricks-cli-assets.ts --root ../../../..");
+  p.compileTask.prependExec(
+    "bun -e 'import { rm } from \"node:fs/promises\"; await rm(\"lib\", { recursive: true, force: true })'",
+  );
 });
 
 // node-bindings: host implementations behind cross-runtime data-only

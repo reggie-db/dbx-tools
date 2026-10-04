@@ -49,7 +49,6 @@ export interface AuthOptions {
   refreshBufferSeconds: number;
   lockTimeoutSeconds: number;
   loginTimeoutSeconds: number;
-  callbackImageSrc?: string;
 }
 
 const AUTH_DEFAULTS: AuthOptions = {

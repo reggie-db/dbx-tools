@@ -2,14 +2,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { configUtils } from "@dbx-tools/core";
-import { log } from "@dbx-tools/shared-core";
 
+import { AppServicePrincipalProvider } from "./app-service-principal.ts";
 import { AuthError } from "./errors.ts";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { AuthClient, publicToken } from "./lifecycle.ts";
 import { FileCredentialStore } from "./node-storage.ts";
-import { OAuthFlow, OAuthGrant } from "./oauth.ts";
-import { effectiveScopes, machineScopes, resolveDatabricksProfile } from "./profile.ts";
+import { machineScopes, resolveConfigFile, resolveDatabricksProfile } from "./profile.ts";
 import { MemoryCredentialStore } from "./storage.ts";
 import {
   AuthKind,
@@ -23,7 +22,6 @@ import {
   Storage,
   TargetKind,
   type Token,
-  type TokenProvider,
   WORKSPACE_ID_HEADER,
 } from "./types.ts";
 
@@ -31,11 +29,8 @@ import {
 export interface DatabricksAuthDependencies {
   environment?: Readonly<Record<string, string | undefined>>;
   fetch?: typeof globalThis.fetch;
-  openBrowser?: (url: string) => Promise<void>;
   resolveCli?: () => Promise<string | undefined>;
 }
-
-const logger = log.logger("auth:databricks");
 
 /** Persistent Databricks auth facade over the provider-neutral lifecycle. */
 export class PersistentAuth implements PersistentAuthLike {
@@ -181,91 +176,56 @@ async function providerFor(
   profile: DatabricksProfile,
   options: DatabricksAuthOptions,
   dependencies: DatabricksAuthDependencies,
-): Promise<TokenProvider> {
+): Promise<DatabricksCliProvider | AppServicePrincipalProvider> {
+  const environment = dependencies.environment ?? process.env;
+  const inApp = configUtils.isDatabricksAppEnv({ ...environment });
   switch (profile.authKind) {
-    case AuthKind.UserToMachine: {
-      const environment = dependencies.environment ?? process.env;
-      const inApp = configUtils.isDatabricksAppEnv({ ...environment });
-      const cliMode = profile.authType ?? "auto";
-      if (!inApp && (cliMode === "auto" || cliMode === "databricks-cli")) {
-        try {
-          const executable = await (
-            dependencies.resolveCli ?? (() => resolveDatabricksCli(environment))
-          )();
-          if (executable) return new DatabricksCliProvider(profile.name, executable);
-          if (cliMode === "databricks-cli") {
-            throw new AuthError("cli", "Databricks CLI is unavailable on this platform");
-          }
-        } catch (cause) {
-          if (cliMode === "databricks-cli") throw cause;
-          logger.warn("Databricks CLI unavailable; using native OAuth", { error: cause });
-        }
-      }
-      const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
-      return new OAuthFlow(
-        {
-          provider: "databricks",
-          authorizationEndpoint: endpoints.authorizationEndpoint,
-          tokenEndpoint: endpoints.tokenEndpoint,
-          clientId: profile.clientId,
-          scopes: effectiveScopes(profile.scopes),
-          host: profile.host,
-          allowInsecureRequests: isLoopbackHttp(profile.host),
-          callbackImageSrc: options.auth?.callbackImageSrc,
-          fetch: dependencies.fetch,
-          openBrowser: dependencies.openBrowser,
-        },
-        OAuthGrant.AuthorizationCode,
+    case AuthKind.UserToMachine:
+    case AuthKind.PersonalAccessToken: {
+      if (inApp)
+        throw new AuthError(
+          "config",
+          "Databricks Apps use app_obo request headers or app_sp environment credentials",
+        );
+      const executable = await (
+        dependencies.resolveCli ?? (() => resolveDatabricksCli(environment))
+      )();
+      if (!executable) throw new AuthError("cli", "Databricks CLI is unavailable on this platform");
+      return new DatabricksCliProvider(
+        profile.name,
+        executable,
+        profile.authKind,
+        cliEnvironment(profile, resolveConfigFile(options.configFile, environment)),
       );
     }
     case AuthKind.MachineToMachine:
-    case AuthKind.AppServicePrincipal: {
-      const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
-      return new OAuthFlow(
-        {
-          provider: "databricks",
-          authorizationEndpoint: endpoints.authorizationEndpoint,
-          tokenEndpoint: endpoints.tokenEndpoint,
-          clientId: profile.clientId,
-          clientSecret: profile.clientSecret,
-          scopes: machineScopes(profile.scopes),
-          ...(profile.groupId ? { extraTokenParams: { assume_group: profile.groupId } } : {}),
-          host: profile.host,
-          allowInsecureRequests: isLoopbackHttp(profile.host),
-          fetch: dependencies.fetch,
-        },
-        OAuthGrant.ClientCredentials,
+      throw new AuthError(
+        "cli",
+        "The Databricks CLI does not expose M2M bearer tokens; use U2M or PAT outside a Databricks App",
       );
-    }
-    case AuthKind.PersonalAccessToken:
-      return new StaticTokenProvider({
-        accessToken: profile.accessToken!,
-        tokenType: "Bearer",
-        scopes: [],
+    case AuthKind.AppServicePrincipal: {
+      if (!inApp)
+        throw new AuthError(
+          "config",
+          "app_sp authentication is available only inside a Databricks App",
+        );
+      const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
+      return new AppServicePrincipalProvider({
+        tokenEndpoint: endpoints.tokenEndpoint,
+        clientId: profile.clientId,
+        clientSecret: profile.clientSecret!,
+        scopes: machineScopes(profile.scopes),
+        ...(profile.groupId ? { groupId: profile.groupId } : {}),
+        allowInsecureRequests: isLoopbackHttp(profile.host),
+        fetch: dependencies.fetch,
       });
+    }
     case AuthKind.AppOnBehalfOf:
       throw new AuthError("config", "App OBO tokens do not use a persistent provider");
   }
 }
 
-class StaticTokenProvider implements TokenProvider {
-  constructor(private readonly value: Token) {}
-  authenticate(): Promise<Token> {
-    return Promise.resolve({ ...this.value, scopes: [...this.value.scopes] });
-  }
-  login(): Promise<Token> {
-    return this.authenticate();
-  }
-  refresh(): Promise<Token> {
-    return this.authenticate();
-  }
-  canAuthenticateSilently(): boolean {
-    return true;
-  }
-}
-
 interface AuthorizationServer {
-  authorizationEndpoint: string;
   tokenEndpoint: string;
 }
 
@@ -277,7 +237,6 @@ async function resolveOAuthEndpoints(
   if (profile.target === TargetKind.Account) {
     if (!profile.accountId) throw new AuthError("config", "Account target requires account_id");
     return {
-      authorizationEndpoint: `${host}/oidc/accounts/${profile.accountId}/v1/authorize`,
       tokenEndpoint: `${host}/oidc/accounts/${profile.accountId}/v1/token`,
     };
   }
@@ -291,11 +250,9 @@ async function resolveOAuthEndpoints(
   if (!response.ok)
     throw new AuthError("oauth", `OAuth discovery returned HTTP ${response.status}`);
   const value = (await response.json()) as Record<string, unknown>;
-  const authorizationEndpoint = stringValue(value.authorization_endpoint);
   const tokenEndpoint = stringValue(value.token_endpoint);
-  if (!authorizationEndpoint || !tokenEndpoint)
-    throw new AuthError("oauth", "OAuth discovery response is incomplete");
-  return { authorizationEndpoint, tokenEndpoint };
+  if (!tokenEndpoint) throw new AuthError("oauth", "OAuth discovery response is incomplete");
+  return { tokenEndpoint };
 }
 
 function requiredAccountId(profile: DatabricksProfile): string {
@@ -310,6 +267,22 @@ function storageFromName(name: string): Storage {
 function isLoopbackHttp(host: string): boolean {
   const url = new URL(host);
   return url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname);
+}
+
+function cliEnvironment(profile: DatabricksProfile, configFile: string): Record<string, string> {
+  return {
+    DATABRICKS_CONFIG_FILE: configFile,
+    DATABRICKS_CONFIG_PROFILE: profile.name,
+    DATABRICKS_HOST: profile.host,
+    ...(profile.accountId ? { DATABRICKS_ACCOUNT_ID: profile.accountId } : {}),
+    ...(profile.workspaceId ? { DATABRICKS_WORKSPACE_ID: profile.workspaceId } : {}),
+    ...(profile.authKind === AuthKind.PersonalAccessToken
+      ? {
+          DATABRICKS_AUTH_TYPE: "pat",
+          DATABRICKS_TOKEN: profile.accessToken!,
+        }
+      : {}),
+  };
 }
 
 function stringValue(value: unknown): string | undefined {

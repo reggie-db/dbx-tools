@@ -12,8 +12,8 @@ Python supplies host capabilities through small protocols:
 - `CredentialStore` persists tokens and returns explicit lock leases.
 - `MemoryCredentialStore` and `FileCredentialStore` use the reusable lease and
   file adapters from `dbx-tools-node-bindings`.
-- `DatabricksCliProvider` uses the installed Databricks CLI through
-  `dbx-tools-core` subprocess resolution.
+- `DatabricksCliProvider` uses the installed Databricks CLI for U2M and PAT
+  profiles through `dbx-tools-core` subprocess resolution.
 - `create_databricks_cli_auth()` applies the same JavaScript profile-selection
   rules, including implicit preference for one matching CLI profile.
 
@@ -53,6 +53,6 @@ lifecycle change cannot publish a stale embedded runtime.
 
 - `client` loads the bundled runtime and exposes the async `AuthClient` facade.
 - `databricks_auth` resolves CLI profiles and exposes complete request headers.
-- `databricks_cli` provides CLI token, login, and force-refresh acquisition.
+- `databricks_cli` provides CLI U2M login/token refresh and PAT resolution.
 - `types` defines the provider, storage, token, and lifecycle contracts.
 - `storage` provides memory and file-backed adapters.

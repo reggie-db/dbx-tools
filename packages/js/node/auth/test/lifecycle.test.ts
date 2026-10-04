@@ -15,6 +15,30 @@ function token(accessToken: string): Token {
 }
 
 describe("authentication lifecycle", () => {
+  it("falls back to provider login when silent acquisition fails", async () => {
+    let logins = 0;
+    const provider: TokenProvider = {
+      authenticate: async () => {
+        throw new Error("missing CLI credential");
+      },
+      login: async () => {
+        logins += 1;
+        return token("login");
+      },
+      refresh: async () => token("refresh"),
+      canAuthenticateSilently: () => true,
+    };
+    const client = new AuthClient(
+      "profile",
+      provider,
+      new MemoryCredentialStore(),
+      AuthOptions.create({ refreshBufferSeconds: 0 }),
+    );
+
+    assert.equal((await client.tokenOrLogin()).accessToken, "login");
+    assert.equal(logins, 1);
+  });
+
   it("checks again after locking so concurrent misses authenticate once", async () => {
     let acquisitions = 0;
     const provider: TokenProvider = {

@@ -146,20 +146,25 @@ Primary package areas:
   Serving endpoint selection and shared schemas/classification.
 - `packages/js/node/auth` owns Databricks authentication for Node.js and Bun.
   It contains Databricks App detection, cached CLI resolution, CLI token process
-  access, profile resolution, U2M, M2M, PAT authentication,
+  access, profile resolution, U2M and PAT authentication, App service-principal
+  authentication,
   provider-neutral token lifecycle, credential storage, and the lightweight
-  Databricks HTTP client. Use `oauth4webapi` for OAuth protocol handling and
-  `open` for browser launch. Do not add a Databricks SDK dependency; callers can
+  Databricks HTTP client. Do not add a Databricks SDK dependency; callers can
   apply auth headers to their own client. Its `CredentialStore` and `LockAdapter`
   contracts remain callback-free and use explicit lease IDs.
-  Outside Databricks Apps, automatic U2M and explicit `databricks-cli` profiles
+  Outside Databricks Apps, U2M, `oauth-u2m`, `databricks-cli`, and PAT profiles
   reuse an installed CLI when it satisfies the minimum JSON token contract. An
   absent or older CLI is installed through `@dbx-tools/core/bin` from the
   checksum-pinned release recorded in
   `src/generated/databricks-cli-assets.json`. The asset task refreshes that
-  manifest once per root `VERSION`; explicit `oauth-u2m` keeps the native browser
-  flow. CLI acquisition remains a provider detail and must not bypass the
-  lifecycle's check-lock-recheck token coordination or credential caches.
+  manifest once per root `VERSION`. There is no native browser OAuth path.
+  Non-App M2M fails explicitly because the Databricks CLI does not expose its
+  generated bearer token. CLI acquisition remains a provider detail and must
+  not bypass the lifecycle's check-lock-recheck token coordination or credential
+  caches.
+  Inside Databricks Apps, use only request-scoped App OBO headers or App SP
+  credentials from the App environment. App SP is the only direct OAuth flow
+  and uses `oauth4webapi` client credentials without opening a browser.
   `@dbx-tools/core` owns the Node file-lock implementation and must not depend
   on Rust only for Databricks App detection.
 - `packages/js/node/bindings` owns data-only process and HTTP host bindings for
@@ -179,7 +184,8 @@ Primary package areas:
   for host adapters. Keep token refresh, check-lock-recheck coordination, login
   policy, rejected-token handling, and profile-selection rules in the
   JavaScript source of truth. Its Python Databricks CLI provider uses
-  `dbx-tools-core` executable resolution and returns complete request headers,
+  `dbx-tools-core` executable resolution for U2M and PAT profiles and returns
+  complete request headers,
   including `X-Databricks-Workspace-Id` when configured. Regenerate the bundle
   through `bun run auth:python-bridge`; tests and release validation must reject
   stale generated output.

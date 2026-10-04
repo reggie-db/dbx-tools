@@ -7,7 +7,7 @@ import { stringUtils } from "@dbx-tools/shared-core";
 
 import cliAssets from "./generated/databricks-cli-assets.json" with { type: "json" };
 import { AuthError } from "./errors.ts";
-import type { Token, TokenProvider } from "./types.ts";
+import { AuthKind, type Token, type TokenProvider } from "./types.ts";
 
 const resolutionCache = new Map<string, Promise<string | undefined>>();
 
@@ -92,10 +92,12 @@ export async function databricksCliLogin(
   profile: string,
   timeoutMs: number,
   executable = process.env.DATABRICKS_CLI_PATH ?? "databricks",
+  environment: Record<string, string> = {},
 ): Promise<void> {
   const result = await processBinding.runProcess({
     command: executable,
     args: ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`],
+    env: environment,
   });
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
@@ -106,10 +108,11 @@ export async function databricksCliToken(
   profile: string,
   forceRefresh = false,
   executable = process.env.DATABRICKS_CLI_PATH ?? "databricks",
+  environment: Record<string, string> = {},
 ): Promise<Token> {
   const args = ["auth", "token", "--profile", profile, "--output", "json"];
   if (forceRefresh) args.push("--force-refresh");
-  const result = await processBinding.runProcess({ command: executable, args });
+  const result = await processBinding.runProcess({ command: executable, args, env: environment });
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth token exited ${result.exitCode}`);
   let value: Record<string, unknown>;
@@ -135,31 +138,74 @@ export async function databricksCliToken(
   };
 }
 
-/** U2M provider that delegates acquisition and refresh to the Databricks CLI. */
+/** Resolve a PAT through the Databricks CLI authentication description. */
+export async function databricksCliPat(
+  profile: string,
+  executable = process.env.DATABRICKS_CLI_PATH ?? "databricks",
+  environment: Record<string, string> = {},
+): Promise<Token> {
+  const result = await processBinding.runProcess({
+    command: executable,
+    args: ["auth", "describe", "--profile", profile, "--output", "json", "--sensitive"],
+    env: environment,
+  });
+  if (result.exitCode !== 0)
+    throw new AuthError(
+      "cli",
+      result.stderr || `databricks auth describe exited ${result.exitCode}`,
+    );
+  let value: Record<string, unknown>;
+  try {
+    value = JSON.parse(result.stdout ?? "") as Record<string, unknown>;
+  } catch (cause) {
+    throw new AuthError("cli", "Databricks CLI auth description was not JSON", { cause });
+  }
+  const details = recordValue(value.details);
+  const configuration = recordValue(details?.configuration);
+  const token = stringValue(recordValue(configuration?.token)?.value);
+  if (!token) throw new AuthError("cli", "Databricks CLI did not resolve a personal access token");
+  return { accessToken: token, tokenType: "Bearer", scopes: [] };
+}
+
+/** Provider that delegates non-App user credentials to the Databricks CLI. */
 export class DatabricksCliProvider implements TokenProvider {
   constructor(
     private readonly profile: string,
     private readonly executable: string,
+    private readonly authKind = AuthKind.UserToMachine,
+    private readonly environment: Record<string, string> = {},
   ) {}
 
   authenticate(): Promise<Token> {
-    return databricksCliToken(this.profile, false, this.executable);
+    return this.resolve(false);
   }
 
   async login(timeoutMs: number): Promise<Token> {
-    await databricksCliLogin(this.profile, timeoutMs, this.executable);
-    return databricksCliToken(this.profile, false, this.executable);
+    if (this.authKind === AuthKind.UserToMachine) {
+      await databricksCliLogin(this.profile, timeoutMs, this.executable, this.environment);
+    }
+    return this.resolve(false);
   }
 
   refresh(): Promise<Token> {
-    return databricksCliToken(this.profile, true, this.executable);
+    return this.resolve(true);
   }
 
   canAuthenticateSilently(): boolean {
     return true;
   }
+
+  private resolve(forceRefresh: boolean): Promise<Token> {
+    return this.authKind === AuthKind.PersonalAccessToken
+      ? databricksCliPat(this.profile, this.executable, this.environment)
+      : databricksCliToken(this.profile, forceRefresh, this.executable, this.environment);
+  }
 }
 
 function stringValue(value: unknown): string | undefined {
   return stringUtils.trimToNull(value) ?? undefined;
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
 }

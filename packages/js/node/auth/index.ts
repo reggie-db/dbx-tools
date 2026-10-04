@@ -4,16 +4,18 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth";
 export const PACKAGE_VERSION = "0.9.21";
+export * as appServicePrincipal from "./src/app-service-principal.ts";
 export * as databricksAuth from "./src/databricks-auth.ts";
 export * as databricksCli from "./src/databricks-cli.ts";
 export * as errors from "./src/errors.ts";
 export * as httpClient from "./src/http-client.ts";
 export * as lifecycle from "./src/lifecycle.ts";
 export * as nodeStorage from "./src/node-storage.ts";
-export * as oauth from "./src/oauth.ts";
 export * as profile from "./src/profile.ts";
 export * as storage from "./src/storage.ts";
 export * as types from "./src/types.ts";
+export { AppServicePrincipalProvider } from "./src/app-service-principal.ts";
+export type { AppServicePrincipalConfig } from "./src/app-service-principal.ts";
 export { PersistentAuth } from "./src/databricks-auth.ts";
 export type { DatabricksAuthDependencies } from "./src/databricks-auth.ts";
 export { DatabricksCliProvider } from "./src/databricks-cli.ts";
@@ -22,8 +24,6 @@ export { DatabricksClient } from "./src/http-client.ts";
 export type { DatabricksRequestOptions } from "./src/http-client.ts";
 export { AuthClient } from "./src/lifecycle.ts";
 export { NodeFileLockAdapter, FileCredentialStore } from "./src/node-storage.ts";
-export { OAuthGrant, OAuthFlow, ProviderAuth } from "./src/oauth.ts";
-export type { OAuthConfig, ProviderOptions } from "./src/oauth.ts";
 export { MemoryLockAdapter, MemoryCredentialStore } from "./src/storage.ts";
 export { AuthKind, TargetKind, Storage, FileLayout, DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE, DEFAULT_ACCOUNTS_HOST, DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER, AUTH_TYPE_APP_OBO, AUTH_TYPE_APP_SP } from "./src/types.ts";
 export type { Token, AccessToken, DatabricksProfileSummary, DatabricksAuthStatus, DatabricksProfile, LockAdapter, CredentialStore, TokenProvider, PersistentAuthLike } from "./src/types.ts";

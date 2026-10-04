@@ -43,7 +43,7 @@ export function resolveDatabricksCliProfile(
   configSource: string,
   requested?: string,
   preferUserToMachine = true,
-): { name: string; host?: string; workspaceId?: string } {
+): { name: string; host?: string; workspaceId?: string; authKind: AuthKind } {
   const selected = requested?.trim() || undefined;
   const config = configSource.trim() ? parseDatabricksConfig(configSource) : undefined;
   const name = resolveProfileName(selected, Boolean(selected), config, preferUserToMachine);
@@ -54,11 +54,15 @@ export function resolveDatabricksCliProfile(
     profile.clientSecret,
     profile.accessToken,
   );
-  if (authKind !== AuthKind.UserToMachine) {
-    throw new AuthError("config", `Profile ${name} does not use Databricks CLI authentication`);
+  if (![AuthKind.UserToMachine, AuthKind.PersonalAccessToken].includes(authKind)) {
+    throw new AuthError(
+      "config",
+      `Profile ${name} cannot expose a bearer token through the Databricks CLI`,
+    );
   }
   return {
     name,
+    authKind,
     ...(profile.host ? { host: normalizeHost(profile.host, name) } : {}),
     ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}),
   };

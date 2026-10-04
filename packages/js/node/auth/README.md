@@ -3,17 +3,16 @@
 Persistent Databricks authentication for Node.js and Bun without a native
 binding requirement.
 
-The package prefers the Databricks CLI for automatic user authentication outside
-Databricks Apps. It reuses a compatible installed CLI or checksum-verifies and
-installs the pinned build asset through `@dbx-tools/core/bin`. An explicit
-`oauth-u2m` profile uses the browser authorization-code flow instead. M2M uses
-OAuth client credentials. PAT, Databricks App service-principal, and App OBO
-credentials use the same profile and request policy.
+Outside Databricks Apps, the package delegates U2M and PAT authentication to the
+Databricks CLI. It reuses a compatible installed CLI or checksum-verifies and
+installs the pinned build asset through `@dbx-tools/core/bin`. Inside Databricks
+Apps, it accepts request-scoped App OBO headers or App SP environment
+credentials. No browser OAuth flow is implemented.
 
 ## Features
 
-- Version-checked CLI-first U2M with native browser fallback.
-- M2M, PAT, App SP, and request-scoped App OBO authentication.
+- Version-checked CLI-only U2M and PAT outside Databricks Apps.
+- App SP and request-scoped App OBO authentication inside Databricks Apps.
 - Databricks profile parsing with `__settings__.default_profile`, `DEFAULT`, and
   sole-profile selection.
 - Optional preference for one matching CLI U2M profile over an implicit M2M
@@ -24,6 +23,10 @@ credentials use the same profile and request policy.
 - Same-origin authorization headers and one rejected-token retry in the bundled
   fetch client.
 - Secret-free profile enumeration with explicit cache refresh.
+
+The Databricks CLI does not expose generated M2M bearer tokens. A non-App M2M
+profile therefore fails explicitly instead of silently switching to a custom
+OAuth implementation. Use a CLI U2M or PAT profile outside Apps.
 
 ## Basic use
 
@@ -78,5 +81,5 @@ entries in `~/.databricks/token-cache.json`.
 - `profile` parses and resolves Databricks configuration.
 - `lifecycle` implements provider-neutral token coordination.
 - `storage` and `nodeStorage` provide memory and file adapters.
-- `oauth` provides generic OAuth authorization-code and client-credential flows.
+- `appServicePrincipal` provides the App-only client-credentials provider.
 - `httpClient` provides a small fetch-based Databricks JSON client.

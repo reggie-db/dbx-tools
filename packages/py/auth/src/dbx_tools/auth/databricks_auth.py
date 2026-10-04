@@ -32,6 +32,7 @@ class DatabricksAuth:
         profile: str,
         host: str | None,
         workspace_id: str | None,
+        auth_kind: str,
     ) -> None:
         self._client = client
         self._status = DatabricksAuthStatus(
@@ -40,6 +41,7 @@ class DatabricksAuth:
             workspace_id,
             client.store_name(),
         )
+        self._auth_kind = auth_kind
 
     async def challenge(self) -> None:
         await self._client.login()
@@ -99,7 +101,7 @@ class DatabricksAuth:
         return self._status.workspace_id
 
     def auth_kind(self) -> str:
-        return "user-to-machine"
+        return self._auth_kind
 
 
 async def create_databricks_cli_auth(
@@ -128,9 +130,10 @@ async def create_databricks_cli_auth(
     name = str(resolved["name"])
     host = str(resolved["host"]) if resolved.get("host") else None
     workspace_id = str(resolved["workspaceId"]) if resolved.get("workspaceId") else None
+    auth_kind = str(resolved["authKind"])
     client = AuthClient(
         name,
-        DatabricksCliProvider(name, executable),
+        DatabricksCliProvider(name, executable, auth_kind, str(selected_file.resolve())),
         store or FileCredentialStore(cache_dir),
         options,
     )
@@ -139,6 +142,7 @@ async def create_databricks_cli_auth(
         profile=name,
         host=host,
         workspace_id=workspace_id,
+        auth_kind=auth_kind,
     )
 
 
