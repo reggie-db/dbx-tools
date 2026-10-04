@@ -48,14 +48,15 @@ function fixtureTool(name: string) {
 }
 
 describe("GraphitiPlugin routes", () => {
-  it("depends on the narrow Rust binary runtime instead of the umbrella CLI", () => {
+  it("depends on the Python model proxy runtime instead of Rust or the umbrella CLI", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as {
       dependencies?: Record<string, string>;
     };
 
-    assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], "workspace:^");
+    assert.equal(manifest.dependencies?.["@dbx-tools/cli-model-proxy"], "workspace:^");
+    assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], undefined);
     assert.equal(manifest.dependencies?.["@dbx-tools/cli"], undefined);
   });
 
@@ -97,18 +98,11 @@ describe("GraphitiPlugin routes", () => {
     assert.equal(calls[3]?.at(-1), `dbx-tools-graphiti==${GRAPHITI_PYTHON_VERSION}`);
   });
 
-  it("installs the registered model proxy binary by absolute path", async () => {
-    let selectedCommand = "";
-    const path = await ensureGraphitiModelProxy(async (command) => {
-      selectedCommand = command.command;
-      return {
-        root: "/cache/dbx-model-proxy",
-        binDir: "/cache/dbx-model-proxy/bin",
-        path: "/cache/dbx-model-proxy/bin/dbx-model-proxy",
-      };
-    });
+  it("installs the exact-version Python model proxy by absolute path", async () => {
+    const path = await ensureGraphitiModelProxy(
+      async () => "/cache/dbx-model-proxy/bin/dbx-model-proxy",
+    );
 
-    assert.equal(selectedCommand, "model-proxy");
     assert.equal(path, "/cache/dbx-model-proxy/bin/dbx-model-proxy");
   });
 

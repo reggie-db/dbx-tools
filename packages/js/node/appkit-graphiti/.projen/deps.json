@@ -40,12 +40,12 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/core",
+      "name": "@dbx-tools/cli-model-proxy",
       "version": "workspace:^",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/rust-binary",
+      "name": "@dbx-tools/core",
       "version": "workspace:^",
       "type": "runtime"
     },

@@ -12,11 +12,6 @@
  * @module
  */
 import { basename } from "node:path";
-import {
-  runReleaseBinary,
-  releaseBinaryCommands,
-  type ReleaseBinaryCommand,
-} from "@dbx-tools/rust-binary";
 import { Command } from "commander";
 import {
   bootstrapWorkspace,
@@ -86,19 +81,6 @@ function addForwardedCommand(
     });
 }
 
-function addReleaseCommand(program: Command, command: ReleaseBinaryCommand): void {
-  program
-    .command(command.command)
-    .description(command.description)
-    .argument("[args...]", `arguments forwarded to ${command.binaryName}`)
-    .allowUnknownOption()
-    .allowExcessArguments()
-    .helpOption(false)
-    .action(async (args: string[]) => {
-      process.exitCode = await runReleaseBinary(command, args);
-    });
-}
-
 /** Build the `dbx` commander program (no side effects until parsed). */
 export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   const program = new Command()
@@ -154,11 +136,6 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     "Run or manage the Python Databricks model proxy",
     async () => (await import("@dbx-tools/cli-model-proxy/cli")).buildProgram,
   );
-
-  for (const command of releaseBinaryCommands()) {
-    if (command.command === "model-proxy" || command.command === "lakebase-proxy") continue;
-    addReleaseCommand(program, command);
-  }
 
   return program;
 }

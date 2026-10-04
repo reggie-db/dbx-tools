@@ -30,8 +30,8 @@ import {
   pluginRegistry,
   toolkitEntries,
 } from "@dbx-tools/appkit";
+import { ensurePythonProxy } from "@dbx-tools/cli-model-proxy/cli";
 import { configUtils } from "@dbx-tools/core";
-import { ensureReleaseBinary, releaseBinaryCommand } from "@dbx-tools/rust-binary";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
 import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";
@@ -46,7 +46,6 @@ import {
 } from "./config.ts";
 
 const LAKEBASE_MANIFEST = pluginRegistry.data(lakebase).plugin.manifest;
-const MODEL_PROXY_RELEASE_BINARY = releaseBinaryCommand("model-proxy");
 const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
@@ -424,12 +423,11 @@ export async function ensureGraphitiPython(
   }
 }
 
-/** Install the model proxy release binary used by the Python sidecar. */
+/** Install the exact-version Python model proxy used by the Python sidecar. */
 export async function ensureGraphitiModelProxy(
-  install: typeof ensureReleaseBinary = ensureReleaseBinary,
+  install: typeof ensurePythonProxy = ensurePythonProxy,
 ): Promise<string> {
-  const installed = await install(MODEL_PROXY_RELEASE_BINARY);
-  return resolvePath(installed.path);
+  return resolvePath(await install());
 }
 
 export const graphiti = toPlugin(GraphitiPlugin);

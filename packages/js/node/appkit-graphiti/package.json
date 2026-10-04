@@ -29,8 +29,8 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
+    "@dbx-tools/cli-model-proxy": "workspace:^",
     "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/rust-binary": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@mastra/core": "catalog:",
     "@mastra/mcp": "catalog:",

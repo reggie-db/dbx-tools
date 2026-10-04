@@ -100,11 +100,7 @@ describe("Rust release binaries", () => {
       "@dbx-tools/core",
       "@dbx-tools/shared-core",
     ]);
-    assert.deepEqual([...runtimeReach].sort(), [
-      "@dbx-tools/core",
-      "@dbx-tools/core-rs",
-      "@dbx-tools/shared-core",
-    ]);
+    assert.deepEqual([...runtimeReach].sort(), ["@dbx-tools/core", "@dbx-tools/shared-core"]);
     assert.ok(cliReach.size > runtimeReach.size);
     assert.equal(
       internalDependencyReach(manifests, "@dbx-tools/appkit-graphiti").has("@dbx-tools/cli"),

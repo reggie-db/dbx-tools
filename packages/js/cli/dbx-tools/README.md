@@ -34,15 +34,10 @@ SMTP, or X.509 code. Run
 `dbx <group> --help` for a group's own flags; each forwards `--help` to the child
 program rather than answering it at the root.
 
-Rust commands are generated from the workspace's release metadata. The first
-invocation downloads the exact GitHub release asset matching `PACKAGE_VERSION`
-and the operating system, then installs it as
-`~/.dbx-tools/bin/<binary>_<major>_<minor>_<patch>`. Later invocations reuse
-that versioned executable. Root help never downloads a binary, and all command
-arguments are forwarded directly to the Rust CLI.
-The registry and installer live in
-[`@dbx-tools/rust-binary`](../../node/rust-binary) so server packages can use a
-native release binary without installing this CLI's command graph.
+The model proxy command installs and runs the exact-version Python/LiteLLM
+package. The Lakebase proxy command runs the pure Node implementation. Rust
+release metadata remains generated for compatibility and release synchronization
+but is not reachable from the `dbx` runtime command graph.
 
 ## Bootstrap A Workspace
 

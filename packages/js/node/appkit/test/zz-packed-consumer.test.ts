@@ -54,7 +54,6 @@ it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 
   try {
     run(bun, ["run", "compile"], packageRoot);
     const packageArchives = {
-      "@dbx-tools/core-rs": pack(resolve(packageRoot, "../core-rs"), archives),
       "@dbx-tools/shared-core": pack(resolve(packageRoot, "../../shared/core"), archives),
       "@dbx-tools/core": pack(resolve(packageRoot, "../core"), archives),
       "@dbx-tools/appkit": pack(packageRoot, archives),

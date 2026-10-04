@@ -495,7 +495,6 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
 project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/core@workspace:^",
-    "@dbx-tools/core-rs@workspace:^",
     "@databricks/sdk-experimental@catalog:",
     "zod@catalog:",
   );
@@ -669,7 +668,7 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
 });
 
 // node-appkit-graphiti: AppKit lifecycle + Caddy routing for the Python Graphiti
-// sidecar. The Python package owns Graphiti, Neo4j, the Rust model proxy, and
+// sidecar. The Python package owns Graphiti, Neo4j, the Python model proxy, and
 // Postgres replay; this package owns binary resolution, child supervision, and
 // the single public port.
 project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
@@ -686,7 +685,7 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
-    "@dbx-tools/rust-binary@workspace:^",
+    "@dbx-tools/cli-model-proxy@workspace:^",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
     "concurrently@catalog:",
@@ -704,7 +703,7 @@ project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (
 // node-postgres: connection-correct Postgres utilities shared by packages.
 // Advisory locks reserve one PoolClient for the full protected callback.
 project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/core-rs@workspace:^", "pg@^8.22.0");
+  p.addDeps("pg@^8.22.0");
   projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
   p.addDevDeps("@types/pg@^8");
 });
@@ -927,7 +926,6 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
     "@dbx-tools/cli-lakebase-proxy@workspace:^",
     "@dbx-tools/cli-model-proxy@workspace:^",
     "@dbx-tools/cli-tunnel@workspace:^",
-    "@dbx-tools/rust-binary@workspace:^",
   );
 });
 
