@@ -8,7 +8,12 @@ implementation to keep in sync.
 ## Usage
 
 ```python
-from dbx_tools.auth import authenticate, create_persistent_auth, token
+from dbx_tools.auth import (
+    DatabricksAuthOptions,
+    authenticate,
+    create_persistent_auth,
+    token,
+)
 
 access_token = await token()
 headers = await authenticate()
@@ -16,6 +21,9 @@ headers = await authenticate()
 auth = await create_persistent_auth()
 profile_token = await auth.token()
 profile_headers = await auth.authenticate()
+
+configured = await create_persistent_auth(DatabricksAuthOptions(profile="DEFAULT"))
+keyword_configured = await create_persistent_auth(profile="DEFAULT")
 ```
 
 Use the top-level `token()` and `authenticate()` functions for normal ambient
@@ -72,6 +80,14 @@ bun run auth:python-runtime:check
 
 `bun run sync --watch` also regenerates the package when a workspace-backed Node
 dependency, binding configuration, shim, or function override changes.
+
+The generator uses the TypeScript type checker for parameters named `options`.
+Supported record types become keyword-only Python dataclasses, including nested
+records. When the Node package exports a same-named companion with a
+`defaults()` method, those values become the dataclass defaults. Callers may
+pass the dataclass, a dictionary, positional arguments, or direct snake-case
+option keywords. Generation fails on unsupported option types such as
+callbacks.
 
 ## Debugging
 

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ _KIND = pm.eval(
     " }"
 )
 _RUNTIME: Any | None = None
+_MISSING = object()
 
 
 def _runtime() -> Any:
@@ -40,6 +42,12 @@ def _snake_to_camel(name: str) -> str:
 def _to_javascript(value: Any) -> Any:
     if isinstance(value, _NodeObject):
         return value._target
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            item.metadata.get("javascript_name", item.name): _to_javascript(field_value)
+            for item in fields(value)
+            if (field_value := getattr(value, item.name)) is not None
+        }
     if isinstance(value, dict):
         return {key: _to_javascript(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -92,6 +100,98 @@ async def _invoke(name: str, *args: Any) -> Any:
     return await _resolve(_runtime()[name](*[_to_javascript(arg) for arg in args]))
 
 
+@dataclass(kw_only=True)
+class AuthOptions:
+    refresh_buffer_seconds: int | float | None = field(
+        default=300,
+        metadata={"javascript_name": "refreshBufferSeconds"},
+    )
+    lock_timeout_seconds: int | float | None = field(
+        default=30,
+        metadata={"javascript_name": "lockTimeoutSeconds"},
+    )
+    login_timeout_seconds: int | float | None = field(
+        default=900,
+        metadata={"javascript_name": "loginTimeoutSeconds"},
+    )
+
+
+@dataclass(kw_only=True)
+class DatabricksAuthOptions:
+    profile: str | None = field(
+        default=None,
+        metadata={"javascript_name": "profile"},
+    )
+    host: str | None = field(
+        default=None,
+        metadata={"javascript_name": "host"},
+    )
+    account_id: str | None = field(
+        default=None,
+        metadata={"javascript_name": "accountId"},
+    )
+    workspace_id: str | None = field(
+        default=None,
+        metadata={"javascript_name": "workspaceId"},
+    )
+    config_file: str | None = field(
+        default=None,
+        metadata={"javascript_name": "configFile"},
+    )
+    client_id: str | None = field(
+        default=None,
+        metadata={"javascript_name": "clientId"},
+    )
+    client_secret: str | None = field(
+        default=None,
+        metadata={"javascript_name": "clientSecret"},
+    )
+    access_token: str | None = field(
+        default=None,
+        metadata={"javascript_name": "accessToken"},
+    )
+    group_id: str | None = field(
+        default=None,
+        metadata={"javascript_name": "groupId"},
+    )
+    auth_type: str | None = field(
+        default=None,
+        metadata={"javascript_name": "authType"},
+    )
+    scopes: list[str] | None = field(
+        default=None,
+        metadata={"javascript_name": "scopes"},
+    )
+    target: str | None = field(
+        default=None,
+        metadata={"javascript_name": "target"},
+    )
+    cache_dir: str | None = field(
+        default=None,
+        metadata={"javascript_name": "cacheDir"},
+    )
+    auth: AuthOptions | None = field(
+        default=None,
+        metadata={"javascript_name": "auth"},
+    )
+    request_headers: dict[str, str] | None = field(
+        default=None,
+        metadata={"javascript_name": "requestHeaders"},
+    )
+    access_token_header: str | None = field(
+        default=None,
+        metadata={"javascript_name": "accessTokenHeader"},
+    )
+    install_cli_in_app: bool | None = field(
+        default=None,
+        metadata={"javascript_name": "installCliInApp"},
+    )
+    prefer_user_to_machine: bool | None = field(
+        default=True,
+        metadata={"javascript_name": "preferUserToMachine"},
+    )
+
+
 async def authenticate(*args: Any) -> Any:
     return await _invoke("authenticate", *args)
 
@@ -100,12 +200,34 @@ async def config_profile_exists(*args: Any) -> Any:
     return await _invoke("configProfileExists", *args)
 
 
-async def create_persistent_auth(*args: Any) -> Any:
-    return await _invoke("createPersistentAuth", *args)
+async def create_persistent_auth(
+    options: DatabricksAuthOptions | dict[str, Any] | None | object = _MISSING,
+    *args: Any,
+    **option_values: Any,
+) -> Any:
+    if option_values:
+        if options is not _MISSING:
+            raise TypeError("options and option keyword arguments are mutually exclusive")
+        options = DatabricksAuthOptions(**option_values)
+    if options is _MISSING:
+        return await _invoke("createPersistentAuth", *args)
+    return await _invoke("createPersistentAuth", options, *args)
 
 
-async def create_persistent_auth_with_storage(*args: Any) -> Any:
-    return await _invoke("createPersistentAuthWithStorage", *args)
+async def create_persistent_auth_with_storage(
+    options: DatabricksAuthOptions | dict[str, Any] | None | object = _MISSING,
+    *args: Any,
+    **option_values: Any,
+) -> Any:
+    if option_values:
+        if options is not _MISSING:
+            raise TypeError("options and option keyword arguments are mutually exclusive")
+        options = DatabricksAuthOptions(**option_values)
+    if options is _MISSING and not option_values:
+        raise TypeError("create_persistent_auth_with_storage requires options")
+    if options is _MISSING:
+        return await _invoke("createPersistentAuthWithStorage", *args)
+    return await _invoke("createPersistentAuthWithStorage", options, *args)
 
 
 async def invalidate_config_file(*args: Any) -> Any:
@@ -128,8 +250,20 @@ async def resolve_config_file(*args: Any) -> Any:
     return await _invoke("resolveConfigFile", *args)
 
 
-async def resolve_databricks_profile(*args: Any) -> Any:
-    return await _invoke("resolveDatabricksProfile", *args)
+async def resolve_databricks_profile(
+    options: DatabricksAuthOptions | dict[str, Any] | None | object = _MISSING,
+    *args: Any,
+    **option_values: Any,
+) -> Any:
+    if option_values:
+        if options is not _MISSING:
+            raise TypeError("options and option keyword arguments are mutually exclusive")
+        options = DatabricksAuthOptions(**option_values)
+    if options is _MISSING and not option_values:
+        raise TypeError("resolve_databricks_profile requires options")
+    if options is _MISSING:
+        return await _invoke("resolveDatabricksProfile", *args)
+    return await _invoke("resolveDatabricksProfile", options, *args)
 
 
 async def token(*args: Any) -> Any:
@@ -137,6 +271,8 @@ async def token(*args: Any) -> Any:
 
 
 __all__ = [
+    "AuthOptions",
+    "DatabricksAuthOptions",
     "authenticate",
     "config_profile_exists",
     "create_persistent_auth",

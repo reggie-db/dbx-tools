@@ -48,6 +48,10 @@ describe("PythonNodeBundle", () => {
         'export const preserved = "original";',
         'export function replaced(): string { return "original"; }',
         'export async function createSession(): Promise<string> { return "session"; }',
+        "export interface RetryOptions { attempts?: number; }",
+        "export interface SessionOptions { host?: string; workspaceId?: string; scopes?: string[]; headers?: Record<string, string>; retry?: RetryOptions; }",
+        'export const SessionOptions = { defaults: () => ({ scopes: ["default"] }) };',
+        "export function createConfigured(options: SessionOptions = {}): SessionOptions { return options; }",
       ].join("\n"),
     );
     const entryDirectory = packageDirectory(directory, "fixture-entry");
@@ -83,6 +87,16 @@ describe("PythonNodeBundle", () => {
 
     const bindings = readFileSync(bindingsPath, "utf8");
     assert.match(bindings, /async def create_session\(\*args: Any\) -> Any:/);
+    assert.match(bindings, /class SessionOptions:/);
+    assert.match(bindings, /workspace_id: str \| None/);
+    assert.match(bindings, /headers: dict\[str, str\] \| None/);
+    assert.match(bindings, /retry: RetryOptions \| None/);
+    assert.match(
+      bindings,
+      /scopes: list\[str\] \| None = field\(\n        default_factory=lambda: \["default"\]/,
+    );
+    assert.match(bindings, /async def create_configured\(/);
+    assert.match(bindings, /options = SessionOptions\(\*\*option_values\)/);
     assert.match(bindings, /async def replaced\(\*args: Any\) -> Any:/);
     assert.match(bindings, /_invoke\("createSession", \*args\)/);
     assert.match(bindings, /class _NodeObject:/);
@@ -117,6 +131,42 @@ describe("PythonNodeBundle", () => {
     assert.match(
       readFileSync(join(generatedPackageDirectory, "__init__.py"), "utf8"),
       /create_session/,
+    );
+  });
+
+  it("keeps generated bindings private when configured", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      "export function value(): number { return 1; }\n",
+    );
+    writeFixturePyproject(directory, ['package = "fixture-entry"', "private = true"]);
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+    const packageSource = readFileSync(
+      join(directory, "python/src/fixture/runtime/_generated/__init__.py"),
+      "utf8",
+    );
+    assert.doesNotMatch(packageSource, /from \.node_bindings import/);
+    assert.match(packageSource, /__all__ = \[\]/);
+  });
+
+  it("fails fast for unsupported option property types", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      "export interface LoadOptions { callback?: () => void; }\nexport function load(options: LoadOptions): void { void options; }\n",
+    );
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
+
+    const result = runBindingTask(directory);
+    assert.notEqual(result.exitCode, 0);
+    assert.match(
+      result.stderr.toString(),
+      /options for load\.callback uses unsupported TypeScript type/,
     );
   });
 

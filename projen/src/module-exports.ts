@@ -67,6 +67,8 @@ export interface ModuleExport {
 /** Plain public function reachable through a module's re-export graph. */
 export interface PublicFunctionExport {
   readonly name: string;
+  readonly sourceFile: string;
+  readonly sourceName: string;
 }
 
 /** Declaration node types that are inherently type-only. */
@@ -147,7 +149,7 @@ export function moduleExports(file: string): ModuleExport[] {
  */
 export function publicFunctionExports(file: string): PublicFunctionExport[] {
   return [...collectPublicFunctions(resolve(file), new Set()).values()]
-    .map(({ name }) => ({ name }))
+    .map(({ name, sourceFile, sourceName }) => ({ name, sourceFile, sourceName }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -228,7 +230,13 @@ function collectPublicFunctions(
         const local = specifier.local?.name ?? specifier.local?.value;
         const exportedName = specifier.exported?.name ?? specifier.exported?.value;
         const target = local ? available.get(local) : undefined;
-        if (target && exportedName) add({ name: exportedName, source: target.source });
+        if (target && exportedName)
+          add({
+            name: exportedName,
+            source: target.source,
+            sourceFile: target.sourceFile,
+            sourceName: target.sourceName,
+          });
       }
       continue;
     }
@@ -239,7 +247,12 @@ function collectPublicFunctions(
       const target = local ? localFunctions.get(local) : undefined;
       if (target && exportedName) {
         const parsed = parseFunctionNode(file, target);
-        add({ name: exportedName, source: parsed.source });
+        add({
+          name: exportedName,
+          source: parsed.source,
+          sourceFile: parsed.sourceFile,
+          sourceName: parsed.sourceName,
+        });
       }
     }
   }
@@ -263,7 +276,7 @@ function parseFunctionNode(file: string, node: FunctionNode): ResolvedFunctionEx
   if (node.type === "TSDeclareFunction" || node.declare || !node.body) {
     throw new Error(`Declaration-only function export ${name} is not supported in ${file}`);
   }
-  return { name, source: `${file}#${name}` };
+  return { name, source: `${file}#${name}`, sourceFile: file, sourceName: name };
 }
 
 function resolveModuleSpecifier(importer: string, specifier: string): string {

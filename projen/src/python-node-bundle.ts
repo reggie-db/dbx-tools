@@ -20,6 +20,8 @@ export interface PythonNodeBindingsOptions {
   readonly package: string;
   /** Generated bindings own the package or live under `_generated`. Defaults to `submodule`. */
   readonly layout?: "package" | "submodule";
+  /** Keep generated symbols out of the generated package `__init__`. Defaults to false. */
+  readonly private?: boolean;
   /** Repository-relative directory containing Node built-in shims. */
   readonly shimRoot?: string;
   /** Functions replaced only while generating the Python runtime. */

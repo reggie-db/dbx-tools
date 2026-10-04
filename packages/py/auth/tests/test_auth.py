@@ -7,7 +7,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dbx_tools.auth import create_persistent_auth, normalize_host
+from dbx_tools.auth import (
+    AuthOptions,
+    DatabricksAuthOptions,
+    create_persistent_auth,
+    normalize_host,
+)
 
 APP_ENVIRONMENT = {"DBX_TOOLS_DATABRICKS_APP_ENV": "true"}
 
@@ -54,12 +59,12 @@ asyncio.run(main())
 
 async def test_generated_object_proxy_exposes_authentication_methods() -> None:
     auth = await create_persistent_auth(
-        {
-            "host": "https://example.cloud.databricks.com",
-            "workspaceId": "workspace-id",
-            "requestHeaders": {"Authorization": "Bearer request-token"},
-            "preferUserToMachine": True,
-        },
+        DatabricksAuthOptions(
+            host="https://example.cloud.databricks.com",
+            workspace_id="workspace-id",
+            request_headers={"Authorization": "Bearer request-token"},
+            auth=AuthOptions(refresh_buffer_seconds=0),
+        ),
         "memory",
         {"environment": APP_ENVIRONMENT},
     )
@@ -83,6 +88,21 @@ async def test_generated_object_proxy_exposes_authentication_methods() -> None:
     }
     assert await auth.workspace_id() == "workspace-id"
     assert await auth.auth_kind() == "app-on-behalf-of"
+
+
+async def test_option_dataclasses_use_node_defaults_and_keyword_construction() -> None:
+    assert DatabricksAuthOptions().prefer_user_to_machine is True
+    assert AuthOptions() == AuthOptions(
+        refresh_buffer_seconds=300,
+        lock_timeout_seconds=30,
+        login_timeout_seconds=900,
+    )
+    auth = await create_persistent_auth(
+        host="https://example.cloud.databricks.com",
+        auth_type="pat",
+        access_token="keyword-token",
+    )
+    assert (await auth.token(False))["accessToken"] == "keyword-token"
 
 
 async def test_file_storage_uses_python_flock_and_preserves_entries(tmp_path: Path) -> None:

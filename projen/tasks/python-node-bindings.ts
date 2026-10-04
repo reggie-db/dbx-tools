@@ -1,11 +1,12 @@
 #!/usr/bin/env -S bun
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { stringUtils } from "@dbx-tools/shared-core";
 import type { BunPlugin } from "bun";
 import stdLibBrowser from "node-stdlib-browser";
+import ts from "typescript";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
 import { publicFunctionExports } from "../src/module-exports.ts";
 import {
@@ -73,9 +74,12 @@ const functions = publicFunctionExports(entrypoint);
 if (functions.length === 0) {
   throw new Error(`${config.package} exports no plain functions that can be bound to Python`);
 }
-const pythonFunctions = functions.map(({ name }) => ({
+const optionTypes = pythonOptionTypes(entrypoint, functions);
+applyOptionDefaults(optionTypes.records, await import(pathToFileURL(entrypoint).href));
+const pythonFunctions = functions.map(({ name, sourceFile, sourceName }) => ({
   javascriptName: name,
   pythonName: pythonFunctionName(name),
+  options: optionTypes.functions.get(`${sourceFile}#${sourceName}`),
 }));
 const functionsByPythonName = new Map<string, string>();
 for (const functionName of pythonFunctions) {
@@ -179,8 +183,13 @@ async function generate(): Promise<void> {
     tool: "projen/tasks/python-node-bindings.ts",
     source,
   })}\n${await result.outputs[0].text()}`;
-  const bindings = pythonBindings(source, pythonFunctions);
-  const bindingsPackage = pythonBindingsPackage(source, pythonFunctions);
+  const bindings = pythonBindings(source, pythonFunctions, optionTypes.records);
+  const bindingsPackage = pythonBindingsPackage(
+    source,
+    pythonFunctions,
+    optionTypes.records,
+    config.private,
+  );
   writeGenerated(runtimeOutput, runtime, "JavaScript runtime");
   writeGenerated(bindingsOutput, bindings, "Python bindings");
   writeGenerated(bindingsPackageOutput, bindingsPackage, "Python bindings package");
@@ -215,15 +224,19 @@ function pythonFunctionName(javascriptName: string): string {
 
 function pythonBindings(
   source: string,
-  functions: readonly { javascriptName: string; pythonName: string }[],
+  functions: readonly PythonFunctionBinding[],
+  records: readonly PythonRecord[],
 ): string {
-  const exported = functions
-    .map(({ pythonName }) => `    ${JSON.stringify(pythonName)},`)
+  const exported = [
+    ...records.map(({ name }) => name),
+    ...functions.map(({ pythonName }) => pythonName),
+  ]
+    .map((name) => `    ${JSON.stringify(name)},`)
     .join("\n");
+  const dataclasses = records.map(pythonDataclass).join("\n\n\n");
   const wrappers = functions
-    .map(
-      ({ javascriptName, pythonName }) =>
-        `async def ${pythonName}(*args: Any) -> Any:\n    return await _invoke(${JSON.stringify(javascriptName)}, *args)`,
+    .map(({ javascriptName, pythonName, options }) =>
+      pythonWrapper(javascriptName, pythonName, options),
     )
     .join("\n\n\n");
   return [
@@ -234,6 +247,7 @@ function pythonBindings(
     "from __future__ import annotations",
     "",
     "import inspect",
+    "from dataclasses import dataclass, field, fields, is_dataclass",
     "from pathlib import Path",
     "from typing import Any",
     "",
@@ -252,6 +266,7 @@ function pythonBindings(
     '    " }"',
     ")",
     "_RUNTIME: Any | None = None",
+    "_MISSING = object()",
     "",
     "",
     "def _runtime() -> Any:",
@@ -269,6 +284,12 @@ function pythonBindings(
     "def _to_javascript(value: Any) -> Any:",
     "    if isinstance(value, _NodeObject):",
     "        return value._target",
+    "    if is_dataclass(value) and not isinstance(value, type):",
+    "        return {",
+    '            item.metadata.get("javascript_name", item.name): _to_javascript(field_value)',
+    "            for item in fields(value)",
+    "            if (field_value := getattr(value, item.name)) is not None",
+    "        }",
     "    if isinstance(value, dict):",
     "        return {key: _to_javascript(item) for key, item in value.items()}",
     "    if isinstance(value, (list, tuple)):",
@@ -321,6 +342,8 @@ function pythonBindings(
     "    return await _resolve(_runtime()[name](*[_to_javascript(arg) for arg in args]))",
     "",
     "",
+    dataclasses,
+    ...(dataclasses ? ["", ""] : []),
     wrappers,
     "",
     "",
@@ -334,24 +357,254 @@ function pythonBindings(
 function pythonBindingsPackage(
   source: string,
   functions: readonly { pythonName: string }[],
+  records: readonly PythonRecord[],
+  privateBindings: boolean,
 ): string {
-  const imported = functions.map(({ pythonName }) => `    ${pythonName},`).join("\n");
-  const exported = functions
-    .map(({ pythonName }) => `    ${JSON.stringify(pythonName)},`)
-    .join("\n");
+  const names = [
+    ...records.map(({ name }) => name),
+    ...functions.map(({ pythonName }) => pythonName),
+  ];
+  const imported = names.map((name) => `    ${name},`).join("\n");
+  const exported = names.map((name) => `    ${JSON.stringify(name)},`).join("\n");
   return [
     "# GENERATED by projen/tasks/python-node-bindings.ts - DO NOT EDIT.",
     `# Regenerated from ${source}.`,
     "# Hand edits are overwritten; this file is read-only.",
     "",
-    "from .node_bindings import (",
-    imported,
-    ")",
+    ...(privateBindings ? [] : ["from .node_bindings import (", imported, ")", ""]),
+    ...(privateBindings ? ["__all__ = []"] : ["__all__ = [", exported, "]"]),
     "",
-    "__all__ = [",
-    exported,
-    "]",
-    "",
+  ].join("\n");
+}
+
+interface PythonFunctionBinding {
+  readonly javascriptName: string;
+  readonly pythonName: string;
+  readonly options?: PythonOptionsParameter;
+}
+
+interface PythonOptionsParameter {
+  readonly record: string;
+  readonly required: boolean;
+}
+
+interface PythonRecord {
+  readonly name: string;
+  readonly fields: readonly PythonField[];
+}
+
+interface PythonField {
+  readonly defaultValue?: unknown;
+  readonly javascriptName: string;
+  readonly pythonName: string;
+  readonly type: string;
+}
+
+function pythonOptionTypes(
+  entrypoint: string,
+  functions: readonly { sourceFile: string; sourceName: string }[],
+): { functions: Map<string, PythonOptionsParameter>; records: PythonRecord[] } {
+  const program = ts.createProgram({
+    rootNames: [entrypoint],
+    options: {
+      allowImportingTsExtensions: true,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      skipLibCheck: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+  });
+  const checker = program.getTypeChecker();
+  const records = new Map<string, PythonRecord>();
+  const options = new Map<string, PythonOptionsParameter>();
+  for (const exported of functions) {
+    const sourceFile = program.getSourceFile(exported.sourceFile);
+    if (!sourceFile) throw new Error(`TypeScript did not load ${exported.sourceFile}`);
+    const declaration = findFunction(sourceFile, exported.sourceName);
+    const parameter = declaration.parameters.find(
+      ({ name }) => ts.isIdentifier(name) && name.text === "options",
+    );
+    if (!parameter) continue;
+    const type = withoutUndefined(checker.getTypeAtLocation(parameter));
+    const record = pythonRecord(checker, type, records, `options for ${exported.sourceName}`);
+    options.set(`${exported.sourceFile}#${exported.sourceName}`, {
+      record: record.name,
+      required: !parameter.questionToken && !parameter.initializer,
+    });
+  }
+  return {
+    functions: options,
+    records: [...records.values()].sort((left, right) => left.name.localeCompare(right.name)),
+  };
+}
+
+function findFunction(source: ts.SourceFile, name: string): ts.FunctionDeclaration {
+  let found: ts.FunctionDeclaration | undefined;
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) found = node;
+    else ts.forEachChild(node, visit);
+  };
+  visit(source);
+  if (!found) throw new Error(`Could not find function ${name} in ${source.fileName}`);
+  return found;
+}
+
+function pythonRecord(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  records: Map<string, PythonRecord>,
+  path: string,
+): PythonRecord {
+  const name = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+  if (!name || name === "__type") throw new Error(`${path} must reference a named object type`);
+  const existing = records.get(name);
+  if (existing) return existing;
+  const placeholder: PythonRecord = { name, fields: [] };
+  records.set(name, placeholder);
+  const fields = checker.getPropertiesOfType(type).map((property) => {
+    const declaration = property.valueDeclaration ?? property.declarations?.[0];
+    if (!declaration) throw new Error(`${path}.${property.name} has no TypeScript declaration`);
+    const propertyType = withoutUndefined(checker.getTypeOfSymbolAtLocation(property, declaration));
+    return {
+      javascriptName: property.name,
+      pythonName: pythonFunctionName(property.name),
+      type: pythonType(checker, propertyType, records, `${path}.${property.name}`),
+    };
+  });
+  const record = { name, fields };
+  records.set(name, record);
+  return record;
+}
+
+function pythonType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  records: Map<string, PythonRecord>,
+  path: string,
+): string {
+  if (type.flags & ts.TypeFlags.StringLike) return "str";
+  if (type.flags & ts.TypeFlags.NumberLike) return "int | float";
+  if (type.flags & ts.TypeFlags.BooleanLike) return "bool";
+  if (checker.isArrayType(type)) {
+    const element = checker.getTypeArguments(type as ts.TypeReference)[0];
+    if (!element) throw new Error(`${path} array element type could not be resolved`);
+    return `list[${pythonType(checker, withoutUndefined(element), records, `${path}[]`)}]`;
+  }
+  if (type.getCallSignatures().length > 0) {
+    throw new Error(`${path} uses unsupported TypeScript type ${checker.typeToString(type)}`);
+  }
+  const stringIndex = checker.getIndexTypeOfType(type, ts.IndexKind.String);
+  if (stringIndex) {
+    return `dict[str, ${pythonType(checker, withoutUndefined(stringIndex), records, `${path}{}`)}]`;
+  }
+  if (type.flags & ts.TypeFlags.Object) {
+    return pythonRecord(checker, type, records, path).name;
+  }
+  throw new Error(`${path} uses unsupported TypeScript type ${checker.typeToString(type)}`);
+}
+
+function withoutUndefined(type: ts.Type): ts.Type {
+  if (!type.isUnion()) return type;
+  const retained = type.types.filter((candidate) => !(candidate.flags & ts.TypeFlags.Undefined));
+  if (retained.length !== 1) return type;
+  return retained[0];
+}
+
+function pythonDataclass(record: PythonRecord): string {
+  const body = record.fields.length
+    ? record.fields
+        .map((field) => {
+          const defaultArgument = Object.hasOwn(field, "defaultValue")
+            ? pythonDefault(field.defaultValue)
+            : "default=None";
+          return [
+            `    ${field.pythonName}: ${field.type} | None = field(`,
+            `        ${defaultArgument},`,
+            `        metadata={"javascript_name": ${JSON.stringify(field.javascriptName)}},`,
+            "    )",
+          ].join("\n");
+        })
+        .join("\n")
+    : "    pass";
+  return `@dataclass(kw_only=True)\nclass ${record.name}:\n${body}`;
+}
+
+function applyOptionDefaults(
+  records: readonly PythonRecord[],
+  runtime: Record<string, unknown>,
+): void {
+  for (const record of records) {
+    const companion = runtime[record.name] as { defaults?: () => unknown } | undefined;
+    if (typeof companion?.defaults !== "function") continue;
+    const defaults = companion.defaults();
+    if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) {
+      throw new Error(`${record.name}.defaults() must return a record`);
+    }
+    const values = defaults as Record<string, unknown>;
+    const fields = record.fields.map((field) =>
+      Object.hasOwn(values, field.javascriptName)
+        ? { ...field, defaultValue: values[field.javascriptName] }
+        : field,
+    );
+    (record as { fields: readonly PythonField[] }).fields = fields;
+  }
+}
+
+function pythonDefault(value: unknown): string {
+  if (value === undefined) return "default=None";
+  if (value === null) return "default=None";
+  if (typeof value === "boolean") return `default=${value ? "True" : "False"}`;
+  if (typeof value === "number" && Number.isFinite(value)) return `default=${value}`;
+  if (typeof value === "string") return `default=${JSON.stringify(value)}`;
+  if (Array.isArray(value) || (typeof value === "object" && value !== null)) {
+    return `default_factory=lambda: ${pythonLiteral(value)}`;
+  }
+  throw new Error(`Unsupported defaults() value: ${String(value)}`);
+}
+
+function pythonLiteral(value: unknown): string {
+  if (value === null) return "None";
+  if (typeof value === "boolean") return value ? "True" : "False";
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(pythonLiteral).join(", ")}]`;
+  if (typeof value === "object") {
+    return `{${Object.entries(value)
+      .map(([key, item]) => `${JSON.stringify(key)}: ${pythonLiteral(item)}`)
+      .join(", ")}}`;
+  }
+  throw new Error(`Unsupported defaults() value: ${String(value)}`);
+}
+
+function pythonWrapper(
+  javascriptName: string,
+  pythonName: string,
+  options?: PythonOptionsParameter,
+): string {
+  if (!options) {
+    return `async def ${pythonName}(*args: Any) -> Any:\n    return await _invoke(${JSON.stringify(javascriptName)}, *args)`;
+  }
+  const required = options.required
+    ? [
+        "    if options is _MISSING and not option_values:",
+        `        raise TypeError(${JSON.stringify(`${pythonName} requires options`)})`,
+      ]
+    : [];
+  return [
+    `async def ${pythonName}(`,
+    `    options: ${options.record} | dict[str, Any] | None | object = _MISSING,`,
+    "    *args: Any,",
+    "    **option_values: Any,",
+    ") -> Any:",
+    "    if option_values:",
+    "        if options is not _MISSING:",
+    '            raise TypeError("options and option keyword arguments are mutually exclusive")',
+    `        options = ${options.record}(**option_values)`,
+    ...required,
+    "    if options is _MISSING:",
+    `        return await _invoke(${JSON.stringify(javascriptName)}, *args)`,
+    `    return await _invoke(${JSON.stringify(javascriptName)}, options, *args)`,
   ].join("\n");
 }
 

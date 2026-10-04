@@ -258,6 +258,7 @@ describe("DBXToolsPythonWorkspace", () => {
             nodeBindings: {
               package: "@fixture/auth",
               layout: "package",
+              private: true,
               shimRoot: "projen/shims/python-node",
               functionOverrides: [
                 {
@@ -281,6 +282,7 @@ describe("DBXToolsPythonWorkspace", () => {
             node_bindings: {
               package: string;
               layout: string;
+              private: boolean;
               shim_root: string;
               function_overrides: Array<Record<string, string>>;
             };
@@ -291,6 +293,7 @@ describe("DBXToolsPythonWorkspace", () => {
       assert.deepEqual(pyproject.tool.dbx_tools.node_bindings, {
         package: "@fixture/auth",
         layout: "package",
+        private: true,
         shim_root: "projen/shims/python-node",
         function_overrides: [
           {

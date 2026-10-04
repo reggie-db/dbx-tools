@@ -19,6 +19,7 @@ export interface ResolvedPythonNodeBindings {
   readonly functionOverrides: readonly ResolvedPythonNodeFunctionOverride[];
   readonly moduleDirectory: string;
   readonly layout: "package" | "submodule";
+  readonly private: boolean;
   readonly package: string;
   readonly project: string;
   readonly projectDirectory: string;
@@ -59,6 +60,7 @@ export function resolvePythonNodeBindings(
     pyproject,
     package: packageName,
     layout,
+    private: optionalBoolean(bindings.private, "tool.dbx_tools.node_bindings.private") ?? false,
     moduleDirectory,
     runtimeOutput: join(generatedDirectory, "_runtime.js"),
     bindingsOutput: join(generatedDirectory, "node_bindings.py"),
@@ -123,4 +125,10 @@ function optionalString(value: unknown, path: string): string | undefined {
     throw new Error(`${path} must be a non-empty string`);
   }
   return value.trim();
+}
+
+function optionalBoolean(value: unknown, path: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new Error(`${path} must be a boolean`);
+  return value;
 }

@@ -7704,6 +7704,13 @@ var require_browser2 = __commonJS((exports2, module2) => {
   };
 });
 
+// node_modules/debug/src/index.js
+var require_src = __commonJS((exports2, module2) => {
+  if (typeof process === "undefined" || process.type === "renderer" || true) {
+    module2.exports = require_browser2();
+  }
+});
+
 // projen/shims/python-node/fs.ts
 var exports_fs = {};
 __export(exports_fs, {
@@ -16149,7 +16156,7 @@ var require_yauzl = __commonJS((exports2) => {
 
 // node_modules/extract-zip/index.js
 var require_extract_zip = __commonJS((exports2, module2) => {
-  var debug = require_browser2()("extract-zip");
+  var debug = require_src()("extract-zip");
   var { createWriteStream: createWriteStream2, promises: fs } = (init_fs(), __toCommonJS(exports_fs));
   var getStream = require_get_stream();
   var path = (init_path(), __toCommonJS(exports_path));

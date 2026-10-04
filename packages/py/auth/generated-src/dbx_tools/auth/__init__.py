@@ -3,6 +3,8 @@
 # Hand edits are overwritten; this file is read-only.
 
 from .node_bindings import (
+    AuthOptions,
+    DatabricksAuthOptions,
     authenticate,
     config_profile_exists,
     create_persistent_auth,
@@ -17,6 +19,8 @@ from .node_bindings import (
 )
 
 __all__ = [
+    "AuthOptions",
+    "DatabricksAuthOptions",
     "authenticate",
     "config_profile_exists",
     "create_persistent_auth",
