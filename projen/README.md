@@ -167,13 +167,13 @@ Set `private: true` to keep every generated symbol out of the generated
 `__init__.py`. The runtime and `node_bindings.py` remain available for a
 handwritten consuming package to import selectively. The default is `false`.
 
-Parameters named `options` are resolved through the TypeScript compiler API.
-Supported record types become keyword-only Python dataclasses, nested records
-become nested dataclasses, and a same-named exported companion's `defaults()`
-method supplies field defaults. Wrappers accept the dataclass, a dictionary,
-ordinary positional arguments, or direct snake-case option keywords. Generation
-fails with the property path when an option record contains an unsupported type
-such as a callback.
+Every function parameter is resolved through the TypeScript compiler API and
+rendered with its Python-equivalent name and type. Supported record types become
+keyword-only Python dataclasses, nested records become nested dataclasses, and a
+same-named exported companion's `defaults()` method supplies field defaults. A
+trailing optional record can be passed as the dataclass, a dictionary, or direct
+snake-case keyword fields. Generation fails with the property path when a type
+cannot be represented safely in Python.
 
 The workspace creates `<name>:python-runtime`,
 `<name>:python-runtime:check`, and, for workspace Node dependencies,

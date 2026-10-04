@@ -48,6 +48,7 @@ describe("PythonNodeBundle", () => {
         'export const preserved = "original";',
         'export function replaced(): string { return "original"; }',
         'export async function createSession(): Promise<string> { return "session"; }',
+        "export async function token(login?: boolean): Promise<string> { return String(login); }",
         "export interface RetryOptions { attempts?: number; }",
         "export interface SessionOptions { host?: string; workspaceId?: string; scopes?: string[]; headers?: Record<string, string>; retry?: RetryOptions; }",
         'export const SessionOptions = { defaults: () => ({ scopes: ["default"] }) };',
@@ -86,7 +87,8 @@ describe("PythonNodeBundle", () => {
     assert.equal(await runtime.createSession(), "session");
 
     const bindings = readFileSync(bindingsPath, "utf8");
-    assert.match(bindings, /async def create_session\(\*args: Any\) -> Any:/);
+    assert.match(bindings, /async def create_session\(\) -> Any:/);
+    assert.match(bindings, /async def token\(\n    login: bool \| object = _MISSING,/);
     assert.match(bindings, /class SessionOptions:/);
     assert.match(bindings, /workspace_id: str \| None/);
     assert.match(bindings, /headers: dict\[str, str\] \| None/);
@@ -96,9 +98,9 @@ describe("PythonNodeBundle", () => {
       /scopes: list\[str\] \| None = field\(\n        default_factory=lambda: \["default"\]/,
     );
     assert.match(bindings, /async def create_configured\(/);
-    assert.match(bindings, /options = SessionOptions\(\*\*option_values\)/);
-    assert.match(bindings, /async def replaced\(\*args: Any\) -> Any:/);
-    assert.match(bindings, /_invoke\("createSession", \*args\)/);
+    assert.match(bindings, /options = SessionOptions\(\*\*kwargs\)/);
+    assert.match(bindings, /async def replaced\(\) -> Any:/);
+    assert.match(bindings, /_invoke\("createSession"\)/);
     assert.match(bindings, /class _NodeObject:/);
     assert.match(bindings, /Reflect\.apply\(target\[name\], target, args\)/);
     assert.doesNotMatch(bindings, /preserved/);
@@ -158,16 +160,13 @@ describe("PythonNodeBundle", () => {
     const entryDirectory = packageDirectory(directory, "fixture-entry");
     writeFileSync(
       join(entryDirectory, "index.ts"),
-      "export interface LoadOptions { callback?: () => void; }\nexport function load(options: LoadOptions): void { void options; }\n",
+      "export interface LoadOptions { value?: bigint; }\nexport function load(options: LoadOptions): void { void options; }\n",
     );
     writeFixturePyproject(directory, ['package = "fixture-entry"']);
 
     const result = runBindingTask(directory);
     assert.notEqual(result.exitCode, 0);
-    assert.match(
-      result.stderr.toString(),
-      /options for load\.callback uses unsupported TypeScript type/,
-    );
+    assert.match(result.stderr.toString(), /load\.options\.value uses unsupported TypeScript type/);
   });
 
   it("fails when JavaScript exports collide in Python", () => {

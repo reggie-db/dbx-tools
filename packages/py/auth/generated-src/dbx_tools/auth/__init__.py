@@ -4,7 +4,10 @@
 
 from .node_bindings import (
     AuthOptions,
+    CredentialStore,
+    DatabricksAuthDependencies,
     DatabricksAuthOptions,
+    DatabricksProfile,
     authenticate,
     config_profile_exists,
     create_persistent_auth,
@@ -20,7 +23,10 @@ from .node_bindings import (
 
 __all__ = [
     "AuthOptions",
+    "CredentialStore",
+    "DatabricksAuthDependencies",
     "DatabricksAuthOptions",
+    "DatabricksProfile",
     "authenticate",
     "config_profile_exists",
     "create_persistent_auth",

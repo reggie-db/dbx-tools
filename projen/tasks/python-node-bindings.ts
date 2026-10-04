@@ -74,12 +74,12 @@ const functions = publicFunctionExports(entrypoint);
 if (functions.length === 0) {
   throw new Error(`${config.package} exports no plain functions that can be bound to Python`);
 }
-const optionTypes = pythonOptionTypes(entrypoint, functions);
-applyOptionDefaults(optionTypes.records, await import(pathToFileURL(entrypoint).href));
+const functionTypes = pythonFunctionTypes(entrypoint, functions);
+applyOptionDefaults(functionTypes.records, await import(pathToFileURL(entrypoint).href));
 const pythonFunctions = functions.map(({ name, sourceFile, sourceName }) => ({
   javascriptName: name,
   pythonName: pythonFunctionName(name),
-  options: optionTypes.functions.get(`${sourceFile}#${sourceName}`),
+  parameters: functionTypes.functions.get(`${sourceFile}#${sourceName}`) ?? [],
 }));
 const functionsByPythonName = new Map<string, string>();
 for (const functionName of pythonFunctions) {
@@ -183,11 +183,11 @@ async function generate(): Promise<void> {
     tool: "projen/tasks/python-node-bindings.ts",
     source,
   })}\n${await result.outputs[0].text()}`;
-  const bindings = pythonBindings(source, pythonFunctions, optionTypes.records);
+  const bindings = pythonBindings(source, pythonFunctions, functionTypes.records);
   const bindingsPackage = pythonBindingsPackage(
     source,
     pythonFunctions,
-    optionTypes.records,
+    functionTypes.records,
     config.private,
   );
   writeGenerated(runtimeOutput, runtime, "JavaScript runtime");
@@ -235,8 +235,8 @@ function pythonBindings(
     .join("\n");
   const dataclasses = records.map(pythonDataclass).join("\n\n\n");
   const wrappers = functions
-    .map(({ javascriptName, pythonName, options }) =>
-      pythonWrapper(javascriptName, pythonName, options),
+    .map(({ javascriptName, pythonName, parameters }) =>
+      pythonWrapper(javascriptName, pythonName, parameters),
     )
     .join("\n\n\n");
   return [
@@ -247,6 +247,7 @@ function pythonBindings(
     "from __future__ import annotations",
     "",
     "import inspect",
+    "from collections.abc import Callable",
     "from dataclasses import dataclass, field, fields, is_dataclass",
     "from pathlib import Path",
     "from typing import Any",
@@ -256,6 +257,9 @@ function pythonBindings(
     "",
     '_GET = pm.eval("(target, name) => target[name]")',
     '_INVOKE = pm.eval("(target, name, args) => Reflect.apply(target[name], target, args)")',
+    "_INVOKE_POSITIONED = pm.eval(",
+    '    "(fn, entries) => { const args = []; for (const [index, value] of entries) args[index] = value; return fn(...args); }"',
+    ")",
     "_KIND = pm.eval(",
     '    "(value) => {"',
     "    \" if (value === null) return 'null';\"",
@@ -342,6 +346,15 @@ function pythonBindings(
     "    return await _resolve(_runtime()[name](*[_to_javascript(arg) for arg in args]))",
     "",
     "",
+    "async def _invoke_positioned(name: str, arguments: list[tuple[int, Any]]) -> Any:",
+    "    return await _resolve(",
+    "        _INVOKE_POSITIONED(",
+    "            _runtime()[name],",
+    "            [[index, _to_javascript(value)] for index, value in arguments],",
+    "        ),",
+    "    )",
+    "",
+    "",
     dataclasses,
     ...(dataclasses ? ["", ""] : []),
     wrappers,
@@ -379,13 +392,17 @@ function pythonBindingsPackage(
 
 interface PythonFunctionBinding {
   readonly javascriptName: string;
+  readonly parameters: readonly PythonParameter[];
   readonly pythonName: string;
-  readonly options?: PythonOptionsParameter;
 }
 
-interface PythonOptionsParameter {
-  readonly record: string;
+interface PythonParameter {
+  readonly flatten: boolean;
+  readonly javascriptName: string;
+  readonly pythonName: string;
+  readonly record?: string;
   readonly required: boolean;
+  readonly type: string;
 }
 
 interface PythonRecord {
@@ -400,10 +417,10 @@ interface PythonField {
   readonly type: string;
 }
 
-function pythonOptionTypes(
+function pythonFunctionTypes(
   entrypoint: string,
   functions: readonly { sourceFile: string; sourceName: string }[],
-): { functions: Map<string, PythonOptionsParameter>; records: PythonRecord[] } {
+): { functions: Map<string, readonly PythonParameter[]>; records: PythonRecord[] } {
   const program = ts.createProgram({
     rootNames: [entrypoint],
     options: {
@@ -417,24 +434,32 @@ function pythonOptionTypes(
   });
   const checker = program.getTypeChecker();
   const records = new Map<string, PythonRecord>();
-  const options = new Map<string, PythonOptionsParameter>();
+  const parametersByFunction = new Map<string, readonly PythonParameter[]>();
   for (const exported of functions) {
     const sourceFile = program.getSourceFile(exported.sourceFile);
     if (!sourceFile) throw new Error(`TypeScript did not load ${exported.sourceFile}`);
     const declaration = findFunction(sourceFile, exported.sourceName);
-    const parameter = declaration.parameters.find(
-      ({ name }) => ts.isIdentifier(name) && name.text === "options",
-    );
-    if (!parameter) continue;
-    const type = withoutUndefined(checker.getTypeAtLocation(parameter));
-    const record = pythonRecord(checker, type, records, `options for ${exported.sourceName}`);
-    options.set(`${exported.sourceFile}#${exported.sourceName}`, {
-      record: record.name,
-      required: !parameter.questionToken && !parameter.initializer,
+    const parameters = declaration.parameters.map((parameter, index) => {
+      if (!ts.isIdentifier(parameter.name)) {
+        throw new Error(`${exported.sourceName} uses an unsupported destructured parameter`);
+      }
+      const parameterType = withoutUndefined(checker.getTypeAtLocation(parameter));
+      const path = `${exported.sourceName}.${parameter.name.text}`;
+      const record = pythonRecordType(checker, parameterType, records, path);
+      const required = !parameter.questionToken && !parameter.initializer;
+      return {
+        javascriptName: parameter.name.text,
+        pythonName: pythonFunctionName(parameter.name.text),
+        type: record?.name ?? pythonType(checker, parameterType, records, path),
+        ...(record ? { record: record.name } : {}),
+        required,
+        flatten: index === declaration.parameters.length - 1 && !required && Boolean(record),
+      };
     });
+    parametersByFunction.set(`${exported.sourceFile}#${exported.sourceName}`, parameters);
   }
   return {
-    functions: options,
+    functions: parametersByFunction,
     records: [...records.values()].sort((left, right) => left.name.localeCompare(right.name)),
   };
 }
@@ -477,30 +502,49 @@ function pythonRecord(
   return record;
 }
 
+function pythonRecordType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  records: Map<string, PythonRecord>,
+  path: string,
+): PythonRecord | undefined {
+  if (!(type.flags & ts.TypeFlags.Object)) return undefined;
+  if (checker.isArrayType(type) || type.getCallSignatures().length > 0) return undefined;
+  if (checker.getIndexTypeOfType(type, ts.IndexKind.String)) return undefined;
+  const name = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+  if (!name || name === "__type") return undefined;
+  return pythonRecord(checker, type, records, path);
+}
+
 function pythonType(
   checker: ts.TypeChecker,
   type: ts.Type,
   records: Map<string, PythonRecord>,
   path: string,
 ): string {
+  if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return "Any";
+  if (type.flags & (ts.TypeFlags.Void | ts.TypeFlags.Undefined | ts.TypeFlags.Null)) return "None";
   if (type.flags & ts.TypeFlags.StringLike) return "str";
   if (type.flags & ts.TypeFlags.NumberLike) return "int | float";
   if (type.flags & ts.TypeFlags.BooleanLike) return "bool";
+  if (type.isUnion()) {
+    const mapped = [...new Set(type.types.map((item) => pythonType(checker, item, records, path)))];
+    return mapped.join(" | ");
+  }
   if (checker.isArrayType(type)) {
     const element = checker.getTypeArguments(type as ts.TypeReference)[0];
     if (!element) throw new Error(`${path} array element type could not be resolved`);
     return `list[${pythonType(checker, withoutUndefined(element), records, `${path}[]`)}]`;
   }
   if (type.getCallSignatures().length > 0) {
-    throw new Error(`${path} uses unsupported TypeScript type ${checker.typeToString(type)}`);
+    return "Callable[..., Any]";
   }
   const stringIndex = checker.getIndexTypeOfType(type, ts.IndexKind.String);
   if (stringIndex) {
     return `dict[str, ${pythonType(checker, withoutUndefined(stringIndex), records, `${path}{}`)}]`;
   }
-  if (type.flags & ts.TypeFlags.Object) {
-    return pythonRecord(checker, type, records, path).name;
-  }
+  const record = pythonRecordType(checker, type, records, path);
+  if (record) return record.name;
   throw new Error(`${path} uses unsupported TypeScript type ${checker.typeToString(type)}`);
 }
 
@@ -580,32 +624,45 @@ function pythonLiteral(value: unknown): string {
 function pythonWrapper(
   javascriptName: string,
   pythonName: string,
-  options?: PythonOptionsParameter,
+  parameters: readonly PythonParameter[],
 ): string {
-  if (!options) {
-    return `async def ${pythonName}(*args: Any) -> Any:\n    return await _invoke(${JSON.stringify(javascriptName)}, *args)`;
+  if (parameters.length === 0) {
+    return `async def ${pythonName}() -> Any:\n    return await _invoke(${JSON.stringify(javascriptName)})`;
   }
-  const required = options.required
-    ? [
-        "    if options is _MISSING and not option_values:",
-        `        raise TypeError(${JSON.stringify(`${pythonName} requires options`)})`,
-      ]
-    : [];
-  return [
-    `async def ${pythonName}(`,
-    `    options: ${options.record} | dict[str, Any] | None | object = _MISSING,`,
-    "    *args: Any,",
-    "    **option_values: Any,",
-    ") -> Any:",
-    "    if option_values:",
-    "        if options is not _MISSING:",
-    '            raise TypeError("options and option keyword arguments are mutually exclusive")',
-    `        options = ${options.record}(**option_values)`,
-    ...required,
-    "    if options is _MISSING:",
-    `        return await _invoke(${JSON.stringify(javascriptName)}, *args)`,
-    `    return await _invoke(${JSON.stringify(javascriptName)}, options, *args)`,
-  ].join("\n");
+  const flattened = parameters.at(-1)?.flatten ? parameters.at(-1) : undefined;
+  const positional = flattened ? parameters.slice(0, -1) : parameters;
+  const signature = positional.map((parameter) => {
+    const type = parameter.record ? `${parameter.record} | dict[str, Any] | None` : parameter.type;
+    return `    ${parameter.pythonName}: ${type}${parameter.required ? "" : " | object = _MISSING"},`;
+  });
+  if (flattened) {
+    signature.push(
+      `    ${flattened.pythonName}: ${flattened.record} | dict[str, Any] | None | object = _MISSING,`,
+      "    **kwargs: Any,",
+    );
+  }
+  const body = ["    arguments: list[tuple[int, Any]] = []"];
+  for (const [index, parameter] of positional.entries()) {
+    if (parameter.required) body.push(`    arguments.append((${index}, ${parameter.pythonName}))`);
+    else {
+      body.push(
+        `    if ${parameter.pythonName} is not _MISSING:`,
+        `        arguments.append((${index}, ${parameter.pythonName}))`,
+      );
+    }
+  }
+  if (flattened) {
+    body.push(
+      "    if kwargs:",
+      `        if ${flattened.pythonName} is not _MISSING:`,
+      `            raise TypeError(${JSON.stringify(`${flattened.pythonName} and keyword fields are mutually exclusive`)})`,
+      `        ${flattened.pythonName} = ${flattened.record}(**kwargs)`,
+      `    if ${flattened.pythonName} is not _MISSING:`,
+      `        arguments.append((${parameters.length - 1}, ${flattened.pythonName}))`,
+    );
+  }
+  body.push(`    return await _invoke_positioned(${JSON.stringify(javascriptName)}, arguments)`);
+  return [`async def ${pythonName}(`, ...signature, ") -> Any:", ...body].join("\n");
 }
 
 function writeGenerated(output: string, contents: string, kind: string): void {

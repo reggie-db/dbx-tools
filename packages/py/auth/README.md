@@ -81,13 +81,14 @@ bun run auth:python-runtime:check
 `bun run sync --watch` also regenerates the package when a workspace-backed Node
 dependency, binding configuration, shim, or function override changes.
 
-The generator uses the TypeScript type checker for parameters named `options`.
+The generator uses the TypeScript type checker for every function parameter, so
+Python functions retain the Node parameter names and equivalent Python types.
 Supported record types become keyword-only Python dataclasses, including nested
 records. When the Node package exports a same-named companion with a
-`defaults()` method, those values become the dataclass defaults. Callers may
-pass the dataclass, a dictionary, positional arguments, or direct snake-case
-option keywords. Generation fails on unsupported option types such as
-callbacks.
+`defaults()` method, those values become the dataclass defaults. A trailing
+optional record can be passed as the dataclass, a dictionary, or direct
+snake-case keyword fields. Generation fails fast when a type cannot be
+represented safely in Python.
 
 ## Debugging
 

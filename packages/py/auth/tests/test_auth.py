@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import subprocess
@@ -10,8 +11,10 @@ from pathlib import Path
 from dbx_tools.auth import (
     AuthOptions,
     DatabricksAuthOptions,
+    authenticate,
     create_persistent_auth,
     normalize_host,
+    token,
 )
 
 APP_ENVIRONMENT = {"DBX_TOOLS_DATABRICKS_APP_ENV": "true"}
@@ -24,6 +27,8 @@ async def test_generated_function_wrapper_calls_embedded_runtime() -> None:
 
 
 def test_generated_package_exposes_ambient_token_and_authenticate() -> None:
+    assert list(inspect.signature(token).parameters) == ["login"]
+    assert list(inspect.signature(authenticate).parameters) == ["login"]
     script = """
 import asyncio
 import json
@@ -98,9 +103,13 @@ async def test_option_dataclasses_use_node_defaults_and_keyword_construction() -
         login_timeout_seconds=900,
     )
     auth = await create_persistent_auth(
-        host="https://example.cloud.databricks.com",
-        auth_type="pat",
-        access_token="keyword-token",
+        DatabricksAuthOptions(
+            host="https://example.cloud.databricks.com",
+            auth_type="pat",
+            access_token="keyword-token",
+        ),
+        "memory",
+        environment={},
     )
     assert (await auth.token(False))["accessToken"] == "keyword-token"
 
