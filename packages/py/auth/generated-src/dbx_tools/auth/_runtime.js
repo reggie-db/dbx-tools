@@ -20086,7 +20086,6 @@ var require_ini = __commonJS((exports2, module2) => {
 var exports_dbx_tools_python_entry = {};
 __export(exports_dbx_tools_python_entry, {
   types: () => exports_types,
-  token: () => token,
   storage: () => exports_storage,
   servicePrincipal: () => exports_service_principal,
   resolveDatabricksProfile: () => resolveDatabricksProfile,
@@ -20105,9 +20104,10 @@ __export(exports_dbx_tools_python_entry, {
   databricksAuth: () => exports_databricks_auth,
   createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
   createPersistentAuth: () => createPersistentAuth,
+  createAuthClient: () => createAuthClient,
   configProfileExists: () => configProfileExists,
-  authenticate: () => authenticate,
   WORKSPACE_ID_HEADER: () => WORKSPACE_ID_HEADER,
+  TokenLifecycle: () => TokenLifecycle,
   TargetKind: () => TargetKind,
   Storage: () => Storage,
   PersistentAuth: () => PersistentAuth,
@@ -20129,7 +20129,6 @@ __export(exports_dbx_tools_python_entry, {
   AuthOptions: () => AuthOptions,
   AuthKind: () => AuthKind,
   AuthError: () => AuthError,
-  AuthClient: () => AuthClient,
   AUTH_TYPE_APP_SP: () => AUTH_TYPE_APP_SP,
   AUTH_TYPE_APP_OBO: () => AUTH_TYPE_APP_OBO
 });
@@ -20269,10 +20268,9 @@ function cloneStructured(value, seen = new Map) {
 // packages/js/node/auth/src/databricks-auth.ts
 var exports_databricks_auth = {};
 __export(exports_databricks_auth, {
-  token: () => token,
   createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
   createPersistentAuth: () => createPersistentAuth,
-  authenticate: () => authenticate,
+  createAuthClient: () => createAuthClient,
   PersistentAuth: () => PersistentAuth
 });
 
@@ -25536,11 +25534,11 @@ var exports_lifecycle = {};
 __export(exports_lifecycle, {
   validateToken: () => validateToken,
   publicToken: () => publicToken,
-  AuthClient: () => AuthClient
+  TokenLifecycle: () => TokenLifecycle
 });
 var logger5 = authLogger("lifecycle");
 
-class AuthClient {
+class TokenLifecycle {
   key;
   provider;
   store;
@@ -27730,11 +27728,21 @@ async function withTimeout(promise, timeoutMs, message) {
 // packages/js/node/auth/src/databricks-auth.ts
 var logger13 = authLogger("databricks");
 var ambientAuth;
-async function token(login) {
-  return (await ambientPersistentAuth()).token(login);
+
+class AmbientAuthClient {
+  auth;
+  constructor(auth) {
+    this.auth = auth;
+  }
+  async token(login) {
+    return (await this.auth).token(login);
+  }
+  async authenticate(login) {
+    return (await this.auth).authenticate(login);
+  }
 }
-async function authenticate(login) {
-  return (await ambientPersistentAuth()).authenticate(login);
+function createAuthClient() {
+  return new AmbientAuthClient(ambientPersistentAuth());
 }
 
 class PersistentAuth {
@@ -27764,15 +27772,15 @@ class PersistentAuth {
     return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().tokenWithLogin(login);
   }
   async authenticate(login) {
-    const token2 = await this.token(login);
+    const token = await this.token(login);
     const headers = {
-      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token2.tokenType} ${token2.accessToken}`,
+      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
       ...this.profileValue.workspaceId ? { [WORKSPACE_ID_HEADER]: this.profileValue.workspaceId } : {}
     };
     logger13.debug("generated Databricks authentication headers", {
       ...this.context(),
       headerNames: Object.keys(headers),
-      token: tokenMetadata(token2)
+      token: tokenMetadata(token)
     });
     return headers;
   }
@@ -27881,7 +27889,7 @@ async function createPersistentAuthWithStorage(options, store, storage = store.n
     });
   }
   const provider = await providerFor(profile, options, dependencies);
-  const client = new AuthClient(profile.cacheKey, provider, store, AuthOptions.create(options.auth));
+  const client = new TokenLifecycle(profile.cacheKey, provider, store, AuthOptions.create(options.auth));
   const persistent = new PersistentAuth(profile, storage === "auto" /* Auto */ ? storageFromName(store.name()) : storage, client);
   logger13.debug("created persistent authentication lifecycle", {
     profile: profile.name,

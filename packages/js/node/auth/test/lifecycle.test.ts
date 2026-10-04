@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { AuthClient } from "../src/lifecycle.ts";
+import { TokenLifecycle } from "../src/lifecycle.ts";
 import { MemoryCredentialStore, MemoryLockAdapter } from "../src/storage.ts";
 import { AuthOptions, type Token, type TokenProvider } from "../src/types.ts";
 
@@ -28,7 +28,7 @@ describe("authentication lifecycle", () => {
       refresh: async () => token("refresh"),
       canAuthenticateSilently: () => true,
     };
-    const client = new AuthClient(
+    const client = new TokenLifecycle(
       "profile",
       provider,
       new MemoryCredentialStore(),
@@ -51,7 +51,7 @@ describe("authentication lifecycle", () => {
       refresh: async () => token("refresh"),
       canAuthenticateSilently: () => true,
     };
-    const client = new AuthClient(
+    const client = new TokenLifecycle(
       "profile",
       provider,
       new MemoryCredentialStore(),
@@ -78,7 +78,7 @@ describe("authentication lifecycle", () => {
       },
       canAuthenticateSilently: () => true,
     };
-    const client = new AuthClient(
+    const client = new TokenLifecycle(
       "profile",
       provider,
       store,

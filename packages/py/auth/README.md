@@ -10,25 +10,26 @@ implementation to keep in sync.
 ```python
 from dbx_tools.auth import (
     DatabricksAuthOptions,
-    authenticate,
+    create_auth_client,
     create_persistent_auth,
-    token,
 )
 
-access_token = await token()
-headers = await authenticate()
+auth = await create_auth_client()
+access_token = await auth.token()
+headers = await auth.authenticate()
 
-auth = await create_persistent_auth()
-profile_token = await auth.token()
-profile_headers = await auth.authenticate()
+profile_auth = await create_persistent_auth()
+profile_token = await profile_auth.token()
+profile_headers = await profile_auth.authenticate()
 
 configured = await create_persistent_auth(DatabricksAuthOptions(profile="DEFAULT"))
 keyword_configured = await create_persistent_auth(profile="DEFAULT")
 ```
 
-Use the top-level `token()` and `authenticate()` functions for normal ambient
-authentication. They share one process-wide `PersistentAuth` instance, so
-profile resolution, token caching, locking, and refresh state are reused.
+Use `create_auth_client()` for normal ambient authentication. It returns a
+narrow client with `token()` and `authenticate()` backed by one process-wide
+authentication lifecycle, so profile resolution, token caching, locking, and
+refresh state are reused.
 Create an explicit auth object when you need custom options, storage, or injected
 dependencies.
 

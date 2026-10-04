@@ -6,7 +6,7 @@ import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
 import { authLogger, tokenMetadata } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
-import { AuthClient, publicToken } from "./lifecycle.ts";
+import { publicToken, TokenLifecycle } from "./lifecycle.ts";
 import { FileCredentialStore } from "./node-storage.ts";
 import { DatabricksPersonalAccessTokenProvider } from "./personal-access-token.ts";
 import { machineScopes, resolveConfigFile, resolveDatabricksProfile } from "./profile.ts";
@@ -31,14 +31,27 @@ import {
 const logger = authLogger("databricks");
 let ambientAuth: Promise<PersistentAuth> | undefined;
 
-/** Return a token from the process-wide ambient Databricks authentication lifecycle. */
-export async function token(login?: boolean) {
-  return (await ambientPersistentAuth()).token(login);
+/** Narrow ambient Databricks authentication client. */
+export interface AuthClient {
+  token(login?: boolean): ReturnType<PersistentAuth["token"]>;
+  authenticate(login?: boolean): Promise<Record<string, string>>;
 }
 
-/** Return request headers from the process-wide ambient Databricks authentication lifecycle. */
-export async function authenticate(login?: boolean): Promise<Record<string, string>> {
-  return (await ambientPersistentAuth()).authenticate(login);
+class AmbientAuthClient implements AuthClient {
+  constructor(private readonly auth: Promise<PersistentAuth>) {}
+
+  async token(login?: boolean) {
+    return (await this.auth).token(login);
+  }
+
+  async authenticate(login?: boolean): Promise<Record<string, string>> {
+    return (await this.auth).authenticate(login);
+  }
+}
+
+/** Create a client backed by the process-wide ambient authentication lifecycle. */
+export function createAuthClient(): AuthClient {
+  return new AmbientAuthClient(ambientPersistentAuth());
 }
 
 /** Injectable host capabilities for Databricks authentication. */
@@ -53,7 +66,7 @@ export class PersistentAuth implements PersistentAuthLike {
   constructor(
     private readonly profileValue: DatabricksProfile,
     private readonly storageValue: Storage,
-    private readonly client?: AuthClient,
+    private readonly client?: TokenLifecycle,
     private readonly requestToken?: Token,
   ) {}
 
@@ -164,7 +177,7 @@ export class PersistentAuth implements PersistentAuthLike {
     return { ...this.profileValue, scopes: [...this.profileValue.scopes] };
   }
 
-  private requiredClient(): AuthClient {
+  private requiredClient(): TokenLifecycle {
     if (!this.client) throw new AuthError("oauth", "Authentication lifecycle is not available");
     return this.client;
   }
@@ -235,7 +248,7 @@ export async function createPersistentAuthWithStorage(
     });
   }
   const provider = await providerFor(profile, options, dependencies);
-  const client = new AuthClient(
+  const client = new TokenLifecycle(
     profile.cacheKey,
     provider,
     store,

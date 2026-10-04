@@ -8,8 +8,8 @@ from .node_bindings import (
     DatabricksAuthDependencies,
     DatabricksAuthOptions,
     DatabricksProfile,
-    authenticate,
     config_profile_exists,
+    create_auth_client,
     create_persistent_auth,
     create_persistent_auth_with_storage,
     invalidate_config_file,
@@ -18,7 +18,6 @@ from .node_bindings import (
     parse_databricks_config,
     resolve_config_file,
     resolve_databricks_profile,
-    token,
 )
 
 __all__ = [
@@ -27,8 +26,8 @@ __all__ = [
     "DatabricksAuthDependencies",
     "DatabricksAuthOptions",
     "DatabricksProfile",
-    "authenticate",
     "config_profile_exists",
+    "create_auth_client",
     "create_persistent_auth",
     "create_persistent_auth_with_storage",
     "invalidate_config_file",
@@ -37,5 +36,4 @@ __all__ = [
     "parse_databricks_config",
     "resolve_config_file",
     "resolve_databricks_profile",
-    "token",
 ]

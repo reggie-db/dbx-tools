@@ -5,7 +5,7 @@ import type { AccessToken, AuthOptions, CredentialStore, Token, TokenProvider } 
 const logger = authLogger("lifecycle");
 
 /** Provider-neutral check-lock-check authentication and persistent token lifecycle. */
-export class AuthClient {
+export class TokenLifecycle {
   constructor(
     private readonly key: string,
     private readonly provider: TokenProvider,

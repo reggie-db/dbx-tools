@@ -9,7 +9,7 @@ describe("authentication debug logging", () => {
     const storage = moduleUrl("src/storage.ts");
     const types = moduleUrl("src/types.ts");
     const script = `
-      import { AuthClient } from ${JSON.stringify(lifecycle)};
+      import { TokenLifecycle } from ${JSON.stringify(lifecycle)};
       import { MemoryCredentialStore } from ${JSON.stringify(storage)};
       import { AuthOptions } from ${JSON.stringify(types)};
       const provider = {
@@ -24,7 +24,7 @@ describe("authentication debug logging", () => {
         refresh: async () => { throw new Error("unexpected refresh"); },
         canAuthenticateSilently: () => true,
       };
-      const client = new AuthClient(
+      const client = new TokenLifecycle(
         "logging-profile",
         provider,
         new MemoryCredentialStore(),

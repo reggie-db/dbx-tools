@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 import os
 import subprocess
@@ -11,10 +10,8 @@ from pathlib import Path
 from dbx_tools.auth import (
     AuthOptions,
     DatabricksAuthOptions,
-    authenticate,
     create_persistent_auth,
     normalize_host,
-    token,
 )
 
 APP_ENVIRONMENT = {"DBX_TOOLS_DATABRICKS_APP_ENV": "true"}
@@ -26,18 +23,17 @@ async def test_generated_function_wrapper_calls_embedded_runtime() -> None:
     )
 
 
-def test_generated_package_exposes_ambient_token_and_authenticate() -> None:
-    assert list(inspect.signature(token).parameters) == ["login"]
-    assert list(inspect.signature(authenticate).parameters) == ["login"]
+def test_generated_package_exposes_ambient_auth_client() -> None:
     script = """
 import asyncio
 import json
-from dbx_tools.auth import authenticate, token
+from dbx_tools.auth import create_auth_client
 
 async def main():
+    auth = await create_auth_client()
     print(json.dumps({
-        "token": await token(False),
-        "headers": await authenticate(False),
+        "token": await auth.token(False),
+        "headers": await auth.authenticate(False),
     }, sort_keys=True))
 
 asyncio.run(main())

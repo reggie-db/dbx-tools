@@ -313,15 +313,6 @@ class DatabricksProfile:
     )
 
 
-async def authenticate(
-    login: bool | object = _MISSING,
-) -> Any:
-    arguments: list[tuple[int, Any]] = []
-    if login is not _MISSING:
-        arguments.append((0, login))
-    return await _invoke_positioned("authenticate", arguments)
-
-
 async def config_profile_exists(
     profile: str,
     config_file: str | object = _MISSING,
@@ -331,6 +322,10 @@ async def config_profile_exists(
     if config_file is not _MISSING:
         arguments.append((1, config_file))
     return await _invoke_positioned("configProfileExists", arguments)
+
+
+async def create_auth_client() -> Any:
+    return await _invoke("createAuthClient")
 
 
 async def create_persistent_auth(
@@ -443,23 +438,14 @@ async def resolve_databricks_profile(
     return await _invoke_positioned("resolveDatabricksProfile", arguments)
 
 
-async def token(
-    login: bool | object = _MISSING,
-) -> Any:
-    arguments: list[tuple[int, Any]] = []
-    if login is not _MISSING:
-        arguments.append((0, login))
-    return await _invoke_positioned("token", arguments)
-
-
 __all__ = [
     "AuthOptions",
     "CredentialStore",
     "DatabricksAuthDependencies",
     "DatabricksAuthOptions",
     "DatabricksProfile",
-    "authenticate",
     "config_profile_exists",
+    "create_auth_client",
     "create_persistent_auth",
     "create_persistent_auth_with_storage",
     "invalidate_config_file",
@@ -468,5 +454,4 @@ __all__ = [
     "parse_databricks_config",
     "resolve_config_file",
     "resolve_databricks_profile",
-    "token",
 ]

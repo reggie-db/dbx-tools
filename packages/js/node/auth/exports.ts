@@ -1,8 +1,7 @@
 export {
-  authenticate,
+  createAuthClient,
   createPersistentAuth,
   createPersistentAuthWithStorage,
-  token,
 } from "./src/databricks-auth.ts";
 export {
   configProfileExists,

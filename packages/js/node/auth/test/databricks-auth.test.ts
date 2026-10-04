@@ -2,18 +2,14 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { describe, it } from "node:test";
 
-import {
-  authenticate as authenticateAmbient,
-  createPersistentAuth,
-  token as ambientToken,
-} from "../src/databricks-auth.ts";
+import { createAuthClient, createPersistentAuth } from "../src/databricks-auth.ts";
 import { DatabricksClient } from "../src/http-client.ts";
 import { DatabricksAuthOptions, Storage } from "../src/types.ts";
 
 const APP_ENV = { DBX_TOOLS_DATABRICKS_APP_ENV: "true" };
 
 describe("Databricks provider construction", () => {
-  it("exposes cached ambient token and authenticate helpers", async () => {
+  it("exposes a cached ambient authentication client", async () => {
     const environment = {
       DATABRICKS_AUTH_TYPE: process.env.DATABRICKS_AUTH_TYPE,
       DATABRICKS_CONFIG_FILE: process.env.DATABRICKS_CONFIG_FILE,
@@ -27,8 +23,10 @@ describe("Databricks provider construction", () => {
     process.env.DATABRICKS_TOKEN = "ambient-token";
     delete process.env.DATABRICKS_WORKSPACE_ID;
     try {
-      assert.equal((await ambientToken(false)).accessToken, "ambient-token");
-      assert.deepEqual(await authenticateAmbient(false), {
+      const auth = createAuthClient();
+      assert.equal("status" in auth, false);
+      assert.equal((await auth.token(false)).accessToken, "ambient-token");
+      assert.deepEqual(await auth.authenticate(false), {
         authorization: "Bearer ambient-token",
       });
     } finally {

@@ -54,11 +54,15 @@ format, and credential persistence stay consistent with Databricks tooling.
 ## Basic use
 
 ```ts
-import { createPersistentAuth, DatabricksAuthOptions } from "@dbx-tools/auth";
+import { createAuthClient } from "@dbx-tools/auth";
 
-const auth = await createPersistentAuth(DatabricksAuthOptions.create({ profile: "DEFAULT" }));
+const auth = createAuthClient();
 const headers = await auth.authenticate();
 ```
+
+`createAuthClient()` returns a narrow client with `token()` and `authenticate()`.
+It shares one lazily resolved process-wide authentication lifecycle, including
+profile selection, locking, caching, login, and refresh state.
 
 `authenticate()` returns the complete request header record, including
 `authorization` and `x-databricks-workspace-id` when the selected profile has a
@@ -70,9 +74,8 @@ const headers = await auth.authenticate(false);
 ```
 
 `token()` remains available when only the token record is needed. Use
-`requestHeadersForUrl()` when applying credentials to an arbitrary URL; it
-returns headers only when the request URL has the same origin as the resolved
-Databricks host.
+`createPersistentAuth()` when profile status, refresh control, logout, or
+same-origin request-header generation is needed.
 
 ## Portable storage
 
