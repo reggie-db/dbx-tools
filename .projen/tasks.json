@@ -86,7 +86,7 @@
       "description": "Increment VERSION and synchronize generated workspace versions",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts",
           "receiveArgs": true
         }
       ]

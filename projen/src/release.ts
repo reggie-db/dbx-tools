@@ -312,7 +312,7 @@ export class DBXToolsRelease extends Component {
     if (options.nodeRelease !== false) nodeReleaseProjects.add(project);
     applyTasks(project, {
       bump: {
-        exec: taskScript(project, "bump.ts", `--prefix ${tagPrefix}`),
+        exec: taskScript(project, "bump.ts"),
         receiveArgs: true,
         description: "Increment VERSION and synchronize generated workspace versions",
       },

@@ -190,7 +190,7 @@ describe("release task contracts", () => {
     const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
       tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
     };
-    assert.match(tasks.tasks.bump?.steps?.[0]?.exec ?? "", /tasks\/bump\.ts --prefix v/);
+    assert.match(tasks.tasks.bump?.steps?.[0]?.exec ?? "", /tasks\/bump\.ts$/);
     assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
     assert.match(
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
