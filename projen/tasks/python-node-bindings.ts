@@ -3,40 +3,92 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { stringUtils } from "@dbx-tools/shared-core";
 import type { BunPlugin } from "bun";
 import stdLibBrowser from "node-stdlib-browser";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
+import { publicFunctionExports } from "../src/module-exports.ts";
+import {
+  resolvePythonNodeBindings,
+  type ResolvedPythonNodeFunctionOverride,
+} from "../src/python-node-bindings.ts";
 
-interface FunctionOverride {
-  readonly handlerExport: string;
-  readonly handlerFile: string;
-  readonly targetExport: string;
-  readonly targetModule: string;
-}
+type FunctionOverride = ResolvedPythonNodeFunctionOverride;
+
+const PYTHON_KEYWORDS = new Set([
+  "and",
+  "as",
+  "assert",
+  "async",
+  "await",
+  "break",
+  "class",
+  "continue",
+  "def",
+  "del",
+  "elif",
+  "else",
+  "except",
+  "False",
+  "finally",
+  "for",
+  "from",
+  "global",
+  "if",
+  "import",
+  "in",
+  "is",
+  "lambda",
+  "None",
+  "nonlocal",
+  "not",
+  "or",
+  "pass",
+  "raise",
+  "return",
+  "True",
+  "try",
+  "while",
+  "with",
+  "yield",
+]);
 
 const { values } = parseArgs({
   options: {
     check: { type: "boolean" },
-    entry: { type: "string" },
-    "function-override": { type: "string", multiple: true },
-    output: { type: "string" },
+    project: { type: "string" },
     root: { type: "string" },
-    "shim-root": { type: "string" },
-    source: { type: "string" },
   },
 });
-if (!values.entry || !values.output || !values.source) {
-  throw new Error("Expected --entry, --output, and --source");
-}
+if (!values.project) throw new Error("Expected --project <python-project-directory>");
 
 const root = values.root
   ? resolve(values.root)
   : resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const entrypoint = resolve(root, values.entry);
-const output = resolve(root, values.output);
-const shimRoot = values["shim-root"] ? resolve(root, values["shim-root"]) : undefined;
-const functionOverrides = (values["function-override"] ?? []).map(parseFunctionOverride);
-const overridesByModule = groupOverrides(functionOverrides);
+const config = resolvePythonNodeBindings(root, values.project);
+const { bindingsOutput, projectDirectory, pyproject, runtimeOutput } = config;
+const entrypoint = Bun.resolveSync(config.package, projectDirectory);
+const functions = publicFunctionExports(entrypoint);
+if (functions.length === 0) {
+  throw new Error(`${config.package} exports no plain functions that can be bound to Python`);
+}
+const pythonFunctions = functions.map(({ name }) => ({
+  javascriptName: name,
+  pythonName: pythonFunctionName(name),
+}));
+const functionsByPythonName = new Map<string, string>();
+for (const functionName of pythonFunctions) {
+  const existing = functionsByPythonName.get(functionName.pythonName);
+  if (existing && existing !== functionName.javascriptName) {
+    throw new Error(
+      `Python function name collision: ${existing} and ${functionName.javascriptName} both map to ${functionName.pythonName}`,
+    );
+  }
+  functionsByPythonName.set(functionName.pythonName, functionName.javascriptName);
+}
+
+const shimRoot = config.shimRoot;
+const overridesByModule = groupOverrides(config.functionOverrides);
 const shimEntry = "dbx-tools:python-entry";
 const functionOverrideNamespace = "dbx-tools-function-override";
 const shimAliases = shimRoot
@@ -55,7 +107,7 @@ const shimAliases = shimRoot
   : undefined;
 const standardAliases = stdLibBrowser as Record<string, string | undefined>;
 const runtimePlugin: BunPlugin | undefined =
-  shimAliases || functionOverrides.length > 0
+  shimAliases || config.functionOverrides.length > 0
     ? {
         name: "python-node-runtime",
         setup(build) {
@@ -103,75 +155,32 @@ const runtimePlugin: BunPlugin | undefined =
         },
       }
     : undefined;
-const bun = (
-  globalThis as typeof globalThis & {
-    Bun?: {
-      build(options: {
-        entrypoints: string[];
-        format: "cjs";
-        plugins?: BunPlugin[];
-        target: "browser";
-        write: false;
-      }): Promise<{
-        success: boolean;
-        logs: unknown[];
-        outputs: { text(): Promise<string> }[];
-      }>;
-    };
+
+const source = `${config.package} configured by ${relative(root, pyproject)}`;
+await generate();
+
+async function generate(): Promise<void> {
+  const result = await Bun.build({
+    entrypoints: [shimRoot ? shimEntry : entrypoint],
+    format: "cjs",
+    ...(runtimePlugin ? { plugins: [runtimePlugin] } : {}),
+    target: "browser",
+  });
+  if (!result.success) {
+    for (const message of result.logs) console.error(message);
+    throw new Error(`Could not bundle ${config.package}`);
   }
-).Bun;
-if (!bun) throw new Error("python-node-bindings must run with Bun");
-
-const result = await bun.build({
-  entrypoints: [shimRoot ? shimEntry : entrypoint],
-  format: "cjs",
-  ...(runtimePlugin ? { plugins: [runtimePlugin] } : {}),
-  target: "browser",
-  write: false,
-});
-if (!result.success) {
-  for (const message of result.logs) console.error(message);
-  throw new Error(`Could not bundle ${values.source}`);
-}
-if (result.outputs.length !== 1) {
-  throw new Error(`Expected one JavaScript bundle, received ${result.outputs.length}`);
-}
-
-const body = await result.outputs[0].text();
-const generated = `${header({
-  tool: "projen/tasks/python-node-bindings.ts",
-  source: values.source,
-})}\n${body}`;
-const destination = relative(root, output);
-
-if (values.check) {
-  if (!existsSync(output) || readFileSync(output, "utf8") !== generated) {
-    throw new Error(`Generated JavaScript runtime is stale: ${destination}`);
+  if (result.outputs.length !== 1) {
+    throw new Error(`Expected one JavaScript bundle, received ${result.outputs.length}`);
   }
-  console.log(`verified ${destination}`);
-} else {
-  mkdirSync(dirname(output), { recursive: true });
-  makeWritable(output);
-  writeFileSync(output, generated);
-  makeReadonly(output);
-  console.log(`generated ${destination}`);
-}
 
-function parseFunctionOverride(value: string): FunctionOverride {
-  const equals = value.indexOf("=");
-  if (equals <= 0 || equals === value.length - 1) {
-    throw new Error(
-      `Invalid --function-override ${JSON.stringify(value)}; expected <module>#<export>=<file>#<export>`,
-    );
-  }
-  const [targetModule, targetExport] = parseFunctionReference(value.slice(0, equals), "target");
-  const [handlerFile, handlerExport] = parseFunctionReference(value.slice(equals + 1), "handler");
-  return {
-    targetModule,
-    targetExport,
-    handlerFile: resolve(root, handlerFile),
-    handlerExport,
-  };
+  const runtime = `${header({
+    tool: "projen/tasks/python-node-bindings.ts",
+    source,
+  })}\n${await result.outputs[0].text()}`;
+  const bindings = pythonBindings(source, pythonFunctions);
+  writeGenerated(runtimeOutput, runtime, "JavaScript runtime");
+  writeGenerated(bindingsOutput, bindings, "Python bindings");
 }
 
 function groupOverrides(
@@ -191,14 +200,80 @@ function groupOverrides(
   return grouped;
 }
 
-function parseFunctionReference(value: string, side: string): [string, string] {
-  const hash = value.lastIndexOf("#");
-  const source = value.slice(0, hash);
-  const exported = value.slice(hash + 1);
-  if (hash <= 0 || !source || !/^[$A-Z_a-z][$\w]*$/.test(exported)) {
+function pythonFunctionName(javascriptName: string): string {
+  const name = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, javascriptName);
+  if (!/^[_A-Za-z]\w*$/.test(name) || PYTHON_KEYWORDS.has(name)) {
     throw new Error(
-      `Invalid ${side} function reference ${JSON.stringify(value)}; expected <source>#<export>`,
+      `JavaScript export ${javascriptName} does not map to a valid Python function name`,
     );
   }
-  return [source, exported];
+  return name;
+}
+
+function pythonBindings(
+  source: string,
+  functions: readonly { javascriptName: string; pythonName: string }[],
+): string {
+  const exported = functions
+    .map(({ pythonName }) => `    ${JSON.stringify(pythonName)},`)
+    .join("\n");
+  const wrappers = functions
+    .map(
+      ({ javascriptName, pythonName }) =>
+        `async def ${pythonName}(*args: Any) -> Any:\n    return await _invoke(${JSON.stringify(javascriptName)}, *args)`,
+    )
+    .join("\n\n\n");
+  return [
+    "# GENERATED by projen/tasks/python-node-bindings.ts - DO NOT EDIT.",
+    `# Regenerated from ${source}.`,
+    "# Hand edits are overwritten; this file is read-only.",
+    "",
+    "from __future__ import annotations",
+    "",
+    "import inspect",
+    "from pathlib import Path",
+    "from typing import Any",
+    "",
+    "import pythonmonkey as pm",
+    "import pythonmonkey.require",
+    "",
+    "_RUNTIME: Any | None = None",
+    "",
+    "",
+    "def _runtime() -> Any:",
+    "    global _RUNTIME",
+    "    if _RUNTIME is None:",
+    '        _RUNTIME = pm.require(str(Path(__file__).with_name("_runtime.js")))',
+    "    return _RUNTIME",
+    "",
+    "",
+    "async def _invoke(name: str, *args: Any) -> Any:",
+    "    value = _runtime()[name](*args)",
+    "    return await value if inspect.isawaitable(value) else value",
+    "",
+    "",
+    wrappers,
+    "",
+    "",
+    "__all__ = [",
+    exported,
+    "]",
+    "",
+  ].join("\n");
+}
+
+function writeGenerated(output: string, contents: string, kind: string): void {
+  const destination = relative(root, output);
+  if (values.check) {
+    if (!existsSync(output) || readFileSync(output, "utf8") !== contents) {
+      throw new Error(`Generated ${kind} is stale: ${destination}`);
+    }
+    console.log(`verified ${destination}`);
+    return;
+  }
+  mkdirSync(dirname(output), { recursive: true });
+  makeWritable(output);
+  writeFileSync(output, contents);
+  makeReadonly(output);
+  console.log(`generated ${destination}`);
 }

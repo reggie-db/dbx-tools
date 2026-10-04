@@ -21,8 +21,8 @@ credentials. No browser OAuth flow is implemented.
 - Optional preference for one matching CLI U2M profile over an implicit M2M
   default. Explicit profiles are never remapped.
 - Check-lock-recheck token acquisition and rejected-token refresh.
-- File or memory credential storage with caller-defined storage and lock
-  adapters.
+- Process-memory credential storage by default, with explicit file or
+  caller-defined storage and lock adapters.
 - Same-origin authorization headers and one rejected-token retry in the bundled
   fetch client.
 - Secret-free profile enumeration with explicit cache refresh.
@@ -76,6 +76,11 @@ Databricks host.
 
 ## Portable storage
 
+`createPersistentAuth()` keeps acquired credentials in process memory by
+default for CLI U2M, PAT, M2M, App SP, and App OBO flows. Pass `Storage.File`
+when disk persistence is explicitly required; custom stores use
+`createPersistentAuthWithStorage()`.
+
 `CredentialStore` and `LockAdapter` use data records, strings, numbers, and
 promises. A Python or FFI bridge can implement them without passing JavaScript
 callbacks across the boundary. Locks return an opaque lease ID that is released
@@ -95,7 +100,7 @@ const auth = await createPersistentAuthWithStorage(
 );
 ```
 
-The built-in file store uses `node:fs` with `@dbx-tools/core/file-lock` and
+The opt-in file store uses `node:fs` with `@dbx-tools/core/file-lock` and
 preserves unrelated entries in `~/.databricks/token-cache.json`.
 
 ## Debug logging

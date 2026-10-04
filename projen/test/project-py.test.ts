@@ -233,6 +233,83 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.ok(project.tasks.tryFind("py:sync"));
     assert.ok(project.tasks.tryFind("py:build"));
   });
+
+  it("registers pyproject-driven Node bindings with the workspace sync watcher", () => {
+    const bindingsOutdir = mkdtempSync(join(tmpdir(), "project-py-node-bindings-"));
+    try {
+      mkdirSync(join(bindingsOutdir, "packages/js/node/auth/src"), { recursive: true });
+      writeFileSync(
+        join(bindingsOutdir, "packages/js/node/auth/src/auth.ts"),
+        "export function authenticate(): void {}\n",
+      );
+      const project = new DBXToolsNodeProject({
+        name: "fixture",
+        outdir: bindingsOutdir,
+        defaultTagMixins: false,
+        packageRoots: ["packages/js"],
+        repository: "https://github.com/example/fixture.git",
+      });
+      new DBXToolsPythonWorkspace(project, {
+        root: "python/packages",
+        packages: [
+          {
+            directory: "auth",
+            description: "Fixture auth bindings",
+            nodeBindings: {
+              package: "@fixture/auth",
+              shimRoot: "projen/shims/python-node",
+              functionOverrides: [
+                {
+                  module: "@fixture/core/file-lock",
+                  export: "acquireFileLock",
+                  handler: "projen/shims/python-node/file-lock.ts",
+                },
+              ],
+            },
+          },
+        ],
+      });
+
+      project.synth();
+
+      const pyproject = parse(
+        readFileSync(join(bindingsOutdir, "python/packages/auth/pyproject.toml"), "utf8"),
+      ) as {
+        tool: {
+          dbx_tools: {
+            node_bindings: {
+              package: string;
+              shim_root: string;
+              function_overrides: Array<Record<string, string>>;
+            };
+          };
+        };
+      };
+      assert.deepEqual(pyproject.tool.dbx_tools.node_bindings, {
+        package: "@fixture/auth",
+        shim_root: "projen/shims/python-node",
+        function_overrides: [
+          {
+            module: "@fixture/core/file-lock",
+            export: "acquireFileLock",
+            handler: "projen/shims/python-node/file-lock.ts",
+          },
+        ],
+      });
+      const manifest = JSON.parse(readFileSync(join(bindingsOutdir, "package.json"), "utf8")) as {
+        dbxToolsConfig?: { pythonNodeBindings?: string[] };
+      };
+      assert.deepEqual(manifest.dbxToolsConfig?.pythonNodeBindings, ["python/packages/auth"]);
+      assert.ok(project.tasks.tryFind("auth:python-runtime"));
+      assert.ok(project.tasks.tryFind("auth:python-runtime:check"));
+      assert.equal(
+        project.tasks.tryFind("auth:python-runtime:watch")?.steps[0]?.exec,
+        "bun projen/tasks/python-node-bindings-watch.ts --project python/packages/auth",
+      );
+    } finally {
+      rmSync(bindingsOutdir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("optional Python release stages", () => {

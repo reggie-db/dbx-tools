@@ -25,3 +25,12 @@ build-backend = "uv_build"
 module-name = "dbx_tools.auth"
 module-root = "src"
 namespace = true
+
+[tool.dbx_tools.node_bindings]
+package = "@dbx-tools/auth"
+shim_root = "projen/shims/python-node"
+
+  [[tool.dbx_tools.node_bindings.function_overrides]]
+  module = "@dbx-tools/core/file-lock"
+  export = "acquireFileLock"
+  handler = "projen/shims/python-node/file-lock.ts"

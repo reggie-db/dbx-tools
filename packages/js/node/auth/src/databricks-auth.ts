@@ -180,7 +180,7 @@ export async function createPersistentAuth(
   const inApp =
     profile.authKind === AuthKind.AppOnBehalfOf ||
     profile.authKind === AuthKind.AppServicePrincipal;
-  const backend = storage === Storage.Auto ? (inApp ? Storage.Memory : Storage.File) : storage;
+  const backend = storage === Storage.Auto ? Storage.Memory : storage;
   logger.debug("creating persistent Databricks auth", {
     profile: profile.name,
     host: profile.host,

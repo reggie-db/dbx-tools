@@ -1,4 +1,5 @@
 import { Component, type Project, type Task } from "projen";
+import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 
 /** One function replaced only in a generated PythonMonkey bundle. */
 export interface PythonNodeFunctionOverride {
@@ -12,61 +13,72 @@ export interface PythonNodeFunctionOverride {
   readonly handlerExport?: string;
 }
 
-/** Options for a generated JavaScript runtime consumed through PythonMonkey. */
+/** Node package embedded into one Python distribution through PythonMonkey. */
+export interface PythonNodeBindingsOptions {
+  /** Public Node package specifier, such as `@dbx-tools/auth`. */
+  readonly package: string;
+  /** Repository-relative directory containing Node built-in shims. */
+  readonly shimRoot?: string;
+  /** Functions replaced only while generating the Python runtime. */
+  readonly functionOverrides?: readonly PythonNodeFunctionOverride[];
+}
+
+/** Options for pyproject-driven PythonMonkey generation tasks. */
 export interface PythonNodeBundleOptions {
   /** Stable task-name prefix, such as `auth`. */
   readonly name: string;
-  /** Repository-relative Node/TypeScript entrypoint. */
-  readonly entry: string;
-  /** Repository-relative generated bundle destination. */
-  readonly output: string;
-  /** Human-readable generated-source description. */
-  readonly source: string;
-  /** Repository-relative directory containing Node built-in shims. */
-  readonly shimRoot?: string;
-  /** Functions replaced only while generating this bundle. */
-  readonly functionOverrides?: readonly PythonNodeFunctionOverride[];
+  /** Repository-relative Python project containing `pyproject.toml`. */
+  readonly projectDirectory: string;
   /** Add the freshness check to the project's test task. Defaults to true. */
   readonly test?: boolean;
+  /** Regenerate during the root workspace watch loop. Defaults to false. */
+  readonly watch?: boolean;
 }
 
-/** Owns paired generation and freshness-check tasks for a PythonMonkey runtime. */
+/** Owns paired generation and freshness-check tasks for one Python package. */
 export class PythonNodeBundle extends Component {
   readonly buildTask: Task;
   readonly checkTask: Task;
+  readonly watchTask?: Task;
 
   constructor(project: Project, options: PythonNodeBundleOptions) {
     super(project);
-    const command = bundleCommand(options);
+    const command = [
+      "bun",
+      "projen/tasks/python-node-bindings.ts",
+      "--project",
+      shellQuote(options.projectDirectory),
+    ].join(" ");
     this.buildTask = project.addTask(`${options.name}:python-runtime`, {
-      description: `Bundle ${options.source}`,
+      description: `Generate Node bindings for Python package ${options.name}`,
       exec: command,
     });
     this.checkTask = project.addTask(`${options.name}:python-runtime:check`, {
-      description: `Verify the committed ${options.source} runtime is current`,
+      description: `Verify generated Node bindings for Python package ${options.name}`,
       exec: `${command} --check`,
     });
     if (options.test ?? true) project.testTask.spawn(this.checkTask);
+    if (options.watch) {
+      this.watchTask = project.addTask(`${options.name}:python-runtime:watch`, {
+        description: `Regenerate Node bindings for Python package ${options.name} on changes`,
+        exec: [
+          "bun",
+          "projen/tasks/python-node-bindings-watch.ts",
+          "--project",
+          shellQuote(options.projectDirectory),
+        ].join(" "),
+      });
+      if (isDBXToolsJavaScriptProject()(project)) {
+        const configured = project.dbxToolsConfig.pythonNodeBindings;
+        const projects = Array.isArray(configured)
+          ? configured.filter((value): value is string => typeof value === "string")
+          : [];
+        project.dbxToolsConfig.pythonNodeBindings = [
+          ...new Set([...projects, options.projectDirectory]),
+        ];
+      }
+    }
   }
-}
-
-function bundleCommand(options: PythonNodeBundleOptions): string {
-  const args = [
-    "bun",
-    "projen/tasks/python-node-bindings.ts",
-    "--entry",
-    options.entry,
-    "--output",
-    options.output,
-    ...(options.shimRoot ? ["--shim-root", options.shimRoot] : []),
-    "--source",
-    options.source,
-    ...(options.functionOverrides ?? []).flatMap((override) => [
-      "--function-override",
-      `${override.module}#${override.export}=${override.handler}#${override.handlerExport ?? override.export}`,
-    ]),
-  ];
-  return args.map(shellQuote).join(" ");
 }
 
 function shellQuote(value: string): string {

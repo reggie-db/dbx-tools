@@ -53,7 +53,7 @@ describe("Databricks provider construction", () => {
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
       }),
-      Storage.Memory,
+      Storage.Auto,
       {
         environment: {},
         resolveCli: () => {

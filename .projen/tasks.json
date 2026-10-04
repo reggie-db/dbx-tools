@@ -24,19 +24,28 @@
     },
     "auth:python-runtime": {
       "name": "auth:python-runtime",
-      "description": "Bundle @dbx-tools/auth for PythonMonkey",
+      "description": "Generate Node bindings for Python package auth",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey' --function-override @dbx-tools/core/file-lock#acquireFileLock=projen/shims/python-node/file-lock.ts#acquireFileLock"
+          "exec": "bun projen/tasks/python-node-bindings.ts --project packages/py/auth"
         }
       ]
     },
     "auth:python-runtime:check": {
       "name": "auth:python-runtime:check",
-      "description": "Verify the committed @dbx-tools/auth for PythonMonkey runtime is current",
+      "description": "Verify generated Node bindings for Python package auth",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey' --function-override @dbx-tools/core/file-lock#acquireFileLock=projen/shims/python-node/file-lock.ts#acquireFileLock --check"
+          "exec": "bun projen/tasks/python-node-bindings.ts --project packages/py/auth --check"
+        }
+      ]
+    },
+    "auth:python-runtime:watch": {
+      "name": "auth:python-runtime:watch",
+      "description": "Regenerate Node bindings for Python package auth on changes",
+      "steps": [
+        {
+          "exec": "bun projen/tasks/python-node-bindings-watch.ts --project packages/py/auth"
         }
       ]
     },

@@ -1515,6 +1515,18 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey",
     internalDependencies: [],
     dependencies: ["filelock>=3.16,<4", "httpx>=0.28,<1", "pythonmonkey>=1.3,<2"],
+    generatedSources: ["src/dbx_tools/auth/_runtime.js", "src/dbx_tools/auth/node_bindings.py"],
+    nodeBindings: {
+      package: "@dbx-tools/auth",
+      shimRoot: "projen/shims/python-node",
+      functionOverrides: [
+        {
+          module: "@dbx-tools/core/file-lock",
+          export: "acquireFileLock",
+          handler: "projen/shims/python-node/file-lock.ts",
+        },
+      ],
+    },
   },
   {
     directory: "core",
@@ -1568,20 +1580,6 @@ new project.DBXToolsPythonWorkspace(root, {
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },
   release: true,
-});
-new project.PythonNodeBundle(root, {
-  name: "auth",
-  entry: "packages/js/node/auth/index.ts",
-  output: "packages/py/auth/src/dbx_tools/auth/_runtime.js",
-  shimRoot: "projen/shims/python-node",
-  source: "@dbx-tools/auth for PythonMonkey",
-  functionOverrides: [
-    {
-      module: "@dbx-tools/core/file-lock",
-      export: "acquireFileLock",
-      handler: "projen/shims/python-node/file-lock.ts",
-    },
-  ],
 });
 root.addTask("auth:cli-assets", {
   description: "Refresh the pinned Databricks CLI release asset manifest",

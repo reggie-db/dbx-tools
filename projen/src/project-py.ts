@@ -6,6 +6,8 @@ import { JobPermission } from "projen/lib/github/workflows-model";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
+import { hasWorkspaceNodePackage } from "./python-node-bindings.ts";
+import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import {
   RELEASE_SHA,
@@ -40,6 +42,8 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly scripts?: Readonly<Record<string, string>>;
   /** Publish this package through the Rust UniFFI release flow instead of the Python workflow. */
   readonly uniffi?: boolean;
+  /** Build-time Node package embedded through PythonMonkey. */
+  readonly nodeBindings?: PythonNodeBindingsOptions;
   /** Generated source files excluded from strict static analysis. Package-relative. */
   readonly generatedSources?: readonly string[];
   /** Trusted publisher used outside the standard Python release workflow. */
@@ -213,6 +217,22 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.uniffi !== undefined) {
       this.uv.file.addOverride("tool.dbx_tools.config.uniffi", pkg.uniffi);
     }
+    if (pkg.nodeBindings) {
+      this.uv.file.addOverride("tool.dbx_tools.node_bindings", {
+        package: pkg.nodeBindings.package,
+        ...(pkg.nodeBindings.shimRoot ? { shim_root: pkg.nodeBindings.shimRoot } : {}),
+        ...(pkg.nodeBindings.functionOverrides?.length
+          ? {
+              function_overrides: pkg.nodeBindings.functionOverrides.map((override) => ({
+                module: override.module,
+                export: override.export,
+                handler: override.handler,
+                ...(override.handlerExport ? { handler_export: override.handlerExport } : {}),
+              })),
+            }
+          : {}),
+      });
+    }
     this.uv.file.readonly = true;
 
     for (const path of [".gitattributes", ".gitignore"]) {
@@ -293,6 +313,14 @@ export class DBXToolsPythonWorkspace extends Component {
             : this.version,
         }),
     );
+    for (const pkg of this.packages) {
+      if (!pkg.packageOptions.nodeBindings) continue;
+      new PythonNodeBundle(project, {
+        name: pkg.packageOptions.directory,
+        projectDirectory: pythonPackagePath(this.repository, pkg.packageOptions.directory),
+        watch: hasWorkspaceNodePackage(project, pkg.packageOptions.nodeBindings.package),
+      });
+    }
     if (isDBXToolsJavaScriptProject()(project)) {
       for (const pkg of this.packages) {
         project.releaseCatalog.registerProject(pkg, {

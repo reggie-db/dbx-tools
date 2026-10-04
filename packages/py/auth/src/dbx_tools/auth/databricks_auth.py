@@ -7,7 +7,7 @@ from typing import Any
 
 from .client import _access_token, credential_store_to_javascript, javascript_runtime
 from .javascript import invoke
-from .storage import FileCredentialStore
+from .storage import MemoryCredentialStore
 from .types import AccessToken, AuthOptions, CredentialStore
 
 
@@ -103,7 +103,6 @@ async def create_databricks_cli_auth(
     *,
     profile: str | None = None,
     config_file: str | Path | None = None,
-    cache_dir: str | Path | None = None,
     environment: Mapping[str, str] | None = None,
     prefer_user_to_machine: bool = True,
     executable: str | None = None,
@@ -111,7 +110,7 @@ async def create_databricks_cli_auth(
     options: AuthOptions | None = None,
 ) -> DatabricksAuth:
     """Create CLI-first Databricks auth using JavaScript profile selection."""
-    selected_store = store or FileCredentialStore(cache_dir)
+    selected_store = store or MemoryCredentialStore()
     runtime = javascript_runtime()
     auth_options = {
         **({"profile": profile} if profile else {}),

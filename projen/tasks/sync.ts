@@ -2,7 +2,7 @@
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
-import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
+import { pythonNodeBindingProjects, readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
@@ -24,6 +24,15 @@ const STOP_GRACE_MS = 2_000;
 /** Absolute path to a sibling task script, so `concurrently`'s cwd doesn't matter. */
 function taskPath(script: string): string {
   return fileURLToPath(new URL(`./${script}`, import.meta.url));
+}
+
+/** One restartable focused watcher managed by the sync supervisor. */
+function watcher(script: string, name: string, prefixColor: string, ...args: string[]) {
+  return {
+    command: ["bun", JSON.stringify(taskPath(script)), ...args].join(" "),
+    name,
+    prefixColor,
+  };
 }
 
 /** Whether synth recorded at least one Rust crate for the focused watcher. */
@@ -65,16 +74,15 @@ if (!process.argv.includes("--watch")) {
   }
 
   const watchers = [
-    { command: `bun "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
-    { command: `bun "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
-    { command: `bun "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
+    watcher("projenrc.ts", "projenrc", "magenta"),
+    watcher("barrels.ts", "barrels", "cyan", "--watch"),
+    watcher("openapi.ts", "openapi", "green", "--watch"),
   ];
   if (hasRustProjects()) {
-    watchers.push({
-      command: `bun "${taskPath("rust.ts")}" --watch`,
-      name: "rust",
-      prefixColor: "yellow",
-    });
+    watchers.push(watcher("rust.ts", "rust", "yellow", "--watch"));
+  }
+  if (pythonNodeBindingProjects(repoRoot).length > 0) {
+    watchers.push(watcher("python-node-bindings-watch.ts", "node-bindings", "blue"));
   }
   const { result } = concurrently(watchers, {
     prefix: "name",

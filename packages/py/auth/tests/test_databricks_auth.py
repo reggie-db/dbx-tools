@@ -34,12 +34,12 @@ auth_type = databricks-cli
         encoding="utf-8",
     )
 
-    auth = await create_databricks_cli_auth(config_file=config, cache_dir=tmp_path / "cache")
+    auth = await create_databricks_cli_auth(config_file=config)
 
     assert auth.status().profile == "user"
     assert auth.status().host == "https://example.cloud.databricks.com"
     assert auth.status().workspace_id == "workspace-id"
-    assert auth.status().storage == "file"
+    assert auth.status().storage == "memory"
     assert auth.auth_kind() == "user-to-machine"
 
 
@@ -56,7 +56,6 @@ auth_type = databricks-cli
 
     auth = await create_databricks_cli_auth(
         config_file=config,
-        cache_dir=tmp_path / "cache",
         executable=str(_write_cli(tmp_path / "databricks", "token")),
     )
 
@@ -88,7 +87,6 @@ token = profile-token
     auth = await create_databricks_cli_auth(
         profile="PAT",
         config_file=config,
-        cache_dir=tmp_path / "cache",
         executable=str(tmp_path / "must-not-run"),
     )
 

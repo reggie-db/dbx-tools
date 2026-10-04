@@ -19,9 +19,11 @@ call Python's standard library directly:
   process's OS lock instead of emulating a Node file descriptor.
 - Shared TypeScript handles App detection and semantic CLI version checks; the
   auth source contains no Python-specific runtime callbacks.
-- `MemoryCredentialStore` and `FileCredentialStore` remain Python-facing
-  adapters. The bundled JavaScript store uses the registered Python flock
-  override when it updates the shared token cache.
+- `create_databricks_cli_auth()` keeps credentials in process memory by default.
+  `MemoryCredentialStore` and `FileCredentialStore` remain Python-facing
+  adapters, and passing a file store opts into persistence. The bundled
+  JavaScript store uses the registered Python flock override when it updates
+  the shared token cache.
 - The bundled TypeScript owns profile resolution, CLI U2M, PAT selection,
   lifecycle caching, and request-header generation.
 - PAT profiles use their configured token directly without invoking the CLI.
@@ -32,8 +34,8 @@ The embedded profile logic uses the same maintained `ini` parser and enhanced
 default selection as the Node package: `__settings__.default_profile`, then
 `DEFAULT`, then a sole profile, with an optional unique matching CLI-U2M
 preference over an implicit M2M default. The JavaScript lifecycle adds the same
-token cache, check-lock-recheck acquisition, automatic CLI login, and rejected
-token handling used by Node callers.
+in-process token cache, check-lock-recheck acquisition, automatic CLI login, and
+rejected-token handling used by Node callers.
 
 ## Example
 
@@ -51,6 +53,19 @@ from dbx_tools.auth import create_databricks_cli_auth
 
 auth = await create_databricks_cli_auth(profile="DEFAULT")
 headers = await auth.authenticate()
+```
+
+To persist lifecycle credentials explicitly:
+
+```python
+from pathlib import Path
+
+from dbx_tools.auth import FileCredentialStore, create_databricks_cli_auth
+
+auth = await create_databricks_cli_auth(
+    profile="DEFAULT",
+    store=FileCredentialStore(Path.home() / ".databricks"),
+)
 ```
 
 Custom provider and storage methods may still be native Python coroutines.
@@ -86,5 +101,7 @@ never logged.
 - `client` loads the bundled runtime and exposes the async `AuthClient` facade.
 - `databricks_auth` resolves profiles and exposes CLI U2M, PAT, and complete
   request-header behavior from the bundled TypeScript implementation.
+- `node_bindings` is generated from plain public functions exported by the
+  configured Node package, using snake_case async Python wrappers.
 - `types` defines the provider, storage, token, and lifecycle contracts.
 - `storage` provides memory and file-backed adapters.

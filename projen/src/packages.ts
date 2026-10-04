@@ -291,6 +291,19 @@ export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): strin
   return Array.isArray(paths) ? stringUtils.parseList(paths.map((p) => String(p))) : [];
 }
 
+/** Python projects with Node bindings registered for the root sync watcher. */
+export function pythonNodeBindingProjects(projectRoot: string = resolveRepoRoot()): string[] {
+  const configured = readDbxToolsConfig(projectRoot)?.pythonNodeBindings;
+  if (!Array.isArray(configured)) return [];
+  return [
+    ...new Set(
+      configured.flatMap((value) =>
+        typeof value === "string" && value.trim() ? [value.trim()] : [],
+      ),
+    ),
+  ].sort();
+}
+
 /**
  * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
  * each augmented with the `tags` read back from its `package.json`. This is what
@@ -312,6 +325,38 @@ export function recordedPackages(projectRoot: string = resolveRepoRoot()): Recor
     });
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * Absolute directories for a workspace package and its transitive runtime
+ * workspace dependencies. Dependency edges come from package manifests; external
+ * packages are ignored. Returns `[]` when `packageName` is not a workspace member.
+ */
+export function workspaceDependencyDirectories(
+  packageName: string,
+  projectRoot: string = resolveRepoRoot(),
+): string[] {
+  const packages = new Map<string, { dir: string; manifest: Record<string, unknown> }>();
+  for (const pkg of recordedPackages(projectRoot)) {
+    const manifest = readPackageManifest(pkg.dir);
+    if (!manifest || typeof manifest.name !== "string") continue;
+    packages.set(manifest.name, { dir: pkg.dir, manifest });
+  }
+  if (!packages.has(packageName)) return [];
+
+  const directories = new Set<string>();
+  const visit = (name: string): void => {
+    const pkg = packages.get(name);
+    if (!pkg || directories.has(pkg.dir)) return;
+    directories.add(pkg.dir);
+    for (const field of ["dependencies", "optionalDependencies", "peerDependencies"] as const) {
+      const dependencies = pkg.manifest[field];
+      if (!object.isRecord(dependencies)) continue;
+      for (const dependency of Object.keys(dependencies)) visit(dependency);
+    }
+  };
+  visit(packageName);
+  return [...directories].sort();
 }
 
 /**
