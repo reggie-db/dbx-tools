@@ -1,8 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { bin } from "@dbx-tools/core";
-import { process as processBinding } from "@dbx-tools/bindings";
+import { bin, exec } from "@dbx-tools/core";
 import { stringUtils } from "@dbx-tools/shared-core";
 
 import cliAssets from "./generated/databricks-cli-assets.json" with { type: "json" };
@@ -84,14 +83,10 @@ function managedExecutableName(): string {
 
 async function compatibleDatabricksCli(executable: string): Promise<boolean> {
   try {
-    const result = await processBinding.runProcess({
-      command: executable,
-      args: ["--version"],
-      timeoutMs: 10_000,
-    });
+    const result = await runProcess(executable, ["--version"], {}, 10_000);
     if (result.exitCode !== 0) return false;
-    const version = bin.parseVersion({ stdout: result.stdout ?? "", stderr: result.stderr ?? "" });
-    return version !== undefined && compareVersion(version, cliAssets.minimumVersion) >= 0;
+    const version = bin.parseVersion(result);
+    return version !== undefined && bin.isVersionAtLeast(version, cliAssets.minimumVersion);
   } catch {
     return false;
   }
@@ -102,16 +97,6 @@ function platformAsset(): DatabricksCliAsset | undefined {
   return cliAssets.assets[key];
 }
 
-function compareVersion(left: string, right: string): number {
-  const leftParts = left.split(".").map(Number);
-  const rightParts = right.split(".").map(Number);
-  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (difference !== 0) return difference;
-  }
-  return 0;
-}
-
 /** Run interactive Databricks CLI login for one profile. */
 export async function databricksCliLogin(
   profile: string,
@@ -119,11 +104,11 @@ export async function databricksCliLogin(
   executable = process.env.DATABRICKS_CLI_PATH ?? "databricks",
   environment: Record<string, string> = {},
 ): Promise<void> {
-  const result = await processBinding.runProcess({
-    command: executable,
-    args: ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`],
-    env: environment,
-  });
+  const result = await runProcess(
+    executable,
+    ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`],
+    environment,
+  );
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
 }
@@ -137,7 +122,7 @@ export async function databricksCliToken(
 ): Promise<Token> {
   const args = ["auth", "token", "--profile", profile, "--output", "json"];
   if (forceRefresh) args.push("--force-refresh");
-  const result = await processBinding.runProcess({ command: executable, args, env: environment });
+  const result = await runProcess(executable, args, environment);
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth token exited ${result.exitCode}`);
   let value: Record<string, unknown>;
@@ -161,6 +146,27 @@ export async function databricksCliToken(
       ? value.scopes.filter((scope): scope is string => typeof scope === "string")
       : [],
   };
+}
+
+async function runProcess(
+  command: string,
+  args: string[],
+  environment: Record<string, string>,
+  timeoutMs?: number,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const controller = timeoutMs === undefined ? undefined : new AbortController();
+  const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  try {
+    return await exec.spawn(command, args, {
+      env: { ...process.env, ...environment },
+      stdin: "ignore",
+      stdout: "capture",
+      stderr: "capture",
+      signal: controller?.signal,
+    });
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 /** Provider that lazily delegates U2M credentials to the Databricks CLI. */

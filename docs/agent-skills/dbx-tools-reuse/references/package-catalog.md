@@ -19,7 +19,6 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
 - `@dbx-tools/auth` - Persistent Databricks authentication for Node.js and Bun without a native binding requirement. Source: `packages/js/node/auth`.
 - `@dbx-tools/auth-gate` - Passwordless authentication runtime built on Better Auth, email OTP, passkeys, and caller-provided identity policy and delivery. Source: `packages/js/node/auth-gate`.
-- `@dbx-tools/bindings` - Data-only process and HTTP host bindings for Node.js, Bun, and embedded JavaScript runtimes. Source: `packages/js/node/bindings`.
 - `@dbx-tools/core` - Node-only core helpers for layered configuration, binary installation, process execution, locking, and project discovery. Source: `packages/js/node/core`.
 - `@dbx-tools/core-rs` - Generated Node bindings for Databricks authentication, runtime utilities, and Lakebase address parsing from the dbx-tools-core Rust crate. Source: `packages/js/node/core-rs`.
 - `@dbx-tools/databricks` - Databricks workspace, filesystem, cloud, and network utilities. Source: `packages/js/node/databricks`.

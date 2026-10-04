@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
-import { files as fileBindings, locks as lockBindings } from "@dbx-tools/bindings";
+import { acquireFileLock, type FileLockLease } from "@dbx-tools/core/file-lock";
 
 import { AuthError } from "./errors.ts";
 import type { CredentialStore, LockAdapter, Token } from "./types.ts";
@@ -11,6 +12,26 @@ import { FileLayout } from "./types.ts";
 interface TokenCache {
   version: number;
   tokens: Record<string, unknown>;
+}
+
+class NodeFileLocks implements LockAdapter {
+  private readonly leases = new Map<string, FileLockLease>();
+
+  constructor(private readonly lockDirectory: string) {}
+
+  async acquire(key: string, timeoutMs: number): Promise<string> {
+    const lease = await acquireFileLock(key, { dir: this.lockDirectory, timeoutMs });
+    const id = randomUUID();
+    this.leases.set(id, lease);
+    return id;
+  }
+
+  async release(id: string): Promise<void> {
+    const lease = this.leases.get(id);
+    if (!lease) return;
+    this.leases.delete(id);
+    await lease.release();
+  }
 }
 
 /** File-backed credential store preserving unrelated Databricks CLI entries. */
@@ -22,7 +43,7 @@ export class FileCredentialStore implements CredentialStore {
     private readonly layout = FileLayout.Single,
     locks?: LockAdapter,
   ) {
-    this.locks = locks ?? new lockBindings.FileLeaseLocks(join(root, "locks"));
+    this.locks = locks ?? new NodeFileLocks(join(root, "locks"));
   }
 
   async load(key: string): Promise<Token | undefined> {
@@ -31,7 +52,7 @@ export class FileCredentialStore implements CredentialStore {
   }
 
   async prepareWrite(): Promise<void> {
-    await fileBindings.ensureDirectory({ path: this.root, mode: 0o700 });
+    await ensureDirectory(this.root, 0o700);
   }
 
   async save(key: string, token: Token): Promise<void> {
@@ -74,7 +95,7 @@ export class FileCredentialStore implements CredentialStore {
   }
 
   private async withCacheLock<T>(action: () => Promise<T>): Promise<T> {
-    await fileBindings.ensureDirectory({ path: this.root, mode: 0o700 });
+    await ensureDirectory(this.root, 0o700);
     const lease = await this.locks.acquire(`${this.root}:cache`, 30_000);
     try {
       return await action();
@@ -85,9 +106,7 @@ export class FileCredentialStore implements CredentialStore {
 
   private async readCache(): Promise<TokenCache> {
     try {
-      const source = await fileBindings.readTextFile({
-        path: join(this.root, "token-cache.json"),
-      });
+      const source = await readTextFile(join(this.root, "token-cache.json"));
       const cache = source ? (JSON.parse(source) as TokenCache) : { version: 1, tokens: {} };
       if (cache.version !== 1 || typeof cache.tokens !== "object" || !cache.tokens) {
         throw new AuthError("storage", "Token cache must use version 1");
@@ -101,14 +120,43 @@ export class FileCredentialStore implements CredentialStore {
 
   private async writeCache(cache: TokenCache): Promise<void> {
     try {
-      await fileBindings.atomicWriteTextFile({
-        path: join(this.root, "token-cache.json"),
-        content: `${JSON.stringify(cache, null, 2)}\n`,
-        mode: 0o600,
-      });
+      await atomicWriteTextFile(
+        join(this.root, "token-cache.json"),
+        `${JSON.stringify(cache, null, 2)}\n`,
+        0o600,
+      );
     } catch (cause) {
       throw new AuthError("storage", "Could not write Databricks token cache", { cause });
     }
+  }
+}
+
+async function ensureDirectory(path: string, mode: number): Promise<void> {
+  await mkdir(path, { recursive: true, mode });
+  await chmod(path, mode);
+}
+
+async function readTextFile(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw cause;
+  }
+}
+
+async function atomicWriteTextFile(path: string, content: string, mode: number): Promise<void> {
+  const parent = dirname(path);
+  await ensureDirectory(parent, 0o700);
+  const temporary = join(parent, `.${basename(path)}-${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, content, { mode, flag: "wx" });
+    await chmod(temporary, mode);
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch((cause: NodeJS.ErrnoException) => {
+      if (cause.code !== "ENOENT") throw cause;
+    });
   }
 }
 

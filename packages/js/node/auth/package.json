@@ -25,7 +25,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/bindings": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "ini": "^6.0.0",

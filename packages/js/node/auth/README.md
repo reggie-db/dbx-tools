@@ -95,9 +95,8 @@ const auth = await createPersistentAuthWithStorage(
 );
 ```
 
-The built-in file store uses the reusable file and lease bindings from
-`@dbx-tools/bindings` and preserves unrelated entries in
-`~/.databricks/token-cache.json`.
+The built-in file store uses `node:fs` with `@dbx-tools/core/file-lock` and
+preserves unrelated entries in `~/.databricks/token-cache.json`.
 
 ## Modules
 

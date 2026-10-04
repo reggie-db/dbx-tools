@@ -23,6 +23,7 @@ import { promisify } from "node:util";
 
 import { errorUtils, log } from "@dbx-tools/shared-core";
 import extractZip from "extract-zip";
+import { coerce, gte, type SemVer } from "semver";
 import { x as extractTar } from "tar";
 
 import { withFileLock } from "./file-lock.ts";
@@ -167,25 +168,20 @@ export function parseVersion({ stdout, stderr }: BinVersionOutput): string | und
   return detectedVersions(stdout).at(0)?.raw ?? detectedVersions(stderr).at(0)?.raw;
 }
 
-function numericVersion(version: string, strict: boolean): number[] | undefined {
-  const pattern = strict ? /^\s*v?(\d+(?:\.\d+){0,2})\s*$/i : /\bv?(\d+(?:\.\d+){0,2})/i;
-  const match = pattern.exec(version);
-  return match?.[1]?.split(".").map(Number);
+function minimumSemVer(version: string): SemVer | undefined {
+  if (!/^\s*v?\d+(?:\.\d+){0,2}\s*$/i.test(version)) return undefined;
+  return coerce(version, { loose: true }) ?? undefined;
 }
 
-function meetsMinVersion(version: string, minVersion: string | undefined): boolean {
-  if (!minVersion) return true;
-  const actual = numericVersion(version, false);
-  const minimum = numericVersion(minVersion, true);
+/** Compare a detected tool version against a one-to-three-component minimum. */
+export function isVersionAtLeast(version: string, minVersion: string): boolean {
+  const minimum = minimumSemVer(minVersion);
   if (!minimum) {
     throw new TypeError(`invalid minimum binary version: ${minVersion}`);
   }
+  const actual = coerce(version, { loose: true });
   if (!actual) return false;
-  for (let index = 0; index < Math.max(actual.length, minimum.length); index += 1) {
-    const difference = (actual[index] ?? 0) - (minimum[index] ?? 0);
-    if (difference !== 0) return difference > 0;
-  }
-  return true;
+  return gte(actual, minimum);
 }
 
 async function isValidBin(path: string, options: BinOptions): Promise<boolean> {
@@ -222,7 +218,9 @@ async function isValidBin(path: string, options: BinOptions): Promise<boolean> {
     stdout,
     stderr,
   });
-  const valid = version !== undefined && meetsMinVersion(version, options.minVersion);
+  const valid =
+    version !== undefined &&
+    (options.minVersion === undefined || isVersionAtLeast(version, options.minVersion));
   logger.debug("binary version checked", {
     path,
     version,
@@ -362,7 +360,7 @@ export async function ensure(
   url: BinUrl,
   options: BinOptions = {},
 ): Promise<BinContext> {
-  if (options.minVersion && !numericVersion(options.minVersion, true)) {
+  if (options.minVersion && !minimumSemVer(options.minVersion)) {
     throw new TypeError(`invalid minimum binary version: ${options.minVersion}`);
   }
   const destination = context(name, options.homeDir ?? homedir(), options.destination);

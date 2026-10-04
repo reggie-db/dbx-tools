@@ -199,7 +199,7 @@ and typed per-turn Mastra request context without owning authentication.
 | Brand context and assets       | [`@dbx-tools/shared-core`](packages/js/shared/core), [`@dbx-tools/core`](packages/js/node/core), [`@dbx-tools/ui-branding`](packages/js/ui/branding)                                                                        |
 | Databricks infrastructure      | [`@dbx-tools/databricks`](packages/js/node/databricks), [`@dbx-tools/databricks-zerobus`](packages/js/node/databricks-zerobus)                                                                                              |
 | Portable filesystems           | [`@dbx-tools/shared-fs`](packages/js/shared/fs), [`@dbx-tools/fs`](packages/js/node/fs)                                                                                                                                     |
-| Shared utilities               | [`@dbx-tools/shared-core`](packages/js/shared/core), [`@dbx-tools/core`](packages/js/node/core), [`@dbx-tools/bindings`](packages/js/node/bindings), [`@dbx-tools/path`](packages/js/node/path)                             |
+| Shared utilities               | [`@dbx-tools/shared-core`](packages/js/shared/core), [`@dbx-tools/core`](packages/js/node/core), [`@dbx-tools/path`](packages/js/node/path)                                                                                 |
 | The `dbx` CLI                  | [`@dbx-tools/cli`](packages/js/cli/dbx-tools), [`@dbx-tools/cli-appkit-env`](packages/js/cli/appkit-env), [`@dbx-tools/cli-auth`](packages/js/cli/auth), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                  |
 
 Read the package README for each feature area. They are written as the

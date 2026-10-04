@@ -57,6 +57,18 @@ describe("bin.parseVersion", () => {
   });
 });
 
+describe("bin.isVersionAtLeast", () => {
+  it("compares partial and suffixed versions through semver", () => {
+    assert.equal(bin.isVersionAtLeast("0.296.0", "0.205"), true);
+    assert.equal(bin.isVersionAtLeast("3.13.5rc1", "3.13.5"), true);
+    assert.equal(bin.isVersionAtLeast("1.9", "2"), false);
+  });
+
+  it("rejects an invalid minimum version", () => {
+    assert.throws(() => bin.isVersionAtLeast("1.2.3", "release-1.2.3"), TypeError);
+  });
+});
+
 describe("bin.ensure", () => {
   it("installs to an explicit destination", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-destination-"));

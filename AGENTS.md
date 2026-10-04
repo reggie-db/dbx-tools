@@ -177,16 +177,10 @@ Primary package areas:
   service-principal OAuth never opens a browser. The public facade uses
   `token()` for the credential record and `authenticate()` for the complete
   request-header dictionary.
-  `@dbx-tools/core` owns the Node file-lock implementation and must not depend
-  on Rust only for Databricks App detection.
-- `packages/js/node/bindings` owns data-only process, HTTP, file, and lease-lock host bindings for
-  Node.js, Bun, and embedded JavaScript. Its Node implementation reuses
-  `@dbx-tools/core` process execution and file locking plus
-  `@dbx-tools/shared-core` string normalization. Portable operations use plain
-  request/result records and explicit lease IDs. Node callers may use the
-  path-and-callback lock convenience locally, but callbacks must not enter the
-  PythonMonkey boundary. Keep capability policy out of this package.
-- `packages/py/node-bindings` owns the matching Python host adapters for
+  Node uses `@dbx-tools/core` directly for process execution and file locking,
+  plus `node:fs` for credential persistence. It must not depend on Rust only for
+  Databricks App detection.
+- `packages/py/node-bindings` owns Python host adapters for
   packages that execute committed TypeScript bundles through PythonMonkey. It
   provides the runtime loader, process and HTTP execution, `filelock`-backed
   lease locks, in-process async lease locks, non-blocking JSON/text file access,
