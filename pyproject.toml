@@ -42,6 +42,9 @@ workspace = true
 [tool.uv.sources.dbx-tools-auth]
 workspace = true
 
+[tool.uv.sources.dbx-tools-models]
+workspace = true
+
 [tool.uv.sources.dbx-tools-core]
 workspace = true
 
@@ -60,5 +63,8 @@ project-excludes = [
   "packages/py/google-rs/src/dbx_tools/google_rs/__init__.py",
   "packages/py/auth/generated-src/dbx_tools/auth/_runtime.js",
   "packages/py/auth/generated-src/dbx_tools/auth/node_bindings.py",
-  "packages/py/auth/generated-src/dbx_tools/auth/__init__.py"
+  "packages/py/auth/generated-src/dbx_tools/auth/__init__.py",
+  "packages/py/models/generated-src/dbx_tools/models/_runtime.js",
+  "packages/py/models/generated-src/dbx_tools/models/node_bindings.py",
+  "packages/py/models/generated-src/dbx_tools/models/__init__.py"
 ]

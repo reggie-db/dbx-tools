@@ -51,8 +51,10 @@ describe("PythonNodeBundle", () => {
         "export async function token(login?: boolean): Promise<string> { return String(login); }",
         "export interface RetryOptions { attempts?: number; }",
         "export interface SessionOptions { host?: string; workspaceId?: string; scopes?: string[]; headers?: Record<string, string>; retry?: RetryOptions; }",
+        "export interface SessionResult { class: string; workspaceId?: string; }",
         'export const SessionOptions = { defaults: () => ({ scopes: ["default"] }) };',
         "export function createConfigured(options: SessionOptions = {}): SessionOptions { return options; }",
+        'export function sessionResult(): SessionResult { return { class: "chat-fast" }; }',
       ].join("\n"),
     );
     const entryDirectory = packageDirectory(directory, "fixture-entry");
@@ -100,6 +102,8 @@ describe("PythonNodeBundle", () => {
     assert.match(bindings, /async def create_configured\(/);
     assert.match(bindings, /\) -> SessionOptionsResponse:/);
     assert.match(bindings, /class SessionOptionsResponse\(TypedDict\):/);
+    assert.match(bindings, /SessionResultResponse = TypedDict\(/);
+    assert.match(bindings, /"class": str,/);
     assert.match(bindings, /options = SessionOptions\(\*\*kwargs\)/);
     assert.match(bindings, /async def replaced\(\) -> str:/);
     assert.match(bindings, /_invoke\("createSession"\)/);
@@ -136,6 +140,42 @@ describe("PythonNodeBundle", () => {
       readFileSync(join(generatedPackageDirectory, "__init__.py"), "utf8"),
       /create_session/,
     );
+  });
+
+  it("binds a portable package subpath while retaining the owning package", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    writeFileSync(
+      join(entryDirectory, "package.json"),
+      JSON.stringify({
+        name: "fixture-entry",
+        type: "module",
+        exports: { ".": "./index.ts", "./python": "./python.ts" },
+      }),
+    );
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      "export function browserOnly(): string { return 'browser'; }\n",
+    );
+    writeFileSync(
+      join(entryDirectory, "python.ts"),
+      "export function portable(): string { return 'portable'; }\n",
+    );
+    writeFixturePyproject(directory, [
+      'package = "fixture-entry"',
+      'entrypoint = "fixture-entry/python"',
+    ]);
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+
+    const bindings = readFileSync(
+      join(directory, "python/src/fixture/runtime/_generated/node_bindings.py"),
+      "utf8",
+    );
+    assert.match(bindings, /Regenerated from fixture-entry\/python/);
+    assert.match(bindings, /async def portable\(\) -> str:/);
+    assert.doesNotMatch(bindings, /browser_only/);
   });
 
   it("keeps generated bindings private when configured", () => {

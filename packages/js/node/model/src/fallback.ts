@@ -16,12 +16,16 @@
  * @module
  */
 
-import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import {
+  ModelClass as ModelClassValues,
+  type ModelClass as ModelClassType,
+  type ServingEndpointSummary,
+} from "@dbx-tools/shared-model/contracts";
 
 import { rankEndpoints } from "./_ranking.ts";
 
-type ModelClass = model.ModelClass;
-const { ModelClass } = model;
+type ModelClass = ModelClassType;
+const ModelClass = ModelClassValues;
 
 /**
  * Small, last-resort set of well-known Foundation Model API endpoint names,

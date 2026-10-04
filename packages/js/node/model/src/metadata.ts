@@ -7,8 +7,8 @@
  *
  * @module
  */
-import { functionUtils } from "@dbx-tools/shared-core";
-import type { ModelStatus, ServingEndpointSummary } from "@dbx-tools/shared-model";
+import * as functionUtils from "@dbx-tools/shared-core/function-utils";
+import type { ModelStatus, ServingEndpointSummary } from "@dbx-tools/shared-model/contracts";
 
 import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
 import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };

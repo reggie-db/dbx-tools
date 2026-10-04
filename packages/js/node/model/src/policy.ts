@@ -1,11 +1,10 @@
 /** TypeScript-owned model-family and serving capability policy. */
 
 import {
-  model,
-  ReasoningEffortSchema,
+  ModelClass,
   type ReasoningEffort,
   type ServingEndpointSummary,
-} from "@dbx-tools/shared-model";
+} from "@dbx-tools/shared-model/contracts";
 
 import { supportsToolsByFamily } from "./classify.ts";
 
@@ -74,7 +73,7 @@ export function modelReasoningEfforts(name: string): ReasoningEffort[] {
   if (normalized.includes("codex") || /(?:^|[-_./])o(?:1|3|4)(?:[-_./]|$)/i.test(name)) {
     efforts = STANDARD;
   }
-  return ReasoningEffortSchema.array().parse(efforts);
+  return efforts;
 }
 
 /** Return whether policy verifies a complete tool-calling round trip. */
@@ -85,7 +84,7 @@ export function modelSupportsTools(name: string): boolean {
 /** Return whether a discovered endpoint can be used for a tool-calling chat. */
 export function endpointSupportsTools(endpoint: ServingEndpointSummary): boolean {
   const embedding =
-    endpoint.task === "llm/v1/embeddings" || endpoint.class === model.ModelClass.Embedding;
+    endpoint.task === "llm/v1/embeddings" || endpoint.class === ModelClass.Embedding;
   const chat = !embedding && (endpoint.task === "llm/v1/chat" || endpoint.class !== undefined);
   return chat && (endpoint.supportsTools ?? modelSupportsTools(endpoint.name));
 }

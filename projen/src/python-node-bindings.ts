@@ -17,6 +17,7 @@ export interface ResolvedPythonNodeBindings {
   readonly bindingsPackageOutput: string;
   readonly bindingsOutput: string;
   readonly functionOverrides: readonly ResolvedPythonNodeFunctionOverride[];
+  readonly entrypoint: string;
   readonly moduleDirectory: string;
   readonly layout: "package" | "submodule";
   readonly private: boolean;
@@ -43,6 +44,8 @@ export function resolvePythonNodeBindings(
   const uv = record(tool.uv, "tool.uv");
   const backend = record(uv["build-backend"], "tool.uv.build-backend");
   const packageName = requiredString(bindings.package, "tool.dbx_tools.node_bindings.package");
+  const entrypoint =
+    optionalString(bindings.entrypoint, "tool.dbx_tools.node_bindings.entrypoint") ?? packageName;
   const layout = nodeBindingsLayout(bindings.layout);
   const moduleName = requiredString(backend["module-name"], "tool.uv.build-backend.module-name");
   const moduleRoot = requiredString(backend["module-root"], "tool.uv.build-backend.module-root");
@@ -59,6 +62,7 @@ export function resolvePythonNodeBindings(
     projectDirectory,
     pyproject,
     package: packageName,
+    entrypoint,
     layout,
     private: optionalBoolean(bindings.private, "tool.dbx_tools.node_bindings.private") ?? false,
     moduleDirectory,

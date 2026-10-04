@@ -26,10 +26,14 @@
  * @module
  */
 
-import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import {
+  ModelClass as ModelClassValues,
+  type ModelClass as ModelClassType,
+  type ServingEndpointSummary,
+} from "@dbx-tools/shared-model/contracts";
 
-const { ModelClass } = model;
-type ModelClass = model.ModelClass;
+type ModelClass = ModelClassType;
+const ModelClass = ModelClassValues;
 
 /** Task hint Databricks stamps on chat completion endpoints. */
 const CHAT_TASK = "llm/v1/chat";

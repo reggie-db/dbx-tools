@@ -29,6 +29,9 @@
     "format": "projen format",
     "model:contracts": "projen model:contracts",
     "model:metadata": "projen model:metadata",
+    "models:python-runtime": "projen models:python-runtime",
+    "models:python-runtime:check": "projen models:python-runtime:check",
+    "models:python-runtime:watch": "projen models:python-runtime:watch",
     "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
@@ -396,7 +399,8 @@
       ]
     },
     "pythonNodeBindings": [
-      "packages/py/auth"
+      "packages/py/auth",
+      "packages/py/models"
     ],
     "tags": []
   },

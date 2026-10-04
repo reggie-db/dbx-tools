@@ -311,6 +311,33 @@
         }
       ]
     },
+    "models:python-runtime": {
+      "name": "models:python-runtime",
+      "description": "Generate Node bindings for Python package models",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/models"
+        }
+      ]
+    },
+    "models:python-runtime:check": {
+      "name": "models:python-runtime:check",
+      "description": "Verify generated Node bindings for Python package models",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/models --check"
+        }
+      ]
+    },
+    "models:python-runtime:watch": {
+      "name": "models:python-runtime:watch",
+      "description": "Regenerate Node bindings for Python package models on changes",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/models"
+        }
+      ]
+    },
     "openapi": {
       "name": "openapi",
       "steps": [
@@ -485,6 +512,9 @@
         },
         {
           "spawn": "auth:python-runtime:check"
+        },
+        {
+          "spawn": "models:python-runtime:check"
         },
         {
           "spawn": "auth:cli-assets:check"

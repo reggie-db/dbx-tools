@@ -18,6 +18,8 @@ export interface PythonNodeFunctionOverride {
 export interface PythonNodeBindingsOptions {
   /** Public Node package specifier, such as `@dbx-tools/auth`. */
   readonly package: string;
+  /** Optional portable package subpath to bind. Defaults to {@link package}. */
+  readonly entrypoint?: string;
   /** Generated bindings own the package or live under `_generated`. Defaults to `submodule`. */
   readonly layout?: "package" | "submodule";
   /** Keep generated symbols out of the generated package `__init__`. Defaults to false. */

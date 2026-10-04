@@ -10,10 +10,14 @@
  * @module
  */
 
-import { model } from "@dbx-tools/shared-model";
+import {
+  ModelClass as ModelClassValues,
+  type ModelClass as ModelClassType,
+} from "@dbx-tools/shared-model/contracts";
 
-type ModelClass = model.ModelClass;
-const { ModelClass, ModelClassSchema } = model;
+type ModelClass = ModelClassType;
+const ModelClass = ModelClassValues;
+const MODEL_CLASSES = new Set<ModelClass>(Object.values(ModelClassValues));
 
 /**
  * Chat capability ladder in descending order - most capable
@@ -50,10 +54,10 @@ export function isChatClass(cls: ModelClass): boolean {
  * `"balanced"` / `"fast"` resolves to the corresponding `chat-*` class.
  */
 export function parseModelClass(value: unknown): ModelClass | null {
-  const exact = ModelClassSchema.safeParse(value);
-  if (exact.success) return exact.data;
-  const prefixed = ModelClassSchema.safeParse(`chat-${value}`);
-  return prefixed.success ? prefixed.data : null;
+  if (typeof value !== "string") return null;
+  if (MODEL_CLASSES.has(value as ModelClass)) return value as ModelClass;
+  const prefixed = `chat-${value}` as ModelClass;
+  return MODEL_CLASSES.has(prefixed) ? prefixed : null;
 }
 
 /**

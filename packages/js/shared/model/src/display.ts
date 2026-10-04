@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { stringUtils } from "@dbx-tools/shared-core";
+import * as stringUtils from "@dbx-tools/shared-core/string-utils";
 
 /**
  * Vendor / namespace prefixes stripped from a tokenized endpoint name

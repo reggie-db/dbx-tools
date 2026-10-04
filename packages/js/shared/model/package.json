@@ -38,6 +38,14 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./contracts": {
+        "types": "./lib/src/contracts.d.ts",
+        "default": "./lib/src/contracts.js"
+      },
+      "./display": {
+        "types": "./lib/src/display.d.ts",
+        "default": "./lib/src/display.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -46,6 +54,8 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./contracts": "./src/contracts.ts",
+    "./display": "./src/display.ts",
     "./package.json": "./package.json"
   },
   "files": [

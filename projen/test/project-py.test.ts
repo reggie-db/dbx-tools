@@ -257,6 +257,7 @@ describe("DBXToolsPythonWorkspace", () => {
             description: "Fixture auth bindings",
             nodeBindings: {
               package: "@fixture/auth",
+              entrypoint: "@fixture/auth/python",
               layout: "package",
               private: true,
               shimRoot: "projen/shims/python-node",
@@ -281,6 +282,7 @@ describe("DBXToolsPythonWorkspace", () => {
           dbx_tools: {
             node_bindings: {
               package: string;
+              entrypoint: string;
               layout: string;
               private: boolean;
               shim_root: string;
@@ -292,6 +294,7 @@ describe("DBXToolsPythonWorkspace", () => {
       };
       assert.deepEqual(pyproject.tool.dbx_tools.node_bindings, {
         package: "@fixture/auth",
+        entrypoint: "@fixture/auth/python",
         layout: "package",
         private: true,
         shim_root: "projen/shims/python-node",

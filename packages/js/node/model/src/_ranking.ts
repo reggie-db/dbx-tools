@@ -1,10 +1,11 @@
 import {
-  display,
-  model,
+  ModelClass as ModelClassValues,
+  type ModelClass as ModelClassType,
   type ModelQuery,
   type RankedModel,
   type ServingEndpointSummary,
-} from "@dbx-tools/shared-model";
+} from "@dbx-tools/shared-model/contracts";
+import { toModelDisplayName } from "@dbx-tools/shared-model/display";
 import Fuse from "fuse.js";
 
 import { classesAtOrBelow, CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./classes.ts";
@@ -17,7 +18,8 @@ import {
 import { modelStatusFor } from "./metadata.ts";
 import { modelFamily, modelReasoningEfforts, modelServiceNames } from "./policy.ts";
 
-type ModelClass = model.ModelClass;
+type ModelClass = ModelClassType;
+const ModelClass = ModelClassValues;
 
 const DEFAULT_FUZZY_THRESHOLD = 0.4;
 interface NativeRankingOptions {
@@ -40,10 +42,10 @@ export function rankEndpoints(
   }));
   const classified = options.modelClass
     ? {
-        [model.ModelClass.ChatThinking]: [],
-        [model.ModelClass.ChatBalanced]: [],
-        [model.ModelClass.ChatFast]: [],
-        [model.ModelClass.Embedding]: [],
+        [ModelClass.ChatThinking]: [],
+        [ModelClass.ChatBalanced]: [],
+        [ModelClass.ChatFast]: [],
+        [ModelClass.Embedding]: [],
         [options.modelClass]: normalized,
       }
     : classifyEndpoints(normalized);
@@ -152,7 +154,7 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
     const profile = entities.map(modelProfile).find(Boolean);
     const summary: ServingEndpointSummary = {
       name,
-      displayName: display.toModelDisplayName(name, providedDisplayName(endpoint, entities)),
+      displayName: toModelDisplayName(name, providedDisplayName(endpoint, entities)),
       ...(family ? { family } : {}),
       ...(stringValue(endpoint.task) ? { task: stringValue(endpoint.task) } : {}),
       ...(stringValue(record(endpoint.state).ready)

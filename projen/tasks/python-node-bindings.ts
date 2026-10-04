@@ -69,10 +69,10 @@ const root = values.root
 const config = resolvePythonNodeBindings(root, values.project);
 const { bindingsOutput, bindingsPackageOutput, projectDirectory, pyproject, runtimeOutput } =
   config;
-const entrypoint = Bun.resolveSync(config.package, projectDirectory);
+const entrypoint = Bun.resolveSync(config.entrypoint, projectDirectory);
 const functions = publicFunctionExports(entrypoint);
 if (functions.length === 0) {
-  throw new Error(`${config.package} exports no plain functions that can be bound to Python`);
+  throw new Error(`${config.entrypoint} exports no plain functions that can be bound to Python`);
 }
 const functionTypes = pythonFunctionTypes(entrypoint, functions);
 applyOptionDefaults(functionTypes.records, await import(pathToFileURL(entrypoint).href));
@@ -164,7 +164,7 @@ const runtimePlugin: BunPlugin | undefined =
       }
     : undefined;
 
-const source = `${config.package} configured by ${relative(root, pyproject)}`;
+const source = `${config.entrypoint} configured by ${relative(root, pyproject)}`;
 await generate();
 
 async function generate(): Promise<void> {
@@ -176,7 +176,7 @@ async function generate(): Promise<void> {
   });
   if (!result.success) {
     for (const message of result.logs) console.error(message);
-    throw new Error(`Could not bundle ${config.package}`);
+    throw new Error(`Could not bundle ${config.entrypoint}`);
   }
   if (result.outputs.length !== 1) {
     throw new Error(`Expected one JavaScript bundle, received ${result.outputs.length}`);
@@ -835,6 +835,22 @@ function pythonOptionalType(type: string): string {
 }
 
 function pythonResponse(response: PythonResponse): string {
+  if (response.fields.some(({ name }) => !isPythonIdentifier(name))) {
+    const fields = response.fields
+      .map(
+        ({ name, required, type }) =>
+          `        ${JSON.stringify(name)}: ${required ? type : `NotRequired[${type}]`},`,
+      )
+      .join("\n");
+    return [
+      `${response.name} = TypedDict(`,
+      `    ${JSON.stringify(response.name)},`,
+      "    {",
+      fields,
+      "    },",
+      ")",
+    ].join("\n");
+  }
   const body = response.fields.length
     ? response.fields
         .map(
@@ -843,6 +859,10 @@ function pythonResponse(response: PythonResponse): string {
         .join("\n")
     : "    pass";
   return `class ${response.name}(TypedDict):\n${body}`;
+}
+
+function isPythonIdentifier(value: string): boolean {
+  return /^[_A-Za-z]\w*$/.test(value) && !PYTHON_KEYWORDS.has(value);
 }
 
 function pythonProtocol(protocol: PythonProtocol): string {

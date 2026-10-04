@@ -223,6 +223,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.nodeBindings) {
       this.uv.file.addOverride("tool.dbx_tools.node_bindings", {
         package: pkg.nodeBindings.package,
+        ...(pkg.nodeBindings.entrypoint ? { entrypoint: pkg.nodeBindings.entrypoint } : {}),
         ...(pkg.nodeBindings.layout ? { layout: pkg.nodeBindings.layout } : {}),
         ...(pkg.nodeBindings.private ? { private: true } : {}),
         ...(pkg.nodeBindings.shimRoot ? { shim_root: pkg.nodeBindings.shimRoot } : {}),

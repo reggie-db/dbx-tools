@@ -537,12 +537,18 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
 // glue. AppKit is a runtime dep here (CacheManager is used directly, not lazy).
 project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/auth@workspace:^",
     "@dbx-tools/shared-model@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
     "fuse.js@^7.4.2",
   );
   p.addDevDeps("cheerio@^1.2.0");
+  p.package.addField("exports", {
+    ".": "./index.ts",
+    "./python": "./src/python.ts",
+    "./package.json": "./package.json",
+  });
 });
 
 // node-databricks: workspace URL/id resolution + cloud provider/region detection (fetches
@@ -783,6 +789,12 @@ project.applyToProjects(root, { identifierName: "fs", tags: "node" }, (p) => {
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
 project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }, (p) => {
   p.addDeps("zod@catalog:");
+  p.package.addField("exports", {
+    ".": "./index.ts",
+    "./contracts": "./src/contracts.ts",
+    "./display": "./src/display.ts",
+    "./package.json": "./package.json",
+  });
 });
 
 // shared-email: browser-safe zod wire contract for the email add-on (message
@@ -1507,6 +1519,27 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
+const pythonNodeBindingDependencies = [
+  "filelock>=3.16,<4",
+  "httpx>=0.28,<1",
+  "pythonmonkey>=1.3,<2",
+];
+const pythonNodeBindings = (
+  packageName: string,
+  entrypoint?: string,
+): NonNullable<project.PythonPackageOptions["nodeBindings"]> => ({
+  package: packageName,
+  ...(entrypoint ? { entrypoint } : {}),
+  layout: "package",
+  shimRoot: "projen/shims/python-node",
+  functionOverrides: [
+    {
+      module: "@dbx-tools/core/file-lock",
+      export: "acquireFileLock",
+      handler: "projen/shims/python-node/file-lock.ts",
+    },
+  ],
+});
 const pythonPackages: project.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
@@ -1514,19 +1547,16 @@ const pythonPackages: project.PythonPackageOptions[] = [
     description:
       "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey",
     internalDependencies: [],
-    dependencies: ["filelock>=3.16,<4", "httpx>=0.28,<1", "pythonmonkey>=1.3,<2"],
-    nodeBindings: {
-      package: "@dbx-tools/auth",
-      layout: "package",
-      shimRoot: "projen/shims/python-node",
-      functionOverrides: [
-        {
-          module: "@dbx-tools/core/file-lock",
-          export: "acquireFileLock",
-          handler: "projen/shims/python-node/file-lock.ts",
-        },
-      ],
-    },
+    dependencies: pythonNodeBindingDependencies,
+    nodeBindings: pythonNodeBindings("@dbx-tools/auth"),
+  },
+  {
+    directory: "models",
+    description:
+      "Python access to Node-owned Databricks model discovery, selection, routing, and metadata",
+    internalDependencies: [],
+    dependencies: pythonNodeBindingDependencies,
+    nodeBindings: pythonNodeBindings("@dbx-tools/model", "@dbx-tools/model/python"),
   },
   {
     directory: "core",

@@ -53,6 +53,37 @@ endpoint:
 - keep local agents and CLIs working with a static fallback when catalogue
   access is unavailable.
 
+## Use The Portable Model Client
+
+```ts
+import { createModelClient } from "@dbx-tools/model";
+
+const models = await createModelClient({
+  auth: { profile: "DEFAULT" },
+  cacheTtlMs: 60_000,
+});
+
+const selected = await models.resolveModel({ explicit: "gpt" });
+const route = await models.route({
+  explicit: selected.modelId,
+  protocol: "responses",
+});
+
+const response = await fetch(route.url, {
+  method: "POST",
+  headers: { ...route.headers, "content-type": "application/json" },
+  body: JSON.stringify({ model: route.modelId, input: "Hello" }),
+});
+```
+
+`createModelClient()` is the portable auth-backed facade used by the generated
+`dbx-tools-models` Python package. It lists and normalizes endpoints, caches one
+catalogue per host, workspace ID, and principal, refreshes once after an
+unmatched fuzzy request, resolves routes, returns complete authentication
+headers, exposes profiles, and returns the package's generated metadata. Its
+portable `@dbx-tools/model/python` entrypoint excludes the AppKit catalogue
+wrapper while reusing the same pure ranking and policy implementation.
+
 ## Select One Model
 
 ```ts
@@ -238,6 +269,8 @@ policy decisions; fallbacks are a last resort.
   headers for calling an endpoint over raw HTTP.
 - `metadata` - build-generated retirement, capability, and rate-limit snapshots
   with cached normalized lookups.
+- `modelClient` - portable authentication-aware discovery, selection, routing,
+  profile, and metadata facade.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.
 - `policy` - family, serving-protocol, tool, and reasoning-effort policy.
 - `fallback` - static fallback model ids per class.

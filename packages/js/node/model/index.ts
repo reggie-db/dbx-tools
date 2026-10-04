@@ -10,7 +10,9 @@ export * as fallback from "./src/fallback.ts";
 export * as invoke from "./src/invoke.ts";
 export * as metadata from "./src/metadata.ts";
 export * as modelCatalog from "./src/model-catalog.ts";
+export * as modelClient from "./src/model-client.ts";
 export * as policy from "./src/policy.ts";
+export * as python from "./src/python.ts";
 export * as resolve from "./src/resolve.ts";
 export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./src/classes.ts";
 export type { EndpointCapabilities, FamilyClass } from "./src/classify.ts";
@@ -21,4 +23,7 @@ export { MODEL_METADATA_TTL_MS, MODEL_RATE_LIMITS_URL, OPENAI_RESPONSES_MODELS_U
 export type { ModelCapabilities, ModelMetadata } from "./src/metadata.ts";
 export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "./src/model-catalog.ts";
 export type { WorkspaceClientLike, ListServingEndpointsOptions, ResolvedModel, ResolveModelOptions, ScoredEndpoint } from "./src/model-catalog.ts";
-export type { ResolveModelInput, ResolvedModelSelection, SelectModelInput, SearchModelsInput } from "./src/resolve.ts";
+export { DEFAULT_MODEL_CLIENT_CACHE_TTL_MS } from "./src/model-client.ts";
+export type { ModelClientOptions, ModelClientStatus, ModelProtocol, ModelRouteInput, ModelRoute, ModelClient } from "./src/model-client.ts";
+export type { SelectModelInput, SearchModelsInput } from "./src/resolve.ts";
+export * from "./exports.ts";
