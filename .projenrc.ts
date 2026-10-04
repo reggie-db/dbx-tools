@@ -1566,9 +1566,12 @@ const pythonPackages: project.PythonPackageOptions[] = [
     dependencies: [
       "fastapi>=0.116,<1",
       "litellm[proxy]==1.99.0",
+      "pillow>=11,<13",
+      "pystray==0.19.5",
     ],
     scripts: {
       "dbx-model-proxy": "dbx_tools.model_proxy.cli:main",
+      "dbx-model-proxy-tray": "dbx_tools.model_proxy.tray:main",
     },
   },
   {

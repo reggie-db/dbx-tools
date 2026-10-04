@@ -31,6 +31,12 @@ class FakeClient:
             "capabilities": {"responses": endpoint["name"] == "chat-model"},
         }
 
+    async def status(self) -> dict[str, Any]:
+        return {"profile": "TEST"}
+
+    async def list_profiles(self, refresh: bool = False) -> list[dict[str, Any]]:
+        return [{"name": "TEST"}]
+
 
 @pytest.mark.asyncio
 async def test_models_preserve_node_ranking_then_append_custom() -> None:
@@ -43,3 +49,11 @@ async def test_models_preserve_node_ranking_then_append_custom() -> None:
         "custom-endpoint",
     ]
     assert models[0]["metadata"]["capabilities"]["responses"] is True
+
+
+@pytest.mark.asyncio
+async def test_runtime_exposes_status_and_profiles() -> None:
+    runtime = ModelProxyRuntime(FakeClient())  # type: ignore[arg-type]
+
+    assert await runtime.status() == {"profile": "TEST"}
+    assert await runtime.profiles() == [{"name": "TEST"}]

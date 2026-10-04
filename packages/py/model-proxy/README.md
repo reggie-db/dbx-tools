@@ -32,6 +32,29 @@ and build-cached capability metadata. Embedding, retired, and unsupported Codex
 families remain available through the OpenAI catalogue but are omitted from the
 Codex extension.
 
+## Service
+
+Install and start the proxy as a per-user background service:
+
+```sh
+dbx-model-proxy service install -- --profile my-workspace --port 4000
+```
+
+The lifecycle includes `start`, `stop`, `restart`, `status`, and `uninstall`,
+with `remove` as an uninstall alias. Configuration and logs default to
+`~/.dbx-tools/model-proxy`. Uninstall retains them unless `--purge` is supplied.
+
+Service installation uses the current package's exact Python environment and
+registers a launchd agent on macOS, a systemd user unit on Linux, or current-user
+scheduled tasks on Windows. `--systray auto` installs the tray when its native
+backend is available. Use `always` to require it or `never` for a headless
+service. The tray uses the dbx-tools icon, opens the local models and API pages,
+switches among configured Databricks profiles, and can stop the service.
+
+The proxy writes service output to `service.log` and tray output to `tray.log`.
+Lifecycle operations fail inside Databricks Apps because host service management
+is unavailable there.
+
 ## Ownership
 
 - `dbx-tools-models` owns authentication, profile selection, endpoint discovery,

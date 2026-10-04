@@ -17,6 +17,7 @@ class ModelProxyRuntime:
 
     def __init__(self, client: ModelClient) -> None:
         self.client = client
+        self._client_lock = asyncio.Lock()
 
     @classmethod
     async def create(cls) -> ModelProxyRuntime:
@@ -59,6 +60,20 @@ class ModelProxyRuntime:
 
     async def lookup(self, query: Mapping[str, Any]) -> list[dict[str, Any]]:
         return await self.client.search_models(dict(query))
+
+    async def status(self) -> dict[str, Any]:
+        return await self.client.status()
+
+    async def profiles(self, *, refresh: bool = False) -> list[dict[str, Any]]:
+        return await self.client.list_profiles(refresh)
+
+    async def switch_profile(self, profile: str | None) -> dict[str, Any]:
+        async with self._client_lock:
+            options = {"auth": {"profile": profile}} if profile is not None else {}
+            replacement = await create_model_client(options)
+            await replacement.list_models(True)
+            self.client = replacement
+            return await replacement.status()
 
 
 async def get_runtime() -> ModelProxyRuntime:

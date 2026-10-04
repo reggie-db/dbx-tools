@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from fastapi import Depends, Query, Request, Response
+from fastapi import Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from .runtime import get_runtime
@@ -33,6 +33,35 @@ def install_models_api() -> None:
     if getattr(app.state, "dbx_models_api", False):
         return
     app.state.dbx_models_api = True
+
+    @app.get("/api/healthz", include_in_schema=False)
+    async def health() -> dict[str, bool]:
+        return {"ready": True}
+
+    @app.get("/api/auth", include_in_schema=False)
+    async def auth_status() -> dict[str, Any]:
+        return {"runtime": await (await get_runtime()).status()}
+
+    @app.get("/api/auth/profiles", include_in_schema=False)
+    async def auth_profiles(refresh: bool = False) -> dict[str, Any]:
+        return {"profiles": await (await get_runtime()).profiles(refresh=refresh)}
+
+    @app.put("/api/auth", include_in_schema=False)
+    async def select_auth(request: Request) -> dict[str, Any]:
+        _require_control_request(request)
+        selection = await request.json()
+        if not isinstance(selection, Mapping):
+            raise HTTPException(status_code=400, detail="auth selection must be an object")
+        kind = selection.get("kind")
+        if kind == "ambient":
+            profile = None
+        elif kind == "profile" and isinstance(selection.get("profile"), str):
+            profile = selection["profile"].strip()
+            if not profile:
+                raise HTTPException(status_code=400, detail="profile must not be empty")
+        else:
+            raise HTTPException(status_code=400, detail="expected ambient or profile selection")
+        return {"runtime": await (await get_runtime()).switch_profile(profile)}
 
     @app.get(
         "/lookup",
@@ -220,3 +249,15 @@ def _headers(response: Response) -> dict[str, str]:
         for name, value in response.headers.items()
         if name.lower() not in {"content-length", "content-type"}
     }
+
+
+def _require_control_request(request: Request) -> None:
+    client = request.client
+    if client is None or client.host not in {"127.0.0.1", "::1", "localhost"}:
+        raise HTTPException(status_code=403, detail="profile switching is loopback-only")
+    if request.headers.get("x-model-proxy-control") != "1":
+        raise HTTPException(status_code=403, detail="missing model proxy control header")
+    origin = request.headers.get("origin")
+    expected = f"{request.url.scheme}://{request.url.netloc}"
+    if origin != expected:
+        raise HTTPException(status_code=403, detail="profile switching requires same origin")

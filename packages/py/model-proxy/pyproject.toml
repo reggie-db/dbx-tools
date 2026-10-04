@@ -11,6 +11,8 @@ license-files = [ "LICENSE" ]
 dependencies = [
   "fastapi>=0.116,<1",
   "litellm[proxy]==1.99.0",
+  "pillow>=11,<13",
+  "pystray==0.19.5",
   "dbx-tools-models @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/models"
 ]
 
@@ -19,6 +21,7 @@ dependencies = [
 
   [project.scripts]
   dbx-model-proxy = "dbx_tools.model_proxy.cli:main"
+  dbx-model-proxy-tray = "dbx_tools.model_proxy.tray:main"
 
 [build-system]
 requires = [ "uv_build>=0.11.28,<0.12.0" ]
