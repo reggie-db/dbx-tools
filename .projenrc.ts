@@ -443,18 +443,15 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDevDeps("@types/proper-lockfile@^4.1.4", "@types/semver@^7.7.1");
 });
 
-// node-auth: dependency-light Databricks and generic OAuth lifecycle. The root
-// surface uses only platform APIs plus node-core's portable file-lock lease.
-// Databricks SDK integration is isolated behind the optional workspace-client
-// subpath so Python/FFI consumers can load the auth engine without the SDK.
+// node-auth: dependency-light Databricks and generic OAuth lifecycle. The
+// package uses only platform APIs plus node-core's portable file-lock lease so
+// Python/FFI consumers can reuse the same engine without an SDK dependency.
 project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
-  projectJs.addExports(p, { "./workspace-client": "./src/_workspace-client.ts" });
   p.addDeps(
     "@dbx-tools/core@workspace:^",
     "oauth4webapi@^3.8.8",
     "open@^11.0.1",
   );
-  projectJs.addOptionalPeer(p, "@databricks/sdk-experimental@catalog:");
 });
 
 // node-appkit: the base for Node-side AppKit helpers and the legacy SDK

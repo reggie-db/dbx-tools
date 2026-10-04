@@ -19,13 +19,9 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@databricks/sdk-experimental": "catalog:",
     "@types/bun": "1.3.14",
     "@types/node": "catalog:",
     "typescript": "^5.9.3"
-  },
-  "peerDependencies": {
-    "@databricks/sdk-experimental": "catalog:"
   },
   "dependencies": {
     "@dbx-tools/core": "workspace:^",
@@ -43,10 +39,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./workspace-client": {
-        "types": "./lib/src/_workspace-client.d.ts",
-        "default": "./lib/src/_workspace-client.js"
-      },
       "./package.json": "./package.json"
     }
   },
@@ -55,7 +47,6 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./workspace-client": "./src/_workspace-client.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -63,11 +54,6 @@
     "src",
     "lib"
   ],
-  "peerDependenciesMeta": {
-    "@databricks/sdk-experimental": {
-      "optional": true
-    }
-  },
   "dbxToolsConfig": {
     "tags": [
       "node"

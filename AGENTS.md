@@ -149,10 +149,9 @@ Primary package areas:
   process access, profile resolution, U2M, M2M, PAT authentication,
   provider-neutral token lifecycle, credential storage, and the lightweight
   Databricks HTTP client. Use `oauth4webapi` for OAuth protocol handling and
-  `open` for browser launch. Keep `@databricks/sdk-experimental` behind the
-  optional `@dbx-tools/auth/workspace-client` subpath so the package root and
-  future Python/FFI consumers do not load the SDK. Its `CredentialStore` and
-  `LockAdapter` contracts remain callback-free and use explicit lease IDs.
+  `open` for browser launch. Do not add a Databricks SDK dependency; callers can
+  apply auth headers to their own client. Its `CredentialStore` and `LockAdapter`
+  contracts remain callback-free and use explicit lease IDs.
   `@dbx-tools/core` owns the Node file-lock implementation and must not depend
   on Rust only for Databricks App detection.
 - `packages/rs/core` retains the Rust authentication implementation for native

@@ -44,23 +44,6 @@ Use `authorizationHeaderForUrl()` or `requestHeadersForUrl()` when applying a
 credential manually. Both return credentials only when the request URL has the
 same origin as the resolved Databricks host.
 
-## WorkspaceClient
-
-The package root does not import the Databricks SDK. Applications that want an
-SDK client can opt into the separate subpath:
-
-```ts
-import { createWorkspaceClient } from "@dbx-tools/auth/workspace-client";
-
-const workspace = await createWorkspaceClient({
-  profile: "DEFAULT",
-  preferUserToMachine: true,
-});
-```
-
-`@databricks/sdk-experimental` is an optional peer dependency and is loaded only
-through this subpath.
-
 ## Portable storage
 
 `CredentialStore` and `LockAdapter` use data records, strings, numbers, and

@@ -92,8 +92,7 @@ await cli.buildProgram().parseAsync(["status"], { from: "user" });
 ```
 
 Applications that need programmatic authentication should import
-[`@dbx-tools/auth`](../../node/auth) directly. Import
-`@dbx-tools/auth/workspace-client` only when the Databricks SDK client is needed.
+[`@dbx-tools/auth`](../../node/auth) directly.
 
 ## Modules
 

@@ -12,7 +12,6 @@ import { find } from "@dbx-tools/path";
 const ROOT = resolve(import.meta.dirname, "../..");
 const ALLOWED = new Set([
   "packages/js/node/appkit/src/databricks.ts",
-  "packages/js/node/auth/src/_workspace-client.ts",
   "packages/js/node/search/src/client.ts",
 ]);
 const SDK_IMPORT = /^\s*import\b[^\n]*["']@databricks\/sdk-experimental["']/m;
