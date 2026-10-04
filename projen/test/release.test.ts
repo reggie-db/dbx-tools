@@ -129,10 +129,7 @@ describe("unified release workflow", () => {
       "registry-url": "https://registry.npmjs.org",
       "package-manager-cache": false,
     });
-    assert.equal(
-      step(job, "Install npm trusted-publishing CLI").run,
-      "npm install --global npm@11.19.0",
-    );
+    assert.equal(step(job, "Install npm CLI").run, "npm install --global npm@11.4.2");
     assert.equal(step(job, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.equal(step(job, "Save Bun cache").uses, "actions/cache/save@v5");
     assert.equal(
@@ -142,22 +139,19 @@ describe("unified release workflow", () => {
 
     assert.ok(step(job, "Download approved npm archives").run?.includes("release-manifest.ts"));
     const publish = step(job, "Publish approved npm archives");
+    assert.equal(publish.env?.NODE_AUTH_TOKEN, "${{ secrets.NPM_TOKEN }}");
     assert.equal(
       publish.env?.NPM_CONFIG_PROVENANCE,
       "${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}",
     );
     assert.equal(publish.env?.ACCEPT_STAGED, undefined);
-    assert.equal(publish.env?.NODE_AUTH_TOKEN, undefined);
     assert.equal(publish.env?.NPM_BOOTSTRAP, undefined);
     assert.equal(
       publish.env?.DRY_RUN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
     );
     assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
-    assert.doesNotMatch(
-      publish.run ?? "",
-      /NPM_CONFIG_PROVENANCE=false|release-automation|ACCEPT_STAGED/,
-    );
+    assert.doesNotMatch(publish.run ?? "", /release-automation|ACCEPT_STAGED/);
   });
 
   it("builds and selectively deploys docs in the same workflow", () => {

@@ -133,9 +133,9 @@ jobs:
           node-version: "24"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Install npm trusted-publishing CLI
-        id: install_npm_trusted-publishing_cli
-        run: npm install --global npm@11.19.0
+      - name: Install npm CLI
+        id: install_npm_cli
+        run: npm install --global npm@11.4.2
       - name: Install
         id: install
         run: bun install
@@ -169,6 +169,7 @@ jobs:
         id: publish_approved_npm_archives
         env:
           RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: ${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
         run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $DRY_RUN

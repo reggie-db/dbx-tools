@@ -922,7 +922,7 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   then upload the complete candidate plus `release-manifest.json` and
   `SHA256SUMS` to a draft GitHub Release. GitHub-hosted publication never rebuilds
   native outputs. Node publishes the exact approved archives in dependency order
-  through npm Trusted Publishing with provenance. Python publishes the exact
+  with `NPM_TOKEN` and GitHub Actions provenance. Python publishes the exact
   approved distributions through package-specific PyPI trusted publishers.
   `Cargo.lock` and `--locked` keep local dependency resolution reproducible.
   Local macOS packaging builds one host `<crate>-uniffi-bindgen` generator and
@@ -2489,18 +2489,18 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   During local release preparation, the npm/Verdaccio and Python/devpi publishers run in
   parallel because they mutate disjoint JS and Python package trees; each still
   completes its own build before uploading.
-  GitHub's `release.yml` uses npm Trusted Publishing with OIDC and enables npm
-  provenance for public npmjs publication, including native archives and UniFFI
-  facades. Do not restore `NPM_TOKEN` or `NODE_AUTH_TOKEN` to the production
-  workflow. Production npm publication is OIDC-only: do not add a token
-  bootstrap input, staged-publish fallback, or package creation to the release
-  workflow. Every npm package must authorize `reggie-db/dbx-tools` and
-  `release.yml` as a trusted publisher with direct `npm publish` permission
-  before its first promoted release. New packages use npm's pending trusted
-  publisher administration once, outside GitHub Actions. npm stage approval and
-  trust administration require interactive npm authentication and 2FA; they are
-  not release workflow jobs. Local Verdaccio publication must not enable
-  provenance because Verdaccio does not support it.
+  GitHub's `release.yml` publishes npm packages directly with the repository
+  `NPM_TOKEN` secret. Keep that token granular, limited to the `@dbx-tools`
+  scope, read-write, and configured to bypass publish-time 2FA. The workflow
+  requests an Actions ID token only to generate npm provenance for production
+  packages published from GitHub Actions. It pins npm `11.4.2`, which supports
+  provenance but predates npm's trusted-publisher registry authentication, so
+  `NODE_AUTH_TOKEN` remains the registry credential. The workflow does not use
+  npm Trusted Publishing or fall back to staged publication. New packages follow
+  the same direct `npm publish` path as existing packages. Rotate the token when
+  npm requires it and update the repository secret without changing the release
+  workflow. Local Verdaccio publication uses its configured local credentials
+  and does not enable provenance.
 - **The release workflow is testable without publication.** `release.yml`
   accepts a verified published tag through `workflow_dispatch` and defaults to
   `dry_run: true`. It revalidates the approved candidate and exercises exact npm
