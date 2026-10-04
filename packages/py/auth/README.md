@@ -11,7 +11,7 @@ Python supplies host capabilities through small protocols:
 - `TokenProvider` acquires, refreshes, and interactively logs in credentials.
 - `CredentialStore` persists tokens and returns explicit lock leases.
 - `MemoryCredentialStore` and `FileCredentialStore` use the reusable lease and
-  file adapters from `dbx-tools-js-runtime`.
+  file adapters from `dbx-tools-node-bindings`.
 - `DatabricksCliProvider` uses the installed Databricks CLI through
   `dbx-tools-core` subprocess resolution.
 - `create_databricks_cli_auth()` applies the same JavaScript profile-selection

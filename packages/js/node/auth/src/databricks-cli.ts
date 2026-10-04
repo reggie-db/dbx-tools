@@ -1,4 +1,6 @@
 import { exec } from "@dbx-tools/core";
+import { process as processBinding } from "@dbx-tools/bindings";
+import { stringUtils } from "@dbx-tools/shared-core";
 
 import { AuthError } from "./errors.ts";
 import type { Token, TokenProvider } from "./types.ts";
@@ -30,11 +32,10 @@ export async function databricksCliLogin(
   timeoutMs: number,
   executable = process.env.DATABRICKS_CLI_PATH ?? "databricks",
 ): Promise<void> {
-  const result = await exec.spawn(
-    executable,
-    ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`],
-    { stdin: "inherit", stdout: "inherit", stderr: "capture" },
-  );
+  const result = await processBinding.runProcess({
+    command: executable,
+    args: ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`],
+  });
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
 }
@@ -47,16 +48,12 @@ export async function databricksCliToken(
 ): Promise<Token> {
   const args = ["auth", "token", "--profile", profile, "--output", "json"];
   if (forceRefresh) args.push("--force-refresh");
-  const result = await exec.spawn(executable, args, {
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "capture",
-  });
+  const result = await processBinding.runProcess({ command: executable, args });
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth token exited ${result.exitCode}`);
   let value: Record<string, unknown>;
   try {
-    value = JSON.parse(result.stdout) as Record<string, unknown>;
+    value = JSON.parse(result.stdout ?? "") as Record<string, unknown>;
   } catch (cause) {
     throw new AuthError("cli", "Databricks CLI token output was not JSON", { cause });
   }
@@ -100,5 +97,5 @@ export class DatabricksCliProvider implements TokenProvider {
 }
 
 function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
+  return stringUtils.trimToNull(value) ?? undefined;
 }

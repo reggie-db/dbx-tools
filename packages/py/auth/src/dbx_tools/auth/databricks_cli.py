@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 from typing import Any
 
-from dbx_tools.core.bin import execute
+from dbx_tools.node_bindings import run_process
 
 from .types import Token
 
@@ -22,19 +21,21 @@ class DatabricksCliProvider:
         return await self._token()
 
     async def login(self, timeout_ms: int) -> Token:
-        process = await execute(
+        result = await run_process(
             self.executable,
-            "auth",
-            "login",
-            "--profile",
-            self.profile,
-            "--timeout",
-            f"{max(1, (timeout_ms + 999) // 1000)}s",
-            stderr=asyncio.subprocess.PIPE,
+            [
+                "auth",
+                "login",
+                "--profile",
+                self.profile,
+                "--timeout",
+                f"{max(1, (timeout_ms + 999) // 1000)}s",
+            ],
         )
-        _, stderr = await process.communicate()
-        if process.returncode != 0:
-            raise RuntimeError(_error(stderr, f"databricks auth login exited {process.returncode}"))
+        if result["exitCode"] != 0:
+            raise RuntimeError(
+                result.get("stderr") or f"databricks auth login exited {result['exitCode']}",
+            )
         return await self._token()
 
     async def refresh(self, token: Token) -> Token:
@@ -48,19 +49,14 @@ class DatabricksCliProvider:
         args = ["auth", "token", "--profile", self.profile, "--output", "json"]
         if force_refresh:
             args.append("--force-refresh")
-        process = await execute(
-            self.executable,
-            *args,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-        if process.returncode != 0:
-            raise RuntimeError(_error(stderr, f"databricks auth token exited {process.returncode}"))
+        result = await run_process(self.executable, args)
+        if result["exitCode"] != 0:
+            raise RuntimeError(
+                result.get("stderr") or f"databricks auth token exited {result['exitCode']}",
+            )
         try:
-            value = json.loads((stdout or b"").decode())
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            value = json.loads(result.get("stdout", ""))
+        except json.JSONDecodeError as error:
             raise RuntimeError("Databricks CLI token output was not JSON") from error
         access_token = _string(value.get("access_token") or value.get("accessToken"))
         if not access_token:
@@ -78,11 +74,6 @@ class DatabricksCliProvider:
         if expiry:
             token["expiry"] = expiry
         return token
-
-
-def _error(value: bytes | None, fallback: str) -> str:
-    message = (value or b"").decode(errors="replace").strip()
-    return message or fallback
 
 
 def _string(value: Any) -> str | None:

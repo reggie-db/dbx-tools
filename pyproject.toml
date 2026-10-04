@@ -39,7 +39,7 @@ workspace = true
 [tool.uv.sources.dbx-tools-google-rs]
 workspace = true
 
-[tool.uv.sources.dbx-tools-js-runtime]
+[tool.uv.sources.dbx-tools-node-bindings]
 workspace = true
 
 [tool.uv.sources.dbx-tools-auth]

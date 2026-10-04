@@ -55,6 +55,8 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "Node local-disk implementation of the dbx-tools browser-safe filesystem contract",
   "packages/js/node/genie": "Server-side Databricks Genie chat drivers",
   "packages/js/node/google-rs": "Node bindings for dbx-tools-google",
+  "packages/js/node/bindings":
+    "Cross-runtime process and HTTP host bindings for Node.js and embedded JavaScript",
   "packages/js/node/model": "Workspace-aware Databricks Model Serving selection",
   "packages/js/node/path":
     "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
@@ -114,6 +116,7 @@ const SHARED_CORE_DEPENDENT_PATHS = [
   "packages/js/node/email",
   "packages/js/node/fs",
   "packages/js/node/genie",
+  "packages/js/node/bindings",
   "packages/js/node/model",
   "packages/js/node/path",
   "packages/js/node/postgres",
@@ -453,9 +456,18 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
 project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/bindings@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
     "oauth4webapi@^3.8.8",
     "open@^11.0.1",
   );
+});
+
+// node-bindings: host implementations behind cross-runtime data-only
+// process and HTTP contracts. Keep capability policy in the consuming package;
+// this package only translates portable records onto Node/Bun APIs.
+project.applyToProjects(root, { identifierName: "bindings", tags: "node" }, (p) => {
+  p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-core@workspace:^");
 });
 
 // node-appkit: the base for Node-side AppKit helpers and the legacy SDK
@@ -1489,16 +1501,17 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
 const pythonPackages: project.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
-    directory: "js-runtime",
+    directory: "node-bindings",
     description:
-      "Reusable PythonMonkey runtime loading and library-backed host shims for dbx-tools Python packages",
-    dependencies: ["filelock>=3.16,<4", "pythonmonkey>=1.3,<2"],
+      "Python host bindings and PythonMonkey runtime loading for dbx-tools packages",
+    internalDependencies: ["core"],
+    dependencies: ["filelock>=3.16,<4", "httpx>=0.28,<1", "pythonmonkey>=1.3,<2"],
   },
   {
     directory: "auth",
     description:
       "PythonMonkey bridge to the shared dbx-tools authentication lifecycle",
-    internalDependencies: ["core", "js-runtime"],
+    internalDependencies: ["node-bindings"],
     dependencies: [],
   },
   {
@@ -1557,7 +1570,7 @@ new project.DBXToolsPythonWorkspace(root, {
 root.addTask("auth:python-bridge", {
   description: "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
   exec: [
-    "bun projen/tasks/python-js-runtime.ts",
+    "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/src/_python-bridge.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
     "--source '@dbx-tools/auth for PythonMonkey'",
@@ -1566,7 +1579,7 @@ root.addTask("auth:python-bridge", {
 const authPythonBridgeCheck = root.addTask("auth:python-bridge:check", {
   description: "Verify the committed PythonMonkey authentication bundle is current",
   exec: [
-    "bun projen/tasks/python-js-runtime.ts",
+    "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/src/_python-bridge.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
     "--source '@dbx-tools/auth for PythonMonkey'",

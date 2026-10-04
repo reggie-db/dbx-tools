@@ -9,8 +9,7 @@ requires-python = ">=3.11,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
 dependencies = [
-  "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core",
-  "dbx-tools-js-runtime @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/js-runtime"
+  "dbx-tools-node-bindings @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/node-bindings"
 ]
 
   [project.urls]

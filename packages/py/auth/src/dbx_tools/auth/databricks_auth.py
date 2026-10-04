@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from dbx_tools.js_runtime import read_text
+from dbx_tools.node_bindings import read_text
 
 from .client import _RUNTIME, AuthClient
 from .databricks_cli import DatabricksCliProvider

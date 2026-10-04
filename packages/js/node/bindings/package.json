@@ -1,10 +1,10 @@
 {
-  "name": "@dbx-tools/auth",
-  "description": "Persistent Databricks authentication with CLI-first OAuth, profile resolution, and portable storage adapters",
+  "name": "@dbx-tools/bindings",
+  "description": "Cross-runtime process and HTTP host bindings for Node.js and embedded JavaScript",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
-    "directory": "packages/js/node/auth"
+    "directory": "packages/js/node/bindings"
   },
   "scripts": {
     "build": "projen build",
@@ -24,11 +24,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/bindings": "workspace:^",
     "@dbx-tools/core": "workspace:^",
-    "@dbx-tools/shared-core": "workspace:^",
-    "oauth4webapi": "^3.8.8",
-    "open": "^11.0.1"
+    "@dbx-tools/shared-core": "workspace:^"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

@@ -1,7 +1,7 @@
-# `dbx-tools-js-runtime`
+# `dbx-tools-node-bindings`
 
-Reusable Python host capabilities for dbx-tools packages that execute bundled
-TypeScript through PythonMonkey.
+Python host bindings for dbx-tools packages that execute bundled TypeScript
+through PythonMonkey.
 
 The package keeps cross-language plumbing out of capability packages:
 
@@ -12,6 +12,9 @@ The package keeps cross-language plumbing out of capability packages:
   file access without blocking the event loop.
 - `open_browser()` delegates browser launch to Python's maintained `webbrowser`
   integration.
+- `run_process()` maps plain arguments onto `dbx-tools-core` executable
+  resolution and asyncio subprocesses.
+- `execute_http()` maps plain arguments onto an HTTPX async client.
 
 Capability packages still own their contracts and generated JavaScript entry
 points. This package owns only reusable Python host behavior.
@@ -19,7 +22,7 @@ points. This package owns only reusable Python host behavior.
 ## Example
 
 ```python
-from dbx_tools.js_runtime import require_runtime
+from dbx_tools.node_bindings import require_runtime
 
 runtime = require_runtime(__file__)
 value = await runtime["run"]()
@@ -29,7 +32,7 @@ Generate committed bundles through the shared Projen task rather than writing a
 package-specific bundler:
 
 ```sh
-bun projen/tasks/python-js-runtime.ts \
+bun projen/tasks/python-node-bindings.ts \
   --entry packages/js/node/example/src/_python-bridge.ts \
   --output packages/py/example/src/dbx_tools/example/_runtime.js \
   --source '@dbx-tools/example for PythonMonkey'

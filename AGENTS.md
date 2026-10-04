@@ -154,16 +154,20 @@ Primary package areas:
   contracts remain callback-free and use explicit lease IDs.
   `@dbx-tools/core` owns the Node file-lock implementation and must not depend
   on Rust only for Databricks App detection.
-- `packages/py/js-runtime` owns reusable Python host adapters for packages that
-  execute committed TypeScript bundles through PythonMonkey. It provides the
-  runtime loader, `filelock`-backed lease locks, in-process async lease locks,
-  non-blocking JSON/text file access, atomic writes, and `webbrowser` launch.
-  Add generic host behavior there instead of copying it into each Python
-  capability package. Generate bundles with
-  `projen/tasks/python-js-runtime.ts`; package tasks must check committed output
-  before tests and release.
+- `packages/js/node/bindings` owns data-only process and HTTP host bindings for
+  Node.js, Bun, and embedded JavaScript. Its Node implementation reuses
+  `@dbx-tools/core` process execution and `@dbx-tools/shared-core` string
+  normalization. Keep capability policy out of this package.
+- `packages/py/node-bindings` owns the matching Python host adapters for
+  packages that execute committed TypeScript bundles through PythonMonkey. It
+  provides the runtime loader, process and HTTP execution, `filelock`-backed
+  lease locks, in-process async lease locks, non-blocking JSON/text file access,
+  atomic writes, and `webbrowser` launch. Add generic host behavior there
+  instead of copying it into each Python capability package. Generate bundles
+  with `projen/tasks/python-node-bindings.ts`; package tasks must check committed
+  output before tests and release.
 - `packages/py/auth` executes the provider-neutral `@dbx-tools/auth` lifecycle
-  through a committed PythonMonkey bundle and depends on `dbx-tools-js-runtime`
+  through a committed PythonMonkey bundle and depends on `dbx-tools-node-bindings`
   for host adapters. Keep token refresh, check-lock-recheck coordination, login
   policy, rejected-token handling, and profile-selection rules in the
   JavaScript source of truth. Its Python Databricks CLI provider uses

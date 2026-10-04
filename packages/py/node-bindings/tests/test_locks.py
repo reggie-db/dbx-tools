@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from dbx_tools.js_runtime import FileLeaseLocks, MemoryLeaseLocks
+from dbx_tools.node_bindings import FileLeaseLocks, MemoryLeaseLocks
 
 
 @pytest.mark.parametrize("kind", ["memory", "file"])

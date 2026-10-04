@@ -39,7 +39,7 @@ const bun = (
     };
   }
 ).Bun;
-if (!bun) throw new Error("python-js-runtime must run with Bun");
+if (!bun) throw new Error("python-node-bindings must run with Bun");
 
 const result = await bun.build({
   entrypoints: [entrypoint],
@@ -57,7 +57,7 @@ if (result.outputs.length !== 1) {
 
 const body = await result.outputs[0].text();
 const generated = `${header({
-  tool: "projen/tasks/python-js-runtime.ts",
+  tool: "projen/tasks/python-node-bindings.ts",
   source: values.source,
 })}\n${body}`;
 const destination = relative(root, output);

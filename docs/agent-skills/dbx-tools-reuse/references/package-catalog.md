@@ -19,6 +19,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
 - `@dbx-tools/auth` - Persistent Databricks authentication for Node.js and Bun without a native binding requirement. Source: `packages/js/node/auth`.
 - `@dbx-tools/auth-gate` - Passwordless authentication runtime built on Better Auth, email OTP, passkeys, and caller-provided identity policy and delivery. Source: `packages/js/node/auth-gate`.
+- `@dbx-tools/bindings` - Data-only process and HTTP host bindings for Node.js, Bun, and embedded JavaScript runtimes. Source: `packages/js/node/bindings`.
 - `@dbx-tools/core` - Node-only core helpers for layered configuration, binary installation, process execution, locking, and project discovery. Source: `packages/js/node/core`.
 - `@dbx-tools/core-rs` - Generated Node bindings for Databricks authentication, runtime utilities, and Lakebase address parsing from the dbx-tools-core Rust crate. Source: `packages/js/node/core-rs`.
 - `@dbx-tools/databricks` - Databricks workspace, filesystem, cloud, and network utilities. Source: `packages/js/node/databricks`.
@@ -47,7 +48,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `dbx-tools-core-rs` - Generated Python bindings for Databricks authentication, runtime utilities, and Lakebase address parsing from the dbx-tools-core Rust crate. Source: `packages/py/core-rs`.
 - `dbx-tools-google-rs` - Generated Python bindings for Google Application Default Credentials from the dbx-tools-google Rust crate. Source: `packages/py/google-rs`.
 - `dbx-tools-graphiti` - Native launcher for Graphiti with local Neo4j and dbx-model-proxy processes configured for Databricks Model Serving. It runs directly on the host without Docker, Podman, or another container runtime. Source: `packages/py/graphiti`.
-- `dbx-tools-js-runtime` - Reusable Python host capabilities for dbx-tools packages that execute bundled TypeScript through PythonMonkey. Source: `packages/py/js-runtime`.
+- `dbx-tools-node-bindings` - Python host bindings for dbx-tools packages that execute bundled TypeScript through PythonMonkey. Source: `packages/py/node-bindings`.
 - `dbx-tools-postgres` - Python Lakebase/Postgres connection setup, advisory locks, and topic fan-out for services that already hold a Databricks WorkspaceClient. This package is the Python counterpart to @dbx-tools/postgres. Lakebase address parsing comes directly from the generated dbx-tools-core-rs Rust bindings. Source: `packages/py/postgres`.
 
 ## Rust

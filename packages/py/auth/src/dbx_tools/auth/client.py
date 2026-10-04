@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from dbx_tools.js_runtime import require_runtime
+from dbx_tools.node_bindings import require_runtime
 
 from .types import AccessToken, AuthOptions, CredentialStore, Token, TokenProvider
 

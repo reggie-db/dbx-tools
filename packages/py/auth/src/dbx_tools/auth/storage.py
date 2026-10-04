@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from dbx_tools.js_runtime import (
+from dbx_tools.node_bindings import (
     FileLeaseLocks,
     MemoryLeaseLocks,
     atomic_write_json,

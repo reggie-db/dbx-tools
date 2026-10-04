@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dbx_tools.js_runtime import browser
+from dbx_tools.node_bindings import browser
 
 
 async def test_open_browser_uses_standard_library(monkeypatch) -> None:
