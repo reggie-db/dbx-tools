@@ -528,6 +528,7 @@ export function at<T>(index: number, ...sources: readonly Source<T>[]): T | unde
   return undefined;
 }
 
+/** Normalize one value or an existing value list into a value list. */
 export function toOneOrMany<T>(input: T | OneOrMany<T>): OneOrMany<T> {
   return Array.isArray(input) ? input : [input];
 }
@@ -1407,6 +1408,7 @@ function toEpochMs(value: unknown): number | undefined {
  */
 export type DeepEqualComparator = (a: unknown, b: unknown) => boolean | undefined;
 
+/** Compare nested values structurally with an optional recursive override. */
 export function deepEqual(a: unknown, b: unknown, comparator?: DeepEqualComparator): boolean {
   if (comparator) {
     const decided = comparator(a, b);

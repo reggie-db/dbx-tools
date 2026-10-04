@@ -72,6 +72,7 @@ export async function mapConcurrent<T, R>(
   throw failures[0]!.reason;
 }
 
+/** Select a bounded retry delay, clamping attempts to the configured schedule. */
 export function boundedRetryDelay(
   attempt: number,
   delaysMs: readonly number[] = DEFAULT_RETRY_DELAYS_MS,

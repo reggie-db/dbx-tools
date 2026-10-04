@@ -108,6 +108,7 @@ const IDENTIFIER_DEFAULTS: ResolvedIdentifierOptions = {
   delimiter: "-",
 };
 
+/** Yield normalized tokens using explicit casing, URI, email, and deduplication rules. */
 export function* tokenizeWithOptions(
   options: TokenizeOptions,
   ...values: unknown[]
@@ -145,6 +146,7 @@ export function* tokenizeWithOptions(
   }
 }
 
+/** Yield normalized tokens using the default tokenization rules. */
 export function* tokenize(...values: unknown[]): Generator<string> {
   yield* tokenizeWithOptions({}, ...values);
 }
@@ -186,6 +188,7 @@ export function toIdentifierWithOptions(options: IdentifierOptions, ...values: u
   return tokens.join(opts.delimiter);
 }
 
+/** Convert arbitrary values into a normalized camel-case identifier. */
 export function toIdentifier(...values: unknown[]): string {
   return toIdentifierWithOptions({}, ...values);
 }
@@ -199,6 +202,7 @@ export function toSlugWithOptions(options: KeyOptions, ...values: unknown[]): st
   return toIdentifierWithOptions({ ...options, delimiter: "-" }, ...values);
 }
 
+/** Convert arbitrary values into a normalized hyphen-delimited slug. */
 export function toSlug(...values: unknown[]): string {
   return toSlugWithOptions({}, ...values);
 }

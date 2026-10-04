@@ -3,6 +3,7 @@ import * as oauth from "oauth4webapi";
 import { AuthError } from "./errors.ts";
 import type { Token, TokenProvider } from "./types.ts";
 
+/** Client-credentials inputs and transport options for Databricks OAuth. */
 export interface DatabricksServicePrincipalConfig {
   tokenEndpoint: string;
   clientId: string;
