@@ -30,7 +30,6 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseEnv } from "node:util";
-import { isDatabricksAppEnvironment } from "@dbx-tools/core-rs";
 import { json, log, object, stringUtils } from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -251,11 +250,20 @@ export function getBundlePath(data: Record<string, unknown>, path: string): stri
 export function isDatabricksAppEnv(
   source: Record<string, string | undefined> = process.env,
 ): boolean {
-  return isDatabricksAppEnvironment(
-    new Map(
-      Object.entries(source).filter((entry): entry is [string, string] => entry[1] !== undefined),
-    ),
-  );
+  const override = object.toBoolean(source.DBX_TOOLS_DATABRICKS_APP_ENV);
+  if (override !== undefined) return override;
+  const name = source.DATABRICKS_APP_NAME?.trim();
+  const host = source.DATABRICKS_HOST?.trim();
+  const port = source.DATABRICKS_APP_PORT?.trim();
+  if (!name || /\$\{[^}]+\}/.test(name) || !host || !port || !/^\d+$/.test(port)) return false;
+  const parsedPort = Number(port);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT) return false;
+  try {
+    const url = new URL(host);
+    return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 /** Exact, uppercase, and tokenized-uppercase names for a human-friendly key. */

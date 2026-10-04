@@ -1,0 +1,79 @@
+import type { CredentialStore, LockAdapter, Token } from "./types.ts";
+
+/** Process-local generic lease registry used by the in-memory store. */
+export class MemoryLockAdapter implements LockAdapter {
+  readonly #tails = new Map<string, Promise<void>>();
+  readonly #leases = new Map<string, () => void>();
+  #sequence = 0;
+
+  async acquire(key: string, timeoutMs: number): Promise<string> {
+    const previous = this.#tails.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.then(() => current);
+    this.#tails.set(key, tail);
+    await withTimeout(previous, timeoutMs, `Timed out waiting for lock ${key}`);
+    const lease = `${++this.#sequence}:${key}`;
+    this.#leases.set(lease, () => {
+      release();
+      this.#leases.delete(lease);
+      if (this.#tails.get(key) === tail) this.#tails.delete(key);
+    });
+    return lease;
+  }
+
+  async release(lease: string): Promise<void> {
+    this.#leases.get(lease)?.();
+  }
+}
+
+/** Process-local credential store with per-key refresh locks. */
+export class MemoryCredentialStore implements CredentialStore {
+  readonly #tokens = new Map<string, Token>();
+
+  constructor(private readonly locks: LockAdapter = new MemoryLockAdapter()) {}
+
+  async load(key: string): Promise<Token | undefined> {
+    const token = this.#tokens.get(key);
+    return token ? structuredClone(token) : undefined;
+  }
+
+  async prepareWrite(): Promise<void> {}
+
+  async save(key: string, token: Token): Promise<void> {
+    this.#tokens.set(key, structuredClone(token));
+  }
+
+  async remove(key: string): Promise<void> {
+    this.#tokens.delete(key);
+  }
+
+  acquireLock(key: string, timeoutMs: number): Promise<string> {
+    return this.locks.acquire(key, timeoutMs);
+  }
+
+  releaseLock(lease: string): Promise<void> {
+    return this.locks.release(lease);
+  }
+
+  name(): string {
+    return "memory";
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) throw new TypeError("timeoutMs must be non-negative");
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}

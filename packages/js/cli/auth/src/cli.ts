@@ -2,12 +2,12 @@
  * `dbx auth` Commander program for Databricks OAuth.
  *
  * The command delegates profile resolution, browser OAuth, token refresh,
- * locking, and credential storage to `@dbx-tools/core-rs`.
+ * locking, and credential storage to `@dbx-tools/auth`.
  *
  * @module
  */
 
-import * as databricks from "@dbx-tools/core-rs";
+import * as databricks from "@dbx-tools/auth";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 
@@ -67,14 +67,16 @@ function collectScopes(value: string, previous: string[] = []): string[] {
   return [...previous, ...stringUtils.parseList(value)];
 }
 
-/** Parse a decimal integer while preserving the full UniFFI integer range. */
-function parseInteger(value: string | bigint, name: string, signed: boolean): bigint {
+/** Parse a decimal integer for lifecycle timeout configuration. */
+function parseInteger(value: string | number, name: string, signed: boolean): number {
   const text = String(value).trim();
   const pattern = signed ? /^-?\d+$/ : /^\d+$/;
   if (!pattern.test(text)) {
     throw new InvalidArgumentError(`${name} must be a ${signed ? "" : "non-negative "}integer`);
   }
-  return BigInt(text);
+  const parsed = Number(text);
+  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError(`${name} is outside the safe integer range`);
+  return parsed;
 }
 
 /** Translate the CLI storage name to the generated UniFFI enum. */
@@ -98,8 +100,6 @@ function storageName(storage: databricks.Storage): StorageName {
       return "memory";
     case databricks.Storage.File:
       return "file";
-    default:
-      throw new Error(`Unknown Databricks auth storage value: ${storage}`);
   }
 }
 

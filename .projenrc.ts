@@ -39,6 +39,8 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "AppKit plugin and server-side toolkit for hosting Mastra agents in Databricks Apps",
   "packages/js/node/appkit-web-search":
     "Server-side web search runtime, Mastra tools, and AppKit plugin",
+  "packages/js/node/auth":
+    "Persistent Databricks authentication with CLI-first OAuth, profile resolution, and portable storage adapters",
   "packages/js/node/auth-gate":
     "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
   "packages/js/node/core":
@@ -431,7 +433,6 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
     "./project-utils": "./src/project-utils.ts",
   });
   p.addDeps(
-    "@dbx-tools/core-rs@workspace:^",
     "extract-zip@^2.0.1",
     "proper-lockfile@^4.1.2",
     "semver@^7.7.3",
@@ -440,6 +441,16 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
     "zod@catalog:",
   );
   p.addDevDeps("@types/proper-lockfile@^4.1.4", "@types/semver@^7.7.1");
+});
+
+// node-auth: dependency-light Databricks and generic OAuth lifecycle. The root
+// surface uses only platform APIs plus node-core's portable file-lock lease.
+// Databricks SDK integration is isolated behind the optional workspace-client
+// subpath so Python/FFI consumers can load the auth engine without the SDK.
+project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
+  projectJs.addExports(p, { "./workspace-client": "./src/_workspace-client.ts" });
+  p.addDeps("@dbx-tools/core@workspace:^");
+  projectJs.addOptionalPeer(p, "@databricks/sdk-experimental@catalog:");
 });
 
 // node-appkit: the base for Node-side AppKit helpers and the legacy SDK
@@ -470,10 +481,10 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 });
 
 // cli-auth: the `dbx auth` OAuth command group. Commander comes from the cli
-// tag, and the native OAuth implementation stays in the generated Databricks binding.
+// tag, while @dbx-tools/auth owns profile selection, OAuth, locking, and storage.
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
   p.package.addField("description", "Commander CLI for Databricks OAuth");
-  p.addDeps("@dbx-tools/core-rs@workspace:^");
+  p.addDeps("@dbx-tools/auth@workspace:^");
 });
 
 // cli-model-proxy: keeps direct native proxy forwarding lazy while adding the

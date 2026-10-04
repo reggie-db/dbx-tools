@@ -77,6 +77,12 @@ export interface FileLockOptions {
   onWait?: (acquisition: FileLockAcquisition) => void;
 }
 
+/** Explicit cross-process lease returned by {@link acquireFileLock}. */
+export interface FileLockLease extends FileLockAcquisition {
+  /** Release the held lock. Repeated calls are safe. */
+  release(): Promise<void>;
+}
+
 type FlockFn = (fd: number, operation: number) => number;
 
 interface BunFfiModule {
@@ -140,6 +146,58 @@ export async function withFileLock<T>(
   }
 
   throw new Error("withFileLock: no lock backend available");
+}
+
+/**
+ * Acquire a cross-process lock and return an explicit lease.
+ *
+ * Prefer {@link withFileLock} for ordinary JavaScript callers. This lower-level
+ * shape exists for storage adapters and cross-language bridges that cannot
+ * conveniently pass an async callback through their FFI boundary.
+ */
+export async function acquireFileLock(
+  key: unknown,
+  options: FileLockOptions = {},
+): Promise<FileLockLease> {
+  let acquisition: FileLockAcquisition | undefined;
+  let resolveAcquired!: () => void;
+  let rejectAcquired!: (error: unknown) => void;
+  let resolveRelease!: () => void;
+  const acquired = new Promise<void>((resolve, reject) => {
+    resolveAcquired = resolve;
+    rejectAcquired = reject;
+  });
+  const released = new Promise<void>((resolve) => {
+    resolveRelease = resolve;
+  });
+  const run = withFileLock(
+    key,
+    async () => {
+      resolveAcquired();
+      await released;
+    },
+    {
+      ...options,
+      onAcquire: (value) => {
+        acquisition = value;
+        options.onAcquire?.(value);
+      },
+    },
+  );
+  void run.catch(rejectAcquired);
+  await acquired;
+  if (!acquisition) throw new Error("File-lock backend was not recorded");
+
+  let active = true;
+  return {
+    ...acquisition,
+    async release() {
+      if (!active) return;
+      active = false;
+      resolveRelease();
+      await run;
+    },
+  };
 }
 
 /** Canonical filesystem-safe id for a lock key. */

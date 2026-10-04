@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   type AccessToken,
+  AuthKind,
   type DatabricksAuthOptions,
   type PersistentAuthLike,
   Storage,
-} from "@dbx-tools/core-rs";
+} from "@dbx-tools/auth";
 
 import { buildProgram } from "../src/cli.ts";
 
@@ -43,6 +44,21 @@ function fakeAuth(calls: string[]): PersistentAuthLike {
     async token(login) {
       calls.push(`token:${String(login)}`);
       return TOKEN;
+    },
+    async authorizationHeaderForUrl() {
+      return "Bearer access";
+    },
+    async requestHeadersForUrl() {
+      return { authorization: "Bearer access" };
+    },
+    principal() {
+      return "TEST";
+    },
+    workspaceId() {
+      return undefined;
+    },
+    authKind() {
+      return AuthKind.UserToMachine;
     },
   };
 }
@@ -171,9 +187,9 @@ describe("auth CLI", () => {
     assert.equal(capturedOptions?.preferUserToMachine, false);
     assert.equal(capturedOptions?.auth?.callbackImageSrc, "data:image/svg+xml,logo");
     assert.deepEqual(capturedOptions?.scopes, ["scope-a", "scope-b", "scope-c"]);
-    assert.equal(capturedOptions?.auth?.lockTimeoutSeconds, 12n);
-    assert.equal(capturedOptions?.auth?.loginTimeoutSeconds, 34n);
-    assert.equal(capturedOptions?.auth?.refreshBufferSeconds, -5n);
+    assert.equal(capturedOptions?.auth?.lockTimeoutSeconds, 12);
+    assert.equal(capturedOptions?.auth?.loginTimeoutSeconds, 34);
+    assert.equal(capturedOptions?.auth?.refreshBufferSeconds, -5);
     assert.equal(capturedStorage, Storage.Memory);
   });
 });
