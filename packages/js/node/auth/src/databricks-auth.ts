@@ -7,6 +7,7 @@ import { AuthError } from "./errors.ts";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { AuthClient, publicToken } from "./lifecycle.ts";
 import { FileCredentialStore } from "./node-storage.ts";
+import { DatabricksPersonalAccessTokenProvider } from "./personal-access-token.ts";
 import { machineScopes, resolveConfigFile, resolveDatabricksProfile } from "./profile.ts";
 import { DatabricksServicePrincipalProvider } from "./service-principal.ts";
 import { MemoryCredentialStore } from "./storage.ts";
@@ -22,6 +23,7 @@ import {
   Storage,
   TargetKind,
   type Token,
+  type TokenProvider,
   WORKSPACE_ID_HEADER,
 } from "./types.ts";
 
@@ -29,7 +31,7 @@ import {
 export interface DatabricksAuthDependencies {
   environment?: Readonly<Record<string, string | undefined>>;
   fetch?: typeof globalThis.fetch;
-  resolveCli?: () => Promise<string | undefined>;
+  resolveCli?: (options: { install: boolean }) => Promise<string | undefined>;
 }
 
 /** Persistent Databricks auth facade over the provider-neutral lifecycle. */
@@ -176,28 +178,23 @@ async function providerFor(
   profile: DatabricksProfile,
   options: DatabricksAuthOptions,
   dependencies: DatabricksAuthDependencies,
-): Promise<DatabricksCliProvider | DatabricksServicePrincipalProvider> {
+): Promise<TokenProvider> {
   const environment = dependencies.environment ?? process.env;
   const inApp = configUtils.isDatabricksAppEnv({ ...environment });
   switch (profile.authKind) {
-    case AuthKind.UserToMachine:
-    case AuthKind.PersonalAccessToken: {
-      if (inApp)
-        throw new AuthError(
-          "config",
-          "Databricks Apps use app_obo request headers or app_sp environment credentials",
-        );
-      const executable = await (
-        dependencies.resolveCli ?? (() => resolveDatabricksCli(environment))
-      )();
-      if (!executable) throw new AuthError("cli", "Databricks CLI is unavailable on this platform");
+    case AuthKind.UserToMachine: {
+      const install = !inApp || options.installCliInApp === true;
       return new DatabricksCliProvider(
         profile.name,
-        executable,
-        profile.authKind,
+        () =>
+          dependencies.resolveCli
+            ? dependencies.resolveCli({ install })
+            : resolveDatabricksCli(environment, { install }),
         cliEnvironment(profile, resolveConfigFile(options.configFile, environment)),
       );
     }
+    case AuthKind.PersonalAccessToken:
+      return new DatabricksPersonalAccessTokenProvider(profile.accessToken!);
     case AuthKind.MachineToMachine:
     case AuthKind.AppServicePrincipal: {
       const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);

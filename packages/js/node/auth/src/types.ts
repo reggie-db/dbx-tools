@@ -102,6 +102,7 @@ export interface DatabricksAuthOptions {
   auth?: AuthOptions;
   requestHeaders?: Record<string, string>;
   accessTokenHeader?: string;
+  installCliInApp?: boolean;
   preferUserToMachine: boolean;
 }
 

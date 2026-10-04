@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from filelock import AsyncFileLock
 
 from .files import ensure_directory
+
+T = TypeVar("T")
 
 
 class LeaseLocks(Protocol):
@@ -58,6 +61,22 @@ class FileLeaseLocks:
         lock = self._leases.pop(lease, None)
         if lock:
             await lock.release()
+
+
+async def with_file_lock(
+    path: Path | str,
+    action: Callable[[], Awaitable[T]],
+    *,
+    timeout_ms: int = 30_000,
+) -> T:
+    """Run one async callback while holding a path-keyed cross-process lock."""
+    resolved = Path(path).expanduser().resolve()
+    locks = FileLeaseLocks(resolved.parent / ".locks")
+    lease = await locks.acquire(str(resolved), timeout_ms)
+    try:
+        return await action()
+    finally:
+        await locks.release(lease)
 
 
 def _digest(value: str) -> str:

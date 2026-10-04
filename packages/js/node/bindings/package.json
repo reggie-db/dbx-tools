@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/bindings",
-  "description": "Cross-runtime process and HTTP host bindings for Node.js and embedded JavaScript",
+  "description": "Cross-runtime process, HTTP, file, and lock host bindings for Node.js and embedded JavaScript",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",

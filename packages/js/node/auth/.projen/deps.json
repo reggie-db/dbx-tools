@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "@types/ini",
+      "version": "^4.1.1",
+      "type": "build"
+    },
+    {
       "name": "@types/node",
       "version": "catalog:",
       "type": "build"
@@ -27,6 +32,11 @@
     {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "ini",
+      "version": "^6.0.0",
       "type": "runtime"
     },
     {

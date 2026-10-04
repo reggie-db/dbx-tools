@@ -7,7 +7,7 @@ import { stringUtils } from "@dbx-tools/shared-core";
 
 import cliAssets from "./generated/databricks-cli-assets.json" with { type: "json" };
 import { AuthError } from "./errors.ts";
-import { AuthKind, type Token, type TokenProvider } from "./types.ts";
+import type { Token, TokenProvider } from "./types.ts";
 
 const resolutionCache = new Map<string, Promise<string | undefined>>();
 
@@ -16,18 +16,29 @@ interface DatabricksCliAsset {
   readonly sha256: string;
 }
 
+/** Deferred Databricks CLI lookup used by U2M token acquisition. */
+export type DatabricksCliResolver = () => Promise<string | undefined>;
+
+/** Controls whether CLI resolution may install the pinned managed executable. */
+export interface DatabricksCliResolutionOptions {
+  install?: boolean;
+}
+
 /** Resolve a compatible Databricks CLI, installing the pinned build asset when needed. */
 export function resolveDatabricksCli(
   environment: Readonly<Record<string, string | undefined>> = process.env,
+  options: DatabricksCliResolutionOptions = {},
 ): Promise<string | undefined> {
   const candidate = stringValue(environment.DATABRICKS_CLI_PATH) ?? "databricks";
-  const key = `${candidate}\0${homedir()}\0${process.platform}\0${process.arch}`;
+  const key = `${candidate}\0${homedir()}\0${process.platform}\0${process.arch}\0${options.install !== false}`;
   const cached = resolutionCache.get(key);
   if (cached) return cached;
-  const resolved = resolveDatabricksCliUncached(candidate).catch((error) => {
-    resolutionCache.delete(key);
-    throw error;
-  });
+  const resolved = resolveDatabricksCliUncached(candidate, options.install !== false).catch(
+    (error) => {
+      resolutionCache.delete(key);
+      throw error;
+    },
+  );
   resolutionCache.set(key, resolved);
   return resolved;
 }
@@ -37,13 +48,19 @@ export function resetDatabricksCliResolution(): void {
   resolutionCache.clear();
 }
 
-async function resolveDatabricksCliUncached(candidate: string): Promise<string | undefined> {
+async function resolveDatabricksCliUncached(
+  candidate: string,
+  install: boolean,
+): Promise<string | undefined> {
   if (await compatibleDatabricksCli(candidate)) return candidate;
+  const managed = managedExecutable();
+  if (await compatibleDatabricksCli(managed)) return managed;
+  if (!install) return undefined;
   const asset = platformAsset();
   if (!asset) return undefined;
   const root = join(homedir(), ".databricks");
   const binDir = join(root, "bin");
-  const executable = process.platform === "win32" ? "databricks.exe" : "databricks";
+  const executable = managedExecutableName();
   const installed = await bin.ensure("databricks", asset, {
     autoUnpackage: true,
     destination: { root, binDir, path: join(binDir, executable) },
@@ -55,6 +72,14 @@ async function resolveDatabricksCliUncached(candidate: string): Promise<string |
     },
   });
   return installed.path;
+}
+
+function managedExecutable(): string {
+  return join(homedir(), ".databricks", "bin", managedExecutableName());
+}
+
+function managedExecutableName(): string {
+  return process.platform === "win32" ? "databricks.exe" : "databricks";
 }
 
 async function compatibleDatabricksCli(executable: string): Promise<boolean> {
@@ -138,74 +163,59 @@ export async function databricksCliToken(
   };
 }
 
-/** Resolve a PAT through the Databricks CLI authentication description. */
-export async function databricksCliPat(
-  profile: string,
-  executable = process.env.DATABRICKS_CLI_PATH ?? "databricks",
-  environment: Record<string, string> = {},
-): Promise<Token> {
-  const result = await processBinding.runProcess({
-    command: executable,
-    args: ["auth", "describe", "--profile", profile, "--output", "json", "--sensitive"],
-    env: environment,
-  });
-  if (result.exitCode !== 0)
-    throw new AuthError(
-      "cli",
-      result.stderr || `databricks auth describe exited ${result.exitCode}`,
-    );
-  let value: Record<string, unknown>;
-  try {
-    value = JSON.parse(result.stdout ?? "") as Record<string, unknown>;
-  } catch (cause) {
-    throw new AuthError("cli", "Databricks CLI auth description was not JSON", { cause });
-  }
-  const details = recordValue(value.details);
-  const configuration = recordValue(details?.configuration);
-  const token = stringValue(recordValue(configuration?.token)?.value);
-  if (!token) throw new AuthError("cli", "Databricks CLI did not resolve a personal access token");
-  return { accessToken: token, tokenType: "Bearer", scopes: [] };
-}
-
-/** Provider that delegates non-App user credentials to the Databricks CLI. */
+/** Provider that lazily delegates U2M credentials to the Databricks CLI. */
 export class DatabricksCliProvider implements TokenProvider {
+  private resolution?: Promise<string>;
+
   constructor(
     private readonly profile: string,
-    private readonly executable: string,
-    private readonly authKind = AuthKind.UserToMachine,
+    private readonly executableOrResolver: string | DatabricksCliResolver = () =>
+      resolveDatabricksCli(),
     private readonly environment: Record<string, string> = {},
   ) {}
 
-  authenticate(): Promise<Token> {
-    return this.resolve(false);
+  async authenticate(_timeoutMs: number): Promise<Token> {
+    return databricksCliToken(
+      this.profile,
+      false,
+      await this.resolveExecutable(),
+      this.environment,
+    );
   }
 
   async login(timeoutMs: number): Promise<Token> {
-    if (this.authKind === AuthKind.UserToMachine) {
-      await databricksCliLogin(this.profile, timeoutMs, this.executable, this.environment);
-    }
-    return this.resolve(false);
+    const executable = await this.resolveExecutable();
+    await databricksCliLogin(this.profile, timeoutMs, executable, this.environment);
+    return databricksCliToken(this.profile, false, executable, this.environment);
   }
 
-  refresh(): Promise<Token> {
-    return this.resolve(true);
+  async refresh(_token: Token): Promise<Token> {
+    return databricksCliToken(this.profile, true, await this.resolveExecutable(), this.environment);
   }
 
   canAuthenticateSilently(): boolean {
     return true;
   }
 
-  private resolve(forceRefresh: boolean): Promise<Token> {
-    return this.authKind === AuthKind.PersonalAccessToken
-      ? databricksCliPat(this.profile, this.executable, this.environment)
-      : databricksCliToken(this.profile, forceRefresh, this.executable, this.environment);
+  private resolveExecutable(): Promise<string> {
+    if (typeof this.executableOrResolver === "string") {
+      return Promise.resolve(this.executableOrResolver);
+    }
+    if (this.resolution) return this.resolution;
+    this.resolution = this.executableOrResolver()
+      .then((executable) => {
+        if (!executable)
+          throw new AuthError("cli", "Databricks CLI is unavailable on this platform");
+        return executable;
+      })
+      .catch((error) => {
+        this.resolution = undefined;
+        throw error;
+      });
+    return this.resolution;
   }
 }
 
 function stringValue(value: unknown): string | undefined {
   return stringUtils.trimToNull(value) ?? undefined;
-}
-
-function recordValue(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
 }

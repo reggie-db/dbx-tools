@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
+import { atomicWriteJsonFile, readJsonFile } from "../src/files.ts";
 import { executeHttp } from "../src/http.ts";
+import { withFileLock } from "../src/locks.ts";
 import { runProcess } from "../src/process.ts";
 
 describe("JavaScript host bindings", () => {
@@ -39,6 +44,35 @@ describe("JavaScript host bindings", () => {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );
+    }
+  });
+
+  it("atomically reads and writes JSON through file bindings", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-bindings-files-"));
+    const path = join(directory, "nested", "state.json");
+    try {
+      await atomicWriteJsonFile({ path, value: { ready: true } });
+      assert.deepEqual(await readJsonFile({ path }), { ready: true });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("runs a callback while holding a path lock", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-bindings-lock-"));
+    const path = join(directory, "state.json");
+    try {
+      let entered = false;
+      await withFileLock(
+        path,
+        () => {
+          entered = true;
+        },
+        { lockDirectory: join(directory, "locks"), timeoutMs: 100 },
+      );
+      assert.equal(entered, true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

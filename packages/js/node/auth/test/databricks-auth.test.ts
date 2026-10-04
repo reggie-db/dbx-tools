@@ -46,26 +46,12 @@ describe("Databricks provider construction", () => {
     assert.equal(outboundHeaders?.get("x-databricks-workspace-id"), "workspace-id");
   });
 
-  it("uses the CLI for automatic U2M with any storage", async () => {
+  it("constructs automatic U2M without resolving the CLI", async () => {
+    let resolvedCli = false;
     const auth = await createPersistentAuth(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
-      }),
-      Storage.Memory,
-      { environment: {}, resolveCli: () => Promise.resolve("databricks") },
-    );
-    assert.equal(auth.status().profile, "TEST");
-    assert.equal(auth.status().storage, Storage.Memory);
-  });
-
-  it("treats oauth-u2m as CLI authentication", async () => {
-    let resolvedCli = false;
-    await createPersistentAuth(
-      DatabricksAuthOptions.create({
-        host: "https://example.cloud.databricks.com",
-        profile: "TEST",
-        authType: "oauth-u2m",
       }),
       Storage.Memory,
       {
@@ -76,43 +62,111 @@ describe("Databricks provider construction", () => {
         },
       },
     );
-    assert.equal(resolvedCli, true);
-  });
-
-  it("does not invoke the CLI inside a Databricks App", async () => {
-    let resolvedCli = false;
-    await assert.rejects(
-      createPersistentAuth(
-        DatabricksAuthOptions.create({
-          host: "https://example.cloud.databricks.com",
-          profile: "TEST",
-        }),
-        Storage.Memory,
-        {
-          environment: APP_ENV,
-          resolveCli: () => {
-            resolvedCli = true;
-            return Promise.resolve("databricks");
-          },
-        },
-      ),
-      /Databricks Apps use app_obo request headers or app_sp environment credentials/,
-    );
+    assert.equal(auth.status().profile, "TEST");
+    assert.equal(auth.status().storage, Storage.Memory);
     assert.equal(resolvedCli, false);
   });
 
-  it("fails closed when no compatible CLI can be resolved", async () => {
-    await assert.rejects(
-      createPersistentAuth(
-        DatabricksAuthOptions.create({
-          host: "https://example.cloud.databricks.com",
-          profile: "TEST",
-        }),
-        Storage.Memory,
-        { environment: {}, resolveCli: () => Promise.resolve(undefined) },
-      ),
-      /Databricks CLI is unavailable/,
+  it("defers explicit oauth-u2m CLI resolution until token acquisition", async () => {
+    let resolvedCli = false;
+    const auth = await createPersistentAuth(
+      DatabricksAuthOptions.create({
+        host: "https://example.cloud.databricks.com",
+        profile: "TEST",
+        authType: "oauth-u2m",
+      }),
+      Storage.Memory,
+      {
+        environment: {},
+        resolveCli: () => {
+          resolvedCli = true;
+          return Promise.resolve(undefined);
+        },
+      },
     );
+    assert.equal(resolvedCli, false);
+    await assert.rejects(auth.token(false), /Databricks CLI is unavailable/);
+    assert.equal(resolvedCli, true);
+  });
+
+  it("keeps CLI fallback lazy and non-installing inside a Databricks App", async () => {
+    let resolution: { install: boolean } | undefined;
+    const auth = await createPersistentAuth(
+      DatabricksAuthOptions.create({
+        host: "https://example.cloud.databricks.com",
+        profile: "TEST",
+        authType: "oauth-u2m",
+      }),
+      Storage.Memory,
+      {
+        environment: APP_ENV,
+        resolveCli: (options) => {
+          resolution = options;
+          return Promise.resolve(undefined);
+        },
+      },
+    );
+    assert.equal(resolution, undefined);
+    await assert.rejects(auth.token(false), /Databricks CLI is unavailable/);
+    assert.deepEqual(resolution, { install: false });
+  });
+
+  it("allows explicit CLI installation inside a Databricks App", async () => {
+    let resolution: { install: boolean } | undefined;
+    const auth = await createPersistentAuth(
+      DatabricksAuthOptions.create({
+        host: "https://example.cloud.databricks.com",
+        profile: "TEST",
+        authType: "oauth-u2m",
+        installCliInApp: true,
+      }),
+      Storage.Memory,
+      {
+        environment: APP_ENV,
+        resolveCli: (options) => {
+          resolution = options;
+          return Promise.resolve(undefined);
+        },
+      },
+    );
+    await assert.rejects(auth.token(false), /Databricks CLI is unavailable/);
+    assert.deepEqual(resolution, { install: true });
+  });
+
+  it("fails closed at U2M token acquisition when no compatible CLI can be resolved", async () => {
+    const auth = await createPersistentAuth(
+      DatabricksAuthOptions.create({
+        host: "https://example.cloud.databricks.com",
+        profile: "TEST",
+      }),
+      Storage.Memory,
+      { environment: {}, resolveCli: () => Promise.resolve(undefined) },
+    );
+    await assert.rejects(auth.token(false), /Databricks CLI is unavailable/);
+  });
+
+  it("uses configured PAT credentials without resolving the CLI", async () => {
+    let resolvedCli = false;
+    const auth = await createPersistentAuth(
+      DatabricksAuthOptions.create({
+        host: "https://example.cloud.databricks.com",
+        profile: "PAT",
+        authType: "pat",
+        accessToken: "profile-token",
+      }),
+      Storage.Memory,
+      {
+        environment: {},
+        resolveCli: () => {
+          resolvedCli = true;
+          return Promise.resolve(undefined);
+        },
+      },
+    );
+    assert.deepEqual(await auth.authenticate(false), {
+      authorization: "Bearer profile-token",
+    });
+    assert.equal(resolvedCli, false);
   });
 
   it("uses client credentials when the CLI cannot expose an M2M token", async () => {

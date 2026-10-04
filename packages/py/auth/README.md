@@ -12,10 +12,18 @@ Python supplies host capabilities through small protocols:
 - `CredentialStore` persists tokens and returns explicit lock leases.
 - `MemoryCredentialStore` and `FileCredentialStore` use the reusable lease and
   file adapters from `dbx-tools-node-bindings`.
-- `DatabricksCliProvider` uses the installed Databricks CLI for U2M and PAT
-  profiles through `dbx-tools-core` subprocess resolution.
+- `DatabricksCliProvider` uses the installed Databricks CLI for U2M profiles
+  through `dbx-tools-core` subprocess resolution.
+- PAT profiles use their configured token directly without invoking the CLI.
 - `create_databricks_cli_auth()` applies the same JavaScript profile-selection
   rules, including implicit preference for one matching CLI profile.
+
+The embedded profile logic uses the same maintained `ini` parser and enhanced
+default selection as the Node package: `__settings__.default_profile`, then
+`DEFAULT`, then a sole profile, with an optional unique matching CLI-U2M
+preference over an implicit M2M default. The JavaScript lifecycle adds the same
+token cache, check-lock-recheck acquisition, automatic CLI login, and rejected
+token handling used by Node callers.
 
 ## Example
 
@@ -53,6 +61,7 @@ lifecycle change cannot publish a stale embedded runtime.
 
 - `client` loads the bundled runtime and exposes the async `AuthClient` facade.
 - `databricks_auth` resolves CLI profiles and exposes complete request headers.
-- `databricks_cli` provides CLI U2M login/token refresh and PAT resolution.
+- `databricks_cli` provides CLI U2M login and token refresh.
+- `personal_access_token` provides direct configured PAT credentials.
 - `types` defines the provider, storage, token, and lifecycle contracts.
 - `storage` provides memory and file-backed adapters.

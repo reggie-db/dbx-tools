@@ -10,6 +10,7 @@ from dbx_tools.node_bindings import read_text
 
 from .client import _RUNTIME, AuthClient
 from .databricks_cli import DatabricksCliProvider
+from .personal_access_token import DatabricksPersonalAccessTokenProvider
 from .storage import FileCredentialStore
 from .types import AccessToken, AuthOptions, CredentialStore
 
@@ -131,9 +132,14 @@ async def create_databricks_cli_auth(
     host = str(resolved["host"]) if resolved.get("host") else None
     workspace_id = str(resolved["workspaceId"]) if resolved.get("workspaceId") else None
     auth_kind = str(resolved["authKind"])
+    provider = (
+        DatabricksPersonalAccessTokenProvider(str(resolved["accessToken"]))
+        if auth_kind == "personal-access-token"
+        else DatabricksCliProvider(name, executable, str(selected_file.resolve()))
+    )
     client = AuthClient(
         name,
-        DatabricksCliProvider(name, executable, auth_kind, str(selected_file.resolve())),
+        provider,
         store or FileCredentialStore(cache_dir),
         options,
     )

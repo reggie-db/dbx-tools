@@ -303,10 +303,11 @@ remain on loopback under `/api`.
 
 ### Authenticate With Databricks OAuth
 
-Use [`@dbx-tools/auth`](packages/js/node/auth) for CLI-first U2M with browser
-fallback, M2M client credentials, PAT and App authentication, secure token
-storage, and refresh. [`@dbx-tools/cli-auth`](packages/js/cli/auth) exposes the
-same runtime through `dbx auth`.
+Use [`@dbx-tools/auth`](packages/js/node/auth) for direct PAT and M2M
+credentials, lazy CLI-backed U2M with automatic CLI login, App OBO/App SP
+authentication, secure token storage, and check-lock-recheck refresh.
+[`@dbx-tools/cli-auth`](packages/js/cli/auth) exposes the same runtime through
+`dbx auth`.
 
 ```sh
 dbx auth login --profile my-workspace

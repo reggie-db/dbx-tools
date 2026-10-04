@@ -135,9 +135,7 @@ export function resolveDatabricksProfile(
     config,
     options.preferUserToMachine,
   );
-  let configured = loadRawProfile(config, profileName);
-  if (inApp && !explicitProfile && (configured.authType === "pat" || configured.accessToken))
-    configured = {};
+  const configured = loadRawProfile(config, profileName);
   const ambient = (name: keyof NodeJS.ProcessEnv): string | undefined =>
     ignoreAmbientCredentials ? undefined : nonempty(environment[name]);
   const host = normalizeHost(
@@ -166,7 +164,7 @@ export function resolveDatabricksProfile(
         nonempty(configured.accessToken));
   const authType =
     selectedAuthType ??
-    (!inApp ? ambient("DATABRICKS_AUTH_TYPE") : undefined) ??
+    ambient("DATABRICKS_AUTH_TYPE") ??
     nonempty(configured.authType)?.toLowerCase();
   const authKind = resolveAuthKind(authType, clientIdValue, clientSecret, accessToken);
   const clientId =
@@ -194,6 +192,7 @@ export function resolveDatabricksProfile(
     groupId,
     scopes,
     authKind,
+    accessToken,
   });
   return {
     name: profileName,
@@ -238,11 +237,24 @@ function loadConfig(path: string): IniConfig | undefined {
 function credentialCacheKey(
   profile: Pick<
     DatabricksProfile,
-    "name" | "host" | "accountId" | "workspaceId" | "clientId" | "groupId" | "scopes" | "authKind"
+    | "name"
+    | "host"
+    | "accountId"
+    | "workspaceId"
+    | "clientId"
+    | "groupId"
+    | "scopes"
+    | "authKind"
+    | "accessToken"
   >,
 ): string {
   if (profile.authKind === AuthKind.UserToMachine) return profile.name;
-  if (profile.authKind === AuthKind.PersonalAccessToken) return `${profile.name}-pat`;
+  if (profile.authKind === AuthKind.PersonalAccessToken) {
+    const digest = createHash("sha256")
+      .update(profile.accessToken ?? "")
+      .digest("hex");
+    return `${profile.name}-pat-${digest}`;
+  }
   if (profile.authKind === AuthKind.AppOnBehalfOf) return `${profile.name}-app-obo`;
   const identity = [
     profile.host,

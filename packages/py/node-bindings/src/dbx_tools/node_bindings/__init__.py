@@ -1,7 +1,7 @@
 from .browser import open_browser
 from .files import atomic_write_json, ensure_directory, read_json, read_text
 from .http import execute_http
-from .locks import FileLeaseLocks, LeaseLocks, MemoryLeaseLocks
+from .locks import FileLeaseLocks, LeaseLocks, MemoryLeaseLocks, with_file_lock
 from .process import run_process
 from .runtime import require_runtime
 
@@ -22,4 +22,5 @@ __all__ = [
     "require_runtime",
     "runProcess",
     "run_process",
+    "with_file_lock",
 ]

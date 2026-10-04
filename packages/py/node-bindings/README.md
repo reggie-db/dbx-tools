@@ -8,6 +8,7 @@ The package keeps cross-language plumbing out of capability packages:
 - `require_runtime()` loads a committed CommonJS bundle beside a Python module.
 - `MemoryLeaseLocks` provides keyed in-process check-lock-recheck leases.
 - `FileLeaseLocks` provides keyed cross-process leases through `filelock`.
+- `with_file_lock()` runs an async callback under a path-keyed file lock.
 - `read_text()`, `read_json()`, and `atomic_write_json()` provide asynchronous
   file access without blocking the event loop.
 - `open_browser()` delegates browser launch to Python's maintained `webbrowser`

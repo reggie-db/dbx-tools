@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import {
   invalidateConfigFile,
   listDatabricksProfiles,
+  parseDatabricksConfig,
   resolveDatabricksProfile,
 } from "../src/profile.ts";
 import { AuthKind, DatabricksAuthOptions, TargetKind } from "../src/types.ts";
@@ -24,6 +25,14 @@ async function withConfig(source: string, action: (path: string) => void | Promi
 }
 
 describe("Databricks profile resolution", () => {
+  it("parses profiles through standard INI rules", () => {
+    const config = parseDatabricksConfig(
+      `[DEFAULT]\nhost=https://example.cloud.databricks.com\ntoken = value=with=equals\n`,
+    );
+    assert.equal(config.get("DEFAULT")?.get("host"), "https://example.cloud.databricks.com");
+    assert.equal(config.get("DEFAULT")?.get("token"), "value=with=equals");
+  });
+
   it("prefers one matching CLI profile over an implicit M2M default", async () => {
     await withConfig(
       `[__settings__]\ndefault_profile = service\n\n[service]\nhost = https://example.cloud.databricks.com\nclient_id = service-id\nclient_secret = secret\n\n[user]\nhost = https://example.cloud.databricks.com\nauth_type = databricks-cli\n`,
@@ -47,6 +56,30 @@ describe("Databricks profile resolution", () => {
         assert.equal(profile.authKind, AuthKind.MachineToMachine);
       },
     );
+  });
+
+  it("changes the PAT cache identity when the configured token changes", () => {
+    const left = resolveDatabricksProfile(
+      DatabricksAuthOptions.create({
+        profile: "PAT",
+        host: "https://example.cloud.databricks.com",
+        authType: "pat",
+        accessToken: "left",
+      }),
+      {},
+    );
+    const right = resolveDatabricksProfile(
+      DatabricksAuthOptions.create({
+        profile: "PAT",
+        host: "https://example.cloud.databricks.com",
+        authType: "pat",
+        accessToken: "right",
+      }),
+      {},
+    );
+    assert.notEqual(left.cacheKey, right.cacheKey);
+    assert.equal(left.cacheKey.includes("left"), false);
+    assert.equal(right.cacheKey.includes("right"), false);
   });
 
   it("lists secret-free profiles and honors default_profile", async () => {

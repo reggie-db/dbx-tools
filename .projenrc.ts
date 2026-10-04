@@ -56,7 +56,7 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "packages/js/node/genie": "Server-side Databricks Genie chat drivers",
   "packages/js/node/google-rs": "Node bindings for dbx-tools-google",
   "packages/js/node/bindings":
-    "Cross-runtime process and HTTP host bindings for Node.js and embedded JavaScript",
+    "Cross-runtime process, HTTP, file, and lock host bindings for Node.js and embedded JavaScript",
   "packages/js/node/model": "Workspace-aware Databricks Model Serving selection",
   "packages/js/node/path":
     "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
@@ -458,8 +458,10 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/bindings@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
+    "ini@^6.0.0",
     "oauth4webapi@^3.8.8",
   );
+  p.addDevDeps("@types/ini@^4.1.1");
   p.tasks
     .tryFind("pre-compile")
     ?.exec("bun ../../../../projen/tasks/databricks-cli-assets.ts --root ../../../..");

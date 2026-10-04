@@ -1,3 +1,5 @@
+import { parse as parseIni } from "ini";
+
 import { AuthError } from "./errors.ts";
 import {
   AUTH_TYPE_APP_OBO,
@@ -24,29 +26,24 @@ export interface RawProfile {
   authType?: string;
 }
 
-/** Parse Databricks INI text without introducing a runtime parser dependency. */
+/** Parse Databricks INI text through the maintained `ini` package. */
 export function parseDatabricksConfig(source: string): IniConfig {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parseIni(source) as Record<string, unknown>;
+  } catch (cause) {
+    throw new AuthError("config", "Databricks configuration is not valid INI", { cause });
+  }
   const config: IniConfig = new Map();
-  let section: Map<string, string> | undefined;
-  for (const rawLine of source.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
-    const sectionMatch = /^\[([^\]]+)]$/.exec(line);
-    if (sectionMatch) {
-      const name = sectionMatch[1]!.trim();
-      if (!name) throw new AuthError("config", "Databricks profile section must not be empty");
-      section = config.get(name) ?? new Map();
-      config.set(name, section);
-      continue;
+  for (const [name, value] of Object.entries(parsed)) {
+    if (!name.trim() || !isRecord(value))
+      throw new AuthError("config", "Databricks configuration values must belong to a profile");
+    const section = new Map<string, string>();
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry === undefined || entry === null) continue;
+      section.set(key.trim().toLowerCase(), String(entry).trim());
     }
-    const delimiter = line.indexOf("=");
-    if (delimiter < 0 || !section) {
-      throw new AuthError("config", `Invalid Databricks configuration line: ${rawLine}`);
-    }
-    const key = line.slice(0, delimiter).trim().toLowerCase();
-    const value = line.slice(delimiter + 1).trim();
-    if (!key) throw new AuthError("config", `Invalid Databricks configuration key: ${rawLine}`);
-    section.set(key, value);
+    config.set(name.trim(), section);
   }
   return config;
 }
@@ -213,4 +210,8 @@ function isM2mProfile(profile: RawProfile): boolean {
     profile.authType === "oauth-m2m" ||
     (!profile.authType && Boolean(profile.clientId && profile.clientSecret))
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

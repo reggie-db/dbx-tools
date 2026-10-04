@@ -5,8 +5,11 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/bindings";
 export const PACKAGE_VERSION = "0.9.21";
 export * as bindings from "./src/bindings.ts";
+export * as files from "./src/files.ts";
 export * as http from "./src/http.ts";
+export * as locks from "./src/locks.ts";
 export * as process from "./src/process.ts";
 export * as types from "./src/types.ts";
 export { nodeBindings } from "./src/bindings.ts";
-export type { ProcessRequest, ProcessResult, HttpRequest, HttpResult, JsBindings } from "./src/types.ts";
+export { FileLeaseLocks } from "./src/locks.ts";
+export type { ProcessRequest, ProcessResult, HttpRequest, HttpResult, EnsureDirectoryRequest, ReadTextRequest, ReadJsonRequest, AtomicWriteJsonRequest, FileLockRequest, JsBindings } from "./src/types.ts";

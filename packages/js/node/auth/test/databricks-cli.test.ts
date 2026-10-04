@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
-  databricksCliPat,
+  DatabricksCliProvider,
   resetDatabricksCliResolution,
   resolveDatabricksCli,
 } from "../src/databricks-cli.ts";
@@ -26,24 +26,34 @@ describe("Databricks CLI resolution", () => {
     }
   });
 
-  it("resolves PAT credentials through the CLI auth description", async () => {
+  it("resolves the CLI only when a U2M token is requested", async () => {
     if (process.platform === "win32") return;
-    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-databricks-pat-"));
+    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-databricks-lazy-"));
     const executable = join(directory, "databricks");
     try {
       await writeFile(
         executable,
-        '#!/bin/sh\nprintf \'%s\\n\' \'{"details":{"configuration":{"token":{"value":"profile-token"}}}}\'\n',
+        '#!/bin/sh\nprintf \'%s\\n\' \'{"access_token":"profile-token","token_type":"Bearer"}\'\n',
       );
       await chmod(executable, 0o755);
-      const token = await databricksCliPat("PAT", executable, {
-        DATABRICKS_CONFIG_FILE: join(directory, "config"),
+      let resolutions = 0;
+      const provider = new DatabricksCliProvider("USER", () => {
+        resolutions += 1;
+        return Promise.resolve(executable);
       });
-      assert.deepEqual(token, {
-        accessToken: "profile-token",
-        tokenType: "Bearer",
-        scopes: [],
-      });
+      assert.equal(resolutions, 0);
+      assert.equal((await provider.authenticate(1)).accessToken, "profile-token");
+      assert.equal(
+        (
+          await provider.refresh({
+            accessToken: "stale",
+            tokenType: "Bearer",
+            scopes: [],
+          })
+        ).accessToken,
+        "profile-token",
+      );
+      assert.equal(resolutions, 1);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

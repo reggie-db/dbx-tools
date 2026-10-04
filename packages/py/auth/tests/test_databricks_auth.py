@@ -63,3 +63,30 @@ auth_type = databricks-cli
         "x-databricks-workspace-id": "workspace-id",
     }
     assert await auth.request_headers_for_url("https://example.com", False) == {}
+
+
+async def test_pat_uses_profile_token_without_cli(monkeypatch, tmp_path: Path) -> None:
+    config = tmp_path / "config"
+    config.write_text(
+        """[PAT]
+host = https://example.cloud.databricks.com
+auth_type = pat
+token = profile-token
+""",
+        encoding="utf-8",
+    )
+
+    async def run_process(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("PAT authentication must not invoke the Databricks CLI")
+
+    monkeypatch.setattr("dbx_tools.auth.databricks_cli.run_process", run_process)
+    auth = await create_databricks_cli_auth(
+        profile="PAT",
+        config_file=config,
+        cache_dir=tmp_path / "cache",
+    )
+
+    assert await auth.authenticate(False) == {
+        "authorization": "Bearer profile-token",
+    }

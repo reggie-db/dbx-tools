@@ -43,7 +43,13 @@ export function resolveDatabricksCliProfile(
   configSource: string,
   requested?: string,
   preferUserToMachine = true,
-): { name: string; host?: string; workspaceId?: string; authKind: AuthKind } {
+): {
+  name: string;
+  host?: string;
+  workspaceId?: string;
+  accessToken?: string;
+  authKind: AuthKind;
+} {
   const selected = requested?.trim() || undefined;
   const config = configSource.trim() ? parseDatabricksConfig(configSource) : undefined;
   const name = resolveProfileName(selected, Boolean(selected), config, preferUserToMachine);
@@ -65,5 +71,6 @@ export function resolveDatabricksCliProfile(
     authKind,
     ...(profile.host ? { host: normalizeHost(profile.host, name) } : {}),
     ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}),
+    ...(profile.accessToken ? { accessToken: profile.accessToken } : {}),
   };
 }

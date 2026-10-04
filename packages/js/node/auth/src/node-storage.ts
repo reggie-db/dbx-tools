@@ -1,9 +1,8 @@
-import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { acquireFileLock, type FileLockLease } from "@dbx-tools/core/file-lock";
+import { files as fileBindings, locks as lockBindings } from "@dbx-tools/bindings";
 
 import { AuthError } from "./errors.ts";
 import type { CredentialStore, LockAdapter, Token } from "./types.ts";
@@ -12,27 +11,6 @@ import { FileLayout } from "./types.ts";
 interface TokenCache {
   version: number;
   tokens: Record<string, unknown>;
-}
-
-/** Node implementation of the portable lease adapter using `@dbx-tools/core`. */
-export class NodeFileLockAdapter implements LockAdapter {
-  readonly #leases = new Map<string, FileLockLease>();
-
-  constructor(private readonly directory?: string) {}
-
-  async acquire(key: string, timeoutMs: number): Promise<string> {
-    const lease = await acquireFileLock(key, { dir: this.directory, timeoutMs });
-    const id = randomUUID();
-    this.#leases.set(id, lease);
-    return id;
-  }
-
-  async release(id: string): Promise<void> {
-    const lease = this.#leases.get(id);
-    if (!lease) return;
-    this.#leases.delete(id);
-    await lease.release();
-  }
 }
 
 /** File-backed credential store preserving unrelated Databricks CLI entries. */
@@ -44,7 +22,7 @@ export class FileCredentialStore implements CredentialStore {
     private readonly layout = FileLayout.Single,
     locks?: LockAdapter,
   ) {
-    this.locks = locks ?? new NodeFileLockAdapter(join(root, "locks"));
+    this.locks = locks ?? new lockBindings.FileLeaseLocks(join(root, "locks"));
   }
 
   async load(key: string): Promise<Token | undefined> {
@@ -53,7 +31,7 @@ export class FileCredentialStore implements CredentialStore {
   }
 
   async prepareWrite(): Promise<void> {
-    await ensurePrivateDirectory(this.root);
+    await fileBindings.ensureDirectory({ path: this.root, mode: 0o700 });
   }
 
   async save(key: string, token: Token): Promise<void> {
@@ -96,7 +74,7 @@ export class FileCredentialStore implements CredentialStore {
   }
 
   private async withCacheLock<T>(action: () => Promise<T>): Promise<T> {
-    await ensurePrivateDirectory(this.root);
+    await fileBindings.ensureDirectory({ path: this.root, mode: 0o700 });
     const lease = await this.locks.acquire(`${this.root}:cache`, 30_000);
     try {
       return await action();
@@ -107,38 +85,31 @@ export class FileCredentialStore implements CredentialStore {
 
   private async readCache(): Promise<TokenCache> {
     try {
-      const cache = JSON.parse(
-        await readFile(join(this.root, "token-cache.json"), "utf8"),
-      ) as TokenCache;
+      const cache = (await fileBindings.readJsonFile({
+        path: join(this.root, "token-cache.json"),
+        defaultValue: { version: 1, tokens: {} },
+      })) as TokenCache;
       if (cache.version !== 1 || typeof cache.tokens !== "object" || !cache.tokens) {
         throw new AuthError("storage", "Token cache must use version 1");
       }
       return cache;
     } catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, tokens: {} };
       if (cause instanceof AuthError) throw cause;
       throw new AuthError("storage", "Could not read Databricks token cache", { cause });
     }
   }
 
   private async writeCache(cache: TokenCache): Promise<void> {
-    const temporary = join(this.root, `.token-cache-${randomUUID()}.tmp`);
     try {
-      await writeFile(temporary, `${JSON.stringify(cache, null, 2)}\n`, {
+      await fileBindings.atomicWriteJsonFile({
+        path: join(this.root, "token-cache.json"),
+        value: cache,
         mode: 0o600,
-        flag: "wx",
       });
-      await chmod(temporary, 0o600);
-      await rename(temporary, join(this.root, "token-cache.json"));
     } catch (cause) {
       throw new AuthError("storage", "Could not write Databricks token cache", { cause });
     }
   }
-}
-
-async function ensurePrivateDirectory(path: string): Promise<void> {
-  await mkdir(path, { recursive: true, mode: 0o700 });
-  await chmod(path, 0o700);
 }
 
 function serializeToken(token: Token): Record<string, unknown> {
