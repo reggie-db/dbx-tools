@@ -51,14 +51,15 @@ export class DatabricksClient {
   async request(path: string, options: DatabricksRequestOptions = {}): Promise<unknown> {
     const url = new URL(path, `${this.host().replace(/\/$/, "")}/`).toString();
     const method = options.method ?? (options.body === undefined ? "GET" : "POST");
-    const token = await this.auth.token(options.login);
-    let response = await this.send(url, method, token.accessToken, token.tokenType, options);
+    let authHeaders = await this.auth.headers(options.login);
+    let response = await this.send(url, method, authHeaders, options);
     if (response.status === 401) {
-      const refreshed = await this.auth.refreshRejectedToken(
-        token.accessToken,
+      await this.auth.refreshRejectedToken(
+        accessTokenFromHeaders(authHeaders),
         options.login ?? true,
       );
-      response = await this.send(url, method, refreshed.accessToken, refreshed.tokenType, options);
+      authHeaders = await this.auth.headers(false);
+      response = await this.send(url, method, authHeaders, options);
     }
     const text = await response.text();
     if (!response.ok)
@@ -77,15 +78,13 @@ export class DatabricksClient {
   private send(
     url: string,
     method: string,
-    accessToken: string,
-    tokenType: string,
+    authHeaders: Record<string, string>,
     options: DatabricksRequestOptions,
   ): Promise<Response> {
     const headers = new Headers(options.headers);
     headers.delete(DEFAULT_ACCESS_TOKEN_HEADER);
     headers.delete(WORKSPACE_ID_HEADER);
-    headers.set(DEFAULT_ACCESS_TOKEN_HEADER, `${tokenType} ${accessToken}`);
-    if (this.workspaceId()) headers.set(WORKSPACE_ID_HEADER, this.workspaceId()!);
+    for (const [name, value] of Object.entries(authHeaders)) headers.set(name, value);
     headers.set("accept", "application/json");
     if (options.body !== undefined) headers.set("content-type", "application/json");
     return this.fetcher(url, {
@@ -95,4 +94,13 @@ export class DatabricksClient {
       signal: options.signal,
     });
   }
+}
+
+function accessTokenFromHeaders(headers: Record<string, string>): string {
+  const authorization = headers[DEFAULT_ACCESS_TOKEN_HEADER];
+  const separator = authorization?.indexOf(" ") ?? -1;
+  if (separator < 1 || !authorization?.slice(separator + 1).trim()) {
+    throw new AuthError("http", "Authentication headers did not contain an access token");
+  }
+  return authorization.slice(separator + 1).trim();
 }

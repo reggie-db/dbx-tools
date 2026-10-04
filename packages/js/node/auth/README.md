@@ -30,19 +30,22 @@ credentials use the same profile and request policy.
 import { createPersistentAuth, DatabricksAuthOptions } from "@dbx-tools/auth";
 
 const auth = await createPersistentAuth(DatabricksAuthOptions.create({ profile: "DEFAULT" }));
-const token = await auth.token();
+const headers = await auth.headers();
 ```
 
-`token()` allows login when a credential is missing or cannot refresh. Pass
-`false` to keep the call non-interactive:
+`headers()` returns the complete request header record, including
+`authorization` and `x-databricks-workspace-id` when the selected profile has a
+`workspace_id`. It allows login when a credential is missing or cannot refresh.
+Pass `false` to keep the call non-interactive:
 
 ```ts
-const token = await auth.token(false);
+const headers = await auth.headers(false);
 ```
 
-Use `authorizationHeaderForUrl()` or `requestHeadersForUrl()` when applying a
-credential manually. Both return credentials only when the request URL has the
-same origin as the resolved Databricks host.
+`token()` remains available when only the token record is needed. Use
+`requestHeadersForUrl()` when applying credentials to an arbitrary URL; it
+returns headers only when the request URL has the same origin as the resolved
+Databricks host.
 
 ## Portable storage
 

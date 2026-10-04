@@ -52,6 +52,16 @@ export class PersistentAuth implements PersistentAuthLike {
       : this.requiredClient().tokenWithLogin(login);
   }
 
+  async headers(login?: boolean): Promise<Record<string, string>> {
+    const token = await this.token(login);
+    return {
+      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
+      ...(this.profileValue.workspaceId
+        ? { [WORKSPACE_ID_HEADER]: this.profileValue.workspaceId }
+        : {}),
+    };
+  }
+
   async authorizationHeaderForUrl(
     requestUrl: string,
     login?: boolean,
@@ -62,13 +72,7 @@ export class PersistentAuth implements PersistentAuthLike {
   async requestHeadersForUrl(requestUrl: string, login?: boolean): Promise<Record<string, string>> {
     const request = new URL(requestUrl);
     if (request.origin !== new URL(this.profileValue.host).origin) return {};
-    const token = await this.token(login);
-    return {
-      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
-      ...(this.profileValue.workspaceId
-        ? { [WORKSPACE_ID_HEADER]: this.profileValue.workspaceId }
-        : {}),
-    };
+    return this.headers(login);
   }
 
   forceRefreshToken(login = true) {

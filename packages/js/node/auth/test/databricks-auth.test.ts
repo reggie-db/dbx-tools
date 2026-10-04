@@ -1,11 +1,68 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { createPersistentAuth } from "../src/databricks-auth.ts";
+import { DatabricksClient } from "../src/http-client.ts";
 import { DatabricksAuthOptions, Storage } from "../src/types.ts";
 
 describe("Databricks provider construction", () => {
+  it("returns authorization and profile workspace headers", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "dbx-tools-auth-headers-"));
+    const configFile = join(directory, "config");
+    try {
+      await writeFile(
+        configFile,
+        `[DEFAULT]\nhost = https://example.cloud.databricks.com\nworkspace_id = workspace-id\nauth_type = pat\ntoken = profile-token\n`,
+      );
+      const auth = await createPersistentAuth(
+        DatabricksAuthOptions.create({ configFile, profile: "DEFAULT" }),
+        Storage.Memory,
+        { environment: {} },
+      );
+
+      assert.equal(auth.workspaceId(), "workspace-id");
+      assert.deepEqual(await auth.headers(false), {
+        authorization: "Bearer profile-token",
+        "x-databricks-workspace-id": "workspace-id",
+      });
+      assert.deepEqual(
+        await auth.requestHeadersForUrl(
+          "https://example.cloud.databricks.com/api/2.0/clusters/list",
+          false,
+        ),
+        {
+          authorization: "Bearer profile-token",
+          "x-databricks-workspace-id": "workspace-id",
+        },
+      );
+      assert.deepEqual(await auth.requestHeadersForUrl("https://example.com", false), {});
+
+      let outboundHeaders: Headers | undefined;
+      const client = await DatabricksClient.create(
+        DatabricksAuthOptions.create({ configFile, profile: "DEFAULT", cacheDir: directory }),
+        {
+          environment: {},
+          fetch: async (_input, init) => {
+            outboundHeaders = new Headers(init?.headers);
+            return new Response("{}", {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          },
+        },
+      );
+      await client.request("/api/2.0/clusters/list", { login: false });
+      assert.equal(outboundHeaders?.get("authorization"), "Bearer profile-token");
+      assert.equal(outboundHeaders?.get("x-databricks-workspace-id"), "workspace-id");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("prefers the installed CLI in automatic storage mode", async () => {
     const auth = await createPersistentAuth(
       DatabricksAuthOptions.create({

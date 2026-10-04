@@ -157,6 +157,7 @@ export interface TokenProvider {
 export interface PersistentAuthLike {
   challenge(): Promise<void>;
   token(login?: boolean): Promise<AccessToken>;
+  headers(login?: boolean): Promise<Record<string, string>>;
   authorizationHeaderForUrl(requestUrl: string, login?: boolean): Promise<string | undefined>;
   requestHeadersForUrl(requestUrl: string, login?: boolean): Promise<Record<string, string>>;
   forceRefreshToken(login?: boolean): Promise<AccessToken>;
