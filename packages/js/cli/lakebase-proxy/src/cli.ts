@@ -1,6 +1,8 @@
 /** Commander entry point for the pure Node Lakebase proxy. */
 
+import { readFileSync } from "node:fs";
 import { connectionUrl } from "@dbx-tools/lakebase";
+import { json } from "@dbx-tools/shared-core";
 import { Command, InvalidArgumentError } from "commander";
 
 import { LakebaseProxy } from "./proxy.ts";
@@ -8,9 +10,10 @@ import { LakebaseProxy } from "./proxy.ts";
 export function buildProgram(name = "dbx lakebase-proxy"): Command {
   const program = new Command(name)
     .description("Run a loopback PostgreSQL proxy for Databricks Lakebase")
+    .version(packageVersion())
     .enablePositionalOptions()
     .option("--host <host>", "loopback listener host", "127.0.0.1")
-    .option("--port <port>", "listener port", integer, 5432)
+    .option("--port <port>", "listener port", port, 5432)
     .option("--startup-timeout-seconds <seconds>", "startup timeout", integer, 30)
     .option("--profile <profile>", "exact Databricks profile")
     .action(async (options) => {
@@ -31,7 +34,7 @@ export function buildProgram(name = "dbx lakebase-proxy"): Command {
     .option("--target <target>", "Lakebase project, resource path, host, or URL")
     .option("--endpoint <endpoint>", "fallback target", process.env.LAKEBASE_ENDPOINT)
     .option("--host <host>", "local proxy host", "localhost")
-    .option("--port <port>", "local proxy port", integer, 5432)
+    .option("--port <port>", "local proxy port", port, 5432)
     .action((options) => {
       const target = options.target ?? options.endpoint;
       if (!target) throw new InvalidArgumentError("url requires --target or LAKEBASE_ENDPOINT");
@@ -46,6 +49,27 @@ function integer(value: string): number {
     throw new InvalidArgumentError("value must be a non-negative integer");
   }
   return parsed;
+}
+
+function port(value: string): number {
+  const parsed = integer(value);
+  if (parsed > 65_535) throw new InvalidArgumentError("port must not exceed 65535");
+  return parsed;
+}
+
+function packageVersion(): string {
+  for (const location of [
+    new URL("../package.json", import.meta.url),
+    new URL("../../package.json", import.meta.url),
+  ]) {
+    try {
+      const version = json.parseRecord(readFileSync(location, "utf8"))?.version;
+      if (typeof version === "string" && version) return version;
+    } catch {
+      continue;
+    }
+  }
+  throw new Error("could not resolve @dbx-tools/cli-lakebase-proxy version");
 }
 
 function waitForShutdown(): Promise<void> {
