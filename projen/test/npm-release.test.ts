@@ -87,6 +87,29 @@ describe("npm release recovery", () => {
     assert.equal(readNpmArchiveIdentity(packed).name, "@fixture/native");
   });
 
+  it("repacks transformed manifests without registry-invalid directory entries", () => {
+    const destination = join(outdir, "packed-transformed");
+    mkdirSync(destination);
+    const packed = packNpmPackage(packageDir, destination, process.env.PATH, (value) => ({
+      ...value,
+      transformed: true,
+    }));
+    const entries = spawnSync("tar", ["-tzf", packed], { encoding: "utf8" });
+    assert.equal(entries.status, 0, entries.stderr);
+    assert.equal(
+      entries.stdout
+        .trim()
+        .split("\n")
+        .some((entry) => entry.endsWith("/")),
+      false,
+    );
+    const packedManifest = spawnSync("tar", ["-xOf", packed, "package/package.json"], {
+      encoding: "utf8",
+    });
+    assert.equal(packedManifest.status, 0, packedManifest.stderr);
+    assert.equal(JSON.parse(packedManifest.stdout).transformed, true);
+  });
+
   it("publishes an absent version", () => {
     assert.equal(npmReleaseMatches(identity, undefined), false);
   });

@@ -44,6 +44,15 @@ export type NpmArchiveManifestTransform = (
   manifest: NpmArchiveManifest,
 ) => Readonly<Record<string, unknown>>;
 
+function archiveFileEntries(directory: string, prefix = ""): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    return entry.isDirectory()
+      ? archiveFileEntries(join(directory, entry.name), relativePath)
+      : [relativePath];
+  });
+}
+
 function normalizedRepository(value: unknown): string | undefined {
   const url =
     typeof value === "string"
@@ -291,7 +300,7 @@ export function packNpmPackage(
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as NpmArchiveManifest;
     writeFileSync(manifestPath, `${JSON.stringify(transformManifest(manifest), null, 2)}\n`);
     rmSync(archive, { force: true });
-    exec.spawnSync("tar", ["-czf", archive, "-C", temp, "package"], {
+    exec.spawnSync("tar", ["-czf", archive, "-C", temp, ...archiveFileEntries(temp)], {
       cwd: process.cwd(),
       stdout: "ignore",
       stderr: "inherit",
