@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from dbx_tools.node_bindings import construct_javascript, invoke_javascript, require_runtime
-
+from .javascript import construct, invoke, runtime
 from .types import AccessToken, AuthOptions, CredentialStore, Token, TokenProvider
 
 _RUNTIME: Any | None = None
@@ -12,7 +11,7 @@ _RUNTIME: Any | None = None
 def javascript_runtime() -> Any:
     global _RUNTIME
     if _RUNTIME is None:
-        _RUNTIME = require_runtime(__file__)
+        _RUNTIME = runtime(__file__)
     return _RUNTIME
 
 
@@ -37,7 +36,7 @@ class AuthClient:
         options: AuthOptions | None = None,
     ) -> None:
         runtime = javascript_runtime()
-        self._client = construct_javascript(
+        self._client = construct(
             runtime["AuthClient"],
             key,
             {
@@ -51,16 +50,16 @@ class AuthClient:
         )
 
     def store_name(self) -> str:
-        return str(invoke_javascript(self._client, "storeName"))
+        return str(invoke(self._client, "storeName"))
 
     async def login(self) -> AccessToken:
-        return _access_token(await invoke_javascript(self._client, "login"))
+        return _access_token(await invoke(self._client, "login"))
 
     async def token(self, login: bool | None = None) -> AccessToken:
-        return _access_token(await invoke_javascript(self._client, "tokenWithLogin", login))
+        return _access_token(await invoke(self._client, "tokenWithLogin", login))
 
     async def force_refresh(self, login: bool = True) -> AccessToken:
-        return _access_token(await invoke_javascript(self._client, "forceRefresh", login))
+        return _access_token(await invoke(self._client, "forceRefresh", login))
 
     async def refresh_rejected_token(
         self,
@@ -68,7 +67,7 @@ class AuthClient:
         login: bool = True,
     ) -> AccessToken:
         return _access_token(
-            await invoke_javascript(
+            await invoke(
                 self._client,
                 "refreshRejectedToken",
                 stale_access_token,
@@ -77,7 +76,7 @@ class AuthClient:
         )
 
     async def logout(self) -> None:
-        await invoke_javascript(self._client, "logout")
+        await invoke(self._client, "logout")
 
 
 def _access_token(value: Any) -> AccessToken:

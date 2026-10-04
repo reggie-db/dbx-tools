@@ -27,7 +27,7 @@
       "description": "Bundle the public authentication package for PythonMonkey",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root packages/py/node-bindings/shims --source '@dbx-tools/auth for PythonMonkey'"
+          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey'"
         }
       ]
     },
@@ -36,7 +36,7 @@
       "description": "Verify the committed PythonMonkey authentication runtime is current",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root packages/py/node-bindings/shims --source '@dbx-tools/auth for PythonMonkey' --check"
+          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey' --check"
         }
       ]
     },

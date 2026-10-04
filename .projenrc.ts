@@ -309,8 +309,8 @@ root.gitignore.addPatterns(
   ".home/",
   ".kanna/",
   "**/.logs/",
-  "!packages/py/node-bindings/shims/",
-  "!packages/py/node-bindings/shims/**",
+  "!projen/shims/python-node/",
+  "!projen/shims/python-node/**",
 );
 
 // ---------------------------------------------------------------------------
@@ -1510,18 +1510,11 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
 const pythonPackages: project.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
-    directory: "node-bindings",
-    description:
-      "Python host bindings and PythonMonkey runtime loading for dbx-tools packages",
-    internalDependencies: ["core"],
-    dependencies: ["filelock>=3.16,<4", "httpx>=0.28,<1", "pythonmonkey>=1.3,<2"],
-  },
-  {
     directory: "auth",
     description:
       "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey",
-    internalDependencies: ["node-bindings"],
-    dependencies: [],
+    internalDependencies: [],
+    dependencies: ["filelock>=3.16,<4", "httpx>=0.28,<1", "pythonmonkey>=1.3,<2"],
   },
   {
     directory: "core",
@@ -1582,7 +1575,7 @@ root.addTask("auth:python-runtime", {
     "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/index.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
-    "--shim-root packages/py/node-bindings/shims",
+    "--shim-root projen/shims/python-node",
     "--source '@dbx-tools/auth for PythonMonkey'",
   ].join(" "),
 });
@@ -1601,7 +1594,7 @@ const authPythonRuntimeCheck = root.addTask("auth:python-runtime:check", {
     "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/index.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
-    "--shim-root packages/py/node-bindings/shims",
+    "--shim-root projen/shims/python-node",
     "--source '@dbx-tools/auth for PythonMonkey'",
     "--check",
   ].join(" "),

@@ -180,28 +180,27 @@ Primary package areas:
   Node uses `@dbx-tools/core` directly for process execution and file locking,
   plus `node:fs` for credential persistence. It must not depend on Rust only for
   Databricks App detection.
-- `packages/py/node-bindings` owns PythonMonkey's Node compatibility layer. Bun
-  aliases only the Node modules a bundle actually imports onto the package's
-  TypeScript shims; those shims call Python host functions installed on
-  `globalThis`. Keep the shim surface trace-driven rather than mirroring whole
+- `projen/shims/python-node` owns PythonMonkey's Node compatibility layer. Bun
+  aliases only the Node modules a bundle actually imports onto these build-time
+  TypeScript shims; the shims call Python's standard library directly through
+  PythonMonkey's built-in `globalThis.python`. Keep the shim surface trace-driven rather than mirroring whole
   Node modules. The auth bundle currently needs synchronous profile-file reads,
   home/path resolution, SHA-256, process execution, and filesystem operations.
   Only Node built-ins may be shimmed. Third-party libraries and the real
   `@dbx-tools/core` modules run unchanged through normal Node imports. Production
   TypeScript contains no Python callbacks; Python compatibility belongs entirely
-  in these shared build-time shims.
+  in these build-time shims.
   Python credential stores retain file locks, so do not add a JavaScript
   file-lock shim. Generate bundles with
   `projen/tasks/python-node-bindings.ts`; package tasks must check committed
   output before tests and release.
 - `packages/py/auth` executes the provider-neutral `@dbx-tools/auth` lifecycle
-  through a committed PythonMonkey bundle and depends on `dbx-tools-node-bindings`
-  for direct Node import shims. Keep profile selection, CLI U2M, PAT handling,
+  through a committed PythonMonkey bundle. Keep profile selection, CLI U2M, PAT handling,
   token refresh, check-lock-recheck coordination, login policy, and
   rejected-token handling in the JavaScript source of truth. Python owns only
-  the credential-store protocols and host callbacks. It returns complete request headers,
+  the credential-store protocols and Python-facing adapters. It returns complete request headers,
   including `X-Databricks-Workspace-Id` when configured. Regenerate the bundle
-  through `bun run auth:python-bridge`; tests and release validation must reject
+  through `bun run auth:python-runtime`; tests and release validation must reject
   stale generated output.
 - `packages/rs/core` retains the Rust authentication implementation for native
   binaries while Node consumers move to `@dbx-tools/auth`. It also owns shared

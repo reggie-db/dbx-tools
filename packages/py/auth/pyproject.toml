@@ -9,7 +9,9 @@ requires-python = ">=3.11,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
 dependencies = [
-  "dbx-tools-node-bindings @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/node-bindings"
+  "filelock>=3.16,<4",
+  "httpx>=0.28,<1",
+  "pythonmonkey>=1.3,<2"
 ]
 
   [project.urls]

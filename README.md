@@ -211,7 +211,7 @@ runtime behavior, module maps, and links to adjacent packages.
 Install the published Python packages by distribution name:
 
 ```bash
-uv add dbx-tools-auth dbx-tools-core dbx-tools-core-rs dbx-tools-google-rs dbx-tools-node-bindings dbx-tools-postgres dbx-tools-graphiti
+uv add dbx-tools-auth dbx-tools-core dbx-tools-core-rs dbx-tools-google-rs dbx-tools-postgres dbx-tools-graphiti
 ```
 
 The Python packages support Python 3.11 through the Python 3 release line.
@@ -224,15 +224,14 @@ credential storage are published in
 [`dbx-tools-google-rs`](packages/py/google-rs). Generated Node bindings use the
 matching `@dbx-tools/*-rs` packages.
 
-| Package                                                | Purpose                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dbx-tools-auth`](packages/py/auth)                   | Runs the provider-neutral `@dbx-tools/auth` token lifecycle through PythonMonkey, selects Databricks CLI profiles with the JavaScript rules, and returns authorization plus workspace headers.                                                                                     |
-| [`dbx-tools-core`](packages/py/core)                   | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                             |
-| [`dbx-tools-core-rs`](packages/py/core-rs)             | Detects Databricks App runtimes, parses Lakebase addresses, reports CLI availability, and provides U2M, M2M, PAT, profile resolution, token lifecycle, locking, and credential storage through generated Rust bindings.                                                            |
-| [`dbx-tools-google-rs`](packages/py/google-rs)         | Resolves Google Application Default Credentials and keeps short-lived access tokens in process memory.                                                                                                                                                                             |
-| [`dbx-tools-node-bindings`](packages/py/node-bindings) | Loads committed CommonJS bundles through PythonMonkey and provides reusable process, HTTP, async file, lease-lock, atomic-write, and browser adapters for Python packages that reuse TypeScript logic.                                                                             |
-| [`dbx-tools-postgres`](packages/py/postgres)           | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
-| [`dbx-tools-graphiti`](packages/py/graphiti)           | Launches upstream Graphiti's MCP server with native Neo4j 5 and the managed Rust model proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.       |
+| Package                                        | Purpose                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`dbx-tools-auth`](packages/py/auth)           | Runs the provider-neutral `@dbx-tools/auth` token lifecycle through PythonMonkey, selects Databricks CLI profiles with the JavaScript rules, and returns authorization plus workspace headers.                                                                                     |
+| [`dbx-tools-core`](packages/py/core)           | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                             |
+| [`dbx-tools-core-rs`](packages/py/core-rs)     | Detects Databricks App runtimes, parses Lakebase addresses, reports CLI availability, and provides U2M, M2M, PAT, profile resolution, token lifecycle, locking, and credential storage through generated Rust bindings.                                                            |
+| [`dbx-tools-google-rs`](packages/py/google-rs) | Resolves Google Application Default Credentials and keeps short-lived access tokens in process memory.                                                                                                                                                                             |
+| [`dbx-tools-postgres`](packages/py/postgres)   | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
+| [`dbx-tools-graphiti`](packages/py/graphiti)   | Launches upstream Graphiti's MCP server with native Neo4j 5 and the managed Rust model proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.       |
 
 ### Load One Brand File
 

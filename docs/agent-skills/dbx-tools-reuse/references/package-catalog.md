@@ -47,7 +47,6 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `dbx-tools-core-rs` - Generated Python bindings for Databricks authentication, runtime utilities, and Lakebase address parsing from the dbx-tools-core Rust crate. Source: `packages/py/core-rs`.
 - `dbx-tools-google-rs` - Generated Python bindings for Google Application Default Credentials from the dbx-tools-google Rust crate. Source: `packages/py/google-rs`.
 - `dbx-tools-graphiti` - Native launcher for Graphiti with local Neo4j and dbx-model-proxy processes configured for Databricks Model Serving. It runs directly on the host without Docker, Podman, or another container runtime. Source: `packages/py/graphiti`.
-- `dbx-tools-node-bindings` - Python host bindings for dbx-tools packages that execute bundled TypeScript through PythonMonkey. Source: `packages/py/node-bindings`.
 - `dbx-tools-postgres` - Python Lakebase/Postgres connection setup, advisory locks, and topic fan-out for services that already hold a Databricks WorkspaceClient. This package is the Python counterpart to @dbx-tools/postgres. Lakebase address parsing comes directly from the generated dbx-tools-core-rs Rust bindings. Source: `packages/py/postgres`.
 
 ## Rust

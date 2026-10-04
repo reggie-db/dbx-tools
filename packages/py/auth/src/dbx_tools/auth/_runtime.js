@@ -1670,7 +1670,7 @@ var require_buffer = __commonJS((exports2) => {
   }();
 });
 
-// packages/py/node-bindings/shims/host.ts
+// projen/shims/python-node/host.ts
 function evaluate(source) {
   return python.eval(source);
 }
@@ -1812,7 +1812,7 @@ var init_host = __esm(() => {
   installPythonGlobals();
 });
 
-// packages/py/node-bindings/shims/path.ts
+// projen/shims/python-node/path.ts
 var exports_path = {};
 __export(exports_path, {
   win32: () => win32,
@@ -7112,7 +7112,7 @@ var require_stream_browserify = __commonJS((exports2, module2) => {
   };
 });
 
-// packages/py/node-bindings/shims/fs-promises.ts
+// projen/shims/python-node/fs-promises.ts
 var exports_fs_promises = {};
 __export(exports_fs_promises, {
   writeFile: () => writeFile,
@@ -7660,7 +7660,7 @@ var require_browser2 = __commonJS((exports2, module2) => {
   };
 });
 
-// packages/py/node-bindings/shims/fs.ts
+// projen/shims/python-node/fs.ts
 var exports_fs = {};
 __export(exports_fs, {
   utimes: () => utimes,
@@ -20082,7 +20082,7 @@ __export(exports_dbx_tools_python_entry, {
 });
 module.exports = __toCommonJS(exports_dbx_tools_python_entry);
 
-// packages/py/node-bindings/shims/bootstrap.ts
+// projen/shims/python-node/bootstrap.ts
 init_host();
 var import_node_buffer = __toESM(require_buffer(), 1);
 installPythonGlobals();
@@ -20117,7 +20117,7 @@ __export(exports_databricks_auth, {
   PersistentAuth: () => PersistentAuth
 });
 
-// packages/py/node-bindings/shims/os.ts
+// projen/shims/python-node/os.ts
 init_host();
 function homedir() {
   return pythonHost().os.homedir();
@@ -20641,7 +20641,7 @@ __export(exports_databricks_cli, {
 });
 init_path();
 
-// packages/py/node-bindings/shims/child-process.ts
+// projen/shims/python-node/child-process.ts
 init_host();
 var import_node_events = __toESM(require_events(), 1);
 var import_node_stream = __toESM(require_stream_browserify(), 1);
@@ -20700,7 +20700,7 @@ function execFile(command, args, _options, callback) {
   }, (error) => callback(error instanceof Error ? error : new Error(String(error))));
 }
 
-// packages/py/node-bindings/shims/crypto.ts
+// projen/shims/python-node/crypto.ts
 init_host();
 
 class PythonHash {
@@ -20737,7 +20737,7 @@ function randomUUID() {
 init_fs_promises();
 init_path();
 
-// packages/py/node-bindings/shims/url.ts
+// projen/shims/python-node/url.ts
 init_host();
 function fileURLToPath(url) {
   return pythonHost().path.fileUrlToPath(String(url));
@@ -24871,7 +24871,7 @@ async function ensure(name, url, options = {}) {
   });
 }
 
-// packages/py/node-bindings/shims/readline.ts
+// projen/shims/python-node/readline.ts
 function createInterface(options) {
   return {
     close() {},
@@ -24889,7 +24889,7 @@ function createInterface(options) {
   };
 }
 
-// packages/py/node-bindings/shims/stream-promises.ts
+// projen/shims/python-node/stream-promises.ts
 function finished(stream) {
   if (stream.writableFinished)
     return Promise.resolve();

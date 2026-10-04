@@ -6,8 +6,8 @@ PythonMonkey's SpiderMonkey runtime. Token refresh, check-lock-recheck
 coordination, login policy, and rejected-token handling stay in the JavaScript
 implementation instead of being copied into Python.
 
-Python supplies host capabilities through `dbx-tools-node-bindings`, which
-aliases the normal Node imports during the committed Bun build:
+The committed Bun build aliases normal Node imports to PythonMonkey shims that
+call Python's standard library directly:
 
 - `node:fs` supplies the exact synchronous profile-file operations auth uses.
 - `node:os`, `node:path`, and `node:crypto` supply home, path, and SHA-256 operations.
@@ -16,8 +16,8 @@ aliases the normal Node imports during the committed Bun build:
   unchanged on top of those built-ins.
 - Shared TypeScript handles App detection and semantic CLI version checks; the
   auth source contains no Python-specific runtime callbacks.
-- `MemoryCredentialStore` and `FileCredentialStore` remain Python adapters so
-  file locking does not need a JavaScript core shim.
+- `MemoryCredentialStore` and `FileCredentialStore` remain Python-facing
+  adapters with native Python locking.
 - The bundled TypeScript owns profile resolution, CLI U2M, PAT selection,
   lifecycle caching, and request-header generation.
 - PAT profiles use their configured token directly without invoking the CLI.

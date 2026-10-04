@@ -1,19 +1,54 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
-from dbx_tools.node_bindings import (
-    FileLeaseLocks,
-    MemoryLeaseLocks,
-    atomic_write_text,
-    ensure_directory,
-    read_text,
-)
+from filelock import AsyncFileLock
 
 from .client import token_to_javascript
 from .types import Token
+
+
+class MemoryLeaseLocks:
+    def __init__(self) -> None:
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._leases: dict[str, asyncio.Lock] = {}
+
+    async def acquire(self, key: str, timeout_ms: int) -> str:
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        await asyncio.wait_for(lock.acquire(), timeout_ms / 1000)
+        lease = uuid.uuid4().hex
+        self._leases[lease] = lock
+        return lease
+
+    async def release(self, lease: str) -> None:
+        lock = self._leases.pop(lease, None)
+        if lock and lock.locked():
+            lock.release()
+
+
+class FileLeaseLocks:
+    def __init__(self, root: Path | str) -> None:
+        self.root = Path(root).expanduser().resolve()
+        self._leases: dict[str, AsyncFileLock] = {}
+
+    async def acquire(self, key: str, timeout_ms: int) -> str:
+        await _ensure_directory(self.root)
+        digest = hashlib.sha256(key.encode()).hexdigest()
+        lock = AsyncFileLock(self.root / f"{digest}.lock")
+        await lock.acquire(timeout=timeout_ms / 1000)
+        lease = uuid.uuid4().hex
+        self._leases[lease] = lock
+        return lease
+
+    async def release(self, lease: str) -> None:
+        lock = self._leases.pop(lease, None)
+        if lock:
+            await lock.release()
 
 
 class MemoryCredentialStore:
@@ -59,8 +94,8 @@ class FileCredentialStore:
         return _deserialize_token(value)
 
     async def prepare_write(self) -> None:
-        await ensure_directory(self.root)
-        await ensure_directory(self.root / "locks")
+        await _ensure_directory(self.root)
+        await _ensure_directory(self.root / "locks")
 
     async def save(self, key: str, token: Token) -> None:
         await self.prepare_write()
@@ -92,16 +127,14 @@ class FileCredentialStore:
         return "file"
 
     async def _read_cache(self) -> dict[str, Any]:
-        source = await read_text(
-            self.root / "token-cache.json",
-        )
+        source = await _read_text(self.root / "token-cache.json")
         cache = json.loads(source) if source else {"version": 1, "tokens": {}}
         if cache.get("version") != 1 or not isinstance(cache.get("tokens"), dict):
             raise ValueError("Token cache must use version 1")
         return cache
 
     async def _write_cache(self, cache: dict[str, Any]) -> None:
-        await atomic_write_text(
+        await _atomic_write_text(
             self.root / "token-cache.json",
             f"{json.dumps(cache, indent=2)}\n",
         )
@@ -130,3 +163,28 @@ def _deserialize_token(value: object) -> Token | None:
     if isinstance(value.get("expiry"), str):
         token["expiry"] = value["expiry"]
     return token
+
+
+async def _ensure_directory(path: Path, *, mode: int = 0o700) -> None:
+    await asyncio.to_thread(path.mkdir, parents=True, exist_ok=True, mode=mode)
+
+
+async def _read_text(path: Path) -> str | None:
+    try:
+        return await asyncio.to_thread(path.read_text, encoding="utf-8")
+    except FileNotFoundError:
+        return None
+
+
+async def _atomic_write_text(path: Path, content: str, *, mode: int = 0o600) -> None:
+    await _ensure_directory(path.parent)
+    temporary = path.parent / f".{path.name}-{uuid.uuid4().hex}.tmp"
+    try:
+        await asyncio.to_thread(temporary.write_text, content, encoding="utf-8")
+        await asyncio.to_thread(temporary.chmod, mode)
+        await asyncio.to_thread(temporary.replace, path)
+    finally:
+        try:
+            await asyncio.to_thread(temporary.unlink)
+        except FileNotFoundError:
+            pass
