@@ -29967,7 +29967,7 @@ function classifyEndpoints(endpoints) {
 }
 // packages/js/node/model/src/generated/model-capabilities.json
 var model_capabilities_default = {
-  generatedAt: 1791144427,
+  generatedAt: 1791150180,
   capabilities: {
     responses: [
       "gpt-5",
@@ -30030,6 +30030,11 @@ var model_capabilities_default = {
       "gpt-6-sol"
     ],
     webSearch: [
+      "gemini-2-5-flash",
+      "gemini-2-5-pro",
+      "gemini-3-1-flash-lite",
+      "gemini-3-1-pro",
+      "gemini-3-flash",
       "gpt-5",
       "gpt-5-1",
       "gpt-5-2",
@@ -30039,8 +30044,15 @@ var model_capabilities_default = {
       "gpt-5-4-nano",
       "gpt-5-5",
       "gpt-5-5-pro",
+      "gpt-5-6-luna",
+      "gpt-5-6-sol",
+      "gpt-5-6-terra",
       "gpt-5-mini",
-      "gpt-5-nano"
+      "gpt-5-nano",
+      "gpt-6-1-sol",
+      "gpt-6-astra",
+      "gpt-6-luna",
+      "gpt-6-sol"
     ]
   }
 };

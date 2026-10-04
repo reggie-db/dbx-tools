@@ -30,17 +30,21 @@ describe("model metadata generation", () => {
 
   it("parses response, image, patch, and web-search capabilities", () => {
     const responses = `<h2 id="databricks-hosted-foundation-models">Models</h2>
-      <p><code>databricks-gpt-5-4</code></p>
+      <p><code>databricks-gpt-5-4</code> <code>databricks-gpt-5-6-sol</code></p>
       <h2 id="supported-input-types">Inputs</h2><p>Text and image</p>
       <h2 id="limitations">Limitations</h2><p><code>apply_patch</code> is supported.</p>`;
-    const webSearch = `<h2 id="openai-models">Models</h2><p><code>databricks-gpt-5-4</code></p>`;
+    const webSearch = `<h2 id="supported-models">Supported models</h2>
+      <h3 id="gemini-models">Gemini models</h3><p><code>databricks-gemini-3-1-pro</code></p>
+      <h3 id="openai-models">OpenAI models</h3><p><code>databricks-gpt-5-4</code></p>
+      <h3 id="anthropic-models-via-mcp">Anthropic models (via MCP)</h3>
+      <p><code>databricks-claude-sonnet-4-6</code></p>`;
     assert.deepEqual(parseModelCapabilities(responses, webSearch, 42), {
       generatedAt: 42,
       capabilities: {
-        responses: ["gpt-5-4"],
-        imageInput: ["gpt-5-4"],
-        applyPatch: ["gpt-5-4"],
-        webSearch: ["gpt-5-4"],
+        responses: ["gpt-5-4", "gpt-5-6-sol"],
+        imageInput: ["gpt-5-4", "gpt-5-6-sol"],
+        applyPatch: ["gpt-5-4", "gpt-5-6-sol"],
+        webSearch: ["gemini-3-1-pro", "gpt-5-4", "gpt-5-6-sol"],
       },
     });
   });
@@ -73,6 +77,9 @@ describe("model metadata lookup", () => {
       serviceNames: { openai: "gpt-5.4" },
     };
     assert.equal(modelCapabilitiesFor(endpoint).responses, true);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-5-6-sol").webSearch, true);
+    assert.equal(modelCapabilitiesFor("system.ai.gemini-3-1-pro").webSearch, true);
+    assert.equal(modelCapabilitiesFor("databricks-claude-sonnet-4-6").webSearch, false);
     assert.deepEqual(modelRateLimitsFor(endpoint), modelRateLimitsFor("gpt-5.4"));
     assert.equal(modelRateLimitsFor("system.ai.bge-large-en")?.queriesPerHour, 2_160_000);
     assert.deepEqual(modelMetadataFor(endpoint).status, { deprecated: false });

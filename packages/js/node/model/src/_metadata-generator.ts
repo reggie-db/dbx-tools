@@ -56,9 +56,9 @@ export function parseModelCapabilities(
   )
     ? responses
     : [];
-  const webSearch = modelsAfterHeading(load(webSearchHtml), "openai-models");
+  const webSearch = nativeWebSearchModels(load(webSearchHtml), responses);
   if (webSearch.length === 0) {
-    throw new Error("Databricks documentation contained no OpenAI web-search models");
+    throw new Error("Databricks documentation contained no native web-search models");
   }
   return {
     generatedAt,
@@ -105,6 +105,33 @@ function modelsAfterHeading($: CheerioAPI, headingId: string): string[] {
   return [
     ...new Set(codeValuesAfterHeading($, headingId).flatMap((value) => modelKey(value) ?? [])),
   ].sort();
+}
+
+function nativeWebSearchModels($: CheerioAPI, responses: readonly string[]): string[] {
+  const families = new Set<string>();
+  const models = new Set<string>();
+  let nativeSection = false;
+  for (const element of sectionElements($, "supported-models")) {
+    if (headingLevel(nodeTagName(element.get(0))) !== undefined) {
+      nativeSection = !collapseText(element).toLowerCase().includes("via mcp");
+      continue;
+    }
+    if (!nativeSection) continue;
+    const values = nodeTagName(element.get(0)) === "code" ? [collapseText(element)] : [];
+    element.find("code").each((_, code) => {
+      values.push(collapseText($(code)));
+    });
+    for (const value of values) {
+      const model = modelKey(value);
+      if (!model) continue;
+      models.add(model);
+      families.add(model.split("-", 1)[0]);
+    }
+  }
+  for (const model of responses) {
+    if (families.has(model.split("-", 1)[0])) models.add(model);
+  }
+  return [...models].sort();
 }
 
 function codeValuesAfterHeading($: CheerioAPI, headingId: string): string[] {
