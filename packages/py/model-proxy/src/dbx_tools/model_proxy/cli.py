@@ -32,6 +32,11 @@ def main(arguments: Sequence[str] | None = None) -> None:
         print(_version())
         return
 
+    if "--concurrent" in args:
+        args.remove("--concurrent")
+        if not _has_option(args, "--port"):
+            args.extend(["--port", "4001"])
+
     parser = argparse.ArgumentParser(prog="dbx-model-proxy", add_help=False)
     parser.add_argument("--profile")
     known, forwarded = parser.parse_known_args(args)
@@ -56,3 +61,7 @@ def _version() -> str:
         return version(_DISTRIBUTION)
     except PackageNotFoundError:
         return "0.0.0"
+
+
+def _has_option(arguments: Sequence[str], name: str) -> bool:
+    return name in arguments or any(argument.startswith(f"{name}=") for argument in arguments)

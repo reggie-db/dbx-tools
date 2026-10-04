@@ -104,7 +104,7 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   const program = new Command()
     .name(name)
     .description(
-      "Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and native proxies",
+      "Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and local proxies",
     )
     .showHelpAfterError()
     .helpOption("-h, --help", `Show ${name} help`);
@@ -144,7 +144,7 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   addForwardedCommand(
     program,
     "model-proxy",
-    "Run or manage the native Databricks model proxy",
+    "Run or manage the Python Databricks model proxy",
     async () => (await import("@dbx-tools/cli-model-proxy/cli")).buildProgram,
   );
 

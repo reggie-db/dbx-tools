@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/cli-model-proxy",
-  "description": "Service lifecycle CLI for dbx-model-proxy",
+  "description": "Python model-proxy runner and service lifecycle CLI",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -24,7 +24,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/rust-binary": "workspace:^",
+    "@dbx-tools/core": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "commander": "catalog:"
   },

@@ -92,3 +92,27 @@ def test_service_rejects_databricks_app(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="Databricks App"):
         service.main(["status"], deps)
+
+
+def test_concurrent_service_uses_independent_identity_and_port(
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    runner = FakeRunner()
+
+    service.main(
+        ["install", "--concurrent", "--systray", "always"],
+        dependencies(tmp_path, runner, "linux"),
+    )
+
+    config_dir = tmp_path / ".dbx-tools/model-proxy-python"
+    unit = tmp_path / ".config/systemd/user/dbx-tools-model-proxy-python.service"
+    tray = tmp_path / ".config/systemd/user/dbx-tools-model-proxy-python-tray.service"
+    settings = json.loads((config_dir / "service.json").read_text())
+    status = json.loads(capsys.readouterr().out)
+    assert settings["server_args"] == ["--port", "4001"]
+    assert settings["concurrent"] is True
+    assert status["url"] == "http://127.0.0.1:4001"
+    assert unit.is_file()
+    assert tray.is_file()
+    assert "dbx-tools-model-proxy-python" in tray.read_text()

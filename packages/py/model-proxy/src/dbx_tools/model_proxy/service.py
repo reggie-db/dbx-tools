@@ -16,9 +16,30 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-SERVICE_NAME = "dbx-tools-model-proxy"
-SERVICE_LABEL = "com.dbx-tools.model-proxy"
-TRAY_LABEL = f"{SERVICE_LABEL}.tray"
+
+@dataclass(frozen=True)
+class ServiceIdentity:
+    name: str
+    label: str
+    config_name: str
+    concurrent: bool = False
+
+    @property
+    def tray_label(self) -> str:
+        return f"{self.label}.tray"
+
+
+DEFAULT_IDENTITY = ServiceIdentity(
+    name="dbx-tools-model-proxy",
+    label="com.dbx-tools.model-proxy",
+    config_name="model-proxy",
+)
+CONCURRENT_IDENTITY = ServiceIdentity(
+    name="dbx-tools-model-proxy-python",
+    label="com.dbx-tools.model-proxy-python",
+    config_name="model-proxy-python",
+    concurrent=True,
+)
 
 
 @dataclass(frozen=True)
@@ -29,6 +50,7 @@ class ServiceSettings:
     port: int
     systray: bool
     path: str
+    concurrent: bool = False
 
     @property
     def url(self) -> str:
@@ -39,6 +61,7 @@ class ServiceSettings:
 @dataclass(frozen=True)
 class ServicePaths:
     config_dir: Path
+    identity: ServiceIdentity
 
     @property
     def settings(self) -> Path:
@@ -120,17 +143,23 @@ class LaunchdBackend(ServiceBackend):
 
     @property
     def service_plist(self) -> Path:
-        return self.dependencies.home / "Library/LaunchAgents" / f"{SERVICE_LABEL}.plist"
+        return (
+            self.dependencies.home / "Library/LaunchAgents" / f"{self.paths.identity.label}.plist"
+        )
 
     @property
     def tray_plist(self) -> Path:
-        return self.dependencies.home / "Library/LaunchAgents" / f"{TRAY_LABEL}.plist"
+        return (
+            self.dependencies.home
+            / "Library/LaunchAgents"
+            / f"{self.paths.identity.tray_label}.plist"
+        )
 
     def install(self, settings: ServiceSettings) -> None:
         self.uninstall(settings)
         _write_plist(
             self.service_plist,
-            SERVICE_LABEL,
+            self.paths.identity.label,
             _proxy_command(settings),
             self.paths.service_log,
             settings.path,
@@ -140,7 +169,7 @@ class LaunchdBackend(ServiceBackend):
         if settings.systray:
             _write_plist(
                 self.tray_plist,
-                TRAY_LABEL,
+                self.paths.identity.tray_label,
                 _tray_command(settings, self.paths),
                 self.paths.tray_log,
                 settings.path,
@@ -152,18 +181,25 @@ class LaunchdBackend(ServiceBackend):
         if not self.registered():
             self._run(["launchctl", "bootstrap", self.domain, str(self.service_plist)])
         else:
-            self._run(["launchctl", "kickstart", "-k", f"{self.domain}/{SERVICE_LABEL}"])
+            self._run(
+                ["launchctl", "kickstart", "-k", f"{self.domain}/{self.paths.identity.label}"]
+            )
         if settings.systray:
             tray_registered = (
                 self._run(
-                    ["launchctl", "print", f"{self.domain}/{TRAY_LABEL}"],
+                    ["launchctl", "print", f"{self.domain}/{self.paths.identity.tray_label}"],
                     check=False,
                 ).returncode
                 == 0
             )
             if tray_registered:
                 self._run(
-                    ["launchctl", "kickstart", "-k", f"{self.domain}/{TRAY_LABEL}"],
+                    [
+                        "launchctl",
+                        "kickstart",
+                        "-k",
+                        f"{self.domain}/{self.paths.identity.tray_label}",
+                    ],
                     check=False,
                 )
             elif self.tray_plist.is_file():
@@ -174,25 +210,35 @@ class LaunchdBackend(ServiceBackend):
 
     def stop(self, settings: ServiceSettings) -> None:
         if settings.systray:
-            self._run(["launchctl", "bootout", f"{self.domain}/{TRAY_LABEL}"], check=False)
-        self._run(["launchctl", "bootout", f"{self.domain}/{SERVICE_LABEL}"], check=False)
+            self._run(
+                ["launchctl", "bootout", f"{self.domain}/{self.paths.identity.tray_label}"],
+                check=False,
+            )
+        self._run(
+            ["launchctl", "bootout", f"{self.domain}/{self.paths.identity.label}"],
+            check=False,
+        )
 
     def uninstall(self, settings: ServiceSettings | None) -> None:
-        for label, path in ((TRAY_LABEL, self.tray_plist), (SERVICE_LABEL, self.service_plist)):
+        for label, path in (
+            (self.paths.identity.tray_label, self.tray_plist),
+            (self.paths.identity.label, self.service_plist),
+        ):
             self._run(["launchctl", "bootout", f"{self.domain}/{label}"], check=False)
             path.unlink(missing_ok=True)
 
     def registered(self) -> bool:
         return (
             self._run(
-                ["launchctl", "print", f"{self.domain}/{SERVICE_LABEL}"], check=False
+                ["launchctl", "print", f"{self.domain}/{self.paths.identity.label}"],
+                check=False,
             ).returncode
             == 0
         )
 
     def running(self) -> bool:
         result = self._run(
-            ["launchctl", "print", f"{self.domain}/{SERVICE_LABEL}"],
+            ["launchctl", "print", f"{self.domain}/{self.paths.identity.label}"],
             check=False,
         )
         return result.returncode == 0 and "state = running" in result.stdout
@@ -205,11 +251,11 @@ class SystemdBackend(ServiceBackend):
 
     @property
     def service_unit(self) -> Path:
-        return self.unit_dir / f"{SERVICE_NAME}.service"
+        return self.unit_dir / f"{self.paths.identity.name}.service"
 
     @property
     def tray_unit(self) -> Path:
-        return self.unit_dir / f"{SERVICE_NAME}-tray.service"
+        return self.unit_dir / f"{self.paths.identity.name}-tray.service"
 
     def install(self, settings: ServiceSettings) -> None:
         self.uninstall(settings)
@@ -229,7 +275,7 @@ class SystemdBackend(ServiceBackend):
                 self.paths.tray_log,
                 settings.path,
                 restart=False,
-                after=f"{SERVICE_NAME}.service",
+                after=self.service_unit.name,
             )
         self._run(["systemctl", "--user", "daemon-reload"])
         self._run(["systemctl", "--user", "enable", "--now", self.service_unit.name])
@@ -274,11 +320,11 @@ class SystemdBackend(ServiceBackend):
 class WindowsBackend(ServiceBackend):
     @property
     def service_task(self) -> str:
-        return r"\dbx-tools\model-proxy"
+        return rf"\dbx-tools\{self.paths.identity.config_name}"
 
     @property
     def tray_task(self) -> str:
-        return r"\dbx-tools\model-proxy-tray"
+        return rf"\dbx-tools\{self.paths.identity.config_name}-tray"
 
     def install(self, settings: ServiceSettings) -> None:
         self.uninstall(settings)
@@ -345,11 +391,13 @@ def main(
     _reject_databricks_app(deps.environment)
     parser = _parser()
     options = parser.parse_args(arguments)
-    paths = ServicePaths(Path(options.config_dir).expanduser().resolve())
+    identity = CONCURRENT_IDENTITY if options.concurrent else DEFAULT_IDENTITY
+    config_dir = options.config_dir or _default_config_dir(deps.home, identity)
+    paths = ServicePaths(Path(config_dir).expanduser().resolve(), identity)
     backend = _backend(paths, deps)
 
     if options.command == "install":
-        server_args = _server_args(options.server_args)
+        server_args = _server_args(options.server_args, concurrent=identity.concurrent)
         host, port = _server_address(server_args, deps.environment)
         systray = _resolve_systray(options.systray, deps.python, paths, deps)
         paths.config_dir.mkdir(parents=True, exist_ok=True)
@@ -360,6 +408,7 @@ def main(
             port=port,
             systray=systray,
             path=deps.environment.get("PATH", ""),
+            concurrent=identity.concurrent,
         )
         _save(paths.settings, settings)
         backend.install(settings)
@@ -396,15 +445,18 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dbx-model-proxy service")
     subcommands = parser.add_subparsers(dest="command", required=True)
     install = subcommands.add_parser("install", help="Install and start the per-user service")
-    install.add_argument("--config-dir", default=str(_default_config_dir(Path.home())))
+    install.add_argument("--config-dir")
+    install.add_argument("--concurrent", action="store_true")
     install.add_argument("--systray", choices=("auto", "always", "never"), default="auto")
     install.add_argument("server_args", nargs=argparse.REMAINDER)
     for name in ("start", "stop", "restart", "status"):
         command = subcommands.add_parser(name)
-        command.add_argument("--config-dir", default=str(_default_config_dir(Path.home())))
+        command.add_argument("--config-dir")
+        command.add_argument("--concurrent", action="store_true")
     for name in ("uninstall", "remove"):
         command = subcommands.add_parser(name)
-        command.add_argument("--config-dir", default=str(_default_config_dir(Path.home())))
+        command.add_argument("--config-dir")
+        command.add_argument("--concurrent", action="store_true")
         command.add_argument("--purge", action="store_true")
     return parser
 
@@ -419,12 +471,19 @@ def _backend(paths: ServicePaths, dependencies: ServiceDependencies) -> ServiceB
     raise RuntimeError(f"service installation is unsupported on {dependencies.platform}")
 
 
-def _default_config_dir(home: Path) -> Path:
-    return home / ".dbx-tools/model-proxy"
+def _default_config_dir(home: Path, identity: ServiceIdentity) -> Path:
+    return home / ".dbx-tools" / identity.config_name
 
 
-def _server_args(arguments: Sequence[str]) -> list[str]:
-    return list(arguments[1:] if arguments[:1] == ["--"] else arguments)
+def _server_args(arguments: Sequence[str], *, concurrent: bool) -> list[str]:
+    values = list(arguments[1:] if arguments[:1] == ["--"] else arguments)
+    if concurrent and not _has_option(values, "--port"):
+        values.extend(["--port", "4001"])
+    return values
+
+
+def _has_option(arguments: Sequence[str], name: str) -> bool:
+    return name in arguments or any(argument.startswith(f"{name}=") for argument in arguments)
 
 
 def _server_address(
@@ -457,6 +516,10 @@ def _tray_command(settings: ServiceSettings, paths: ServicePaths) -> list[str]:
         settings.url,
         "--config-dir",
         str(paths.config_dir),
+        "--name",
+        paths.identity.name,
+        "--title",
+        "dbx-tools model proxy Python A/B" if settings.concurrent else "dbx-tools model proxy",
     ]
 
 
@@ -566,7 +629,7 @@ def _write_plist(
                 "ProgramArguments": list(command),
                 "RunAtLoad": True,
                 "KeepAlive": keep_alive,
-                "ProcessType": "Interactive" if label == TRAY_LABEL else "Background",
+                "ProcessType": "Interactive" if label.endswith(".tray") else "Background",
                 "EnvironmentVariables": {"PATH": path_environment},
                 "StandardOutPath": str(log),
                 "StandardErrorPath": str(log),

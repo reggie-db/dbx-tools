@@ -64,12 +64,27 @@ def main(arguments: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="dbx-model-proxy-tray")
     parser.add_argument("--url", default="http://127.0.0.1:4000")
     parser.add_argument("--config-dir", default=str(Path.home() / ".dbx-tools/model-proxy"))
+    parser.add_argument("--name", default="dbx-tools-model-proxy")
+    parser.add_argument("--title", default="dbx-tools model proxy")
     parser.add_argument("--probe", action="store_true")
     options = parser.parse_args(arguments)
-    run_tray(options.url, Path(options.config_dir), probe=options.probe)
+    run_tray(
+        options.url,
+        Path(options.config_dir),
+        options.name,
+        options.title,
+        probe=options.probe,
+    )
 
 
-def run_tray(url: str, config_dir: Path, *, probe: bool = False) -> None:
+def run_tray(
+    url: str,
+    config_dir: Path,
+    name: str,
+    title: str,
+    *,
+    probe: bool = False,
+) -> None:
     import pystray
     from PIL import Image
 
@@ -142,7 +157,7 @@ def run_tray(url: str, config_dir: Path, *, probe: bool = False) -> None:
     icon_path = files("dbx_tools.model_proxy").joinpath(f"assets/{asset}")
     with icon_path.open("rb") as source:
         image = Image.open(source).copy()
-    icon = pystray.Icon("dbx-tools-model-proxy", image, "dbx-tools model proxy", menu)
+    icon = pystray.Icon(name, image, title, menu)
     if probe:
         return
     icon.run()

@@ -1,37 +1,37 @@
 # `@dbx-tools/cli-model-proxy`
 
-Lazy `dbx model-proxy` command group for direct proxy execution and per-user
-service management.
+Lazy `dbx model-proxy` command group for the Python LiteLLM proxy and its
+per-user service lifecycle.
 
-Direct execution preserves native argument forwarding:
+Direct execution preserves argument forwarding:
 
 ```sh
 dbx model-proxy --profile PROFILE
 ```
 
-Install the service with its optional native tray companion:
+Install the service with its optional native tray companion and dbx-tools icon:
 
 ```sh
 dbx model-proxy service install -- --profile PROFILE
 ```
 
-The service configuration defaults to `~/.dbx-tools/model-proxy`. Override it
-with `--config-dir`. Systray startup defaults to `auto`, which runs the
-tray executable's native capability probe before registration. Select
-`always` to require a supported tray session or `never` to install only the
-headless service. The service and companion use separate processes.
-Persistence also defaults to `auto`: direct execution uses memory and an
-installed service uses the shared `service.sqlite3`. Pass
-`--persistence memory|sqlite` to the native command for an explicit choice.
-`--show-sensitive` opts into unredacted authorization, cookie, token, and
-API-key header values in live GraphQL events. It defaults off.
+The CLI first accepts an already installed `dbx-model-proxy` only when its
+runtime metadata identifies the Python LiteLLM implementation at the same
+version as this npm package. Otherwise it uses `uv tool install` to install the
+matching `dbx-tools-model-proxy` release, then forwards argv to that stable tool
+environment. Set `DBX_TOOLS_MODEL_PROXY_COMMAND` to an explicit executable or
+`DBX_TOOLS_MODEL_PROXY_PACKAGE` to a local path or alternate Python requirement.
 
-This package does not define the lifecycle command tree or its options. It
-forwards argv to the Rust command. Before installation, it calls the Rust
-service requirements preflight with the original argv, restores a `--`
-that Commander stripped so server flags stay after that delimiter, installs
-the hidden tray executable only when requested, and forwards the preflight's
-resolved argv.
+The service configuration defaults to `~/.dbx-tools/model-proxy`. Override it
+with `--config-dir`. Systray startup defaults to `auto`, which probes the native
+backend before registration. Select `always` to require a supported desktop
+session or `never` for a headless service. Service and tray logs live beside the
+configuration as `service.log` and `tray.log`.
+
+Use `service install --concurrent` for side-by-side A/B testing with the Rust
+proxy. The Python service then uses port `4001`, a separate
+`~/.dbx-tools/model-proxy-python` directory, and independent service and tray
+registrations while the Rust proxy remains on port `4000`.
 
 Lifecycle commands:
 
@@ -47,7 +47,7 @@ dbx model-proxy service remove
 Uninstall retains the configuration directory and SQLite state. Pass
 `--purge` to remove them.
 
-On macOS and Linux, lifecycle operations use a user-level launchd or systemd
-service. On Windows, install uses current-user login startup and the native
-service runtime supervises the stored exact executable path for start, stop,
-and restart.
+macOS uses launchd, Linux uses systemd user units, and Windows uses current-user
+scheduled tasks. The tray opens local proxy pages, switches Databricks profiles,
+and can stop the service. Host service management is rejected inside Databricks
+Apps.

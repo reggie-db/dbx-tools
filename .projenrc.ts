@@ -513,11 +513,11 @@ project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) =
   p.addDeps("@dbx-tools/auth@workspace:^");
 });
 
-// cli-model-proxy: keeps direct native proxy forwarding lazy while adding the
-// service lifecycle command group and exact-version companion installation.
+// cli-model-proxy: keeps Python proxy installation and execution lazy while
+// forwarding the complete service and tray lifecycle to the exact-version tool.
 project.applyToProjects(root, { identifierName: "cli-model-proxy", tags: "cli" }, (p) => {
-  p.package.addField("description", "Service lifecycle CLI for dbx-model-proxy");
-  p.addDeps("@dbx-tools/rust-binary@workspace:^", "@dbx-tools/shared-core@workspace:^");
+  p.package.addField("description", "Python model-proxy runner and service lifecycle CLI");
+  p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-core@workspace:^");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
