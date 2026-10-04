@@ -9,7 +9,7 @@ import {
   listDatabricksProfiles,
   parseDatabricksConfig,
   resolveDatabricksProfile,
-} from "../src/profile.ts";
+} from "../src/_profile.ts";
 import { AuthKind, DatabricksAuthOptions, TargetKind } from "../src/types.ts";
 
 async function withConfig(source: string, action: (path: string) => void | Promise<void>) {

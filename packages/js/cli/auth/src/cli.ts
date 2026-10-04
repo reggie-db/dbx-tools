@@ -26,7 +26,6 @@ interface AuthCliOptions {
   target?: string;
   storage: StorageName;
   cacheDir?: string;
-  callbackImageSrc?: string;
   lockTimeoutSeconds: string;
   loginTimeoutSeconds: string;
   refreshBufferSeconds: string;
@@ -39,13 +38,13 @@ interface TokenCommandOptions {
 }
 
 interface AuthContext {
-  auth: databricks.PersistentAuthLike;
+  auth: databricks.AuthClient;
   close(): Promise<void>;
   storage?: StorageName;
 }
 
 interface AuthCliDependencies {
-  createPersistentAuth: typeof databricks.createPersistentAuth;
+  createAuthClient: typeof databricks.createAuthClient;
   writeJson(value: unknown): void;
   writeText(value: string): void;
 }
@@ -53,7 +52,7 @@ interface AuthCliDependencies {
 const DEFAULT_AUTH_OPTIONS = databricks.AuthOptions.create({});
 
 const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
-  createPersistentAuth: databricks.createPersistentAuth,
+  createAuthClient: databricks.createAuthClient,
   writeJson: (value) => {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   },
@@ -119,7 +118,6 @@ function bindingOptions(options: AuthCliOptions): databricks.DatabricksAuthOptio
     target: options.target,
     cacheDir: options.cacheDir,
     auth: databricks.AuthOptions.create({
-      callbackImageSrc: options.callbackImageSrc,
       lockTimeoutSeconds: parseInteger(options.lockTimeoutSeconds, "--lock-timeout-seconds", false),
       loginTimeoutSeconds: parseInteger(
         options.loginTimeoutSeconds,
@@ -142,7 +140,7 @@ async function openAuth(
   dependencies: AuthCliDependencies,
 ): Promise<AuthContext> {
   return {
-    auth: await dependencies.createPersistentAuth(
+    auth: await dependencies.createAuthClient(
       bindingOptions(options),
       bindingStorage(options.storage),
     ),
@@ -219,12 +217,6 @@ function addCommonOptions(program: Command): Command {
       new Option("--cache-dir <path>", "Credential cache directory").env("DBX_TOOLS_U2M_CACHE_DIR"),
     )
     .addOption(
-      new Option(
-        "--callback-image-src <src>",
-        "Callback logo URL or data URI (defaults to dbx tools branding)",
-      ),
-    )
-    .addOption(
       new Option("--lock-timeout-seconds <seconds>", "Credential lock timeout")
         .default(DEFAULT_AUTH_OPTIONS.lockTimeoutSeconds.toString())
         .env("DBX_TOOLS_U2M_LOCK_TIMEOUT_SECONDS"),
@@ -288,7 +280,7 @@ export function buildProgram(
     .description("Print the configured or automatically detected profile")
     .action(async () => {
       await withAuth(options(), dependencies, async ({ auth }) => {
-        dependencies.writeText(auth.status().profile);
+        dependencies.writeText(auth.profile().name);
       });
     });
 

@@ -8,30 +8,24 @@ import sys
 from pathlib import Path
 from typing import get_type_hints
 
+import dbx_tools.auth as auth_package
 from dbx_tools.auth import (
     AccessTokenResponse,
     AuthClient,
     AuthOptions,
     DatabricksAuthOptions,
-    PersistentAuth,
     create_auth_client,
-    create_persistent_auth,
-    normalize_host,
 )
 
 APP_ENVIRONMENT = {"DBX_TOOLS_DATABRICKS_APP_ENV": "true"}
 
 
-async def test_generated_function_wrapper_calls_embedded_runtime() -> None:
-    assert await normalize_host("https://example.cloud.databricks.com/") == (
-        "https://example.cloud.databricks.com"
-    )
-
-
 def test_generated_package_exposes_ambient_auth_client() -> None:
+    assert "create_persistent_auth" not in auth_package.__all__
+    assert "parse_databricks_config" not in auth_package.__all__
+    assert "resolve_config_file" not in auth_package.__all__
     assert get_type_hints(create_auth_client)["return"] is AuthClient
     assert get_type_hints(AuthClient.token)["return"] is AccessTokenResponse
-    assert get_type_hints(create_persistent_auth)["return"] is PersistentAuth
     script = """
 import asyncio
 import json
@@ -42,6 +36,9 @@ async def main():
     print(json.dumps({
         "token": await auth.token(False),
         "headers": await auth.authenticate(False),
+        "profile": await auth.profile(),
+        "namedProfile": await auth.profile("DEFAULT"),
+        "profiles": await auth.list_profiles(True),
     }, sort_keys=True))
 
 asyncio.run(main())
@@ -64,10 +61,13 @@ asyncio.run(main())
     output = json.loads(result.stdout)
     assert output["token"]["accessToken"] == "ambient-token"
     assert output["headers"] == {"authorization": "Bearer ambient-token"}
+    assert output["profile"]["name"] == "DEFAULT"
+    assert output["namedProfile"] == output["profile"]
+    assert output["profiles"] == []
 
 
 async def test_generated_object_proxy_exposes_authentication_methods() -> None:
-    auth = await create_persistent_auth(
+    auth = await create_auth_client(
         DatabricksAuthOptions(
             host="https://example.cloud.databricks.com",
             workspace_id="workspace-id",
@@ -106,7 +106,7 @@ async def test_option_dataclasses_use_node_defaults_and_keyword_construction() -
         lock_timeout_seconds=30,
         login_timeout_seconds=900,
     )
-    auth = await create_persistent_auth(
+    auth = await create_auth_client(
         DatabricksAuthOptions(
             host="https://example.cloud.databricks.com",
             auth_type="pat",
@@ -126,7 +126,7 @@ async def test_file_storage_uses_python_flock_and_preserves_entries(tmp_path: Pa
     )
 
     async def authenticate(profile: str, token: str) -> None:
-        auth = await create_persistent_auth(
+        auth = await create_auth_client(
             {
                 "profile": profile,
                 "host": "https://example.cloud.databricks.com",

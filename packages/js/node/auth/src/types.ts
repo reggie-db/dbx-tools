@@ -154,8 +154,8 @@ export interface TokenProvider {
   canAuthenticateSilently(): boolean;
 }
 
-/** Stable facade shared by the CLI, HTTP client, and future language shims. */
-export interface PersistentAuthLike {
+/** Stable facade shared by Node, the CLI, and generated language bindings. */
+export interface AuthClient {
   challenge(): Promise<void>;
   token(login?: boolean): Promise<AccessToken>;
   authenticate(login?: boolean): Promise<Record<string, string>>;
@@ -168,6 +168,8 @@ export interface PersistentAuthLike {
   principal(): string;
   workspaceId(): string | undefined;
   authKind(): AuthKind;
+  profile(name?: string): DatabricksProfileSummary;
+  listProfiles(refresh?: boolean): DatabricksProfileSummary[];
 }
 
 /** Public OAuth client used by Databricks CLI-compatible user authentication. */

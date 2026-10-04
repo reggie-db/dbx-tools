@@ -7,7 +7,7 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from dbx_tools.auth import create_persistent_auth
+from dbx_tools.auth import create_auth_client
 
 PROFILE_ENVIRONMENT_KEYS = (
     "DATABRICKS_CONFIG_PROFILE",
@@ -67,7 +67,7 @@ def _environment(environment: Mapping[str, str], show_sensitive: bool) -> dict[s
 async def _main() -> None:
     arguments = _arguments()
     environment = dict(os.environ)
-    auth = await create_persistent_auth({}, "memory", {"environment": environment})
+    auth = await create_auth_client({}, "memory", {"environment": environment})
     status = await auth.status()
     output: dict[str, Any] = {
         "command": arguments.command,

@@ -56,13 +56,17 @@ format, and credential persistence stay consistent with Databricks tooling.
 ```ts
 import { createAuthClient } from "@dbx-tools/auth";
 
-const auth = createAuthClient();
+const auth = await createAuthClient();
 const headers = await auth.authenticate();
+const profile = auth.profile();
+const namedProfile = auth.profile("DEFAULT");
+const profiles = auth.listProfiles();
 ```
 
-`createAuthClient()` returns a narrow client with `token()` and `authenticate()`.
-It shares one lazily resolved process-wide authentication lifecycle, including
-profile selection, locking, caching, login, and refresh state.
+`createAuthClient()` is the package's public factory. The returned client owns
+token and header acquisition, the selected secret-free profile, configured
+profile listing, lifecycle status, refresh, logout, and same-origin request
+headers.
 
 `authenticate()` returns the complete request header record, including
 `authorization` and `x-databricks-workspace-id` when the selected profile has a
@@ -73,33 +77,20 @@ Pass `false` to keep the call non-interactive:
 const headers = await auth.authenticate(false);
 ```
 
-`token()` remains available when only the token record is needed. Use
-`createPersistentAuth()` when profile status, refresh control, logout, or
-same-origin request-header generation is needed.
+`token()` remains available when only the token record is needed.
 
 ## Portable storage
 
-`createPersistentAuth()` keeps acquired credentials in process memory by
-default for CLI U2M, PAT, M2M, App SP, and App OBO flows. Pass `Storage.File`
-when disk persistence is explicitly required; custom stores use
-`createPersistentAuthWithStorage()`.
-
-`CredentialStore` and `LockAdapter` use data records, strings, numbers, and
-promises. A Python or FFI bridge can implement them without passing JavaScript
-callbacks across the boundary. Locks return an opaque lease ID that is released
-explicitly.
+`createAuthClient()` keeps acquired credentials in process memory by default for
+CLI U2M, PAT, M2M, App SP, and App OBO flows. Pass `Storage.File` as the second
+argument when disk persistence is explicitly required.
 
 ```ts
-import {
-  createPersistentAuthWithStorage,
-  DatabricksAuthOptions,
-  type CredentialStore,
-} from "@dbx-tools/auth";
+import { createAuthClient, DatabricksAuthOptions, Storage } from "@dbx-tools/auth";
 
-const store: CredentialStore = implementation;
-const auth = await createPersistentAuthWithStorage(
+const auth = await createAuthClient(
   DatabricksAuthOptions.create({ profile: "DEFAULT" }),
-  store,
+  Storage.File,
 );
 ```
 

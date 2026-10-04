@@ -9,18 +9,23 @@ import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts
 import { publicToken, TokenLifecycle } from "./lifecycle.ts";
 import { FileCredentialStore } from "./node-storage.ts";
 import { DatabricksPersonalAccessTokenProvider } from "./personal-access-token.ts";
-import { machineScopes, resolveConfigFile, resolveDatabricksProfile } from "./profile.ts";
+import {
+  listDatabricksProfiles,
+  machineScopes,
+  resolveConfigFile,
+  resolveDatabricksProfile,
+} from "./_profile.ts";
 import { DatabricksServicePrincipalProvider } from "./service-principal.ts";
 import { MemoryCredentialStore } from "./storage.ts";
 import {
   AuthKind,
+  type AuthClient,
   AuthOptions,
   type CredentialStore,
   type DatabricksAuthOptions,
   type DatabricksAuthStatus,
   type DatabricksProfile,
   DEFAULT_ACCESS_TOKEN_HEADER,
-  type PersistentAuthLike,
   Storage,
   TargetKind,
   type Token,
@@ -29,30 +34,6 @@ import {
 } from "./types.ts";
 
 const logger = authLogger("databricks");
-let ambientAuth: Promise<PersistentAuth> | undefined;
-
-/** Narrow ambient Databricks authentication client. */
-export interface AuthClient {
-  token(login?: boolean): ReturnType<PersistentAuth["token"]>;
-  authenticate(login?: boolean): Promise<Record<string, string>>;
-}
-
-class AmbientAuthClient implements AuthClient {
-  constructor(private readonly auth: Promise<PersistentAuth>) {}
-
-  async token(login?: boolean) {
-    return (await this.auth).token(login);
-  }
-
-  async authenticate(login?: boolean): Promise<Record<string, string>> {
-    return (await this.auth).authenticate(login);
-  }
-}
-
-/** Create a client backed by the process-wide ambient authentication lifecycle. */
-export function createAuthClient(): AuthClient {
-  return new AmbientAuthClient(ambientPersistentAuth());
-}
 
 /** Injectable host capabilities for Databricks authentication. */
 export interface DatabricksAuthDependencies {
@@ -62,10 +43,12 @@ export interface DatabricksAuthDependencies {
 }
 
 /** Persistent Databricks auth facade over the provider-neutral lifecycle. */
-export class PersistentAuth implements PersistentAuthLike {
+class PersistentAuth implements AuthClient {
   constructor(
     private readonly profileValue: DatabricksProfile,
     private readonly storageValue: Storage,
+    private readonly options: DatabricksAuthOptions,
+    private readonly environment: Readonly<Record<string, string | undefined>>,
     private readonly client?: TokenLifecycle,
     private readonly requestToken?: Token,
   ) {}
@@ -173,8 +156,15 @@ export class PersistentAuth implements PersistentAuthLike {
     return this.profileValue.authKind;
   }
 
-  profile(): DatabricksProfile {
-    return { ...this.profileValue, scopes: [...this.profileValue.scopes] };
+  profile(name?: string) {
+    const profile = name
+      ? resolveDatabricksProfile({ ...this.options, profile: name }, this.environment)
+      : this.profileValue;
+    return profileSummary(profile);
+  }
+
+  listProfiles(refresh = false) {
+    return listDatabricksProfiles(this.options.configFile, refresh, this.environment);
   }
 
   private requiredClient(): TokenLifecycle {
@@ -193,16 +183,20 @@ export class PersistentAuth implements PersistentAuthLike {
   }
 }
 
-function ambientPersistentAuth(): Promise<PersistentAuth> {
-  ambientAuth ??= createPersistentAuth();
-  return ambientAuth;
-}
-
-/** Resolve a Databricks profile and open built-in credential storage. */
-export async function createPersistentAuth(
+/** Create a Databricks authentication client. */
+export function createAuthClient(
   options: DatabricksAuthOptions = { preferUserToMachine: true },
   storage = Storage.Auto,
   dependencies: DatabricksAuthDependencies = {},
+): Promise<AuthClient> {
+  return createPersistentAuth(options, storage, dependencies);
+}
+
+/** Resolve a Databricks profile and open built-in credential storage. */
+async function createPersistentAuth(
+  options: DatabricksAuthOptions,
+  storage: Storage,
+  dependencies: DatabricksAuthDependencies,
 ): Promise<PersistentAuth> {
   const environment = dependencies.environment ?? process.env;
   const profile = resolveDatabricksProfile(options, environment);
@@ -226,7 +220,7 @@ export async function createPersistentAuth(
 }
 
 /** Resolve a Databricks profile using caller-owned generic storage. */
-export async function createPersistentAuthWithStorage(
+async function createPersistentAuthWithStorage(
   options: DatabricksAuthOptions,
   store: CredentialStore,
   storage = store.name() === "memory" ? Storage.Memory : Storage.File,
@@ -241,11 +235,18 @@ export async function createPersistentAuthWithStorage(
       host: profile.host,
       hasWorkspaceId: Boolean(profile.workspaceId),
     });
-    return new PersistentAuth(profile, Storage.Memory, undefined, {
-      accessToken: profile.accessToken!,
-      tokenType: "Bearer",
-      scopes: [...profile.scopes],
-    });
+    return new PersistentAuth(
+      profile,
+      Storage.Memory,
+      options,
+      dependencies.environment ?? process.env,
+      undefined,
+      {
+        accessToken: profile.accessToken!,
+        tokenType: "Bearer",
+        scopes: [...profile.scopes],
+      },
+    );
   }
   const provider = await providerFor(profile, options, dependencies);
   const client = new TokenLifecycle(
@@ -257,6 +258,8 @@ export async function createPersistentAuthWithStorage(
   const persistent = new PersistentAuth(
     profile,
     storage === Storage.Auto ? storageFromName(store.name()) : storage,
+    options,
+    dependencies.environment ?? process.env,
     client,
   );
   logger.debug("created persistent authentication lifecycle", {
@@ -373,6 +376,17 @@ function requiredAccountId(profile: DatabricksProfile): string {
 
 function storageFromName(name: string): Storage {
   return name === "memory" ? Storage.Memory : Storage.File;
+}
+
+function profileSummary(profile: DatabricksProfile) {
+  return {
+    name: profile.name,
+    host: profile.host,
+    ...(profile.accountId ? { accountId: profile.accountId } : {}),
+    ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}),
+    target: profile.target,
+    authKind: profile.authKind,
+  };
 }
 
 function isLoopbackHttp(host: string): boolean {

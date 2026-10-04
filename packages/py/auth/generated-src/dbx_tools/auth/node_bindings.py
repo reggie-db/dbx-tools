@@ -130,38 +130,6 @@ class AuthOptions:
 
 
 @dataclass(kw_only=True)
-class CredentialStore:
-    load: Callable[..., Any] | None = field(
-        default=None,
-        metadata={"javascript_name": "load"},
-    )
-    prepare_write: Callable[..., Any] | None = field(
-        default=None,
-        metadata={"javascript_name": "prepareWrite"},
-    )
-    save: Callable[..., Any] | None = field(
-        default=None,
-        metadata={"javascript_name": "save"},
-    )
-    remove: Callable[..., Any] | None = field(
-        default=None,
-        metadata={"javascript_name": "remove"},
-    )
-    acquire_lock: Callable[..., Any] | None = field(
-        default=None,
-        metadata={"javascript_name": "acquireLock"},
-    )
-    release_lock: Callable[..., Any] | None = field(
-        default=None,
-        metadata={"javascript_name": "releaseLock"},
-    )
-    name: Callable[..., Any] | None = field(
-        default=None,
-        metadata={"javascript_name": "name"},
-    )
-
-
-@dataclass(kw_only=True)
 class DatabricksAuthDependencies:
     environment: dict[str, str] | None = field(
         default=None,
@@ -253,66 +221,6 @@ class DatabricksAuthOptions:
     )
 
 
-@dataclass(kw_only=True)
-class DatabricksProfile:
-    host: str | None = field(
-        default=None,
-        metadata={"javascript_name": "host"},
-    )
-    auth_type: str | None = field(
-        default=None,
-        metadata={"javascript_name": "authType"},
-    )
-    client_id: str | None = field(
-        default=None,
-        metadata={"javascript_name": "clientId"},
-    )
-    group_id: str | None = field(
-        default=None,
-        metadata={"javascript_name": "groupId"},
-    )
-    scopes: list[str] | None = field(
-        default=None,
-        metadata={"javascript_name": "scopes"},
-    )
-    client_secret: str | None = field(
-        default=None,
-        metadata={"javascript_name": "clientSecret"},
-    )
-    access_token: str | None = field(
-        default=None,
-        metadata={"javascript_name": "accessToken"},
-    )
-    cache_key: str | None = field(
-        default=None,
-        metadata={"javascript_name": "cacheKey"},
-    )
-    principal: str | None = field(
-        default=None,
-        metadata={"javascript_name": "principal"},
-    )
-    name: str | None = field(
-        default=None,
-        metadata={"javascript_name": "name"},
-    )
-    account_id: str | None = field(
-        default=None,
-        metadata={"javascript_name": "accountId"},
-    )
-    workspace_id: str | None = field(
-        default=None,
-        metadata={"javascript_name": "workspaceId"},
-    )
-    target: str | None = field(
-        default=None,
-        metadata={"javascript_name": "target"},
-    )
-    auth_kind: str | None = field(
-        default=None,
-        metadata={"javascript_name": "authKind"},
-    )
-
-
 class AccessTokenResponse(TypedDict):
     accessToken: str
     tokenType: str
@@ -326,23 +234,6 @@ class DatabricksAuthStatusResponse(TypedDict):
     storage: str
 
 
-class DatabricksProfileResponse(TypedDict):
-    host: str
-    authType: NotRequired[str]
-    clientId: str
-    groupId: NotRequired[str]
-    scopes: list[str]
-    clientSecret: NotRequired[str]
-    accessToken: NotRequired[str]
-    cacheKey: str
-    principal: str
-    name: str
-    accountId: NotRequired[str]
-    workspaceId: NotRequired[str]
-    target: str
-    authKind: str
-
-
 class DatabricksProfileSummaryResponse(TypedDict):
     name: str
     host: NotRequired[str]
@@ -353,18 +244,6 @@ class DatabricksProfileSummaryResponse(TypedDict):
 
 
 class AuthClient(Protocol):
-    async def token(
-        self,
-        login: bool = ...,
-    ) -> AccessTokenResponse: ...
-
-    async def authenticate(
-        self,
-        login: bool = ...,
-    ) -> dict[str, str]: ...
-
-
-class PersistentAuth(Protocol):
     async def challenge(
         self,
     ) -> None: ...
@@ -424,30 +303,21 @@ class PersistentAuth(Protocol):
 
     async def profile(
         self,
-    ) -> DatabricksProfileResponse: ...
+        name: str = ...,
+    ) -> DatabricksProfileSummaryResponse: ...
+
+    async def list_profiles(
+        self,
+        refresh: bool = ...,
+    ) -> list[DatabricksProfileSummaryResponse]: ...
 
 
-async def config_profile_exists(
-    profile: str,
-    config_file: str | object = _MISSING,
-) -> bool:
-    arguments: list[tuple[int, Any]] = []
-    arguments.append((0, profile))
-    if config_file is not _MISSING:
-        arguments.append((1, config_file))
-    return await _invoke_positioned("configProfileExists", arguments)
-
-
-async def create_auth_client() -> AuthClient:
-    return await _invoke("createAuthClient")
-
-
-async def create_persistent_auth(
+async def create_auth_client(
     options: DatabricksAuthOptions | dict[str, Any] | None | object = _MISSING,
     storage: str | object = _MISSING,
     dependencies: DatabricksAuthDependencies | dict[str, Any] | None | object = _MISSING,
     **kwargs: Any,
-) -> PersistentAuth:
+) -> AuthClient:
     arguments: list[tuple[int, Any]] = []
     if options is not _MISSING:
         arguments.append((0, options))
@@ -459,119 +329,16 @@ async def create_persistent_auth(
         dependencies = DatabricksAuthDependencies(**kwargs)
     if dependencies is not _MISSING:
         arguments.append((2, dependencies))
-    return await _invoke_positioned("createPersistentAuth", arguments)
-
-
-async def create_persistent_auth_with_storage(
-    options: DatabricksAuthOptions | dict[str, Any] | None,
-    store: CredentialStore | dict[str, Any] | None,
-    storage: str | object = _MISSING,
-    dependencies: DatabricksAuthDependencies | dict[str, Any] | None | object = _MISSING,
-    resolved_profile: DatabricksProfile | dict[str, Any] | None | object = _MISSING,
-    **kwargs: Any,
-) -> PersistentAuth:
-    arguments: list[tuple[int, Any]] = []
-    arguments.append((0, options))
-    arguments.append((1, store))
-    if storage is not _MISSING:
-        arguments.append((2, storage))
-    if dependencies is not _MISSING:
-        arguments.append((3, dependencies))
-    if kwargs:
-        if resolved_profile is not _MISSING:
-            raise TypeError("resolved_profile and keyword fields are mutually exclusive")
-        resolved_profile = DatabricksProfile(**kwargs)
-    if resolved_profile is not _MISSING:
-        arguments.append((4, resolved_profile))
-    return await _invoke_positioned("createPersistentAuthWithStorage", arguments)
-
-
-async def invalidate_config_file(
-    config_file: str | object = _MISSING,
-) -> None:
-    arguments: list[tuple[int, Any]] = []
-    if config_file is not _MISSING:
-        arguments.append((0, config_file))
-    return await _invoke_positioned("invalidateConfigFile", arguments)
-
-
-async def list_databricks_profiles(
-    config_file: str | object = _MISSING,
-    refresh: bool | object = _MISSING,
-    environment: dict[str, str] | object = _MISSING,
-) -> list[DatabricksProfileSummaryResponse]:
-    arguments: list[tuple[int, Any]] = []
-    if config_file is not _MISSING:
-        arguments.append((0, config_file))
-    if refresh is not _MISSING:
-        arguments.append((1, refresh))
-    if environment is not _MISSING:
-        arguments.append((2, environment))
-    return await _invoke_positioned("listDatabricksProfiles", arguments)
-
-
-async def normalize_host(
-    value: str,
-    profile: str | object = _MISSING,
-) -> str:
-    arguments: list[tuple[int, Any]] = []
-    arguments.append((0, value))
-    if profile is not _MISSING:
-        arguments.append((1, profile))
-    return await _invoke_positioned("normalizeHost", arguments)
-
-
-async def parse_databricks_config(
-    source: str,
-) -> dict[str, dict[str, str]]:
-    arguments: list[tuple[int, Any]] = []
-    arguments.append((0, source))
-    return await _invoke_positioned("parseDatabricksConfig", arguments)
-
-
-async def resolve_config_file(
-    explicit: str | object = _MISSING,
-    environment: dict[str, str] | object = _MISSING,
-) -> str:
-    arguments: list[tuple[int, Any]] = []
-    if explicit is not _MISSING:
-        arguments.append((0, explicit))
-    if environment is not _MISSING:
-        arguments.append((1, environment))
-    return await _invoke_positioned("resolveConfigFile", arguments)
-
-
-async def resolve_databricks_profile(
-    options: DatabricksAuthOptions | dict[str, Any] | None,
-    environment: dict[str, str] | object = _MISSING,
-) -> DatabricksProfileResponse:
-    arguments: list[tuple[int, Any]] = []
-    arguments.append((0, options))
-    if environment is not _MISSING:
-        arguments.append((1, environment))
-    return await _invoke_positioned("resolveDatabricksProfile", arguments)
+    return await _invoke_positioned("createAuthClient", arguments)
 
 
 __all__ = [
     "AccessTokenResponse",
     "AuthClient",
     "AuthOptions",
-    "CredentialStore",
     "DatabricksAuthDependencies",
     "DatabricksAuthOptions",
     "DatabricksAuthStatusResponse",
-    "DatabricksProfile",
-    "DatabricksProfileResponse",
     "DatabricksProfileSummaryResponse",
-    "PersistentAuth",
-    "config_profile_exists",
     "create_auth_client",
-    "create_persistent_auth",
-    "create_persistent_auth_with_storage",
-    "invalidate_config_file",
-    "list_databricks_profiles",
-    "normalize_host",
-    "parse_databricks_config",
-    "resolve_config_file",
-    "resolve_databricks_profile",
 ]

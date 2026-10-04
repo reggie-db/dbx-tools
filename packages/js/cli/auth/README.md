@@ -57,7 +57,6 @@ fallback.
 - `--target workspace|account|unified` selects the OAuth target.
 - `--storage auto|memory|file` selects credential storage.
 - `--cache-dir <path>` selects the file-storage directory.
-- `--callback-image-src <src>` sets the callback logo URL or data URI.
 - `--lock-timeout-seconds`, `--login-timeout-seconds`, and
   `--refresh-buffer-seconds` control auth timing. Browser login defaults to 15
   minutes.

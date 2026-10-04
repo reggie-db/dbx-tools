@@ -1,11 +1,7 @@
 import { authLogger } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
-import {
-  createPersistentAuth,
-  type DatabricksAuthDependencies,
-  PersistentAuth,
-} from "./databricks-auth.ts";
-import type { DatabricksAuthOptions } from "./types.ts";
+import { createAuthClient, type DatabricksAuthDependencies } from "./databricks-auth.ts";
+import type { AuthClient, DatabricksAuthOptions } from "./types.ts";
 import { DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER } from "./types.ts";
 
 const logger = authLogger("http");
@@ -22,7 +18,7 @@ export interface DatabricksRequestOptions {
 /** Dependency-light Databricks JSON client with one rejected-token refresh. */
 export class DatabricksClient {
   private constructor(
-    readonly auth: PersistentAuth,
+    readonly auth: AuthClient,
     private readonly fetcher: typeof globalThis.fetch,
   ) {}
 
@@ -31,7 +27,7 @@ export class DatabricksClient {
     dependencies: DatabricksAuthDependencies = {},
   ): Promise<DatabricksClient> {
     const client = new DatabricksClient(
-      await createPersistentAuth(options, undefined, dependencies),
+      await createAuthClient(options, undefined, dependencies),
       dependencies.fetch ?? globalThis.fetch,
     );
     logger.debug("created Databricks HTTP client", {

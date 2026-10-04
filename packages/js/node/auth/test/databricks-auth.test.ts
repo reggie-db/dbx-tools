@@ -2,14 +2,30 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { describe, it } from "node:test";
 
-import { createAuthClient, createPersistentAuth } from "../src/databricks-auth.ts";
+import * as publicAuth from "../index.ts";
+import { createAuthClient } from "../src/databricks-auth.ts";
 import { DatabricksClient } from "../src/http-client.ts";
-import { DatabricksAuthOptions, Storage } from "../src/types.ts";
+import { AuthKind, DatabricksAuthOptions, Storage, TargetKind } from "../src/types.ts";
 
 const APP_ENV = { DBX_TOOLS_DATABRICKS_APP_ENV: "true" };
 
 describe("Databricks provider construction", () => {
-  it("exposes a cached ambient authentication client", async () => {
+  it("keeps implementation helpers out of the package root", () => {
+    for (const name of [
+      "configProfileExists",
+      "createPersistentAuth",
+      "createPersistentAuthWithStorage",
+      "listDatabricksProfiles",
+      "parseDatabricksConfig",
+      "profile",
+      "resolveConfigFile",
+      "resolveDatabricksProfile",
+    ]) {
+      assert.equal(name in publicAuth, false, name);
+    }
+  });
+
+  it("exposes authentication and profile operations through one client", async () => {
     const environment = {
       DATABRICKS_AUTH_TYPE: process.env.DATABRICKS_AUTH_TYPE,
       DATABRICKS_CONFIG_FILE: process.env.DATABRICKS_CONFIG_FILE,
@@ -23,12 +39,19 @@ describe("Databricks provider construction", () => {
     process.env.DATABRICKS_TOKEN = "ambient-token";
     delete process.env.DATABRICKS_WORKSPACE_ID;
     try {
-      const auth = createAuthClient();
-      assert.equal("status" in auth, false);
+      const auth = await createAuthClient();
       assert.equal((await auth.token(false)).accessToken, "ambient-token");
       assert.deepEqual(await auth.authenticate(false), {
         authorization: "Bearer ambient-token",
       });
+      assert.deepEqual(auth.profile(), {
+        name: "DEFAULT",
+        host: "https://example.cloud.databricks.com",
+        target: TargetKind.Workspace,
+        authKind: AuthKind.PersonalAccessToken,
+      });
+      assert.deepEqual(auth.profile("DEFAULT"), auth.profile());
+      assert.deepEqual(auth.listProfiles(true), []);
     } finally {
       for (const [name, value] of Object.entries(environment)) {
         if (value === undefined) delete process.env[name];
@@ -43,7 +66,7 @@ describe("Databricks provider construction", () => {
       workspaceId: "workspace-id",
       requestHeaders: { Authorization: "Bearer request-token" },
     });
-    const auth = await createPersistentAuth(options, Storage.Memory, { environment: APP_ENV });
+    const auth = await createAuthClient(options, Storage.Memory, { environment: APP_ENV });
 
     assert.deepEqual(await auth.authenticate(false), {
       authorization: "Bearer request-token",
@@ -76,7 +99,7 @@ describe("Databricks provider construction", () => {
 
   it("constructs automatic U2M without resolving the CLI", async () => {
     let resolvedCli = false;
-    const auth = await createPersistentAuth(
+    const auth = await createAuthClient(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
@@ -97,7 +120,7 @@ describe("Databricks provider construction", () => {
 
   it("defers explicit oauth-u2m CLI resolution until token acquisition", async () => {
     let resolvedCli = false;
-    const auth = await createPersistentAuth(
+    const auth = await createAuthClient(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
@@ -119,7 +142,7 @@ describe("Databricks provider construction", () => {
 
   it("keeps CLI fallback lazy and non-installing inside a Databricks App", async () => {
     let resolution: { install: boolean } | undefined;
-    const auth = await createPersistentAuth(
+    const auth = await createAuthClient(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
@@ -141,7 +164,7 @@ describe("Databricks provider construction", () => {
 
   it("allows explicit CLI installation inside a Databricks App", async () => {
     let resolution: { install: boolean } | undefined;
-    const auth = await createPersistentAuth(
+    const auth = await createAuthClient(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
@@ -162,7 +185,7 @@ describe("Databricks provider construction", () => {
   });
 
   it("fails closed at U2M token acquisition when no compatible CLI can be resolved", async () => {
-    const auth = await createPersistentAuth(
+    const auth = await createAuthClient(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
@@ -175,7 +198,7 @@ describe("Databricks provider construction", () => {
 
   it("uses configured PAT credentials without resolving the CLI", async () => {
     let resolvedCli = false;
-    const auth = await createPersistentAuth(
+    const auth = await createAuthClient(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "PAT",
@@ -225,7 +248,7 @@ describe("Databricks provider construction", () => {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("fixture did not bind");
     try {
-      const auth = await createPersistentAuth(
+      const auth = await createAuthClient(
         DatabricksAuthOptions.create({
           profile: "SERVICE",
           host: `http://127.0.0.1:${address.port}`,
@@ -272,7 +295,7 @@ describe("Databricks provider construction", () => {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("fixture did not bind");
     try {
-      const auth = await createPersistentAuth(
+      const auth = await createAuthClient(
         DatabricksAuthOptions.create({
           host: `http://127.0.0.1:${address.port}`,
           accountId: "account-id",

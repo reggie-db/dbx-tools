@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   type AccessToken,
+  type AuthClient,
   AuthKind,
   type DatabricksAuthOptions,
-  type PersistentAuthLike,
   Storage,
+  TargetKind,
 } from "@dbx-tools/auth";
 
 import { buildProgram } from "../src/cli.ts";
@@ -18,7 +19,7 @@ const TOKEN: AccessToken = {
   scopes: ["scope-a"],
 };
 
-function fakeAuth(calls: string[]): PersistentAuthLike {
+function fakeAuth(calls: string[]): AuthClient {
   return {
     async challenge() {
       calls.push("challenge");
@@ -63,11 +64,23 @@ function fakeAuth(calls: string[]): PersistentAuthLike {
     authKind() {
       return AuthKind.UserToMachine;
     },
+    profile() {
+      calls.push("profile");
+      return {
+        name: "TEST",
+        host: "https://example.cloud.databricks.com",
+        target: TargetKind.Workspace,
+        authKind: AuthKind.UserToMachine,
+      };
+    },
+    listProfiles() {
+      return [];
+    },
   };
 }
 
 describe("auth CLI", () => {
-  it("routes login and token operations through PersistentAuth", async () => {
+  it("routes login and token operations through AuthClient", async () => {
     const cases = [
       { args: ["login"], expected: "token:true" },
       { args: ["token"], expected: "token:undefined" },
@@ -83,7 +96,7 @@ describe("auth CLI", () => {
       const calls: string[] = [];
       const output: unknown[] = [];
       await buildProgram("dbx auth", {
-        createPersistentAuth: async () => fakeAuth(calls),
+        createAuthClient: async () => fakeAuth(calls),
         writeJson: (value) => output.push(value),
       }).parseAsync(testCase.args, { from: "user" });
 
@@ -99,17 +112,17 @@ describe("auth CLI", () => {
     }
   });
 
-  it("routes logout, profile, and status through PersistentAuth", async () => {
+  it("routes logout, profile, and status through AuthClient", async () => {
     const logoutCalls: string[] = [];
     await buildProgram("dbx auth", {
-      createPersistentAuth: async () => fakeAuth(logoutCalls),
+      createAuthClient: async () => fakeAuth(logoutCalls),
     }).parseAsync(["logout"], { from: "user" });
     assert.deepEqual(logoutCalls, ["logout"]);
 
     const statusCalls: string[] = [];
     const output: unknown[] = [];
     await buildProgram("dbx auth", {
-      createPersistentAuth: async () => fakeAuth(statusCalls),
+      createAuthClient: async () => fakeAuth(statusCalls),
       writeJson: (value) => output.push(value),
     }).parseAsync(["status"], { from: "user" });
     assert.deepEqual(statusCalls, ["status"]);
@@ -124,10 +137,10 @@ describe("auth CLI", () => {
     const profileCalls: string[] = [];
     const profileOutput: string[] = [];
     await buildProgram("dbx auth", {
-      createPersistentAuth: async () => fakeAuth(profileCalls),
+      createAuthClient: async () => fakeAuth(profileCalls),
       writeText: (value) => profileOutput.push(value),
     }).parseAsync(["profile"], { from: "user" });
-    assert.deepEqual(profileCalls, ["status"]);
+    assert.deepEqual(profileCalls, ["profile"]);
     assert.deepEqual(profileOutput, ["TEST"]);
   });
 
@@ -147,7 +160,7 @@ describe("auth CLI", () => {
     let capturedStorage: Storage | undefined;
 
     await buildProgram("dbx auth", {
-      createPersistentAuth: async (options, storage) => {
+      createAuthClient: async (options, storage) => {
         capturedOptions = options;
         capturedStorage = storage;
         return fakeAuth([]);
@@ -166,8 +179,6 @@ describe("auth CLI", () => {
         "--no-prefer-user-to-machine",
         "--storage",
         "memory",
-        "--callback-image-src",
-        "data:image/svg+xml,logo",
         "--scopes",
         "scope-a,scope-b",
         "--scopes",
@@ -188,7 +199,6 @@ describe("auth CLI", () => {
     assert.equal(capturedOptions?.authType, "oauth-m2m");
     assert.equal(capturedOptions?.groupId, "group");
     assert.equal(capturedOptions?.preferUserToMachine, false);
-    assert.equal(capturedOptions?.auth?.callbackImageSrc, "data:image/svg+xml,logo");
     assert.deepEqual(capturedOptions?.scopes, ["scope-a", "scope-b", "scope-c"]);
     assert.equal(capturedOptions?.auth?.lockTimeoutSeconds, 12);
     assert.equal(capturedOptions?.auth?.loginTimeoutSeconds, 34);

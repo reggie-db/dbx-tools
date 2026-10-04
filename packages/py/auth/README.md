@@ -11,27 +11,24 @@ implementation to keep in sync.
 from dbx_tools.auth import (
     DatabricksAuthOptions,
     create_auth_client,
-    create_persistent_auth,
 )
 
 auth = await create_auth_client()
 access_token = await auth.token()
 headers = await auth.authenticate()
 
-profile_auth = await create_persistent_auth()
-profile_token = await profile_auth.token()
-profile_headers = await profile_auth.authenticate()
+profile = await auth.profile()
+named_profile = await auth.profile("DEFAULT")
+profiles = await auth.list_profiles()
 
-configured = await create_persistent_auth(DatabricksAuthOptions(profile="DEFAULT"))
-keyword_configured = await create_persistent_auth(profile="DEFAULT")
+configured = await create_auth_client(DatabricksAuthOptions(profile="DEFAULT"))
+keyword_configured = await create_auth_client(profile="DEFAULT")
 ```
 
-Use `create_auth_client()` for normal ambient authentication. It returns a
-narrow client with `token()` and `authenticate()` backed by one process-wide
-authentication lifecycle, so profile resolution, token caching, locking, and
-refresh state are reused.
-Create an explicit auth object when you need custom options, storage, or injected
-dependencies.
+`create_auth_client()` is the package's only generated function. Its client owns
+token and header acquisition, the selected secret-free profile, configured
+profile listing, lifecycle status, refresh, logout, and same-origin request
+headers.
 
 Generated function names use `snake_case`. Objects returned by JavaScript are
 proxied automatically, so JavaScript methods such as `workspaceId()` and
@@ -42,7 +39,7 @@ Authentication uses process memory by default. Pass `"file"` as the second
 factory argument to use the shared Databricks token cache:
 
 ```python
-auth = await create_persistent_auth(
+auth = await create_auth_client(
     {"profile": "DEFAULT"},
     "file",
 )
@@ -92,8 +89,8 @@ snake-case keyword fields. Generation fails fast when a type cannot be
 represented safely in Python.
 
 Generated return contracts are typed as well. `create_auth_client()` returns an
-`AuthClient` protocol, `create_persistent_auth()` returns `PersistentAuth`, and
-token/profile records use exported `TypedDict` response types instead of `Any`.
+`AuthClient` protocol, and token, status, and profile records use exported
+`TypedDict` response types instead of `Any`.
 
 ## Debugging
 

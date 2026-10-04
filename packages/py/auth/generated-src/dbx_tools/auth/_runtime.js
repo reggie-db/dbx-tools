@@ -20088,29 +20088,18 @@ __export(exports_dbx_tools_python_entry, {
   types: () => exports_types,
   storage: () => exports_storage,
   servicePrincipal: () => exports_service_principal,
-  resolveDatabricksProfile: () => resolveDatabricksProfile,
-  resolveConfigFile: () => resolveConfigFile,
-  profile: () => exports_profile,
   personalAccessToken: () => exports_personal_access_token,
-  parseDatabricksConfig: () => parseDatabricksConfig,
-  normalizeHost: () => normalizeHost,
   nodeStorage: () => exports_node_storage,
-  listDatabricksProfiles: () => listDatabricksProfiles,
   lifecycle: () => exports_lifecycle,
-  invalidateConfigFile: () => invalidateConfigFile,
   httpClient: () => exports_http_client,
   errors: () => exports_errors,
   databricksCli: () => exports_databricks_cli,
   databricksAuth: () => exports_databricks_auth,
-  createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
-  createPersistentAuth: () => createPersistentAuth,
   createAuthClient: () => createAuthClient,
-  configProfileExists: () => configProfileExists,
   WORKSPACE_ID_HEADER: () => WORKSPACE_ID_HEADER,
   TokenLifecycle: () => TokenLifecycle,
   TargetKind: () => TargetKind,
   Storage: () => Storage,
-  PersistentAuth: () => PersistentAuth,
   PACKAGE_VERSION: () => PACKAGE_VERSION,
   PACKAGE_IDENTIFIER: () => PACKAGE_IDENTIFIER,
   MemoryLockAdapter: () => MemoryLockAdapter,
@@ -20268,10 +20257,7 @@ function cloneStructured(value, seen = new Map) {
 // packages/js/node/auth/src/databricks-auth.ts
 var exports_databricks_auth = {};
 __export(exports_databricks_auth, {
-  createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
-  createPersistentAuth: () => createPersistentAuth,
-  createAuthClient: () => createAuthClient,
-  PersistentAuth: () => PersistentAuth
+  createAuthClient: () => createAuthClient
 });
 
 // projen/shims/python-node/os.ts
@@ -26129,19 +26115,7 @@ class DatabricksPersonalAccessTokenProvider {
   }
 }
 
-// packages/js/node/auth/src/profile.ts
-var exports_profile = {};
-__export(exports_profile, {
-  resolveDatabricksProfile: () => resolveDatabricksProfile,
-  resolveConfigFile: () => resolveConfigFile,
-  parseDatabricksConfig: () => parseDatabricksConfig,
-  normalizeHost: () => normalizeHost,
-  machineScopes: () => machineScopes,
-  listDatabricksProfiles: () => listDatabricksProfiles,
-  invalidateConfigFile: () => invalidateConfigFile,
-  effectiveScopes: () => effectiveScopes,
-  configProfileExists: () => configProfileExists
-});
+// packages/js/node/auth/src/_profile.ts
 init_fs();
 init_path();
 
@@ -26351,7 +26325,7 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-// packages/js/node/auth/src/profile.ts
+// packages/js/node/auth/src/_profile.ts
 var configCache = new Map;
 var logger10 = authLogger("profile");
 function resolveConfigFile(explicit, environment = process.env) {
@@ -26363,16 +26337,6 @@ function resolveConfigFile(explicit, environment = process.env) {
     source: nonempty(explicit) ? "option" : nonempty(environment.DATABRICKS_CONFIG_FILE) ? "environment" : "default"
   });
   return path;
-}
-function invalidateConfigFile(configFile) {
-  const path = resolveConfigFile(configFile);
-  configCache.delete(path);
-  logger10.debug("invalidated Databricks config cache", { path });
-}
-function configProfileExists(profile, configFile) {
-  if (!profile.trim() || profile === SETTINGS_SECTION)
-    return false;
-  return loadConfig(resolveConfigFile(configFile))?.has(profile) ?? false;
 }
 function listDatabricksProfiles(configFile, refresh = false, environment = process.env) {
   const path = resolveConfigFile(configFile, environment);
@@ -26521,9 +26485,6 @@ function credentialCacheKey(profile) {
   ].join("\x00");
   const digest = createHash("sha256").update(identity).digest("hex");
   return `${profile.name}-${profile.authKind === "app-service-principal" /* AppServicePrincipal */ ? "app-sp" : "oauth-m2m"}-${digest}`;
-}
-function effectiveScopes(scopes) {
-  return cleanList(["offline_access", ...scopes]);
 }
 function machineScopes(scopes) {
   const values2 = cleanList(scopes.length ? scopes : ["all-apis"]);
@@ -27727,32 +27688,19 @@ async function withTimeout(promise, timeoutMs, message) {
 
 // packages/js/node/auth/src/databricks-auth.ts
 var logger13 = authLogger("databricks");
-var ambientAuth;
-
-class AmbientAuthClient {
-  auth;
-  constructor(auth) {
-    this.auth = auth;
-  }
-  async token(login) {
-    return (await this.auth).token(login);
-  }
-  async authenticate(login) {
-    return (await this.auth).authenticate(login);
-  }
-}
-function createAuthClient() {
-  return new AmbientAuthClient(ambientPersistentAuth());
-}
 
 class PersistentAuth {
   profileValue;
   storageValue;
+  options;
+  environment;
   client;
   requestToken;
-  constructor(profileValue, storageValue, client, requestToken) {
+  constructor(profileValue, storageValue, options, environment, client, requestToken) {
     this.profileValue = profileValue;
     this.storageValue = storageValue;
+    this.options = options;
+    this.environment = environment;
     this.client = client;
     this.requestToken = requestToken;
   }
@@ -27836,8 +27784,12 @@ class PersistentAuth {
   authKind() {
     return this.profileValue.authKind;
   }
-  profile() {
-    return { ...this.profileValue, scopes: [...this.profileValue.scopes] };
+  profile(name) {
+    const profile = name ? resolveDatabricksProfile({ ...this.options, profile: name }, this.environment) : this.profileValue;
+    return profileSummary(profile);
+  }
+  listProfiles(refresh = false) {
+    return listDatabricksProfiles(this.options.configFile, refresh, this.environment);
   }
   requiredClient() {
     if (!this.client)
@@ -27854,11 +27806,10 @@ class PersistentAuth {
     };
   }
 }
-function ambientPersistentAuth() {
-  ambientAuth ??= createPersistentAuth();
-  return ambientAuth;
+function createAuthClient(options = { preferUserToMachine: true }, storage = "auto" /* Auto */, dependencies = {}) {
+  return createPersistentAuth(options, storage, dependencies);
 }
-async function createPersistentAuth(options = { preferUserToMachine: true }, storage = "auto" /* Auto */, dependencies = {}) {
+async function createPersistentAuth(options, storage, dependencies) {
   const environment = dependencies.environment ?? process.env;
   const profile = resolveDatabricksProfile(options, environment);
   const inApp = profile.authKind === "app-on-behalf-of" /* AppOnBehalfOf */ || profile.authKind === "app-service-principal" /* AppServicePrincipal */;
@@ -27882,7 +27833,7 @@ async function createPersistentAuthWithStorage(options, store, storage = store.n
       host: profile.host,
       hasWorkspaceId: Boolean(profile.workspaceId)
     });
-    return new PersistentAuth(profile, "memory" /* Memory */, undefined, {
+    return new PersistentAuth(profile, "memory" /* Memory */, options, dependencies.environment ?? process.env, undefined, {
       accessToken: profile.accessToken,
       tokenType: "Bearer",
       scopes: [...profile.scopes]
@@ -27890,7 +27841,7 @@ async function createPersistentAuthWithStorage(options, store, storage = store.n
   }
   const provider = await providerFor(profile, options, dependencies);
   const client = new TokenLifecycle(profile.cacheKey, provider, store, AuthOptions.create(options.auth));
-  const persistent = new PersistentAuth(profile, storage === "auto" /* Auto */ ? storageFromName(store.name()) : storage, client);
+  const persistent = new PersistentAuth(profile, storage === "auto" /* Auto */ ? storageFromName(store.name()) : storage, options, dependencies.environment ?? process.env, client);
   logger13.debug("created persistent authentication lifecycle", {
     profile: profile.name,
     host: profile.host,
@@ -27984,6 +27935,16 @@ function requiredAccountId(profile) {
 function storageFromName(name) {
   return name === "memory" ? "memory" /* Memory */ : "file" /* File */;
 }
+function profileSummary(profile) {
+  return {
+    name: profile.name,
+    host: profile.host,
+    ...profile.accountId ? { accountId: profile.accountId } : {},
+    ...profile.workspaceId ? { workspaceId: profile.workspaceId } : {},
+    target: profile.target,
+    authKind: profile.authKind
+  };
+}
 function isLoopbackHttp(host2) {
   const url = new URL(host2);
   return url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname);
@@ -28019,7 +27980,7 @@ class DatabricksClient {
     this.fetcher = fetcher;
   }
   static async create(options = { preferUserToMachine: true }, dependencies = {}) {
-    const client = new DatabricksClient(await createPersistentAuth(options, undefined, dependencies), dependencies.fetch ?? globalThis.fetch);
+    const client = new DatabricksClient(await createAuthClient(options, undefined, dependencies), dependencies.fetch ?? globalThis.fetch);
     logger14.debug("created Databricks HTTP client", {
       profile: client.profile(),
       host: client.host(),
