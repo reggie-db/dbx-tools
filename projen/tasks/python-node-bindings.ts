@@ -4,6 +4,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { BunPlugin } from "bun";
+import stdLibBrowser from "node-stdlib-browser";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
 
 const { values } = parseArgs({
@@ -28,20 +29,31 @@ const output = resolve(root, values.output);
 const shimRoot = values["shim-root"] ? resolve(root, values["shim-root"]) : undefined;
 const shimAliases = shimRoot
   ? new Map([
-      ["@dbx-tools/core", resolve(shimRoot, "core.ts")],
+      ["child_process", resolve(shimRoot, "child-process.ts")],
       ["crypto", resolve(shimRoot, "crypto.ts")],
       ["fs", resolve(shimRoot, "fs.ts")],
+      ["fs/promises", resolve(shimRoot, "fs-promises.ts")],
       ["os", resolve(shimRoot, "os.ts")],
       ["path", resolve(shimRoot, "path.ts")],
+      ["process", resolve(shimRoot, "process.ts")],
+      ["readline", resolve(shimRoot, "readline.ts")],
+      ["stream/promises", resolve(shimRoot, "stream-promises.ts")],
+      ["url", resolve(shimRoot, "url.ts")],
     ])
   : undefined;
+const standardAliases = stdLibBrowser as Record<string, string | undefined>;
 const shimPlugin: BunPlugin | undefined = shimAliases
   ? {
       name: "python-node-shims",
       setup(build) {
         build.onResolve({ filter: /.*/ }, ({ path }) => {
-          const shim = shimAliases.get(path.replace(/^node:/, "")) ?? shimAliases.get(path);
-          return shim ? { path: shim } : undefined;
+          const moduleName = path.replace(/^node:/, "");
+          const shim = shimAliases.get(moduleName) ?? shimAliases.get(path);
+          if (shim) return { path: shim };
+          const standard = standardAliases[moduleName];
+          return standard
+            ? { path: Bun.resolveSync(standard, dirname(fileURLToPath(import.meta.url))) }
+            : undefined;
         });
       },
     }

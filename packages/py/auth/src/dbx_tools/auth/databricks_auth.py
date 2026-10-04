@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
+from typing import Any
 
-from dbx_tools.node_bindings import read_text
-
-from .client import _RUNTIME, AuthClient
-from .databricks_cli import DatabricksCliProvider
-from .personal_access_token import DatabricksPersonalAccessTokenProvider
+from .client import _RUNTIME, _access_token, credential_store_to_javascript
 from .storage import FileCredentialStore
 from .types import AccessToken, AuthOptions, CredentialStore
 
@@ -18,7 +13,7 @@ from .types import AccessToken, AuthOptions, CredentialStore
 @dataclass(frozen=True, slots=True)
 class DatabricksAuthStatus:
     profile: str
-    host: str | None
+    host: str
     workspace_id: str | None
     storage: str
 
@@ -28,81 +23,67 @@ class DatabricksAuth:
 
     def __init__(
         self,
-        client: AuthClient,
-        *,
-        profile: str,
-        host: str | None,
-        workspace_id: str | None,
-        auth_kind: str,
+        client: Any,
     ) -> None:
         self._client = client
-        self._status = DatabricksAuthStatus(
-            profile,
-            host,
-            workspace_id,
-            client.store_name(),
-        )
-        self._auth_kind = auth_kind
 
     async def challenge(self) -> None:
-        await self._client.login()
+        await self._client["login"]()
 
     async def token(self, login: bool | None = None) -> AccessToken:
-        return await self._client.token(login)
+        return _access_token(await self._client["token"](login))
 
     async def authenticate(self, login: bool | None = None) -> dict[str, str]:
-        token = await self.token(login)
-        return {
-            "authorization": f"{token['tokenType']} {token['accessToken']}",
-            **(
-                {"x-databricks-workspace-id": self._status.workspace_id}
-                if self._status.workspace_id
-                else {}
-            ),
-        }
+        return dict(await self._client["authenticate"](login))
 
     async def authorization_header_for_url(
         self,
         request_url: str,
         login: bool | None = None,
     ) -> str | None:
-        return (await self.request_headers_for_url(request_url, login)).get(
-            "authorization",
-        )
+        return (await self.request_headers_for_url(request_url, login)).get("authorization")
 
     async def request_headers_for_url(
         self,
         request_url: str,
         login: bool | None = None,
     ) -> dict[str, str]:
-        if not self._status.host or _origin(request_url) != _origin(self._status.host):
-            return {}
-        return await self.authenticate(login)
+        return dict(await self._client["requestHeadersForUrl"](request_url, login))
 
     async def force_refresh(self, login: bool = True) -> AccessToken:
-        return await self._client.force_refresh(login)
+        return _access_token(await self._client["forceRefresh"](login))
 
     async def refresh_rejected_token(
         self,
         stale_access_token: str,
         login: bool = True,
     ) -> AccessToken:
-        return await self._client.refresh_rejected_token(stale_access_token, login)
+        return _access_token(
+            await self._client["refreshRejectedToken"](stale_access_token, login),
+        )
 
     async def logout(self) -> None:
-        await self._client.logout()
+        await self._client["logout"]()
 
     def status(self) -> DatabricksAuthStatus:
-        return self._status
+        status = self._client["status"]()
+        workspace_id = self._client["workspaceId"]()
+        return DatabricksAuthStatus(
+            str(status["profile"]),
+            str(status["host"]),
+            str(workspace_id) if workspace_id else None,
+            str(status["storage"]),
+        )
 
     def principal(self) -> str:
-        return self._status.profile
+        return str(self._client["principal"]())
 
     def workspace_id(self) -> str | None:
-        return self._status.workspace_id
+        value = self._client["workspaceId"]()
+        return str(value) if value else None
 
     def auth_kind(self) -> str:
-        return self._auth_kind
+        return str(self._client["authKind"]())
 
 
 async def create_databricks_cli_auth(
@@ -117,45 +98,16 @@ async def create_databricks_cli_auth(
     options: AuthOptions | None = None,
 ) -> DatabricksAuth:
     """Create CLI-first Databricks auth using JavaScript profile selection."""
-    environ = dict(os.environ if environment is None else environment)
-    selected_file = Path(
-        config_file or environ.get("DATABRICKS_CONFIG_FILE") or "~/.databrickscfg",
-    ).expanduser()
-    source = await read_text(selected_file.resolve(), default="")
-    requested = profile or environ.get("DATABRICKS_CONFIG_PROFILE")
-    resolved = _RUNTIME["resolveDatabricksCliProfile"](
-        source or "",
-        requested,
-        prefer_user_to_machine,
+    selected_store = store or FileCredentialStore(cache_dir)
+    client = await _RUNTIME["createDatabricksAuth"](
+        {
+            **({"profile": profile} if profile else {}),
+            **({"configFile": str(Path(config_file).expanduser())} if config_file else {}),
+            **({"environment": dict(environment)} if environment is not None else {}),
+            **({"executable": executable} if executable else {}),
+            "preferUserToMachine": prefer_user_to_machine,
+            "auth": (options or AuthOptions()).to_javascript(),
+        },
+        credential_store_to_javascript(selected_store),
     )
-    name = str(resolved["name"])
-    host = str(resolved["host"]) if resolved.get("host") else None
-    workspace_id = str(resolved["workspaceId"]) if resolved.get("workspaceId") else None
-    auth_kind = str(resolved["authKind"])
-    provider = (
-        DatabricksPersonalAccessTokenProvider(str(resolved["accessToken"]))
-        if auth_kind == "personal-access-token"
-        else DatabricksCliProvider(name, executable, str(selected_file.resolve()))
-    )
-    client = AuthClient(
-        name,
-        provider,
-        store or FileCredentialStore(cache_dir),
-        options,
-    )
-    return DatabricksAuth(
-        client,
-        profile=name,
-        host=host,
-        workspace_id=workspace_id,
-        auth_kind=auth_kind,
-    )
-
-
-def _origin(value: str) -> tuple[str, str, int | None]:
-    parsed = urlsplit(value)
-    scheme = parsed.scheme.lower()
-    port = parsed.port
-    if port is None:
-        port = 443 if scheme == "https" else 80 if scheme == "http" else None
-    return scheme, (parsed.hostname or "").lower(), port
+    return DatabricksAuth(client)

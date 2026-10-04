@@ -180,20 +180,26 @@ Primary package areas:
   Node uses `@dbx-tools/core` directly for process execution and file locking,
   plus `node:fs` for credential persistence. It must not depend on Rust only for
   Databricks App detection.
-- `packages/py/node-bindings` owns Python host adapters for
-  packages that execute committed TypeScript bundles through PythonMonkey. It
-  provides the runtime loader, process and HTTP execution, `filelock`-backed
-  lease locks, in-process async lease locks, non-blocking JSON/text file access,
-  atomic writes, and `webbrowser` launch. Add generic host behavior there
-  instead of copying it into each Python capability package. Generate bundles
-  with `projen/tasks/python-node-bindings.ts`; package tasks must check committed
+- `packages/py/node-bindings` owns PythonMonkey's Node compatibility layer. Bun
+  aliases only the Node modules a bundle actually imports onto the package's
+  TypeScript shims; those shims call Python host functions installed on
+  `globalThis`. Keep the shim surface trace-driven rather than mirroring whole
+  Node modules. The auth bundle currently needs synchronous profile-file reads,
+  home/path resolution, SHA-256, process execution, and filesystem operations.
+  Only Node built-ins may be shimmed. Third-party libraries and the real
+  `@dbx-tools/core` modules run unchanged through normal Node imports. Production
+  TypeScript contains no Python callbacks; Python compatibility belongs entirely
+  in these shared build-time shims.
+  Python credential stores retain file locks, so do not add a JavaScript
+  file-lock shim. Generate bundles with
+  `projen/tasks/python-node-bindings.ts`; package tasks must check committed
   output before tests and release.
 - `packages/py/auth` executes the provider-neutral `@dbx-tools/auth` lifecycle
   through a committed PythonMonkey bundle and depends on `dbx-tools-node-bindings`
-  for host adapters. Keep token refresh, check-lock-recheck coordination, login
-  policy, rejected-token handling, and profile-selection rules in the
-  JavaScript source of truth. Its Python Databricks CLI provider handles U2M;
-  PAT profiles use the configured token directly. It returns complete request headers,
+  for direct Node import shims. Keep profile selection, CLI U2M, PAT handling,
+  token refresh, check-lock-recheck coordination, login policy, and
+  rejected-token handling in the JavaScript source of truth. Python owns only
+  the credential-store protocols and host callbacks. It returns complete request headers,
   including `X-Databricks-Workspace-Id` when configured. Regenerate the bundle
   through `bun run auth:python-bridge`; tests and release validation must reject
   stale generated output.

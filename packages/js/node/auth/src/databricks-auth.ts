@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { configUtils } from "@dbx-tools/core";
+import { environmentUtils } from "@dbx-tools/shared-core";
 
 import { AuthError } from "./errors.ts";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
@@ -180,7 +180,7 @@ async function providerFor(
   dependencies: DatabricksAuthDependencies,
 ): Promise<TokenProvider> {
   const environment = dependencies.environment ?? process.env;
-  const inApp = configUtils.isDatabricksAppEnv({ ...environment });
+  const inApp = environmentUtils.isDatabricksAppEnv({ ...environment });
   switch (profile.authKind) {
     case AuthKind.UserToMachine: {
       const install = !inApp || options.installCliInApp === true;

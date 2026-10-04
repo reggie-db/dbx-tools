@@ -260,6 +260,7 @@ const root = new project.DBXToolsNodeProject({
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/projen@workspace:^",
+    "node-stdlib-browser@^1.3.1",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
     "ts-to-zod@5.1.0",

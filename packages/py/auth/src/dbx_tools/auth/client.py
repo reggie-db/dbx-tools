@@ -9,6 +9,18 @@ from .types import AccessToken, AuthOptions, CredentialStore, Token, TokenProvid
 _RUNTIME = require_runtime(__file__)
 
 
+def credential_store_to_javascript(store: CredentialStore) -> dict[str, object]:
+    return {
+        "load": store.load,
+        "prepareWrite": store.prepare_write,
+        "save": store.save,
+        "remove": store.remove,
+        "acquireLock": store.acquire_lock,
+        "releaseLock": store.release_lock,
+        "name": store.name,
+    }
+
+
 class AuthClient:
     def __init__(
         self,
@@ -25,15 +37,7 @@ class AuthClient:
                 "refresh": provider.refresh,
                 "canAuthenticateSilently": provider.can_authenticate_silently,
             },
-            {
-                "load": store.load,
-                "prepareWrite": store.prepare_write,
-                "save": store.save,
-                "remove": store.remove,
-                "acquireLock": store.acquire_lock,
-                "releaseLock": store.release_lock,
-                "name": store.name,
-            },
+            credential_store_to_javascript(store),
             (options or AuthOptions()).to_javascript(),
         )
 

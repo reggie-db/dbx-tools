@@ -6,14 +6,20 @@ PythonMonkey's SpiderMonkey runtime. Token refresh, check-lock-recheck
 coordination, login policy, and rejected-token handling stay in the JavaScript
 implementation instead of being copied into Python.
 
-Python supplies host capabilities through small protocols:
+Python supplies host capabilities through `dbx-tools-node-bindings`, which
+aliases the normal Node imports during the committed Bun build:
 
-- `TokenProvider` acquires, refreshes, and interactively logs in credentials.
-- `CredentialStore` persists tokens and returns explicit lock leases.
-- `MemoryCredentialStore` and `FileCredentialStore` use the reusable lease and
-  file adapters from `dbx-tools-node-bindings`.
-- `DatabricksCliProvider` uses the installed Databricks CLI for U2M profiles
-  through `dbx-tools-core` subprocess resolution.
+- `node:fs` supplies the exact synchronous profile-file operations auth uses.
+- `node:os`, `node:path`, and `node:crypto` supply home, path, and SHA-256 operations.
+- Shared build-time shims cover only the Node built-ins reached by the auth
+  graph. Third-party libraries and the real `@dbx-tools/core` implementation run
+  unchanged on top of those built-ins.
+- Shared TypeScript handles App detection and semantic CLI version checks; the
+  auth source contains no Python-specific runtime callbacks.
+- `MemoryCredentialStore` and `FileCredentialStore` remain Python adapters so
+  file locking does not need a JavaScript core shim.
+- The bundled TypeScript owns profile resolution, CLI U2M, PAT selection,
+  lifecycle caching, and request-header generation.
 - PAT profiles use their configured token directly without invoking the CLI.
 - `create_databricks_cli_auth()` applies the same JavaScript profile-selection
   rules, including implicit preference for one matching CLI profile.
@@ -43,9 +49,9 @@ auth = await create_databricks_cli_auth(profile="DEFAULT")
 headers = await auth.authenticate()
 ```
 
-Provider and storage methods may be native Python coroutines. PythonMonkey
-converts them to JavaScript promises, then converts resolved token records back
-to Python dictionaries.
+Custom provider and storage methods may still be native Python coroutines.
+PythonMonkey converts them to JavaScript promises, then converts resolved token
+records back to Python dictionaries.
 
 Regenerate the committed SpiderMonkey bundle after changing its TypeScript
 entry point or the shared lifecycle:
@@ -60,8 +66,7 @@ lifecycle change cannot publish a stale embedded runtime.
 ## Modules
 
 - `client` loads the bundled runtime and exposes the async `AuthClient` facade.
-- `databricks_auth` resolves CLI profiles and exposes complete request headers.
-- `databricks_cli` provides CLI U2M login and token refresh.
-- `personal_access_token` provides direct configured PAT credentials.
+- `databricks_auth` resolves profiles and exposes CLI U2M, PAT, and complete
+  request-header behavior from the bundled TypeScript implementation.
 - `types` defines the provider, storage, token, and lifecycle contracts.
 - `storage` provides memory and file-backed adapters.

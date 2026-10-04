@@ -1,13 +1,23 @@
-import { AuthClient } from "./lifecycle.ts";
-import {
-  loadRawProfile,
-  normalizeHost,
-  parseDatabricksConfig,
-  resolveAuthKind,
-  resolveProfileName,
-} from "./_profile-core.ts";
+import { environmentUtils } from "@dbx-tools/shared-core";
+
+import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { AuthError } from "./errors.ts";
-import { AuthKind, AuthOptions, type CredentialStore, type TokenProvider } from "./types.ts";
+import { AuthClient } from "./lifecycle.ts";
+import { DatabricksPersonalAccessTokenProvider } from "./personal-access-token.ts";
+import {
+  resolveConfigFile,
+  resolveDatabricksProfile,
+} from "./profile.ts";
+import {
+  AuthKind,
+  AuthOptions,
+  type CredentialStore,
+  DEFAULT_ACCESS_TOKEN_HEADER,
+  type DatabricksAuthOptions,
+  type DatabricksAuthStatus,
+  type TokenProvider,
+  WORKSPACE_ID_HEADER,
+} from "./types.ts";
 
 export interface PythonAuthClient {
   storeName(): string;
@@ -39,38 +49,92 @@ export function createAuthClient(
   };
 }
 
-export function resolveDatabricksCliProfile(
-  configSource: string,
-  requested?: string,
-  preferUserToMachine = true,
-): {
-  name: string;
-  host?: string;
-  workspaceId?: string;
-  accessToken?: string;
-  authKind: AuthKind;
-} {
-  const selected = requested?.trim() || undefined;
-  const config = configSource.trim() ? parseDatabricksConfig(configSource) : undefined;
-  const name = resolveProfileName(selected, Boolean(selected), config, preferUserToMachine);
-  const profile = loadRawProfile(config, name);
-  const authKind = resolveAuthKind(
-    profile.authType,
-    profile.clientId,
-    profile.clientSecret,
+export interface PythonDatabricksAuthOptions extends DatabricksAuthOptions {
+  environment?: Readonly<Record<string, string | undefined>>;
+  executable?: string;
+}
+
+export interface PythonDatabricksAuth extends PythonAuthClient {
+  authenticate(login?: boolean): Promise<Record<string, string>>;
+  authKind(): AuthKind;
+  principal(): string;
+  requestHeadersForUrl(requestUrl: string, login?: boolean): Promise<Record<string, string>>;
+  status(): DatabricksAuthStatus;
+  workspaceId(): string | undefined;
+}
+
+export async function createDatabricksAuth(
+  options: PythonDatabricksAuthOptions,
+  store: CredentialStore,
+): Promise<PythonDatabricksAuth> {
+  const environment = options.environment ?? process.env;
+  const profile = resolveDatabricksProfile(options, environment);
+  const provider = providerFor(
+    profile.authKind,
+    profile.name,
     profile.accessToken,
+    options,
+    environment,
   );
-  if (![AuthKind.UserToMachine, AuthKind.PersonalAccessToken].includes(authKind)) {
+  const client = createAuthClient(profile.cacheKey, provider, store, options.auth);
+  const authenticate = async (login?: boolean): Promise<Record<string, string>> => {
+    const token = await client.token(login);
+    return {
+      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
+      ...(profile.workspaceId ? { [WORKSPACE_ID_HEADER]: profile.workspaceId } : {}),
+    };
+  };
+  return {
+    ...client,
+    authenticate,
+    authKind: () => profile.authKind,
+    principal: () => profile.principal,
+    requestHeadersForUrl: async (requestUrl, login) =>
+      new URL(requestUrl).origin === new URL(profile.host).origin ? authenticate(login) : {},
+    status: () => ({
+      profile: profile.name,
+      host: profile.host,
+      storage: store.name() === "memory" ? "memory" : "file",
+    }),
+    workspaceId: () => profile.workspaceId,
+  };
+}
+
+function providerFor(
+  authKind: AuthKind,
+  profile: string,
+  accessToken: string | undefined,
+  options: PythonDatabricksAuthOptions,
+  environment: Readonly<Record<string, string | undefined>>,
+): TokenProvider {
+  if (authKind === AuthKind.PersonalAccessToken) {
+    return new DatabricksPersonalAccessTokenProvider(accessToken!);
+  }
+  if (authKind !== AuthKind.UserToMachine) {
     throw new AuthError(
       "config",
-      `Profile ${name} cannot expose a bearer token through the Databricks CLI`,
+      `Profile ${profile} requires ${authKind}; Python auth currently supports CLI U2M and PAT profiles`,
     );
   }
-  return {
-    name,
-    authKind,
-    ...(profile.host ? { host: normalizeHost(profile.host, name) } : {}),
-    ...(profile.workspaceId ? { workspaceId: profile.workspaceId } : {}),
-    ...(profile.accessToken ? { accessToken: profile.accessToken } : {}),
-  };
+  const configFile = resolveConfigFile(options.configFile, environment);
+  const inApp = environmentUtils.isDatabricksAppEnv({ ...environment });
+  const executable = options.executable;
+  return new DatabricksCliProvider(
+    profile,
+    executable
+      ? executable
+      : () =>
+          resolveDatabricksCli(environment, {
+            install: !inApp || options.installCliInApp === true,
+          }),
+    {
+      ...Object.fromEntries(
+        Object.entries(environment).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
+      ),
+      DATABRICKS_CONFIG_FILE: configFile,
+      DATABRICKS_CONFIG_PROFILE: profile,
+    },
+  );
 }

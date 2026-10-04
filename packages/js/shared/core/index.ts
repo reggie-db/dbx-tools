@@ -6,6 +6,7 @@ export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-core";
 export const PACKAGE_VERSION = "0.9.21";
 export * as asyncUtils from "./src/async-utils.ts";
 export * as brandUtils from "./src/brand-utils.ts";
+export * as environmentUtils from "./src/environment-utils.ts";
 export * as errorUtils from "./src/error-utils.ts";
 export * as execution from "./src/execution.ts";
 export * as functionUtils from "./src/function-utils.ts";

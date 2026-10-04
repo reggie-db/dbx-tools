@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { bin, exec } from "@dbx-tools/core";
+import * as bin from "@dbx-tools/core/bin";
+import * as exec from "@dbx-tools/core/exec";
 import { stringUtils } from "@dbx-tools/shared-core";
 
 import cliAssets from "./generated/databricks-cli-assets.json" with { type: "json" };

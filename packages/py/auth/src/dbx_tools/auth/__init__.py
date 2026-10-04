@@ -4,8 +4,6 @@ from .databricks_auth import (
     DatabricksAuthStatus,
     create_databricks_cli_auth,
 )
-from .databricks_cli import DatabricksCliProvider
-from .personal_access_token import DatabricksPersonalAccessTokenProvider
 from .storage import FileCredentialStore, MemoryCredentialStore
 from .types import AccessToken, AuthOptions, CredentialStore, Token, TokenProvider
 
@@ -16,8 +14,6 @@ __all__ = [
     "CredentialStore",
     "DatabricksAuth",
     "DatabricksAuthStatus",
-    "DatabricksCliProvider",
-    "DatabricksPersonalAccessTokenProvider",
     "FileCredentialStore",
     "MemoryCredentialStore",
     "Token",

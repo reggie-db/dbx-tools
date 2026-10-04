@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 
-import { configUtils } from "@dbx-tools/core";
+import { environmentUtils } from "@dbx-tools/shared-core";
 
 import { AuthError } from "./errors.ts";
 import {
@@ -102,7 +102,7 @@ export function resolveDatabricksProfile(
   options: DatabricksAuthOptions,
   environment: Environment = process.env,
 ): DatabricksProfile {
-  const inApp = configUtils.isDatabricksAppEnv({ ...environment });
+  const inApp = environmentUtils.isDatabricksAppEnv({ ...environment });
   const environmentProfile = nonempty(environment.DATABRICKS_CONFIG_PROFILE);
   const explicitProfile = Boolean(nonempty(options.profile) ?? environmentProfile);
   const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
