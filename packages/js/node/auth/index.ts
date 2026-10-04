@@ -4,7 +4,7 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth";
 export const PACKAGE_VERSION = "0.9.21";
-export * as databricks from "./src/databricks.ts";
+export * as databricksAuth from "./src/databricks-auth.ts";
 export * as databricksCli from "./src/databricks-cli.ts";
 export * as errors from "./src/errors.ts";
 export * as httpClient from "./src/http-client.ts";
@@ -14,8 +14,8 @@ export * as oauth from "./src/oauth.ts";
 export * as profile from "./src/profile.ts";
 export * as storage from "./src/storage.ts";
 export * as types from "./src/types.ts";
-export { PersistentAuth } from "./src/databricks.ts";
-export type { DatabricksAuthDependencies } from "./src/databricks.ts";
+export { PersistentAuth } from "./src/databricks-auth.ts";
+export type { DatabricksAuthDependencies } from "./src/databricks-auth.ts";
 export { DatabricksCliProvider } from "./src/databricks-cli.ts";
 export { AuthError } from "./src/errors.ts";
 export { DatabricksClient } from "./src/http-client.ts";

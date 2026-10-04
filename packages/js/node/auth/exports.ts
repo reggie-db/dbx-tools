@@ -1,4 +1,4 @@
-export { createPersistentAuth, createPersistentAuthWithStorage } from "./src/databricks.ts";
+export { createPersistentAuth, createPersistentAuthWithStorage } from "./src/databricks-auth.ts";
 export {
   configProfileExists,
   invalidateConfigFile,

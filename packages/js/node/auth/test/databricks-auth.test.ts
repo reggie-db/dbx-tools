@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { describe, it } from "node:test";
 
-import { createPersistentAuth } from "../src/databricks.ts";
+import { createPersistentAuth } from "../src/databricks-auth.ts";
 import { DatabricksAuthOptions, Storage } from "../src/types.ts";
 
 describe("Databricks provider construction", () => {

@@ -70,7 +70,7 @@ entries in `~/.databricks/token-cache.json`.
 
 ## Modules
 
-- `databricks` provides `PersistentAuth` and Databricks provider construction.
+- `databricksAuth` provides `PersistentAuth` and Databricks provider construction.
 - `profile` parses and resolves Databricks configuration.
 - `lifecycle` implements provider-neutral token coordination.
 - `storage` and `nodeStorage` provide memory and file adapters.

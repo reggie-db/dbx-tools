@@ -3,7 +3,7 @@ import {
   createPersistentAuth,
   type DatabricksAuthDependencies,
   PersistentAuth,
-} from "./databricks.ts";
+} from "./databricks-auth.ts";
 import type { DatabricksAuthOptions } from "./types.ts";
 import { DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER } from "./types.ts";
 
