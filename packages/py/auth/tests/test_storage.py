@@ -29,7 +29,7 @@ async def test_file_store_preserves_unrelated_cache_entries(tmp_path: Path) -> N
     assert loaded and loaded["accessToken"] == "stored"
 
 
-async def test_javascript_file_store_uses_proper_lockfile(tmp_path: Path) -> None:
+async def test_javascript_file_store_uses_python_flock_override(tmp_path: Path) -> None:
     runtime = javascript_runtime()
     left = construct(runtime["FileCredentialStore"], str(tmp_path))
     right = construct(runtime["FileCredentialStore"], str(tmp_path))
@@ -51,4 +51,15 @@ async def test_javascript_file_store_uses_proper_lockfile(tmp_path: Path) -> Non
 
     cache = json.loads((tmp_path / "token-cache.json").read_text(encoding="utf-8"))
     assert sorted(cache["tokens"]) == ["left", "right"]
-    assert list((tmp_path / "locks").iterdir()) == []
+    lock_files = list((tmp_path / "locks").iterdir())
+    assert len(lock_files) == 1
+    assert lock_files[0].suffix == ".flock"
+
+    await invoke(
+        left,
+        "save",
+        "after-release",
+        {"accessToken": "released", "tokenType": "Bearer", "scopes": []},
+    )
+    cache = json.loads((tmp_path / "token-cache.json").read_text(encoding="utf-8"))
+    assert sorted(cache["tokens"]) == ["after-release", "left", "right"]

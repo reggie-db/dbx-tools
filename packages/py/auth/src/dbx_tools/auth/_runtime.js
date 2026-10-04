@@ -24568,44 +24568,6 @@ async function withFileLock(key, fn, options = {}) {
   }
   throw new Error("withFileLock: no lock backend available");
 }
-async function acquireFileLock(key, options = {}) {
-  let acquisition;
-  let resolveAcquired;
-  let rejectAcquired;
-  let resolveRelease;
-  const acquired = new Promise((resolve2, reject) => {
-    resolveAcquired = resolve2;
-    rejectAcquired = reject;
-  });
-  const released = new Promise((resolve2) => {
-    resolveRelease = resolve2;
-  });
-  const run = withFileLock(key, async () => {
-    resolveAcquired();
-    await released;
-  }, {
-    ...options,
-    onAcquire: (value) => {
-      acquisition = value;
-      options.onAcquire?.(value);
-    }
-  });
-  run.catch(rejectAcquired);
-  await acquired;
-  if (!acquisition)
-    throw new Error("File-lock backend was not recorded");
-  let active = true;
-  return {
-    ...acquisition,
-    async release() {
-      if (!active)
-        return;
-      active = false;
-      resolveRelease();
-      await run;
-    }
-  };
-}
 function lockId(key) {
   const stable = toOneOrMany(key).map((part) => toStableKey(part)).join("\x00");
   return fnvHash(stable);
@@ -25598,7 +25560,62 @@ __export(exports_node_storage, {
 });
 init_fs_promises();
 init_path();
-
+// projen/shims/python-node/file-lock.ts
+init_fs_promises();
+init_path();
+var POLL_MS2 = 50;
+var python2 = globalThis.python;
+if (!python2)
+  throw new Error("PythonMonkey globalThis.python is unavailable");
+function evaluate2(source) {
+  return python2.eval(source);
+}
+var createLock = evaluate2("lambda path: __import__('filelock').FileLock(path)");
+var tryAcquire = evaluate2(`(lambda namespace: (
+    __import__('builtins').exec(
+      "def try_acquire(lock):\\n try:\\n  lock.acquire(timeout=0)\\n  return True\\n except __import__('filelock').Timeout:\\n  return False",
+      namespace,
+    ),
+    namespace['try_acquire'],
+  )[1])({})`);
+var releaseLock = evaluate2("lambda lock: lock.release()");
+async function acquireFileLock(key, options = {}) {
+  if (options.timeoutMs !== undefined && options.timeoutMs < 0) {
+    throw new TypeError("timeoutMs must be non-negative");
+  }
+  const dir = options.dir ?? join(tmpdir(), "dbx-tools-locks");
+  const lockPath = join(dir, `${lockId2(key)}.flock`);
+  const acquisition = { backend: "flock" };
+  const deadline = options.timeoutMs === undefined ? undefined : Date.now() + options.timeoutMs;
+  await mkdir2(dir, { recursive: true });
+  const lock = createLock(lockPath);
+  options.onAcquire?.(acquisition);
+  let waiting = false;
+  while (!tryAcquire(lock)) {
+    if (!waiting) {
+      waiting = true;
+      options.onWait?.(acquisition);
+    }
+    if (deadline !== undefined && Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for file lock: ${lockPath}`);
+    }
+    await sleep(POLL_MS2);
+  }
+  let active = true;
+  return {
+    ...acquisition,
+    async release() {
+      if (!active)
+        return;
+      active = false;
+      releaseLock(lock);
+    }
+  };
+}
+function lockId2(key) {
+  const stable = toOneOrMany(key).map((part) => toStableKey(part)).join("\x00");
+  return fnvHash(stable);
+}
 // packages/js/node/auth/src/types.ts
 var exports_types = {};
 __export(exports_types, {

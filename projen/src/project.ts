@@ -13,6 +13,7 @@ import * as projectPredicate from "./project-predicate.ts";
 export * from "./project-js.ts";
 export * from "./project-py.ts";
 export * from "./project-rs.ts";
+export * from "./python-node-bundle.ts";
 
 /** Runtime family implemented by a dbx-tools project. */
 export type DBXToolsProjectLanguage = "javascript" | "python" | "rust";

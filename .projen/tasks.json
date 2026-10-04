@@ -24,19 +24,19 @@
     },
     "auth:python-runtime": {
       "name": "auth:python-runtime",
-      "description": "Bundle the public authentication package for PythonMonkey",
+      "description": "Bundle @dbx-tools/auth for PythonMonkey",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey'"
+          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey' --function-override @dbx-tools/core/file-lock#acquireFileLock=projen/shims/python-node/file-lock.ts#acquireFileLock"
         }
       ]
     },
     "auth:python-runtime:check": {
       "name": "auth:python-runtime:check",
-      "description": "Verify the committed PythonMonkey authentication runtime is current",
+      "description": "Verify the committed @dbx-tools/auth for PythonMonkey runtime is current",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey' --check"
+          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root projen/shims/python-node --source '@dbx-tools/auth for PythonMonkey' --function-override @dbx-tools/core/file-lock#acquireFileLock=projen/shims/python-node/file-lock.ts#acquireFileLock --check"
         }
       ]
     },
@@ -475,10 +475,10 @@
           "spawn": "test:installer"
         },
         {
-          "spawn": "auth:cli-assets:check"
+          "spawn": "auth:python-runtime:check"
         },
         {
-          "spawn": "auth:python-runtime:check"
+          "spawn": "auth:cli-assets:check"
         },
         {
           "exec": "bun run --filter '*' test"

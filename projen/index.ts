@@ -24,6 +24,7 @@ export * as projectPy from "./src/project-py.ts";
 export * as projectRs from "./src/project-rs.ts";
 export * as projenVersion from "./src/projen-version.ts";
 export * as publish from "./src/publish.ts";
+export * as pythonNodeBundle from "./src/python-node-bundle.ts";
 export * as release from "./src/release.ts";
 export * as releaseCatalog from "./src/release-catalog.ts";
 export * as releaseDispatch from "./src/release-dispatch.ts";
@@ -58,6 +59,8 @@ export { DBXToolsRustProject, RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARG
 export type { CargoDependency, CargoDependencyOptions, CargoExampleOptions, DBXToolsRustProjectOptions, RustCrateOptions, RustCliOptions, RustOpenApiOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustOpenApiMapping, RustWorkspaceMapping, RustReleaseBinaryAssetMapping, RustReleaseBinaryMapping } from "./src/project-rs.ts";
 export { PROJEN_VERSION } from "./src/projen-version.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
+export { PythonNodeBundle } from "./src/python-node-bundle.ts";
+export type { PythonNodeFunctionOverride, PythonNodeBundleOptions } from "./src/python-node-bundle.ts";
 export { DBXToolsRelease } from "./src/release.ts";
 export type { ReleaseStage, ReleaseDocsOptions, ReleaseSummaryOptions, DBXToolsReleaseOptions } from "./src/release.ts";
 export { DBXToolsReleaseCatalog } from "./src/release-catalog.ts";

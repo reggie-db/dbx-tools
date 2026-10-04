@@ -124,6 +124,36 @@ without repeating repository coordinates. Pass `repository`, `name`, or
 VS Code component; dbx-tools reuses it rather than constructing a second
 `.vscode/settings.json` owner.
 
+### Bundle Node Code For PythonMonkey
+
+`PythonNodeBundle` generates a committed CommonJS runtime and a matching
+freshness-check task. Built-in shims can make ordinary Node imports work under
+PythonMonkey. `functionOverrides` replaces named exports only in that generated
+runtime, so the Node package does not gain Python callbacks or alternate source
+files.
+
+```ts
+new project.PythonNodeBundle(root, {
+  name: "auth",
+  entry: "packages/js/node/auth/index.ts",
+  output: "packages/py/auth/src/example/auth/_runtime.js",
+  shimRoot: "projen/shims/python-node",
+  source: "@example/auth for PythonMonkey",
+  functionOverrides: [
+    {
+      module: "@example/core/file-lock",
+      export: "acquireFileLock",
+      handler: "projen/shims/python-node/file-lock.ts",
+    },
+  ],
+});
+```
+
+This creates `<name>:python-runtime` and `<name>:python-runtime:check`. The
+check runs with the project test task by default. A replacement module may
+export a differently named function through `handlerExport`; every other export
+continues to come from the original module.
+
 ## Add A Rust Workspace
 
 `DBXToolsRustWorkspace` discovers every source-bearing folder under its

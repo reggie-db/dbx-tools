@@ -1569,15 +1569,19 @@ new project.DBXToolsPythonWorkspace(root, {
   },
   release: true,
 });
-root.addTask("auth:python-runtime", {
-  description: "Bundle the public authentication package for PythonMonkey",
-  exec: [
-    "bun projen/tasks/python-node-bindings.ts",
-    "--entry packages/js/node/auth/index.ts",
-    "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
-    "--shim-root projen/shims/python-node",
-    "--source '@dbx-tools/auth for PythonMonkey'",
-  ].join(" "),
+new project.PythonNodeBundle(root, {
+  name: "auth",
+  entry: "packages/js/node/auth/index.ts",
+  output: "packages/py/auth/src/dbx_tools/auth/_runtime.js",
+  shimRoot: "projen/shims/python-node",
+  source: "@dbx-tools/auth for PythonMonkey",
+  functionOverrides: [
+    {
+      module: "@dbx-tools/core/file-lock",
+      export: "acquireFileLock",
+      handler: "projen/shims/python-node/file-lock.ts",
+    },
+  ],
 });
 root.addTask("auth:cli-assets", {
   description: "Refresh the pinned Databricks CLI release asset manifest",
@@ -1588,18 +1592,6 @@ const authCliAssetsCheck = root.addTask("auth:cli-assets:check", {
   exec: "bun projen/tasks/databricks-cli-assets.ts --check",
 });
 root.testTask.spawn(authCliAssetsCheck);
-const authPythonRuntimeCheck = root.addTask("auth:python-runtime:check", {
-  description: "Verify the committed PythonMonkey authentication runtime is current",
-  exec: [
-    "bun projen/tasks/python-node-bindings.ts",
-    "--entry packages/js/node/auth/index.ts",
-    "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
-    "--shim-root projen/shims/python-node",
-    "--source '@dbx-tools/auth for PythonMonkey'",
-    "--check",
-  ].join(" "),
-});
-root.testTask.spawn(authPythonRuntimeCheck);
 root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
   target: "dbx-tools-graphiti",
   kind: "generated",

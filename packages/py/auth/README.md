@@ -12,12 +12,16 @@ call Python's standard library directly:
 - `node:fs` supplies the exact synchronous profile-file operations auth uses.
 - `node:os`, `node:path`, and `node:crypto` supply home, path, and SHA-256 operations.
 - Shared build-time shims cover only the Node built-ins reached by the auth
-  graph. Third-party libraries and the real `@dbx-tools/core` implementation run
-  unchanged on top of those built-ins.
+  graph. Third-party libraries and workspace packages otherwise run unchanged.
+- The Python build explicitly replaces `@dbx-tools/core/file-lock`'s
+  `acquireFileLock` export with a `filelock.FileLock` handler. It keeps the same
+  lease API and check-lock-recheck behavior while using the host Python
+  process's OS lock instead of emulating a Node file descriptor.
 - Shared TypeScript handles App detection and semantic CLI version checks; the
   auth source contains no Python-specific runtime callbacks.
 - `MemoryCredentialStore` and `FileCredentialStore` remain Python-facing
-  adapters with native Python locking.
+  adapters. The bundled JavaScript store uses the registered Python flock
+  override when it updates the shared token cache.
 - The bundled TypeScript owns profile resolution, CLI U2M, PAT selection,
   lifecycle caching, and request-header generation.
 - PAT profiles use their configured token directly without invoking the CLI.
