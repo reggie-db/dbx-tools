@@ -38,6 +38,38 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./async-utils": {
+        "types": "./lib/src/async-utils.d.ts",
+        "default": "./lib/src/async-utils.js"
+      },
+      "./environment-utils": {
+        "types": "./lib/src/environment-utils.d.ts",
+        "default": "./lib/src/environment-utils.js"
+      },
+      "./error-utils": {
+        "types": "./lib/src/error-utils.d.ts",
+        "default": "./lib/src/error-utils.js"
+      },
+      "./function-utils": {
+        "types": "./lib/src/function-utils.d.ts",
+        "default": "./lib/src/function-utils.js"
+      },
+      "./hash": {
+        "types": "./lib/src/hash.d.ts",
+        "default": "./lib/src/hash.js"
+      },
+      "./log": {
+        "types": "./lib/src/log.d.ts",
+        "default": "./lib/src/log.js"
+      },
+      "./object": {
+        "types": "./lib/src/object.d.ts",
+        "default": "./lib/src/object.js"
+      },
+      "./string-utils": {
+        "types": "./lib/src/string-utils.d.ts",
+        "default": "./lib/src/string-utils.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -46,6 +78,14 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./async-utils": "./src/async-utils.ts",
+    "./environment-utils": "./src/environment-utils.ts",
+    "./error-utils": "./src/error-utils.ts",
+    "./function-utils": "./src/function-utils.ts",
+    "./hash": "./src/hash.ts",
+    "./log": "./src/log.ts",
+    "./object": "./src/object.ts",
+    "./string-utils": "./src/string-utils.ts",
     "./package.json": "./package.json"
   },
   "files": [
