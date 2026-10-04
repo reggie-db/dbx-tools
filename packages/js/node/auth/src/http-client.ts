@@ -52,14 +52,14 @@ export class DatabricksClient {
   async request(path: string, options: DatabricksRequestOptions = {}): Promise<unknown> {
     const url = new URL(path, `${this.host().replace(/\/$/, "")}/`).toString();
     const method = options.method ?? (options.body === undefined ? "GET" : "POST");
-    let authHeaders = await this.auth.headers(options.login);
+    let authHeaders = await this.auth.authenticate(options.login);
     let response = await this.send(url, method, authHeaders, options);
     if (response.status === 401) {
       await this.auth.refreshRejectedToken(
         accessTokenFromHeaders(authHeaders),
         options.login ?? true,
       );
-      authHeaders = await this.auth.headers(false);
+      authHeaders = await this.auth.authenticate(false);
       response = await this.send(url, method, authHeaders, options);
     }
     const text = await response.text();

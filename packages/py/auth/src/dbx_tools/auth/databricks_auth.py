@@ -23,7 +23,7 @@ class DatabricksAuthStatus:
 
 
 class DatabricksAuth:
-    """Databricks header facade over the shared JavaScript lifecycle."""
+    """Databricks authentication facade over the shared JavaScript lifecycle."""
 
     def __init__(
         self,
@@ -49,7 +49,7 @@ class DatabricksAuth:
     async def token(self, login: bool | None = None) -> AccessToken:
         return await self._client.token(login)
 
-    async def headers(self, login: bool | None = None) -> dict[str, str]:
+    async def authenticate(self, login: bool | None = None) -> dict[str, str]:
         token = await self.token(login)
         return {
             "authorization": f"{token['tokenType']} {token['accessToken']}",
@@ -76,7 +76,7 @@ class DatabricksAuth:
     ) -> dict[str, str]:
         if not self._status.host or _origin(request_url) != _origin(self._status.host):
             return {}
-        return await self.headers(login)
+        return await self.authenticate(login)
 
     async def force_refresh(self, login: bool = True) -> AccessToken:
         return await self._client.force_refresh(login)

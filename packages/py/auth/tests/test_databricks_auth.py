@@ -51,7 +51,7 @@ auth_type = databricks-cli
     monkeypatch.setattr("dbx_tools.auth.client.AuthClient.token", token)
     auth = await create_databricks_cli_auth(config_file=config, cache_dir=tmp_path / "cache")
 
-    assert await auth.headers(False) == {
+    assert await auth.authenticate(False) == {
         "authorization": "Bearer token",
         "x-databricks-workspace-id": "workspace-id",
     }

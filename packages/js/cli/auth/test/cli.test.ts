@@ -45,7 +45,7 @@ function fakeAuth(calls: string[]): PersistentAuthLike {
       calls.push(`token:${String(login)}`);
       return TOKEN;
     },
-    async headers() {
+    async authenticate() {
       return { authorization: "Bearer access" };
     },
     async authorizationHeaderForUrl() {

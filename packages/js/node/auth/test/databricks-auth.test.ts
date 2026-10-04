@@ -17,7 +17,7 @@ describe("Databricks provider construction", () => {
     });
     const auth = await createPersistentAuth(options, Storage.Memory, { environment: APP_ENV });
 
-    assert.deepEqual(await auth.headers(false), {
+    assert.deepEqual(await auth.authenticate(false), {
       authorization: "Bearer request-token",
       "x-databricks-workspace-id": "workspace-id",
     });
@@ -115,24 +115,7 @@ describe("Databricks provider construction", () => {
     );
   });
 
-  it("rejects non-App service-principal auth instead of using custom OAuth", async () => {
-    await assert.rejects(
-      createPersistentAuth(
-        DatabricksAuthOptions.create({
-          profile: "SERVICE",
-          host: "https://example.cloud.databricks.com",
-          authType: "oauth-m2m",
-          clientId: "client-id",
-          clientSecret: "client-secret",
-        }),
-        Storage.Memory,
-        { environment: {} },
-      ),
-      /CLI does not expose M2M bearer tokens/,
-    );
-  });
-
-  it("uses client credentials only for Databricks App SP", async () => {
+  it("uses client credentials when the CLI cannot expose an M2M token", async () => {
     const requests: string[] = [];
     const server = createServer(async (request, response) => {
       requests.push(request.url ?? "");
@@ -166,17 +149,69 @@ describe("Databricks provider construction", () => {
           host: `http://127.0.0.1:${address.port}`,
           accountId: "account-id",
           target: "account",
-          authType: "app_sp",
+          authType: "oauth-m2m",
           clientId: "client-id",
           clientSecret: "client-secret",
         }),
         Storage.Memory,
-        { environment: APP_ENV },
+        { environment: {} },
       );
       const token = await auth.token(false);
       assert.equal(token.accessToken, "m2m-token");
       assert.deepEqual(token.scopes, ["all-apis"]);
       assert.deepEqual(requests, ["/oidc/accounts/account-id/v1/token"]);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it("uses App environment service-principal credentials without the CLI", async () => {
+    let resolvedCli = false;
+    const server = createServer((_request, response) => {
+      response.writeHead(200, {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+      });
+      response.end(
+        JSON.stringify({
+          access_token: "app-token",
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "all-apis",
+        }),
+      );
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("fixture did not bind");
+    try {
+      const auth = await createPersistentAuth(
+        DatabricksAuthOptions.create({
+          host: `http://127.0.0.1:${address.port}`,
+          accountId: "account-id",
+          target: "account",
+        }),
+        Storage.Memory,
+        {
+          environment: {
+            ...APP_ENV,
+            DATABRICKS_HOST: `http://127.0.0.1:${address.port}`,
+            DATABRICKS_CLIENT_ID: "app-id",
+            DATABRICKS_CLIENT_SECRET: "app-secret",
+          },
+          resolveCli: () => {
+            resolvedCli = true;
+            return Promise.resolve("databricks");
+          },
+        },
+      );
+      assert.equal((await auth.token(false)).accessToken, "app-token");
+      assert.equal(resolvedCli, false);
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),

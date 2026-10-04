@@ -32,7 +32,7 @@ For Databricks CLI-backed authentication:
 from dbx_tools.auth import create_databricks_cli_auth
 
 auth = await create_databricks_cli_auth(profile="DEFAULT")
-headers = await auth.headers()
+headers = await auth.authenticate()
 ```
 
 Provider and storage methods may be native Python coroutines. PythonMonkey

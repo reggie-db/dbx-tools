@@ -3,7 +3,7 @@ import * as oauth from "oauth4webapi";
 import { AuthError } from "./errors.ts";
 import type { Token, TokenProvider } from "./types.ts";
 
-export interface AppServicePrincipalConfig {
+export interface DatabricksServicePrincipalConfig {
   tokenEndpoint: string;
   clientId: string;
   clientSecret: string;
@@ -13,13 +13,13 @@ export interface AppServicePrincipalConfig {
   allowInsecureRequests?: boolean;
 }
 
-/** Databricks App service-principal provider backed by client credentials. */
-export class AppServicePrincipalProvider implements TokenProvider {
+/** Databricks service-principal provider backed by client credentials. */
+export class DatabricksServicePrincipalProvider implements TokenProvider {
   private readonly authorizationServer: oauth.AuthorizationServer;
   private readonly client: oauth.Client;
   private readonly requestOptions: oauth.HttpRequestOptions<string, URLSearchParams>;
 
-  constructor(private readonly config: AppServicePrincipalConfig) {
+  constructor(private readonly config: DatabricksServicePrincipalConfig) {
     this.authorizationServer = {
       issuer: new URL(config.tokenEndpoint).origin,
       token_endpoint: config.tokenEndpoint,
@@ -73,7 +73,7 @@ export class AppServicePrincipalProvider implements TokenProvider {
         scopes: value.scope?.split(/\s+/).filter(Boolean) ?? [...this.config.scopes],
       };
     } catch (cause) {
-      throw new AuthError("oauth", "Databricks App service-principal authentication failed", {
+      throw new AuthError("oauth", "Databricks service-principal authentication failed", {
         cause,
       });
     }

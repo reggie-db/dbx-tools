@@ -3,12 +3,12 @@ import { join } from "node:path";
 
 import { configUtils } from "@dbx-tools/core";
 
-import { AppServicePrincipalProvider } from "./app-service-principal.ts";
 import { AuthError } from "./errors.ts";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { AuthClient, publicToken } from "./lifecycle.ts";
 import { FileCredentialStore } from "./node-storage.ts";
 import { machineScopes, resolveConfigFile, resolveDatabricksProfile } from "./profile.ts";
+import { DatabricksServicePrincipalProvider } from "./service-principal.ts";
 import { MemoryCredentialStore } from "./storage.ts";
 import {
   AuthKind,
@@ -53,7 +53,7 @@ export class PersistentAuth implements PersistentAuthLike {
       : this.requiredClient().tokenWithLogin(login);
   }
 
-  async headers(login?: boolean): Promise<Record<string, string>> {
+  async authenticate(login?: boolean): Promise<Record<string, string>> {
     const token = await this.token(login);
     return {
       [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
@@ -73,7 +73,7 @@ export class PersistentAuth implements PersistentAuthLike {
   async requestHeadersForUrl(requestUrl: string, login?: boolean): Promise<Record<string, string>> {
     const request = new URL(requestUrl);
     if (request.origin !== new URL(this.profileValue.host).origin) return {};
-    return this.headers(login);
+    return this.authenticate(login);
   }
 
   forceRefreshToken(login = true) {
@@ -176,7 +176,7 @@ async function providerFor(
   profile: DatabricksProfile,
   options: DatabricksAuthOptions,
   dependencies: DatabricksAuthDependencies,
-): Promise<DatabricksCliProvider | AppServicePrincipalProvider> {
+): Promise<DatabricksCliProvider | DatabricksServicePrincipalProvider> {
   const environment = dependencies.environment ?? process.env;
   const inApp = configUtils.isDatabricksAppEnv({ ...environment });
   switch (profile.authKind) {
@@ -199,18 +199,9 @@ async function providerFor(
       );
     }
     case AuthKind.MachineToMachine:
-      throw new AuthError(
-        "cli",
-        "The Databricks CLI does not expose M2M bearer tokens; use U2M or PAT outside a Databricks App",
-      );
     case AuthKind.AppServicePrincipal: {
-      if (!inApp)
-        throw new AuthError(
-          "config",
-          "app_sp authentication is available only inside a Databricks App",
-        );
       const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
-      return new AppServicePrincipalProvider({
+      return new DatabricksServicePrincipalProvider({
         tokenEndpoint: endpoints.tokenEndpoint,
         clientId: profile.clientId,
         clientSecret: profile.clientSecret!,

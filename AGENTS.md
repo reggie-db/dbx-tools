@@ -158,13 +158,15 @@ Primary package areas:
   checksum-pinned release recorded in
   `src/generated/databricks-cli-assets.json`. The asset task refreshes that
   manifest once per root `VERSION`. There is no native browser OAuth path.
-  Non-App M2M fails explicitly because the Databricks CLI does not expose its
-  generated bearer token. CLI acquisition remains a provider detail and must
+  M2M is the only non-App exception: use direct `oauth4webapi` client
+  credentials because the Databricks CLI does not expose its generated bearer
+  token. CLI acquisition remains a provider detail and must
   not bypass the lifecycle's check-lock-recheck token coordination or credential
   caches.
-  Inside Databricks Apps, use only request-scoped App OBO headers or App SP
-  credentials from the App environment. App SP is the only direct OAuth flow
-  and uses `oauth4webapi` client credentials without opening a browser.
+  Inside Databricks Apps, use request-scoped App OBO headers or App SP
+  credentials from the App environment. Direct service-principal OAuth never
+  opens a browser. The public facade uses `token()` for the credential record
+  and `authenticate()` for the complete request-header dictionary.
   `@dbx-tools/core` owns the Node file-lock implementation and must not depend
   on Rust only for Databricks App detection.
 - `packages/js/node/bindings` owns data-only process and HTTP host bindings for
