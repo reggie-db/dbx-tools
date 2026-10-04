@@ -38,7 +38,6 @@
     "@dbx-tools/fs": "workspace:^",
     "@dbx-tools/genie": "workspace:^",
     "@dbx-tools/model": "workspace:^",
-    "@dbx-tools/model-rs": "workspace:^",
     "@dbx-tools/path": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-fs": "workspace:^",

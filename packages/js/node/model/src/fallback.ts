@@ -5,7 +5,7 @@
  * token, the service principal can't list, or the workspace is unreachable -
  * the resolver still has to name *some* endpoint. This module holds that floor:
  * a small, hard-coded set of well-known Foundation Model API endpoint names,
- * each bucketed into a chat {@link ModelClass} by the Rust family policy
+ * each bucketed into a chat {@link ModelClass} by the TypeScript family policy
  * and ordered best-first.
  *
  * This is deliberately *server-only*. A browser client never talks to
@@ -18,14 +18,14 @@
 
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import { rankEndpoints } from "./_native.ts";
+import { rankEndpoints } from "./_ranking.ts";
 
 type ModelClass = model.ModelClass;
 const { ModelClass } = model;
 
 /**
  * Small, last-resort set of well-known Foundation Model API endpoint names,
- * ordered best-first within each class by the Rust model ranker.
+ * ordered best-first within each class by the model ranker.
  * Used only as the floor when the live `/serving-endpoints` catalogue can't be
  * read at resolve time; the live, score-driven classification supersedes it
  * whenever the workspace listing is available. Classes are not hard-coded here
@@ -53,7 +53,7 @@ const FALLBACK_ENDPOINTS: readonly ServingEndpointSummary[] = FALLBACK_MODEL_NAM
  * {@link FALLBACK_MODEL_NAMES} list and ordered best-first by family rank. Sync
  * and workspace-independent: this is the *fallback opinion* used to seed default
  * lists or when the live catalogue is unreachable - live resolution prefers
- * the Rust-classified workspace catalogue. Returns `[]` for
+ * the classified workspace catalogue. Returns `[]` for
  * {@link ModelClass.Embedding} (the floor is chat-only).
  */
 export function modelsForClass(cls: ModelClass): readonly string[] {

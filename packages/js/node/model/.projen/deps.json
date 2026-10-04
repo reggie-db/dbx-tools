@@ -25,11 +25,6 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/model-rs",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:^",
       "type": "runtime"
@@ -37,6 +32,11 @@
     {
       "name": "@dbx-tools/shared-model",
       "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "fuse.js",
+      "version": "^7.4.2",
       "type": "runtime"
     }
   ],

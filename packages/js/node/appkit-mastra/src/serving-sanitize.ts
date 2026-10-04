@@ -21,7 +21,7 @@
  * @module
  */
 
-import { chatToolReasoningEffort, ReasoningEffort } from "@dbx-tools/model-rs";
+import { policy } from "@dbx-tools/model";
 import { json, stringUtils } from "@dbx-tools/shared-core";
 import { type ChatMessage, type ChatRole, openaiChat } from "@dbx-tools/shared-model";
 
@@ -114,7 +114,7 @@ export function applyToolReasoningCompatibility(body: Record<string, unknown>): 
   }
   const model = stringUtils.trimToNull(body.model);
   if (!model) return false;
-  if (chatToolReasoningEffort(model) !== ReasoningEffort.None) return false;
+  if (policy.chatToolReasoningEffort(model) !== "none") return false;
   if (body.reasoning_effort === "none") return false;
   body.reasoning_effort = "none";
   return true;

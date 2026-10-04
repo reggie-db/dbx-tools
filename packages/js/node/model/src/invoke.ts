@@ -18,7 +18,7 @@
  * @module
  */
 
-import { isResponsesOnly as isResponsesOnlyRs } from "@dbx-tools/model-rs";
+import { isResponsesOnly as isResponsesOnlyByPolicy } from "./policy.ts";
 
 /**
  * Path segment appended to a serving endpoint for OpenAI-compatible chat
@@ -83,7 +83,7 @@ export function chatCompletionsUrl(host: string): string {
  * those to {@link responsesUrl} instead of {@link invocationsUrl}.
  */
 export function isResponsesOnly(endpoint: string): boolean {
-  return isResponsesOnlyRs(endpoint);
+  return isResponsesOnlyByPolicy(endpoint);
 }
 
 /**

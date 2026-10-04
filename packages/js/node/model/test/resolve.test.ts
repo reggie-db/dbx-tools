@@ -64,7 +64,7 @@ describe("searchServingEndpoints / resolveModelId", () => {
     assert.equal(result.modelId, SONNET);
   });
 
-  it("uses the same version-aware Rust ranking as lookupModels", () => {
+  it("uses the same version-aware ranking as lookupModels", () => {
     const versions = [chat(OPUS_6), chat(OPUS_8), chat(OPUS_7)];
     assert.equal(resolveModelId("claude opus", versions).modelId, OPUS_8);
     assert.equal(
@@ -73,7 +73,7 @@ describe("searchServingEndpoints / resolveModelId", () => {
     );
   });
 
-  it("searches explicit custom endpoint records through the Rust ranker", () => {
+  it("searches explicit custom endpoint records through the model ranker", () => {
     const custom = { name: "approved-custom-endpoint" };
     assert.deepEqual(searchServingEndpoints("approved custom", [custom]), [
       { endpoint: custom, score: 0 },
@@ -92,7 +92,7 @@ describe("searchServingEndpoints / resolveModelId", () => {
 });
 
 describe("listServingEndpointsUncached model policy", () => {
-  it("exposes Rust-derived family, reasoning, and tool metadata", async () => {
+  it("exposes TypeScript-derived family, reasoning, and tool metadata", async () => {
     const client = {
       servingEndpoints: {
         async *list() {

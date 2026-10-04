@@ -24,8 +24,7 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { classes, invoke, resolve } from "@dbx-tools/model";
-import { ModelServingApi, modelServingApi } from "@dbx-tools/model-rs";
+import { classes, invoke, policy, resolve } from "@dbx-tools/model";
 import { functionUtils, json, log, net } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
@@ -52,7 +51,7 @@ export const RESPONSES_PROVIDER_OPTIONS = {
 
 /** Pick the native Databricks inference surface required by a resolved model. */
 export function servingApi(modelId: string): "chat" | "responses" {
-  return modelServingApi(modelId) === ModelServingApi.Responses ? "responses" : "chat";
+  return policy.modelServingApi(modelId);
 }
 
 /** Optional overrides accepted by {@link buildModel}. */

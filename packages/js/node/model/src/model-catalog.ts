@@ -9,7 +9,7 @@
  * `quality` / `speed` / `cost` profile when present, the classified
  * {@link ModelClass}, and (for embedding endpoints) the measured vector
  * `dimension` - and snaps loose, human-typed names to real endpoint ids
- * through the Rust model ranker so tokens like `"claude sonnet"` resolve to
+ * through the TypeScript model ranker so tokens like `"claude sonnet"` resolve to
  * `databricks-claude-sonnet-4-6`.
  *
  * The class stamp and embedding dimension are computed once per cache load:
@@ -27,7 +27,7 @@ import { appkit } from "@dbx-tools/appkit";
 import { errorUtils, log } from "@dbx-tools/shared-core";
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_native.ts";
+import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_ranking.ts";
 
 const { ModelClass } = model;
 
@@ -43,7 +43,7 @@ export type WorkspaceClientLike = Pick<appkit.WorkspaceClientLike, "servingEndpo
 /** Default TTL for the in-memory endpoint cache. Matches the Databricks SDK's session lifetime budget. */
 export const DEFAULT_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 
-/** Default Rust distance threshold below which a fuzzy match is accepted. */
+/** Default fuzzy distance threshold below which a match is accepted. */
 export const DEFAULT_FUZZY_THRESHOLD = 0.4;
 
 /** Cache key parts under which endpoint listings are stored. */
@@ -215,7 +215,7 @@ export async function clearServingEndpointsCache(
 
 /**
  * Result of fuzzy-resolving a user-supplied model name against the live
- * endpoint list. `score` is the Rust ranker's distance (`0` is exact, `1` is no match);
+ * endpoint list. `score` is the ranker's distance (`0` is exact, `1` is no match);
  * `matched` is `false` when the score exceeds the configured threshold so
  * callers can fall back to the original input (Databricks will then return a
  * clean 404).
@@ -246,7 +246,7 @@ export interface ScoredEndpoint {
  * (lowest score) first, keeping only those within `threshold`:
  *
  * 1. An exact name match short-circuits to a single `score: 0` result.
- * 2. Otherwise Rust tokenizes the input and scores every endpoint through the
+ * 2. Otherwise the shared TypeScript policy tokenizes and scores every endpoint through the
  *    same fuzzy-distance policy used by {@link lookupModels}.
  *
  * Returns `[]` for an empty endpoint list or when `input` tokenizes to nothing,

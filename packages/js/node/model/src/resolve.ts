@@ -28,7 +28,7 @@ import {
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { rankEndpoints } from "./_native.ts";
+import { rankEndpoints } from "./_ranking.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import {
   listServingEndpoints,
@@ -57,7 +57,7 @@ export interface ResolveModelInput {
    * doesn't exist).
    */
   fuzzy?: boolean;
-  /** Rust fuzzy-distance threshold forwarded to the search match. */
+  /** Fuzzy-distance threshold forwarded to the search match. */
   threshold?: number;
   /** Require a model that supports a complete function-tool round-trip. */
   requiresTools?: boolean;
@@ -107,7 +107,7 @@ export interface SearchModelsInput extends ModelQuery {
 /**
  * Rank the live catalogue against a {@link ModelQuery}, best-first.
  *
- * Rust owns classification, fuzzy scoring, family-version ordering, preferred
+ * This package owns classification, fuzzy scoring, family-version ordering, preferred
  * variants, class ceilings, tool filtering, and result limiting. Node retains
  * the caller's endpoint objects so fields outside the ranking contract remain
  * available unchanged.

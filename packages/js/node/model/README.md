@@ -14,7 +14,7 @@ Browser-safe request/result schemas and endpoint classification types live in
 Key features:
 
 - Lists Databricks Model Serving endpoints through the SDK and normalizes them
-  into a stable summary shape with Rust-derived family and reasoning-effort
+  into a stable summary shape with TypeScript-owned family and reasoning-effort
   metadata.
 - Classifies endpoints into chat-thinking, chat-balanced, chat-fast, and
   embedding classes using Foundation Model API scores and family heuristics.
@@ -95,10 +95,9 @@ const ranked = await resolve.searchModels(client, host, {
 
 Use `searchModels()` for UI pickers and debug routes. It returns ranked models
 with match scores and endpoint summaries, using the same fuzzy threshold and
-class ceiling logic as `selectModel()`. Both delegate catalogue ranking to the
-generated [`@dbx-tools/model-rs`](../model-rs) binding, so Node and the Rust
-model proxy use one fuzzy scorer, family-version order, variant preference, and
-class policy.
+class ceiling logic as `selectModel()`. Classification, fuzzy scoring,
+family-version order, and variant preference are implemented directly in this
+package and require no native binding.
 
 ## Work With A Held Catalogue
 
@@ -194,9 +193,8 @@ a property of the model (see `isResponsesOnly()` and `responsesUpstreamUrl()`),
 so a hard-coded string in one package silently diverges when that routing
 changes. `isResponsesOnly()` covers Codex and GPT 5.4+ endpoints, which reject
 tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
-The TypeScript helper delegates this policy to the generated
-[`@dbx-tools/model-rs`](../model-rs) binding, so the Rust proxy, Node packages,
-and Python callers share one version threshold.
+The TypeScript helper owns this policy, so Node consumers and generated Python
+bindings share one version threshold without loading a native library.
 
 ## Use Static Fallbacks
 
@@ -214,14 +212,14 @@ policy decisions; fallbacks are a last resort.
 
 ## Modules
 
-- `resolve` - high-level `selectModel`, Rust-backed ranked search, and
+- `resolve` - high-level `selectModel`, TypeScript-ranked search, and
   catalogue-held resolver functions.
 - `serving` - Databricks serving-endpoint listing, cache management, fuzzy
   search, and endpoint-id resolution.
 - `invoke` - serving-path constants, URL construction, and per-request auth
   headers for calling an endpoint over raw HTTP.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.
-- `policy` - Rust-backed family and reasoning-effort metadata projection.
+- `policy` - family, serving-protocol, tool, and reasoning-effort policy.
 - `fallback` - static fallback model ids per class.
 
 The AppKit-Mastra integration uses this package through

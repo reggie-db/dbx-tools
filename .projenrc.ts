@@ -538,9 +538,9 @@ project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => 
 project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/shared-model@workspace:^",
-    "@dbx-tools/model-rs@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
+    "fuse.js@^7.4.2",
   );
 });
 
@@ -723,7 +723,6 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@dbx-tools/fs@workspace:^",
     "@dbx-tools/genie@workspace:^",
     "@dbx-tools/model@workspace:^",
-    "@dbx-tools/model-rs@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/path@workspace:^",
