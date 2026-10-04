@@ -30,6 +30,8 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "packages/js/cli/auth": "Databricks OAuth commands mounted under dbx auth",
   "packages/js/cli/dbx-tools":
     "The dbx CLI for workspace lifecycle, AppKit environment, Databricks OAuth, and gated tunnels",
+  "packages/js/cli/lakebase-proxy":
+    "Pure Node loopback PostgreSQL proxy for Databricks Lakebase",
   "packages/js/cli/tunnel":
     "Public Portr and FRP tunnel commands protected by the dbx-tools authentication gate",
   "packages/js/node/appkit": "Node-side helpers for Databricks AppKit applications",
@@ -105,6 +107,7 @@ const SHARED_CORE_DEPENDENT_PATHS = [
   "packages/js/cli/appkit-env",
   "packages/js/cli/auth",
   "packages/js/cli/dbx-tools",
+  "packages/js/cli/lakebase-proxy",
   "packages/js/cli/tunnel",
   "packages/js/node/appkit",
   "packages/js/node/appkit-graphiti",
@@ -523,6 +526,25 @@ project.applyToProjects(root, { identifierName: "cli-model-proxy", tags: "cli" }
   p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-core@workspace:^");
 });
 
+project.applyToProjects(root, { identifierName: "cli-lakebase-proxy", tags: "cli" }, (p) => {
+  p.addDeps(
+    "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/lakebase@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "commander@catalog:",
+    "pg@^8.22.0",
+  );
+  p.addDevDeps("@types/pg@^8");
+  p.package.addField("bin", {
+    "dbx-lakebase-proxy": "lib/bin/dbx-lakebase-proxy.js",
+  });
+  p.package.addField("exports", {
+    ".": "./index.ts",
+    "./cli": "./src/cli.ts",
+    "./package.json": "./package.json",
+  });
+});
+
 // node-genie: the server-side Genie driver (live chat + space metadata).
 // Consumes the browser-safe shared-genie contracts and AppKit's public
 // workspace-client facade. AppKit handles request-scoped and default auth.
@@ -902,6 +924,7 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/cli-appkit-env@workspace:^",
     "@dbx-tools/cli-auth@workspace:^",
+    "@dbx-tools/cli-lakebase-proxy@workspace:^",
     "@dbx-tools/cli-model-proxy@workspace:^",
     "@dbx-tools/cli-tunnel@workspace:^",
     "@dbx-tools/rust-binary@workspace:^",

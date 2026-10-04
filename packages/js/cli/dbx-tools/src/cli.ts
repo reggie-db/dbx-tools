@@ -143,13 +143,20 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
 
   addForwardedCommand(
     program,
+    "lakebase-proxy",
+    "Run the Node Databricks Lakebase PostgreSQL proxy",
+    async () => (await import("@dbx-tools/cli-lakebase-proxy/cli")).buildProgram,
+  );
+
+  addForwardedCommand(
+    program,
     "model-proxy",
     "Run or manage the Python Databricks model proxy",
     async () => (await import("@dbx-tools/cli-model-proxy/cli")).buildProgram,
   );
 
   for (const command of releaseBinaryCommands()) {
-    if (command.command === "model-proxy") continue;
+    if (command.command === "model-proxy" || command.command === "lakebase-proxy") continue;
     addReleaseCommand(program, command);
   }
 
