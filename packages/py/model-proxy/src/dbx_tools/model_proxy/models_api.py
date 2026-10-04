@@ -132,6 +132,8 @@ def install_models_api() -> None:
 
     @app.middleware("http")
     async def dynamic_models(request: Request, call_next: Any) -> Response:
+        if _is_litellm_ui_path(request.url.path):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
         response = await call_next(request)
         if request.url.path != "/v1/models" or response.status_code != 200:
             return response
