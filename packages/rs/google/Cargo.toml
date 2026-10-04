@@ -36,7 +36,7 @@ uniffi-bindgen = [ "uniffi/cli" ]
 workspace = true
 
 [dependencies.dbx-tools-core]
-version = "0.9.19"
+version = "0.9.20"
 path = "../core"
 
 [dependencies.google-cloud-auth]
