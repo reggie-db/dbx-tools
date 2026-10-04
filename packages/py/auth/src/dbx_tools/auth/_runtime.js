@@ -66,490 +66,6 @@ var __export = (target, all) => {
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 
-// packages/py/node-bindings/build/shims/host.ts
-function pythonHost() {
-  const host = globalThis.__dbxToolsPython;
-  if (!host)
-    throw new Error("dbx-tools Python runtime host is unavailable");
-  return host;
-}
-
-// packages/py/node-bindings/build/shims/path.ts
-var exports_path = {};
-__export(exports_path, {
-  win32: () => win32,
-  sep: () => sep,
-  resolve: () => resolve,
-  relative: () => relative,
-  posix: () => posix,
-  parse: () => parse,
-  normalize: () => normalize,
-  join: () => join,
-  isAbsolute: () => isAbsolute,
-  extname: () => extname,
-  dirname: () => dirname,
-  delimiter: () => delimiter,
-  default: () => path_default,
-  basename: () => basename
-});
-function basename(path) {
-  return pythonHost().path.basename(String(path));
-}
-function dirname(path) {
-  return pythonHost().path.dirname(String(path));
-}
-function extname(path) {
-  const name = basename(path);
-  const index = name.lastIndexOf(".");
-  return index <= 0 ? "" : name.slice(index);
-}
-function isAbsolute(path) {
-  return pythonHost().path.isAbsolute(String(path));
-}
-function join(...parts) {
-  return pythonHost().path.join(parts.map(String));
-}
-function normalize(path) {
-  return resolve(path);
-}
-function parse(path) {
-  const dir = dirname(path);
-  const base = basename(path);
-  const ext = extname(base);
-  return {
-    root: isAbsolute(path) ? sep : "",
-    dir,
-    base,
-    ext,
-    name: ext ? base.slice(0, -ext.length) : base
-  };
-}
-function relative(from, to) {
-  return pythonHost().path.relative(String(from), String(to));
-}
-function resolve(...parts) {
-  return pythonHost().path.resolve(parts.map(String));
-}
-var sep = "/", delimiter, posix, win32, path_default;
-var init_path = __esm(() => {
-  delimiter = process.platform === "win32" ? ";" : ":";
-  posix = { basename, delimiter: ":", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "/" };
-  win32 = { basename, delimiter: ";", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "\\" };
-  path_default = {
-    basename,
-    delimiter,
-    dirname,
-    extname,
-    isAbsolute,
-    join,
-    normalize,
-    parse,
-    posix,
-    relative,
-    resolve,
-    sep,
-    win32
-  };
-});
-
-// node_modules/events/events.js
-var require_events = __commonJS((exports2, module2) => {
-  var R = typeof Reflect === "object" ? Reflect : null;
-  var ReflectApply = R && typeof R.apply === "function" ? R.apply : function ReflectApply2(target, receiver, args) {
-    return Function.prototype.apply.call(target, receiver, args);
-  };
-  var ReflectOwnKeys;
-  if (R && typeof R.ownKeys === "function") {
-    ReflectOwnKeys = R.ownKeys;
-  } else if (Object.getOwnPropertySymbols) {
-    ReflectOwnKeys = function ReflectOwnKeys2(target) {
-      return Object.getOwnPropertyNames(target).concat(Object.getOwnPropertySymbols(target));
-    };
-  } else {
-    ReflectOwnKeys = function ReflectOwnKeys2(target) {
-      return Object.getOwnPropertyNames(target);
-    };
-  }
-  function ProcessEmitWarning(warning) {
-    if (console && console.warn)
-      console.warn(warning);
-  }
-  var NumberIsNaN = Number.isNaN || function NumberIsNaN2(value) {
-    return value !== value;
-  };
-  function EventEmitter() {
-    EventEmitter.init.call(this);
-  }
-  module2.exports = EventEmitter;
-  module2.exports.once = once;
-  EventEmitter.EventEmitter = EventEmitter;
-  EventEmitter.prototype._events = undefined;
-  EventEmitter.prototype._eventsCount = 0;
-  EventEmitter.prototype._maxListeners = undefined;
-  var defaultMaxListeners = 10;
-  function checkListener(listener) {
-    if (typeof listener !== "function") {
-      throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-    }
-  }
-  Object.defineProperty(EventEmitter, "defaultMaxListeners", {
-    enumerable: true,
-    get: function() {
-      return defaultMaxListeners;
-    },
-    set: function(arg) {
-      if (typeof arg !== "number" || arg < 0 || NumberIsNaN(arg)) {
-        throw new RangeError('The value of "defaultMaxListeners" is out of range. It must be a non-negative number. Received ' + arg + ".");
-      }
-      defaultMaxListeners = arg;
-    }
-  });
-  EventEmitter.init = function() {
-    if (this._events === undefined || this._events === Object.getPrototypeOf(this)._events) {
-      this._events = Object.create(null);
-      this._eventsCount = 0;
-    }
-    this._maxListeners = this._maxListeners || undefined;
-  };
-  EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
-    if (typeof n !== "number" || n < 0 || NumberIsNaN(n)) {
-      throw new RangeError('The value of "n" is out of range. It must be a non-negative number. Received ' + n + ".");
-    }
-    this._maxListeners = n;
-    return this;
-  };
-  function _getMaxListeners(that) {
-    if (that._maxListeners === undefined)
-      return EventEmitter.defaultMaxListeners;
-    return that._maxListeners;
-  }
-  EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
-    return _getMaxListeners(this);
-  };
-  EventEmitter.prototype.emit = function emit(type) {
-    var args = [];
-    for (var i = 1;i < arguments.length; i++)
-      args.push(arguments[i]);
-    var doError = type === "error";
-    var events = this._events;
-    if (events !== undefined)
-      doError = doError && events.error === undefined;
-    else if (!doError)
-      return false;
-    if (doError) {
-      var er;
-      if (args.length > 0)
-        er = args[0];
-      if (er instanceof Error) {
-        throw er;
-      }
-      var err = new Error("Unhandled error." + (er ? " (" + er.message + ")" : ""));
-      err.context = er;
-      throw err;
-    }
-    var handler = events[type];
-    if (handler === undefined)
-      return false;
-    if (typeof handler === "function") {
-      ReflectApply(handler, this, args);
-    } else {
-      var len = handler.length;
-      var listeners = arrayClone(handler, len);
-      for (var i = 0;i < len; ++i)
-        ReflectApply(listeners[i], this, args);
-    }
-    return true;
-  };
-  function _addListener(target, type, listener, prepend) {
-    var m;
-    var events;
-    var existing;
-    checkListener(listener);
-    events = target._events;
-    if (events === undefined) {
-      events = target._events = Object.create(null);
-      target._eventsCount = 0;
-    } else {
-      if (events.newListener !== undefined) {
-        target.emit("newListener", type, listener.listener ? listener.listener : listener);
-        events = target._events;
-      }
-      existing = events[type];
-    }
-    if (existing === undefined) {
-      existing = events[type] = listener;
-      ++target._eventsCount;
-    } else {
-      if (typeof existing === "function") {
-        existing = events[type] = prepend ? [listener, existing] : [existing, listener];
-      } else if (prepend) {
-        existing.unshift(listener);
-      } else {
-        existing.push(listener);
-      }
-      m = _getMaxListeners(target);
-      if (m > 0 && existing.length > m && !existing.warned) {
-        existing.warned = true;
-        var w = new Error("Possible EventEmitter memory leak detected. " + existing.length + " " + String(type) + " listeners " + "added. Use emitter.setMaxListeners() to " + "increase limit");
-        w.name = "MaxListenersExceededWarning";
-        w.emitter = target;
-        w.type = type;
-        w.count = existing.length;
-        ProcessEmitWarning(w);
-      }
-    }
-    return target;
-  }
-  EventEmitter.prototype.addListener = function addListener(type, listener) {
-    return _addListener(this, type, listener, false);
-  };
-  EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-  EventEmitter.prototype.prependListener = function prependListener(type, listener) {
-    return _addListener(this, type, listener, true);
-  };
-  function onceWrapper() {
-    if (!this.fired) {
-      this.target.removeListener(this.type, this.wrapFn);
-      this.fired = true;
-      if (arguments.length === 0)
-        return this.listener.call(this.target);
-      return this.listener.apply(this.target, arguments);
-    }
-  }
-  function _onceWrap(target, type, listener) {
-    var state = { fired: false, wrapFn: undefined, target, type, listener };
-    var wrapped = onceWrapper.bind(state);
-    wrapped.listener = listener;
-    state.wrapFn = wrapped;
-    return wrapped;
-  }
-  EventEmitter.prototype.once = function once2(type, listener) {
-    checkListener(listener);
-    this.on(type, _onceWrap(this, type, listener));
-    return this;
-  };
-  EventEmitter.prototype.prependOnceListener = function prependOnceListener(type, listener) {
-    checkListener(listener);
-    this.prependListener(type, _onceWrap(this, type, listener));
-    return this;
-  };
-  EventEmitter.prototype.removeListener = function removeListener(type, listener) {
-    var list, events, position, i, originalListener;
-    checkListener(listener);
-    events = this._events;
-    if (events === undefined)
-      return this;
-    list = events[type];
-    if (list === undefined)
-      return this;
-    if (list === listener || list.listener === listener) {
-      if (--this._eventsCount === 0)
-        this._events = Object.create(null);
-      else {
-        delete events[type];
-        if (events.removeListener)
-          this.emit("removeListener", type, list.listener || listener);
-      }
-    } else if (typeof list !== "function") {
-      position = -1;
-      for (i = list.length - 1;i >= 0; i--) {
-        if (list[i] === listener || list[i].listener === listener) {
-          originalListener = list[i].listener;
-          position = i;
-          break;
-        }
-      }
-      if (position < 0)
-        return this;
-      if (position === 0)
-        list.shift();
-      else {
-        spliceOne(list, position);
-      }
-      if (list.length === 1)
-        events[type] = list[0];
-      if (events.removeListener !== undefined)
-        this.emit("removeListener", type, originalListener || listener);
-    }
-    return this;
-  };
-  EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
-  EventEmitter.prototype.removeAllListeners = function removeAllListeners(type) {
-    var listeners, events, i;
-    events = this._events;
-    if (events === undefined)
-      return this;
-    if (events.removeListener === undefined) {
-      if (arguments.length === 0) {
-        this._events = Object.create(null);
-        this._eventsCount = 0;
-      } else if (events[type] !== undefined) {
-        if (--this._eventsCount === 0)
-          this._events = Object.create(null);
-        else
-          delete events[type];
-      }
-      return this;
-    }
-    if (arguments.length === 0) {
-      var keys = Object.keys(events);
-      var key;
-      for (i = 0;i < keys.length; ++i) {
-        key = keys[i];
-        if (key === "removeListener")
-          continue;
-        this.removeAllListeners(key);
-      }
-      this.removeAllListeners("removeListener");
-      this._events = Object.create(null);
-      this._eventsCount = 0;
-      return this;
-    }
-    listeners = events[type];
-    if (typeof listeners === "function") {
-      this.removeListener(type, listeners);
-    } else if (listeners !== undefined) {
-      for (i = listeners.length - 1;i >= 0; i--) {
-        this.removeListener(type, listeners[i]);
-      }
-    }
-    return this;
-  };
-  function _listeners(target, type, unwrap) {
-    var events = target._events;
-    if (events === undefined)
-      return [];
-    var evlistener = events[type];
-    if (evlistener === undefined)
-      return [];
-    if (typeof evlistener === "function")
-      return unwrap ? [evlistener.listener || evlistener] : [evlistener];
-    return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
-  }
-  EventEmitter.prototype.listeners = function listeners(type) {
-    return _listeners(this, type, true);
-  };
-  EventEmitter.prototype.rawListeners = function rawListeners(type) {
-    return _listeners(this, type, false);
-  };
-  EventEmitter.listenerCount = function(emitter, type) {
-    if (typeof emitter.listenerCount === "function") {
-      return emitter.listenerCount(type);
-    } else {
-      return listenerCount.call(emitter, type);
-    }
-  };
-  EventEmitter.prototype.listenerCount = listenerCount;
-  function listenerCount(type) {
-    var events = this._events;
-    if (events !== undefined) {
-      var evlistener = events[type];
-      if (typeof evlistener === "function") {
-        return 1;
-      } else if (evlistener !== undefined) {
-        return evlistener.length;
-      }
-    }
-    return 0;
-  }
-  EventEmitter.prototype.eventNames = function eventNames() {
-    return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
-  };
-  function arrayClone(arr, n) {
-    var copy = new Array(n);
-    for (var i = 0;i < n; ++i)
-      copy[i] = arr[i];
-    return copy;
-  }
-  function spliceOne(list, index) {
-    for (;index + 1 < list.length; index++)
-      list[index] = list[index + 1];
-    list.pop();
-  }
-  function unwrapListeners(arr) {
-    var ret = new Array(arr.length);
-    for (var i = 0;i < ret.length; ++i) {
-      ret[i] = arr[i].listener || arr[i];
-    }
-    return ret;
-  }
-  function once(emitter, name) {
-    return new Promise(function(resolve2, reject) {
-      function errorListener(err) {
-        emitter.removeListener(name, resolver);
-        reject(err);
-      }
-      function resolver() {
-        if (typeof emitter.removeListener === "function") {
-          emitter.removeListener("error", errorListener);
-        }
-        resolve2([].slice.call(arguments));
-      }
-      eventTargetAgnosticAddListener(emitter, name, resolver, { once: true });
-      if (name !== "error") {
-        addErrorHandlerIfEventEmitter(emitter, errorListener, { once: true });
-      }
-    });
-  }
-  function addErrorHandlerIfEventEmitter(emitter, handler, flags) {
-    if (typeof emitter.on === "function") {
-      eventTargetAgnosticAddListener(emitter, "error", handler, flags);
-    }
-  }
-  function eventTargetAgnosticAddListener(emitter, name, listener, flags) {
-    if (typeof emitter.on === "function") {
-      if (flags.once) {
-        emitter.once(name, listener);
-      } else {
-        emitter.on(name, listener);
-      }
-    } else if (typeof emitter.addEventListener === "function") {
-      emitter.addEventListener(name, function wrapListener(arg) {
-        if (flags.once) {
-          emitter.removeEventListener(name, wrapListener);
-        }
-        listener(arg);
-      });
-    } else {
-      throw new TypeError('The "emitter" argument must be of type EventEmitter. Received type ' + typeof emitter);
-    }
-  }
-});
-
-// node_modules/inherits/inherits_browser.js
-var require_inherits_browser = __commonJS((exports2, module2) => {
-  if (typeof Object.create === "function") {
-    module2.exports = function inherits(ctor, superCtor) {
-      if (superCtor) {
-        ctor.super_ = superCtor;
-        ctor.prototype = Object.create(superCtor.prototype, {
-          constructor: {
-            value: ctor,
-            enumerable: false,
-            writable: true,
-            configurable: true
-          }
-        });
-      }
-    };
-  } else {
-    module2.exports = function inherits(ctor, superCtor) {
-      if (superCtor) {
-        ctor.super_ = superCtor;
-        var TempCtor = function() {};
-        TempCtor.prototype = superCtor.prototype;
-        ctor.prototype = new TempCtor;
-        ctor.prototype.constructor = ctor;
-      }
-    };
-  }
-});
-
-// node_modules/readable-stream/lib/internal/streams/stream-browser.js
-var require_stream_browser = __commonJS((exports2, module2) => {
-  module2.exports = require_events().EventEmitter;
-});
-
 // node_modules/base64-js/index.js
 var require_base64_js = __commonJS((exports2) => {
   exports2.byteLength = byteLength;
@@ -982,7 +498,7 @@ var require_buffer = __commonJS((exports2) => {
         return false;
     }
   };
-  Buffer2.concat = function concat2(list, length) {
+  Buffer2.concat = function concat(list, length) {
     if (!Array.isArray(list)) {
       throw new TypeError('"list" argument must be an Array of Buffers');
     }
@@ -2152,6 +1668,490 @@ var require_buffer = __commonJS((exports2) => {
     }
     return table;
   }();
+});
+
+// packages/py/node-bindings/build/shims/host.ts
+function pythonHost() {
+  const host = globalThis.__dbxToolsPython;
+  if (!host)
+    throw new Error("dbx-tools Python runtime host is unavailable");
+  return host;
+}
+
+// packages/py/node-bindings/build/shims/path.ts
+var exports_path = {};
+__export(exports_path, {
+  win32: () => win32,
+  sep: () => sep,
+  resolve: () => resolve,
+  relative: () => relative,
+  posix: () => posix,
+  parse: () => parse,
+  normalize: () => normalize,
+  join: () => join,
+  isAbsolute: () => isAbsolute,
+  extname: () => extname,
+  dirname: () => dirname,
+  delimiter: () => delimiter,
+  default: () => path_default,
+  basename: () => basename
+});
+function basename(path) {
+  return pythonHost().path.basename(String(path));
+}
+function dirname(path) {
+  return pythonHost().path.dirname(String(path));
+}
+function extname(path) {
+  const name = basename(path);
+  const index = name.lastIndexOf(".");
+  return index <= 0 ? "" : name.slice(index);
+}
+function isAbsolute(path) {
+  return pythonHost().path.isAbsolute(String(path));
+}
+function join(...parts) {
+  return pythonHost().path.join(parts.map(String));
+}
+function normalize(path) {
+  return resolve(path);
+}
+function parse(path) {
+  const dir = dirname(path);
+  const base = basename(path);
+  const ext = extname(base);
+  return {
+    root: isAbsolute(path) ? sep : "",
+    dir,
+    base,
+    ext,
+    name: ext ? base.slice(0, -ext.length) : base
+  };
+}
+function relative(from, to) {
+  return pythonHost().path.relative(String(from), String(to));
+}
+function resolve(...parts) {
+  return pythonHost().path.resolve(parts.map(String));
+}
+var sep = "/", delimiter, posix, win32, path_default;
+var init_path = __esm(() => {
+  delimiter = process.platform === "win32" ? ";" : ":";
+  posix = { basename, delimiter: ":", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "/" };
+  win32 = { basename, delimiter: ";", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "\\" };
+  path_default = {
+    basename,
+    delimiter,
+    dirname,
+    extname,
+    isAbsolute,
+    join,
+    normalize,
+    parse,
+    posix,
+    relative,
+    resolve,
+    sep,
+    win32
+  };
+});
+
+// node_modules/events/events.js
+var require_events = __commonJS((exports2, module2) => {
+  var R = typeof Reflect === "object" ? Reflect : null;
+  var ReflectApply = R && typeof R.apply === "function" ? R.apply : function ReflectApply2(target, receiver, args) {
+    return Function.prototype.apply.call(target, receiver, args);
+  };
+  var ReflectOwnKeys;
+  if (R && typeof R.ownKeys === "function") {
+    ReflectOwnKeys = R.ownKeys;
+  } else if (Object.getOwnPropertySymbols) {
+    ReflectOwnKeys = function ReflectOwnKeys2(target) {
+      return Object.getOwnPropertyNames(target).concat(Object.getOwnPropertySymbols(target));
+    };
+  } else {
+    ReflectOwnKeys = function ReflectOwnKeys2(target) {
+      return Object.getOwnPropertyNames(target);
+    };
+  }
+  function ProcessEmitWarning(warning) {
+    if (console && console.warn)
+      console.warn(warning);
+  }
+  var NumberIsNaN = Number.isNaN || function NumberIsNaN2(value) {
+    return value !== value;
+  };
+  function EventEmitter() {
+    EventEmitter.init.call(this);
+  }
+  module2.exports = EventEmitter;
+  module2.exports.once = once;
+  EventEmitter.EventEmitter = EventEmitter;
+  EventEmitter.prototype._events = undefined;
+  EventEmitter.prototype._eventsCount = 0;
+  EventEmitter.prototype._maxListeners = undefined;
+  var defaultMaxListeners = 10;
+  function checkListener(listener) {
+    if (typeof listener !== "function") {
+      throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+    }
+  }
+  Object.defineProperty(EventEmitter, "defaultMaxListeners", {
+    enumerable: true,
+    get: function() {
+      return defaultMaxListeners;
+    },
+    set: function(arg) {
+      if (typeof arg !== "number" || arg < 0 || NumberIsNaN(arg)) {
+        throw new RangeError('The value of "defaultMaxListeners" is out of range. It must be a non-negative number. Received ' + arg + ".");
+      }
+      defaultMaxListeners = arg;
+    }
+  });
+  EventEmitter.init = function() {
+    if (this._events === undefined || this._events === Object.getPrototypeOf(this)._events) {
+      this._events = Object.create(null);
+      this._eventsCount = 0;
+    }
+    this._maxListeners = this._maxListeners || undefined;
+  };
+  EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
+    if (typeof n !== "number" || n < 0 || NumberIsNaN(n)) {
+      throw new RangeError('The value of "n" is out of range. It must be a non-negative number. Received ' + n + ".");
+    }
+    this._maxListeners = n;
+    return this;
+  };
+  function _getMaxListeners(that) {
+    if (that._maxListeners === undefined)
+      return EventEmitter.defaultMaxListeners;
+    return that._maxListeners;
+  }
+  EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
+    return _getMaxListeners(this);
+  };
+  EventEmitter.prototype.emit = function emit(type) {
+    var args = [];
+    for (var i = 1;i < arguments.length; i++)
+      args.push(arguments[i]);
+    var doError = type === "error";
+    var events = this._events;
+    if (events !== undefined)
+      doError = doError && events.error === undefined;
+    else if (!doError)
+      return false;
+    if (doError) {
+      var er;
+      if (args.length > 0)
+        er = args[0];
+      if (er instanceof Error) {
+        throw er;
+      }
+      var err = new Error("Unhandled error." + (er ? " (" + er.message + ")" : ""));
+      err.context = er;
+      throw err;
+    }
+    var handler = events[type];
+    if (handler === undefined)
+      return false;
+    if (typeof handler === "function") {
+      ReflectApply(handler, this, args);
+    } else {
+      var len = handler.length;
+      var listeners = arrayClone(handler, len);
+      for (var i = 0;i < len; ++i)
+        ReflectApply(listeners[i], this, args);
+    }
+    return true;
+  };
+  function _addListener(target, type, listener, prepend) {
+    var m;
+    var events;
+    var existing;
+    checkListener(listener);
+    events = target._events;
+    if (events === undefined) {
+      events = target._events = Object.create(null);
+      target._eventsCount = 0;
+    } else {
+      if (events.newListener !== undefined) {
+        target.emit("newListener", type, listener.listener ? listener.listener : listener);
+        events = target._events;
+      }
+      existing = events[type];
+    }
+    if (existing === undefined) {
+      existing = events[type] = listener;
+      ++target._eventsCount;
+    } else {
+      if (typeof existing === "function") {
+        existing = events[type] = prepend ? [listener, existing] : [existing, listener];
+      } else if (prepend) {
+        existing.unshift(listener);
+      } else {
+        existing.push(listener);
+      }
+      m = _getMaxListeners(target);
+      if (m > 0 && existing.length > m && !existing.warned) {
+        existing.warned = true;
+        var w = new Error("Possible EventEmitter memory leak detected. " + existing.length + " " + String(type) + " listeners " + "added. Use emitter.setMaxListeners() to " + "increase limit");
+        w.name = "MaxListenersExceededWarning";
+        w.emitter = target;
+        w.type = type;
+        w.count = existing.length;
+        ProcessEmitWarning(w);
+      }
+    }
+    return target;
+  }
+  EventEmitter.prototype.addListener = function addListener(type, listener) {
+    return _addListener(this, type, listener, false);
+  };
+  EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+  EventEmitter.prototype.prependListener = function prependListener(type, listener) {
+    return _addListener(this, type, listener, true);
+  };
+  function onceWrapper() {
+    if (!this.fired) {
+      this.target.removeListener(this.type, this.wrapFn);
+      this.fired = true;
+      if (arguments.length === 0)
+        return this.listener.call(this.target);
+      return this.listener.apply(this.target, arguments);
+    }
+  }
+  function _onceWrap(target, type, listener) {
+    var state = { fired: false, wrapFn: undefined, target, type, listener };
+    var wrapped = onceWrapper.bind(state);
+    wrapped.listener = listener;
+    state.wrapFn = wrapped;
+    return wrapped;
+  }
+  EventEmitter.prototype.once = function once2(type, listener) {
+    checkListener(listener);
+    this.on(type, _onceWrap(this, type, listener));
+    return this;
+  };
+  EventEmitter.prototype.prependOnceListener = function prependOnceListener(type, listener) {
+    checkListener(listener);
+    this.prependListener(type, _onceWrap(this, type, listener));
+    return this;
+  };
+  EventEmitter.prototype.removeListener = function removeListener(type, listener) {
+    var list, events, position, i, originalListener;
+    checkListener(listener);
+    events = this._events;
+    if (events === undefined)
+      return this;
+    list = events[type];
+    if (list === undefined)
+      return this;
+    if (list === listener || list.listener === listener) {
+      if (--this._eventsCount === 0)
+        this._events = Object.create(null);
+      else {
+        delete events[type];
+        if (events.removeListener)
+          this.emit("removeListener", type, list.listener || listener);
+      }
+    } else if (typeof list !== "function") {
+      position = -1;
+      for (i = list.length - 1;i >= 0; i--) {
+        if (list[i] === listener || list[i].listener === listener) {
+          originalListener = list[i].listener;
+          position = i;
+          break;
+        }
+      }
+      if (position < 0)
+        return this;
+      if (position === 0)
+        list.shift();
+      else {
+        spliceOne(list, position);
+      }
+      if (list.length === 1)
+        events[type] = list[0];
+      if (events.removeListener !== undefined)
+        this.emit("removeListener", type, originalListener || listener);
+    }
+    return this;
+  };
+  EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
+  EventEmitter.prototype.removeAllListeners = function removeAllListeners(type) {
+    var listeners, events, i;
+    events = this._events;
+    if (events === undefined)
+      return this;
+    if (events.removeListener === undefined) {
+      if (arguments.length === 0) {
+        this._events = Object.create(null);
+        this._eventsCount = 0;
+      } else if (events[type] !== undefined) {
+        if (--this._eventsCount === 0)
+          this._events = Object.create(null);
+        else
+          delete events[type];
+      }
+      return this;
+    }
+    if (arguments.length === 0) {
+      var keys = Object.keys(events);
+      var key;
+      for (i = 0;i < keys.length; ++i) {
+        key = keys[i];
+        if (key === "removeListener")
+          continue;
+        this.removeAllListeners(key);
+      }
+      this.removeAllListeners("removeListener");
+      this._events = Object.create(null);
+      this._eventsCount = 0;
+      return this;
+    }
+    listeners = events[type];
+    if (typeof listeners === "function") {
+      this.removeListener(type, listeners);
+    } else if (listeners !== undefined) {
+      for (i = listeners.length - 1;i >= 0; i--) {
+        this.removeListener(type, listeners[i]);
+      }
+    }
+    return this;
+  };
+  function _listeners(target, type, unwrap) {
+    var events = target._events;
+    if (events === undefined)
+      return [];
+    var evlistener = events[type];
+    if (evlistener === undefined)
+      return [];
+    if (typeof evlistener === "function")
+      return unwrap ? [evlistener.listener || evlistener] : [evlistener];
+    return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
+  }
+  EventEmitter.prototype.listeners = function listeners(type) {
+    return _listeners(this, type, true);
+  };
+  EventEmitter.prototype.rawListeners = function rawListeners(type) {
+    return _listeners(this, type, false);
+  };
+  EventEmitter.listenerCount = function(emitter, type) {
+    if (typeof emitter.listenerCount === "function") {
+      return emitter.listenerCount(type);
+    } else {
+      return listenerCount.call(emitter, type);
+    }
+  };
+  EventEmitter.prototype.listenerCount = listenerCount;
+  function listenerCount(type) {
+    var events = this._events;
+    if (events !== undefined) {
+      var evlistener = events[type];
+      if (typeof evlistener === "function") {
+        return 1;
+      } else if (evlistener !== undefined) {
+        return evlistener.length;
+      }
+    }
+    return 0;
+  }
+  EventEmitter.prototype.eventNames = function eventNames() {
+    return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
+  };
+  function arrayClone(arr, n) {
+    var copy = new Array(n);
+    for (var i = 0;i < n; ++i)
+      copy[i] = arr[i];
+    return copy;
+  }
+  function spliceOne(list, index) {
+    for (;index + 1 < list.length; index++)
+      list[index] = list[index + 1];
+    list.pop();
+  }
+  function unwrapListeners(arr) {
+    var ret = new Array(arr.length);
+    for (var i = 0;i < ret.length; ++i) {
+      ret[i] = arr[i].listener || arr[i];
+    }
+    return ret;
+  }
+  function once(emitter, name) {
+    return new Promise(function(resolve2, reject) {
+      function errorListener(err) {
+        emitter.removeListener(name, resolver);
+        reject(err);
+      }
+      function resolver() {
+        if (typeof emitter.removeListener === "function") {
+          emitter.removeListener("error", errorListener);
+        }
+        resolve2([].slice.call(arguments));
+      }
+      eventTargetAgnosticAddListener(emitter, name, resolver, { once: true });
+      if (name !== "error") {
+        addErrorHandlerIfEventEmitter(emitter, errorListener, { once: true });
+      }
+    });
+  }
+  function addErrorHandlerIfEventEmitter(emitter, handler, flags) {
+    if (typeof emitter.on === "function") {
+      eventTargetAgnosticAddListener(emitter, "error", handler, flags);
+    }
+  }
+  function eventTargetAgnosticAddListener(emitter, name, listener, flags) {
+    if (typeof emitter.on === "function") {
+      if (flags.once) {
+        emitter.once(name, listener);
+      } else {
+        emitter.on(name, listener);
+      }
+    } else if (typeof emitter.addEventListener === "function") {
+      emitter.addEventListener(name, function wrapListener(arg) {
+        if (flags.once) {
+          emitter.removeEventListener(name, wrapListener);
+        }
+        listener(arg);
+      });
+    } else {
+      throw new TypeError('The "emitter" argument must be of type EventEmitter. Received type ' + typeof emitter);
+    }
+  }
+});
+
+// node_modules/inherits/inherits_browser.js
+var require_inherits_browser = __commonJS((exports2, module2) => {
+  if (typeof Object.create === "function") {
+    module2.exports = function inherits(ctor, superCtor) {
+      if (superCtor) {
+        ctor.super_ = superCtor;
+        ctor.prototype = Object.create(superCtor.prototype, {
+          constructor: {
+            value: ctor,
+            enumerable: false,
+            writable: true,
+            configurable: true
+          }
+        });
+      }
+    };
+  } else {
+    module2.exports = function inherits(ctor, superCtor) {
+      if (superCtor) {
+        ctor.super_ = superCtor;
+        var TempCtor = function() {};
+        TempCtor.prototype = superCtor.prototype;
+        ctor.prototype = new TempCtor;
+        ctor.prototype.constructor = ctor;
+      }
+    };
+  }
+});
+
+// node_modules/readable-stream/lib/internal/streams/stream-browser.js
+var require_stream_browser = __commonJS((exports2, module2) => {
+  module2.exports = require_events().EventEmitter;
 });
 
 // node_modules/has-symbols/shams.js
@@ -4282,12 +4282,12 @@ var require_buffer_list = __commonJS((exports2, module2) => {
     return (hint === "string" ? String : Number)(input);
   }
   var _require = require_buffer();
-  var Buffer2 = _require.Buffer;
+  var Buffer3 = _require.Buffer;
   var _require2 = require_util();
   var inspect = _require2.inspect;
   var custom = inspect && inspect.custom || "inspect";
   function copyBuffer(src, target, offset) {
-    Buffer2.prototype.copy.call(src, target, offset);
+    Buffer3.prototype.copy.call(src, target, offset);
   }
   module2.exports = /* @__PURE__ */ function() {
     function BufferList() {
@@ -4356,8 +4356,8 @@ var require_buffer_list = __commonJS((exports2, module2) => {
       key: "concat",
       value: function concat2(n) {
         if (this.length === 0)
-          return Buffer2.alloc(0);
-        var ret = Buffer2.allocUnsafe(n >>> 0);
+          return Buffer3.alloc(0);
+        var ret = Buffer3.allocUnsafe(n >>> 0);
         var p = this.head;
         var i = 0;
         while (p) {
@@ -4422,7 +4422,7 @@ var require_buffer_list = __commonJS((exports2, module2) => {
     }, {
       key: "_getBuffer",
       value: function _getBuffer(n) {
-        var ret = Buffer2.allocUnsafe(n);
+        var ret = Buffer3.allocUnsafe(n);
         var p = this.head;
         var c = 1;
         p.data.copy(ret);
@@ -4735,13 +4735,13 @@ var require__stream_writable = __commonJS((exports2, module2) => {
     deprecate: require_browser()
   };
   var Stream = require_stream_browser();
-  var Buffer2 = require_buffer().Buffer;
+  var Buffer3 = require_buffer().Buffer;
   var OurUint8Array = (typeof global !== "undefined" ? global : typeof window !== "undefined" ? window : typeof self !== "undefined" ? self : {}).Uint8Array || function() {};
   function _uint8ArrayToBuffer(chunk) {
-    return Buffer2.from(chunk);
+    return Buffer3.from(chunk);
   }
   function _isUint8Array(obj) {
-    return Buffer2.isBuffer(obj) || obj instanceof OurUint8Array;
+    return Buffer3.isBuffer(obj) || obj instanceof OurUint8Array;
   }
   var destroyImpl = require_destroy();
   var _require = require_state();
@@ -4876,7 +4876,7 @@ var require__stream_writable = __commonJS((exports2, module2) => {
     var state = this._writableState;
     var ret = false;
     var isBuf = !state.objectMode && _isUint8Array(chunk);
-    if (isBuf && !Buffer2.isBuffer(chunk)) {
+    if (isBuf && !Buffer3.isBuffer(chunk)) {
       chunk = _uint8ArrayToBuffer(chunk);
     }
     if (typeof encoding === "function") {
@@ -4924,7 +4924,7 @@ var require__stream_writable = __commonJS((exports2, module2) => {
   });
   function decodeChunk(state, chunk, encoding) {
     if (!state.objectMode && state.decodeStrings !== false && typeof chunk === "string") {
-      chunk = Buffer2.from(chunk, encoding);
+      chunk = Buffer3.from(chunk, encoding);
     }
     return chunk;
   }
@@ -5288,34 +5288,34 @@ var require__stream_duplex = __commonJS((exports2, module2) => {
 var require_safe_buffer = __commonJS((exports2, module2) => {
   /*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
   var buffer = require_buffer();
-  var Buffer2 = buffer.Buffer;
+  var Buffer3 = buffer.Buffer;
   function copyProps(src, dst) {
     for (var key in src) {
       dst[key] = src[key];
     }
   }
-  if (Buffer2.from && Buffer2.alloc && Buffer2.allocUnsafe && Buffer2.allocUnsafeSlow) {
+  if (Buffer3.from && Buffer3.alloc && Buffer3.allocUnsafe && Buffer3.allocUnsafeSlow) {
     module2.exports = buffer;
   } else {
     copyProps(buffer, exports2);
     exports2.Buffer = SafeBuffer;
   }
   function SafeBuffer(arg, encodingOrOffset, length) {
-    return Buffer2(arg, encodingOrOffset, length);
+    return Buffer3(arg, encodingOrOffset, length);
   }
-  SafeBuffer.prototype = Object.create(Buffer2.prototype);
-  copyProps(Buffer2, SafeBuffer);
+  SafeBuffer.prototype = Object.create(Buffer3.prototype);
+  copyProps(Buffer3, SafeBuffer);
   SafeBuffer.from = function(arg, encodingOrOffset, length) {
     if (typeof arg === "number") {
       throw new TypeError("Argument must not be a number");
     }
-    return Buffer2(arg, encodingOrOffset, length);
+    return Buffer3(arg, encodingOrOffset, length);
   };
   SafeBuffer.alloc = function(size, fill, encoding) {
     if (typeof size !== "number") {
       throw new TypeError("Argument must be a number");
     }
-    var buf = Buffer2(size);
+    var buf = Buffer3(size);
     if (fill !== undefined) {
       if (typeof encoding === "string") {
         buf.fill(fill, encoding);
@@ -5331,7 +5331,7 @@ var require_safe_buffer = __commonJS((exports2, module2) => {
     if (typeof size !== "number") {
       throw new TypeError("Argument must be a number");
     }
-    return Buffer2(size);
+    return Buffer3(size);
   };
   SafeBuffer.allocUnsafeSlow = function(size) {
     if (typeof size !== "number") {
@@ -5343,8 +5343,8 @@ var require_safe_buffer = __commonJS((exports2, module2) => {
 
 // node_modules/string_decoder/lib/string_decoder.js
 var require_string_decoder = __commonJS((exports2) => {
-  var Buffer2 = require_safe_buffer().Buffer;
-  var isEncoding = Buffer2.isEncoding || function(encoding) {
+  var Buffer3 = require_safe_buffer().Buffer;
+  var isEncoding = Buffer3.isEncoding || function(encoding) {
     encoding = "" + encoding;
     switch (encoding && encoding.toLowerCase()) {
       case "hex":
@@ -5394,7 +5394,7 @@ var require_string_decoder = __commonJS((exports2) => {
   }
   function normalizeEncoding(enc) {
     var nenc = _normalizeEncoding(enc);
-    if (typeof nenc !== "string" && (Buffer2.isEncoding === isEncoding || !isEncoding(enc)))
+    if (typeof nenc !== "string" && (Buffer3.isEncoding === isEncoding || !isEncoding(enc)))
       throw new Error("Unknown encoding: " + enc);
     return nenc || enc;
   }
@@ -5424,7 +5424,7 @@ var require_string_decoder = __commonJS((exports2) => {
     }
     this.lastNeed = 0;
     this.lastTotal = 0;
-    this.lastChar = Buffer2.allocUnsafe(nb);
+    this.lastChar = Buffer3.allocUnsafe(nb);
   }
   StringDecoder.prototype.write = function(buf) {
     if (buf.length === 0)
@@ -5893,13 +5893,13 @@ var require__stream_readable = __commonJS((exports2, module2) => {
     return emitter.listeners(type).length;
   };
   var Stream = require_stream_browser();
-  var Buffer2 = require_buffer().Buffer;
+  var Buffer3 = require_buffer().Buffer;
   var OurUint8Array = (typeof global !== "undefined" ? global : typeof window !== "undefined" ? window : typeof self !== "undefined" ? self : {}).Uint8Array || function() {};
   function _uint8ArrayToBuffer(chunk) {
-    return Buffer2.from(chunk);
+    return Buffer3.from(chunk);
   }
   function _isUint8Array(obj) {
-    return Buffer2.isBuffer(obj) || obj instanceof OurUint8Array;
+    return Buffer3.isBuffer(obj) || obj instanceof OurUint8Array;
   }
   var debugUtil = require_util();
   var debug;
@@ -6013,7 +6013,7 @@ var require__stream_readable = __commonJS((exports2, module2) => {
       if (typeof chunk === "string") {
         encoding = encoding || state.defaultEncoding;
         if (encoding !== state.encoding) {
-          chunk = Buffer2.from(chunk, encoding);
+          chunk = Buffer3.from(chunk, encoding);
           encoding = "";
         }
         skipChunkCheck = true;
@@ -6039,7 +6039,7 @@ var require__stream_readable = __commonJS((exports2, module2) => {
       if (er) {
         errorOrDestroy(stream, er);
       } else if (state.objectMode || chunk && chunk.length > 0) {
-        if (typeof chunk !== "string" && !state.objectMode && Object.getPrototypeOf(chunk) !== Buffer2.prototype) {
+        if (typeof chunk !== "string" && !state.objectMode && Object.getPrototypeOf(chunk) !== Buffer3.prototype) {
           chunk = _uint8ArrayToBuffer(chunk);
         }
         if (addToFront) {
@@ -14137,7 +14137,7 @@ var require_binding = __commonJS((exports2) => {
 
 // node_modules/browserify-zlib/lib/index.js
 var require_lib = __commonJS((exports2) => {
-  var Buffer2 = require_buffer().Buffer;
+  var Buffer3 = require_buffer().Buffer;
   var Transform = require_stream_browserify().Transform;
   var binding = require_binding();
   var util = require_util();
@@ -14316,7 +14316,7 @@ var require_lib = __commonJS((exports2) => {
       if (nread >= kMaxLength) {
         err = new RangeError(kRangeErrorMessage);
       } else {
-        buf = Buffer2.concat(buffers, nread);
+        buf = Buffer3.concat(buffers, nread);
       }
       buffers = [];
       engine.close();
@@ -14325,8 +14325,8 @@ var require_lib = __commonJS((exports2) => {
   }
   function zlibBufferSync(engine, buffer) {
     if (typeof buffer === "string")
-      buffer = Buffer2.from(buffer);
-    if (!Buffer2.isBuffer(buffer))
+      buffer = Buffer3.from(buffer);
+    if (!Buffer3.isBuffer(buffer))
       throw new TypeError("Not a string or buffer");
     var flushFlag = engine._finishFlushFlag;
     return engine._processChunk(buffer, flushFlag);
@@ -14408,7 +14408,7 @@ var require_lib = __commonJS((exports2) => {
       }
     }
     if (opts.dictionary) {
-      if (!Buffer2.isBuffer(opts.dictionary)) {
+      if (!Buffer3.isBuffer(opts.dictionary)) {
         throw new Error("Invalid dictionary: it should be a Buffer instance");
       }
     }
@@ -14430,7 +14430,7 @@ var require_lib = __commonJS((exports2) => {
     if (typeof opts.strategy === "number")
       strategy = opts.strategy;
     this._handle.init(opts.windowBits || exports2.Z_DEFAULT_WINDOWBITS, level, opts.memLevel || exports2.Z_DEFAULT_MEMLEVEL, strategy, opts.dictionary);
-    this._buffer = Buffer2.allocUnsafe(this._chunkSize);
+    this._buffer = Buffer3.allocUnsafe(this._chunkSize);
     this._offset = 0;
     this._level = level;
     this._strategy = strategy;
@@ -14472,7 +14472,7 @@ var require_lib = __commonJS((exports2) => {
     return this._handle.reset();
   };
   Zlib.prototype._flush = function(callback2) {
-    this._transform(Buffer2.alloc(0), "", callback2);
+    this._transform(Buffer3.alloc(0), "", callback2);
   };
   Zlib.prototype.flush = function(kind, callback2) {
     var _this2 = this;
@@ -14495,7 +14495,7 @@ var require_lib = __commonJS((exports2) => {
       }
     } else {
       this._flushFlag = kind;
-      this.write(Buffer2.alloc(0), "", callback2);
+      this.write(Buffer3.alloc(0), "", callback2);
     }
   };
   Zlib.prototype.close = function(callback2) {
@@ -14518,7 +14518,7 @@ var require_lib = __commonJS((exports2) => {
     var ws = this._writableState;
     var ending = ws.ending || ws.ended;
     var last = ending && (!chunk || ws.length === chunk.length);
-    if (chunk !== null && !Buffer2.isBuffer(chunk))
+    if (chunk !== null && !Buffer3.isBuffer(chunk))
       return cb(new Error("invalid input"));
     if (!this._handle)
       return cb(new Error("zlib binding closed"));
@@ -14556,7 +14556,7 @@ var require_lib = __commonJS((exports2) => {
         _close(this);
         throw new RangeError(kRangeErrorMessage);
       }
-      var buf = Buffer2.concat(buffers, nread);
+      var buf = Buffer3.concat(buffers, nread);
       _close(this);
       return buf;
     }
@@ -14586,7 +14586,7 @@ var require_lib = __commonJS((exports2) => {
       if (availOutAfter === 0 || self2._offset >= self2._chunkSize) {
         availOutBefore = self2._chunkSize;
         self2._offset = 0;
-        self2._buffer = Buffer2.allocUnsafe(self2._chunkSize);
+        self2._buffer = Buffer3.allocUnsafe(self2._chunkSize);
       }
       if (availOutAfter === 0) {
         inOff += availInBefore - availInAfter;
@@ -14934,7 +14934,7 @@ var require_fd_slicer = __commonJS((exports2) => {
 
 // node_modules/buffer-crc32/index.js
 var require_buffer_crc32 = __commonJS((exports2, module2) => {
-  var Buffer2 = require_buffer().Buffer;
+  var Buffer3 = require_buffer().Buffer;
   var CRC_TABLE = [
     0,
     1996959894,
@@ -15197,14 +15197,14 @@ var require_buffer_crc32 = __commonJS((exports2, module2) => {
     CRC_TABLE = new Int32Array(CRC_TABLE);
   }
   function ensureBuffer(input) {
-    if (Buffer2.isBuffer(input)) {
+    if (Buffer3.isBuffer(input)) {
       return input;
     }
-    var hasNewBufferAPI = typeof Buffer2.alloc === "function" && typeof Buffer2.from === "function";
+    var hasNewBufferAPI = typeof Buffer3.alloc === "function" && typeof Buffer3.from === "function";
     if (typeof input === "number") {
-      return hasNewBufferAPI ? Buffer2.alloc(input) : new Buffer2(input);
+      return hasNewBufferAPI ? Buffer3.alloc(input) : new Buffer3(input);
     } else if (typeof input === "string") {
-      return hasNewBufferAPI ? Buffer2.from(input) : new Buffer2(input);
+      return hasNewBufferAPI ? Buffer3.from(input) : new Buffer3(input);
     } else {
       throw new Error("input must be buffer, number, or string, received " + typeof input);
     }
@@ -15216,7 +15216,7 @@ var require_buffer_crc32 = __commonJS((exports2, module2) => {
   }
   function _crc32(buf, previous) {
     buf = ensureBuffer(buf);
-    if (Buffer2.isBuffer(previous)) {
+    if (Buffer3.isBuffer(previous)) {
       previous = previous.readUInt32BE(0);
     }
     var crc = ~~previous ^ -1;
@@ -19863,13 +19863,17 @@ var require_ini = __commonJS((exports2, module2) => {
   };
 });
 
-// packages/js/node/auth/src/_python-bridge.ts
-var exports__python_bridge = {};
-__export(exports__python_bridge, {
+// dbx-tools-python:dbx-tools:python-entry
+var exports_dbx_tools_python_entry = {};
+__export(exports_dbx_tools_python_entry, {
   createDatabricksAuth: () => createDatabricksAuth,
   createAuthClient: () => createAuthClient
 });
-module.exports = __toCommonJS(exports__python_bridge);
+module.exports = __toCommonJS(exports_dbx_tools_python_entry);
+
+// packages/py/node-bindings/build/shims/bootstrap.ts
+var import_node_buffer = __toESM(require_buffer(), 1);
+globalThis.Buffer = import_node_buffer.Buffer;
 
 // packages/js/shared/core/src/object.ts
 function isCollection(value) {

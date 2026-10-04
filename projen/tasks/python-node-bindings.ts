@@ -27,6 +27,7 @@ const root = values.root
 const entrypoint = resolve(root, values.entry);
 const output = resolve(root, values.output);
 const shimRoot = values["shim-root"] ? resolve(root, values["shim-root"]) : undefined;
+const shimEntry = "dbx-tools:python-entry";
 const shimAliases = shimRoot
   ? new Map([
       ["child_process", resolve(shimRoot, "child-process.ts")],
@@ -46,6 +47,17 @@ const shimPlugin: BunPlugin | undefined = shimAliases
   ? {
       name: "python-node-shims",
       setup(build) {
+        build.onResolve({ filter: /^dbx-tools:python-entry$/ }, () => ({
+          path: shimEntry,
+          namespace: "dbx-tools-python",
+        }));
+        build.onLoad({ filter: /.*/, namespace: "dbx-tools-python" }, () => ({
+          contents: [
+            `import ${JSON.stringify(resolve(shimRoot!, "bootstrap.ts"))};`,
+            `export * from ${JSON.stringify(entrypoint)};`,
+          ].join("\n"),
+          loader: "ts",
+        }));
         build.onResolve({ filter: /.*/ }, ({ path }) => {
           const moduleName = path.replace(/^node:/, "");
           const shim = shimAliases.get(moduleName) ?? shimAliases.get(path);
@@ -78,7 +90,7 @@ const bun = (
 if (!bun) throw new Error("python-node-bindings must run with Bun");
 
 const result = await bun.build({
-  entrypoints: [entrypoint],
+  entrypoints: [shimPlugin ? shimEntry : entrypoint],
   format: "cjs",
   ...(shimPlugin ? { plugins: [shimPlugin] } : {}),
   target: "browser",

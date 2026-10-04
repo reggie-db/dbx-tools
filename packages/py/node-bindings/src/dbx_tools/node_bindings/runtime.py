@@ -208,14 +208,6 @@ def _install_runtime() -> None:
               return decodeURIComponent(escape(encoded));
             }
           };
-          globalThis.Buffer = globalThis.Buffer || {
-            byteLength: value => new TextEncoder().encode(String(value)).byteLength,
-            from: value => value instanceof ArrayBuffer
-              ? new Uint8Array(value)
-              : ArrayBuffer.isView(value)
-                ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-                : new TextEncoder().encode(String(value)),
-          };
           globalThis.fetch = globalThis.fetch || (async url => {
             const result = await host.http.fetch(String(url));
             return {
