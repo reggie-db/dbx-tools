@@ -1,4 +1,4 @@
-import { environmentUtils } from "@dbx-tools/shared-core";
+import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
 
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { AuthError } from "./errors.ts";
@@ -15,6 +15,7 @@ import {
   DEFAULT_ACCESS_TOKEN_HEADER,
   type DatabricksAuthOptions,
   type DatabricksAuthStatus,
+  Storage,
   type TokenProvider,
   WORKSPACE_ID_HEADER,
 } from "./types.ts";
@@ -94,7 +95,7 @@ export async function createDatabricksAuth(
     status: () => ({
       profile: profile.name,
       host: profile.host,
-      storage: store.name() === "memory" ? "memory" : "file",
+      storage: store.name() === "memory" ? Storage.Memory : Storage.File,
     }),
     workspaceId: () => profile.workspaceId,
   };

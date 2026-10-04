@@ -26,7 +26,12 @@ import { mkdir, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { asyncUtils, errorUtils, functionUtils, hash, log, object } from "@dbx-tools/shared-core";
+import * as asyncUtils from "@dbx-tools/shared-core/async-utils";
+import * as errorUtils from "@dbx-tools/shared-core/error-utils";
+import * as functionUtils from "@dbx-tools/shared-core/function-utils";
+import * as hash from "@dbx-tools/shared-core/hash";
+import * as log from "@dbx-tools/shared-core/log";
+import * as object from "@dbx-tools/shared-core/object";
 import lockfile from "proper-lockfile";
 
 const logger = log.logger("core:file-lock");

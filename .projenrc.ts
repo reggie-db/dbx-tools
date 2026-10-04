@@ -418,6 +418,16 @@ project.applyToProjects(root, { path: [...SHARED_CORE_DEPENDENT_PATHS] }, (p) =>
 // Its logger uses only platform console/stderr surfaces so browser bundlers do
 // not retain optional bare imports that consumers must install themselves.
 project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" }, (p) => {
+  projectJs.addExports(p, {
+    "./async-utils": "./src/async-utils.ts",
+    "./environment-utils": "./src/environment-utils.ts",
+    "./error-utils": "./src/error-utils.ts",
+    "./function-utils": "./src/function-utils.ts",
+    "./hash": "./src/hash.ts",
+    "./log": "./src/log.ts",
+    "./object": "./src/object.ts",
+    "./string-utils": "./src/string-utils.ts",
+  });
   p.addDeps("zod@catalog:");
 });
 

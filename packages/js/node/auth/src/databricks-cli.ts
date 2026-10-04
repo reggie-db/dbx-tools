@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import * as bin from "@dbx-tools/core/bin";
 import * as exec from "@dbx-tools/core/exec";
-import { stringUtils } from "@dbx-tools/shared-core";
+import * as stringUtils from "@dbx-tools/shared-core/string-utils";
 
 import cliAssets from "./generated/databricks-cli-assets.json" with { type: "json" };
 import { AuthError } from "./errors.ts";

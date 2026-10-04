@@ -21,7 +21,8 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { errorUtils, log } from "@dbx-tools/shared-core";
+import * as errorUtils from "@dbx-tools/shared-core/error-utils";
+import * as log from "@dbx-tools/shared-core/log";
 import extractZip from "extract-zip";
 import { coerce, gte, type SemVer } from "semver";
 import { x as extractTar } from "tar";

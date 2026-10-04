@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 
-import { environmentUtils } from "@dbx-tools/shared-core";
+import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
 
 import { AuthError } from "./errors.ts";
 import {
