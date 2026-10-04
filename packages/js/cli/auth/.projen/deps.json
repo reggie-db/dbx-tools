@@ -15,7 +15,7 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/core-rs",
+      "name": "@dbx-tools/auth",
       "version": "workspace:^",
       "type": "runtime"
     },

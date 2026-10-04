@@ -18,7 +18,9 @@ export class AuthClient {
   async login(): Promise<AccessToken> {
     return this.withLock(async () => {
       await this.store.prepareWrite();
-      const token = validateToken(await this.provider.login(this.options.loginTimeoutSeconds * 1000));
+      const token = validateToken(
+        await this.provider.login(this.options.loginTimeoutSeconds * 1000),
+      );
       await this.store.save(this.key, token);
       return publicToken(token);
     });
@@ -60,7 +62,10 @@ export class AuthClient {
     });
   }
 
-  private async refreshRejected(staleAccessToken: string | undefined, login: boolean): Promise<AccessToken> {
+  private async refreshRejected(
+    staleAccessToken: string | undefined,
+    login: boolean,
+  ): Promise<AccessToken> {
     return this.withLock(async () => {
       const current = await this.store.load(this.key);
       if (
@@ -89,7 +94,10 @@ export class AuthClient {
     } else if (login) {
       token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
     } else {
-      throw new AuthError("oauth", "No stored credential is available and interactive login is disabled");
+      throw new AuthError(
+        "oauth",
+        "No stored credential is available and interactive login is disabled",
+      );
     }
     token = validateToken(token, current);
     await this.store.prepareWrite();
@@ -100,7 +108,9 @@ export class AuthClient {
   private canReuse(token: Token): boolean {
     if (!isValid(token, this.now())) return false;
     if (!token.expiry) return true;
-    return Date.parse(token.expiry) - this.now().getTime() > this.options.refreshBufferSeconds * 1000;
+    return (
+      Date.parse(token.expiry) - this.now().getTime() > this.options.refreshBufferSeconds * 1000
+    );
   }
 
   private async withLock<T>(action: () => Promise<T>): Promise<T> {
@@ -131,7 +141,8 @@ export function publicToken(token: Token): AccessToken {
 }
 
 export function validateToken(token: Token, previous?: Token): Token {
-  if (!token.accessToken.trim()) throw new AuthError("oauth", "Token response did not contain an access token");
+  if (!token.accessToken.trim())
+    throw new AuthError("oauth", "Token response did not contain an access token");
   return {
     accessToken: token.accessToken,
     tokenType: token.tokenType || "Bearer",

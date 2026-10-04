@@ -26,7 +26,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/core-rs": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "extract-zip": "^2.0.1",
     "proper-lockfile": "^4.1.2",

@@ -75,7 +75,10 @@ export class FileCredentialStore implements CredentialStore {
   }
 
   acquireLock(key: string, timeoutMs: number): Promise<string> {
-    return this.locks.acquire(this.layout === FileLayout.Single ? `${this.root}:refresh` : `${this.root}:${key}:refresh`, timeoutMs);
+    return this.locks.acquire(
+      this.layout === FileLayout.Single ? `${this.root}:refresh` : `${this.root}:${key}:refresh`,
+      timeoutMs,
+    );
   }
 
   releaseLock(lease: string): Promise<void> {
@@ -104,7 +107,9 @@ export class FileCredentialStore implements CredentialStore {
 
   private async readCache(): Promise<TokenCache> {
     try {
-      const cache = JSON.parse(await readFile(join(this.root, "token-cache.json"), "utf8")) as TokenCache;
+      const cache = JSON.parse(
+        await readFile(join(this.root, "token-cache.json"), "utf8"),
+      ) as TokenCache;
       if (cache.version !== 1 || typeof cache.tokens !== "object" || !cache.tokens) {
         throw new AuthError("storage", "Token cache must use version 1");
       }
@@ -119,7 +124,10 @@ export class FileCredentialStore implements CredentialStore {
   private async writeCache(cache: TokenCache): Promise<void> {
     const temporary = join(this.root, `.token-cache-${randomUUID()}.tmp`);
     try {
-      await writeFile(temporary, `${JSON.stringify(cache, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+      await writeFile(temporary, `${JSON.stringify(cache, null, 2)}\n`, {
+        mode: 0o600,
+        flag: "wx",
+      });
       await chmod(temporary, 0o600);
       await rename(temporary, join(this.root, "token-cache.json"));
     } catch (cause) {
@@ -154,8 +162,12 @@ function deserializeToken(value: unknown): Token | undefined {
     ...(stringValue(record.refresh_token ?? record.refreshToken)
       ? { refreshToken: stringValue(record.refresh_token ?? record.refreshToken) }
       : {}),
-    ...(stringValue(record.expiry ?? record.expires_at) ? { expiry: stringValue(record.expiry ?? record.expires_at) } : {}),
-    scopes: Array.isArray(record.scopes) ? record.scopes.filter((scope): scope is string => typeof scope === "string") : [],
+    ...(stringValue(record.expiry ?? record.expires_at)
+      ? { expiry: stringValue(record.expiry ?? record.expires_at) }
+      : {}),
+    scopes: Array.isArray(record.scopes)
+      ? record.scopes.filter((scope): scope is string => typeof scope === "string")
+      : [],
   };
 }
 

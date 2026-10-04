@@ -25,11 +25,6 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/core-rs",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:^",
       "type": "runtime"

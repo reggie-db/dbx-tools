@@ -28,7 +28,9 @@
     "@databricks/sdk-experimental": "catalog:"
   },
   "dependencies": {
-    "@dbx-tools/core": "workspace:^"
+    "@dbx-tools/core": "workspace:^",
+    "oauth4webapi": "^3.8.8",
+    "open": "^11.0.1"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

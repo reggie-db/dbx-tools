@@ -42,8 +42,14 @@ export function resolveConfigFile(
   explicit?: string,
   environment: Environment = process.env,
 ): string {
-  const selected = nonempty(explicit) ?? nonempty(environment.DATABRICKS_CONFIG_FILE) ?? DEFAULT_CONFIG_FILE;
-  const expanded = selected === "~" ? homedir() : selected.startsWith("~/") ? resolve(homedir(), selected.slice(2)) : selected;
+  const selected =
+    nonempty(explicit) ?? nonempty(environment.DATABRICKS_CONFIG_FILE) ?? DEFAULT_CONFIG_FILE;
+  const expanded =
+    selected === "~"
+      ? homedir()
+      : selected.startsWith("~/")
+        ? resolve(homedir(), selected.slice(2))
+        : selected;
   return isAbsolute(expanded) ? expanded : resolve(expanded);
 }
 
@@ -107,7 +113,12 @@ export function listDatabricksProfiles(
         ...(accountId ? { accountId } : {}),
         ...(nonempty(profile.workspaceId) ? { workspaceId: nonempty(profile.workspaceId) } : {}),
         target: inferTarget(host, accountId),
-        authKind: resolveAuthKind(profile.authType, profile.clientId, profile.clientSecret, profile.accessToken),
+        authKind: resolveAuthKind(
+          profile.authType,
+          profile.clientId,
+          profile.clientSecret,
+          profile.accessToken,
+        ),
       };
     })
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -122,8 +133,14 @@ export function resolveDatabricksProfile(
   const environmentProfile = nonempty(environment.DATABRICKS_CONFIG_PROFILE);
   const explicitProfile = Boolean(nonempty(options.profile) ?? environmentProfile);
   const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
-  const explicitAuthType = nonempty(options.authType)?.toLowerCase() ?? (!inApp ? nonempty(environment.DATABRICKS_AUTH_TYPE)?.toLowerCase() : undefined);
-  const appServicePrincipal = [environment.DATABRICKS_HOST, environment.DATABRICKS_CLIENT_ID, environment.DATABRICKS_CLIENT_SECRET].every(nonempty);
+  const explicitAuthType =
+    nonempty(options.authType)?.toLowerCase() ??
+    (!inApp ? nonempty(environment.DATABRICKS_AUTH_TYPE)?.toLowerCase() : undefined);
+  const appServicePrincipal = [
+    environment.DATABRICKS_HOST,
+    environment.DATABRICKS_CLIENT_ID,
+    environment.DATABRICKS_CLIENT_SECRET,
+  ].every(nonempty);
   const selectedAuthType =
     !inApp || explicitProfile || explicitAuthType
       ? explicitAuthType
@@ -132,7 +149,9 @@ export function resolveDatabricksProfile(
         : appServicePrincipal
           ? AUTH_TYPE_APP_SP
           : undefined;
-  const appAuth = [AUTH_TYPE_APP_OBO, "app-obo", AUTH_TYPE_APP_SP, "app-sp"].includes(selectedAuthType ?? "");
+  const appAuth = [AUTH_TYPE_APP_OBO, "app-obo", AUTH_TYPE_APP_SP, "app-sp"].includes(
+    selectedAuthType ?? "",
+  );
   const ignoreAmbientCredentials = inApp && explicitProfile && !appAuth;
   const configPath = resolveConfigFile(options.configFile, environment);
   const config = loadConfig(configPath);
@@ -144,31 +163,51 @@ export function resolveDatabricksProfile(
     options.preferUserToMachine,
   );
   let configured = loadRawProfile(config, profileName);
-  if (inApp && !explicitProfile && (configured.authType === "pat" || configured.accessToken)) configured = {};
+  if (inApp && !explicitProfile && (configured.authType === "pat" || configured.accessToken))
+    configured = {};
   const ambient = (name: keyof NodeJS.ProcessEnv): string | undefined =>
     ignoreAmbientCredentials ? undefined : nonempty(environment[name]);
-  const host = normalizeHost(options.host ?? ambient("DATABRICKS_HOST") ?? configured.host, profileName);
-  const accountId = nonempty(options.accountId) ?? ambient("DATABRICKS_ACCOUNT_ID") ?? nonempty(configured.accountId);
-  const workspaceId = nonempty(options.workspaceId) ?? ambient("DATABRICKS_WORKSPACE_ID") ?? nonempty(configured.workspaceId);
-  const clientIdValue = nonempty(options.clientId) ?? ambient("DATABRICKS_CLIENT_ID") ?? nonempty(configured.clientId);
-  const clientSecret = nonempty(options.clientSecret) ?? ambient("DATABRICKS_CLIENT_SECRET") ?? nonempty(configured.clientSecret);
+  const host = normalizeHost(
+    options.host ?? ambient("DATABRICKS_HOST") ?? configured.host,
+    profileName,
+  );
+  const accountId =
+    nonempty(options.accountId) ??
+    ambient("DATABRICKS_ACCOUNT_ID") ??
+    nonempty(configured.accountId);
+  const workspaceId =
+    nonempty(options.workspaceId) ??
+    ambient("DATABRICKS_WORKSPACE_ID") ??
+    nonempty(configured.workspaceId);
+  const clientIdValue =
+    nonempty(options.clientId) ?? ambient("DATABRICKS_CLIENT_ID") ?? nonempty(configured.clientId);
+  const clientSecret =
+    nonempty(options.clientSecret) ??
+    ambient("DATABRICKS_CLIENT_SECRET") ??
+    nonempty(configured.clientSecret);
   const accessToken =
     selectedAuthType === AUTH_TYPE_APP_OBO || selectedAuthType === "app-obo"
       ? requestToken
-      : nonempty(options.accessToken) ?? ambient("DATABRICKS_TOKEN") ?? nonempty(configured.accessToken);
-  const authType = selectedAuthType ?? (!inApp ? ambient("DATABRICKS_AUTH_TYPE") : undefined) ?? nonempty(configured.authType)?.toLowerCase();
+      : (nonempty(options.accessToken) ??
+        ambient("DATABRICKS_TOKEN") ??
+        nonempty(configured.accessToken));
+  const authType =
+    selectedAuthType ??
+    (!inApp ? ambient("DATABRICKS_AUTH_TYPE") : undefined) ??
+    nonempty(configured.authType)?.toLowerCase();
   const authKind = resolveAuthKind(authType, clientIdValue, clientSecret, accessToken);
   const clientId =
     authKind === AuthKind.UserToMachine
-      ? clientIdValue ?? DEFAULT_CLIENT_ID
+      ? (clientIdValue ?? DEFAULT_CLIENT_ID)
       : authKind === AuthKind.MachineToMachine || authKind === AuthKind.AppServicePrincipal
-        ? clientIdValue ?? missing(profileName, "client_id")
-        : clientIdValue ?? "";
+        ? (clientIdValue ?? missing(profileName, "client_id"))
+        : (clientIdValue ?? "");
   const scopes = options.scopes?.length
     ? cleanList(options.scopes)
     : cleanList(configured.scopes?.split(",") ?? ["all-apis"]);
   const target = options.target ? parseTarget(options.target) : inferTarget(host, accountId);
-  const groupId = nonempty(options.groupId) ?? ambient("DATABRICKS_GROUP_ID") ?? nonempty(configured.groupId);
+  const groupId =
+    nonempty(options.groupId) ?? ambient("DATABRICKS_GROUP_ID") ?? nonempty(configured.groupId);
   const principal =
     authKind === AuthKind.MachineToMachine || authKind === AuthKind.AppServicePrincipal
       ? clientId
@@ -232,7 +271,8 @@ function loadConfig(path: string): IniConfig | undefined {
     configCache.set(path, config);
     return config;
   } catch (cause) {
-    const error = cause instanceof Error ? cause : new AuthError("config", `Could not read ${path}`, { cause });
+    const error =
+      cause instanceof Error ? cause : new AuthError("config", `Could not read ${path}`, { cause });
     configCache.set(path, error);
     throw error;
   }
@@ -267,7 +307,8 @@ function resolveProfileName(
     if (profiles.length === 1) selected = profiles[0];
   }
   selected ??= "DEFAULT";
-  if (selected === SETTINGS_SECTION) throw new AuthError("config", `${SETTINGS_SECTION} is reserved`);
+  if (selected === SETTINGS_SECTION)
+    throw new AuthError("config", `${SETTINGS_SECTION} is reserved`);
   if (explicit || !preferUserToMachine || !config) return selected;
   const current = loadRawProfile(config, selected);
   if (!isM2mProfile(current) || !current.host) return selected;
@@ -285,11 +326,17 @@ function sameTarget(left: RawProfile, right: RawProfile): boolean {
   } catch {
     return false;
   }
-  return (!left.accountId || left.accountId === right.accountId) && (!left.workspaceId || left.workspaceId === right.workspaceId);
+  return (
+    (!left.accountId || left.accountId === right.accountId) &&
+    (!left.workspaceId || left.workspaceId === right.workspaceId)
+  );
 }
 
 function isM2mProfile(profile: RawProfile): boolean {
-  return profile.authType === "oauth-m2m" || (!profile.authType && Boolean(profile.clientId && profile.clientSecret));
+  return (
+    profile.authType === "oauth-m2m" ||
+    (!profile.authType && Boolean(profile.clientId && profile.clientSecret))
+  );
 }
 
 function resolveAuthKind(
@@ -302,18 +349,21 @@ function resolveAuthKind(
     case "databricks-cli":
       return AuthKind.UserToMachine;
     case "oauth-m2m":
-      if (!clientId || !clientSecret) throw new AuthError("config", "oauth-m2m requires client_id and client_secret");
+      if (!clientId || !clientSecret)
+        throw new AuthError("config", "oauth-m2m requires client_id and client_secret");
       return AuthKind.MachineToMachine;
     case "pat":
       if (!accessToken) throw new AuthError("config", "pat requires token");
       return AuthKind.PersonalAccessToken;
     case AUTH_TYPE_APP_OBO:
     case "app-obo":
-      if (!accessToken) throw new AuthError("config", "app_obo requires the configured access token header");
+      if (!accessToken)
+        throw new AuthError("config", "app_obo requires the configured access token header");
       return AuthKind.AppOnBehalfOf;
     case AUTH_TYPE_APP_SP:
     case "app-sp":
-      if (!clientId || !clientSecret) throw new AuthError("config", "app_sp requires client id and secret");
+      if (!clientId || !clientSecret)
+        throw new AuthError("config", "app_sp requires client id and secret");
       return AuthKind.AppServicePrincipal;
     case undefined:
       if (clientId && clientSecret) return AuthKind.MachineToMachine;
@@ -324,8 +374,13 @@ function resolveAuthKind(
   }
 }
 
-function requestOboToken(headers?: Record<string, string>, headerName = DEFAULT_ACCESS_TOKEN_HEADER): string | undefined {
-  const entry = Object.entries(headers ?? {}).find(([name]) => name.toLowerCase() === headerName.toLowerCase());
+function requestOboToken(
+  headers?: Record<string, string>,
+  headerName = DEFAULT_ACCESS_TOKEN_HEADER,
+): string | undefined {
+  const entry = Object.entries(headers ?? {}).find(
+    ([name]) => name.toLowerCase() === headerName.toLowerCase(),
+  );
   const value = nonempty(entry?.[1]);
   if (!value) return undefined;
   if (headerName.toLowerCase() !== DEFAULT_ACCESS_TOKEN_HEADER) return value;
@@ -333,11 +388,23 @@ function requestOboToken(headers?: Record<string, string>, headerName = DEFAULT_
   return scheme?.toLowerCase() === "bearer" ? nonempty(parts.join(" ")) : undefined;
 }
 
-function credentialCacheKey(profile: Pick<DatabricksProfile, "name" | "host" | "accountId" | "workspaceId" | "clientId" | "groupId" | "scopes" | "authKind">): string {
+function credentialCacheKey(
+  profile: Pick<
+    DatabricksProfile,
+    "name" | "host" | "accountId" | "workspaceId" | "clientId" | "groupId" | "scopes" | "authKind"
+  >,
+): string {
   if (profile.authKind === AuthKind.UserToMachine) return profile.name;
   if (profile.authKind === AuthKind.PersonalAccessToken) return `${profile.name}-pat`;
   if (profile.authKind === AuthKind.AppOnBehalfOf) return `${profile.name}-app-obo`;
-  const identity = [profile.host, profile.accountId ?? "", profile.workspaceId ?? "", profile.clientId, profile.groupId ?? "", machineScopes(profile.scopes).join(" ")].join("\0");
+  const identity = [
+    profile.host,
+    profile.accountId ?? "",
+    profile.workspaceId ?? "",
+    profile.clientId,
+    profile.groupId ?? "",
+    machineScopes(profile.scopes).join(" "),
+  ].join("\0");
   const digest = createHash("sha256").update(identity).digest("hex");
   return `${profile.name}-${profile.authKind === AuthKind.AppServicePrincipal ? "app-sp" : "oauth-m2m"}-${digest}`;
 }
@@ -354,7 +421,8 @@ export function machineScopes(scopes: readonly string[]): string[] {
 function inferTarget(host: string | undefined, accountId: string | undefined): TargetKind {
   if (accountId && host) {
     try {
-      if (new URL(normalizeHost(host)).hostname === "accounts.cloud.databricks.com") return TargetKind.Account;
+      if (new URL(normalizeHost(host)).hostname === "accounts.cloud.databricks.com")
+        return TargetKind.Account;
     } catch {}
   }
   return TargetKind.Workspace;

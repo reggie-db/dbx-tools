@@ -26,4 +26,5 @@ export { OAuthGrant, OAuthFlow, ProviderAuth } from "./src/oauth.ts";
 export type { OAuthConfig, ProviderOptions } from "./src/oauth.ts";
 export { MemoryLockAdapter, MemoryCredentialStore } from "./src/storage.ts";
 export { AuthKind, TargetKind, Storage, FileLayout, DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE, DEFAULT_ACCOUNTS_HOST, DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER, AUTH_TYPE_APP_OBO, AUTH_TYPE_APP_SP } from "./src/types.ts";
-export type { Token, AccessToken, AuthOptions, DatabricksProfileSummary, DatabricksAuthStatus, DatabricksAuthOptions, DatabricksProfile, LockAdapter, CredentialStore, TokenProvider, PersistentAuthLike } from "./src/types.ts";
+export type { Token, AccessToken, DatabricksProfileSummary, DatabricksAuthStatus, DatabricksProfile, LockAdapter, CredentialStore, TokenProvider, PersistentAuthLike } from "./src/types.ts";
+export * from "./exports.ts";

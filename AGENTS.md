@@ -144,11 +144,21 @@ Primary package areas:
   schemas widen. Keep this single-consumer contract in `shared/genie`.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
-- `packages/rs/core` owns Databricks authentication and shared Rust runtime
-  primitives. It contains Databricks App detection, cached CLI availability,
-  CLI token process access, profile resolution, U2M, M2M, PAT authentication,
-  provider-neutral token lifecycle, credential storage, file locking, file
-  caching, and tracing initialization. Databricks-specific authentication lives
+- `packages/js/node/auth` owns Databricks authentication for Node.js and Bun.
+  It contains Databricks App detection, cached CLI availability, CLI token
+  process access, profile resolution, U2M, M2M, PAT authentication,
+  provider-neutral token lifecycle, credential storage, and the lightweight
+  Databricks HTTP client. Use `oauth4webapi` for OAuth protocol handling and
+  `open` for browser launch. Keep `@databricks/sdk-experimental` behind the
+  optional `@dbx-tools/auth/workspace-client` subpath so the package root and
+  future Python/FFI consumers do not load the SDK. Its `CredentialStore` and
+  `LockAdapter` contracts remain callback-free and use explicit lease IDs.
+  `@dbx-tools/core` owns the Node file-lock implementation and must not depend
+  on Rust only for Databricks App detection.
+- `packages/rs/core` retains the Rust authentication implementation for native
+  binaries while Node consumers move to `@dbx-tools/auth`. It also owns shared
+  Rust runtime primitives, file caching, file locking, Lakebase address parsing,
+  and tracing initialization. Databricks-specific Rust authentication lives
   under `src/auth`; generic OAuth flow, templates, and provider factories live
   under `src/oauth`; credential records, token lifecycle, and storage stay under
   `src/credentials`. `FileCache` and `FileLock` remain root modules.

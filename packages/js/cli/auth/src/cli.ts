@@ -75,7 +75,8 @@ function parseInteger(value: string | number, name: string, signed: boolean): nu
     throw new InvalidArgumentError(`${name} must be a ${signed ? "" : "non-negative "}integer`);
   }
   const parsed = Number(text);
-  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError(`${name} is outside the safe integer range`);
+  if (!Number.isSafeInteger(parsed))
+    throw new InvalidArgumentError(`${name} is outside the safe integer range`);
   return parsed;
 }
 

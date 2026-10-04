@@ -41,7 +41,8 @@ export class PersistentAuth implements PersistentAuthLike {
   ) {}
 
   async challenge(): Promise<void> {
-    if (!this.client) throw new AuthError("oauth", "app_obo uses the current request token and cannot start login");
+    if (!this.client)
+      throw new AuthError("oauth", "app_obo uses the current request token and cannot start login");
     await this.client.login();
   }
 
@@ -51,7 +52,10 @@ export class PersistentAuth implements PersistentAuthLike {
       : this.requiredClient().tokenWithLogin(login);
   }
 
-  async authorizationHeaderForUrl(requestUrl: string, login?: boolean): Promise<string | undefined> {
+  async authorizationHeaderForUrl(
+    requestUrl: string,
+    login?: boolean,
+  ): Promise<string | undefined> {
     return (await this.requestHeadersForUrl(requestUrl, login))[DEFAULT_ACCESS_TOKEN_HEADER];
   }
 
@@ -121,7 +125,9 @@ export async function createPersistentAuth(
 ): Promise<PersistentAuth> {
   const environment = dependencies.environment ?? process.env;
   const profile = resolveDatabricksProfile(options, environment);
-  const inApp = profile.authKind === AuthKind.AppOnBehalfOf || profile.authKind === AuthKind.AppServicePrincipal;
+  const inApp =
+    profile.authKind === AuthKind.AppOnBehalfOf ||
+    profile.authKind === AuthKind.AppServicePrincipal;
   const backend = storage === Storage.Auto ? (inApp ? Storage.Memory : Storage.File) : storage;
   const store =
     backend === Storage.Memory
@@ -138,22 +144,27 @@ export async function createPersistentAuthWithStorage(
   dependencies: DatabricksAuthDependencies = {},
   resolvedProfile?: DatabricksProfile,
 ): Promise<PersistentAuth> {
-  const profile = resolvedProfile ?? resolveDatabricksProfile(options, dependencies.environment ?? process.env);
+  const profile =
+    resolvedProfile ?? resolveDatabricksProfile(options, dependencies.environment ?? process.env);
   if (profile.authKind === AuthKind.AppOnBehalfOf) {
-    return new PersistentAuth(
-      profile,
-      Storage.Memory,
-      undefined,
-      {
-        accessToken: profile.accessToken!,
-        tokenType: "Bearer",
-        scopes: [...profile.scopes],
-      },
-    );
+    return new PersistentAuth(profile, Storage.Memory, undefined, {
+      accessToken: profile.accessToken!,
+      tokenType: "Bearer",
+      scopes: [...profile.scopes],
+    });
   }
   const provider = await providerFor(profile, storage, options, dependencies);
-  const client = new AuthClient(profile.cacheKey, provider, store, AuthOptions.create(options.auth));
-  return new PersistentAuth(profile, storage === Storage.Auto ? storageFromName(store.name()) : storage, client);
+  const client = new AuthClient(
+    profile.cacheKey,
+    provider,
+    store,
+    AuthOptions.create(options.auth),
+  );
+  return new PersistentAuth(
+    profile,
+    storage === Storage.Auto ? storageFromName(store.name()) : storage,
+    client,
+  );
 }
 
 async function providerFor(
@@ -165,8 +176,7 @@ async function providerFor(
   switch (profile.authKind) {
     case AuthKind.UserToMachine: {
       const useCli =
-        storage === Storage.Auto &&
-        (dependencies.cliAvailable ?? databricksCliAvailable)();
+        storage === Storage.Auto && (dependencies.cliAvailable ?? databricksCliAvailable)();
       if (useCli) return new DatabricksCliProvider(profile.name);
       const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
       return new OAuthFlow(
@@ -177,6 +187,7 @@ async function providerFor(
           clientId: profile.clientId,
           scopes: effectiveScopes(profile.scopes),
           host: profile.host,
+          allowInsecureRequests: isLoopbackHttp(profile.host),
           callbackImageSrc: options.auth?.callbackImageSrc,
           fetch: dependencies.fetch,
           openBrowser: dependencies.openBrowser,
@@ -197,6 +208,7 @@ async function providerFor(
           scopes: machineScopes(profile.scopes),
           ...(profile.groupId ? { extraTokenParams: { assume_group: profile.groupId } } : {}),
           host: profile.host,
+          allowInsecureRequests: isLoopbackHttp(profile.host),
           fetch: dependencies.fetch,
         },
         OAuthGrant.ClientCredentials,
@@ -251,12 +263,15 @@ async function resolveOAuthEndpoints(
       ? `${host}/oidc/accounts/${requiredAccountId(profile)}/.well-known/oauth-authorization-server`
       : `${host}/oidc/.well-known/oauth-authorization-server`;
   const response = await fetcher(discovery, { redirect: "manual" });
-  if (response.status === 404) throw new AuthError("oauth", `OAuth is not supported at ${discovery}`);
-  if (!response.ok) throw new AuthError("oauth", `OAuth discovery returned HTTP ${response.status}`);
+  if (response.status === 404)
+    throw new AuthError("oauth", `OAuth is not supported at ${discovery}`);
+  if (!response.ok)
+    throw new AuthError("oauth", `OAuth discovery returned HTTP ${response.status}`);
   const value = (await response.json()) as Record<string, unknown>;
   const authorizationEndpoint = stringValue(value.authorization_endpoint);
   const tokenEndpoint = stringValue(value.token_endpoint);
-  if (!authorizationEndpoint || !tokenEndpoint) throw new AuthError("oauth", "OAuth discovery response is incomplete");
+  if (!authorizationEndpoint || !tokenEndpoint)
+    throw new AuthError("oauth", "OAuth discovery response is incomplete");
   return { authorizationEndpoint, tokenEndpoint };
 }
 
@@ -267,6 +282,11 @@ function requiredAccountId(profile: DatabricksProfile): string {
 
 function storageFromName(name: string): Storage {
   return name === "memory" ? Storage.Memory : Storage.File;
+}
+
+function isLoopbackHttp(host: string): boolean {
+  const url = new URL(host);
+  return url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname);
 }
 
 function stringValue(value: unknown): string | undefined {

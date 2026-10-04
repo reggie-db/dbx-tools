@@ -185,7 +185,7 @@ and typed per-turn Mastra request context without owning authentication.
 | Native command runtime         | [`@dbx-tools/rust-binary`](packages/js/node/rust-binary)                                                                                                                                                                    |
 | Databricks runtime utilities   | [`dbx-tools-core`](packages/rs/core), [`@dbx-tools/databricks`](packages/js/node/databricks), [`@dbx-tools/core-rs`](packages/js/node/core-rs), [`dbx-tools-core-rs`](packages/py/core-rs)                                  |
 | Lakebase parsing and discovery | [`dbx-tools-core`](packages/rs/core), [`@dbx-tools/core-rs`](packages/js/node/core-rs), [`dbx-tools-core-rs`](packages/py/core-rs), [`dbx-tools-lakebase-proxy`](packages/rs/lakebase-proxy)                                |
-| Databricks OAuth tokens        | [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                                                               |
+| Databricks OAuth tokens        | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                   |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
 | Passwordless authentication    | [`@dbx-tools/auth-gate`](packages/js/node/auth-gate), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                      |
 | Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core), [`dbx-tools-core`](packages/py/core)                                                                                                                                            |
@@ -301,8 +301,10 @@ remain on loopback under `/api`.
 
 ### Authenticate With Databricks OAuth
 
-Use [`@dbx-tools/cli-auth`](packages/js/cli/auth) for preferred U2M browser
-OAuth, M2M client credentials, secure token storage, and refresh.
+Use [`@dbx-tools/auth`](packages/js/node/auth) for CLI-first U2M with browser
+fallback, M2M client credentials, PAT and App authentication, secure token
+storage, and refresh. [`@dbx-tools/cli-auth`](packages/js/cli/auth) exposes the
+same runtime through `dbx auth`.
 
 ```sh
 dbx auth login --profile my-workspace

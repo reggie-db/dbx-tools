@@ -449,7 +449,11 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
 // subpath so Python/FFI consumers can load the auth engine without the SDK.
 project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
   projectJs.addExports(p, { "./workspace-client": "./src/_workspace-client.ts" });
-  p.addDeps("@dbx-tools/core@workspace:^");
+  p.addDeps(
+    "@dbx-tools/core@workspace:^",
+    "oauth4webapi@^3.8.8",
+    "open@^11.0.1",
+  );
   projectJs.addOptionalPeer(p, "@databricks/sdk-experimental@catalog:");
 });
 

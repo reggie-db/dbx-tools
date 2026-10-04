@@ -6,7 +6,9 @@ import type { Token, TokenProvider } from "./types.ts";
 let available: boolean | undefined;
 
 /** Whether `databricks auth --help` succeeds in this process environment. */
-export function databricksCliAvailable(executable = process.env.DATABRICKS_CLI_PATH ?? "databricks"): boolean {
+export function databricksCliAvailable(
+  executable = process.env.DATABRICKS_CLI_PATH ?? "databricks",
+): boolean {
   if (available !== undefined) return available;
   available =
     exec.spawnSync(executable, ["auth", "--help"], {
@@ -33,7 +35,8 @@ export async function databricksCliLogin(
     ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`],
     { stdin: "inherit", stdout: "inherit", stderr: "capture" },
   );
-  if (result.exitCode !== 0) throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
+  if (result.exitCode !== 0)
+    throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
 }
 
 /** Request one profile token from the Databricks CLI. */
@@ -49,7 +52,8 @@ export async function databricksCliToken(
     stdout: "capture",
     stderr: "capture",
   });
-  if (result.exitCode !== 0) throw new AuthError("cli", result.stderr || `databricks auth token exited ${result.exitCode}`);
+  if (result.exitCode !== 0)
+    throw new AuthError("cli", result.stderr || `databricks auth token exited ${result.exitCode}`);
   let value: Record<string, unknown>;
   try {
     value = JSON.parse(result.stdout) as Record<string, unknown>;
@@ -64,8 +68,12 @@ export async function databricksCliToken(
     ...(stringValue(value.refresh_token ?? value.refreshToken)
       ? { refreshToken: stringValue(value.refresh_token ?? value.refreshToken) }
       : {}),
-    ...(stringValue(value.expiry ?? value.expires_at) ? { expiry: stringValue(value.expiry ?? value.expires_at) } : {}),
-    scopes: Array.isArray(value.scopes) ? value.scopes.filter((scope): scope is string => typeof scope === "string") : [],
+    ...(stringValue(value.expiry ?? value.expires_at)
+      ? { expiry: stringValue(value.expiry ?? value.expires_at) }
+      : {}),
+    scopes: Array.isArray(value.scopes)
+      ? value.scopes.filter((scope): scope is string => typeof scope === "string")
+      : [],
   };
 }
 

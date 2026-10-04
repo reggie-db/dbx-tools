@@ -2,7 +2,7 @@
 name: dbx-tools-reuse
 description: Choose and reuse current @dbx-tools packages and @dbx-tools/projen before adding project generators, helpers, dependencies, or Databricks integration code. Use for work in github-reggie-db and for new Bun-first TypeScript or polyglot repositories.
 metadata:
-  version: "0.9.6"
+  version: "0.9.21"
 ---
 
 # dbx-tools reuse

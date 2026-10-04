@@ -2,10 +2,9 @@
 
 Databricks OAuth commands mounted under `dbx auth`.
 
-The package uses the generated
-[`@dbx-tools/core-rs`](../../node/core-rs) bindings for profile
-resolution, U2M browser authorization, M2M client credentials, token refresh,
-PAT access, locking, and credential storage.
+The package uses [`@dbx-tools/auth`](../../node/auth) for profile resolution,
+CLI-first U2M with browser fallback, M2M client credentials, PAT access, token
+refresh, locking, and credential storage.
 
 Key features:
 
@@ -71,7 +70,7 @@ standard Databricks environment variables. The secret is not accepted as a CLI
 argument or included in generated binding records.
 PAT reads `token` from the selected profile or `DATABRICKS_TOKEN`.
 
-For U2M with automatic storage, the Rust package checks
+For U2M with automatic storage, `@dbx-tools/auth` checks
 `databricks auth --help` once per process outside Databricks Apps. When
 available, token refresh runs through
 `databricks auth token --profile <name>`. Otherwise it uses the native
@@ -92,8 +91,9 @@ import { cli } from "@dbx-tools/cli-auth";
 await cli.buildProgram().parseAsync(["status"], { from: "user" });
 ```
 
-Applications that need programmatic OAuth should import
-[`@dbx-tools/core-rs`](../../node/core-rs) directly.
+Applications that need programmatic authentication should import
+[`@dbx-tools/auth`](../../node/auth) directly. Import
+`@dbx-tools/auth/workspace-client` only when the Databricks SDK client is needed.
 
 ## Modules
 

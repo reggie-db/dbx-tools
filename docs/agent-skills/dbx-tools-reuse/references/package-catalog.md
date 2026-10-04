@@ -1,6 +1,6 @@
 # dbx-tools package catalog
 
-Generated from repository manifests and package READMEs for dbx-tools 0.9.6.
+Generated from repository manifests and package READMEs for dbx-tools 0.9.21.
 Inspect the installed manifest, README, exports, and source before relying on a capability.
 
 ## CLI Tools
@@ -17,6 +17,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/appkit-graphiti` - AppKit process plugin for the Python dbx-tools-graphiti MCP runtime. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
+- `@dbx-tools/auth` - Persistent Databricks authentication for Node.js and Bun without a native binding requirement. Source: `packages/js/node/auth`.
 - `@dbx-tools/auth-gate` - Passwordless authentication runtime built on Better Auth, email OTP, passkeys, and caller-provided identity policy and delivery. Source: `packages/js/node/auth-gate`.
 - `@dbx-tools/core` - Node-only core helpers for layered configuration, binary installation, process execution, locking, and project discovery. Source: `packages/js/node/core`.
 - `@dbx-tools/core-rs` - Generated Node bindings for Databricks authentication, runtime utilities, and Lakebase address parsing from the dbx-tools-core Rust crate. Source: `packages/js/node/core-rs`.
@@ -35,6 +36,10 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/teams` - Server-side Microsoft Teams Adaptive Card runtime, agent tool, and AppKit plugin. Source: `packages/js/node/teams`.
 - `@dbx-tools/tunnel` - Front an app with a public Portr and/or FRP tunnel and the passwordless @dbx-tools/auth-gate gate, in-process. Source: `packages/js/node/tunnel`.
 
+## Openapi
+
+- `@dbx-tools/openapi-model-proxy` - Generated OpenAPI 3.1 schema and openapi-fetch client for dbx-tools-model-proxy. Source: `packages/js/openapi/model-proxy`.
+
 ## Python
 
 - `dbx-tools-core` - Dependency-free Python configuration, identity, and mise-backed executable helpers shared by dbx-tools packages. Source: `packages/py/core`.
@@ -49,7 +54,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `dbx-tools-google` - Google integrations backed by native Rust libraries. The current surface is Google Application Default Credentials. Source: `packages/rs/google`.
 - `dbx-tools-model` - Rust Model Serving discovery, capability policy, and endpoint resolution for Databricks. Source: `packages/rs/model`.
 - `dbx-tools-model-proxy` - Rust proxy between OpenAI or Anthropic clients and Databricks Model Serving protocols. Source: `packages/rs/model-proxy`.
-- `dbx-tools-service` - Reusable Rust lifecycle support for per-user dbx-tools background services. Source: `packages/rs/service`.
+- `dbx-tools-service` - Reusable Rust lifecycle and persistence support for per-user dbx-tools background services. Source: `packages/rs/service`.
 
 ## Shared Contracts
 

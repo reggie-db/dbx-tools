@@ -1,12 +1,16 @@
 import { AuthError } from "./errors.ts";
-import { createPersistentAuth, type DatabricksAuthDependencies, PersistentAuth } from "./databricks.ts";
+import {
+  createPersistentAuth,
+  type DatabricksAuthDependencies,
+  PersistentAuth,
+} from "./databricks.ts";
 import type { DatabricksAuthOptions } from "./types.ts";
 import { DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER } from "./types.ts";
 
 export interface DatabricksRequestOptions {
   method?: string;
   body?: unknown;
-  headers?: HeadersInit;
+  headers?: Headers | Record<string, string> | [string, string][];
   login?: boolean;
   signal?: AbortSignal;
 }
@@ -22,7 +26,10 @@ export class DatabricksClient {
     options: DatabricksAuthOptions = { preferUserToMachine: true },
     dependencies: DatabricksAuthDependencies = {},
   ): Promise<DatabricksClient> {
-    return new DatabricksClient(await createPersistentAuth(options, undefined, dependencies), dependencies.fetch ?? globalThis.fetch);
+    return new DatabricksClient(
+      await createPersistentAuth(options, undefined, dependencies),
+      dependencies.fetch ?? globalThis.fetch,
+    );
   }
 
   profile(): string {
@@ -47,11 +54,18 @@ export class DatabricksClient {
     const token = await this.auth.token(options.login);
     let response = await this.send(url, method, token.accessToken, token.tokenType, options);
     if (response.status === 401) {
-      const refreshed = await this.auth.refreshRejectedToken(token.accessToken, options.login ?? true);
+      const refreshed = await this.auth.refreshRejectedToken(
+        token.accessToken,
+        options.login ?? true,
+      );
       response = await this.send(url, method, refreshed.accessToken, refreshed.tokenType, options);
     }
     const text = await response.text();
-    if (!response.ok) throw new AuthError("http", `Databricks API ${path} returned HTTP ${response.status}: ${text}`);
+    if (!response.ok)
+      throw new AuthError(
+        "http",
+        `Databricks API ${path} returned HTTP ${response.status}: ${text}`,
+      );
     if (!text) return undefined;
     try {
       return JSON.parse(text);

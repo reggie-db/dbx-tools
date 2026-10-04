@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 
-import { exec } from "@dbx-tools/core";
+import * as oauth from "oauth4webapi";
+import open from "open";
 
 import { AuthError } from "./errors.ts";
 import { AuthClient } from "./lifecycle.ts";
@@ -35,6 +36,7 @@ export interface OAuthConfig {
   callbackImageSrc?: string;
   fetch?: typeof globalThis.fetch;
   openBrowser?: (url: string) => Promise<void>;
+  allowInsecureRequests?: boolean;
 }
 
 /** Persistent generic OAuth provider options. */
@@ -47,38 +49,68 @@ export interface ProviderOptions extends OAuthConfig {
   auth?: AuthOptions;
 }
 
-/** Generic OAuth implementation shared by Databricks U2M and M2M. */
+/** Generic OAuth implementation backed by `oauth4webapi`. */
 export class OAuthFlow implements TokenProvider {
-  private readonly fetcher: typeof globalThis.fetch;
+  private readonly authorizationServer: oauth.AuthorizationServer;
+  private readonly client: oauth.Client;
+  private readonly clientAuthentication: oauth.ClientAuth;
+  private readonly requestOptions: oauth.HttpRequestOptions<string, URLSearchParams>;
 
-  constructor(private readonly config: OAuthConfig, private readonly grant = OAuthGrant.AuthorizationCode) {
-    this.fetcher = config.fetch ?? globalThis.fetch;
+  constructor(
+    private readonly config: OAuthConfig,
+    private readonly grant = OAuthGrant.AuthorizationCode,
+  ) {
     if (!config.provider.trim()) throw new AuthError("config", "OAuth provider must not be empty");
-    if (!config.tokenEndpoint.trim()) throw new AuthError("config", "OAuth token endpoint must not be empty");
+    if (!config.tokenEndpoint.trim())
+      throw new AuthError("config", "OAuth token endpoint must not be empty");
     if (grant === OAuthGrant.AuthorizationCode && !config.authorizationEndpoint) {
       throw new AuthError("config", "Authorization-code grants require an authorization endpoint");
     }
+    this.authorizationServer = {
+      issuer: config.host ?? new URL(config.tokenEndpoint).origin,
+      authorization_endpoint: config.authorizationEndpoint,
+      token_endpoint: config.tokenEndpoint,
+    };
+    this.client = { client_id: config.clientId };
+    this.clientAuthentication = config.clientSecret
+      ? oauth.ClientSecretBasic(config.clientSecret)
+      : oauth.None();
+    this.requestOptions = {
+      ...(config.fetch ? { [oauth.customFetch]: config.fetch as typeof globalThis.fetch } : {}),
+      ...(config.allowInsecureRequests ? { [oauth.allowInsecureRequests]: true } : {}),
+    };
   }
 
   authenticate(timeoutMs: number): Promise<Token> {
-    return this.grant === OAuthGrant.ClientCredentials ? this.clientCredentials() : this.login(timeoutMs);
+    return this.grant === OAuthGrant.ClientCredentials
+      ? this.clientCredentials()
+      : this.login(timeoutMs);
   }
 
   login(timeoutMs: number): Promise<Token> {
-    return this.grant === OAuthGrant.ClientCredentials ? this.clientCredentials() : this.authorizationCode(timeoutMs);
+    return this.grant === OAuthGrant.ClientCredentials
+      ? this.clientCredentials()
+      : this.authorizationCode(timeoutMs);
   }
 
-  refresh(token: Token): Promise<Token> {
+  async refresh(token: Token): Promise<Token> {
     if (this.grant === OAuthGrant.ClientCredentials) return this.clientCredentials();
     if (!token.refreshToken) throw new AuthError("oauth", "Stored credential has no refresh token");
-    return this.requestToken(
-      {
-        grant_type: "refresh_token",
-        refresh_token: token.refreshToken,
-        client_id: this.config.clientId,
-      },
-      token,
-    );
+    try {
+      const response = await oauth.refreshTokenGrantRequest(
+        this.authorizationServer,
+        this.client,
+        this.clientAuthentication,
+        token.refreshToken,
+        this.requestOptions,
+      );
+      return tokenFromResponse(
+        await oauth.processRefreshTokenResponse(this.authorizationServer, this.client, response),
+        token,
+      );
+    } catch (cause) {
+      throw new AuthError("oauth", "OAuth refresh failed", { cause });
+    }
   }
 
   canAuthenticateSilently(): boolean {
@@ -86,87 +118,78 @@ export class OAuthFlow implements TokenProvider {
   }
 
   private async clientCredentials(): Promise<Token> {
-    return this.requestToken(
-      {
-        grant_type: "client_credentials",
-        scope: canonicalScopes(this.config.scopes).join(" "),
-        ...this.config.extraTokenParams,
-      },
-      undefined,
-      true,
-    );
+    try {
+      const response = await oauth.clientCredentialsGrantRequest(
+        this.authorizationServer,
+        this.client,
+        this.clientAuthentication,
+        {
+          scope: canonicalScopes(this.config.scopes).join(" "),
+          ...this.config.extraTokenParams,
+        },
+        this.requestOptions,
+      );
+      return tokenFromResponse(
+        await oauth.processClientCredentialsResponse(
+          this.authorizationServer,
+          this.client,
+          response,
+        ),
+      );
+    } catch (cause) {
+      throw new AuthError("oauth", "OAuth client-credentials request failed", { cause });
+    }
   }
 
   private async authorizationCode(timeoutMs: number): Promise<Token> {
-    const verifier = base64Url(randomBytes(32));
-    const challenge = base64Url(createHash("sha256").update(verifier).digest());
-    const state = base64Url(randomBytes(24));
-    const callback = await createCallback(timeoutMs, state, this.config.host, this.config.callbackImageSrc);
+    const codeVerifier = oauth.generateRandomCodeVerifier();
+    const codeChallenge = await oauth.calculatePKCECodeChallenge(codeVerifier);
+    const state = oauth.generateRandomState();
+    const callback = await createCallback(
+      timeoutMs,
+      this.config.host,
+      this.config.callbackImageSrc,
+    );
     const authorization = new URL(this.config.authorizationEndpoint!);
     authorization.searchParams.set("response_type", "code");
     authorization.searchParams.set("client_id", this.config.clientId);
     authorization.searchParams.set("redirect_uri", callback.redirectUri);
-    authorization.searchParams.set("scope", canonicalScopes(["offline_access", ...(this.config.scopes ?? [])]).join(" "));
+    authorization.searchParams.set(
+      "scope",
+      canonicalScopes(["offline_access", ...(this.config.scopes ?? [])]).join(" "),
+    );
     authorization.searchParams.set("state", state);
-    authorization.searchParams.set("code_challenge", challenge);
+    authorization.searchParams.set("code_challenge", codeChallenge);
     authorization.searchParams.set("code_challenge_method", "S256");
     try {
       await (this.config.openBrowser ?? openBrowser)(authorization.toString());
-      const code = await callback.code;
-      return await this.requestToken({
-        grant_type: "authorization_code",
-        client_id: this.config.clientId,
-        code,
-        redirect_uri: callback.redirectUri,
-        code_verifier: verifier,
-      });
+      const callbackParameters = oauth.validateAuthResponse(
+        this.authorizationServer,
+        this.client,
+        await callback.parameters,
+        state,
+      );
+      const response = await oauth.authorizationCodeGrantRequest(
+        this.authorizationServer,
+        this.client,
+        oauth.None(),
+        callbackParameters,
+        callback.redirectUri,
+        codeVerifier,
+        this.requestOptions,
+      );
+      return tokenFromResponse(
+        await oauth.processAuthorizationCodeResponse(
+          this.authorizationServer,
+          this.client,
+          response,
+        ),
+      );
+    } catch (cause) {
+      throw new AuthError("oauth", "OAuth authorization-code flow failed", { cause });
     } finally {
       await callback.close();
     }
-  }
-
-  private async requestToken(
-    parameters: Record<string, string>,
-    previous?: Token,
-    basicAuth = false,
-  ): Promise<Token> {
-    const headers = new Headers({ "content-type": "application/x-www-form-urlencoded" });
-    if (basicAuth) {
-      if (!this.config.clientSecret) throw new AuthError("config", "Client credentials require a client secret");
-      headers.set(
-        "authorization",
-        `Basic ${Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64")}`,
-      );
-    }
-    const response = await this.fetcher(this.config.tokenEndpoint, {
-      method: "POST",
-      headers,
-      body: new URLSearchParams(parameters),
-      redirect: "manual",
-    });
-    const text = await response.text();
-    if (!response.ok) throw new AuthError("oauth", `OAuth token endpoint returned HTTP ${response.status}: ${text}`);
-    let value: Record<string, unknown>;
-    try {
-      value = JSON.parse(text) as Record<string, unknown>;
-    } catch (cause) {
-      throw new AuthError("oauth", "OAuth token endpoint did not return JSON", { cause });
-    }
-    const accessToken = stringValue(value.access_token);
-    if (!accessToken) throw new AuthError("oauth", "OAuth token response did not contain an access token");
-    const expiresIn = numberValue(value.expires_in);
-    const scopes = Array.isArray(value.scopes)
-      ? value.scopes.filter((scope): scope is string => typeof scope === "string")
-      : typeof value.scope === "string"
-        ? value.scope.split(/\s+/).filter(Boolean)
-        : previous?.scopes ?? canonicalScopes(this.config.scopes);
-    return {
-      accessToken,
-      tokenType: stringValue(value.token_type) ?? "Bearer",
-      refreshToken: stringValue(value.refresh_token) ?? previous?.refreshToken,
-      ...(expiresIn !== undefined ? { expiry: new Date(Date.now() + expiresIn * 1000).toISOString() } : {}),
-      scopes,
-    };
   }
 }
 
@@ -214,68 +237,63 @@ export function canonicalScopes(scopes: readonly string[] | undefined): string[]
 }
 
 async function openBrowser(url: string): Promise<void> {
-  const [command, args] =
-    process.platform === "darwin"
-      ? ["open", [url]]
-      : process.platform === "win32"
-        ? ["cmd", ["/c", "start", "", url]]
-        : ["xdg-open", [url]];
-  const result = await exec.spawn(command, args, { stdout: "ignore", stderr: "capture" });
-  if (result.exitCode !== 0) throw new AuthError("oauth", `Could not open browser: ${result.stderr}`);
+  await open(url, { wait: false });
 }
 
 async function createCallback(
   timeoutMs: number,
-  expectedState: string,
   host?: string,
   imageSrc?: string,
-): Promise<{ redirectUri: string; code: Promise<string>; close(): Promise<void> }> {
-  let resolveCode!: (code: string) => void;
-  let rejectCode!: (error: unknown) => void;
-  const rawCode = new Promise<string>((resolve, reject) => {
-    resolveCode = resolve;
-    rejectCode = reject;
+): Promise<{ redirectUri: string; parameters: Promise<URLSearchParams>; close(): Promise<void> }> {
+  let resolveParameters!: (parameters: URLSearchParams) => void;
+  let rejectParameters!: (error: unknown) => void;
+  const rawParameters = new Promise<URLSearchParams>((resolve, reject) => {
+    resolveParameters = resolve;
+    rejectParameters = reject;
   });
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
-    const error = url.searchParams.get("error");
-    const description = url.searchParams.get("error_description");
-    if (url.searchParams.get("state") !== expectedState) {
-      response.writeHead(400, { "content-type": "text/html; charset=utf-8" });
-      response.end(callbackHtml(host, imageSrc, "Invalid OAuth state"));
-      rejectCode(new AuthError("oauth", "OAuth callback state did not match"));
-      return;
-    }
-    if (error) {
-      response.writeHead(400, { "content-type": "text/html; charset=utf-8" });
-      response.end(callbackHtml(host, imageSrc, description ?? error));
-      rejectCode(new AuthError("oauth", description ?? error));
-      return;
-    }
-    const code = url.searchParams.get("code");
-    if (!code) {
-      response.writeHead(400, { "content-type": "text/html; charset=utf-8" });
-      response.end(callbackHtml(host, imageSrc, "OAuth callback did not include a code"));
-      rejectCode(new AuthError("oauth", "OAuth callback did not include a code"));
-      return;
-    }
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    response.end(callbackHtml(host, imageSrc));
-    resolveCode(code);
+    const error = url.searchParams.get("error_description") ?? url.searchParams.get("error");
+    response.writeHead(error ? 400 : 200, { "content-type": "text/html; charset=utf-8" });
+    response.end(callbackHtml(host, imageSrc, error ?? undefined));
+    resolveParameters(url.searchParams);
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
   });
   const address = server.address();
-  if (!address || typeof address === "string") throw new AuthError("oauth", "Could not bind OAuth callback server");
-  const timeout = setTimeout(() => rejectCode(new AuthError("oauth", "OAuth login timed out")), timeoutMs);
-  const code = rawCode.finally(() => clearTimeout(timeout));
+  if (!address || typeof address === "string")
+    throw new AuthError("oauth", "Could not bind OAuth callback server");
+  const timeout = setTimeout(
+    () => rejectParameters(new AuthError("oauth", "OAuth login timed out")),
+    timeoutMs,
+  );
+  const parameters = rawParameters.finally(() => clearTimeout(timeout));
   return {
     redirectUri: `http://127.0.0.1:${address.port}/callback`,
-    code,
-    close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
+    parameters,
+    close: () =>
+      new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      ),
   };
+}
+
+function tokenFromResponse(response: oauth.TokenEndpointResponse, previous?: Token): Token {
+  return {
+    accessToken: response.access_token,
+    tokenType: titleTokenType(response.token_type),
+    refreshToken: response.refresh_token ?? previous?.refreshToken,
+    ...(response.expires_in !== undefined
+      ? { expiry: new Date(Date.now() + response.expires_in * 1000).toISOString() }
+      : {}),
+    scopes: response.scope?.split(/\s+/).filter(Boolean) ?? previous?.scopes ?? [],
+  };
+}
+
+function titleTokenType(value: string): string {
+  return value.toLowerCase() === "bearer" ? "Bearer" : value;
 }
 
 function callbackHtml(host?: string, imageSrc?: string, error?: string): string {
@@ -284,18 +302,9 @@ function callbackHtml(host?: string, imageSrc?: string, error?: string): string 
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;" })[character]!);
-}
-
-function base64Url(value: Uint8Array): string {
-  return Buffer.from(value).toString("base64url");
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
-}
-
-function numberValue(value: unknown): number | undefined {
-  const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
-  return Number.isFinite(number) && number >= 0 ? number : undefined;
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;" })[character]!,
+  );
 }

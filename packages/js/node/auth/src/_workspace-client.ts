@@ -1,10 +1,10 @@
-import {
-  Config,
-  type CredentialProvider,
-  WorkspaceClient,
-} from "@databricks/sdk-experimental";
+import { Config, type CredentialProvider, WorkspaceClient } from "@databricks/sdk-experimental";
 
-import { createPersistentAuth, type DatabricksAuthDependencies, PersistentAuth } from "./databricks.ts";
+import {
+  createPersistentAuth,
+  type DatabricksAuthDependencies,
+  PersistentAuth,
+} from "./databricks.ts";
 import type { DatabricksAuthOptions } from "./types.ts";
 
 /** Create the Databricks SDK client while retaining dbx-tools token lifecycle policy. */

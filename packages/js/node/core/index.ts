@@ -22,5 +22,5 @@ export type { ConfigMapValue, ConfigData, ConfigSource, ConfigOptions, ConfigFil
 export type { DependencyResolverOptions, DependencyInfo, ResolvedNpmVersion, NpmSpecifierInput, ResolvedNpmDependencies, MissingDependencyInfo } from "./src/dependency-resolver.ts";
 export { COMMAND_NOT_FOUND_EXIT_CODE } from "./src/exec.ts";
 export type { ExecStdio, LineHandler, StdioOption, ExecResult, ChildProcessResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
-export type { FileLockBackend, FileLockAcquisition, FileLockOptions } from "./src/file-lock.ts";
+export type { FileLockBackend, FileLockAcquisition, FileLockOptions, FileLockLease } from "./src/file-lock.ts";
 export type { ProjectContext, NpmRegistryOptions } from "./src/project-utils.ts";

@@ -14,7 +14,13 @@ export class MemoryLockAdapter implements LockAdapter {
     });
     const tail = previous.then(() => current);
     this.#tails.set(key, tail);
-    await withTimeout(previous, timeoutMs, `Timed out waiting for lock ${key}`);
+    try {
+      await withTimeout(previous, timeoutMs, `Timed out waiting for lock ${key}`);
+    } catch (error) {
+      release();
+      if (this.#tails.get(key) === tail) this.#tails.delete(key);
+      throw error;
+    }
     const lease = `${++this.#sequence}:${key}`;
     this.#leases.set(lease, () => {
       release();
@@ -64,7 +70,8 @@ export class MemoryCredentialStore implements CredentialStore {
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) throw new TypeError("timeoutMs must be non-negative");
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0)
+    throw new TypeError("timeoutMs must be non-negative");
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([

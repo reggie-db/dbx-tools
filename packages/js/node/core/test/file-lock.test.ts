@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { withFileLock, type FileLockBackend } from "../src/file-lock.ts";
+import { acquireFileLock, withFileLock, type FileLockBackend } from "../src/file-lock.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -300,6 +300,25 @@ void (async () => {
 
       release();
       await first;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("acquireFileLock", () => {
+  it("returns an idempotent explicit lease", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dbx-file-lock-"));
+    try {
+      const first = await acquireFileLock("explicit", { dir, timeoutMs: 250 });
+      await assert.rejects(
+        acquireFileLock("explicit", { dir, timeoutMs: 50 }),
+        /Timed out waiting for file lock/,
+      );
+      await first.release();
+      await first.release();
+      const second = await acquireFileLock("explicit", { dir, timeoutMs: 250 });
+      await second.release();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
