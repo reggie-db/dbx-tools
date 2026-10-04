@@ -6,7 +6,6 @@ import { isAbsolute, resolve } from "node:path";
 import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
 
 import { authLogger } from "./_logging.ts";
-import { AuthError } from "./errors.ts";
 import {
   cleanList,
   type Environment,
@@ -23,6 +22,7 @@ import {
   resolveProfileName,
   SETTINGS_SECTION,
 } from "./_profile-core.ts";
+import { AuthError } from "./errors.ts";
 import {
   AUTH_TYPE_APP_OBO,
   AUTH_TYPE_APP_SP,
@@ -126,7 +126,9 @@ export function resolveDatabricksProfile(
   const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
   const explicitAuthType =
     nonempty(options.authType)?.toLowerCase() ??
-    (!inApp ? nonempty(environment.DATABRICKS_AUTH_TYPE)?.toLowerCase() : undefined);
+    (!inApp && !explicitProfile
+      ? nonempty(environment.DATABRICKS_AUTH_TYPE)?.toLowerCase()
+      : undefined);
   const appServicePrincipal = [
     environment.DATABRICKS_HOST,
     environment.DATABRICKS_CLIENT_ID,
@@ -143,7 +145,7 @@ export function resolveDatabricksProfile(
   const appAuth = [AUTH_TYPE_APP_OBO, "app-obo", AUTH_TYPE_APP_SP, "app-sp"].includes(
     selectedAuthType ?? "",
   );
-  const ignoreAmbientCredentials = inApp && explicitProfile && !appAuth;
+  const ignoreAmbientCredentials = explicitProfile && !appAuth;
   const configPath = resolveConfigFile(options.configFile, environment);
   const config = loadConfig(configPath);
   const requestedName = nonempty(options.profile) ?? environmentProfile;

@@ -157,9 +157,10 @@ class PersistentAuth implements AuthClient {
   }
 
   profile(name?: string) {
-    const profile = name
-      ? resolveDatabricksProfile({ ...this.options, profile: name }, this.environment)
-      : this.profileValue;
+    const profile =
+      !name || name === this.profileValue.name
+        ? this.profileValue
+        : resolveDatabricksProfile({ ...this.options, profile: name }, this.environment);
     return profileSummary(profile);
   }
 

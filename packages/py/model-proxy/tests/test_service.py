@@ -12,9 +12,22 @@ from dbx_tools.model_proxy import service
 class FakeRunner:
     def __init__(self) -> None:
         self.commands: list[list[str]] = []
+        self.launchd_labels: set[str] = set()
 
     def __call__(self, command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
         self.commands.append(command)
+        if command[:2] == ["launchctl", "bootstrap"]:
+            self.launchd_labels.add(Path(command[-1]).stem)
+        elif command[:2] == ["launchctl", "bootout"]:
+            self.launchd_labels.discard(command[-1].rsplit("/", 1)[-1])
+        elif command[:2] == ["launchctl", "print"]:
+            registered = command[-1].rsplit("/", 1)[-1] in self.launchd_labels
+            return subprocess.CompletedProcess(
+                command,
+                0 if registered else 1,
+                "state = running" if registered else "",
+                "",
+            )
         return subprocess.CompletedProcess(command, 0, "", "")
 
 
@@ -82,6 +95,10 @@ def test_launchd_install_writes_user_agents(tmp_path: Path, capsys: Any) -> None
         ["start", "--config-dir", str(config_dir)],
         dependencies(tmp_path, runner, "darwin"),
     )
+    service.main(
+        ["restart", "--config-dir", str(config_dir)],
+        dependencies(tmp_path, runner, "darwin"),
+    )
     assert ["launchctl", "bootstrap", "gui/501", str(plist)] in runner.commands
 
 
@@ -116,3 +133,4 @@ def test_concurrent_service_uses_independent_identity_and_port(
     assert unit.is_file()
     assert tray.is_file()
     assert "dbx-tools-model-proxy-python" in tray.read_text()
+    assert '"--concurrent"' in tray.read_text()

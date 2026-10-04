@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 
+import { PythonHeaders } from "./headers.ts";
 import { installPythonGlobals, pythonHost } from "./host.ts";
 
 installPythonGlobals();
@@ -43,39 +44,6 @@ globals.AbortController ??= class AbortController {
     this.#listeners.clear();
   }
 } as typeof AbortController;
-
-class PythonHeaders implements Iterable<[string, string]> {
-  readonly #values = new Map<string, string>();
-
-  constructor(init?: HeadersInit) {
-    if (!init) return;
-    if (Symbol.iterator in Object(init)) {
-      for (const [name, value] of init as Iterable<[string, string]>) this.set(name, value);
-      return;
-    }
-    for (const [name, value] of Object.entries(init)) this.set(name, String(value));
-  }
-
-  set(name: string, value: string): void {
-    this.#values.set(name.toLowerCase(), String(value));
-  }
-
-  get(name: string): string | null {
-    return this.#values.get(name.toLowerCase()) ?? null;
-  }
-
-  has(name: string): boolean {
-    return this.#values.has(name.toLowerCase());
-  }
-
-  entries(): MapIterator<[string, string]> {
-    return this.#values.entries();
-  }
-
-  [Symbol.iterator](): MapIterator<[string, string]> {
-    return this.entries();
-  }
-}
 
 globals.Headers ??= PythonHeaders as unknown as typeof Headers;
 

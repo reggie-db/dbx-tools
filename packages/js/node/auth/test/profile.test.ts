@@ -58,6 +58,25 @@ describe("Databricks profile resolution", () => {
     );
   });
 
+  it("isolates an explicit profile from ambient Databricks credentials", async () => {
+    await withConfig(
+      `[selected]\nhost = https://selected.cloud.databricks.com\nworkspace_id = selected-workspace\nauth_type = pat\ntoken = selected-token\n`,
+      (configFile) => {
+        const profile = resolveDatabricksProfile(DatabricksAuthOptions.create({ configFile }), {
+          DATABRICKS_CONFIG_PROFILE: "selected",
+          DATABRICKS_HOST: "https://ambient.cloud.databricks.com",
+          DATABRICKS_WORKSPACE_ID: "ambient-workspace",
+          DATABRICKS_AUTH_TYPE: "pat",
+          DATABRICKS_TOKEN: "ambient-token",
+        });
+        assert.equal(profile.host, "https://selected.cloud.databricks.com");
+        assert.equal(profile.workspaceId, "selected-workspace");
+        assert.equal(profile.accessToken, "selected-token");
+        assert.equal(profile.authKind, AuthKind.PersonalAccessToken);
+      },
+    );
+  });
+
   it("changes the PAT cache identity when the configured token changes", () => {
     const left = resolveDatabricksProfile(
       DatabricksAuthOptions.create({

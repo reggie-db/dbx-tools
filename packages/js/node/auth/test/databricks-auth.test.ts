@@ -29,12 +29,14 @@ describe("Databricks provider construction", () => {
     const environment = {
       DATABRICKS_AUTH_TYPE: process.env.DATABRICKS_AUTH_TYPE,
       DATABRICKS_CONFIG_FILE: process.env.DATABRICKS_CONFIG_FILE,
+      DATABRICKS_CONFIG_PROFILE: process.env.DATABRICKS_CONFIG_PROFILE,
       DATABRICKS_HOST: process.env.DATABRICKS_HOST,
       DATABRICKS_TOKEN: process.env.DATABRICKS_TOKEN,
       DATABRICKS_WORKSPACE_ID: process.env.DATABRICKS_WORKSPACE_ID,
     };
     process.env.DATABRICKS_AUTH_TYPE = "pat";
     process.env.DATABRICKS_CONFIG_FILE = "/tmp/dbx-tools-auth-ambient-test-missing";
+    delete process.env.DATABRICKS_CONFIG_PROFILE;
     process.env.DATABRICKS_HOST = "https://example.cloud.databricks.com";
     process.env.DATABRICKS_TOKEN = "ambient-token";
     delete process.env.DATABRICKS_WORKSPACE_ID;

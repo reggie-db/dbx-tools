@@ -20124,8 +20124,75 @@ __export(exports_dbx_tools_python_entry, {
 module.exports = __toCommonJS(exports_dbx_tools_python_entry);
 
 // projen/shims/python-node/bootstrap.ts
-init_host();
 var import_node_buffer = __toESM(require_buffer(), 1);
+
+// projen/shims/python-node/headers.ts
+class PythonHeaders {
+  #values = new Map;
+  constructor(init) {
+    if (!init)
+      return;
+    if (Symbol.iterator in Object(init)) {
+      for (const [name, value] of init)
+        this.append(name, value);
+      return;
+    }
+    for (const [name, value] of Object.entries(init))
+      this.set(name, String(value));
+  }
+  append(name, value) {
+    const key = normalizeName(name);
+    const values = this.#values.get(key) ?? [];
+    values.push(String(value));
+    this.#values.set(key, values);
+  }
+  delete(name) {
+    this.#values.delete(normalizeName(name));
+  }
+  entries() {
+    return this.#iterateEntries();
+  }
+  forEach(callback, thisArg) {
+    for (const [key, value] of this)
+      callback.call(thisArg, value, key, this);
+  }
+  get(name) {
+    const values = this.#values.get(normalizeName(name));
+    return values ? values.join(", ") : null;
+  }
+  getSetCookie() {
+    return [...this.#values.get("set-cookie") ?? []];
+  }
+  has(name) {
+    return this.#values.has(normalizeName(name));
+  }
+  keys() {
+    return this.#values.keys();
+  }
+  set(name, value) {
+    this.#values.set(normalizeName(name), [String(value)]);
+  }
+  values() {
+    return this.#iterateValues();
+  }
+  [Symbol.iterator]() {
+    return this.entries();
+  }
+  *#iterateEntries() {
+    for (const [name, values] of this.#values)
+      yield [name, values.join(", ")];
+  }
+  *#iterateValues() {
+    for (const [, value] of this)
+      yield value;
+  }
+}
+function normalizeName(name) {
+  return String(name).toLowerCase();
+}
+
+// projen/shims/python-node/bootstrap.ts
+init_host();
 installPythonGlobals();
 globalThis.Buffer = import_node_buffer.Buffer;
 var globals = globalThis;
@@ -20152,36 +20219,6 @@ globals.AbortController ??= class AbortController2 {
     this.#listeners.clear();
   }
 };
-
-class PythonHeaders {
-  #values = new Map;
-  constructor(init) {
-    if (!init)
-      return;
-    if (Symbol.iterator in Object(init)) {
-      for (const [name, value] of init)
-        this.set(name, value);
-      return;
-    }
-    for (const [name, value] of Object.entries(init))
-      this.set(name, String(value));
-  }
-  set(name, value) {
-    this.#values.set(name.toLowerCase(), String(value));
-  }
-  get(name) {
-    return this.#values.get(name.toLowerCase()) ?? null;
-  }
-  has(name) {
-    return this.#values.has(name.toLowerCase());
-  }
-  entries() {
-    return this.#values.entries();
-  }
-  [Symbol.iterator]() {
-    return this.entries();
-  }
-}
 globals.Headers ??= PythonHeaders;
 
 class PythonResponse {
@@ -26368,7 +26405,7 @@ function resolveDatabricksProfile(options, environment = process.env) {
   const environmentProfile = nonempty(environment.DATABRICKS_CONFIG_PROFILE);
   const explicitProfile = Boolean(nonempty(options.profile) ?? environmentProfile);
   const requestToken = requestOboToken(options.requestHeaders, options.accessTokenHeader);
-  const explicitAuthType = nonempty(options.authType)?.toLowerCase() ?? (!inApp ? nonempty(environment.DATABRICKS_AUTH_TYPE)?.toLowerCase() : undefined);
+  const explicitAuthType = nonempty(options.authType)?.toLowerCase() ?? (!inApp && !explicitProfile ? nonempty(environment.DATABRICKS_AUTH_TYPE)?.toLowerCase() : undefined);
   const appServicePrincipal = [
     environment.DATABRICKS_HOST,
     environment.DATABRICKS_CLIENT_ID,
@@ -26376,7 +26413,7 @@ function resolveDatabricksProfile(options, environment = process.env) {
   ].every(nonempty);
   const selectedAuthType = !inApp || explicitProfile || explicitAuthType ? explicitAuthType : requestToken ? AUTH_TYPE_APP_OBO : appServicePrincipal ? AUTH_TYPE_APP_SP : undefined;
   const appAuth = [AUTH_TYPE_APP_OBO, "app-obo", AUTH_TYPE_APP_SP, "app-sp"].includes(selectedAuthType ?? "");
-  const ignoreAmbientCredentials = inApp && explicitProfile && !appAuth;
+  const ignoreAmbientCredentials = explicitProfile && !appAuth;
   const configPath = resolveConfigFile(options.configFile, environment);
   const config = loadConfig(configPath);
   const requestedName = nonempty(options.profile) ?? environmentProfile;
@@ -27785,7 +27822,7 @@ class PersistentAuth {
     return this.profileValue.authKind;
   }
   profile(name) {
-    const profile = name ? resolveDatabricksProfile({ ...this.options, profile: name }, this.environment) : this.profileValue;
+    const profile = !name || name === this.profileValue.name ? this.profileValue : resolveDatabricksProfile({ ...this.options, profile: name }, this.environment);
     return profileSummary(profile);
   }
   listProfiles(refresh = false) {

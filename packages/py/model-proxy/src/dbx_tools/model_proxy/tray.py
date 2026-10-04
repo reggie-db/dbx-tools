@@ -7,6 +7,8 @@ import json
 import subprocess
 import sys
 import threading
+import time
+import urllib.error
 import urllib.request
 import webbrowser
 from collections.abc import Mapping, Sequence
@@ -66,6 +68,7 @@ def main(arguments: Sequence[str] | None = None) -> None:
     parser.add_argument("--config-dir", default=str(Path.home() / ".dbx-tools/model-proxy"))
     parser.add_argument("--name", default="dbx-tools-model-proxy")
     parser.add_argument("--title", default="dbx-tools model proxy")
+    parser.add_argument("--concurrent", action="store_true")
     parser.add_argument("--probe", action="store_true")
     options = parser.parse_args(arguments)
     run_tray(
@@ -73,6 +76,7 @@ def main(arguments: Sequence[str] | None = None) -> None:
         Path(options.config_dir),
         options.name,
         options.title,
+        concurrent=options.concurrent,
         probe=options.probe,
     )
 
@@ -83,6 +87,7 @@ def run_tray(
     name: str,
     title: str,
     *,
+    concurrent: bool = False,
     probe: bool = False,
 ) -> None:
     import pystray
@@ -92,7 +97,7 @@ def run_tray(
     current = {"profile": "Loading"}
     profile_names: list[str] = []
     if not probe:
-        status = api.status()
+        status = _wait_for_status(api)
         runtime = status.get("runtime")
         if isinstance(runtime, Mapping) and isinstance(runtime.get("profile"), str):
             current["profile"] = runtime["profile"]
@@ -122,6 +127,7 @@ def run_tray(
                 "stop",
                 "--config-dir",
                 str(config_dir),
+                *(["--concurrent"] if concurrent else []),
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -132,8 +138,8 @@ def run_tray(
         *[
             pystray.MenuItem(
                 profile,
-                lambda _icon, _item, selected=profile: select(selected),
-                checked=lambda item, selected=profile: current["profile"] == selected,
+                _profile_action(select, profile),
+                checked=_profile_checked(current, profile),
                 radio=True,
             )
             for profile in profile_names
@@ -161,3 +167,37 @@ def run_tray(
     if probe:
         return
     icon.run()
+
+
+def _profile_action(select: Any, profile: str) -> Any:
+    def action(_icon: Any, _item: Any) -> None:
+        select(profile)
+
+    return action
+
+
+def _profile_checked(current: Mapping[str, str], profile: str) -> Any:
+    def checked(_item: Any) -> bool:
+        return current.get("profile") == profile
+
+    return checked
+
+
+def _wait_for_status(
+    api: ProxyApi,
+    *,
+    attempts: int = 120,
+    sleep: Any = time.sleep,
+) -> dict[str, Any]:
+    for attempt in range(attempts):
+        try:
+            return api.status()
+        except (OSError, urllib.error.URLError):
+            if attempt + 1 == attempts:
+                raise
+            sleep(0.25)
+    raise RuntimeError("model proxy status retry loop did not run")
+
+
+if __name__ == "__main__":
+    main()

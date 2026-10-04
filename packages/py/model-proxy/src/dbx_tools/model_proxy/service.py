@@ -115,6 +115,10 @@ class ServiceBackend:
     def stop(self, settings: ServiceSettings) -> None:
         raise NotImplementedError
 
+    def restart(self, settings: ServiceSettings) -> None:
+        self.stop(settings)
+        self.start(settings)
+
     def uninstall(self, settings: ServiceSettings | None) -> None:
         raise NotImplementedError
 
@@ -157,6 +161,7 @@ class LaunchdBackend(ServiceBackend):
 
     def install(self, settings: ServiceSettings) -> None:
         self.uninstall(settings)
+        self._wait_unregistered()
         _write_plist(
             self.service_plist,
             self.paths.identity.label,
@@ -165,7 +170,7 @@ class LaunchdBackend(ServiceBackend):
             settings.path,
             keep_alive=True,
         )
-        self._run(["launchctl", "bootstrap", self.domain, str(self.service_plist)])
+        self._bootstrap(self.service_plist)
         if settings.systray:
             _write_plist(
                 self.tray_plist,
@@ -175,11 +180,11 @@ class LaunchdBackend(ServiceBackend):
                 settings.path,
                 keep_alive=False,
             )
-            self._run(["launchctl", "bootstrap", self.domain, str(self.tray_plist)])
+            self._bootstrap(self.tray_plist)
 
     def start(self, settings: ServiceSettings) -> None:
         if not self.registered():
-            self._run(["launchctl", "bootstrap", self.domain, str(self.service_plist)])
+            self._bootstrap(self.service_plist)
         else:
             self._run(
                 ["launchctl", "kickstart", "-k", f"{self.domain}/{self.paths.identity.label}"]
@@ -203,10 +208,14 @@ class LaunchdBackend(ServiceBackend):
                     check=False,
                 )
             elif self.tray_plist.is_file():
-                self._run(
-                    ["launchctl", "bootstrap", self.domain, str(self.tray_plist)],
-                    check=False,
-                )
+                self._bootstrap(self.tray_plist, check=False)
+
+    def restart(self, settings: ServiceSettings) -> None:
+        self.stop(settings)
+        self._wait_unregistered()
+        self._bootstrap(self.service_plist)
+        if settings.systray and self.tray_plist.is_file():
+            self._bootstrap(self.tray_plist, check=False)
 
     def stop(self, settings: ServiceSettings) -> None:
         if settings.systray:
@@ -242,6 +251,30 @@ class LaunchdBackend(ServiceBackend):
             check=False,
         )
         return result.returncode == 0 and "state = running" in result.stdout
+
+    def _bootstrap(self, path: Path, *, check: bool = True) -> None:
+        command = ["launchctl", "bootstrap", self.domain, str(path)]
+        for _ in range(20):
+            result = self._run(command, check=False)
+            if result.returncode == 0:
+                return
+            if result.returncode not in {5, 37}:
+                break
+            self.dependencies.sleep(0.1)
+        if check:
+            raise subprocess.CalledProcessError(
+                result.returncode,
+                command,
+                output=result.stdout,
+                stderr=result.stderr,
+            )
+
+    def _wait_unregistered(self) -> None:
+        for _ in range(50):
+            if not self.registered():
+                return
+            self.dependencies.sleep(0.1)
+        raise RuntimeError(f"launchd service did not unregister: {self.paths.identity.label}")
 
 
 class SystemdBackend(ServiceBackend):
@@ -427,8 +460,7 @@ def main(
     elif options.command == "stop":
         backend.stop(settings)
     elif options.command == "restart":
-        backend.stop(settings)
-        backend.start(settings)
+        backend.restart(settings)
         _wait_healthy(settings.url, deps)
     elif options.command == "status":
         _write_status(backend, settings, deps)
@@ -520,6 +552,7 @@ def _tray_command(settings: ServiceSettings, paths: ServicePaths) -> list[str]:
         paths.identity.name,
         "--title",
         "dbx-tools model proxy Python A/B" if settings.concurrent else "dbx-tools model proxy",
+        *(["--concurrent"] if settings.concurrent else []),
     ]
 
 

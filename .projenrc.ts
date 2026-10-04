@@ -1565,6 +1565,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
     internalDependencies: ["models"],
     dependencies: [
       "fastapi>=0.116,<1",
+      "hypercorn>=0.17,<1",
       "litellm[proxy]==1.99.0",
       "pillow>=11,<13",
       "pystray==0.19.5",

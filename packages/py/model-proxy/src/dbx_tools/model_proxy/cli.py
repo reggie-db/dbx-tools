@@ -50,8 +50,15 @@ def main(arguments: Sequence[str] | None = None) -> None:
     install_models_api()
     config = files("dbx_tools.model_proxy").joinpath("config.yaml")
     host = [] if "--host" in forwarded else ["--host", "127.0.0.1"]
+    server = (
+        []
+        if any(
+            option in forwarded for option in ("--run_gunicorn", "--run_hypercorn", "--run_granian")
+        )
+        else ["--run_hypercorn"]
+    )
     run_server.main(
-        args=["--config", str(config), *host, *forwarded],
+        args=["--config", str(config), *server, *host, *forwarded],
         prog_name="dbx-model-proxy",
     )
 

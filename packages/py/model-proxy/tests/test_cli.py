@@ -23,6 +23,7 @@ def test_cli_sets_profile_and_forwards_litellm_arguments(
 
     assert calls[0][:2] == ["dbx-model-proxy", "--config"]
     assert calls[0][3:] == [
+        "--run_hypercorn",
         "--host",
         "127.0.0.1",
         "--port",
@@ -44,3 +45,18 @@ def test_cli_concurrent_mode_defaults_to_port_4001(monkeypatch: pytest.MonkeyPat
     cli.main(["--concurrent"])
 
     assert calls[0][-4:] == ["--host", "127.0.0.1", "--port", "4001"]
+
+
+def test_cli_preserves_explicit_server_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+    proxy_cli = ModuleType("litellm.proxy.proxy_cli")
+    proxy_cli.run_server = SimpleNamespace(
+        main=lambda *, args, prog_name: calls.append([prog_name, *args])
+    )
+    monkeypatch.setitem(sys.modules, "litellm.proxy.proxy_cli", proxy_cli)
+    monkeypatch.setattr(models_api, "install_models_api", lambda: None)
+
+    cli.main(["--run_granian"])
+
+    assert calls[0].count("--run_hypercorn") == 0
+    assert calls[0].count("--run_granian") == 1
