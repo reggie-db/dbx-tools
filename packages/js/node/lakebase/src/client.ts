@@ -1,8 +1,10 @@
 /** Cached Databricks Lakebase discovery and database credentials. */
 
 import {
+  type AuthClient,
   DatabricksAuthOptions,
   DatabricksClient,
+  type DatabricksRequestOptions,
 } from "@dbx-tools/auth";
 import { log } from "@dbx-tools/shared-core";
 
@@ -29,11 +31,29 @@ interface Timed<T> {
   expiresAt: number;
 }
 
+export interface LakebaseApiClient {
+  auth: Pick<AuthClient, "listProfiles">;
+  request(path: string, options?: DatabricksRequestOptions): Promise<unknown>;
+}
+
+export interface LakebaseClientDependencies {
+  createClient(options: DatabricksAuthOptions): Promise<LakebaseApiClient>;
+  isDatabricksApp(): boolean;
+}
+
+const DEFAULT_DEPENDENCIES: LakebaseClientDependencies = {
+  createClient: (options) => DatabricksClient.create(options),
+  isDatabricksApp,
+};
+
 export class LakebaseClient {
-  private readonly sessions = new Map<string, Timed<DatabricksClient>>();
+  private readonly sessions = new Map<string, Timed<LakebaseApiClient>>();
   private readonly resolved = new Map<string, Timed<ResolvedLakebase>>();
 
-  constructor(private readonly authOptions = DatabricksAuthOptions.create()) {}
+  constructor(
+    private readonly authOptions = DatabricksAuthOptions.create(),
+    private readonly dependencies = DEFAULT_DEPENDENCIES,
+  ) {}
 
   async resolve(target: ParsedAddress, startupUser?: string): Promise<ResolvedLakebase> {
     const profile = await this.resolveProfile(startupUser);
@@ -48,7 +68,9 @@ export class LakebaseClient {
   async generateDatabaseCredential(endpoint: string, startupUser?: string): Promise<string> {
     const profile = await this.resolveProfile(startupUser);
     const response = record(
-      await (await this.session(profile)).request(`${API_BASE}/credentials`, {
+      await (
+        await this.session(profile)
+      ).request(`${API_BASE}/credentials`, {
         body: { endpoint },
       }),
     );
@@ -57,11 +79,11 @@ export class LakebaseClient {
     return token;
   }
 
-  private async session(profile?: string): Promise<DatabricksClient> {
+  private async session(profile?: string): Promise<LakebaseApiClient> {
     const key = profile ?? "<default>";
     const cached = current(this.sessions.get(key));
     if (cached) return cached;
-    const value = await DatabricksClient.create({ ...this.authOptions, profile });
+    const value = await this.dependencies.createClient({ ...this.authOptions, profile });
     this.sessions.set(key, timed(value, SESSION_TTL_MS));
     return value;
   }
@@ -69,7 +91,7 @@ export class LakebaseClient {
   private async resolveProfile(startupUser?: string): Promise<string | undefined> {
     if (this.authOptions.profile) return this.authOptions.profile;
     const candidate = startupUser?.trim();
-    if (!candidate || isDatabricksApp()) return undefined;
+    if (!candidate || this.dependencies.isDatabricksApp()) return undefined;
     const client = await this.session();
     const exists = client.auth.listProfiles().some((profile) => profile.name === candidate);
     logger.debug("resolved Lakebase startup profile", { startupUser: candidate, exists });
@@ -77,7 +99,7 @@ export class LakebaseClient {
   }
 
   private async discover(
-    client: DatabricksClient,
+    client: LakebaseApiClient,
     target: ParsedAddress,
   ): Promise<ResolvedLakebase> {
     let project = target.project;
@@ -125,7 +147,7 @@ export class LakebaseClient {
   }
 
   private async findEndpointByHost(
-    client: DatabricksClient,
+    client: LakebaseApiClient,
     host: string,
   ): Promise<{ project: string; branch: string; endpointId: string } | undefined> {
     for (const project of await this.list(client, `${API_BASE}/projects`, "projects")) {
@@ -140,9 +162,8 @@ export class LakebaseClient {
           `${projectPath}/branches/${branchId}/endpoints`,
           "endpoints",
         )) {
-          const candidate = text(at(endpoint, "status", "hosts", "host"));
           const endpointId = resourceId(endpoint, "endpoints");
-          if (candidate === host && endpointId) {
+          if (endpointHosts(endpoint).includes(host) && endpointId) {
             return { project: projectId, branch: branchId, endpointId };
           }
         }
@@ -151,7 +172,7 @@ export class LakebaseClient {
     return undefined;
   }
 
-  private async list(client: DatabricksClient, path: string, field: string): Promise<object[]> {
+  private async list(client: LakebaseApiClient, path: string, field: string): Promise<object[]> {
     const values: object[] = [];
     let pageToken: string | undefined;
     do {
@@ -166,7 +187,10 @@ export class LakebaseClient {
 }
 
 function selectProject(projects: object[]): string {
-  const usable = projects.map((value) => resourceId(value, "projects")).filter(isString);
+  const usable = projects
+    .filter((value) => !isInactive(value))
+    .map((value) => resourceId(value, "projects"))
+    .filter(isString);
   if (usable.length === 1) return usable[0]!;
   throw new Error(
     usable.length === 0
@@ -176,26 +200,40 @@ function selectProject(projects: object[]): string {
 }
 
 function selectBranch(project: object, branches: object[], explicit?: string): string {
-  if (explicit) return explicit;
+  const usable = branches.filter((value) => !isInactive(value));
+  if (explicit) {
+    const match = usable.find((value) => resourceId(value, "branches") === explicit);
+    if (!match) throw new Error(`Lakebase branch is unavailable: ${explicit}`);
+    return explicit;
+  }
   const defaultBranch = text(at(project, "status", "default_branch"));
-  if (defaultBranch) return defaultBranch;
-  const flagged = branches.find((value) => at(value, "status", "default") === true);
-  const candidates = branches.map((value) => resourceId(value, "branches")).filter(isString);
-  const selected = resourceId(flagged, "branches") ?? (candidates.length === 1 ? candidates[0] : undefined);
+  const flagged = usable.find((value) => at(value, "status", "default") === true);
+  const candidates = usable.map((value) => resourceId(value, "branches")).filter(isString);
+  const selected =
+    candidates.length === 1
+      ? candidates[0]
+      : (candidates.find((candidate) => candidate === resourcePathId(defaultBranch, "branches")) ??
+        resourceId(flagged, "branches"));
   if (!selected) throw new Error(`Lakebase branch is ambiguous: ${candidates.join(", ")}`);
   return selected;
 }
 
 function selectEndpoint(endpoints: object[], explicit?: string, host?: string): object {
-  const usable = endpoints.filter((value) => !isInactive(value));
+  const usable = endpoints.filter((value) => {
+    const type = text(at(value, "status", "endpoint_type"))?.toUpperCase();
+    return (
+      !isInactive(value) &&
+      at(value, "status", "disabled") !== true &&
+      (type === "READ_WRITE" || type === "ENDPOINT_TYPE_READ_WRITE")
+    );
+  });
   const selected = explicit
     ? usable.find((value) => resourceId(value, "endpoints") === explicit)
     : host
-      ? usable.find((value) => text(at(value, "status", "hosts", "host")) === host)
-      : usable.find((value) => {
-          const type = text(at(value, "status", "endpoint_type"));
-          return type === "READ_WRITE" || type === "ENDPOINT_TYPE_READ_WRITE";
-        }) ?? (usable.length === 1 ? usable[0] : undefined);
+      ? usable.find((value) => endpointHosts(value).includes(host))
+      : usable.length === 1
+        ? usable[0]
+        : undefined;
   if (!selected) throw new Error("Lakebase read-write endpoint is ambiguous or unavailable");
   return selected;
 }
@@ -210,15 +248,17 @@ function selectDatabase(databases: object[], explicit?: string): string {
     .filter((value): value is { id: string | undefined; name: string } => Boolean(value.name));
   const selected = explicit
     ? candidates.find((value) => value.id === explicit || value.name === explicit)?.name
-    : candidates.find((value) => value.name === DEFAULT_DATABASE)?.name ??
-      (candidates.length === 1 ? candidates[0]?.name : undefined);
+    : (candidates.find((value) => value.name === DEFAULT_DATABASE)?.name ??
+      (candidates.length === 1 ? candidates[0]?.name : undefined));
   if (!selected) throw new Error("Lakebase database is ambiguous or unavailable");
   return selected;
 }
 
 function isInactive(value: object): boolean {
   const state = text(at(value, "status", "current_state"))?.toUpperCase();
-  return state === "ARCHIVED" || state === "DELETING" || state === "DELETED" || state === "DISABLED";
+  return (
+    state === "ARCHIVED" || state === "DELETING" || state === "DELETED" || state === "DISABLED"
+  );
 }
 
 function resourceId(value: object | undefined, kind: string): string | undefined {
@@ -227,6 +267,19 @@ function resourceId(value: object | undefined, kind: string): string | undefined
   const parts = name.split("/");
   const index = parts.lastIndexOf(kind);
   return index >= 0 ? parts[index + 1] : undefined;
+}
+
+function resourcePathId(value: string | undefined, kind: string): string | undefined {
+  if (!value) return undefined;
+  const parts = value.split("/");
+  const index = parts.lastIndexOf(kind);
+  return index >= 0 ? parts[index + 1] : value;
+}
+
+function endpointHosts(value: object): string[] {
+  return ["host", "read_write_pooled_host", "read_only_host"]
+    .map((name) => text(at(value, "status", "hosts", name)))
+    .filter(isString);
 }
 
 function isDatabricksApp(): boolean {

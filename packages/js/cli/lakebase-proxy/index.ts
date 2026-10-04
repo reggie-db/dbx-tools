@@ -4,10 +4,13 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-lakebase-proxy";
 export const PACKAGE_VERSION = "0.9.21";
+export * as cancellation from "./src/cancellation.ts";
 export * as cli from "./src/cli.ts";
 export * as protocol from "./src/protocol.ts";
 export * as proxy from "./src/proxy.ts";
-export { SSL_REQUEST, CANCEL_REQUEST, PROTOCOL_3 } from "./src/protocol.ts";
-export type { StartupMessage } from "./src/protocol.ts";
+export { CancellationRegistry } from "./src/cancellation.ts";
+export type { CancellationTarget, CancellationForwarder } from "./src/cancellation.ts";
+export { SSL_REQUEST, CANCEL_REQUEST, PROTOCOL_3, PostgresProtocolError } from "./src/protocol.ts";
+export type { StartupMessage, CancelMessage, InitialMessage } from "./src/protocol.ts";
 export { LakebaseProxy } from "./src/proxy.ts";
 export type { LakebaseProxyOptions } from "./src/proxy.ts";

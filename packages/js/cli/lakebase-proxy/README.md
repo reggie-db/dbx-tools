@@ -15,6 +15,7 @@ Local clients use `sslmode=disable`; upstream Lakebase connections always use
 verified TLS. The startup `user` is treated as a Databricks profile only when it
 matches a configured profile.
 
-The initial Node implementation supports normal PostgreSQL sessions, including
-the authentication modes supported by `pg`. PostgreSQL `CancelRequest`
-forwarding remains explicit follow-up work before the Rust proxy can be deleted.
+The proxy preserves startup parameters other than the resolved `user` and
+`database`, supports the authentication modes implemented by `pg`, and maps
+synthetic local cancellation keys onto verified-TLS upstream `CancelRequest`
+connections.
