@@ -195,6 +195,19 @@ def _install_runtime() -> None:
           globalThis.self = globalThis;
           globalThis.window = globalThis;
           globalThis.__dbxToolsPython = host;
+          globalThis.TextEncoder = globalThis.TextEncoder || class TextEncoder {
+            encode(value) {
+              const encoded = unescape(encodeURIComponent(String(value)));
+              return Uint8Array.from(encoded, character => character.charCodeAt(0));
+            }
+          };
+          globalThis.TextDecoder = globalThis.TextDecoder || class TextDecoder {
+            decode(value) {
+              const bytes = value instanceof Uint8Array ? value : new Uint8Array(value || 0);
+              const encoded = Array.from(bytes, byte => String.fromCharCode(byte)).join("");
+              return decodeURIComponent(escape(encoded));
+            }
+          };
           globalThis.Buffer = globalThis.Buffer || {
             byteLength: value => new TextEncoder().encode(String(value)).byteLength,
             from: value => value instanceof ArrayBuffer
