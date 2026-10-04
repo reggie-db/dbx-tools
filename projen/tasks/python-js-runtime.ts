@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
@@ -8,15 +8,21 @@ import { header, makeReadonly, makeWritable } from "../src/generated.ts";
 const { values } = parseArgs({
   options: {
     check: { type: "boolean" },
+    entry: { type: "string" },
+    output: { type: "string" },
     root: { type: "string" },
+    source: { type: "string" },
   },
 });
+if (!values.entry || !values.output || !values.source) {
+  throw new Error("Expected --entry, --output, and --source");
+}
 
 const root = values.root
   ? resolve(values.root)
   : resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const entrypoint = join(root, "packages/js/node/auth/src/_python-bridge.ts");
-const output = join(root, "packages/py/auth/src/dbx_tools/auth/_runtime.js");
+const entrypoint = resolve(root, values.entry);
+const output = resolve(root, values.output);
 const bun = (
   globalThis as typeof globalThis & {
     Bun?: {
@@ -33,7 +39,7 @@ const bun = (
     };
   }
 ).Bun;
-if (!bun) throw new Error("python-auth-bridge must run with Bun");
+if (!bun) throw new Error("python-js-runtime must run with Bun");
 
 const result = await bun.build({
   entrypoints: [entrypoint],
@@ -41,27 +47,24 @@ const result = await bun.build({
   target: "browser",
   write: false,
 });
-
 if (!result.success) {
   for (const message of result.logs) console.error(message);
-  throw new Error("Could not bundle the Python authentication runtime");
+  throw new Error(`Could not bundle ${values.source}`);
 }
 if (result.outputs.length !== 1) {
-  throw new Error(`Expected one Python authentication bundle, received ${result.outputs.length}`);
+  throw new Error(`Expected one JavaScript bundle, received ${result.outputs.length}`);
 }
 
 const body = await result.outputs[0].text();
 const generated = `${header({
-  tool: "projen/tasks/python-auth-bridge.ts",
-  source: "@dbx-tools/auth for PythonMonkey",
+  tool: "projen/tasks/python-js-runtime.ts",
+  source: values.source,
 })}\n${body}`;
 const destination = relative(root, output);
 
 if (values.check) {
   if (!existsSync(output) || readFileSync(output, "utf8") !== generated) {
-    throw new Error(
-      `Generated Python authentication runtime is stale: ${destination}. Run bun run auth:python-bridge.`,
-    );
+    throw new Error(`Generated JavaScript runtime is stale: ${destination}`);
   }
   console.log(`verified ${destination}`);
 } else {

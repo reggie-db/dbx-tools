@@ -10,11 +10,12 @@ Python supplies host capabilities through small protocols:
 
 - `TokenProvider` acquires, refreshes, and interactively logs in credentials.
 - `CredentialStore` persists tokens and returns explicit lock leases.
-- `MemoryCredentialStore` uses `asyncio` locks.
-- `FileCredentialStore` uses the maintained `filelock` package and preserves
-  unrelated entries in `token-cache.json`.
-- `open_browser()` uses Python's `webbrowser` library for future native OAuth
-  provider adapters.
+- `MemoryCredentialStore` and `FileCredentialStore` use the reusable lease and
+  file adapters from `dbx-tools-js-runtime`.
+- `DatabricksCliProvider` uses the installed Databricks CLI through
+  `dbx-tools-core` subprocess resolution.
+- `create_databricks_cli_auth()` applies the same JavaScript profile-selection
+  rules, including implicit preference for one matching CLI profile.
 
 ## Example
 
@@ -23,6 +24,15 @@ from dbx_tools.auth import AuthClient, MemoryCredentialStore
 
 auth = AuthClient("profile", provider, MemoryCredentialStore())
 token = await auth.token()
+```
+
+For Databricks CLI-backed authentication:
+
+```python
+from dbx_tools.auth import create_databricks_cli_auth
+
+auth = await create_databricks_cli_auth(profile="DEFAULT")
+headers = await auth.headers()
 ```
 
 Provider and storage methods may be native Python coroutines. PythonMonkey
@@ -42,6 +52,7 @@ lifecycle change cannot publish a stale embedded runtime.
 ## Modules
 
 - `client` loads the bundled runtime and exposes the async `AuthClient` facade.
+- `databricks_auth` resolves CLI profiles and exposes complete request headers.
+- `databricks_cli` provides CLI token, login, and force-refresh acquisition.
 - `types` defines the provider, storage, token, and lifecycle contracts.
 - `storage` provides memory and file-backed adapters.
-- `browser` opens authorization URLs through the Python standard library.

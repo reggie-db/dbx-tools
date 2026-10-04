@@ -1489,10 +1489,17 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
 const pythonPackages: project.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
+    directory: "js-runtime",
+    description:
+      "Reusable PythonMonkey runtime loading and library-backed host shims for dbx-tools Python packages",
+    dependencies: ["filelock>=3.16,<4", "pythonmonkey>=1.3,<2"],
+  },
+  {
     directory: "auth",
     description:
       "PythonMonkey bridge to the shared dbx-tools authentication lifecycle",
-    dependencies: ["filelock>=3.16,<4", "pythonmonkey>=1.3,<2"],
+    internalDependencies: ["core", "js-runtime"],
+    dependencies: [],
   },
   {
     directory: "core",
@@ -1549,11 +1556,22 @@ new project.DBXToolsPythonWorkspace(root, {
 });
 root.addTask("auth:python-bridge", {
   description: "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
-  exec: "bun projen/tasks/python-auth-bridge.ts",
+  exec: [
+    "bun projen/tasks/python-js-runtime.ts",
+    "--entry packages/js/node/auth/src/_python-bridge.ts",
+    "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
+    "--source '@dbx-tools/auth for PythonMonkey'",
+  ].join(" "),
 });
 const authPythonBridgeCheck = root.addTask("auth:python-bridge:check", {
   description: "Verify the committed PythonMonkey authentication bundle is current",
-  exec: "bun projen/tasks/python-auth-bridge.ts --check",
+  exec: [
+    "bun projen/tasks/python-js-runtime.ts",
+    "--entry packages/js/node/auth/src/_python-bridge.ts",
+    "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
+    "--source '@dbx-tools/auth for PythonMonkey'",
+    "--check",
+  ].join(" "),
 });
 root.testTask.spawn(authPythonBridgeCheck);
 root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {

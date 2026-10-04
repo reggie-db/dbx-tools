@@ -39,6 +39,9 @@ workspace = true
 [tool.uv.sources.dbx-tools-google-rs]
 workspace = true
 
+[tool.uv.sources.dbx-tools-js-runtime]
+workspace = true
+
 [tool.uv.sources.dbx-tools-auth]
 workspace = true
 

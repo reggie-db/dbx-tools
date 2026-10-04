@@ -154,15 +154,23 @@ Primary package areas:
   contracts remain callback-free and use explicit lease IDs.
   `@dbx-tools/core` owns the Node file-lock implementation and must not depend
   on Rust only for Databricks App detection.
+- `packages/py/js-runtime` owns reusable Python host adapters for packages that
+  execute committed TypeScript bundles through PythonMonkey. It provides the
+  runtime loader, `filelock`-backed lease locks, in-process async lease locks,
+  non-blocking JSON/text file access, atomic writes, and `webbrowser` launch.
+  Add generic host behavior there instead of copying it into each Python
+  capability package. Generate bundles with
+  `projen/tasks/python-js-runtime.ts`; package tasks must check committed output
+  before tests and release.
 - `packages/py/auth` executes the provider-neutral `@dbx-tools/auth` lifecycle
-  through a committed PythonMonkey bundle. Keep token refresh,
-  check-lock-recheck coordination, login policy, and rejected-token handling in
-  the JavaScript source of truth. Python supplies host capabilities through
-  narrow protocols and maintained libraries: `filelock` for cross-process
-  locks, `asyncio` for in-process coordination and subprocesses, and
-  `webbrowser` for browser launch. Regenerate the bundle through
-  `bun run auth:python-bridge`; tests and release validation must reject stale
-  generated output.
+  through a committed PythonMonkey bundle and depends on `dbx-tools-js-runtime`
+  for host adapters. Keep token refresh, check-lock-recheck coordination, login
+  policy, rejected-token handling, and profile-selection rules in the
+  JavaScript source of truth. Its Python Databricks CLI provider uses
+  `dbx-tools-core` executable resolution and returns complete request headers,
+  including `X-Databricks-Workspace-Id` when configured. Regenerate the bundle
+  through `bun run auth:python-bridge`; tests and release validation must reject
+  stale generated output.
 - `packages/rs/core` retains the Rust authentication implementation for native
   binaries while Node consumers move to `@dbx-tools/auth`. It also owns shared
   Rust runtime primitives, file caching, file locking, Lakebase address parsing,

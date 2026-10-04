@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-import pythonmonkey as pm
+from dbx_tools.js_runtime import require_runtime
 
 from .types import AccessToken, AuthOptions, CredentialStore, Token, TokenProvider
 
-_RUNTIME = pm.require(str(Path(__file__).with_name("_runtime.js")))
+_RUNTIME = require_runtime(__file__)
 
 
 class AuthClient:

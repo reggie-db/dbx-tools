@@ -9,7 +9,7 @@
       "description": "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-auth-bridge.ts"
+          "exec": "bun projen/tasks/python-js-runtime.ts --entry packages/js/node/auth/src/_python-bridge.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --source '@dbx-tools/auth for PythonMonkey'"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "description": "Verify the committed PythonMonkey authentication bundle is current",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-auth-bridge.ts --check"
+          "exec": "bun projen/tasks/python-js-runtime.ts --entry packages/js/node/auth/src/_python-bridge.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --source '@dbx-tools/auth for PythonMonkey' --check"
         }
       ]
     },
