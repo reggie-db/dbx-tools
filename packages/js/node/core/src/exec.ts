@@ -554,8 +554,15 @@ export function spawn(...args: SpawnArgs<ExecOptions>): ChildProcessResult {
       exitCode = await waitForExit(proc);
       await Promise.all([stdinWrite, ...reads]);
     } catch (err) {
-      await Promise.allSettled([stdinWrite, ...reads]);
-      if (!isCommandNotFoundError(err)) throw err;
+      if (!isCommandNotFoundError(err)) {
+        await Promise.allSettled([stdinWrite, ...reads]);
+        throw err;
+      }
+      proc.stdin?.destroy();
+      proc.stdout?.destroy();
+      proc.stderr?.destroy();
+      await Promise.allSettled([stdinWrite]);
+      for (const read of reads) void read.catch(() => undefined);
       commandNotFoundError = err;
       exitCode = COMMAND_NOT_FOUND_EXIT_CODE;
     }

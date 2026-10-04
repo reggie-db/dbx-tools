@@ -1,8 +1,11 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { configUtils } from "@dbx-tools/core";
+import { log } from "@dbx-tools/shared-core";
+
 import { AuthError } from "./errors.ts";
-import { DatabricksCliProvider, databricksCliAvailable } from "./databricks-cli.ts";
+import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { AuthClient, publicToken } from "./lifecycle.ts";
 import { FileCredentialStore } from "./node-storage.ts";
 import { OAuthFlow, OAuthGrant } from "./oauth.ts";
@@ -29,8 +32,10 @@ export interface DatabricksAuthDependencies {
   environment?: Readonly<Record<string, string | undefined>>;
   fetch?: typeof globalThis.fetch;
   openBrowser?: (url: string) => Promise<void>;
-  cliAvailable?: () => boolean;
+  resolveCli?: () => Promise<string | undefined>;
 }
+
+const logger = log.logger("auth:databricks");
 
 /** Persistent Databricks auth facade over the provider-neutral lifecycle. */
 export class PersistentAuth implements PersistentAuthLike {
@@ -158,7 +163,7 @@ export async function createPersistentAuthWithStorage(
       scopes: [...profile.scopes],
     });
   }
-  const provider = await providerFor(profile, storage, options, dependencies);
+  const provider = await providerFor(profile, options, dependencies);
   const client = new AuthClient(
     profile.cacheKey,
     provider,
@@ -174,15 +179,28 @@ export async function createPersistentAuthWithStorage(
 
 async function providerFor(
   profile: DatabricksProfile,
-  storage: Storage,
   options: DatabricksAuthOptions,
   dependencies: DatabricksAuthDependencies,
 ): Promise<TokenProvider> {
   switch (profile.authKind) {
     case AuthKind.UserToMachine: {
-      const useCli =
-        storage === Storage.Auto && (dependencies.cliAvailable ?? databricksCliAvailable)();
-      if (useCli) return new DatabricksCliProvider(profile.name);
+      const environment = dependencies.environment ?? process.env;
+      const inApp = configUtils.isDatabricksAppEnv({ ...environment });
+      const cliMode = profile.authType ?? "auto";
+      if (!inApp && (cliMode === "auto" || cliMode === "databricks-cli")) {
+        try {
+          const executable = await (
+            dependencies.resolveCli ?? (() => resolveDatabricksCli(environment))
+          )();
+          if (executable) return new DatabricksCliProvider(profile.name, executable);
+          if (cliMode === "databricks-cli") {
+            throw new AuthError("cli", "Databricks CLI is unavailable on this platform");
+          }
+        } catch (cause) {
+          if (cliMode === "databricks-cli") throw cause;
+          logger.warn("Databricks CLI unavailable; using native OAuth", { error: cause });
+        }
+      }
       const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
       return new OAuthFlow(
         {

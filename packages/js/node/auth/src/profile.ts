@@ -205,6 +205,7 @@ export function resolveDatabricksProfile(
     scopes,
     target,
     authKind,
+    ...(authType ? { authType } : {}),
     ...(clientSecret ? { clientSecret } : {}),
     ...(accessToken ? { accessToken } : {}),
     cacheKey,

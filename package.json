@@ -5,6 +5,8 @@
     "url": "git+https://github.com/reggie-db/dbx-tools.git"
   },
   "scripts": {
+    "auth:cli-assets": "projen auth:cli-assets",
+    "auth:cli-assets:check": "projen auth:cli-assets:check",
     "auth:python-bridge": "projen auth:python-bridge",
     "auth:python-bridge:check": "projen auth:python-bridge:check",
     "barrels": "projen barrels",

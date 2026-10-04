@@ -461,6 +461,9 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
     "oauth4webapi@^3.8.8",
     "open@^11.0.1",
   );
+  p.tasks
+    .tryFind("pre-compile")
+    ?.exec("bun ../../../../projen/tasks/databricks-cli-assets.ts --root ../../../..");
 });
 
 // node-bindings: host implementations behind cross-runtime data-only
@@ -1576,6 +1579,15 @@ root.addTask("auth:python-bridge", {
     "--source '@dbx-tools/auth for PythonMonkey'",
   ].join(" "),
 });
+root.addTask("auth:cli-assets", {
+  description: "Refresh the pinned Databricks CLI release asset manifest",
+  exec: "bun projen/tasks/databricks-cli-assets.ts",
+});
+const authCliAssetsCheck = root.addTask("auth:cli-assets:check", {
+  description: "Verify the pinned Databricks CLI release asset manifest",
+  exec: "bun projen/tasks/databricks-cli-assets.ts --check",
+});
+root.testTask.spawn(authCliAssetsCheck);
 const authPythonBridgeCheck = root.addTask("auth:python-bridge:check", {
   description: "Verify the committed PythonMonkey authentication bundle is current",
   exec: [

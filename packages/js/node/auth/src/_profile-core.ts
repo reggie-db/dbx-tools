@@ -118,6 +118,7 @@ export function resolveAuthKind(
 ): AuthKind {
   switch (authType) {
     case "databricks-cli":
+    case "oauth-u2m":
       return AuthKind.UserToMachine;
     case "oauth-m2m":
       if (!clientId || !clientSecret)

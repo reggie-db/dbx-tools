@@ -14,6 +14,11 @@ describe("JavaScript host bindings", () => {
     assert.deepEqual(result, { exitCode: 0, stdout: "ok" });
   });
 
+  it("reports a missing process without hanging", async () => {
+    const result = await runProcess({ command: `dbx-tools-missing-${process.pid}` });
+    assert.deepEqual(result, { exitCode: 127 });
+  });
+
   it("executes HTTP through fetch", async () => {
     const server = createServer((request, response) => {
       response.writeHead(201, { "content-type": "text/plain", "x-method": request.method });

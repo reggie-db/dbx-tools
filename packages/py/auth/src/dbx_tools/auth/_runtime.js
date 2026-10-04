@@ -302,6 +302,7 @@ function normalizeHost(value, profile = "DEFAULT") {
 function resolveAuthKind(authType, clientId, clientSecret, accessToken) {
   switch (authType) {
     case "databricks-cli":
+    case "oauth-u2m":
       return "user-to-machine" /* UserToMachine */;
     case "oauth-m2m":
       if (!clientId || !clientSecret)

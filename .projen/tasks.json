@@ -4,6 +4,24 @@
     "PATH": "$(bun --eval \"console.log(process.env.PATH)\")"
   },
   "tasks": {
+    "auth:cli-assets": {
+      "name": "auth:cli-assets",
+      "description": "Refresh the pinned Databricks CLI release asset manifest",
+      "steps": [
+        {
+          "exec": "bun projen/tasks/databricks-cli-assets.ts"
+        }
+      ]
+    },
+    "auth:cli-assets:check": {
+      "name": "auth:cli-assets:check",
+      "description": "Verify the pinned Databricks CLI release asset manifest",
+      "steps": [
+        {
+          "exec": "bun projen/tasks/databricks-cli-assets.ts --check"
+        }
+      ]
+    },
     "auth:python-bridge": {
       "name": "auth:python-bridge",
       "description": "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
@@ -455,6 +473,9 @@
         },
         {
           "spawn": "test:installer"
+        },
+        {
+          "spawn": "auth:cli-assets:check"
         },
         {
           "spawn": "auth:python-bridge:check"

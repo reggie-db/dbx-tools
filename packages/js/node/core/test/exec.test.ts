@@ -34,6 +34,18 @@ describe("missing executable", () => {
     assert.equal(result.exitCode, 127);
   });
 
+  it("returns exit code 127 when missing-command output is captured", async () => {
+    const result = await exec.spawn(MISSING_COMMAND, [], {
+      stdin: "ignore",
+      stdout: "capture",
+      stderr: "capture",
+    });
+
+    assert.equal(result.exitCode, exec.COMMAND_NOT_FOUND_EXIT_CODE);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "");
+  });
+
   it("throws from spawn when check is true", async () => {
     await assert.rejects(
       exec.spawn(MISSING_COMMAND, [], { ...QUIET_STDIO, check: true }),

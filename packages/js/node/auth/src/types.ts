@@ -119,6 +119,7 @@ export const DatabricksAuthOptions = {
 /** Resolved profile with secrets retained only for provider construction. */
 export interface DatabricksProfile extends DatabricksProfileSummary {
   host: string;
+  authType?: string;
   clientId: string;
   groupId?: string;
   scopes: string[];

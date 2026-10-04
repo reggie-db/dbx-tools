@@ -3,15 +3,16 @@
 Persistent Databricks authentication for Node.js and Bun without a native
 binding requirement.
 
-The package prefers the Databricks CLI for automatic user authentication. When
-the CLI is unavailable, it uses a browser authorization-code flow implemented
-with `oauth4webapi` and opens the authorization URL with `open`. M2M uses OAuth
-client credentials. PAT, Databricks App service-principal, and App OBO
+The package prefers the Databricks CLI for automatic user authentication outside
+Databricks Apps. It reuses a compatible installed CLI or checksum-verifies and
+installs the pinned build asset through `@dbx-tools/core/bin`. An explicit
+`oauth-u2m` profile uses the browser authorization-code flow instead. M2M uses
+OAuth client credentials. PAT, Databricks App service-principal, and App OBO
 credentials use the same profile and request policy.
 
 ## Features
 
-- CLI-first U2M with native browser fallback.
+- Version-checked CLI-first U2M with native browser fallback.
 - M2M, PAT, App SP, and request-scoped App OBO authentication.
 - Databricks profile parsing with `__settings__.default_profile`, `DEFAULT`, and
   sole-profile selection.

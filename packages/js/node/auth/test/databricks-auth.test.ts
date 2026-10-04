@@ -63,23 +63,92 @@ describe("Databricks provider construction", () => {
     }
   });
 
-  it("prefers the installed CLI in automatic storage mode", async () => {
+  it("prefers a compatible CLI for automatic U2M with any storage", async () => {
     const auth = await createPersistentAuth(
       DatabricksAuthOptions.create({
         host: "https://example.cloud.databricks.com",
         profile: "TEST",
       }),
-      Storage.Auto,
+      Storage.Memory,
       {
         environment: {},
-        cliAvailable: () => true,
+        resolveCli: () => Promise.resolve("databricks"),
         fetch: async () => {
           throw new Error("native OAuth discovery should not run");
         },
       },
     );
     assert.equal(auth.status().profile, "TEST");
-    assert.equal(auth.status().storage, Storage.File);
+    assert.equal(auth.status().storage, Storage.Memory);
+  });
+
+  it("uses native OAuth when the profile explicitly selects oauth-u2m", async () => {
+    let resolvedCli = false;
+    await assert.rejects(
+      createPersistentAuth(
+        DatabricksAuthOptions.create({
+          host: "https://example.cloud.databricks.com",
+          profile: "TEST",
+          authType: "oauth-u2m",
+        }),
+        Storage.Memory,
+        {
+          environment: {},
+          resolveCli: () => {
+            resolvedCli = true;
+            return Promise.resolve("databricks");
+          },
+          fetch: async () => {
+            throw new Error("native OAuth discovery selected");
+          },
+        },
+      ),
+      /native OAuth discovery selected/,
+    );
+    assert.equal(resolvedCli, false);
+  });
+
+  it("does not invoke the CLI automatically inside a Databricks App", async () => {
+    let resolvedCli = false;
+    await assert.rejects(
+      createPersistentAuth(
+        DatabricksAuthOptions.create({
+          host: "https://example.cloud.databricks.com",
+          profile: "TEST",
+        }),
+        Storage.Memory,
+        {
+          environment: { DBX_TOOLS_DATABRICKS_APP_ENV: "true" },
+          resolveCli: () => {
+            resolvedCli = true;
+            return Promise.resolve("databricks");
+          },
+          fetch: async () => {
+            throw new Error("native OAuth discovery selected");
+          },
+        },
+      ),
+      /native OAuth discovery selected/,
+    );
+    assert.equal(resolvedCli, false);
+  });
+
+  it("fails closed when databricks-cli is explicit and no CLI can be resolved", async () => {
+    await assert.rejects(
+      createPersistentAuth(
+        DatabricksAuthOptions.create({
+          host: "https://example.cloud.databricks.com",
+          profile: "TEST",
+          authType: "databricks-cli",
+        }),
+        Storage.Memory,
+        {
+          environment: {},
+          resolveCli: () => Promise.resolve(undefined),
+        },
+      ),
+      /Databricks CLI is unavailable/,
+    );
   });
 
   it("uses oauth4webapi for Databricks M2M client credentials", async () => {
