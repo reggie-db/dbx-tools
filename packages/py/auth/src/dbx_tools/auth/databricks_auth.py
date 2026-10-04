@@ -122,8 +122,13 @@ async def create_databricks_cli_auth(
     }
     dependencies = {
         **({"environment": dict(environment)} if environment is not None else {}),
-        **({"resolveCli": lambda _options: executable} if executable else {}),
     }
+    if executable:
+
+        async def resolve_cli(_options: object) -> str:
+            return executable
+
+        dependencies["resolveCli"] = resolve_cli
     client = await runtime["createPersistentAuthWithStorage"](
         auth_options,
         credential_store_to_javascript(selected_store),

@@ -5,6 +5,16 @@ from pathlib import Path
 from dbx_tools.auth import create_databricks_cli_auth
 
 
+def _write_cli(path: Path, access_token: str) -> Path:
+    path.write_text(
+        "#!/bin/sh\n"
+        f'printf \'%s\\n\' \'{{"access_token":"{access_token}","token_type":"Bearer"}}\'\n',
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+    return path
+
+
 async def test_profile_selection_prefers_matching_cli_profile(tmp_path: Path) -> None:
     config = tmp_path / "config"
     config.write_text(
@@ -33,7 +43,7 @@ auth_type = databricks-cli
     assert auth.auth_kind() == "user-to-machine"
 
 
-async def test_headers_include_workspace_id(monkeypatch, tmp_path: Path) -> None:
+async def test_headers_include_workspace_id(tmp_path: Path) -> None:
     config = tmp_path / "config"
     config.write_text(
         """[DEFAULT]
@@ -44,12 +54,11 @@ auth_type = databricks-cli
         encoding="utf-8",
     )
 
-    async def token(self, login=None):
-        del self, login
-        return {"accessToken": "token", "tokenType": "Bearer", "scopes": []}
-
-    monkeypatch.setattr("dbx_tools.auth.client.AuthClient.token", token)
-    auth = await create_databricks_cli_auth(config_file=config, cache_dir=tmp_path / "cache")
+    auth = await create_databricks_cli_auth(
+        config_file=config,
+        cache_dir=tmp_path / "cache",
+        executable=str(_write_cli(tmp_path / "databricks", "token")),
+    )
 
     assert await auth.authenticate(False) == {
         "authorization": "Bearer token",
@@ -65,7 +74,7 @@ auth_type = databricks-cli
     assert await auth.request_headers_for_url("https://example.com", False) == {}
 
 
-async def test_pat_uses_profile_token_without_cli(monkeypatch, tmp_path: Path) -> None:
+async def test_pat_uses_profile_token_without_cli(tmp_path: Path) -> None:
     config = tmp_path / "config"
     config.write_text(
         """[PAT]
@@ -76,15 +85,11 @@ token = profile-token
         encoding="utf-8",
     )
 
-    async def run_process(*args, **kwargs):
-        del args, kwargs
-        raise AssertionError("PAT authentication must not invoke the Databricks CLI")
-
-    monkeypatch.setattr("dbx_tools.auth.databricks_cli.run_process", run_process)
     auth = await create_databricks_cli_auth(
         profile="PAT",
         config_file=config,
         cache_dir=tmp_path / "cache",
+        executable=str(tmp_path / "must-not-run"),
     )
 
     assert await auth.authenticate(False) == {

@@ -24709,6 +24709,7 @@ async function ensure(name, url, options = {}) {
 // packages/py/node-bindings/shims/readline.ts
 function createInterface(options) {
   return {
+    close() {},
     async* [Symbol.asyncIterator]() {
       let pending = "";
       for await (const chunk of options.input) {
