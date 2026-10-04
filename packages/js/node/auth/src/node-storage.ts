@@ -85,10 +85,10 @@ export class FileCredentialStore implements CredentialStore {
 
   private async readCache(): Promise<TokenCache> {
     try {
-      const cache = (await fileBindings.readJsonFile({
+      const source = await fileBindings.readTextFile({
         path: join(this.root, "token-cache.json"),
-        defaultValue: { version: 1, tokens: {} },
-      })) as TokenCache;
+      });
+      const cache = source ? (JSON.parse(source) as TokenCache) : { version: 1, tokens: {} };
       if (cache.version !== 1 || typeof cache.tokens !== "object" || !cache.tokens) {
         throw new AuthError("storage", "Token cache must use version 1");
       }
@@ -101,9 +101,9 @@ export class FileCredentialStore implements CredentialStore {
 
   private async writeCache(cache: TokenCache): Promise<void> {
     try {
-      await fileBindings.atomicWriteJsonFile({
+      await fileBindings.atomicWriteTextFile({
         path: join(this.root, "token-cache.json"),
-        value: cache,
+        content: `${JSON.stringify(cache, null, 2)}\n`,
         mode: 0o600,
       });
     } catch (cause) {

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { atomicWriteJsonFile, readJsonFile } from "../src/files.ts";
+import { atomicWriteTextFile, readTextFile } from "../src/files.ts";
 import { executeHttp } from "../src/http.ts";
 import { withFileLock } from "../src/locks.ts";
 import { runProcess } from "../src/process.ts";
@@ -47,12 +47,12 @@ describe("JavaScript host bindings", () => {
     }
   });
 
-  it("atomically reads and writes JSON through file bindings", async () => {
+  it("atomically reads and writes text through file bindings", async () => {
     const directory = await mkdtemp(join(tmpdir(), "dbx-tools-bindings-files-"));
     const path = join(directory, "nested", "state.json");
     try {
-      await atomicWriteJsonFile({ path, value: { ready: true } });
-      assert.deepEqual(await readJsonFile({ path }), { ready: true });
+      await atomicWriteTextFile({ path, content: "ready\n" });
+      assert.equal(await readTextFile({ path }), "ready\n");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -9,8 +9,8 @@ The package keeps cross-language plumbing out of capability packages:
 - `MemoryLeaseLocks` provides keyed in-process check-lock-recheck leases.
 - `FileLeaseLocks` provides keyed cross-process leases through `filelock`.
 - `with_file_lock()` runs an async callback under a path-keyed file lock.
-- `read_text()`, `read_json()`, and `atomic_write_json()` provide asynchronous
-  file access without blocking the event loop.
+- `read_text()` and `atomic_write_text()` provide generic asynchronous file
+  access without blocking the event loop; capability packages own serialization.
 - `open_browser()` delegates browser launch to Python's maintained `webbrowser`
   integration.
 - `run_process()` maps plain arguments onto `dbx-tools-core` executable

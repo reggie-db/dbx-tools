@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 from dbx_tools.node_bindings import (
     FileLeaseLocks,
     MemoryLeaseLocks,
-    atomic_write_json,
+    atomic_write_text,
     ensure_directory,
-    read_json,
+    read_text,
 )
 
 from .client import token_to_javascript
@@ -91,16 +92,19 @@ class FileCredentialStore:
         return "file"
 
     async def _read_cache(self) -> dict[str, Any]:
-        cache = await read_json(
+        source = await read_text(
             self.root / "token-cache.json",
-            default={"version": 1, "tokens": {}},
         )
+        cache = json.loads(source) if source else {"version": 1, "tokens": {}}
         if cache.get("version") != 1 or not isinstance(cache.get("tokens"), dict):
             raise ValueError("Token cache must use version 1")
         return cache
 
     async def _write_cache(self, cache: dict[str, Any]) -> None:
-        await atomic_write_json(self.root / "token-cache.json", cache)
+        await atomic_write_text(
+            self.root / "token-cache.json",
+            f"{json.dumps(cache, indent=2)}\n",
+        )
 
 
 def _serialize_token(token: Token) -> dict[str, object]:

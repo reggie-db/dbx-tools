@@ -1,4 +1,4 @@
-import { atomicWriteJsonFile, ensureDirectory, readJsonFile, readTextFile } from "./files.ts";
+import { atomicWriteTextFile, ensureDirectory, readTextFile } from "./files.ts";
 import { executeHttp } from "./http.ts";
 import { acquireFileLease, releaseFileLease } from "./locks.ts";
 import { runProcess } from "./process.ts";
@@ -10,8 +10,7 @@ export const nodeBindings: JsBindings = Object.freeze({
   executeHttp,
   ensureDirectory,
   readTextFile,
-  readJsonFile,
-  atomicWriteJsonFile,
+  atomicWriteTextFile,
   acquireFileLease,
   releaseFileLease,
 });

@@ -37,8 +37,9 @@ headers, and the complete response body without interpreting its format.
 
 ## Files And Locks
 
-`readTextFile()`, `readJsonFile()`, `ensureDirectory()`, and
-`atomicWriteJsonFile()` provide the file operations needed by embedded
-capability packages. `acquireFileLease()` and `releaseFileLease()` form the
-callback-free portable lock boundary. Ordinary Node callers can use
-`withFileLock(path, callback)` as a convenience around the same lease protocol.
+`readTextFile()`, `ensureDirectory()`, and `atomicWriteTextFile()` provide the
+generic file operations needed by embedded capability packages. Serialization
+and validation remain capability policy. `acquireFileLease()` and
+`releaseFileLease()` form the callback-free portable lock boundary. Ordinary
+Node callers can use `withFileLock(path, callback)` as a convenience around the
+same lease protocol.

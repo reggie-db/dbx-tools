@@ -12,4 +12,4 @@ export * as process from "./src/process.ts";
 export * as types from "./src/types.ts";
 export { nodeBindings } from "./src/bindings.ts";
 export { FileLeaseLocks } from "./src/locks.ts";
-export type { ProcessRequest, ProcessResult, HttpRequest, HttpResult, EnsureDirectoryRequest, ReadTextRequest, ReadJsonRequest, AtomicWriteJsonRequest, FileLockRequest, JsBindings } from "./src/types.ts";
+export type { ProcessRequest, ProcessResult, HttpRequest, HttpResult, EnsureDirectoryRequest, ReadTextRequest, AtomicWriteTextRequest, FileLockRequest, JsBindings } from "./src/types.ts";

@@ -2,12 +2,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
-import type {
-  AtomicWriteJsonRequest,
-  EnsureDirectoryRequest,
-  ReadJsonRequest,
-  ReadTextRequest,
-} from "./types.ts";
+import type { AtomicWriteTextRequest, EnsureDirectoryRequest, ReadTextRequest } from "./types.ts";
 
 /** Ensure a directory exists with the requested permissions. */
 export async function ensureDirectory(request: EnsureDirectoryRequest): Promise<void> {
@@ -26,22 +21,14 @@ export async function readTextFile(request: ReadTextRequest): Promise<string | u
   }
 }
 
-/** Read one JSON value and return the caller-provided missing-file value. */
-export async function readJsonFile(request: ReadJsonRequest): Promise<unknown> {
-  const text = await readTextFile({ path: request.path });
-  return text === undefined ? request.defaultValue : JSON.parse(text);
-}
-
-/** Atomically replace one JSON file with deterministic formatting and permissions. */
-export async function atomicWriteJsonFile(request: AtomicWriteJsonRequest): Promise<void> {
+/** Atomically replace one UTF-8 file with the requested permissions. */
+export async function atomicWriteTextFile(request: AtomicWriteTextRequest): Promise<void> {
   const mode = request.mode ?? 0o600;
   const parent = dirname(request.path);
   await ensureDirectory({ path: parent });
   const temporary = join(parent, `.${basename(request.path)}-${randomUUID()}.tmp`);
-  const serialized = JSON.stringify(request.value, null, 2);
-  if (serialized === undefined) throw new Error("Atomic JSON value is not serializable");
   try {
-    await writeFile(temporary, `${serialized}\n`, {
+    await writeFile(temporary, request.content, {
       mode,
       flag: "wx",
     });
