@@ -215,6 +215,7 @@ program
   .addOption(releaseLevelOption())
   .option("--prefix <prefix>", "release tag prefix", "v")
   .option("--base <branch>", "release pull request base branch", "main")
+  .option("--python-root <path>", "Python package root", "packages/py")
   .option("--message <message>", "commit message for pending source work", "chore: prepare release")
   .addOption(releaseOperatingSystemOption())
   .addOption(releaseArchitectureOption())
@@ -246,6 +247,7 @@ program
       level: VersionLevel;
       prefix: string;
       base: string;
+      pythonRoot: string;
       message: string;
       os: ReleaseOs[];
       arch: ReleaseArch[];
@@ -507,6 +509,8 @@ program
               releaseTag,
               "--sha",
               mergeSha,
+              "--python-root",
+              opts.pythonRoot,
               "--notes-file",
               `docs/releases/v${next.version}.md`,
             ];

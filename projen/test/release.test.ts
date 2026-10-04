@@ -238,6 +238,10 @@ describe("release task contracts", () => {
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
       /tasks\/release-pr\.ts --prefix v --base main --python-root "python\/packages" --validate-task "docs:check-source" --validate-task "docs:check-readmes"/,
     );
+    assert.match(
+      tasks.tasks["release:assets"]?.steps?.[0]?.exec ?? "",
+      /tasks\/release-candidate\.ts --python-root "python\/packages"/,
+    );
   });
 
   it("configures summary provider order and opt-out through project options", () => {
