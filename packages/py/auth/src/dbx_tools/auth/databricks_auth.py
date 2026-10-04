@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .client import _RUNTIME, _access_token, credential_store_to_javascript
+from .client import _access_token, credential_store_to_javascript, javascript_runtime
 from .storage import FileCredentialStore
 from .types import AccessToken, AuthOptions, CredentialStore
 
@@ -99,7 +99,7 @@ async def create_databricks_cli_auth(
 ) -> DatabricksAuth:
     """Create CLI-first Databricks auth using JavaScript profile selection."""
     selected_store = store or FileCredentialStore(cache_dir)
-    client = await _RUNTIME["createDatabricksAuth"](
+    client = await javascript_runtime()["createDatabricksAuth"](
         {
             **({"profile": profile} if profile else {}),
             **({"configFile": str(Path(config_file).expanduser())} if config_file else {}),

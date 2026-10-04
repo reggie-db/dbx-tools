@@ -6,7 +6,14 @@ from dbx_tools.node_bindings import require_runtime
 
 from .types import AccessToken, AuthOptions, CredentialStore, Token, TokenProvider
 
-_RUNTIME = require_runtime(__file__)
+_RUNTIME: Any | None = None
+
+
+def javascript_runtime() -> Any:
+    global _RUNTIME
+    if _RUNTIME is None:
+        _RUNTIME = require_runtime(__file__)
+    return _RUNTIME
 
 
 def credential_store_to_javascript(store: CredentialStore) -> dict[str, object]:
@@ -29,7 +36,7 @@ class AuthClient:
         store: CredentialStore,
         options: AuthOptions | None = None,
     ) -> None:
-        self._client = _RUNTIME["createAuthClient"](
+        self._client = javascript_runtime()["createAuthClient"](
             key,
             {
                 "authenticate": provider.authenticate,
