@@ -1670,7 +1670,7 @@ var require_buffer = __commonJS((exports2) => {
   }();
 });
 
-// packages/py/node-bindings/build/shims/host.ts
+// packages/py/node-bindings/shims/host.ts
 function pythonHost() {
   const host = globalThis.__dbxToolsPython;
   if (!host)
@@ -1678,7 +1678,7 @@ function pythonHost() {
   return host;
 }
 
-// packages/py/node-bindings/build/shims/path.ts
+// packages/py/node-bindings/shims/path.ts
 var exports_path = {};
 __export(exports_path, {
   win32: () => win32,
@@ -1737,8 +1737,32 @@ function resolve(...parts) {
 var sep = "/", delimiter, posix, win32, path_default;
 var init_path = __esm(() => {
   delimiter = process.platform === "win32" ? ";" : ":";
-  posix = { basename, delimiter: ":", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "/" };
-  win32 = { basename, delimiter: ";", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "\\" };
+  posix = {
+    basename,
+    delimiter: ":",
+    dirname,
+    extname,
+    isAbsolute,
+    join,
+    normalize,
+    parse,
+    relative,
+    resolve,
+    sep: "/"
+  };
+  win32 = {
+    basename,
+    delimiter: ";",
+    dirname,
+    extname,
+    isAbsolute,
+    join,
+    normalize,
+    parse,
+    relative,
+    resolve,
+    sep: "\\"
+  };
   path_default = {
     basename,
     delimiter,
@@ -6953,7 +6977,7 @@ var require_stream_browserify = __commonJS((exports2, module2) => {
   };
 });
 
-// packages/py/node-bindings/build/shims/fs-promises.ts
+// packages/py/node-bindings/shims/fs-promises.ts
 var exports_fs_promises = {};
 __export(exports_fs_promises, {
   writeFile: () => writeFile,
@@ -7500,7 +7524,7 @@ var require_browser2 = __commonJS((exports2, module2) => {
   };
 });
 
-// packages/py/node-bindings/build/shims/fs.ts
+// packages/py/node-bindings/shims/fs.ts
 var exports_fs = {};
 __export(exports_fs, {
   utimes: () => utimes,
@@ -7574,7 +7598,9 @@ function utimes(path, atime, mtime, done) {
   }), done);
 }
 function open2(_path, _flags, done) {
-  done(Object.assign(new Error("File descriptors are unavailable in PythonMonkey"), { code: "ENOSYS" }));
+  done(Object.assign(new Error("File descriptors are unavailable in PythonMonkey"), {
+    code: "ENOSYS"
+  }));
 }
 function close(_fd, done) {
   done(null);
@@ -19919,7 +19945,7 @@ __export(exports_dbx_tools_python_entry, {
 });
 module.exports = __toCommonJS(exports_dbx_tools_python_entry);
 
-// packages/py/node-bindings/build/shims/bootstrap.ts
+// packages/py/node-bindings/shims/bootstrap.ts
 var import_node_buffer = __toESM(require_buffer(), 1);
 globalThis.Buffer = import_node_buffer.Buffer;
 
@@ -19931,7 +19957,7 @@ __export(exports_databricks_auth, {
   PersistentAuth: () => PersistentAuth
 });
 
-// packages/py/node-bindings/build/shims/os.ts
+// packages/py/node-bindings/shims/os.ts
 function homedir() {
   return pythonHost().os.homedir();
 }
@@ -20454,7 +20480,7 @@ __export(exports_databricks_cli, {
 });
 init_path();
 
-// packages/py/node-bindings/build/shims/child-process.ts
+// packages/py/node-bindings/shims/child-process.ts
 var import_node_events = __toESM(require_events(), 1);
 var import_node_stream = __toESM(require_stream_browserify(), 1);
 
@@ -20512,7 +20538,7 @@ function execFile(command, args, _options, callback) {
   }, (error) => callback(error instanceof Error ? error : new Error(String(error))));
 }
 
-// packages/py/node-bindings/build/shims/crypto.ts
+// packages/py/node-bindings/shims/crypto.ts
 class PythonHash {
   content = [];
   update(value) {
@@ -20547,7 +20573,7 @@ function randomUUID() {
 init_fs_promises();
 init_path();
 
-// packages/py/node-bindings/build/shims/url.ts
+// packages/py/node-bindings/shims/url.ts
 function fileURLToPath(url) {
   return pythonHost().path.fileUrlToPath(String(url));
 }
@@ -24680,7 +24706,7 @@ async function ensure(name, url, options = {}) {
   });
 }
 
-// packages/py/node-bindings/build/shims/readline.ts
+// packages/py/node-bindings/shims/readline.ts
 function createInterface(options) {
   return {
     async* [Symbol.asyncIterator]() {
@@ -24697,7 +24723,7 @@ function createInterface(options) {
   };
 }
 
-// packages/py/node-bindings/build/shims/stream-promises.ts
+// packages/py/node-bindings/shims/stream-promises.ts
 function finished(stream) {
   if (stream.writableFinished)
     return Promise.resolve();

@@ -6,7 +6,10 @@ import { pythonHost } from "./host.ts";
 type Callback<T = undefined> = (error: Error | null, value?: T) => void;
 
 function callback<T>(operation: Promise<T>, done: Callback<T>): void {
-  void operation.then((value) => done(null, value), (error) => done(error as Error));
+  void operation.then(
+    (value) => done(null, value),
+    (error) => done(error as Error),
+  );
 }
 
 export function existsSync(path: string): boolean {
@@ -19,13 +22,15 @@ export function readFileSync(path: string, _encoding?: string): string {
 
 export function createReadStream(path: string): Readable {
   const stream = new Readable({ read() {} });
-  void pythonHost().file.readBytes(String(path)).then(
-    (content) => {
-      stream.push(Uint8Array.from(content));
-      stream.push(null);
-    },
-    (error) => stream.destroy(error as Error),
-  );
+  void pythonHost()
+    .file.readBytes(String(path))
+    .then(
+      (content) => {
+        stream.push(Uint8Array.from(content));
+        stream.push(null);
+      },
+      (error) => stream.destroy(error as Error),
+    );
   return stream;
 }
 
@@ -37,10 +42,12 @@ export function createWriteStream(path: string, options: { mode?: number } = {})
       done();
     },
     final(done) {
-      void pythonHost().file.writeBytes(String(path), chunks, options.mode).then(
-        () => done(),
-        (error) => done(error as Error),
-      );
+      void pythonHost()
+        .file.writeBytes(String(path), chunks, options.mode)
+        .then(
+          () => done(),
+          (error) => done(error as Error),
+        );
     },
   });
 }
@@ -65,18 +72,27 @@ export function stat(path: string, done: Callback<unknown>): void {
 export const lstat = stat;
 
 export function rmdir(path: string, done: Callback): void {
-  callback(promises.rm(path).then(() => undefined), done);
+  callback(
+    promises.rm(path).then(() => undefined),
+    done,
+  );
 }
 
 export function utimes(path: string, atime: Date, mtime: Date, done: Callback): void {
   callback(
-    pythonHost().file.touch(String(path), atime.getTime(), mtime.getTime()).then(() => undefined),
+    pythonHost()
+      .file.touch(String(path), atime.getTime(), mtime.getTime())
+      .then(() => undefined),
     done,
   );
 }
 
 export function open(_path: string, _flags: unknown, done: Callback<number>): void {
-  done(Object.assign(new Error("File descriptors are unavailable in PythonMonkey"), { code: "ENOSYS" }));
+  done(
+    Object.assign(new Error("File descriptors are unavailable in PythonMonkey"), {
+      code: "ENOSYS",
+    }),
+  );
 }
 
 export function close(_fd: number, done: Callback): void {

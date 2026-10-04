@@ -49,7 +49,9 @@ export interface PythonRuntimeHost {
   };
   path: PythonPathHost;
   http: {
-    fetch(url: string): Promise<{ status: number; headers: Record<string, string>; body: number[] }>;
+    fetch(
+      url: string,
+    ): Promise<{ status: number; headers: Record<string, string>; body: number[] }>;
   };
   process: {
     run(
@@ -63,9 +65,11 @@ export interface PythonRuntimeHost {
 }
 
 export function pythonHost(): PythonRuntimeHost {
-  const host = (globalThis as typeof globalThis & {
-    __dbxToolsPython?: PythonRuntimeHost;
-  }).__dbxToolsPython;
+  const host = (
+    globalThis as typeof globalThis & {
+      __dbxToolsPython?: PythonRuntimeHost;
+    }
+  ).__dbxToolsPython;
   if (!host) throw new Error("dbx-tools Python runtime host is unavailable");
   return host;
 }

@@ -56,8 +56,32 @@ export function resolve(...parts: string[]): string {
 }
 
 export const delimiter = process.platform === "win32" ? ";" : ":";
-export const posix = { basename, delimiter: ":", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "/" };
-export const win32 = { basename, delimiter: ";", dirname, extname, isAbsolute, join, normalize, parse, relative, resolve, sep: "\\" };
+export const posix = {
+  basename,
+  delimiter: ":",
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  normalize,
+  parse,
+  relative,
+  resolve,
+  sep: "/",
+};
+export const win32 = {
+  basename,
+  delimiter: ";",
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  normalize,
+  parse,
+  relative,
+  resolve,
+  sep: "\\",
+};
 
 export default {
   basename,

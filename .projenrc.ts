@@ -309,9 +309,8 @@ root.gitignore.addPatterns(
   ".home/",
   ".kanna/",
   "**/.logs/",
-  "!packages/py/node-bindings/build/",
-  "!packages/py/node-bindings/build/shims/",
-  "!packages/py/node-bindings/build/shims/**",
+  "!packages/py/node-bindings/shims/",
+  "!packages/py/node-bindings/shims/**",
 );
 
 // ---------------------------------------------------------------------------
@@ -1583,7 +1582,7 @@ root.addTask("auth:python-runtime", {
     "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/index.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
-    "--shim-root packages/py/node-bindings/build/shims",
+    "--shim-root packages/py/node-bindings/shims",
     "--source '@dbx-tools/auth for PythonMonkey'",
   ].join(" "),
 });
@@ -1602,7 +1601,7 @@ const authPythonRuntimeCheck = root.addTask("auth:python-runtime:check", {
     "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/index.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
-    "--shim-root packages/py/node-bindings/build/shims",
+    "--shim-root packages/py/node-bindings/shims",
     "--source '@dbx-tools/auth for PythonMonkey'",
     "--check",
   ].join(" "),
