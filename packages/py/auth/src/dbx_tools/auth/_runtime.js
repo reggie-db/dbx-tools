@@ -20132,6 +20132,83 @@ var import_node_buffer = __toESM(require_buffer(), 1);
 installPythonGlobals();
 globalThis.Buffer = import_node_buffer.Buffer;
 var globals = globalThis;
+globals.AbortController ??= class AbortController2 {
+  signal;
+  #listeners = new Set;
+  constructor() {
+    this.signal = {
+      aborted: false,
+      addEventListener: (name, listener) => {
+        if (name === "abort") {
+          this.#listeners.add(typeof listener === "function" ? () => listener(new Event("abort")) : () => listener.handleEvent(new Event("abort")));
+        }
+      },
+      removeEventListener: () => {}
+    };
+  }
+  abort() {
+    if (this.signal.aborted)
+      return;
+    Object.defineProperty(this.signal, "aborted", { value: true });
+    for (const listener of this.#listeners)
+      listener();
+    this.#listeners.clear();
+  }
+};
+
+class PythonHeaders {
+  #values = new Map;
+  constructor(init) {
+    if (!init)
+      return;
+    if (Symbol.iterator in Object(init)) {
+      for (const [name, value] of init)
+        this.set(name, value);
+      return;
+    }
+    for (const [name, value] of Object.entries(init))
+      this.set(name, String(value));
+  }
+  set(name, value) {
+    this.#values.set(name.toLowerCase(), String(value));
+  }
+  get(name) {
+    return this.#values.get(name.toLowerCase()) ?? null;
+  }
+  has(name) {
+    return this.#values.has(name.toLowerCase());
+  }
+  entries() {
+    return this.#values.entries();
+  }
+  [Symbol.iterator]() {
+    return this.entries();
+  }
+}
+globals.Headers ??= PythonHeaders;
+
+class PythonResponse {
+  headers;
+  ok;
+  status;
+  #body;
+  constructor(body, init = {}) {
+    this.#body = body;
+    this.status = init.status ?? 200;
+    this.ok = this.status >= 200 && this.status < 300;
+    this.headers = new Headers(init.headers);
+  }
+  async arrayBuffer() {
+    return this.#body.slice().buffer;
+  }
+  async text() {
+    return new TextDecoder().decode(this.#body);
+  }
+  async json() {
+    return JSON.parse(await this.text());
+  }
+}
+globals.Response ??= PythonResponse;
 globals.TextEncoder ??= class TextEncoder2 {
   encode(value) {
     const encoded = unescape(encodeURIComponent(String(value)));
@@ -20146,7 +20223,9 @@ globals.TextDecoder ??= class TextDecoder2 {
   }
 };
 globals.fetch ??= async (input, init = {}) => {
-  const response = await pythonHost().http.fetch(String(input), init.method, init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : undefined, typeof init.body === "string" ? init.body : undefined);
+  const request = typeof input === "object" && "url" in input ? input : undefined;
+  const headers = init.headers ?? request?.headers;
+  const response = await pythonHost().http.fetch(request?.url ?? String(input), init.method ?? request?.method, headers ? Object.fromEntries(new Headers(headers).entries()) : undefined, typeof init.body === "string" ? init.body : undefined);
   return new Response(Uint8Array.from(response.body), {
     status: response.status,
     headers: response.headers

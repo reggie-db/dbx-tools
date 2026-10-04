@@ -7,10 +7,104 @@ installPythonGlobals();
 (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer = Buffer;
 
 const globals = globalThis as typeof globalThis & {
+  AbortController?: typeof AbortController;
+  Headers?: typeof Headers;
+  Request?: typeof Request;
+  Response?: typeof Response;
   TextDecoder?: typeof TextDecoder;
   TextEncoder?: typeof TextEncoder;
   fetch?: typeof fetch;
 };
+globals.AbortController ??= class AbortController {
+  readonly signal: AbortSignal;
+  readonly #listeners = new Set<() => void>();
+
+  constructor() {
+    this.signal = {
+      aborted: false,
+      addEventListener: (name: string, listener: EventListenerOrEventListenerObject) => {
+        if (name === "abort") {
+          this.#listeners.add(
+            typeof listener === "function"
+              ? () => listener(new Event("abort"))
+              : () => listener.handleEvent(new Event("abort")),
+          );
+        }
+      },
+      removeEventListener: () => {},
+    } as AbortSignal;
+  }
+
+  abort(): void {
+    if (this.signal.aborted) return;
+    Object.defineProperty(this.signal, "aborted", { value: true });
+    for (const listener of this.#listeners) listener();
+    this.#listeners.clear();
+  }
+} as typeof AbortController;
+
+class PythonHeaders implements Iterable<[string, string]> {
+  readonly #values = new Map<string, string>();
+
+  constructor(init?: HeadersInit) {
+    if (!init) return;
+    if (Symbol.iterator in Object(init)) {
+      for (const [name, value] of init as Iterable<[string, string]>) this.set(name, value);
+      return;
+    }
+    for (const [name, value] of Object.entries(init)) this.set(name, String(value));
+  }
+
+  set(name: string, value: string): void {
+    this.#values.set(name.toLowerCase(), String(value));
+  }
+
+  get(name: string): string | null {
+    return this.#values.get(name.toLowerCase()) ?? null;
+  }
+
+  has(name: string): boolean {
+    return this.#values.has(name.toLowerCase());
+  }
+
+  entries(): MapIterator<[string, string]> {
+    return this.#values.entries();
+  }
+
+  [Symbol.iterator](): MapIterator<[string, string]> {
+    return this.entries();
+  }
+}
+
+globals.Headers ??= PythonHeaders as unknown as typeof Headers;
+
+class PythonResponse {
+  readonly headers: Headers;
+  readonly ok: boolean;
+  readonly status: number;
+  readonly #body: Uint8Array;
+
+  constructor(body: Uint8Array, init: ResponseInit = {}) {
+    this.#body = body;
+    this.status = init.status ?? 200;
+    this.ok = this.status >= 200 && this.status < 300;
+    this.headers = new Headers(init.headers);
+  }
+
+  async arrayBuffer(): Promise<ArrayBuffer> {
+    return this.#body.slice().buffer;
+  }
+
+  async text(): Promise<string> {
+    return new TextDecoder().decode(this.#body);
+  }
+
+  async json(): Promise<unknown> {
+    return JSON.parse(await this.text());
+  }
+}
+
+globals.Response ??= PythonResponse as unknown as typeof Response;
 globals.TextEncoder ??= class TextEncoder {
   encode(value: string): Uint8Array {
     const encoded = unescape(encodeURIComponent(String(value)));
@@ -30,10 +124,12 @@ globals.TextDecoder ??= class TextDecoder {
   }
 } as typeof TextDecoder;
 globals.fetch ??= (async (input: string | URL | Request, init: RequestInit = {}) => {
+  const request = typeof input === "object" && "url" in input ? input : undefined;
+  const headers = init.headers ?? request?.headers;
   const response = await pythonHost().http.fetch(
-    String(input),
-    init.method,
-    init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : undefined,
+    request?.url ?? String(input),
+    init.method ?? request?.method,
+    headers ? Object.fromEntries(new Headers(headers).entries()) : undefined,
     typeof init.body === "string" ? init.body : undefined,
   );
   return new Response(Uint8Array.from(response.body), {
