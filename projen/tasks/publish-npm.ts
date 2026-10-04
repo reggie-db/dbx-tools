@@ -2,6 +2,7 @@
 /** Idempotent npm archive publication for release recovery. */
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   lstatSync,
   mkdtempSync,
   readFileSync,
@@ -250,18 +251,26 @@ export function packNpmPackage(
   transformManifest?: NpmArchiveManifestTransform,
 ): string {
   const executable = process.versions.bun ? process.execPath : "bun";
-  exec.spawnSync(
-    executable,
-    ["pm", "pack", "--destination", destination, "--ignore-scripts", "--quiet"],
-    {
-      cwd: directory,
-      env: { ...process.env, PATH: path },
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "ignore",
-      check: true,
-    },
-  );
+  const manifest = join(directory, "package.json");
+  const manifestMode = lstatSync(manifest).mode & 0o777;
+  const restoreManifestMode = (manifestMode & 0o200) === 0;
+  if (restoreManifestMode) chmodSync(manifest, manifestMode | 0o200);
+  try {
+    exec.spawnSync(
+      executable,
+      ["pm", "pack", "--destination", destination, "--ignore-scripts", "--quiet"],
+      {
+        cwd: directory,
+        env: { ...process.env, PATH: path },
+        stdout: "inherit",
+        stderr: "inherit",
+        stdin: "ignore",
+        check: true,
+      },
+    );
+  } finally {
+    if (restoreManifestMode) chmodSync(manifest, manifestMode);
+  }
   const archives = readdirSync(destination).filter((file) => file.endsWith(".tgz"));
   if (archives.length !== 1) {
     throw new Error(`Expected one packed npm archive, found ${archives.length}`);

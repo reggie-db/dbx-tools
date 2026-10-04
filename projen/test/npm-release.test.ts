@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -21,6 +30,16 @@ before(() => {
   outdir = mkdtempSync(join(tmpdir(), "npm-release-"));
   packageDir = join(outdir, "package");
   mkdirSync(packageDir);
+  const dependencyDir = join(outdir, "dependency");
+  mkdirSync(dependencyDir);
+  writeFileSync(
+    join(outdir, "package.json"),
+    `${JSON.stringify({ private: true, workspaces: ["package", "dependency"] })}\n`,
+  );
+  writeFileSync(
+    join(dependencyDir, "package.json"),
+    `${JSON.stringify({ name: "@fixture/dependency", version: "1.2.3" })}\n`,
+  );
   writeFileSync(
     join(packageDir, "package.json"),
     `${JSON.stringify({
@@ -28,8 +47,14 @@ before(() => {
       version: "1.2.3",
       repository: "git+https://github.com/example/fixture.git",
       publishConfig: { access: "restricted" },
+      dependencies: { "@fixture/dependency": "workspace:*" },
     })}\n`,
   );
+  const installed = spawnSync("bun", ["install", "--ignore-scripts"], {
+    cwd: outdir,
+    stdio: "pipe",
+  });
+  assert.equal(installed.status, 0, installed.stderr.toString());
   archive = join(outdir, "fixture.tgz");
   const packed = spawnSync("tar", ["-czf", archive, "-C", outdir, "package"]);
   assert.equal(packed.status, 0);
@@ -77,6 +102,19 @@ describe("npm release recovery", () => {
 
     assert.equal(second.contentDigest, identity.contentDigest);
     assert.equal(npmReleaseMatches(second, identity), true);
+  });
+
+  it("packs a read-only workspace manifest without changing it", () => {
+    const destination = join(outdir, "packed-read-only");
+    const manifest = join(packageDir, "package.json");
+    const contents = readFileSync(manifest);
+    mkdirSync(destination);
+
+    const packed = packNpmPackage(packageDir, destination);
+
+    assert.equal(readNpmArchiveIdentity(packed).name, "@fixture/native");
+    assert.deepEqual(readFileSync(manifest), contents);
+    assert.equal(statSync(manifest).mode & 0o777, 0o444);
   });
 
   it("rejects an existing version with different content", () => {
