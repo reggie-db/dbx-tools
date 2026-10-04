@@ -238,9 +238,10 @@ promotion event.
 `release.yml` runs on `release.published`. Its context job resolves the annotated
 tag, verifies main ancestry, checks out the exact commit, checks `VERSION`, and
 downloads and verifies the approved candidate. npm publishes the approved
-archives through GitHub Actions OIDC Trusted Publishing with provenance. The
-job pins npm `11.19.0` so trusted-publisher support does not depend on the npm
-version bundled with the runner's Node release. PyPI
+archives directly with the repository `NPM_TOKEN` secret. The job pins npm
+`11.4.2` so token authentication and GitHub provenance do not depend on the npm
+version bundled with the runner's Node release or opt into trusted-publisher
+registry authentication. PyPI
 publishes the approved distributions through trusted-publisher environments.
 Cargo publishes from the verified source checkout with `cargo publish --locked`.
 GitHub-hosted runners do not rebuild native release artifacts.
@@ -274,9 +275,9 @@ already-verified files rather than rebuilding them.
 
 Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
 manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
-approved npm archives are dependency-ordered and published through npm OIDC
-Trusted Publishing with provenance. Local Verdaccio publication does not enable
-provenance. Python publishes the exact approved wheels and source distributions
+approved npm archives are dependency-ordered and published directly with the
+repository `NPM_TOKEN` secret with GitHub Actions provenance. Local Verdaccio
+publication does not enable provenance. Python publishes the exact approved wheels and source distributions
 through package-specific PyPI trusted-publisher environments; binding publishers
 wait for their dependencies. Trusted-publisher instructions name `release.yml`
 and the `v*` deployment tag policy. Cargo publication checks the approved source

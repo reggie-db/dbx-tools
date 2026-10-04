@@ -2,11 +2,10 @@
 
 Date: 2026-09-30
 
-Updated: 2026-10-03
+Updated: 2026-10-04
 
-Status: Implemented. Keep active through the npm trusted-publisher cutover and
-the first release prepared with this transaction, then archive it with the
-observed release result.
+Status: Implemented. Keep active through the first token-authenticated release
+prepared with this transaction, then archive it with the observed release result.
 
 ## Goal
 
@@ -137,17 +136,13 @@ runners never rebuild native release artifacts.
 
 ### npm
 
-npm publication runs entirely in GitHub Actions through OIDC Trusted Publishing:
+npm publication runs entirely in GitHub Actions with the repository token:
 
 - permissions are `contents: read` and `id-token: write`;
 - the workflow publishes the approved `.tgz` files directly;
-- public packages enable npm provenance;
-- no `NPM_TOKEN` or `NODE_AUTH_TOKEN` is accepted by the production workflow;
+- `NODE_AUTH_TOKEN` reads the repository `NPM_TOKEN` secret;
+- npm `11.4.2` uses the Actions ID token for provenance while retaining token registry authentication;
 - no staged-publish fallback or package-creation bootstrap runs during release.
-
-The one-time trusted-publisher cutover is tracked in
-`2026-10-03-npm-trusted-publisher-cutover.md`. Keep the repository `NPM_TOKEN`
-secret only until that remote cutover succeeds; the workflow does not consume it.
 
 ### PyPI
 
@@ -203,7 +198,7 @@ must be retried.
 - The Git commit SHA is the release content identity.
 - The annotated tag and manifest must resolve to that SHA.
 - Publishing the draft GitHub Release is the only production promotion event.
-- Production npm publication is OIDC-only.
+- Production npm publication uses the repository `NPM_TOKEN` directly.
 - No Git worktree, Release Please state, component version, component tag,
   source-manifest stamping, binary byte injection, or automatic GitHub rebuild
   belongs in this path.
@@ -212,9 +207,8 @@ must be retried.
 
 Archive this document after:
 
-1. the npm trusted-publisher cutover succeeds for every public package;
-2. the repository `NPM_TOKEN` secret is removed;
-3. one release is prepared through the single-checkout transaction;
-4. the draft is reviewed and published manually;
-5. npm, PyPI, Cargo, binaries, and docs all promote from the recorded tag and SHA;
-6. manual dry-run recovery validates the same candidate without rebuilding it.
+1. one release is prepared through the single-checkout transaction;
+2. the draft is reviewed and published manually;
+3. npm publishes directly with `NPM_TOKEN` and GitHub provenance from the recorded tag and SHA;
+4. PyPI, Cargo, binaries, and docs promote from the same release identity;
+5. manual dry-run recovery validates the same candidate without rebuilding it.

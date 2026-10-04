@@ -12,10 +12,6 @@ date and final status.
 
 ## Active plans
 
-- [npm trusted-publisher cutover](2026-10-03-npm-trusted-publisher-cutover.md)
-  - Approves the nine remaining `0.9.19` npm stages and verifies direct GitHub
-    OIDC publication for all 63 packages from `release.yml`.
-
 - [Repository code-quality audit](2026-10-01-repository-code-quality-audit.md)
   - Records the model-proxy metrics redesign, conditional passkey flow, reusable
     Rust Projen project and release helper, release compile ownership, dependency

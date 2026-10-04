@@ -16,7 +16,7 @@ import {
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 const NODE_VERSION = "24";
-const NPM_VERSION = "11.19.0";
+const NPM_VERSION = "11.4.2";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
 const nodeReleaseProjects = new WeakSet<DBXToolsJavaScriptProject>();
 const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
@@ -132,15 +132,16 @@ export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): reado
         "package-manager-cache": false,
       },
     },
-    { name: "Install npm trusted-publishing CLI", run: `npm install --global npm@${NPM_VERSION}` },
+    { name: "Install npm CLI", run: `npm install --global npm@${NPM_VERSION}` },
     { name: "Install", run: "bun install" },
     bunCacheSaveStep(),
   ];
 }
 
-/** Authentication, provenance, and dry-run values shared by npm publishers. */
+/** Token authentication, GitHub provenance, and dry-run values shared by npm publishers. */
 export function npmPublishEnvironment(): Record<string, string> {
   return {
+    NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
     NPM_CONFIG_PROVENANCE:
       "${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}",
     DRY_RUN:

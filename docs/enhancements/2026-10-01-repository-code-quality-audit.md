@@ -4,9 +4,9 @@ Date: 2026-10-01
 
 Updated: 2026-10-03
 
-Status: Implementation complete. Keep this audit active through the npm
-trusted-publisher cutover and the first draft-promotion release, then archive it
-after recording the production workflow result.
+Status: Implementation complete. Keep this audit active through the first
+token-authenticated draft-promotion release, then archive it after recording the
+production workflow result.
 
 Scope: repository-wide architecture, package boundaries, generated Projen
 behavior, release workflows, AppKit and Mastra reuse, Rust ownership, tunnel
@@ -156,7 +156,7 @@ The first production release after this change should confirm:
 1. one root-owned Node compile during candidate construction;
 2. no per-package `prepack` compile blocks;
 3. no native Rust build in GitHub Actions;
-4. npm publication through OIDC without `NPM_TOKEN`;
+4. npm publication through the repository `NPM_TOKEN` with GitHub provenance;
 5. exact npm and Python archive publication from the approved manifest;
 6. Cargo publication from the verified commit with `--locked`;
 7. documentation deployment from the same published tag.
