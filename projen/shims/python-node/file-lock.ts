@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import * as asyncUtils from "@dbx-tools/shared-core/async-utils";
 import * as hash from "@dbx-tools/shared-core/hash";
+import * as log from "@dbx-tools/shared-core/log";
 import * as object from "@dbx-tools/shared-core/object";
 
 interface PythonBridge {
@@ -28,6 +29,7 @@ interface FileLockLease extends FileLockAcquisition {
 type PythonFunction = (...args: any[]) => any;
 
 const POLL_MS = 50;
+const logger = log.logger("auth:file-lock");
 const python = (globalThis as typeof globalThis & { python?: PythonBridge }).python;
 if (!python) throw new Error("PythonMonkey globalThis.python is unavailable");
 
@@ -62,18 +64,31 @@ export async function acquireFileLock(
   await mkdir(dir, { recursive: true });
   const lock = createLock(lockPath);
   options.onAcquire?.(acquisition);
+  logger.debug("acquiring Python file lock", {
+    credential: hash.fnvHash(lockId(key)),
+    backend: acquisition.backend,
+    timeoutMs: options.timeoutMs,
+  });
 
   let waiting = false;
   while (!tryAcquire(lock)) {
     if (!waiting) {
       waiting = true;
       options.onWait?.(acquisition);
+      logger.debug("waiting for Python file lock", {
+        credential: hash.fnvHash(lockId(key)),
+        backend: acquisition.backend,
+      });
     }
     if (deadline !== undefined && Date.now() >= deadline) {
       throw new Error(`Timed out waiting for file lock: ${lockPath}`);
     }
     await asyncUtils.sleep(POLL_MS);
   }
+  logger.debug("Python file lock acquired", {
+    credential: hash.fnvHash(lockId(key)),
+    backend: acquisition.backend,
+  });
 
   let active = true;
   return {
@@ -82,6 +97,10 @@ export async function acquireFileLock(
       if (!active) return;
       active = false;
       releaseLock(lock);
+      logger.debug("Python file lock released", {
+        credential: hash.fnvHash(lockId(key)),
+        backend: acquisition.backend,
+      });
     },
   };
 }

@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
 
+import { authLogger, tokenMetadata } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { AuthClient, publicToken } from "./lifecycle.ts";
@@ -27,6 +28,8 @@ import {
   WORKSPACE_ID_HEADER,
 } from "./types.ts";
 
+const logger = authLogger("databricks");
+
 /** Injectable host capabilities for Databricks authentication. */
 export interface DatabricksAuthDependencies {
   environment?: Readonly<Record<string, string | undefined>>;
@@ -46,10 +49,17 @@ export class PersistentAuth implements PersistentAuthLike {
   async challenge(): Promise<void> {
     if (!this.client)
       throw new AuthError("oauth", "app_obo uses the current request token and cannot start login");
+    logger.debug("authentication challenge requested", this.context());
     await this.client.login();
+    logger.debug("authentication challenge completed", this.context());
   }
 
   token(login?: boolean) {
+    logger.debug("Databricks token requested", {
+      ...this.context(),
+      login: login ?? "auto",
+      source: this.requestToken ? "request" : "lifecycle",
+    });
     return this.requestToken
       ? Promise.resolve(publicToken(this.requestToken))
       : this.requiredClient().tokenWithLogin(login);
@@ -57,12 +67,18 @@ export class PersistentAuth implements PersistentAuthLike {
 
   async authenticate(login?: boolean): Promise<Record<string, string>> {
     const token = await this.token(login);
-    return {
+    const headers = {
       [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
       ...(this.profileValue.workspaceId
         ? { [WORKSPACE_ID_HEADER]: this.profileValue.workspaceId }
         : {}),
     };
+    logger.debug("generated Databricks authentication headers", {
+      ...this.context(),
+      headerNames: Object.keys(headers),
+      token: tokenMetadata(token),
+    });
+    return headers;
   }
 
   async authorizationHeaderForUrl(
@@ -74,23 +90,42 @@ export class PersistentAuth implements PersistentAuthLike {
 
   async requestHeadersForUrl(requestUrl: string, login?: boolean): Promise<Record<string, string>> {
     const request = new URL(requestUrl);
-    if (request.origin !== new URL(this.profileValue.host).origin) return {};
+    const credentialOrigin = new URL(this.profileValue.host).origin;
+    if (request.origin !== credentialOrigin) {
+      logger.debug("skipped authentication for different origin", {
+        ...this.context(),
+        requestOrigin: request.origin,
+        credentialOrigin,
+      });
+      return {};
+    }
+    logger.debug("applying authentication to matching origin", {
+      ...this.context(),
+      requestOrigin: request.origin,
+    });
     return this.authenticate(login);
   }
 
   forceRefreshToken(login = true) {
+    logger.debug("Databricks token force refresh requested", { ...this.context(), login });
     return this.requestToken
       ? Promise.resolve(publicToken(this.requestToken))
       : this.requiredClient().forceRefresh(login);
   }
 
   refreshRejectedToken(staleAccessToken: string, login = true) {
+    logger.debug("Databricks rejected token refresh requested", {
+      ...this.context(),
+      login,
+      requestToken: Boolean(this.requestToken),
+    });
     return this.requestToken
       ? Promise.resolve(publicToken(this.requestToken))
       : this.requiredClient().refreshRejectedToken(staleAccessToken, login);
   }
 
   logout(): Promise<void> {
+    logger.debug("Databricks logout requested", this.context());
     return this.client?.logout() ?? Promise.resolve();
   }
 
@@ -122,6 +157,16 @@ export class PersistentAuth implements PersistentAuthLike {
     if (!this.client) throw new AuthError("oauth", "Authentication lifecycle is not available");
     return this.client;
   }
+
+  private context(): Record<string, unknown> {
+    return {
+      profile: this.profileValue.name,
+      host: this.profileValue.host,
+      authKind: this.profileValue.authKind,
+      storage: this.storageValue,
+      hasWorkspaceId: Boolean(this.profileValue.workspaceId),
+    };
+  }
 }
 
 /** Resolve a Databricks profile and open built-in credential storage. */
@@ -136,6 +181,14 @@ export async function createPersistentAuth(
     profile.authKind === AuthKind.AppOnBehalfOf ||
     profile.authKind === AuthKind.AppServicePrincipal;
   const backend = storage === Storage.Auto ? (inApp ? Storage.Memory : Storage.File) : storage;
+  logger.debug("creating persistent Databricks auth", {
+    profile: profile.name,
+    host: profile.host,
+    authKind: profile.authKind,
+    requestedStorage: storage,
+    resolvedStorage: backend,
+    inApp,
+  });
   const store =
     backend === Storage.Memory
       ? new MemoryCredentialStore()
@@ -154,6 +207,11 @@ export async function createPersistentAuthWithStorage(
   const profile =
     resolvedProfile ?? resolveDatabricksProfile(options, dependencies.environment ?? process.env);
   if (profile.authKind === AuthKind.AppOnBehalfOf) {
+    logger.debug("created request-scoped App OBO authentication", {
+      profile: profile.name,
+      host: profile.host,
+      hasWorkspaceId: Boolean(profile.workspaceId),
+    });
     return new PersistentAuth(profile, Storage.Memory, undefined, {
       accessToken: profile.accessToken!,
       tokenType: "Bearer",
@@ -167,11 +225,18 @@ export async function createPersistentAuthWithStorage(
     store,
     AuthOptions.create(options.auth),
   );
-  return new PersistentAuth(
+  const persistent = new PersistentAuth(
     profile,
     storage === Storage.Auto ? storageFromName(store.name()) : storage,
     client,
   );
+  logger.debug("created persistent authentication lifecycle", {
+    profile: profile.name,
+    host: profile.host,
+    authKind: profile.authKind,
+    storage: persistent.status().storage,
+  });
+  return persistent;
 }
 
 async function providerFor(
@@ -184,6 +249,11 @@ async function providerFor(
   switch (profile.authKind) {
     case AuthKind.UserToMachine: {
       const install = !inApp || options.installCliInApp === true;
+      logger.debug("selected Databricks CLI provider", {
+        profile: profile.name,
+        inApp,
+        install,
+      });
       return new DatabricksCliProvider(
         profile.name,
         () =>
@@ -194,9 +264,15 @@ async function providerFor(
       );
     }
     case AuthKind.PersonalAccessToken:
+      logger.debug("selected personal access token provider", { profile: profile.name });
       return new DatabricksPersonalAccessTokenProvider(profile.accessToken!);
     case AuthKind.MachineToMachine:
     case AuthKind.AppServicePrincipal: {
+      logger.debug("selected service-principal provider", {
+        profile: profile.name,
+        authKind: profile.authKind,
+        target: profile.target,
+      });
       const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
       return new DatabricksServicePrincipalProvider({
         tokenEndpoint: endpoints.tokenEndpoint,
@@ -224,15 +300,29 @@ async function resolveOAuthEndpoints(
   const host = profile.host.replace(/\/$/, "");
   if (profile.target === TargetKind.Account) {
     if (!profile.accountId) throw new AuthError("config", "Account target requires account_id");
-    return {
+    const endpoints = {
       tokenEndpoint: `${host}/oidc/accounts/${profile.accountId}/v1/token`,
     };
+    logger.debug("resolved account OAuth endpoint", {
+      profile: profile.name,
+      tokenOrigin: new URL(endpoints.tokenEndpoint).origin,
+    });
+    return endpoints;
   }
   const discovery =
     profile.target === TargetKind.Unified
       ? `${host}/oidc/accounts/${requiredAccountId(profile)}/.well-known/oauth-authorization-server`
       : `${host}/oidc/.well-known/oauth-authorization-server`;
+  logger.debug("requesting OAuth discovery", {
+    profile: profile.name,
+    target: profile.target,
+    discovery,
+  });
   const response = await fetcher(discovery, { redirect: "manual" });
+  logger.debug("received OAuth discovery response", {
+    profile: profile.name,
+    status: response.status,
+  });
   if (response.status === 404)
     throw new AuthError("oauth", `OAuth is not supported at ${discovery}`);
   if (!response.ok)
@@ -240,6 +330,10 @@ async function resolveOAuthEndpoints(
   const value = (await response.json()) as Record<string, unknown>;
   const tokenEndpoint = stringValue(value.token_endpoint);
   if (!tokenEndpoint) throw new AuthError("oauth", "OAuth discovery response is incomplete");
+  logger.debug("resolved OAuth token endpoint", {
+    profile: profile.name,
+    tokenOrigin: new URL(tokenEndpoint).origin,
+  });
   return { tokenEndpoint };
 }
 

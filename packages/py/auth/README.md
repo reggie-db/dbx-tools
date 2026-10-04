@@ -67,6 +67,20 @@ bun run auth:python-runtime
 Tests and release preparation run `bun run auth:python-runtime:check` so a
 lifecycle change cannot publish a stale embedded runtime.
 
+## Debug logging
+
+Set `LOG_LEVEL=debug` before starting Python to receive the same structured
+JavaScript lifecycle logs through PythonMonkey's console bridge:
+
+```sh
+LOG_LEVEL=debug uv run python packages/py/auth/tests/auth_cli.py both --no-login
+```
+
+The output covers profile selection, provider and CLI decisions, locks, cache
+reuse, refresh/login fallback, and generated header names. Credentials, client
+secrets, authorization values, raw headers, cache contents, and HTTP bodies are
+never logged.
+
 ## Modules
 
 - `client` loads the bundled runtime and exposes the async `AuthClient` facade.

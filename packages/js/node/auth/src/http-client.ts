@@ -1,3 +1,4 @@
+import { authLogger } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import {
   createPersistentAuth,
@@ -6,6 +7,8 @@ import {
 } from "./databricks-auth.ts";
 import type { DatabricksAuthOptions } from "./types.ts";
 import { DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER } from "./types.ts";
+
+const logger = authLogger("http");
 
 /** Options for one Databricks JSON API request. */
 export interface DatabricksRequestOptions {
@@ -27,10 +30,16 @@ export class DatabricksClient {
     options: DatabricksAuthOptions = { preferUserToMachine: true },
     dependencies: DatabricksAuthDependencies = {},
   ): Promise<DatabricksClient> {
-    return new DatabricksClient(
+    const client = new DatabricksClient(
       await createPersistentAuth(options, undefined, dependencies),
       dependencies.fetch ?? globalThis.fetch,
     );
+    logger.debug("created Databricks HTTP client", {
+      profile: client.profile(),
+      host: client.host(),
+      hasWorkspaceId: Boolean(client.workspaceId()),
+    });
+    return client;
   }
 
   profile(): string {
@@ -52,15 +61,39 @@ export class DatabricksClient {
   async request(path: string, options: DatabricksRequestOptions = {}): Promise<unknown> {
     const url = new URL(path, `${this.host().replace(/\/$/, "")}/`).toString();
     const method = options.method ?? (options.body === undefined ? "GET" : "POST");
+    const requestUrl = new URL(url);
+    logger.debug("sending Databricks API request", {
+      method,
+      origin: requestUrl.origin,
+      path: requestUrl.pathname,
+      hasBody: options.body !== undefined,
+      login: options.login ?? "auto",
+    });
     let authHeaders = await this.auth.authenticate(options.login);
     let response = await this.send(url, method, authHeaders, options);
+    logger.debug("received Databricks API response", {
+      method,
+      path: requestUrl.pathname,
+      status: response.status,
+      attempt: 1,
+    });
     if (response.status === 401) {
+      logger.debug("refreshing rejected Databricks API credential", {
+        method,
+        path: requestUrl.pathname,
+      });
       await this.auth.refreshRejectedToken(
         accessTokenFromHeaders(authHeaders),
         options.login ?? true,
       );
       authHeaders = await this.auth.authenticate(false);
       response = await this.send(url, method, authHeaders, options);
+      logger.debug("received Databricks API response", {
+        method,
+        path: requestUrl.pathname,
+        status: response.status,
+        attempt: 2,
+      });
     }
     const text = await response.text();
     if (!response.ok)
@@ -68,9 +101,20 @@ export class DatabricksClient {
         "http",
         `Databricks API ${path} returned HTTP ${response.status}: ${text}`,
       );
-    if (!text) return undefined;
+    if (!text) {
+      logger.debug("Databricks API response had no body", {
+        method,
+        path: requestUrl.pathname,
+      });
+      return undefined;
+    }
     try {
-      return JSON.parse(text);
+      const value = JSON.parse(text);
+      logger.debug("parsed Databricks API JSON response", {
+        method,
+        path: requestUrl.pathname,
+      });
+      return value;
     } catch (cause) {
       throw new AuthError("http", `Databricks API ${path} did not return JSON`, { cause });
     }

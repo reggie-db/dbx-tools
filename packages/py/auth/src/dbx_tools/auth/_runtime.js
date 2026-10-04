@@ -20734,141 +20734,6 @@ function isDatabricksAppEnv(source = process.env) {
   }
 }
 
-// packages/js/node/auth/src/errors.ts
-var exports_errors = {};
-__export(exports_errors, {
-  authError: () => authError,
-  AuthError: () => AuthError
-});
-
-class AuthError extends Error {
-  kind;
-  constructor(kind, message, options) {
-    super(message, options);
-    this.kind = kind;
-    this.name = "AuthError";
-  }
-}
-function authError(kind, message, cause) {
-  return cause instanceof AuthError ? cause : new AuthError(kind, message, { cause });
-}
-
-// packages/js/node/auth/src/databricks-cli.ts
-var exports_databricks_cli = {};
-__export(exports_databricks_cli, {
-  resolveDatabricksCli: () => resolveDatabricksCli,
-  resetDatabricksCliResolution: () => resetDatabricksCliResolution,
-  databricksCliToken: () => databricksCliToken,
-  databricksCliLogin: () => databricksCliLogin,
-  DatabricksCliProvider: () => DatabricksCliProvider
-});
-init_path();
-
-// projen/shims/python-node/child-process.ts
-init_host();
-var import_node_events = __toESM(require_events(), 1);
-var import_node_stream = __toESM(require_stream_browserify(), 1);
-
-class PythonChildProcess extends import_node_events.EventEmitter {
-  pid = undefined;
-  stdin = new import_node_stream.Writable({ write: (_chunk, _encoding, callback) => callback() });
-  stdout = new import_node_stream.Readable({ read() {} });
-  stderr = new import_node_stream.Readable({ read() {} });
-  active = true;
-  constructor(command, args, options) {
-    super();
-    options.signal?.addEventListener("abort", () => {
-      if (!this.active)
-        return;
-      this.active = false;
-      this.emit("error", Object.assign(new Error("Process execution was aborted"), { code: "ABORT_ERR" }));
-    });
-    pythonHost().process.run(command, args, options.env, undefined, undefined).then((result) => {
-      if (!this.active)
-        return;
-      this.active = false;
-      if (result.stdout)
-        this.stdout.push(result.stdout);
-      if (result.stderr)
-        this.stderr.push(result.stderr);
-      this.stdout.push(null);
-      this.stderr.push(null);
-      this.emit("close", result.exitCode);
-      this.emit("exit", result.exitCode);
-    }, (error) => {
-      if (!this.active)
-        return;
-      this.active = false;
-      this.stdout.push(null);
-      this.stderr.push(null);
-      this.emit("error", error);
-    });
-  }
-  kill() {
-    return false;
-  }
-}
-function spawn(command, args = [], options = {}) {
-  return new PythonChildProcess(command, args, options);
-}
-function execFile(command, args, _options, callback) {
-  pythonHost().process.run(command, args, undefined, undefined, undefined).then((result) => {
-    if (result.exitCode === 0) {
-      callback(null, { stdout: result.stdout ?? "", stderr: result.stderr ?? "" });
-    } else {
-      callback(Object.assign(new Error(result.stderr || `Command exited ${result.exitCode}`), {
-        code: result.exitCode
-      }));
-    }
-  }, (error) => callback(error instanceof Error ? error : new Error(String(error))));
-}
-
-// projen/shims/python-node/crypto.ts
-init_host();
-
-class PythonHash {
-  content = [];
-  update(value) {
-    const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-    this.content.push(...bytes);
-    return this;
-  }
-  digest(encoding) {
-    if (encoding !== "hex")
-      throw new Error(`Unsupported digest encoding: ${encoding}`);
-    return pythonHost().crypto.sha256(this.content);
-  }
-}
-function createHash(algorithm) {
-  if (algorithm.toLowerCase() !== "sha256") {
-    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
-  }
-  return new PythonHash;
-}
-function randomBytes(length) {
-  return Uint8Array.from(pythonHost().crypto.randomBytes(length));
-}
-function randomUUID() {
-  const bytes = randomBytes(16);
-  bytes[6] = bytes[6] & 15 | 64;
-  bytes[8] = bytes[8] & 63 | 128;
-  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-// packages/js/node/core/src/bin.ts
-init_fs_promises();
-init_path();
-
-// projen/shims/python-node/url.ts
-init_host();
-function fileURLToPath(url) {
-  return pythonHost().path.fileUrlToPath(String(url));
-}
-
-// packages/js/node/core/src/bin.ts
-var import_node_util = __toESM(require_util(), 1);
-
 // packages/js/shared/core/src/hash.ts
 function fnvHash(...values2) {
   return fnvHashWithOptions({}, ...values2);
@@ -20977,81 +20842,6 @@ function toBase32(value, alphabet, disableAlphabetValidation) {
     value >>>= 5;
   }
   return result;
-}
-
-// packages/js/shared/core/src/string-utils.ts
-var TOKENIZE_DEFAULTS = {
-  distinct: false,
-  lowerCase: false,
-  capitalize: false,
-  omitUriScheme: false,
-  omitEmailDomain: false,
-  camelCase: true
-};
-var IDENTIFIER_DEFAULTS = {
-  ...TOKENIZE_DEFAULTS,
-  lowerCase: true,
-  maxLength: Infinity,
-  truncateStrategy: "hash",
-  truncateHashLength: 6,
-  delimiter: "-"
-};
-function trimToNull(value) {
-  if (typeof value !== "string")
-    return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
-// packages/js/shared/core/src/error-utils.ts
-function toError(value) {
-  return value instanceof Error ? value : new Error(errorMessage(value));
-}
-function errorMessage(value) {
-  const message = errorMessages(value).next().value;
-  return message ?? String(value);
-}
-function* errorMessages(value) {
-  for (const node of errorNodes(value)) {
-    if (typeof node === "object") {
-      for (const key of ["message", "errorCode"]) {
-        if (key in node) {
-          const value2 = node[key];
-          if (typeof value2 === "string" && value2) {
-            yield value2;
-          }
-        }
-      }
-    } else if (typeof node === "string" && node) {
-      yield node;
-    }
-  }
-}
-function* errorNodes(err) {
-  const seen = new Set;
-  function* visit(node) {
-    if (node === undefined || node === null)
-      return;
-    if (Array.isArray(node)) {
-      for (const child of node) {
-        yield* visit(child);
-      }
-      return;
-    }
-    if (seen.has(node))
-      return;
-    seen.add(node);
-    yield node;
-    if (typeof node === "object") {
-      for (const key of ["errors", "cause"]) {
-        if (key in node) {
-          const value = node[key];
-          yield* visit(value);
-        }
-      }
-    }
-  }
-  yield* visit(err);
 }
 
 // packages/js/shared/core/src/function-utils.ts
@@ -21273,6 +21063,246 @@ function extractLoggerName(loggerName) {
 function logger(loggerName) {
   const name = extractLoggerName(loggerName);
   return createLogger(name);
+}
+
+// packages/js/node/auth/src/errors.ts
+var exports_errors = {};
+__export(exports_errors, {
+  authError: () => authError,
+  AuthError: () => AuthError
+});
+
+class AuthError extends Error {
+  kind;
+  constructor(kind, message, options) {
+    super(message, options);
+    this.kind = kind;
+    this.name = "AuthError";
+  }
+}
+function authError(kind, message, cause) {
+  return cause instanceof AuthError ? cause : new AuthError(kind, message, { cause });
+}
+
+// packages/js/node/auth/src/_logging.ts
+function authLogger(scope) {
+  return logger(`auth:${scope}`);
+}
+function credentialId(key) {
+  return fnvHash(key);
+}
+function tokenMetadata(token, now = new Date) {
+  if (!token)
+    return { present: false };
+  const expiryMs = token.expiry ? Date.parse(token.expiry) : undefined;
+  return {
+    present: true,
+    tokenType: token.tokenType,
+    scopeCount: token.scopes.length,
+    hasRefreshToken: Boolean(token.refreshToken),
+    hasExpiry: Boolean(token.expiry),
+    ...expiryMs !== undefined && Number.isFinite(expiryMs) ? {
+      expired: expiryMs <= now.getTime(),
+      expiresInSeconds: Math.round((expiryMs - now.getTime()) / 1000)
+    } : {}
+  };
+}
+function failureMetadata(cause) {
+  return {
+    name: cause instanceof Error ? cause.name : typeof cause,
+    ...cause instanceof AuthError ? { kind: cause.kind } : {}
+  };
+}
+
+// packages/js/node/auth/src/databricks-cli.ts
+var exports_databricks_cli = {};
+__export(exports_databricks_cli, {
+  resolveDatabricksCli: () => resolveDatabricksCli,
+  resetDatabricksCliResolution: () => resetDatabricksCliResolution,
+  databricksCliToken: () => databricksCliToken,
+  databricksCliLogin: () => databricksCliLogin,
+  DatabricksCliProvider: () => DatabricksCliProvider
+});
+init_path();
+
+// projen/shims/python-node/child-process.ts
+init_host();
+var import_node_events = __toESM(require_events(), 1);
+var import_node_stream = __toESM(require_stream_browserify(), 1);
+
+class PythonChildProcess extends import_node_events.EventEmitter {
+  pid = undefined;
+  stdin = new import_node_stream.Writable({ write: (_chunk, _encoding, callback) => callback() });
+  stdout = new import_node_stream.Readable({ read() {} });
+  stderr = new import_node_stream.Readable({ read() {} });
+  active = true;
+  constructor(command, args, options) {
+    super();
+    options.signal?.addEventListener("abort", () => {
+      if (!this.active)
+        return;
+      this.active = false;
+      this.emit("error", Object.assign(new Error("Process execution was aborted"), { code: "ABORT_ERR" }));
+    });
+    pythonHost().process.run(command, args, options.env, undefined, undefined).then((result) => {
+      if (!this.active)
+        return;
+      this.active = false;
+      if (result.stdout)
+        this.stdout.push(result.stdout);
+      if (result.stderr)
+        this.stderr.push(result.stderr);
+      this.stdout.push(null);
+      this.stderr.push(null);
+      this.emit("close", result.exitCode);
+      this.emit("exit", result.exitCode);
+    }, (error) => {
+      if (!this.active)
+        return;
+      this.active = false;
+      this.stdout.push(null);
+      this.stderr.push(null);
+      this.emit("error", error);
+    });
+  }
+  kill() {
+    return false;
+  }
+}
+function spawn(command, args = [], options = {}) {
+  return new PythonChildProcess(command, args, options);
+}
+function execFile(command, args, _options, callback) {
+  pythonHost().process.run(command, args, undefined, undefined, undefined).then((result) => {
+    if (result.exitCode === 0) {
+      callback(null, { stdout: result.stdout ?? "", stderr: result.stderr ?? "" });
+    } else {
+      callback(Object.assign(new Error(result.stderr || `Command exited ${result.exitCode}`), {
+        code: result.exitCode
+      }));
+    }
+  }, (error) => callback(error instanceof Error ? error : new Error(String(error))));
+}
+
+// projen/shims/python-node/crypto.ts
+init_host();
+
+class PythonHash {
+  content = [];
+  update(value) {
+    const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    this.content.push(...bytes);
+    return this;
+  }
+  digest(encoding) {
+    if (encoding !== "hex")
+      throw new Error(`Unsupported digest encoding: ${encoding}`);
+    return pythonHost().crypto.sha256(this.content);
+  }
+}
+function createHash(algorithm) {
+  if (algorithm.toLowerCase() !== "sha256") {
+    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+  }
+  return new PythonHash;
+}
+function randomBytes(length) {
+  return Uint8Array.from(pythonHost().crypto.randomBytes(length));
+}
+function randomUUID() {
+  const bytes = randomBytes(16);
+  bytes[6] = bytes[6] & 15 | 64;
+  bytes[8] = bytes[8] & 63 | 128;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+// packages/js/node/core/src/bin.ts
+init_fs_promises();
+init_path();
+
+// projen/shims/python-node/url.ts
+init_host();
+function fileURLToPath(url) {
+  return pythonHost().path.fileUrlToPath(String(url));
+}
+
+// packages/js/node/core/src/bin.ts
+var import_node_util = __toESM(require_util(), 1);
+
+// packages/js/shared/core/src/string-utils.ts
+var TOKENIZE_DEFAULTS = {
+  distinct: false,
+  lowerCase: false,
+  capitalize: false,
+  omitUriScheme: false,
+  omitEmailDomain: false,
+  camelCase: true
+};
+var IDENTIFIER_DEFAULTS = {
+  ...TOKENIZE_DEFAULTS,
+  lowerCase: true,
+  maxLength: Infinity,
+  truncateStrategy: "hash",
+  truncateHashLength: 6,
+  delimiter: "-"
+};
+function trimToNull(value) {
+  if (typeof value !== "string")
+    return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+// packages/js/shared/core/src/error-utils.ts
+function toError(value) {
+  return value instanceof Error ? value : new Error(errorMessage(value));
+}
+function errorMessage(value) {
+  const message = errorMessages(value).next().value;
+  return message ?? String(value);
+}
+function* errorMessages(value) {
+  for (const node of errorNodes(value)) {
+    if (typeof node === "object") {
+      for (const key of ["message", "errorCode"]) {
+        if (key in node) {
+          const value2 = node[key];
+          if (typeof value2 === "string" && value2) {
+            yield value2;
+          }
+        }
+      }
+    } else if (typeof node === "string" && node) {
+      yield node;
+    }
+  }
+}
+function* errorNodes(err) {
+  const seen = new Set;
+  function* visit(node) {
+    if (node === undefined || node === null)
+      return;
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        yield* visit(child);
+      }
+      return;
+    }
+    if (seen.has(node))
+      return;
+    seen.add(node);
+    yield node;
+    if (typeof node === "object") {
+      for (const key of ["errors", "cause"]) {
+        if (key in node) {
+          const value = node[key];
+          yield* visit(value);
+        }
+      }
+    }
+  }
+  yield* visit(err);
 }
 
 // packages/js/node/core/src/bin.ts
@@ -25250,12 +25280,25 @@ var databricks_cli_assets_default = {
 
 // packages/js/node/auth/src/databricks-cli.ts
 var resolutionCache = new Map;
+var logger4 = authLogger("cli");
 function resolveDatabricksCli(environment = process.env, options = {}) {
   const candidate = stringValue(environment.DATABRICKS_CLI_PATH) ?? "databricks";
   const key = `${candidate}\x00${homedir()}\x00${process.platform}\x00${process.arch}\x00${options.install !== false}`;
   const cached = resolutionCache.get(key);
-  if (cached)
+  if (cached) {
+    logger4.debug("reused Databricks CLI resolution", {
+      candidate,
+      install: options.install !== false
+    });
     return cached;
+  }
+  logger4.debug("resolving Databricks CLI", {
+    candidate,
+    install: options.install !== false,
+    platform: process.platform,
+    arch: process.arch,
+    minimumVersion: databricks_cli_assets_default.minimumVersion
+  });
   const resolved = resolveDatabricksCliUncached(candidate, options.install !== false).catch((error) => {
     resolutionCache.delete(key);
     throw error;
@@ -25265,18 +25308,30 @@ function resolveDatabricksCli(environment = process.env, options = {}) {
 }
 function resetDatabricksCliResolution() {
   resolutionCache.clear();
+  logger4.debug("cleared Databricks CLI resolution cache");
 }
 async function resolveDatabricksCliUncached(candidate, install) {
-  if (await compatibleDatabricksCli(candidate))
+  if (await compatibleDatabricksCli(candidate)) {
+    logger4.debug("selected installed Databricks CLI", { executable: candidate });
     return candidate;
+  }
   const managed = managedExecutable();
-  if (await compatibleDatabricksCli(managed))
+  if (await compatibleDatabricksCli(managed)) {
+    logger4.debug("selected managed Databricks CLI", { executable: managed });
     return managed;
-  if (!install)
+  }
+  if (!install) {
+    logger4.debug("compatible Databricks CLI unavailable and installation disabled");
     return;
+  }
   const asset = platformAsset();
-  if (!asset)
+  if (!asset) {
+    logger4.debug("no managed Databricks CLI asset for platform", {
+      platform: process.platform,
+      arch: process.arch
+    });
     return;
+  }
   const root = join(homedir(), ".databricks");
   const binDir = join(root, "bin");
   const executable = managedExecutableName();
@@ -25290,6 +25345,10 @@ async function resolveDatabricksCliUncached(candidate, install) {
       return version === databricks_cli_assets_default.version ? version : undefined;
     }
   });
+  logger4.debug("ensured managed Databricks CLI", {
+    executable: installed.path,
+    version: databricks_cli_assets_default.version
+  });
   return installed.path;
 }
 function managedExecutable() {
@@ -25301,11 +25360,27 @@ function managedExecutableName() {
 async function compatibleDatabricksCli(executable) {
   try {
     const result = await runProcess2(executable, ["--version"], {}, 1e4);
-    if (result.exitCode !== 0)
+    if (result.exitCode !== 0) {
+      logger4.debug("Databricks CLI version probe failed", {
+        executable,
+        exitCode: result.exitCode
+      });
       return false;
+    }
     const version = parseVersion(result);
-    return version !== undefined && isVersionAtLeast(version, databricks_cli_assets_default.minimumVersion);
-  } catch {
+    const compatible = version !== undefined && isVersionAtLeast(version, databricks_cli_assets_default.minimumVersion);
+    logger4.debug("probed Databricks CLI version", {
+      executable,
+      version: version ?? "unknown",
+      minimumVersion: databricks_cli_assets_default.minimumVersion,
+      compatible
+    });
+    return compatible;
+  } catch (cause) {
+    logger4.debug("Databricks CLI version probe unavailable", {
+      executable,
+      error: failureMetadata(cause)
+    });
     return false;
   }
 }
@@ -25314,11 +25389,14 @@ function platformAsset() {
   return databricks_cli_assets_default.assets[key];
 }
 async function databricksCliLogin(profile, timeoutMs, executable = process.env.DATABRICKS_CLI_PATH ?? "databricks", environment = {}) {
+  logger4.debug("starting Databricks CLI login", { profile, executable, timeoutMs });
   const result = await runProcess2(executable, ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`], environment);
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
+  logger4.debug("Databricks CLI login completed", { profile, executable });
 }
 async function databricksCliToken(profile, forceRefresh = false, executable = process.env.DATABRICKS_CLI_PATH ?? "databricks", environment = {}) {
+  logger4.debug("requesting Databricks CLI token", { profile, executable, forceRefresh });
   const args = ["auth", "token", "--profile", profile, "--output", "json"];
   if (forceRefresh)
     args.push("--force-refresh");
@@ -25334,13 +25412,19 @@ async function databricksCliToken(profile, forceRefresh = false, executable = pr
   const accessToken = stringValue(value.access_token ?? value.accessToken);
   if (!accessToken)
     throw new AuthError("cli", "Databricks CLI token output had no access token");
-  return {
+  const token = {
     accessToken,
     tokenType: stringValue(value.token_type ?? value.tokenType) ?? "Bearer",
     ...stringValue(value.refresh_token ?? value.refreshToken) ? { refreshToken: stringValue(value.refresh_token ?? value.refreshToken) } : {},
     ...stringValue(value.expiry ?? value.expires_at) ? { expiry: stringValue(value.expiry ?? value.expires_at) } : {},
     scopes: Array.isArray(value.scopes) ? value.scopes.filter((scope) => typeof scope === "string") : []
   };
+  logger4.debug("received Databricks CLI token", {
+    profile,
+    forceRefresh,
+    token: tokenMetadata(token)
+  });
+  return token;
 }
 async function runProcess2(command, args, environment, timeoutMs) {
   const controller = timeoutMs === undefined ? undefined : new AbortController;
@@ -25385,10 +25469,17 @@ class DatabricksCliProvider {
   }
   resolveExecutable() {
     if (typeof this.executableOrResolver === "string") {
+      logger4.debug("using configured Databricks CLI executable", {
+        profile: this.profile,
+        executable: this.executableOrResolver
+      });
       return Promise.resolve(this.executableOrResolver);
     }
-    if (this.resolution)
+    if (this.resolution) {
+      logger4.debug("reused provider CLI resolution", { profile: this.profile });
       return this.resolution;
+    }
+    logger4.debug("resolving provider CLI lazily", { profile: this.profile });
     this.resolution = this.executableOrResolver().then((executable) => {
       if (!executable)
         throw new AuthError("cli", "Databricks CLI is unavailable on this platform");
@@ -25411,6 +25502,8 @@ __export(exports_lifecycle, {
   publicToken: () => publicToken,
   AuthClient: () => AuthClient
 });
+var logger5 = authLogger("lifecycle");
+
 class AuthClient {
   key;
   provider;
@@ -25423,15 +25516,28 @@ class AuthClient {
     this.store = store;
     this.options = options;
     this.now = now;
+    logger5.debug("created authentication lifecycle", {
+      credential: credentialId(key),
+      storage: store.name(),
+      refreshBufferSeconds: options.refreshBufferSeconds,
+      lockTimeoutSeconds: options.lockTimeoutSeconds,
+      loginTimeoutSeconds: options.loginTimeoutSeconds,
+      silentProvider: provider.canAuthenticateSilently()
+    });
   }
   storeName() {
     return this.store.name();
   }
   async login() {
+    logger5.debug("interactive login requested", this.context());
     return this.withLock(async () => {
       await this.store.prepareWrite();
       const token = validateToken(await this.provider.login(this.options.loginTimeoutSeconds * 1000));
       await this.store.save(this.key, token);
+      logger5.debug("interactive login stored credential", {
+        ...this.context(),
+        token: tokenMetadata(token, this.now())
+      });
       return publicToken(token);
     });
   }
@@ -25442,6 +25548,7 @@ class AuthClient {
     return this.loadToken(true);
   }
   async tokenWithLogin(login) {
+    logger5.debug("token requested", { ...this.context(), login: login ?? "auto" });
     if (login === true)
       return this.login();
     if (login === false)
@@ -25449,21 +25556,38 @@ class AuthClient {
     return this.tokenOrLogin();
   }
   forceRefresh(login = true) {
+    logger5.debug("forced refresh requested", { ...this.context(), login });
     return this.refreshRejected(undefined, login);
   }
   refreshRejectedToken(staleAccessToken, login = true) {
+    logger5.debug("rejected token refresh requested", { ...this.context(), login });
     return this.refreshRejected(staleAccessToken, login);
   }
   async logout() {
+    logger5.debug("logout requested", this.context());
     await this.withLock(() => this.store.remove(this.key));
+    logger5.debug("stored credential removed", this.context());
   }
   async loadToken(login) {
     const existing = await this.store.load(this.key);
-    if (existing && this.canReuse(existing))
+    const reusable = Boolean(existing && this.canReuse(existing));
+    logger5.debug("checked credential cache", {
+      ...this.context(),
+      login,
+      reusable,
+      token: tokenMetadata(existing, this.now())
+    });
+    if (existing && reusable)
       return publicToken(existing);
     return this.withLock(async () => {
       const current = await this.store.load(this.key);
-      if (current && this.canReuse(current))
+      const currentReusable = Boolean(current && this.canReuse(current));
+      logger5.debug("rechecked credential cache after lock", {
+        ...this.context(),
+        reusable: currentReusable,
+        token: tokenMetadata(current, this.now())
+      });
+      if (current && currentReusable)
         return publicToken(current);
       return this.renew(current, login);
     });
@@ -25472,6 +25596,10 @@ class AuthClient {
     return this.withLock(async () => {
       const current = await this.store.load(this.key);
       if (staleAccessToken && current?.accessToken && current.accessToken !== staleAccessToken && isValid(current, this.now())) {
+        logger5.debug("reused replacement for rejected credential", {
+          ...this.context(),
+          token: tokenMetadata(current, this.now())
+        });
         return publicToken(current);
       }
       return this.renew(current, login);
@@ -25480,29 +25608,56 @@ class AuthClient {
   async renew(current, login) {
     let token;
     if (current) {
+      logger5.debug("refreshing stored credential", {
+        ...this.context(),
+        loginFallback: login,
+        token: tokenMetadata(current, this.now())
+      });
       try {
         token = await this.provider.refresh(current);
       } catch (error) {
+        logger5.debug("credential refresh failed", {
+          ...this.context(),
+          loginFallback: login,
+          error: failureMetadata(error)
+        });
         if (!login)
           throw error;
+        logger5.debug("falling back to interactive login", this.context());
         token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
       }
     } else if (this.provider.canAuthenticateSilently()) {
+      logger5.debug("attempting silent credential acquisition", {
+        ...this.context(),
+        loginFallback: login
+      });
       try {
         token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
       } catch (error) {
+        logger5.debug("silent credential acquisition failed", {
+          ...this.context(),
+          loginFallback: login,
+          error: failureMetadata(error)
+        });
         if (!login)
           throw error;
+        logger5.debug("falling back to interactive login", this.context());
         token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
       }
     } else if (login) {
+      logger5.debug("provider requires interactive login", this.context());
       token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
     } else {
       throw new AuthError("oauth", "No stored credential is available and interactive login is disabled");
     }
     token = validateToken(token, current);
+    logger5.debug("credential acquisition completed", {
+      ...this.context(),
+      token: tokenMetadata(token, this.now())
+    });
     await this.store.prepareWrite();
     await this.store.save(this.key, token);
+    logger5.debug("credential saved", this.context());
     return publicToken(token);
   }
   canReuse(token) {
@@ -25513,7 +25668,9 @@ class AuthClient {
     return Date.parse(token.expiry) - this.now().getTime() > this.options.refreshBufferSeconds * 1000;
   }
   async withLock(action) {
+    logger5.debug("waiting for credential lock", this.context());
     const lease = await this.store.acquireLock(this.key, this.options.lockTimeoutSeconds * 1000);
+    logger5.debug("credential lock acquired", this.context());
     let failure;
     try {
       return await action();
@@ -25523,11 +25680,19 @@ class AuthClient {
     } finally {
       try {
         await this.store.releaseLock(lease);
+        logger5.debug("credential lock released", this.context());
       } catch (releaseError) {
+        logger5.debug("credential lock release failed", {
+          ...this.context(),
+          error: failureMetadata(releaseError)
+        });
         if (failure === undefined)
           throw releaseError;
       }
     }
+  }
+  context() {
+    return { credential: credentialId(this.key), storage: this.store.name() };
   }
 }
 function publicToken(token) {
@@ -25564,6 +25729,7 @@ init_path();
 init_fs_promises();
 init_path();
 var POLL_MS2 = 50;
+var logger6 = logger("auth:file-lock");
 var python2 = globalThis.python;
 if (!python2)
   throw new Error("PythonMonkey globalThis.python is unavailable");
@@ -25590,17 +25756,30 @@ async function acquireFileLock(key, options = {}) {
   await mkdir2(dir, { recursive: true });
   const lock = createLock(lockPath);
   options.onAcquire?.(acquisition);
+  logger6.debug("acquiring Python file lock", {
+    credential: fnvHash(lockId2(key)),
+    backend: acquisition.backend,
+    timeoutMs: options.timeoutMs
+  });
   let waiting = false;
   while (!tryAcquire(lock)) {
     if (!waiting) {
       waiting = true;
       options.onWait?.(acquisition);
+      logger6.debug("waiting for Python file lock", {
+        credential: fnvHash(lockId2(key)),
+        backend: acquisition.backend
+      });
     }
     if (deadline !== undefined && Date.now() >= deadline) {
       throw new Error(`Timed out waiting for file lock: ${lockPath}`);
     }
     await sleep(POLL_MS2);
   }
+  logger6.debug("Python file lock acquired", {
+    credential: fnvHash(lockId2(key)),
+    backend: acquisition.backend
+  });
   let active = true;
   return {
     ...acquisition,
@@ -25609,6 +25788,10 @@ async function acquireFileLock(key, options = {}) {
         return;
       active = false;
       releaseLock(lock);
+      logger6.debug("Python file lock released", {
+        credential: fnvHash(lockId2(key)),
+        backend: acquisition.backend
+      });
     }
   };
 }
@@ -25688,6 +25871,8 @@ var AUTH_TYPE_APP_OBO = "app_obo";
 var AUTH_TYPE_APP_SP = "app_sp";
 
 // packages/js/node/auth/src/node-storage.ts
+var logger7 = authLogger("file-storage");
+
 class NodeFileLocks {
   lockDirectory;
   leases = new Map;
@@ -25695,9 +25880,17 @@ class NodeFileLocks {
     this.lockDirectory = lockDirectory;
   }
   async acquire(key, timeoutMs) {
+    logger7.debug("waiting for file lock", {
+      credential: credentialId(key),
+      timeoutMs
+    });
     const lease = await acquireFileLock(key, { dir: this.lockDirectory, timeoutMs });
     const id = randomUUID();
     this.leases.set(id, lease);
+    logger7.debug("file lock acquired", {
+      credential: credentialId(key),
+      backend: lease.backend
+    });
     return id;
   }
   async release(id) {
@@ -25706,6 +25899,7 @@ class NodeFileLocks {
       return;
     this.leases.delete(id);
     await lease.release();
+    logger7.debug("file lock released", { backend: lease.backend });
   }
 }
 
@@ -25720,10 +25914,19 @@ class FileCredentialStore {
   }
   async load(key) {
     const store = this.forKey(key);
-    return store.withCacheLock(async () => deserializeToken((await store.readCache()).tokens[key]));
+    return store.withCacheLock(async () => {
+      const token = deserializeToken((await store.readCache()).tokens[key]);
+      logger7.debug("loaded file credential", {
+        credential: credentialId(key),
+        layout: this.layout,
+        token: tokenMetadata(token)
+      });
+      return token;
+    });
   }
   async prepareWrite() {
     await ensureDirectory(this.root, 448);
+    logger7.debug("prepared credential directory", { layout: this.layout });
   }
   async save(key, token) {
     const store = this.forKey(key);
@@ -25731,6 +25934,11 @@ class FileCredentialStore {
       const cache = await store.readCache();
       cache.tokens[key] = serializeToken(token);
       await store.writeCache(cache);
+      logger7.debug("saved file credential", {
+        credential: credentialId(key),
+        layout: this.layout,
+        token: tokenMetadata(token)
+      });
     });
   }
   async remove(key) {
@@ -25739,6 +25947,10 @@ class FileCredentialStore {
       const cache = await store.readCache();
       delete cache.tokens[key];
       await store.writeCache(cache);
+      logger7.debug("removed file credential", {
+        credential: credentialId(key),
+        layout: this.layout
+      });
     });
   }
   acquireLock(key, timeoutMs) {
@@ -25772,6 +25984,10 @@ class FileCredentialStore {
       if (cache.version !== 1 || typeof cache.tokens !== "object" || !cache.tokens) {
         throw new AuthError("storage", "Token cache must use version 1");
       }
+      logger7.debug("read token cache", {
+        exists: Boolean(source),
+        credentialCount: Object.keys(cache.tokens).length
+      });
       return cache;
     } catch (cause) {
       if (cause instanceof AuthError)
@@ -25783,6 +25999,7 @@ class FileCredentialStore {
     try {
       await atomicWriteTextFile(join(this.root, "token-cache.json"), `${JSON.stringify(cache, null, 2)}
 `, 384);
+      logger7.debug("wrote token cache", { credentialCount: Object.keys(cache.tokens).length });
     } catch (cause) {
       throw new AuthError("storage", "Could not write Databricks token cache", { cause });
     }
@@ -25849,6 +26066,7 @@ var exports_personal_access_token = {};
 __export(exports_personal_access_token, {
   DatabricksPersonalAccessTokenProvider: () => DatabricksPersonalAccessTokenProvider
 });
+var logger8 = authLogger("pat");
 
 class DatabricksPersonalAccessTokenProvider {
   accessToken;
@@ -25868,6 +26086,7 @@ class DatabricksPersonalAccessTokenProvider {
     return true;
   }
   token() {
+    logger8.debug("using configured personal access token");
     return {
       accessToken: this.accessToken,
       tokenType: "Bearer",
@@ -25894,6 +26113,7 @@ init_path();
 
 // packages/js/node/auth/src/_profile-core.ts
 var import_ini = __toESM(require_ini(), 1);
+var logger9 = authLogger("profile-selection");
 var SETTINGS_SECTION = "__settings__";
 function parseDatabricksConfig(source) {
   let parsed;
@@ -25932,30 +26152,64 @@ function loadRawProfile(config, name) {
 }
 function resolveProfileName(requested, explicit, config, preferUserToMachine) {
   let selected = requested;
-  if (!selected)
+  let source = requested ? "requested" : undefined;
+  if (!selected) {
     selected = nonempty(config?.get(SETTINGS_SECTION)?.get("default_profile"));
-  if (!selected && config?.has("DEFAULT"))
+    if (selected)
+      source = "settings-default";
+  }
+  if (!selected && config?.has("DEFAULT")) {
     selected = "DEFAULT";
+    source = "default-section";
+  }
   if (!selected) {
     const profiles = [...config?.keys() ?? []].filter((name) => name !== SETTINGS_SECTION);
-    if (profiles.length === 1)
+    if (profiles.length === 1) {
       selected = profiles[0];
+      source = "sole-profile";
+    }
   }
-  selected ??= "DEFAULT";
+  if (!selected) {
+    selected = "DEFAULT";
+    source = "fallback";
+  }
   if (selected === SETTINGS_SECTION)
     throw new AuthError("config", `${SETTINGS_SECTION} is reserved`);
-  if (explicit || !preferUserToMachine || !config)
+  if (explicit || !preferUserToMachine || !config) {
+    logger9.debug("selected Databricks profile", {
+      profile: selected,
+      source,
+      explicit,
+      preferUserToMachine
+    });
     return selected;
+  }
   const current = loadRawProfile(config, selected);
-  if (!isM2mProfile(current) || !current.host)
+  if (!isM2mProfile(current) || !current.host) {
+    logger9.debug("selected Databricks profile", {
+      profile: selected,
+      source,
+      explicit,
+      preferUserToMachine
+    });
     return selected;
+  }
   const matches = [...config.keys()].filter((name) => {
     if (name === selected || name === SETTINGS_SECTION)
       return false;
     const candidate = loadRawProfile(config, name);
     return candidate.authType === "databricks-cli" && sameTarget(current, candidate);
   });
-  return matches.length === 1 ? matches[0] : selected;
+  const preferred = matches.length === 1 ? matches[0] : selected;
+  logger9.debug("selected Databricks profile", {
+    profile: preferred,
+    source: preferred === selected ? source : "matching-cli-profile",
+    originalProfile: preferred === selected ? undefined : selected,
+    explicit,
+    preferUserToMachine,
+    matchingCliProfiles: matches.length
+  });
+  return preferred;
 }
 function normalizeHost(value, profile = "DEFAULT") {
   const selected = nonempty(value);
@@ -26065,13 +26319,21 @@ function isRecord(value) {
 
 // packages/js/node/auth/src/profile.ts
 var configCache = new Map;
+var logger10 = authLogger("profile");
 function resolveConfigFile(explicit, environment = process.env) {
   const selected = nonempty(explicit) ?? nonempty(environment.DATABRICKS_CONFIG_FILE) ?? DEFAULT_CONFIG_FILE;
   const expanded = selected === "~" ? homedir() : selected.startsWith("~/") ? resolve(homedir(), selected.slice(2)) : selected;
-  return isAbsolute(expanded) ? expanded : resolve(expanded);
+  const path = isAbsolute(expanded) ? expanded : resolve(expanded);
+  logger10.debug("resolved Databricks config file", {
+    path,
+    source: nonempty(explicit) ? "option" : nonempty(environment.DATABRICKS_CONFIG_FILE) ? "environment" : "default"
+  });
+  return path;
 }
 function invalidateConfigFile(configFile) {
-  configCache.delete(resolveConfigFile(configFile));
+  const path = resolveConfigFile(configFile);
+  configCache.delete(path);
+  logger10.debug("invalidated Databricks config cache", { path });
 }
 function configProfileExists(profile, configFile) {
   if (!profile.trim() || profile === SETTINGS_SECTION)
@@ -26083,9 +26345,11 @@ function listDatabricksProfiles(configFile, refresh = false, environment = proce
   if (refresh)
     configCache.delete(path);
   const config = loadConfig(path);
-  if (!config)
+  if (!config) {
+    logger10.debug("listed Databricks profiles", { path, refresh, count: 0 });
     return [];
-  return [...config.keys()].filter((name) => name !== SETTINGS_SECTION).map((name) => {
+  }
+  const profiles = [...config.keys()].filter((name) => name !== SETTINGS_SECTION).map((name) => {
     const profile = loadRawProfile(config, name);
     const host2 = nonempty(profile.host);
     const accountId = nonempty(profile.accountId);
@@ -26098,6 +26362,8 @@ function listDatabricksProfiles(configFile, refresh = false, environment = proce
       authKind: resolveAuthKind(profile.authType, profile.clientId, profile.clientSecret, profile.accessToken)
     };
   }).sort((left, right) => left.name.localeCompare(right.name));
+  logger10.debug("listed Databricks profiles", { path, refresh, count: profiles.length });
+  return profiles;
 }
 function resolveDatabricksProfile(options, environment = process.env) {
   const inApp = isDatabricksAppEnv({ ...environment });
@@ -26143,6 +26409,20 @@ function resolveDatabricksProfile(options, environment = process.env) {
     authKind,
     accessToken
   });
+  logger10.debug("resolved Databricks profile", {
+    profile: profileName,
+    host: host2,
+    authKind,
+    target,
+    inApp,
+    explicitProfile,
+    authType: authType ?? "automatic",
+    hasAccountId: Boolean(accountId),
+    hasWorkspaceId: Boolean(workspaceId),
+    hasGroupId: Boolean(groupId),
+    scopeCount: scopes.length,
+    configPath
+  });
   return {
     name: profileName,
     host: host2,
@@ -26165,15 +26445,22 @@ function loadConfig(path) {
     const cached = configCache.get(path);
     if (cached instanceof Error)
       throw cached;
+    logger10.debug("reused Databricks config cache", {
+      path,
+      exists: Boolean(cached),
+      profileCount: cached?.size ?? 0
+    });
     return cached;
   }
   if (!existsSync(path)) {
     configCache.set(path, undefined);
+    logger10.debug("Databricks config file not found", { path });
     return;
   }
   try {
     const config = parseDatabricksConfig(readFileSync(path, "utf8"));
     configCache.set(path, config);
+    logger10.debug("parsed Databricks config file", { path, profileCount: config.size });
     return config;
   } catch (cause) {
     const error = cause instanceof Error ? cause : new AuthError("config", `Could not read ${path}`, { cause });
@@ -27240,6 +27527,8 @@ var _nodiscoverycheck = Symbol();
 var _expectedIssuer = Symbol();
 
 // packages/js/node/auth/src/service-principal.ts
+var logger11 = authLogger("service-principal");
+
 class DatabricksServicePrincipalProvider {
   config;
   authorizationServer;
@@ -27270,19 +27559,30 @@ class DatabricksServicePrincipalProvider {
     return true;
   }
   async acquire() {
+    logger11.debug("requesting service-principal token", {
+      tokenOrigin: new URL(this.config.tokenEndpoint).origin,
+      scopeCount: this.config.scopes.length,
+      hasGroupId: Boolean(this.config.groupId),
+      allowInsecureRequests: Boolean(this.config.allowInsecureRequests)
+    });
     try {
       const response = await clientCredentialsGrantRequest(this.authorizationServer, this.client, ClientSecretBasic(this.config.clientSecret), {
         scope: [...new Set(this.config.scopes)].sort().join(" "),
         ...this.config.groupId ? { assume_group: this.config.groupId } : {}
       }, this.requestOptions);
       const value = await processClientCredentialsResponse(this.authorizationServer, this.client, response);
-      return {
+      const token = {
         accessToken: value.access_token,
         tokenType: value.token_type.toLowerCase() === "bearer" ? "Bearer" : value.token_type,
         ...value.expires_in !== undefined ? { expiry: new Date(Date.now() + value.expires_in * 1000).toISOString() } : {},
         scopes: value.scope?.split(/\s+/).filter(Boolean) ?? [...this.config.scopes]
       };
+      logger11.debug("received service-principal token", { token: tokenMetadata(token) });
+      return token;
     } catch (cause) {
+      logger11.debug("service-principal token request failed", {
+        error: failureMetadata(cause)
+      });
       throw new AuthError("oauth", "Databricks service-principal authentication failed", {
         cause
       });
@@ -27296,12 +27596,14 @@ __export(exports_storage, {
   MemoryLockAdapter: () => MemoryLockAdapter,
   MemoryCredentialStore: () => MemoryCredentialStore
 });
+var logger12 = authLogger("memory-storage");
 
 class MemoryLockAdapter {
   #tails = new Map;
   #leases = new Map;
   #sequence = 0;
   async acquire(key, timeoutMs) {
+    const credential = credentialId(key);
     const previous = this.#tails.get(key) ?? Promise.resolve();
     let release;
     const current = new Promise((resolve2) => {
@@ -27310,6 +27612,7 @@ class MemoryLockAdapter {
     const tail = previous.then(() => current);
     this.#tails.set(key, tail);
     try {
+      logger12.debug("waiting for memory lock", { credential, timeoutMs });
       await withTimeout(previous, timeoutMs, `Timed out waiting for lock ${key}`);
     } catch (error) {
       release();
@@ -27324,9 +27627,13 @@ class MemoryLockAdapter {
       if (this.#tails.get(key) === tail)
         this.#tails.delete(key);
     });
+    logger12.debug("memory lock acquired", { credential });
     return lease;
   }
   async release(lease) {
+    logger12.debug("releasing memory lock", {
+      credential: credentialId(lease.split(":").slice(1).join(":"))
+    });
     this.#leases.get(lease)?.();
   }
 }
@@ -27339,14 +27646,23 @@ class MemoryCredentialStore {
   }
   async load(key) {
     const token = this.#tokens.get(key);
+    logger12.debug("loaded memory credential", {
+      credential: credentialId(key),
+      token: tokenMetadata(token)
+    });
     return token ? structuredClone(token) : undefined;
   }
   async prepareWrite() {}
   async save(key, token) {
     this.#tokens.set(key, structuredClone(token));
+    logger12.debug("saved memory credential", {
+      credential: credentialId(key),
+      token: tokenMetadata(token)
+    });
   }
   async remove(key) {
     this.#tokens.delete(key);
+    logger12.debug("removed memory credential", { credential: credentialId(key) });
   }
   acquireLock(key, timeoutMs) {
     return this.locks.acquire(key, timeoutMs);
@@ -27376,6 +27692,8 @@ async function withTimeout(promise, timeoutMs, message) {
 }
 
 // packages/js/node/auth/src/databricks-auth.ts
+var logger13 = authLogger("databricks");
+
 class PersistentAuth {
   profileValue;
   storageValue;
@@ -27390,34 +27708,65 @@ class PersistentAuth {
   async challenge() {
     if (!this.client)
       throw new AuthError("oauth", "app_obo uses the current request token and cannot start login");
+    logger13.debug("authentication challenge requested", this.context());
     await this.client.login();
+    logger13.debug("authentication challenge completed", this.context());
   }
   token(login) {
+    logger13.debug("Databricks token requested", {
+      ...this.context(),
+      login: login ?? "auto",
+      source: this.requestToken ? "request" : "lifecycle"
+    });
     return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().tokenWithLogin(login);
   }
   async authenticate(login) {
     const token = await this.token(login);
-    return {
+    const headers = {
       [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
       ...this.profileValue.workspaceId ? { [WORKSPACE_ID_HEADER]: this.profileValue.workspaceId } : {}
     };
+    logger13.debug("generated Databricks authentication headers", {
+      ...this.context(),
+      headerNames: Object.keys(headers),
+      token: tokenMetadata(token)
+    });
+    return headers;
   }
   async authorizationHeaderForUrl(requestUrl, login) {
     return (await this.requestHeadersForUrl(requestUrl, login))[DEFAULT_ACCESS_TOKEN_HEADER];
   }
   async requestHeadersForUrl(requestUrl, login) {
     const request = new URL(requestUrl);
-    if (request.origin !== new URL(this.profileValue.host).origin)
+    const credentialOrigin = new URL(this.profileValue.host).origin;
+    if (request.origin !== credentialOrigin) {
+      logger13.debug("skipped authentication for different origin", {
+        ...this.context(),
+        requestOrigin: request.origin,
+        credentialOrigin
+      });
       return {};
+    }
+    logger13.debug("applying authentication to matching origin", {
+      ...this.context(),
+      requestOrigin: request.origin
+    });
     return this.authenticate(login);
   }
   forceRefreshToken(login = true) {
+    logger13.debug("Databricks token force refresh requested", { ...this.context(), login });
     return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().forceRefresh(login);
   }
   refreshRejectedToken(staleAccessToken, login = true) {
+    logger13.debug("Databricks rejected token refresh requested", {
+      ...this.context(),
+      login,
+      requestToken: Boolean(this.requestToken)
+    });
     return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().refreshRejectedToken(staleAccessToken, login);
   }
   logout() {
+    logger13.debug("Databricks logout requested", this.context());
     return this.client?.logout() ?? Promise.resolve();
   }
   status() {
@@ -27444,18 +27793,40 @@ class PersistentAuth {
       throw new AuthError("oauth", "Authentication lifecycle is not available");
     return this.client;
   }
+  context() {
+    return {
+      profile: this.profileValue.name,
+      host: this.profileValue.host,
+      authKind: this.profileValue.authKind,
+      storage: this.storageValue,
+      hasWorkspaceId: Boolean(this.profileValue.workspaceId)
+    };
+  }
 }
 async function createPersistentAuth(options = { preferUserToMachine: true }, storage = "auto" /* Auto */, dependencies = {}) {
   const environment = dependencies.environment ?? process.env;
   const profile = resolveDatabricksProfile(options, environment);
   const inApp = profile.authKind === "app-on-behalf-of" /* AppOnBehalfOf */ || profile.authKind === "app-service-principal" /* AppServicePrincipal */;
   const backend = storage === "auto" /* Auto */ ? inApp ? "memory" /* Memory */ : "file" /* File */ : storage;
+  logger13.debug("creating persistent Databricks auth", {
+    profile: profile.name,
+    host: profile.host,
+    authKind: profile.authKind,
+    requestedStorage: storage,
+    resolvedStorage: backend,
+    inApp
+  });
   const store = backend === "memory" /* Memory */ ? new MemoryCredentialStore : new FileCredentialStore(options.cacheDir ?? join(homedir(), ".databricks"));
   return createPersistentAuthWithStorage(options, store, storage, dependencies, profile);
 }
 async function createPersistentAuthWithStorage(options, store, storage = store.name() === "memory" ? "memory" /* Memory */ : "file" /* File */, dependencies = {}, resolvedProfile) {
   const profile = resolvedProfile ?? resolveDatabricksProfile(options, dependencies.environment ?? process.env);
   if (profile.authKind === "app-on-behalf-of" /* AppOnBehalfOf */) {
+    logger13.debug("created request-scoped App OBO authentication", {
+      profile: profile.name,
+      host: profile.host,
+      hasWorkspaceId: Boolean(profile.workspaceId)
+    });
     return new PersistentAuth(profile, "memory" /* Memory */, undefined, {
       accessToken: profile.accessToken,
       tokenType: "Bearer",
@@ -27464,7 +27835,14 @@ async function createPersistentAuthWithStorage(options, store, storage = store.n
   }
   const provider = await providerFor(profile, options, dependencies);
   const client = new AuthClient(profile.cacheKey, provider, store, AuthOptions.create(options.auth));
-  return new PersistentAuth(profile, storage === "auto" /* Auto */ ? storageFromName(store.name()) : storage, client);
+  const persistent = new PersistentAuth(profile, storage === "auto" /* Auto */ ? storageFromName(store.name()) : storage, client);
+  logger13.debug("created persistent authentication lifecycle", {
+    profile: profile.name,
+    host: profile.host,
+    authKind: profile.authKind,
+    storage: persistent.status().storage
+  });
+  return persistent;
 }
 async function providerFor(profile, options, dependencies) {
   const environment = dependencies.environment ?? process.env;
@@ -27472,12 +27850,23 @@ async function providerFor(profile, options, dependencies) {
   switch (profile.authKind) {
     case "user-to-machine" /* UserToMachine */: {
       const install = !inApp || options.installCliInApp === true;
+      logger13.debug("selected Databricks CLI provider", {
+        profile: profile.name,
+        inApp,
+        install
+      });
       return new DatabricksCliProvider(profile.name, () => dependencies.resolveCli ? dependencies.resolveCli({ install }) : resolveDatabricksCli(environment, { install }), cliEnvironment(profile, resolveConfigFile(options.configFile, environment)));
     }
     case "personal-access-token" /* PersonalAccessToken */:
+      logger13.debug("selected personal access token provider", { profile: profile.name });
       return new DatabricksPersonalAccessTokenProvider(profile.accessToken);
     case "machine-to-machine" /* MachineToMachine */:
     case "app-service-principal" /* AppServicePrincipal */: {
+      logger13.debug("selected service-principal provider", {
+        profile: profile.name,
+        authKind: profile.authKind,
+        target: profile.target
+      });
       const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
       return new DatabricksServicePrincipalProvider({
         tokenEndpoint: endpoints.tokenEndpoint,
@@ -27498,12 +27887,26 @@ async function resolveOAuthEndpoints(profile, fetcher = globalThis.fetch) {
   if (profile.target === "account" /* Account */) {
     if (!profile.accountId)
       throw new AuthError("config", "Account target requires account_id");
-    return {
+    const endpoints = {
       tokenEndpoint: `${host2}/oidc/accounts/${profile.accountId}/v1/token`
     };
+    logger13.debug("resolved account OAuth endpoint", {
+      profile: profile.name,
+      tokenOrigin: new URL(endpoints.tokenEndpoint).origin
+    });
+    return endpoints;
   }
   const discovery = profile.target === "unified" /* Unified */ ? `${host2}/oidc/accounts/${requiredAccountId(profile)}/.well-known/oauth-authorization-server` : `${host2}/oidc/.well-known/oauth-authorization-server`;
+  logger13.debug("requesting OAuth discovery", {
+    profile: profile.name,
+    target: profile.target,
+    discovery
+  });
   const response = await fetcher(discovery, { redirect: "manual" });
+  logger13.debug("received OAuth discovery response", {
+    profile: profile.name,
+    status: response.status
+  });
   if (response.status === 404)
     throw new AuthError("oauth", `OAuth is not supported at ${discovery}`);
   if (!response.ok)
@@ -27512,6 +27915,10 @@ async function resolveOAuthEndpoints(profile, fetcher = globalThis.fetch) {
   const tokenEndpoint = stringValue3(value.token_endpoint);
   if (!tokenEndpoint)
     throw new AuthError("oauth", "OAuth discovery response is incomplete");
+  logger13.debug("resolved OAuth token endpoint", {
+    profile: profile.name,
+    tokenOrigin: new URL(tokenEndpoint).origin
+  });
   return { tokenEndpoint };
 }
 function requiredAccountId(profile) {
@@ -27547,6 +27954,8 @@ var exports_http_client = {};
 __export(exports_http_client, {
   DatabricksClient: () => DatabricksClient
 });
+var logger14 = authLogger("http");
+
 class DatabricksClient {
   auth;
   fetcher;
@@ -27555,7 +27964,13 @@ class DatabricksClient {
     this.fetcher = fetcher;
   }
   static async create(options = { preferUserToMachine: true }, dependencies = {}) {
-    return new DatabricksClient(await createPersistentAuth(options, undefined, dependencies), dependencies.fetch ?? globalThis.fetch);
+    const client = new DatabricksClient(await createPersistentAuth(options, undefined, dependencies), dependencies.fetch ?? globalThis.fetch);
+    logger14.debug("created Databricks HTTP client", {
+      profile: client.profile(),
+      host: client.host(),
+      hasWorkspaceId: Boolean(client.workspaceId())
+    });
+    return client;
   }
   profile() {
     return this.auth.status().profile;
@@ -27572,20 +27987,54 @@ class DatabricksClient {
   async request(path, options = {}) {
     const url = new URL(path, `${this.host().replace(/\/$/, "")}/`).toString();
     const method = options.method ?? (options.body === undefined ? "GET" : "POST");
+    const requestUrl = new URL(url);
+    logger14.debug("sending Databricks API request", {
+      method,
+      origin: requestUrl.origin,
+      path: requestUrl.pathname,
+      hasBody: options.body !== undefined,
+      login: options.login ?? "auto"
+    });
     let authHeaders = await this.auth.authenticate(options.login);
     let response = await this.send(url, method, authHeaders, options);
+    logger14.debug("received Databricks API response", {
+      method,
+      path: requestUrl.pathname,
+      status: response.status,
+      attempt: 1
+    });
     if (response.status === 401) {
+      logger14.debug("refreshing rejected Databricks API credential", {
+        method,
+        path: requestUrl.pathname
+      });
       await this.auth.refreshRejectedToken(accessTokenFromHeaders(authHeaders), options.login ?? true);
       authHeaders = await this.auth.authenticate(false);
       response = await this.send(url, method, authHeaders, options);
+      logger14.debug("received Databricks API response", {
+        method,
+        path: requestUrl.pathname,
+        status: response.status,
+        attempt: 2
+      });
     }
     const text = await response.text();
     if (!response.ok)
       throw new AuthError("http", `Databricks API ${path} returned HTTP ${response.status}: ${text}`);
-    if (!text)
+    if (!text) {
+      logger14.debug("Databricks API response had no body", {
+        method,
+        path: requestUrl.pathname
+      });
       return;
+    }
     try {
-      return JSON.parse(text);
+      const value = JSON.parse(text);
+      logger14.debug("parsed Databricks API JSON response", {
+        method,
+        path: requestUrl.pathname
+      });
+      return value;
     } catch (cause) {
       throw new AuthError("http", `Databricks API ${path} did not return JSON`, { cause });
     }

@@ -1,5 +1,8 @@
 import { AuthError } from "./errors.ts";
+import { authLogger, credentialId, failureMetadata, tokenMetadata } from "./_logging.ts";
 import type { AccessToken, AuthOptions, CredentialStore, Token, TokenProvider } from "./types.ts";
+
+const logger = authLogger("lifecycle");
 
 /** Provider-neutral check-lock-check authentication and persistent token lifecycle. */
 export class AuthClient {
@@ -9,19 +12,33 @@ export class AuthClient {
     private readonly store: CredentialStore,
     private readonly options: AuthOptions,
     private readonly now: () => Date = () => new Date(),
-  ) {}
+  ) {
+    logger.debug("created authentication lifecycle", {
+      credential: credentialId(key),
+      storage: store.name(),
+      refreshBufferSeconds: options.refreshBufferSeconds,
+      lockTimeoutSeconds: options.lockTimeoutSeconds,
+      loginTimeoutSeconds: options.loginTimeoutSeconds,
+      silentProvider: provider.canAuthenticateSilently(),
+    });
+  }
 
   storeName(): string {
     return this.store.name();
   }
 
   async login(): Promise<AccessToken> {
+    logger.debug("interactive login requested", this.context());
     return this.withLock(async () => {
       await this.store.prepareWrite();
       const token = validateToken(
         await this.provider.login(this.options.loginTimeoutSeconds * 1000),
       );
       await this.store.save(this.key, token);
+      logger.debug("interactive login stored credential", {
+        ...this.context(),
+        token: tokenMetadata(token, this.now()),
+      });
       return publicToken(token);
     });
   }
@@ -35,29 +52,47 @@ export class AuthClient {
   }
 
   async tokenWithLogin(login?: boolean): Promise<AccessToken> {
+    logger.debug("token requested", { ...this.context(), login: login ?? "auto" });
     if (login === true) return this.login();
     if (login === false) return this.token();
     return this.tokenOrLogin();
   }
 
   forceRefresh(login = true): Promise<AccessToken> {
+    logger.debug("forced refresh requested", { ...this.context(), login });
     return this.refreshRejected(undefined, login);
   }
 
   refreshRejectedToken(staleAccessToken: string, login = true): Promise<AccessToken> {
+    logger.debug("rejected token refresh requested", { ...this.context(), login });
     return this.refreshRejected(staleAccessToken, login);
   }
 
   async logout(): Promise<void> {
+    logger.debug("logout requested", this.context());
     await this.withLock(() => this.store.remove(this.key));
+    logger.debug("stored credential removed", this.context());
   }
 
   private async loadToken(login: boolean): Promise<AccessToken> {
     const existing = await this.store.load(this.key);
-    if (existing && this.canReuse(existing)) return publicToken(existing);
+    const reusable = Boolean(existing && this.canReuse(existing));
+    logger.debug("checked credential cache", {
+      ...this.context(),
+      login,
+      reusable,
+      token: tokenMetadata(existing, this.now()),
+    });
+    if (existing && reusable) return publicToken(existing);
     return this.withLock(async () => {
       const current = await this.store.load(this.key);
-      if (current && this.canReuse(current)) return publicToken(current);
+      const currentReusable = Boolean(current && this.canReuse(current));
+      logger.debug("rechecked credential cache after lock", {
+        ...this.context(),
+        reusable: currentReusable,
+        token: tokenMetadata(current, this.now()),
+      });
+      if (current && currentReusable) return publicToken(current);
       return this.renew(current, login);
     });
   }
@@ -74,6 +109,10 @@ export class AuthClient {
         current.accessToken !== staleAccessToken &&
         isValid(current, this.now())
       ) {
+        logger.debug("reused replacement for rejected credential", {
+          ...this.context(),
+          token: tokenMetadata(current, this.now()),
+        });
         return publicToken(current);
       }
       return this.renew(current, login);
@@ -83,20 +122,42 @@ export class AuthClient {
   private async renew(current: Token | undefined, login: boolean): Promise<AccessToken> {
     let token: Token;
     if (current) {
+      logger.debug("refreshing stored credential", {
+        ...this.context(),
+        loginFallback: login,
+        token: tokenMetadata(current, this.now()),
+      });
       try {
         token = await this.provider.refresh(current);
       } catch (error) {
+        logger.debug("credential refresh failed", {
+          ...this.context(),
+          loginFallback: login,
+          error: failureMetadata(error),
+        });
         if (!login) throw error;
+        logger.debug("falling back to interactive login", this.context());
         token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
       }
     } else if (this.provider.canAuthenticateSilently()) {
+      logger.debug("attempting silent credential acquisition", {
+        ...this.context(),
+        loginFallback: login,
+      });
       try {
         token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
       } catch (error) {
+        logger.debug("silent credential acquisition failed", {
+          ...this.context(),
+          loginFallback: login,
+          error: failureMetadata(error),
+        });
         if (!login) throw error;
+        logger.debug("falling back to interactive login", this.context());
         token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
       }
     } else if (login) {
+      logger.debug("provider requires interactive login", this.context());
       token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
     } else {
       throw new AuthError(
@@ -105,8 +166,13 @@ export class AuthClient {
       );
     }
     token = validateToken(token, current);
+    logger.debug("credential acquisition completed", {
+      ...this.context(),
+      token: tokenMetadata(token, this.now()),
+    });
     await this.store.prepareWrite();
     await this.store.save(this.key, token);
+    logger.debug("credential saved", this.context());
     return publicToken(token);
   }
 
@@ -119,7 +185,9 @@ export class AuthClient {
   }
 
   private async withLock<T>(action: () => Promise<T>): Promise<T> {
+    logger.debug("waiting for credential lock", this.context());
     const lease = await this.store.acquireLock(this.key, this.options.lockTimeoutSeconds * 1000);
+    logger.debug("credential lock acquired", this.context());
     let failure: unknown;
     try {
       return await action();
@@ -129,10 +197,19 @@ export class AuthClient {
     } finally {
       try {
         await this.store.releaseLock(lease);
+        logger.debug("credential lock released", this.context());
       } catch (releaseError) {
+        logger.debug("credential lock release failed", {
+          ...this.context(),
+          error: failureMetadata(releaseError),
+        });
         if (failure === undefined) throw releaseError;
       }
     }
+  }
+
+  private context(): Record<string, unknown> {
+    return { credential: credentialId(this.key), storage: this.store.name() };
   }
 }
 

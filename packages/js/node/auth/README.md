@@ -98,6 +98,21 @@ const auth = await createPersistentAuthWithStorage(
 The built-in file store uses `node:fs` with `@dbx-tools/core/file-lock` and
 preserves unrelated entries in `~/.databricks/token-cache.json`.
 
+## Debug logging
+
+Set `LOG_LEVEL=debug` to trace profile selection, configuration caching, CLI
+resolution, provider choice, credential locks, cache reuse, refresh/login
+fallback, OAuth discovery, same-origin header decisions, and HTTP retry state.
+
+```sh
+LOG_LEVEL=debug bun run my-auth-command
+```
+
+Debug records include profile and host metadata, storage/backend choices,
+header names, token expiry state, and scope counts. They never include access
+tokens, refresh tokens, client secrets, authorization values, raw request
+headers, token-cache contents, or request/response bodies.
+
 ## Modules
 
 - `databricksAuth` provides `PersistentAuth` and Databricks provider construction.

@@ -1,4 +1,7 @@
+import { authLogger } from "./_logging.ts";
 import type { Token, TokenProvider } from "./types.ts";
+
+const logger = authLogger("pat");
 
 /** Non-refreshing provider for a configured Databricks personal access token. */
 export class DatabricksPersonalAccessTokenProvider implements TokenProvider {
@@ -21,6 +24,7 @@ export class DatabricksPersonalAccessTokenProvider implements TokenProvider {
   }
 
   private token(): Token {
+    logger.debug("using configured personal access token");
     return {
       accessToken: this.accessToken,
       tokenType: "Bearer",

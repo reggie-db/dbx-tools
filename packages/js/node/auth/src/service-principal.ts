@@ -1,7 +1,10 @@
 import * as oauth from "oauth4webapi";
 
+import { authLogger, failureMetadata, tokenMetadata } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import type { Token, TokenProvider } from "./types.ts";
+
+const logger = authLogger("service-principal");
 
 /** Client-credentials inputs and transport options for Databricks OAuth. */
 export interface DatabricksServicePrincipalConfig {
@@ -49,6 +52,12 @@ export class DatabricksServicePrincipalProvider implements TokenProvider {
   }
 
   private async acquire(): Promise<Token> {
+    logger.debug("requesting service-principal token", {
+      tokenOrigin: new URL(this.config.tokenEndpoint).origin,
+      scopeCount: this.config.scopes.length,
+      hasGroupId: Boolean(this.config.groupId),
+      allowInsecureRequests: Boolean(this.config.allowInsecureRequests),
+    });
     try {
       const response = await oauth.clientCredentialsGrantRequest(
         this.authorizationServer,
@@ -65,7 +74,7 @@ export class DatabricksServicePrincipalProvider implements TokenProvider {
         this.client,
         response,
       );
-      return {
+      const token = {
         accessToken: value.access_token,
         tokenType: value.token_type.toLowerCase() === "bearer" ? "Bearer" : value.token_type,
         ...(value.expires_in !== undefined
@@ -73,7 +82,12 @@ export class DatabricksServicePrincipalProvider implements TokenProvider {
           : {}),
         scopes: value.scope?.split(/\s+/).filter(Boolean) ?? [...this.config.scopes],
       };
+      logger.debug("received service-principal token", { token: tokenMetadata(token) });
+      return token;
     } catch (cause) {
+      logger.debug("service-principal token request failed", {
+        error: failureMetadata(cause),
+      });
       throw new AuthError("oauth", "Databricks service-principal authentication failed", {
         cause,
       });

@@ -5,6 +5,7 @@ import { isAbsolute, resolve } from "node:path";
 
 import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
 
+import { authLogger } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import {
   cleanList,
@@ -34,6 +35,7 @@ import {
 } from "./types.ts";
 
 const configCache = new Map<string, IniConfig | Error | undefined>();
+const logger = authLogger("profile");
 
 export { normalizeHost, parseDatabricksConfig } from "./_profile-core.ts";
 
@@ -50,12 +52,23 @@ export function resolveConfigFile(
       : selected.startsWith("~/")
         ? resolve(homedir(), selected.slice(2))
         : selected;
-  return isAbsolute(expanded) ? expanded : resolve(expanded);
+  const path = isAbsolute(expanded) ? expanded : resolve(expanded);
+  logger.debug("resolved Databricks config file", {
+    path,
+    source: nonempty(explicit)
+      ? "option"
+      : nonempty(environment.DATABRICKS_CONFIG_FILE)
+        ? "environment"
+        : "default",
+  });
+  return path;
 }
 
 /** Invalidate the process-wide parsed configuration cache after an external write. */
 export function invalidateConfigFile(configFile?: string): void {
-  configCache.delete(resolveConfigFile(configFile));
+  const path = resolveConfigFile(configFile);
+  configCache.delete(path);
+  logger.debug("invalidated Databricks config cache", { path });
 }
 
 /** Return whether a named profile exists in the selected configuration. */
@@ -73,8 +86,11 @@ export function listDatabricksProfiles(
   const path = resolveConfigFile(configFile, environment);
   if (refresh) configCache.delete(path);
   const config = loadConfig(path);
-  if (!config) return [];
-  return [...config.keys()]
+  if (!config) {
+    logger.debug("listed Databricks profiles", { path, refresh, count: 0 });
+    return [];
+  }
+  const profiles = [...config.keys()]
     .filter((name) => name !== SETTINGS_SECTION)
     .map((name) => {
       const profile = loadRawProfile(config, name);
@@ -95,6 +111,8 @@ export function listDatabricksProfiles(
       };
     })
     .sort((left, right) => left.name.localeCompare(right.name));
+  logger.debug("listed Databricks profiles", { path, refresh, count: profiles.length });
+  return profiles;
 }
 
 /** Resolve options, environment, request headers, and CLI configuration into one profile. */
@@ -194,6 +212,20 @@ export function resolveDatabricksProfile(
     authKind,
     accessToken,
   });
+  logger.debug("resolved Databricks profile", {
+    profile: profileName,
+    host,
+    authKind,
+    target,
+    inApp,
+    explicitProfile,
+    authType: authType ?? "automatic",
+    hasAccountId: Boolean(accountId),
+    hasWorkspaceId: Boolean(workspaceId),
+    hasGroupId: Boolean(groupId),
+    scopeCount: scopes.length,
+    configPath,
+  });
   return {
     name: profileName,
     host,
@@ -216,15 +248,22 @@ function loadConfig(path: string): IniConfig | undefined {
   if (configCache.has(path)) {
     const cached = configCache.get(path);
     if (cached instanceof Error) throw cached;
+    logger.debug("reused Databricks config cache", {
+      path,
+      exists: Boolean(cached),
+      profileCount: cached?.size ?? 0,
+    });
     return cached;
   }
   if (!existsSync(path)) {
     configCache.set(path, undefined);
+    logger.debug("Databricks config file not found", { path });
     return undefined;
   }
   try {
     const config = parseDatabricksConfig(readFileSync(path, "utf8"));
     configCache.set(path, config);
+    logger.debug("parsed Databricks config file", { path, profileCount: config.size });
     return config;
   } catch (cause) {
     const error =

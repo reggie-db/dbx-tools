@@ -5,9 +5,12 @@ import { basename, dirname, join } from "node:path";
 
 import { acquireFileLock, type FileLockLease } from "@dbx-tools/core/file-lock";
 
+import { authLogger, credentialId, tokenMetadata } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import type { CredentialStore, LockAdapter, Token } from "./types.ts";
 import { FileLayout } from "./types.ts";
+
+const logger = authLogger("file-storage");
 
 interface TokenCache {
   version: number;
@@ -20,9 +23,17 @@ class NodeFileLocks implements LockAdapter {
   constructor(private readonly lockDirectory: string) {}
 
   async acquire(key: string, timeoutMs: number): Promise<string> {
+    logger.debug("waiting for file lock", {
+      credential: credentialId(key),
+      timeoutMs,
+    });
     const lease = await acquireFileLock(key, { dir: this.lockDirectory, timeoutMs });
     const id = randomUUID();
     this.leases.set(id, lease);
+    logger.debug("file lock acquired", {
+      credential: credentialId(key),
+      backend: lease.backend,
+    });
     return id;
   }
 
@@ -31,6 +42,7 @@ class NodeFileLocks implements LockAdapter {
     if (!lease) return;
     this.leases.delete(id);
     await lease.release();
+    logger.debug("file lock released", { backend: lease.backend });
   }
 }
 
@@ -48,11 +60,20 @@ export class FileCredentialStore implements CredentialStore {
 
   async load(key: string): Promise<Token | undefined> {
     const store = this.forKey(key);
-    return store.withCacheLock(async () => deserializeToken((await store.readCache()).tokens[key]));
+    return store.withCacheLock(async () => {
+      const token = deserializeToken((await store.readCache()).tokens[key]);
+      logger.debug("loaded file credential", {
+        credential: credentialId(key),
+        layout: this.layout,
+        token: tokenMetadata(token),
+      });
+      return token;
+    });
   }
 
   async prepareWrite(): Promise<void> {
     await ensureDirectory(this.root, 0o700);
+    logger.debug("prepared credential directory", { layout: this.layout });
   }
 
   async save(key: string, token: Token): Promise<void> {
@@ -61,6 +82,11 @@ export class FileCredentialStore implements CredentialStore {
       const cache = await store.readCache();
       cache.tokens[key] = serializeToken(token);
       await store.writeCache(cache);
+      logger.debug("saved file credential", {
+        credential: credentialId(key),
+        layout: this.layout,
+        token: tokenMetadata(token),
+      });
     });
   }
 
@@ -70,6 +96,10 @@ export class FileCredentialStore implements CredentialStore {
       const cache = await store.readCache();
       delete cache.tokens[key];
       await store.writeCache(cache);
+      logger.debug("removed file credential", {
+        credential: credentialId(key),
+        layout: this.layout,
+      });
     });
   }
 
@@ -111,6 +141,10 @@ export class FileCredentialStore implements CredentialStore {
       if (cache.version !== 1 || typeof cache.tokens !== "object" || !cache.tokens) {
         throw new AuthError("storage", "Token cache must use version 1");
       }
+      logger.debug("read token cache", {
+        exists: Boolean(source),
+        credentialCount: Object.keys(cache.tokens).length,
+      });
       return cache;
     } catch (cause) {
       if (cause instanceof AuthError) throw cause;
@@ -125,6 +159,7 @@ export class FileCredentialStore implements CredentialStore {
         `${JSON.stringify(cache, null, 2)}\n`,
         0o600,
       );
+      logger.debug("wrote token cache", { credentialCount: Object.keys(cache.tokens).length });
     } catch (cause) {
       throw new AuthError("storage", "Could not write Databricks token cache", { cause });
     }

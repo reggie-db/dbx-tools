@@ -1,5 +1,6 @@
 import { parse as parseIni } from "ini";
 
+import { authLogger } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import {
   AUTH_TYPE_APP_OBO,
@@ -8,6 +9,8 @@ import {
   DEFAULT_ACCESS_TOKEN_HEADER,
   TargetKind,
 } from "./types.ts";
+
+const logger = authLogger("profile-selection");
 
 export const SETTINGS_SECTION = "__settings__";
 
@@ -70,24 +73,62 @@ export function resolveProfileName(
   preferUserToMachine: boolean,
 ): string {
   let selected = requested;
-  if (!selected) selected = nonempty(config?.get(SETTINGS_SECTION)?.get("default_profile"));
-  if (!selected && config?.has("DEFAULT")) selected = "DEFAULT";
+  let source = requested ? "requested" : undefined;
+  if (!selected) {
+    selected = nonempty(config?.get(SETTINGS_SECTION)?.get("default_profile"));
+    if (selected) source = "settings-default";
+  }
+  if (!selected && config?.has("DEFAULT")) {
+    selected = "DEFAULT";
+    source = "default-section";
+  }
   if (!selected) {
     const profiles = [...(config?.keys() ?? [])].filter((name) => name !== SETTINGS_SECTION);
-    if (profiles.length === 1) selected = profiles[0];
+    if (profiles.length === 1) {
+      selected = profiles[0];
+      source = "sole-profile";
+    }
   }
-  selected ??= "DEFAULT";
+  if (!selected) {
+    selected = "DEFAULT";
+    source = "fallback";
+  }
   if (selected === SETTINGS_SECTION)
     throw new AuthError("config", `${SETTINGS_SECTION} is reserved`);
-  if (explicit || !preferUserToMachine || !config) return selected;
+  if (explicit || !preferUserToMachine || !config) {
+    logger.debug("selected Databricks profile", {
+      profile: selected,
+      source,
+      explicit,
+      preferUserToMachine,
+    });
+    return selected;
+  }
   const current = loadRawProfile(config, selected);
-  if (!isM2mProfile(current) || !current.host) return selected;
+  if (!isM2mProfile(current) || !current.host) {
+    logger.debug("selected Databricks profile", {
+      profile: selected,
+      source,
+      explicit,
+      preferUserToMachine,
+    });
+    return selected;
+  }
   const matches = [...config.keys()].filter((name) => {
     if (name === selected || name === SETTINGS_SECTION) return false;
     const candidate = loadRawProfile(config, name);
     return candidate.authType === "databricks-cli" && sameTarget(current, candidate);
   });
-  return matches.length === 1 ? matches[0]! : selected;
+  const preferred = matches.length === 1 ? matches[0]! : selected;
+  logger.debug("selected Databricks profile", {
+    profile: preferred,
+    source: preferred === selected ? source : "matching-cli-profile",
+    originalProfile: preferred === selected ? undefined : selected,
+    explicit,
+    preferUserToMachine,
+    matchingCliProfiles: matches.length,
+  });
+  return preferred;
 }
 
 /** Normalize Databricks hosts and require TLS outside loopback development. */

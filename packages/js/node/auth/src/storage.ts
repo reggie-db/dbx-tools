@@ -1,4 +1,7 @@
+import { authLogger, credentialId, tokenMetadata } from "./_logging.ts";
 import type { CredentialStore, LockAdapter, Token } from "./types.ts";
+
+const logger = authLogger("memory-storage");
 
 /** Process-local generic lease registry used by the in-memory store. */
 export class MemoryLockAdapter implements LockAdapter {
@@ -7,6 +10,7 @@ export class MemoryLockAdapter implements LockAdapter {
   #sequence = 0;
 
   async acquire(key: string, timeoutMs: number): Promise<string> {
+    const credential = credentialId(key);
     const previous = this.#tails.get(key) ?? Promise.resolve();
     let release!: () => void;
     const current = new Promise<void>((resolve) => {
@@ -15,6 +19,7 @@ export class MemoryLockAdapter implements LockAdapter {
     const tail = previous.then(() => current);
     this.#tails.set(key, tail);
     try {
+      logger.debug("waiting for memory lock", { credential, timeoutMs });
       await withTimeout(previous, timeoutMs, `Timed out waiting for lock ${key}`);
     } catch (error) {
       release();
@@ -27,10 +32,14 @@ export class MemoryLockAdapter implements LockAdapter {
       this.#leases.delete(lease);
       if (this.#tails.get(key) === tail) this.#tails.delete(key);
     });
+    logger.debug("memory lock acquired", { credential });
     return lease;
   }
 
   async release(lease: string): Promise<void> {
+    logger.debug("releasing memory lock", {
+      credential: credentialId(lease.split(":").slice(1).join(":")),
+    });
     this.#leases.get(lease)?.();
   }
 }
@@ -43,6 +52,10 @@ export class MemoryCredentialStore implements CredentialStore {
 
   async load(key: string): Promise<Token | undefined> {
     const token = this.#tokens.get(key);
+    logger.debug("loaded memory credential", {
+      credential: credentialId(key),
+      token: tokenMetadata(token),
+    });
     return token ? structuredClone(token) : undefined;
   }
 
@@ -50,10 +63,15 @@ export class MemoryCredentialStore implements CredentialStore {
 
   async save(key: string, token: Token): Promise<void> {
     this.#tokens.set(key, structuredClone(token));
+    logger.debug("saved memory credential", {
+      credential: credentialId(key),
+      token: tokenMetadata(token),
+    });
   }
 
   async remove(key: string): Promise<void> {
     this.#tokens.delete(key);
+    logger.debug("removed memory credential", { credential: credentialId(key) });
   }
 
   acquireLock(key: string, timeoutMs: number): Promise<string> {
