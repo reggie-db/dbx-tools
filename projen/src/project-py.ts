@@ -78,6 +78,8 @@ export interface PythonReleaseOptions {
   /** GitHub environment by Python distribution name. Defaults to `pypi-<name>`. */
   readonly environments?: Readonly<Record<string, string>>;
   readonly environmentUrl?: string;
+  /** Publish generated UniFFI wheels. Defaults to true. */
+  readonly includeUniFFI?: boolean;
 }
 
 interface PythonPublication {
@@ -604,6 +606,7 @@ export class DBXToolsPythonWorkspace extends Component {
   }
 
   private uniffiPublications(options: PythonReleaseOptions): readonly PythonPublication[] {
+    if (options.includeUniFFI === false) return [];
     return this.packages
       .filter((pkg) => pkg.packageOptions.uniffi === true)
       .map((pkg) => ({
@@ -625,6 +628,7 @@ export class DBXToolsPythonWorkspace extends Component {
       this.publications(options).map((publication) => [publication.distribution, publication]),
     );
     for (const pkg of this.packages) {
+      if (options.includeUniFFI === false && pkg.packageOptions.uniffi === true) continue;
       const publisher = pkg.packageOptions.trustedPublisher;
       if (!publisher || standard.has(pkg.packageOptions.name)) continue;
       standard.set(pkg.packageOptions.name, {

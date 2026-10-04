@@ -73,6 +73,8 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly private?: boolean;
   /** Generate release-branch-driven cross-platform UniFFI package releases. */
   readonly release?: boolean;
+  /** Add Rust publication jobs to the root release workflow. Defaults to true. */
+  readonly publishRelease?: boolean;
   /** Native release targets; defaults to the maintained GitHub-hosted matrix. */
   readonly releaseTargets?: readonly UniFFIReleaseTarget[];
   /** Maintained OS/CPU combinations to release. Defaults to every supported target. */
@@ -1023,17 +1025,23 @@ export class DBXToolsRustWorkspace extends Component {
     configureRustWorkspaceFiles(project, this.packages, options, resolved);
     configureRustWorkspaceTasks(project);
     if (releaseEnabled) {
-      this.addReleaseWorkflow(project, options, resolved.nativeTargets, packageDependencies);
+      this.configureRelease(
+        project,
+        options,
+        resolved.nativeTargets,
+        packageDependencies,
+        options.publishRelease !== false,
+      );
     }
   }
 
-  private addReleaseWorkflow(
+  private configureRelease(
     project: javascript.NodeProject,
     options: DBXToolsRustWorkspaceOptions,
     targets: readonly UniFFIReleaseTarget[],
     packageDependencies: RustPackageDependencyResolver,
+    publish: boolean,
   ): void {
-    if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const plan = planRustRelease(
       project,
       options,
@@ -1042,11 +1050,12 @@ export class DBXToolsRustWorkspace extends Component {
       this.bindingMappings,
       packageDependencies,
     );
+    configureRustReleaseTask(project, plan);
+    if (!publish || !project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const workflow = tryReleaseWorkflow(project);
     if (!workflow) {
       throw new Error("Rust release requires the root dbx-tools release mode");
     }
-    configureRustReleaseTask(project, plan);
     if (plan.publicCrates.length) {
       workflow.addJob("publish-cargo", rustCargoPublishJob(plan));
     }

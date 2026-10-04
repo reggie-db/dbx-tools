@@ -244,6 +244,7 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
+  releaseNative: false,
   releaseValidationTasks: [
     "auth:python-runtime:check",
     "docs:check-source",
@@ -1233,6 +1234,8 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // Rust Cargo workspace
 // ---------------------------------------------------------------------------
 const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
+  release: true,
+  publishRelease: false,
   rustVersion: "1.90",
   cliRegistryPath: "packages/js/node/rust-binary/src/_release-binaries.ts",
   pythonRoot: PYTHON_ROOT,
@@ -1664,7 +1667,7 @@ new project.DBXToolsPythonWorkspace(root, {
     "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },
-  release: true,
+  release: { includeUniFFI: false },
 });
 root.addTask("auth:cli-assets", {
   description: "Refresh the pinned Databricks CLI release asset manifest",
@@ -1681,17 +1684,6 @@ root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
   propagation: "always",
   publishOrder: true,
 });
-for (const binary of [
-  "dbx-tools-model-proxy",
-  "dbx-tools-lakebase-proxy",
-]) {
-  root.releaseCatalog.addDependency("@dbx-tools/rust-binary", {
-    target: binary,
-    kind: "generated",
-    propagation: "always",
-    publishOrder: true,
-  });
-}
 root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
 root.annotateGenerated("/packages/js/shared/model/src/generated/**");

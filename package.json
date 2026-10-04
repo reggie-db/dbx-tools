@@ -44,7 +44,6 @@
     "py:test": "projen py:test",
     "pypiTrustedPublisherInstructions": "projen pypiTrustedPublisherInstructions",
     "release": "projen release",
-    "release:assets": "projen release:assets",
     "rs:bindings": "projen rs:bindings",
     "rs:build": "projen rs:build",
     "rs:format": "projen rs:format",

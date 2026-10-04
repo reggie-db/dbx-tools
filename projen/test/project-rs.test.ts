@@ -200,6 +200,7 @@ describe("DBXToolsRustWorkspace", () => {
         defaultTagMixins: false,
         github: true,
         nodeRelease: false,
+        repository: "https://github.com/example/fixture.git",
       });
       const rust = new DBXToolsRustWorkspace(project, {
         workspaceDependencies: { shared: { package: "fixture-auth", path: "packages/rs/auth" } },
@@ -254,6 +255,7 @@ describe("DBXToolsRustWorkspace", () => {
         defaultTagMixins: false,
         github: true,
         nodeRelease: false,
+        repository: "https://github.com/example/fixture.git",
       });
       new DBXToolsRustWorkspace(project, {});
       project.synth();
@@ -347,7 +349,7 @@ describe("DBXToolsRustWorkspace", () => {
       const tasks = JSON.parse(readFileSync(join(binaryOutdir, ".projen/tasks.json"), "utf8")) as {
         tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
       };
-      assert.match(tasks.tasks["release:assets"]?.steps?.[0]?.exec ?? "", /release-candidate/);
+      assert.equal(tasks.tasks["release:assets"], undefined);
       assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-release.mjs")), false);
       assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-python.js")), false);
       assert.equal(existsSync(join(binaryOutdir, ".projen/smol-toml.cjs")), false);
@@ -397,6 +399,35 @@ describe("DBXToolsRustWorkspace", () => {
       assert.match(registry, /"tag": "v1\.4\.0"/);
     } finally {
       rmSync(fixedOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("retains Rust release generators without adding publication jobs", () => {
+    const metadataOutdir = mkdtempSync(join(tmpdir(), "project-rs-metadata-only-"));
+    try {
+      mkdirSync(join(metadataOutdir, "packages/rs/tool/src"), { recursive: true });
+      writeFileSync(join(metadataOutdir, "packages/rs/tool/src/main.rs"), "fn main() {}\n");
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/root",
+        scope: "fixture",
+        outdir: metadataOutdir,
+        packageRoots: ["packages/js"],
+        repository: "https://github.com/example/fixture.git",
+        defaultTagMixins: false,
+        github: true,
+        nodeRelease: false,
+      });
+      new DBXToolsRustWorkspace(project, {
+        publishRelease: false,
+        cliRegistryPath: "packages/js/node/rust-binary/src/_registry.ts",
+        packages: { tool: { release: true, cli: true } },
+      });
+      project.synth();
+
+      assert.equal(existsSync(join(metadataOutdir, ".projen/rust-release.json")), true);
+      assert.equal(readWorkflow(metadataOutdir).jobs["publish-cargo"], undefined);
+    } finally {
+      rmSync(metadataOutdir, { recursive: true, force: true });
     }
   });
 
@@ -860,7 +891,7 @@ describe("DBXToolsRustWorkspace", () => {
     ]);
     assert.equal(
       cargoPublisher.if,
-      "${{ always() && (needs.verify-context.result == 'success') && (github.event_name == 'release' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'cargo'))) }}",
+      "${{ always() && (needs.verify-context.result == 'success') }}",
     );
     const cargoPublish = workflowStep(cargoPublisher, "Publish public crates").run!;
     assert.ok(cargoPublish.includes('--package "fixture-databricks-auth"'));

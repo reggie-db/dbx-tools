@@ -45,8 +45,12 @@ instead of creating a second owner. An explicit `outdir` is the workspace root
 for naming, Git metadata, package discovery, codegen, and barrels even when the
 calling process has a different current directory.
 
-The unified dbx-tools release surface is enabled by default. Set
-`releaseMode: "disabled"` to omit its workflow and bump/version/release tasks.
+The unified dbx-tools release surface is enabled by default. `bump` increments
+the local `VERSION` and synchronizes generated version surfaces. `release`
+commits that bump on the configured release branch, pushes it, and pushes an
+annotated version tag. The generated GitHub workflow runs only for matching tag
+pushes and publishes directly from that immutable commit. Set
+`releaseMode: "disabled"` to omit the workflow and bump/version/release tasks.
 The inherited Projen `release` and `releaseTrigger` options are intentionally
 not part of this engine's public options because they create a competing release
 workflow.
@@ -58,13 +62,8 @@ Repository policy stays in the consuming `.projenrc.ts`:
   artifact upload, and deployment without naming a docs script or output tree.
 - `releasePythonRoot` passes the actual Python package root to local release
   preparation. Omit it when the workspace has no standard Python packages.
-- `releaseValidationTasks` names repository tasks that must pass in the release
-  branch before Cargo tests, compilation, local publication, or approval.
-  Use it for repository-specific guards that also run in release CI.
-- `releaseSummary` controls versioned release notes. It defaults to Cursor,
-  Codex, Claude fallback order and writes a deterministic Git summary when every
-  configured provider is unavailable; pass `false` to disable or provide a
-  `providers` array to choose the order/subset.
+- `releaseValidationTasks` names repository tasks that must pass in tag CI
+  before release artifacts are built and published.
 - `pullRequestTitlePolicy` configures semantic title types and scope policy.
   Omit it or pass `false` to disable the title job.
 - `workflowCacheIgnorePaths` excludes generated output trees that may contain

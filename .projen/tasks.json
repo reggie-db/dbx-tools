@@ -432,20 +432,10 @@
     },
     "release": {
       "name": "release",
-      "description": "Prepare, validate, locally publish, and upload a draft release candidate",
+      "description": "Commit the local version bump and push an annotated release tag",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"auth:python-runtime:check\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
-          "receiveArgs": true
-        }
-      ]
-    },
-    "release:assets": {
-      "name": "release:assets",
-      "description": "Rebuild and upload a complete draft release candidate",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-candidate.ts --python-root \"packages/py\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-tag.ts --prefix v --branch main",
           "receiveArgs": true
         }
       ]

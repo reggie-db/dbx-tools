@@ -625,6 +625,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releasePythonRoot?: string;
     /** Repository task names run during local release preparation before publication. */
     readonly releaseValidationTasks?: readonly string[];
+    /** Include configured Rust/UniFFI artifacts in tag releases. Defaults to true. */
+    readonly releaseNative?: boolean;
     /** Optional AI-generated release summary. Defaults to enabled. */
     readonly releaseSummary?: boolean | ReleaseSummaryOptions;
     /** Set to `false` to omit normal npm workspace publication. */
@@ -1580,6 +1582,7 @@ function initProject(
       docs: options.releaseDocs,
       pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
+      nativeRelease: options.releaseNative,
       summary: options.releaseSummary,
     });
   }

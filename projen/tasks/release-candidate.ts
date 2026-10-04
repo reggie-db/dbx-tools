@@ -262,6 +262,7 @@ export function buildReleaseCandidate(options: {
   readonly version: string;
   readonly notesFile?: string;
   readonly upload?: boolean;
+  readonly skipRust?: boolean;
   readonly env?: NodeJS.ProcessEnv;
 }): void {
   const root = resolve(options.root);
@@ -287,7 +288,7 @@ export function buildReleaseCandidate(options: {
   if (status) throw new Error("Release candidate source contains tracked changes");
 
   rmSync(join(root, "dist/release"), { recursive: true, force: true });
-  if ((rustReleaseConfiguration(root)?.targets.length ?? 0) > 0) {
+  if (!options.skipRust && (rustReleaseConfiguration(root)?.targets.length ?? 0) > 0) {
     buildReleaseAssets({ root, version: options.version });
     buildFacades(root, options.version);
   }
@@ -388,6 +389,7 @@ if (import.meta.main) {
     .option("--python-root <path>", "Python package root", "packages/py")
     .option("--notes-file <path>", "draft release notes file")
     .option("--upload", "create or update the draft GitHub Release after building")
+    .option("--skip-rust", "omit configured Rust binaries and UniFFI artifacts")
     .option("--upload-existing", "upload the existing verified candidate without rebuilding")
     .action(
       (options: {
@@ -398,6 +400,7 @@ if (import.meta.main) {
         pythonRoot: string;
         notesFile?: string;
         upload?: boolean;
+        skipRust?: boolean;
         uploadExisting?: boolean;
       }) => {
         const candidateOptions = {
@@ -409,7 +412,12 @@ if (import.meta.main) {
           ...(options.notesFile ? { notesFile: options.notesFile } : {}),
         };
         if (options.uploadExisting) uploadReleaseCandidate(candidateOptions);
-        else buildReleaseCandidate({ ...candidateOptions, upload: options.upload });
+        else
+          buildReleaseCandidate({
+            ...candidateOptions,
+            upload: options.upload,
+            skipRust: options.skipRust,
+          });
       },
     )
     .parse();

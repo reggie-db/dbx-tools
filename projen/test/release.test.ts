@@ -60,68 +60,38 @@ after(() => {
 });
 
 describe("unified release workflow", () => {
-  it("promotes a published draft release and supports manual recovery", () => {
+  it("builds and publishes directly from annotated main tags", () => {
     assert.equal(release.name, "release");
-    assert.equal(
-      release["run-name"],
-      "release 0.0.1 ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}",
-    );
-    assert.deepEqual(workflowTrigger<{ types: string[] }>(release, "release"), {
-      types: ["published"],
-    });
-    const inputs = workflowTrigger<{ inputs: Record<string, unknown> }>(
-      release,
-      "workflow_dispatch",
-    ).inputs;
-    assert.deepEqual(inputs.dry_run, {
-      description: "Build and validate without publishing",
-      type: "boolean",
-      default: true,
-      required: true,
-    });
-    assert.equal(inputs.npm_bootstrap, undefined);
-    assert.deepEqual(inputs.stage, {
-      description: "Published release stage to validate or recover",
-      type: "choice",
-      options: ["all", "node", "python", "cargo", "docs"],
-      default: "all",
-      required: true,
-    });
-    assert.equal(inputs.expected_sha, undefined);
-    assert.equal(inputs.source_run_id, undefined);
+    assert.equal(release["run-name"], "release ${{ github.ref_name }}");
+    assert.deepEqual(workflowTrigger<{ tags: string[] }>(release, "push"), { tags: ["v*"] });
+    assert.equal("release" in release.on, false);
+    assert.equal("workflow_dispatch" in release.on, false);
     assert.deepEqual(release.concurrency, {
-      group:
-        "release-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}",
+      group: "release-${{ github.ref_name }}",
       "cancel-in-progress": false,
     });
     assert.deepEqual(release.permissions, { contents: "read" });
 
     const verifyJob = release.jobs["verify-context"]!;
-    assert.deepEqual(verifyJob.permissions, { contents: "read" });
+    assert.deepEqual(verifyJob.permissions, { contents: "write" });
     assert.equal(verifyJob.outputs?.build_mode, undefined);
     assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
     const verify = step(verifyJob, "Verify release context");
-    assert.equal(
-      verify.env?.RELEASE_TAG,
-      "${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}",
-    );
+    assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
     assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
-    assert.ok(verify.run?.includes('git merge-base --is-ancestor "$RELEASE_SHA" "origin/main"'));
-    assert.ok(verify.run?.includes('gh release view "$RELEASE_TAG" --json isDraft'));
-    assert.ok(verify.run?.includes("tasks/release-manifest.ts verify"));
-    assert.ok(verify.run?.includes('gh release download "$RELEASE_TAG"'));
-    assert.doesNotMatch(verify.run ?? "", /gh release create/);
+    assert.ok(verify.run?.includes('test "$(git rev-parse "origin/main")" = "$RELEASE_SHA"'));
+    const candidate = step(verifyJob, "Build and upload release artifacts");
+    assert.ok(candidate.run?.includes("tasks/release-candidate.ts"));
+    assert.ok(candidate.run?.includes("--upload"));
+    assert.ok(candidate.run?.includes('gh release edit "$RELEASE_TAG" --draft=false --latest'));
   });
 
   it("publishes npm through the shared authenticated driver", () => {
     const job = release.jobs["publish-node"]!;
-    assert.equal(
-      job.if,
-      "${{ github.event_name == 'release' || inputs.stage == 'all' || inputs.stage == 'node' }}",
-    );
+    assert.equal(job.if, "${{ success() }}");
     assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
     assert.equal(job.env?.BUN_VERSION, "1.3.14");
     assert.deepEqual(step(job, "Setup Node.js").with, {
@@ -140,26 +110,17 @@ describe("unified release workflow", () => {
     assert.ok(step(job, "Download approved npm archives").run?.includes("release-manifest.ts"));
     const publish = step(job, "Publish approved npm archives");
     assert.equal(publish.env?.NODE_AUTH_TOKEN, "${{ secrets.NPM_TOKEN }}");
-    assert.equal(
-      publish.env?.NPM_CONFIG_PROVENANCE,
-      "${{ (github.event_name == 'release' || inputs.dry_run != true) && 'true' || 'false' }}",
-    );
+    assert.equal(publish.env?.NPM_CONFIG_PROVENANCE, "true");
     assert.equal(publish.env?.ACCEPT_STAGED, undefined);
     assert.equal(publish.env?.NPM_BOOTSTRAP, undefined);
-    assert.equal(
-      publish.env?.DRY_RUN,
-      "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
-    );
+    assert.equal(publish.env?.DRY_RUN, "");
     assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
     assert.doesNotMatch(publish.run ?? "", /release-automation|ACCEPT_STAGED/);
   });
 
   it("builds and selectively deploys docs in the same workflow", () => {
     const build = release.jobs["build-docs"]!;
-    assert.equal(
-      build.if,
-      "${{ github.event_name == 'release' || inputs.stage == 'all' || inputs.stage == 'docs' }}",
-    );
+    assert.equal(build.if, "${{ success() }}");
     assert.deepEqual(build.permissions, {
       contents: "read",
       pages: "write",
@@ -181,10 +142,7 @@ describe("unified release workflow", () => {
     });
 
     const deploy = release.jobs["deploy-docs"]!;
-    assert.equal(
-      deploy.if,
-      "${{ github.event_name == 'release' || (inputs.dry_run != true && (inputs.stage == 'all' || inputs.stage == 'docs')) }}",
-    );
+    assert.equal(deploy.if, "${{ success() }}");
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
       url: "${{ steps.deployment.outputs.page_url }}",
@@ -228,7 +186,7 @@ describe("unified release workflow", () => {
 });
 
 describe("release task contracts", () => {
-  it("exposes pure bump, version check, and reviewed release preparation tasks", () => {
+  it("exposes pure bump, version check, and direct tag release tasks", () => {
     const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
       tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
     };
@@ -236,15 +194,12 @@ describe("release task contracts", () => {
     assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
     assert.match(
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
-      /tasks\/release-pr\.ts --prefix v --base main --python-root "python\/packages" --validate-task "docs:check-source" --validate-task "docs:check-readmes"/,
+      /tasks\/release-tag\.ts --prefix v --branch main/,
     );
-    assert.match(
-      tasks.tasks["release:assets"]?.steps?.[0]?.exec ?? "",
-      /tasks\/release-candidate\.ts --python-root "python\/packages"/,
-    );
+    assert.equal(tasks.tasks["release:assets"], undefined);
   });
 
-  it("configures summary provider order and opt-out through project options", () => {
+  it("keeps legacy summary options source-compatible without changing tag release", () => {
     const providersOutdir = mkdtempSync(join(tmpdir(), "release-summary-providers-"));
     const disabledOutdir = mkdtempSync(join(tmpdir(), "release-summary-disabled-"));
     try {
@@ -267,8 +222,8 @@ describe("release task contracts", () => {
         return tasks.tasks.release?.steps?.[0]?.exec ?? "";
       };
 
-      assert.match(command(providersOutdir), /--release-summary-providers claude,codex/);
-      assert.match(command(disabledOutdir), /--no-release-summary/);
+      assert.match(command(providersOutdir), /release-tag\.ts --prefix v --branch main/);
+      assert.match(command(disabledOutdir), /release-tag\.ts --prefix v --branch main/);
     } finally {
       rmSync(providersOutdir, { recursive: true, force: true });
       rmSync(disabledOutdir, { recursive: true, force: true });
@@ -554,12 +509,33 @@ describe("optional Node release stage", () => {
       const tasks = JSON.parse(readFileSync(join(fixedOutdir, ".projen/tasks.json"), "utf8")) as {
         tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
       };
-      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-pr\.ts/);
+      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-tag\.ts/);
       assert.equal(tasks.tasks["release:refresh"], undefined);
       const build = readWorkflow(fixedOutdir, "build");
       assert.ok(workflowTrigger(build, "pull_request"));
     } finally {
       rmSync(fixedOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("can omit native candidate assets while retaining tag publication", () => {
+    const nativeDisabledOutdir = mkdtempSync(join(tmpdir(), "release-native-disabled-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "native-disabled-release",
+        outdir: nativeDisabledOutdir,
+        github: true,
+        releaseNative: false,
+      });
+      project.synth();
+      const workflow = readWorkflow(nativeDisabledOutdir);
+      assert.ok(
+        step(workflow.jobs["verify-context"]!, "Build and upload release artifacts").run?.includes(
+          "--upload --skip-rust",
+        ),
+      );
+    } finally {
+      rmSync(nativeDisabledOutdir, { recursive: true, force: true });
     }
   });
 });
