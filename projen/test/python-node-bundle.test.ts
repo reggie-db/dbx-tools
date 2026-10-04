@@ -90,6 +90,8 @@ describe("PythonNodeBundle", () => {
 
     const bindings = readFileSync(bindingsPath, "utf8");
     assert.match(bindings, /async def create_session\(\) -> str:/);
+    assert.match(bindings, /_INVOKE_METHOD = pm\.eval\(/);
+    assert.match(bindings, /result = json\.loads\(encoded\)/);
     assert.match(bindings, /async def token\(\n    login: bool \| object = _MISSING,\n\) -> str:/);
     assert.match(bindings, /class SessionOptions:/);
     assert.match(bindings, /workspace_id: str \| None/);
