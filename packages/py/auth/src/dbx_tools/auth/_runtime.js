@@ -6957,6 +6957,7 @@ var require_stream_browserify = __commonJS((exports2, module2) => {
 var exports_fs_promises = {};
 __export(exports_fs_promises, {
   writeFile: () => writeFile,
+  unlink: () => unlink,
   stat: () => stat,
   rm: () => rm,
   rename: () => rename,
@@ -7011,6 +7012,9 @@ async function rename(source, destination) {
 async function rm(path, options = {}) {
   await pythonHost().file.remove(String(path), options.recursive === true, options.force === true);
 }
+async function unlink(path) {
+  await pythonHost().file.remove(String(path), false, false);
+}
 async function stat(path) {
   const value = await pythonHost().file.stat(String(path));
   return {
@@ -7046,6 +7050,7 @@ var init_fs_promises = __esm(() => {
     rename,
     rm,
     stat,
+    unlink,
     writeFile
   };
 });
@@ -19866,14 +19871,76 @@ var require_ini = __commonJS((exports2, module2) => {
 // dbx-tools-python:dbx-tools:python-entry
 var exports_dbx_tools_python_entry = {};
 __export(exports_dbx_tools_python_entry, {
-  createDatabricksAuth: () => createDatabricksAuth,
-  createAuthClient: () => createAuthClient
+  types: () => exports_types,
+  storage: () => exports_storage,
+  servicePrincipal: () => exports_service_principal,
+  resolveDatabricksProfile: () => resolveDatabricksProfile,
+  resolveConfigFile: () => resolveConfigFile,
+  profile: () => exports_profile,
+  personalAccessToken: () => exports_personal_access_token,
+  parseDatabricksConfig: () => parseDatabricksConfig,
+  normalizeHost: () => normalizeHost,
+  nodeStorage: () => exports_node_storage,
+  listDatabricksProfiles: () => listDatabricksProfiles,
+  lifecycle: () => exports_lifecycle,
+  invalidateConfigFile: () => invalidateConfigFile,
+  httpClient: () => exports_http_client,
+  errors: () => exports_errors,
+  databricksCli: () => exports_databricks_cli,
+  databricksAuth: () => exports_databricks_auth,
+  createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
+  createPersistentAuth: () => createPersistentAuth,
+  configProfileExists: () => configProfileExists,
+  WORKSPACE_ID_HEADER: () => WORKSPACE_ID_HEADER,
+  TargetKind: () => TargetKind,
+  Storage: () => Storage,
+  PersistentAuth: () => PersistentAuth,
+  PACKAGE_VERSION: () => PACKAGE_VERSION,
+  PACKAGE_IDENTIFIER: () => PACKAGE_IDENTIFIER,
+  MemoryLockAdapter: () => MemoryLockAdapter,
+  MemoryCredentialStore: () => MemoryCredentialStore,
+  FileLayout: () => FileLayout,
+  FileCredentialStore: () => FileCredentialStore,
+  DatabricksServicePrincipalProvider: () => DatabricksServicePrincipalProvider,
+  DatabricksPersonalAccessTokenProvider: () => DatabricksPersonalAccessTokenProvider,
+  DatabricksClient: () => DatabricksClient,
+  DatabricksCliProvider: () => DatabricksCliProvider,
+  DatabricksAuthOptions: () => DatabricksAuthOptions,
+  DEFAULT_CONFIG_FILE: () => DEFAULT_CONFIG_FILE,
+  DEFAULT_CLIENT_ID: () => DEFAULT_CLIENT_ID,
+  DEFAULT_ACCOUNTS_HOST: () => DEFAULT_ACCOUNTS_HOST,
+  DEFAULT_ACCESS_TOKEN_HEADER: () => DEFAULT_ACCESS_TOKEN_HEADER,
+  AuthOptions: () => AuthOptions,
+  AuthKind: () => AuthKind,
+  AuthError: () => AuthError,
+  AuthClient: () => AuthClient,
+  AUTH_TYPE_APP_SP: () => AUTH_TYPE_APP_SP,
+  AUTH_TYPE_APP_OBO: () => AUTH_TYPE_APP_OBO
 });
 module.exports = __toCommonJS(exports_dbx_tools_python_entry);
 
 // packages/py/node-bindings/build/shims/bootstrap.ts
 var import_node_buffer = __toESM(require_buffer(), 1);
 globalThis.Buffer = import_node_buffer.Buffer;
+
+// packages/js/node/auth/src/databricks-auth.ts
+var exports_databricks_auth = {};
+__export(exports_databricks_auth, {
+  createPersistentAuthWithStorage: () => createPersistentAuthWithStorage,
+  createPersistentAuth: () => createPersistentAuth,
+  PersistentAuth: () => PersistentAuth
+});
+
+// packages/py/node-bindings/build/shims/os.ts
+function homedir() {
+  return pythonHost().os.homedir();
+}
+function tmpdir() {
+  return pythonHost().os.tmpdir();
+}
+
+// packages/js/node/auth/src/databricks-auth.ts
+init_path();
 
 // packages/js/shared/core/src/object.ts
 function isCollection(value) {
@@ -20357,15 +20424,34 @@ function isDatabricksAppEnv(source = process.env) {
   }
 }
 
-// packages/py/node-bindings/build/shims/os.ts
-function homedir() {
-  return pythonHost().os.homedir();
+// packages/js/node/auth/src/errors.ts
+var exports_errors = {};
+__export(exports_errors, {
+  authError: () => authError,
+  AuthError: () => AuthError
+});
+
+class AuthError extends Error {
+  kind;
+  constructor(kind, message, options) {
+    super(message, options);
+    this.kind = kind;
+    this.name = "AuthError";
+  }
 }
-function tmpdir() {
-  return pythonHost().os.tmpdir();
+function authError(kind, message, cause) {
+  return cause instanceof AuthError ? cause : new AuthError(kind, message, { cause });
 }
 
 // packages/js/node/auth/src/databricks-cli.ts
+var exports_databricks_cli = {};
+__export(exports_databricks_cli, {
+  resolveDatabricksCli: () => resolveDatabricksCli,
+  resetDatabricksCliResolution: () => resetDatabricksCliResolution,
+  databricksCliToken: () => databricksCliToken,
+  databricksCliLogin: () => databricksCliLogin,
+  DatabricksCliProvider: () => DatabricksCliProvider
+});
 init_path();
 
 // packages/py/node-bindings/build/shims/child-process.ts
@@ -24168,6 +24254,44 @@ async function withFileLock(key, fn, options = {}) {
   }
   throw new Error("withFileLock: no lock backend available");
 }
+async function acquireFileLock(key, options = {}) {
+  let acquisition;
+  let resolveAcquired;
+  let rejectAcquired;
+  let resolveRelease;
+  const acquired = new Promise((resolve2, reject) => {
+    resolveAcquired = resolve2;
+    rejectAcquired = reject;
+  });
+  const released = new Promise((resolve2) => {
+    resolveRelease = resolve2;
+  });
+  const run = withFileLock(key, async () => {
+    resolveAcquired();
+    await released;
+  }, {
+    ...options,
+    onAcquire: (value) => {
+      acquisition = value;
+      options.onAcquire?.(value);
+    }
+  });
+  run.catch(rejectAcquired);
+  await acquired;
+  if (!acquisition)
+    throw new Error("File-lock backend was not recorded");
+  let active = true;
+  return {
+    ...acquisition,
+    async release() {
+      if (!active)
+        return;
+      active = false;
+      resolveRelease();
+      await run;
+    }
+  };
+}
 function lockId(key) {
   const stable = toOneOrMany(key).map((part) => toStableKey(part)).join("\x00");
   return fnvHash(stable);
@@ -24847,16 +24971,6 @@ var databricks_cli_assets_default = {
   }
 };
 
-// packages/js/node/auth/src/errors.ts
-class AuthError extends Error {
-  kind;
-  constructor(kind, message, options) {
-    super(message, options);
-    this.kind = kind;
-    this.name = "AuthError";
-  }
-}
-
 // packages/js/node/auth/src/databricks-cli.ts
 var resolutionCache = new Map;
 function resolveDatabricksCli(environment = process.env, options = {}) {
@@ -24871,6 +24985,9 @@ function resolveDatabricksCli(environment = process.env, options = {}) {
   });
   resolutionCache.set(key, resolved);
   return resolved;
+}
+function resetDatabricksCliResolution() {
+  resolutionCache.clear();
 }
 async function resolveDatabricksCliUncached(candidate, install) {
   if (await compatibleDatabricksCli(candidate))
@@ -25011,6 +25128,12 @@ function stringValue(value) {
 }
 
 // packages/js/node/auth/src/lifecycle.ts
+var exports_lifecycle = {};
+__export(exports_lifecycle, {
+  validateToken: () => validateToken,
+  publicToken: () => publicToken,
+  AuthClient: () => AuthClient
+});
 class AuthClient {
   key;
   provider;
@@ -25153,7 +25276,248 @@ function isValid(token, now) {
   return Boolean(token.accessToken) && (!token.expiry || Date.parse(token.expiry) > now.getTime());
 }
 
+// packages/js/node/auth/src/node-storage.ts
+var exports_node_storage = {};
+__export(exports_node_storage, {
+  FileCredentialStore: () => FileCredentialStore
+});
+init_fs_promises();
+init_path();
+
+// packages/js/node/auth/src/types.ts
+var exports_types = {};
+__export(exports_types, {
+  WORKSPACE_ID_HEADER: () => WORKSPACE_ID_HEADER,
+  TargetKind: () => TargetKind,
+  Storage: () => Storage,
+  FileLayout: () => FileLayout,
+  DatabricksAuthOptions: () => DatabricksAuthOptions,
+  DEFAULT_CONFIG_FILE: () => DEFAULT_CONFIG_FILE,
+  DEFAULT_CLIENT_ID: () => DEFAULT_CLIENT_ID,
+  DEFAULT_ACCOUNTS_HOST: () => DEFAULT_ACCOUNTS_HOST,
+  DEFAULT_ACCESS_TOKEN_HEADER: () => DEFAULT_ACCESS_TOKEN_HEADER,
+  AuthOptions: () => AuthOptions,
+  AuthKind: () => AuthKind,
+  AUTH_TYPE_APP_SP: () => AUTH_TYPE_APP_SP,
+  AUTH_TYPE_APP_OBO: () => AUTH_TYPE_APP_OBO
+});
+var AuthKind;
+((AuthKind2) => {
+  AuthKind2["UserToMachine"] = "user-to-machine";
+  AuthKind2["MachineToMachine"] = "machine-to-machine";
+  AuthKind2["PersonalAccessToken"] = "personal-access-token";
+  AuthKind2["AppServicePrincipal"] = "app-service-principal";
+  AuthKind2["AppOnBehalfOf"] = "app-on-behalf-of";
+})(AuthKind ||= {});
+var TargetKind;
+((TargetKind2) => {
+  TargetKind2["Workspace"] = "workspace";
+  TargetKind2["Account"] = "account";
+  TargetKind2["Unified"] = "unified";
+})(TargetKind ||= {});
+var Storage;
+((Storage2) => {
+  Storage2["Auto"] = "auto";
+  Storage2["Memory"] = "memory";
+  Storage2["File"] = "file";
+})(Storage ||= {});
+var FileLayout;
+((FileLayout2) => {
+  FileLayout2["Single"] = "single";
+  FileLayout2["PerCredential"] = "per-credential";
+})(FileLayout ||= {});
+var AUTH_DEFAULTS = {
+  refreshBufferSeconds: 300,
+  lockTimeoutSeconds: 30,
+  loginTimeoutSeconds: 900
+};
+var AuthOptions = {
+  create(options = {}) {
+    return { ...AUTH_DEFAULTS, ...options };
+  },
+  defaults() {
+    return Object.freeze({ ...AUTH_DEFAULTS });
+  }
+};
+var DatabricksAuthOptions = {
+  create(options = {}) {
+    return { preferUserToMachine: true, ...options };
+  },
+  defaults() {
+    return Object.freeze({ preferUserToMachine: true });
+  }
+};
+var DEFAULT_CLIENT_ID = "databricks-cli";
+var DEFAULT_CONFIG_FILE = "~/.databrickscfg";
+var DEFAULT_ACCOUNTS_HOST = "https://accounts.cloud.databricks.com";
+var DEFAULT_ACCESS_TOKEN_HEADER = "authorization";
+var WORKSPACE_ID_HEADER = "x-databricks-workspace-id";
+var AUTH_TYPE_APP_OBO = "app_obo";
+var AUTH_TYPE_APP_SP = "app_sp";
+
+// packages/js/node/auth/src/node-storage.ts
+class NodeFileLocks {
+  lockDirectory;
+  leases = new Map;
+  constructor(lockDirectory) {
+    this.lockDirectory = lockDirectory;
+  }
+  async acquire(key, timeoutMs) {
+    const lease = await acquireFileLock(key, { dir: this.lockDirectory, timeoutMs });
+    const id = randomUUID();
+    this.leases.set(id, lease);
+    return id;
+  }
+  async release(id) {
+    const lease = this.leases.get(id);
+    if (!lease)
+      return;
+    this.leases.delete(id);
+    await lease.release();
+  }
+}
+
+class FileCredentialStore {
+  root;
+  layout;
+  locks;
+  constructor(root = join(homedir(), ".databricks"), layout = "single" /* Single */, locks) {
+    this.root = root;
+    this.layout = layout;
+    this.locks = locks ?? new NodeFileLocks(join(root, "locks"));
+  }
+  async load(key) {
+    const store = this.forKey(key);
+    return store.withCacheLock(async () => deserializeToken((await store.readCache()).tokens[key]));
+  }
+  async prepareWrite() {
+    await ensureDirectory(this.root, 448);
+  }
+  async save(key, token) {
+    const store = this.forKey(key);
+    await store.withCacheLock(async () => {
+      const cache = await store.readCache();
+      cache.tokens[key] = serializeToken(token);
+      await store.writeCache(cache);
+    });
+  }
+  async remove(key) {
+    const store = this.forKey(key);
+    await store.withCacheLock(async () => {
+      const cache = await store.readCache();
+      delete cache.tokens[key];
+      await store.writeCache(cache);
+    });
+  }
+  acquireLock(key, timeoutMs) {
+    return this.locks.acquire(this.layout === "single" /* Single */ ? `${this.root}:refresh` : `${this.root}:${key}:refresh`, timeoutMs);
+  }
+  releaseLock(lease) {
+    return this.locks.release(lease);
+  }
+  name() {
+    return "file";
+  }
+  forKey(key) {
+    if (this.layout === "single" /* Single */)
+      return this;
+    const digest = createHash("sha256").update(key).digest("hex");
+    return new FileCredentialStore(join(this.root, digest), "single" /* Single */, this.locks);
+  }
+  async withCacheLock(action) {
+    await ensureDirectory(this.root, 448);
+    const lease = await this.locks.acquire(`${this.root}:cache`, 30000);
+    try {
+      return await action();
+    } finally {
+      await this.locks.release(lease);
+    }
+  }
+  async readCache() {
+    try {
+      const source = await readTextFile(join(this.root, "token-cache.json"));
+      const cache = source ? JSON.parse(source) : { version: 1, tokens: {} };
+      if (cache.version !== 1 || typeof cache.tokens !== "object" || !cache.tokens) {
+        throw new AuthError("storage", "Token cache must use version 1");
+      }
+      return cache;
+    } catch (cause) {
+      if (cause instanceof AuthError)
+        throw cause;
+      throw new AuthError("storage", "Could not read Databricks token cache", { cause });
+    }
+  }
+  async writeCache(cache) {
+    try {
+      await atomicWriteTextFile(join(this.root, "token-cache.json"), `${JSON.stringify(cache, null, 2)}
+`, 384);
+    } catch (cause) {
+      throw new AuthError("storage", "Could not write Databricks token cache", { cause });
+    }
+  }
+}
+async function ensureDirectory(path, mode) {
+  await mkdir(path, { recursive: true, mode });
+  await chmod(path, mode);
+}
+async function readTextFile(path) {
+  try {
+    return await readFile(path, "utf8");
+  } catch (cause) {
+    if (cause.code === "ENOENT")
+      return;
+    throw cause;
+  }
+}
+async function atomicWriteTextFile(path, content, mode) {
+  const parent = dirname(path);
+  await ensureDirectory(parent, 448);
+  const temporary = join(parent, `.${basename(path)}-${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, content, { mode, flag: "wx" });
+    await chmod(temporary, mode);
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch((cause) => {
+      if (cause.code !== "ENOENT")
+        throw cause;
+    });
+  }
+}
+function serializeToken(token) {
+  return {
+    access_token: token.accessToken,
+    token_type: token.tokenType,
+    ...token.refreshToken ? { refresh_token: token.refreshToken } : {},
+    ...token.expiry ? { expiry: token.expiry } : {},
+    ...token.scopes.length ? { scopes: token.scopes } : {}
+  };
+}
+function deserializeToken(value) {
+  if (!value || typeof value !== "object")
+    return;
+  const record = value;
+  const accessToken = stringValue2(record.access_token ?? record.accessToken);
+  if (!accessToken)
+    return;
+  return {
+    accessToken,
+    tokenType: stringValue2(record.token_type ?? record.tokenType) ?? "Bearer",
+    ...stringValue2(record.refresh_token ?? record.refreshToken) ? { refreshToken: stringValue2(record.refresh_token ?? record.refreshToken) } : {},
+    ...stringValue2(record.expiry ?? record.expires_at) ? { expiry: stringValue2(record.expiry ?? record.expires_at) } : {},
+    scopes: Array.isArray(record.scopes) ? record.scopes.filter((scope) => typeof scope === "string") : []
+  };
+}
+function stringValue2(value) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 // packages/js/node/auth/src/personal-access-token.ts
+var exports_personal_access_token = {};
+__export(exports_personal_access_token, {
+  DatabricksPersonalAccessTokenProvider: () => DatabricksPersonalAccessTokenProvider
+});
+
 class DatabricksPersonalAccessTokenProvider {
   accessToken;
   constructor(accessToken) {
@@ -25181,34 +25545,23 @@ class DatabricksPersonalAccessTokenProvider {
 }
 
 // packages/js/node/auth/src/profile.ts
+var exports_profile = {};
+__export(exports_profile, {
+  resolveDatabricksProfile: () => resolveDatabricksProfile,
+  resolveConfigFile: () => resolveConfigFile,
+  parseDatabricksConfig: () => parseDatabricksConfig,
+  normalizeHost: () => normalizeHost,
+  machineScopes: () => machineScopes,
+  listDatabricksProfiles: () => listDatabricksProfiles,
+  invalidateConfigFile: () => invalidateConfigFile,
+  effectiveScopes: () => effectiveScopes,
+  configProfileExists: () => configProfileExists
+});
 init_fs();
 init_path();
 
 // packages/js/node/auth/src/_profile-core.ts
 var import_ini = __toESM(require_ini(), 1);
-
-// packages/js/node/auth/src/types.ts
-var AUTH_DEFAULTS = {
-  refreshBufferSeconds: 300,
-  lockTimeoutSeconds: 30,
-  loginTimeoutSeconds: 900
-};
-var AuthOptions = {
-  create(options = {}) {
-    return { ...AUTH_DEFAULTS, ...options };
-  },
-  defaults() {
-    return Object.freeze({ ...AUTH_DEFAULTS });
-  }
-};
-var DEFAULT_CLIENT_ID = "databricks-cli";
-var DEFAULT_CONFIG_FILE = "~/.databrickscfg";
-var DEFAULT_ACCESS_TOKEN_HEADER = "authorization";
-var WORKSPACE_ID_HEADER = "x-databricks-workspace-id";
-var AUTH_TYPE_APP_OBO = "app_obo";
-var AUTH_TYPE_APP_SP = "app_sp";
-
-// packages/js/node/auth/src/_profile-core.ts
 var SETTINGS_SECTION = "__settings__";
 function parseDatabricksConfig(source) {
   let parsed;
@@ -25385,6 +25738,35 @@ function resolveConfigFile(explicit, environment = process.env) {
   const expanded = selected === "~" ? homedir() : selected.startsWith("~/") ? resolve(homedir(), selected.slice(2)) : selected;
   return isAbsolute(expanded) ? expanded : resolve(expanded);
 }
+function invalidateConfigFile(configFile) {
+  configCache.delete(resolveConfigFile(configFile));
+}
+function configProfileExists(profile, configFile) {
+  if (!profile.trim() || profile === SETTINGS_SECTION)
+    return false;
+  return loadConfig(resolveConfigFile(configFile))?.has(profile) ?? false;
+}
+function listDatabricksProfiles(configFile, refresh = false, environment = process.env) {
+  const path = resolveConfigFile(configFile, environment);
+  if (refresh)
+    configCache.delete(path);
+  const config = loadConfig(path);
+  if (!config)
+    return [];
+  return [...config.keys()].filter((name) => name !== SETTINGS_SECTION).map((name) => {
+    const profile = loadRawProfile(config, name);
+    const host = nonempty(profile.host);
+    const accountId = nonempty(profile.accountId);
+    return {
+      name,
+      ...host ? { host } : {},
+      ...accountId ? { accountId } : {},
+      ...nonempty(profile.workspaceId) ? { workspaceId: nonempty(profile.workspaceId) } : {},
+      target: inferTarget(host, accountId),
+      authKind: resolveAuthKind(profile.authType, profile.clientId, profile.clientSecret, profile.accessToken)
+    };
+  }).sort((left, right) => left.name.localeCompare(right.name));
+}
 function resolveDatabricksProfile(options, environment = process.env) {
   const inApp = isDatabricksAppEnv({ ...environment });
   const environmentProfile = nonempty(environment.DATABRICKS_CONFIG_PROFILE);
@@ -25487,64 +25869,1420 @@ function credentialCacheKey(profile) {
   const digest = createHash("sha256").update(identity).digest("hex");
   return `${profile.name}-${profile.authKind === "app-service-principal" /* AppServicePrincipal */ ? "app-sp" : "oauth-m2m"}-${digest}`;
 }
+function effectiveScopes(scopes) {
+  return cleanList(["offline_access", ...scopes]);
+}
 function machineScopes(scopes) {
   const values2 = cleanList(scopes.length ? scopes : ["all-apis"]);
   return [...values2].sort();
 }
 
-// packages/js/node/auth/src/_python-bridge.ts
-function createAuthClient(key, provider, store, options = {}) {
-  const client = new AuthClient(key, provider, store, AuthOptions.create(options));
-  return {
-    storeName: () => client.storeName(),
-    login: () => client.login(),
-    token: (login) => client.tokenWithLogin(login),
-    forceRefresh: (login) => client.forceRefresh(login),
-    refreshRejectedToken: (staleAccessToken, login) => client.refreshRejectedToken(staleAccessToken, login),
-    logout: () => client.logout()
+// packages/js/node/auth/src/service-principal.ts
+var exports_service_principal = {};
+__export(exports_service_principal, {
+  DatabricksServicePrincipalProvider: () => DatabricksServicePrincipalProvider
+});
+
+// node_modules/oauth4webapi/build/index.js
+var USER_AGENT;
+if (typeof navigator === "undefined" || !navigator.userAgent?.startsWith?.("Mozilla/5.0 ")) {
+  const NAME = "oauth4webapi";
+  const VERSION = "v3.8.8";
+  USER_AGENT = `${NAME}/${VERSION}`;
+}
+function looseInstanceOf(input, expected) {
+  if (input == null) {
+    return false;
+  }
+  try {
+    return input instanceof expected || Object.getPrototypeOf(input)[Symbol.toStringTag] === expected.prototype[Symbol.toStringTag];
+  } catch {
+    return false;
+  }
+}
+var ERR_INVALID_ARG_VALUE = "ERR_INVALID_ARG_VALUE";
+var ERR_INVALID_ARG_TYPE = "ERR_INVALID_ARG_TYPE";
+function CodedTypeError(message, code, cause) {
+  const err = new TypeError(message, { cause });
+  Object.assign(err, { code });
+  return err;
+}
+var allowInsecureRequests = Symbol();
+var clockSkew = Symbol();
+var clockTolerance = Symbol();
+var customFetch = Symbol();
+var modifyAssertion = Symbol();
+var jweDecrypt = Symbol();
+var jwksCache = Symbol();
+var encoder = new TextEncoder;
+var decoder = new TextDecoder;
+function buf(input) {
+  if (typeof input === "string") {
+    return encoder.encode(input);
+  }
+  return decoder.decode(input);
+}
+var encodeBase64Url;
+if (Uint8Array.prototype.toBase64) {
+  encodeBase64Url = (input) => {
+    if (input instanceof ArrayBuffer) {
+      input = new Uint8Array(input);
+    }
+    return input.toBase64({ alphabet: "base64url", omitPadding: true });
+  };
+} else {
+  const CHUNK_SIZE = 32768;
+  encodeBase64Url = (input) => {
+    if (input instanceof ArrayBuffer) {
+      input = new Uint8Array(input);
+    }
+    const arr = [];
+    for (let i = 0;i < input.byteLength; i += CHUNK_SIZE) {
+      arr.push(String.fromCharCode.apply(null, input.subarray(i, i + CHUNK_SIZE)));
+    }
+    return btoa(arr.join("")).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
   };
 }
-async function createDatabricksAuth(options, store) {
-  const environment = options.environment ?? process.env;
-  const profile = resolveDatabricksProfile(options, environment);
-  const provider = providerFor(profile.authKind, profile.name, profile.accessToken, options, environment);
-  const client = createAuthClient(profile.cacheKey, provider, store, options.auth);
-  const authenticate = async (login) => {
-    const token = await client.token(login);
-    return {
-      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
-      ...profile.workspaceId ? { [WORKSPACE_ID_HEADER]: profile.workspaceId } : {}
-    };
+var decodeBase64Url;
+if (Uint8Array.fromBase64) {
+  decodeBase64Url = (input) => {
+    try {
+      return Uint8Array.fromBase64(input, { alphabet: "base64url" });
+    } catch (cause) {
+      throw CodedTypeError("The input to be decoded is not correctly encoded.", ERR_INVALID_ARG_VALUE, cause);
+    }
   };
-  return {
-    ...client,
-    authenticate,
-    authKind: () => profile.authKind,
-    principal: () => profile.principal,
-    requestHeadersForUrl: async (requestUrl, login) => new URL(requestUrl).origin === new URL(profile.host).origin ? authenticate(login) : {},
-    status: () => ({
-      profile: profile.name,
-      host: profile.host,
-      storage: store.name() === "memory" ? "memory" /* Memory */ : "file" /* File */
-    }),
-    workspaceId: () => profile.workspaceId
+} else {
+  decodeBase64Url = (input) => {
+    try {
+      const binary = atob(input.replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, ""));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0;i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    } catch (cause) {
+      throw CodedTypeError("The input to be decoded is not correctly encoded.", ERR_INVALID_ARG_VALUE, cause);
+    }
   };
 }
-function providerFor(authKind, profile, accessToken, options, environment) {
-  if (authKind === "personal-access-token" /* PersonalAccessToken */) {
-    return new DatabricksPersonalAccessTokenProvider(accessToken);
+function b64u(input) {
+  if (typeof input === "string") {
+    return decodeBase64Url(input);
   }
-  if (authKind !== "user-to-machine" /* UserToMachine */) {
-    throw new AuthError("config", `Profile ${profile} requires ${authKind}; Python auth currently supports CLI U2M and PAT profiles`);
+  return encodeBase64Url(input);
+}
+
+class UnsupportedOperationError extends Error {
+  code;
+  constructor(message, options) {
+    super(message, options);
+    this.name = this.constructor.name;
+    this.code = UNSUPPORTED_OPERATION;
+    Error.captureStackTrace?.(this, this.constructor);
   }
-  const configFile = resolveConfigFile(options.configFile, environment);
-  const inApp = isDatabricksAppEnv({ ...environment });
-  const executable = options.executable;
-  return new DatabricksCliProvider(profile, executable ? executable : () => resolveDatabricksCli(environment, {
-    install: !inApp || options.installCliInApp === true
-  }), {
-    ...Object.fromEntries(Object.entries(environment).filter((entry) => entry[1] !== undefined)),
-    DATABRICKS_CONFIG_FILE: configFile,
-    DATABRICKS_CONFIG_PROFILE: profile
+}
+
+class OperationProcessingError extends Error {
+  code;
+  constructor(message, options) {
+    super(message, options);
+    this.name = this.constructor.name;
+    if (options?.code) {
+      this.code = options?.code;
+    }
+    Error.captureStackTrace?.(this, this.constructor);
+  }
+}
+function OPE(message, code, cause) {
+  return new OperationProcessingError(message, { code, cause });
+}
+async function calculateJwkThumbprint(jwk) {
+  let components;
+  switch (jwk.kty) {
+    case "EC":
+      components = {
+        crv: jwk.crv,
+        kty: jwk.kty,
+        x: jwk.x,
+        y: jwk.y
+      };
+      break;
+    case "OKP":
+      components = {
+        crv: jwk.crv,
+        kty: jwk.kty,
+        x: jwk.x
+      };
+      break;
+    case "AKP":
+      components = {
+        alg: jwk.alg,
+        kty: jwk.kty,
+        pub: jwk.pub
+      };
+      break;
+    case "RSA":
+      components = {
+        e: jwk.e,
+        kty: jwk.kty,
+        n: jwk.n
+      };
+      break;
+    default:
+      throw new UnsupportedOperationError("unsupported JWK key type", { cause: jwk });
+  }
+  return b64u(await crypto.subtle.digest("SHA-256", buf(JSON.stringify(components))));
+}
+function assertCryptoKey(key, it2) {
+  if (!(key instanceof CryptoKey)) {
+    throw CodedTypeError(`${it2} must be a CryptoKey`, ERR_INVALID_ARG_TYPE);
+  }
+}
+function assertPrivateKey(key, it2) {
+  assertCryptoKey(key, it2);
+  if (key.type !== "private") {
+    throw CodedTypeError(`${it2} must be a private CryptoKey`, ERR_INVALID_ARG_VALUE);
+  }
+}
+function assertPublicKey(key, it2) {
+  assertCryptoKey(key, it2);
+  if (key.type !== "public") {
+    throw CodedTypeError(`${it2} must be a public CryptoKey`, ERR_INVALID_ARG_VALUE);
+  }
+}
+function isJsonObject(input) {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    return false;
+  }
+  return true;
+}
+function prepareHeaders(input) {
+  if (looseInstanceOf(input, Headers)) {
+    input = Object.fromEntries(input.entries());
+  }
+  const headers = new Headers(input ?? {});
+  if (USER_AGENT && !headers.has("user-agent")) {
+    headers.set("user-agent", USER_AGENT);
+  }
+  if (headers.has("authorization")) {
+    throw CodedTypeError('"options.headers" must not include the "authorization" header name', ERR_INVALID_ARG_VALUE);
+  }
+  return headers;
+}
+function signal(url, value) {
+  if (value !== undefined) {
+    if (typeof value === "function") {
+      value = value(url.href);
+    }
+    if (!(value instanceof AbortSignal)) {
+      throw CodedTypeError('"options.signal" must return or be an instance of AbortSignal', ERR_INVALID_ARG_TYPE);
+    }
+    return value;
+  }
+  return;
+}
+function assertNumber(input, allow0, it2, code, cause) {
+  try {
+    if (typeof input !== "number" || !Number.isFinite(input)) {
+      throw CodedTypeError(`${it2} must be a number`, ERR_INVALID_ARG_TYPE, cause);
+    }
+    if (input > 0)
+      return;
+    if (allow0) {
+      if (input !== 0) {
+        throw CodedTypeError(`${it2} must be a non-negative number`, ERR_INVALID_ARG_VALUE, cause);
+      }
+      return;
+    }
+    throw CodedTypeError(`${it2} must be a positive number`, ERR_INVALID_ARG_VALUE, cause);
+  } catch (err) {
+    if (code) {
+      throw OPE(err.message, code, cause);
+    }
+    throw err;
+  }
+}
+function assertString(input, it2, code, cause) {
+  try {
+    if (typeof input !== "string") {
+      throw CodedTypeError(`${it2} must be a string`, ERR_INVALID_ARG_TYPE, cause);
+    }
+    if (input.length === 0) {
+      throw CodedTypeError(`${it2} must not be empty`, ERR_INVALID_ARG_VALUE, cause);
+    }
+  } catch (err) {
+    if (code) {
+      throw OPE(err.message, code, cause);
+    }
+    throw err;
+  }
+}
+function assertApplicationJson(response) {
+  assertContentType(response, "application/json");
+}
+function notJson(response, ...types) {
+  let msg = '"response" content-type must be ';
+  if (types.length > 2) {
+    const last = types.pop();
+    msg += `${types.join(", ")}, or ${last}`;
+  } else if (types.length === 2) {
+    msg += `${types[0]} or ${types[1]}`;
+  } else {
+    msg += types[0];
+  }
+  return OPE(msg, RESPONSE_IS_NOT_JSON, response);
+}
+function assertContentType(response, contentType) {
+  if (getContentType(response) !== contentType) {
+    throw notJson(response, contentType);
+  }
+}
+function randomBytes2() {
+  return b64u(crypto.getRandomValues(new Uint8Array(32)));
+}
+function psAlg(key) {
+  switch (key.algorithm.hash.name) {
+    case "SHA-256":
+      return "PS256";
+    case "SHA-384":
+      return "PS384";
+    case "SHA-512":
+      return "PS512";
+    default:
+      throw new UnsupportedOperationError("unsupported RsaHashedKeyAlgorithm hash name", {
+        cause: key
+      });
+  }
+}
+function rsAlg(key) {
+  switch (key.algorithm.hash.name) {
+    case "SHA-256":
+      return "RS256";
+    case "SHA-384":
+      return "RS384";
+    case "SHA-512":
+      return "RS512";
+    default:
+      throw new UnsupportedOperationError("unsupported RsaHashedKeyAlgorithm hash name", {
+        cause: key
+      });
+  }
+}
+function esAlg(key) {
+  switch (key.algorithm.namedCurve) {
+    case "P-256":
+      return "ES256";
+    case "P-384":
+      return "ES384";
+    case "P-521":
+      return "ES512";
+    default:
+      throw new UnsupportedOperationError("unsupported EcKeyAlgorithm namedCurve", { cause: key });
+  }
+}
+function keyToJws(key) {
+  switch (key.algorithm.name) {
+    case "RSA-PSS":
+      return psAlg(key);
+    case "RSASSA-PKCS1-v1_5":
+      return rsAlg(key);
+    case "ECDSA":
+      return esAlg(key);
+    case "Ed25519":
+    case "ML-DSA-44":
+    case "ML-DSA-65":
+    case "ML-DSA-87":
+      return key.algorithm.name;
+    case "EdDSA":
+      return "Ed25519";
+    default:
+      throw new UnsupportedOperationError("unsupported CryptoKey algorithm name", { cause: key });
+  }
+}
+function getClockSkew(client) {
+  const skew = client?.[clockSkew];
+  return typeof skew === "number" && Number.isFinite(skew) ? skew : 0;
+}
+function getClockTolerance(client) {
+  const tolerance = client?.[clockTolerance];
+  return typeof tolerance === "number" && Number.isFinite(tolerance) && Math.sign(tolerance) !== -1 ? tolerance : 30;
+}
+function epochTime() {
+  return Math.floor(Date.now() / 1000);
+}
+function assertAs(as2) {
+  if (typeof as2 !== "object" || as2 === null) {
+    throw CodedTypeError('"as" must be an object', ERR_INVALID_ARG_TYPE);
+  }
+  assertString(as2.issuer, '"as.issuer"');
+}
+function assertClient(client) {
+  if (typeof client !== "object" || client === null) {
+    throw CodedTypeError('"client" must be an object', ERR_INVALID_ARG_TYPE);
+  }
+  assertString(client.client_id, '"client.client_id"');
+}
+function formUrlEncode(token) {
+  return encodeURIComponent(token).replace(/(?:[-_.!~*'()]|%20)/g, (substring) => {
+    switch (substring) {
+      case "-":
+      case "_":
+      case ".":
+      case "!":
+      case "~":
+      case "*":
+      case "'":
+      case "(":
+      case ")":
+        return `%${substring.charCodeAt(0).toString(16).toUpperCase()}`;
+      case "%20":
+        return "+";
+      default:
+        throw new Error;
+    }
   });
 }
+function ClientSecretBasic(clientSecret) {
+  assertString(clientSecret, '"clientSecret"');
+  return (_as, client, _body, headers) => {
+    const username = formUrlEncode(client.client_id);
+    const password = formUrlEncode(clientSecret);
+    const credentials = btoa(`${username}:${password}`);
+    headers.set("authorization", `Basic ${credentials}`);
+  };
+}
+async function signJwt(header, payload, key) {
+  if (!key.usages.includes("sign")) {
+    throw CodedTypeError('CryptoKey instances used for signing assertions must include "sign" in their "usages"', ERR_INVALID_ARG_VALUE);
+  }
+  const input = `${b64u(buf(JSON.stringify(header)))}.${b64u(buf(JSON.stringify(payload)))}`;
+  const signature = b64u(await crypto.subtle.sign(keyToSubtle(key), key, buf(input)));
+  return `${input}.${signature}`;
+}
+var jwkCache;
+async function getSetPublicJwkCache(key, alg) {
+  const { kty, e, n, x, y, crv, pub } = await crypto.subtle.exportKey("jwk", key);
+  const jwk = { kty, e, n, x, y, crv, pub };
+  if (kty === "AKP")
+    jwk.alg = alg;
+  jwkCache.set(key, jwk);
+  return jwk;
+}
+async function publicJwk(key, alg) {
+  jwkCache ||= new WeakMap;
+  return jwkCache.get(key) || getSetPublicJwkCache(key, alg);
+}
+var URLParse = URL.parse ? (url, base) => URL.parse(url, base) : (url, base) => {
+  try {
+    return new URL(url, base);
+  } catch {
+    return null;
+  }
+};
+function checkProtocol(url, enforceHttps) {
+  if (enforceHttps && url.protocol !== "https:") {
+    throw OPE("only requests to HTTPS are allowed", HTTP_REQUEST_FORBIDDEN, url);
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw OPE("only HTTP and HTTPS requests are allowed", REQUEST_PROTOCOL_FORBIDDEN, url);
+  }
+}
+function validateEndpoint(value, endpoint, useMtlsAlias, enforceHttps) {
+  let url;
+  if (typeof value !== "string" || !(url = URLParse(value))) {
+    throw OPE(`authorization server metadata does not contain a valid ${useMtlsAlias ? `"as.mtls_endpoint_aliases.${endpoint}"` : `"as.${endpoint}"`}`, value === undefined ? MISSING_SERVER_METADATA : INVALID_SERVER_METADATA, { attribute: useMtlsAlias ? `mtls_endpoint_aliases.${endpoint}` : endpoint });
+  }
+  checkProtocol(url, enforceHttps);
+  return url;
+}
+function resolveEndpoint(as2, endpoint, useMtlsAlias, enforceHttps) {
+  if (useMtlsAlias && as2.mtls_endpoint_aliases && endpoint in as2.mtls_endpoint_aliases) {
+    return validateEndpoint(as2.mtls_endpoint_aliases[endpoint], endpoint, useMtlsAlias, enforceHttps);
+  }
+  return validateEndpoint(as2[endpoint], endpoint, useMtlsAlias, enforceHttps);
+}
+class DPoPHandler {
+  #header;
+  #privateKey;
+  #publicKey;
+  #clockSkew;
+  #modifyAssertion;
+  #map;
+  #jkt;
+  constructor(client, keyPair, options) {
+    assertPrivateKey(keyPair?.privateKey, '"DPoP.privateKey"');
+    assertPublicKey(keyPair?.publicKey, '"DPoP.publicKey"');
+    if (!keyPair.publicKey.extractable) {
+      throw CodedTypeError('"DPoP.publicKey.extractable" must be true', ERR_INVALID_ARG_VALUE);
+    }
+    this.#modifyAssertion = options?.[modifyAssertion];
+    this.#clockSkew = getClockSkew(client);
+    this.#privateKey = keyPair.privateKey;
+    this.#publicKey = keyPair.publicKey;
+    branded.add(this);
+  }
+  #get(key) {
+    this.#map ||= new Map;
+    let item = this.#map.get(key);
+    if (item) {
+      this.#map.delete(key);
+      this.#map.set(key, item);
+    }
+    return item;
+  }
+  #set(key, val) {
+    this.#map ||= new Map;
+    this.#map.delete(key);
+    if (this.#map.size === 100) {
+      this.#map.delete(this.#map.keys().next().value);
+    }
+    this.#map.set(key, val);
+  }
+  async calculateThumbprint() {
+    if (!this.#jkt) {
+      const jwk = await crypto.subtle.exportKey("jwk", this.#publicKey);
+      this.#jkt ||= await calculateJwkThumbprint(jwk);
+    }
+    return this.#jkt;
+  }
+  async addProof(url, headers, htm, accessToken) {
+    const alg = keyToJws(this.#privateKey);
+    this.#header ||= {
+      alg,
+      typ: "dpop+jwt",
+      jwk: await publicJwk(this.#publicKey, alg)
+    };
+    const nonce = this.#get(url.origin);
+    const now = epochTime() + this.#clockSkew;
+    const payload = {
+      iat: now,
+      jti: randomBytes2(),
+      htm,
+      nonce,
+      htu: `${url.origin}${url.pathname}`,
+      ath: accessToken ? b64u(await crypto.subtle.digest("SHA-256", buf(accessToken))) : undefined
+    };
+    this.#modifyAssertion?.(this.#header, payload);
+    headers.set("dpop", await signJwt(this.#header, payload, this.#privateKey));
+  }
+  cacheNonce(response, url) {
+    try {
+      const nonce = response.headers.get("dpop-nonce");
+      if (nonce) {
+        this.#set(url.origin, nonce);
+      }
+    } catch {}
+  }
+}
+class ResponseBodyError extends Error {
+  cause;
+  code;
+  error;
+  status;
+  error_description;
+  response;
+  constructor(message, options) {
+    super(message, options);
+    this.name = this.constructor.name;
+    this.code = RESPONSE_BODY_ERROR;
+    this.cause = options.cause;
+    this.error = options.cause.error;
+    this.status = options.response.status;
+    this.error_description = options.cause.error_description;
+    Object.defineProperty(this, "response", { enumerable: false, value: options.response });
+    Error.captureStackTrace?.(this, this.constructor);
+  }
+}
+class WWWAuthenticateChallengeError extends Error {
+  cause;
+  code;
+  response;
+  status;
+  constructor(message, options) {
+    super(message, options);
+    this.name = this.constructor.name;
+    this.code = WWW_AUTHENTICATE_CHALLENGE;
+    this.cause = options.cause;
+    this.status = options.response.status;
+    this.response = options.response;
+    Object.defineProperty(this, "response", { enumerable: false });
+    Error.captureStackTrace?.(this, this.constructor);
+  }
+}
+var tokenMatch = "[a-zA-Z0-9!#$%&\\'\\*\\+\\-\\.\\^_`\\|~]+";
+var token68Match = "[a-zA-Z0-9\\-\\._\\~\\+\\/]+={0,2}";
+var quotedMatch = '"((?:[^"\\\\]|\\\\[\\s\\S])*)"';
+var quotedParamMatcher = "(" + tokenMatch + ")\\s*=\\s*" + quotedMatch;
+var paramMatcher = "(" + tokenMatch + ")\\s*=\\s*(" + tokenMatch + ")";
+var schemeRE = new RegExp("^[,\\s]*(" + tokenMatch + ")");
+var quotedParamRE = new RegExp("^[,\\s]*" + quotedParamMatcher + "[,\\s]*(.*)");
+var unquotedParamRE = new RegExp("^[,\\s]*" + paramMatcher + "[,\\s]*(.*)");
+var token68ParamRE = new RegExp("^(" + token68Match + ")(?:$|[,\\s])(.*)");
+function parseWwwAuthenticateChallenges(response) {
+  if (!looseInstanceOf(response, Response)) {
+    throw CodedTypeError('"response" must be an instance of Response', ERR_INVALID_ARG_TYPE);
+  }
+  const header = response.headers.get("www-authenticate");
+  if (header === null) {
+    return;
+  }
+  const challenges = [];
+  let rest = header;
+  while (rest) {
+    let match = rest.match(schemeRE);
+    const scheme = match?.["1"].toLowerCase();
+    if (!scheme) {
+      return;
+    }
+    const afterScheme = rest.substring(match[0].length);
+    if (afterScheme && !afterScheme.match(/^[\s,]/)) {
+      return;
+    }
+    const spaceMatch = afterScheme.match(/^\s+(.*)$/);
+    const hasParameters = !!spaceMatch;
+    rest = spaceMatch ? spaceMatch[1] : undefined;
+    const parameters = {};
+    let token68;
+    if (hasParameters) {
+      while (rest) {
+        let key;
+        let value;
+        if (match = rest.match(quotedParamRE)) {
+          [, key, value, rest] = match;
+          if (value.includes("\\")) {
+            value = value.replace(/\\([\s\S])/g, "$1");
+          }
+          parameters[key.toLowerCase()] = value;
+          continue;
+        }
+        if (match = rest.match(unquotedParamRE)) {
+          [, key, value, rest] = match;
+          parameters[key.toLowerCase()] = value;
+          continue;
+        }
+        if (match = rest.match(token68ParamRE)) {
+          if (Object.keys(parameters).length) {
+            break;
+          }
+          [, token68, rest] = match;
+          break;
+        }
+        return;
+      }
+    } else {
+      rest = afterScheme || undefined;
+    }
+    const challenge = { scheme, parameters };
+    if (token68) {
+      challenge.token68 = token68;
+    }
+    challenges.push(challenge);
+  }
+  if (!challenges.length) {
+    return;
+  }
+  return challenges;
+}
+async function parseOAuthResponseErrorBody(response) {
+  if (response.status > 399 && response.status < 500) {
+    assertReadableResponse(response);
+    assertApplicationJson(response);
+    try {
+      const json = await response.clone().json();
+      if (isJsonObject(json) && typeof json.error === "string" && json.error.length) {
+        return json;
+      }
+    } catch {}
+  }
+  return;
+}
+async function checkOAuthBodyError(response, expected, label) {
+  if (response.status !== expected) {
+    checkAuthenticationChallenges(response);
+    let err;
+    if (err = await parseOAuthResponseErrorBody(response)) {
+      await response.body?.cancel();
+      throw new ResponseBodyError("server responded with an error in the response body", {
+        cause: err,
+        response
+      });
+    }
+    throw OPE(`"response" is not a conform ${label} response (unexpected HTTP status code)`, RESPONSE_IS_NOT_CONFORM, response);
+  }
+}
+function assertDPoP(option) {
+  if (!branded.has(option)) {
+    throw CodedTypeError('"options.DPoP" is not a valid DPoPHandle', ERR_INVALID_ARG_VALUE);
+  }
+}
+var skipSubjectCheck = Symbol();
+function getContentType(input) {
+  return input.headers.get("content-type")?.split(";")[0];
+}
+async function authenticatedRequest(as2, client, clientAuthentication, url, body, headers, options) {
+  await clientAuthentication(as2, client, body, headers);
+  headers.set("content-type", "application/x-www-form-urlencoded;charset=UTF-8");
+  return (options?.[customFetch] || fetch)(url.href, {
+    body,
+    headers: Object.fromEntries(headers.entries()),
+    method: "POST",
+    redirect: "manual",
+    signal: signal(url, options?.signal)
+  });
+}
+async function tokenEndpointRequest(as2, client, clientAuthentication, grantType, parameters, options) {
+  const url = resolveEndpoint(as2, "token_endpoint", client.use_mtls_endpoint_aliases, options?.[allowInsecureRequests] !== true);
+  parameters.set("grant_type", grantType);
+  const headers = prepareHeaders(options?.headers);
+  headers.set("accept", "application/json");
+  if (options?.DPoP !== undefined) {
+    assertDPoP(options.DPoP);
+    await options.DPoP.addProof(url, headers, "POST");
+  }
+  const response = await authenticatedRequest(as2, client, clientAuthentication, url, parameters, headers, options);
+  options?.DPoP?.cacheNonce(response, url);
+  return response;
+}
+var idTokenClaims = new WeakMap;
+var jwtRefs = new WeakMap;
+async function processGenericAccessTokenResponse(as2, client, response, additionalRequiredIdTokenClaims, decryptFn, recognizedTokenTypes) {
+  assertAs(as2);
+  assertClient(client);
+  if (!looseInstanceOf(response, Response)) {
+    throw CodedTypeError('"response" must be an instance of Response', ERR_INVALID_ARG_TYPE);
+  }
+  await checkOAuthBodyError(response, 200, "Token Endpoint");
+  assertReadableResponse(response);
+  const json = await getResponseJsonBody(response);
+  assertString(json.access_token, '"response" body "access_token" property', INVALID_RESPONSE, {
+    body: json
+  });
+  assertString(json.token_type, '"response" body "token_type" property', INVALID_RESPONSE, {
+    body: json
+  });
+  json.token_type = json.token_type.toLowerCase();
+  if (json.expires_in !== undefined) {
+    let expiresIn = typeof json.expires_in !== "number" ? parseFloat(json.expires_in) : json.expires_in;
+    assertNumber(expiresIn, true, '"response" body "expires_in" property', INVALID_RESPONSE, {
+      body: json
+    });
+    json.expires_in = expiresIn;
+  }
+  if (json.refresh_token !== undefined) {
+    assertString(json.refresh_token, '"response" body "refresh_token" property', INVALID_RESPONSE, {
+      body: json
+    });
+  }
+  if (json.scope !== undefined && typeof json.scope !== "string") {
+    throw OPE('"response" body "scope" property must be a string', INVALID_RESPONSE, { body: json });
+  }
+  if (json.id_token !== undefined) {
+    assertString(json.id_token, '"response" body "id_token" property', INVALID_RESPONSE, {
+      body: json
+    });
+    const requiredClaims = [];
+    if (client.require_auth_time === true) {
+      requiredClaims.push("auth_time");
+    }
+    if (client.default_max_age !== undefined) {
+      assertNumber(client.default_max_age, true, '"client.default_max_age"');
+      requiredClaims.push("auth_time");
+    }
+    if (additionalRequiredIdTokenClaims?.length) {
+      requiredClaims.push(...additionalRequiredIdTokenClaims);
+    }
+    const { claims, jwt } = await validateIdTokenClaims(as2, client, json.id_token, requiredClaims, decryptFn);
+    validateIdTokenAuthorizedParty(client, claims);
+    validateIdTokenAuthTimeClaim(claims);
+    jwtRefs.set(response, jwt);
+    idTokenClaims.set(json, claims);
+  }
+  if (recognizedTokenTypes?.[json.token_type] !== undefined) {
+    recognizedTokenTypes[json.token_type](response, json);
+  } else if (json.token_type !== "dpop" && json.token_type !== "bearer") {
+    throw new UnsupportedOperationError("unsupported `token_type` value", { cause: { body: json } });
+  }
+  return json;
+}
+function checkAuthenticationChallenges(response) {
+  let challenges;
+  if (challenges = parseWwwAuthenticateChallenges(response)) {
+    throw new WWWAuthenticateChallengeError("server responded with a challenge in the WWW-Authenticate HTTP Header", { cause: challenges, response });
+  }
+}
+function validateAudience(expected, result) {
+  if (Array.isArray(result.claims.aud)) {
+    if (!result.claims.aud.includes(expected)) {
+      throw OPE('unexpected JWT "aud" (audience) claim value', JWT_CLAIM_COMPARISON, {
+        expected,
+        claims: result.claims,
+        claim: "aud"
+      });
+    }
+  } else if (result.claims.aud !== expected) {
+    throw OPE('unexpected JWT "aud" (audience) claim value', JWT_CLAIM_COMPARISON, {
+      expected,
+      claims: result.claims,
+      claim: "aud"
+    });
+  }
+  return result;
+}
+function validateIssuer(as2, result) {
+  const expected = as2[_expectedIssuer]?.(result) ?? as2.issuer;
+  if (result.claims.iss !== expected) {
+    throw OPE('unexpected JWT "iss" (issuer) claim value', JWT_CLAIM_COMPARISON, {
+      expected,
+      claims: result.claims,
+      claim: "iss"
+    });
+  }
+  return result;
+}
+var branded = new WeakSet;
+var nopkce = Symbol();
+var jwtClaimNames = {
+  aud: "audience",
+  c_hash: "code hash",
+  client_id: "client id",
+  exp: "expiration time",
+  iat: "issued at",
+  iss: "issuer",
+  jti: "jwt id",
+  nonce: "nonce",
+  s_hash: "state hash",
+  sub: "subject",
+  ath: "access token hash",
+  htm: "http method",
+  htu: "http uri",
+  cnf: "confirmation",
+  auth_time: "authentication time"
+};
+function validatePresence(required, result) {
+  for (const claim of required) {
+    if (result.claims[claim] === undefined) {
+      throw OPE(`JWT "${claim}" (${jwtClaimNames[claim]}) claim missing`, INVALID_RESPONSE, {
+        claims: result.claims
+      });
+    }
+  }
+  return result;
+}
+function validateStringClaim(claim, result) {
+  if (typeof result.claims[claim] !== "string") {
+    throw OPE(`unexpected JWT "${claim}" (${jwtClaimNames[claim]}) claim type`, INVALID_RESPONSE, {
+      claims: result.claims
+    });
+  }
+  return result;
+}
+function validateIdTokenClaims(as2, client, idToken, requiredClaims, decryptFn) {
+  return validateJwt(idToken, checkSigningAlgorithm.bind(undefined, client.id_token_signed_response_alg, as2.id_token_signing_alg_values_supported, "RS256"), getClockSkew(client), getClockTolerance(client), decryptFn).then(validatePresence.bind(undefined, ["aud", "exp", "iat", "iss", "sub", ...requiredClaims])).then(validateIssuer.bind(undefined, as2)).then(validateAudience.bind(undefined, client.client_id)).then(validateStringClaim.bind(undefined, "sub"));
+}
+function validateIdTokenAuthTimeClaim(claims) {
+  if (claims.auth_time !== undefined) {
+    assertNumber(claims.auth_time, true, 'ID Token "auth_time" (authentication time)', INVALID_RESPONSE, { claims });
+  }
+}
+function validateIdTokenAuthorizedParty(client, claims) {
+  if (Array.isArray(claims.aud) && claims.aud.length !== 1) {
+    if (claims.azp === undefined) {
+      throw OPE('ID Token "aud" (audience) claim includes additional untrusted audiences', JWT_CLAIM_COMPARISON, { claims, claim: "aud" });
+    }
+    if (claims.azp !== client.client_id) {
+      throw OPE('unexpected ID Token "azp" (authorized party) claim value', JWT_CLAIM_COMPARISON, {
+        expected: client.client_id,
+        claims,
+        claim: "azp"
+      });
+    }
+  }
+}
+var expectNoNonce = Symbol();
+var skipAuthTimeCheck = Symbol();
+var WWW_AUTHENTICATE_CHALLENGE = "OAUTH_WWW_AUTHENTICATE_CHALLENGE";
+var RESPONSE_BODY_ERROR = "OAUTH_RESPONSE_BODY_ERROR";
+var UNSUPPORTED_OPERATION = "OAUTH_UNSUPPORTED_OPERATION";
+var PARSE_ERROR = "OAUTH_PARSE_ERROR";
+var INVALID_RESPONSE = "OAUTH_INVALID_RESPONSE";
+var RESPONSE_IS_NOT_JSON = "OAUTH_RESPONSE_IS_NOT_JSON";
+var RESPONSE_IS_NOT_CONFORM = "OAUTH_RESPONSE_IS_NOT_CONFORM";
+var HTTP_REQUEST_FORBIDDEN = "OAUTH_HTTP_REQUEST_FORBIDDEN";
+var REQUEST_PROTOCOL_FORBIDDEN = "OAUTH_REQUEST_PROTOCOL_FORBIDDEN";
+var JWT_TIMESTAMP_CHECK = "OAUTH_JWT_TIMESTAMP_CHECK_FAILED";
+var JWT_CLAIM_COMPARISON = "OAUTH_JWT_CLAIM_COMPARISON_FAILED";
+var MISSING_SERVER_METADATA = "OAUTH_MISSING_SERVER_METADATA";
+var INVALID_SERVER_METADATA = "OAUTH_INVALID_SERVER_METADATA";
+async function clientCredentialsGrantRequest(as2, client, clientAuthentication, parameters, options) {
+  assertAs(as2);
+  assertClient(client);
+  return tokenEndpointRequest(as2, client, clientAuthentication, "client_credentials", new URLSearchParams(parameters), options);
+}
+async function processClientCredentialsResponse(as2, client, response, options) {
+  return processGenericAccessTokenResponse(as2, client, response, undefined, options?.[jweDecrypt], options?.recognizedTokenTypes);
+}
+function assertReadableResponse(response) {
+  if (response.bodyUsed) {
+    throw CodedTypeError('"response" body has been used already', ERR_INVALID_ARG_VALUE);
+  }
+}
+function checkRsaKeyAlgorithm(key) {
+  const { algorithm } = key;
+  if (typeof algorithm.modulusLength !== "number" || algorithm.modulusLength < 2048) {
+    throw new UnsupportedOperationError(`unsupported ${algorithm.name} modulusLength`, {
+      cause: key
+    });
+  }
+}
+function ecdsaHashName(key) {
+  const { algorithm } = key;
+  switch (algorithm.namedCurve) {
+    case "P-256":
+      return "SHA-256";
+    case "P-384":
+      return "SHA-384";
+    case "P-521":
+      return "SHA-512";
+    default:
+      throw new UnsupportedOperationError("unsupported ECDSA namedCurve", { cause: key });
+  }
+}
+function keyToSubtle(key) {
+  switch (key.algorithm.name) {
+    case "ECDSA":
+      return {
+        name: key.algorithm.name,
+        hash: ecdsaHashName(key)
+      };
+    case "RSA-PSS": {
+      checkRsaKeyAlgorithm(key);
+      switch (key.algorithm.hash.name) {
+        case "SHA-256":
+        case "SHA-384":
+        case "SHA-512":
+          return {
+            name: key.algorithm.name,
+            saltLength: parseInt(key.algorithm.hash.name.slice(-3), 10) >> 3
+          };
+        default:
+          throw new UnsupportedOperationError("unsupported RSA-PSS hash name", { cause: key });
+      }
+    }
+    case "RSASSA-PKCS1-v1_5":
+      checkRsaKeyAlgorithm(key);
+      return key.algorithm.name;
+    case "ML-DSA-44":
+    case "ML-DSA-65":
+    case "ML-DSA-87":
+    case "Ed25519":
+      return key.algorithm.name;
+  }
+  throw new UnsupportedOperationError("unsupported CryptoKey algorithm name", { cause: key });
+}
+async function validateJwt(jws, checkAlg, clockSkew2, clockTolerance2, decryptJwt) {
+  let { 0: protectedHeader, 1: payload, length } = jws.split(".");
+  if (length === 5) {
+    if (decryptJwt !== undefined) {
+      jws = await decryptJwt(jws);
+      ({ 0: protectedHeader, 1: payload, length } = jws.split("."));
+    } else {
+      throw new UnsupportedOperationError("JWE decryption is not configured", { cause: jws });
+    }
+  }
+  if (length !== 3) {
+    throw OPE("Invalid JWT", INVALID_RESPONSE, jws);
+  }
+  let header;
+  try {
+    header = JSON.parse(buf(b64u(protectedHeader)));
+  } catch (cause) {
+    throw OPE("failed to parse JWT Header body as base64url encoded JSON", PARSE_ERROR, cause);
+  }
+  if (!isJsonObject(header)) {
+    throw OPE("JWT Header must be a top level object", INVALID_RESPONSE, jws);
+  }
+  checkAlg(header);
+  if (header.crit !== undefined) {
+    throw new UnsupportedOperationError('no JWT "crit" header parameter extensions are supported', {
+      cause: { header }
+    });
+  }
+  let claims;
+  try {
+    claims = JSON.parse(buf(b64u(payload)));
+  } catch (cause) {
+    throw OPE("failed to parse JWT Payload body as base64url encoded JSON", PARSE_ERROR, cause);
+  }
+  if (!isJsonObject(claims)) {
+    throw OPE("JWT Payload must be a top level object", INVALID_RESPONSE, jws);
+  }
+  const now = epochTime() + clockSkew2;
+  if (claims.exp !== undefined) {
+    if (typeof claims.exp !== "number") {
+      throw OPE('unexpected JWT "exp" (expiration time) claim type', INVALID_RESPONSE, { claims });
+    }
+    if (claims.exp <= now - clockTolerance2) {
+      throw OPE('unexpected JWT "exp" (expiration time) claim value, expiration is past current timestamp', JWT_TIMESTAMP_CHECK, { claims, now, tolerance: clockTolerance2, claim: "exp" });
+    }
+  }
+  if (claims.iat !== undefined) {
+    if (typeof claims.iat !== "number") {
+      throw OPE('unexpected JWT "iat" (issued at) claim type', INVALID_RESPONSE, { claims });
+    }
+  }
+  if (claims.iss !== undefined) {
+    if (typeof claims.iss !== "string") {
+      throw OPE('unexpected JWT "iss" (issuer) claim type', INVALID_RESPONSE, { claims });
+    }
+  }
+  if (claims.nbf !== undefined) {
+    if (typeof claims.nbf !== "number") {
+      throw OPE('unexpected JWT "nbf" (not before) claim type', INVALID_RESPONSE, { claims });
+    }
+    if (claims.nbf > now + clockTolerance2) {
+      throw OPE('unexpected JWT "nbf" (not before) claim value', JWT_TIMESTAMP_CHECK, {
+        claims,
+        now,
+        tolerance: clockTolerance2,
+        claim: "nbf"
+      });
+    }
+  }
+  if (claims.aud !== undefined) {
+    if (typeof claims.aud !== "string" && !Array.isArray(claims.aud)) {
+      throw OPE('unexpected JWT "aud" (audience) claim type', INVALID_RESPONSE, { claims });
+    }
+  }
+  return { header, claims, jwt: jws };
+}
+function checkSigningAlgorithm(client, issuer, fallback, header) {
+  if (client !== undefined) {
+    if (typeof client === "string" ? header.alg !== client : !client.includes(header.alg)) {
+      throw OPE('unexpected JWT "alg" header parameter', INVALID_RESPONSE, {
+        header,
+        expected: client,
+        reason: "client configuration"
+      });
+    }
+    return;
+  }
+  if (Array.isArray(issuer)) {
+    if (!issuer.includes(header.alg)) {
+      throw OPE('unexpected JWT "alg" header parameter', INVALID_RESPONSE, {
+        header,
+        expected: issuer,
+        reason: "authorization server metadata"
+      });
+    }
+    return;
+  }
+  if (fallback !== undefined) {
+    if (typeof fallback === "string" ? header.alg !== fallback : typeof fallback === "function" ? !fallback(header.alg) : !fallback.includes(header.alg)) {
+      throw OPE('unexpected JWT "alg" header parameter', INVALID_RESPONSE, {
+        header,
+        expected: fallback,
+        reason: "default value"
+      });
+    }
+    return;
+  }
+  throw OPE('missing client or server configuration to verify used JWT "alg" header parameter', undefined, { client, issuer, fallback });
+}
+var skipStateCheck = Symbol();
+var expectNoState = Symbol();
+async function getResponseJsonBody(response, check = assertApplicationJson) {
+  let json;
+  try {
+    json = await response.json();
+  } catch (cause) {
+    check(response);
+    throw OPE('failed to parse "response" body as JSON', PARSE_ERROR, cause);
+  }
+  if (!isJsonObject(json)) {
+    throw OPE('"response" body must be a top level object', INVALID_RESPONSE, { body: json });
+  }
+  return json;
+}
+var _nodiscoverycheck = Symbol();
+var _expectedIssuer = Symbol();
+
+// packages/js/node/auth/src/service-principal.ts
+class DatabricksServicePrincipalProvider {
+  config;
+  authorizationServer;
+  client;
+  requestOptions;
+  constructor(config) {
+    this.config = config;
+    this.authorizationServer = {
+      issuer: new URL(config.tokenEndpoint).origin,
+      token_endpoint: config.tokenEndpoint
+    };
+    this.client = { client_id: config.clientId };
+    this.requestOptions = {
+      ...config.fetch ? { [customFetch]: config.fetch } : {},
+      ...config.allowInsecureRequests ? { [allowInsecureRequests]: true } : {}
+    };
+  }
+  authenticate() {
+    return this.acquire();
+  }
+  login() {
+    return this.acquire();
+  }
+  refresh() {
+    return this.acquire();
+  }
+  canAuthenticateSilently() {
+    return true;
+  }
+  async acquire() {
+    try {
+      const response = await clientCredentialsGrantRequest(this.authorizationServer, this.client, ClientSecretBasic(this.config.clientSecret), {
+        scope: [...new Set(this.config.scopes)].sort().join(" "),
+        ...this.config.groupId ? { assume_group: this.config.groupId } : {}
+      }, this.requestOptions);
+      const value = await processClientCredentialsResponse(this.authorizationServer, this.client, response);
+      return {
+        accessToken: value.access_token,
+        tokenType: value.token_type.toLowerCase() === "bearer" ? "Bearer" : value.token_type,
+        ...value.expires_in !== undefined ? { expiry: new Date(Date.now() + value.expires_in * 1000).toISOString() } : {},
+        scopes: value.scope?.split(/\s+/).filter(Boolean) ?? [...this.config.scopes]
+      };
+    } catch (cause) {
+      throw new AuthError("oauth", "Databricks service-principal authentication failed", {
+        cause
+      });
+    }
+  }
+}
+
+// packages/js/node/auth/src/storage.ts
+var exports_storage = {};
+__export(exports_storage, {
+  MemoryLockAdapter: () => MemoryLockAdapter,
+  MemoryCredentialStore: () => MemoryCredentialStore
+});
+
+class MemoryLockAdapter {
+  #tails = new Map;
+  #leases = new Map;
+  #sequence = 0;
+  async acquire(key, timeoutMs) {
+    const previous = this.#tails.get(key) ?? Promise.resolve();
+    let release;
+    const current = new Promise((resolve2) => {
+      release = resolve2;
+    });
+    const tail = previous.then(() => current);
+    this.#tails.set(key, tail);
+    try {
+      await withTimeout(previous, timeoutMs, `Timed out waiting for lock ${key}`);
+    } catch (error) {
+      release();
+      if (this.#tails.get(key) === tail)
+        this.#tails.delete(key);
+      throw error;
+    }
+    const lease = `${++this.#sequence}:${key}`;
+    this.#leases.set(lease, () => {
+      release();
+      this.#leases.delete(lease);
+      if (this.#tails.get(key) === tail)
+        this.#tails.delete(key);
+    });
+    return lease;
+  }
+  async release(lease) {
+    this.#leases.get(lease)?.();
+  }
+}
+
+class MemoryCredentialStore {
+  locks;
+  #tokens = new Map;
+  constructor(locks = new MemoryLockAdapter) {
+    this.locks = locks;
+  }
+  async load(key) {
+    const token = this.#tokens.get(key);
+    return token ? structuredClone(token) : undefined;
+  }
+  async prepareWrite() {}
+  async save(key, token) {
+    this.#tokens.set(key, structuredClone(token));
+  }
+  async remove(key) {
+    this.#tokens.delete(key);
+  }
+  acquireLock(key, timeoutMs) {
+    return this.locks.acquire(key, timeoutMs);
+  }
+  releaseLock(lease) {
+    return this.locks.release(lease);
+  }
+  name() {
+    return "memory";
+  }
+}
+async function withTimeout(promise, timeoutMs, message) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0)
+    throw new TypeError("timeoutMs must be non-negative");
+  let timeout;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_2, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeout)
+      clearTimeout(timeout);
+  }
+}
+
+// packages/js/node/auth/src/databricks-auth.ts
+class PersistentAuth {
+  profileValue;
+  storageValue;
+  client;
+  requestToken;
+  constructor(profileValue, storageValue, client, requestToken) {
+    this.profileValue = profileValue;
+    this.storageValue = storageValue;
+    this.client = client;
+    this.requestToken = requestToken;
+  }
+  async challenge() {
+    if (!this.client)
+      throw new AuthError("oauth", "app_obo uses the current request token and cannot start login");
+    await this.client.login();
+  }
+  token(login) {
+    return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().tokenWithLogin(login);
+  }
+  async authenticate(login) {
+    const token = await this.token(login);
+    return {
+      [DEFAULT_ACCESS_TOKEN_HEADER]: `${token.tokenType} ${token.accessToken}`,
+      ...this.profileValue.workspaceId ? { [WORKSPACE_ID_HEADER]: this.profileValue.workspaceId } : {}
+    };
+  }
+  async authorizationHeaderForUrl(requestUrl, login) {
+    return (await this.requestHeadersForUrl(requestUrl, login))[DEFAULT_ACCESS_TOKEN_HEADER];
+  }
+  async requestHeadersForUrl(requestUrl, login) {
+    const request = new URL(requestUrl);
+    if (request.origin !== new URL(this.profileValue.host).origin)
+      return {};
+    return this.authenticate(login);
+  }
+  forceRefreshToken(login = true) {
+    return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().forceRefresh(login);
+  }
+  refreshRejectedToken(staleAccessToken, login = true) {
+    return this.requestToken ? Promise.resolve(publicToken(this.requestToken)) : this.requiredClient().refreshRejectedToken(staleAccessToken, login);
+  }
+  logout() {
+    return this.client?.logout() ?? Promise.resolve();
+  }
+  status() {
+    return {
+      profile: this.profileValue.name,
+      host: this.profileValue.host,
+      storage: this.storageValue
+    };
+  }
+  principal() {
+    return this.profileValue.principal;
+  }
+  workspaceId() {
+    return this.profileValue.workspaceId;
+  }
+  authKind() {
+    return this.profileValue.authKind;
+  }
+  profile() {
+    return { ...this.profileValue, scopes: [...this.profileValue.scopes] };
+  }
+  requiredClient() {
+    if (!this.client)
+      throw new AuthError("oauth", "Authentication lifecycle is not available");
+    return this.client;
+  }
+}
+async function createPersistentAuth(options = { preferUserToMachine: true }, storage = "auto" /* Auto */, dependencies = {}) {
+  const environment = dependencies.environment ?? process.env;
+  const profile = resolveDatabricksProfile(options, environment);
+  const inApp = profile.authKind === "app-on-behalf-of" /* AppOnBehalfOf */ || profile.authKind === "app-service-principal" /* AppServicePrincipal */;
+  const backend = storage === "auto" /* Auto */ ? inApp ? "memory" /* Memory */ : "file" /* File */ : storage;
+  const store = backend === "memory" /* Memory */ ? new MemoryCredentialStore : new FileCredentialStore(options.cacheDir ?? join(homedir(), ".databricks"));
+  return createPersistentAuthWithStorage(options, store, storage, dependencies, profile);
+}
+async function createPersistentAuthWithStorage(options, store, storage = store.name() === "memory" ? "memory" /* Memory */ : "file" /* File */, dependencies = {}, resolvedProfile) {
+  const profile = resolvedProfile ?? resolveDatabricksProfile(options, dependencies.environment ?? process.env);
+  if (profile.authKind === "app-on-behalf-of" /* AppOnBehalfOf */) {
+    return new PersistentAuth(profile, "memory" /* Memory */, undefined, {
+      accessToken: profile.accessToken,
+      tokenType: "Bearer",
+      scopes: [...profile.scopes]
+    });
+  }
+  const provider = await providerFor(profile, options, dependencies);
+  const client = new AuthClient(profile.cacheKey, provider, store, AuthOptions.create(options.auth));
+  return new PersistentAuth(profile, storage === "auto" /* Auto */ ? storageFromName(store.name()) : storage, client);
+}
+async function providerFor(profile, options, dependencies) {
+  const environment = dependencies.environment ?? process.env;
+  const inApp = isDatabricksAppEnv({ ...environment });
+  switch (profile.authKind) {
+    case "user-to-machine" /* UserToMachine */: {
+      const install = !inApp || options.installCliInApp === true;
+      return new DatabricksCliProvider(profile.name, () => dependencies.resolveCli ? dependencies.resolveCli({ install }) : resolveDatabricksCli(environment, { install }), cliEnvironment(profile, resolveConfigFile(options.configFile, environment)));
+    }
+    case "personal-access-token" /* PersonalAccessToken */:
+      return new DatabricksPersonalAccessTokenProvider(profile.accessToken);
+    case "machine-to-machine" /* MachineToMachine */:
+    case "app-service-principal" /* AppServicePrincipal */: {
+      const endpoints = await resolveOAuthEndpoints(profile, dependencies.fetch);
+      return new DatabricksServicePrincipalProvider({
+        tokenEndpoint: endpoints.tokenEndpoint,
+        clientId: profile.clientId,
+        clientSecret: profile.clientSecret,
+        scopes: machineScopes(profile.scopes),
+        ...profile.groupId ? { groupId: profile.groupId } : {},
+        allowInsecureRequests: isLoopbackHttp(profile.host),
+        fetch: dependencies.fetch
+      });
+    }
+    case "app-on-behalf-of" /* AppOnBehalfOf */:
+      throw new AuthError("config", "App OBO tokens do not use a persistent provider");
+  }
+}
+async function resolveOAuthEndpoints(profile, fetcher = globalThis.fetch) {
+  const host = profile.host.replace(/\/$/, "");
+  if (profile.target === "account" /* Account */) {
+    if (!profile.accountId)
+      throw new AuthError("config", "Account target requires account_id");
+    return {
+      tokenEndpoint: `${host}/oidc/accounts/${profile.accountId}/v1/token`
+    };
+  }
+  const discovery = profile.target === "unified" /* Unified */ ? `${host}/oidc/accounts/${requiredAccountId(profile)}/.well-known/oauth-authorization-server` : `${host}/oidc/.well-known/oauth-authorization-server`;
+  const response = await fetcher(discovery, { redirect: "manual" });
+  if (response.status === 404)
+    throw new AuthError("oauth", `OAuth is not supported at ${discovery}`);
+  if (!response.ok)
+    throw new AuthError("oauth", `OAuth discovery returned HTTP ${response.status}`);
+  const value = await response.json();
+  const tokenEndpoint = stringValue3(value.token_endpoint);
+  if (!tokenEndpoint)
+    throw new AuthError("oauth", "OAuth discovery response is incomplete");
+  return { tokenEndpoint };
+}
+function requiredAccountId(profile) {
+  if (!profile.accountId)
+    throw new AuthError("config", "Unified target requires account_id");
+  return profile.accountId;
+}
+function storageFromName(name) {
+  return name === "memory" ? "memory" /* Memory */ : "file" /* File */;
+}
+function isLoopbackHttp(host) {
+  const url = new URL(host);
+  return url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname);
+}
+function cliEnvironment(profile, configFile) {
+  return {
+    DATABRICKS_CONFIG_FILE: configFile,
+    DATABRICKS_CONFIG_PROFILE: profile.name,
+    DATABRICKS_HOST: profile.host,
+    ...profile.accountId ? { DATABRICKS_ACCOUNT_ID: profile.accountId } : {},
+    ...profile.workspaceId ? { DATABRICKS_WORKSPACE_ID: profile.workspaceId } : {},
+    ...profile.authKind === "personal-access-token" /* PersonalAccessToken */ ? {
+      DATABRICKS_AUTH_TYPE: "pat",
+      DATABRICKS_TOKEN: profile.accessToken
+    } : {}
+  };
+}
+function stringValue3(value) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+// packages/js/node/auth/src/http-client.ts
+var exports_http_client = {};
+__export(exports_http_client, {
+  DatabricksClient: () => DatabricksClient
+});
+class DatabricksClient {
+  auth;
+  fetcher;
+  constructor(auth, fetcher) {
+    this.auth = auth;
+    this.fetcher = fetcher;
+  }
+  static async create(options = { preferUserToMachine: true }, dependencies = {}) {
+    return new DatabricksClient(await createPersistentAuth(options, undefined, dependencies), dependencies.fetch ?? globalThis.fetch);
+  }
+  profile() {
+    return this.auth.status().profile;
+  }
+  host() {
+    return this.auth.status().host;
+  }
+  principal() {
+    return this.auth.principal();
+  }
+  workspaceId() {
+    return this.auth.workspaceId();
+  }
+  async request(path, options = {}) {
+    const url = new URL(path, `${this.host().replace(/\/$/, "")}/`).toString();
+    const method = options.method ?? (options.body === undefined ? "GET" : "POST");
+    let authHeaders = await this.auth.authenticate(options.login);
+    let response = await this.send(url, method, authHeaders, options);
+    if (response.status === 401) {
+      await this.auth.refreshRejectedToken(accessTokenFromHeaders(authHeaders), options.login ?? true);
+      authHeaders = await this.auth.authenticate(false);
+      response = await this.send(url, method, authHeaders, options);
+    }
+    const text = await response.text();
+    if (!response.ok)
+      throw new AuthError("http", `Databricks API ${path} returned HTTP ${response.status}: ${text}`);
+    if (!text)
+      return;
+    try {
+      return JSON.parse(text);
+    } catch (cause) {
+      throw new AuthError("http", `Databricks API ${path} did not return JSON`, { cause });
+    }
+  }
+  send(url, method, authHeaders, options) {
+    const headers = new Headers(options.headers);
+    headers.delete(DEFAULT_ACCESS_TOKEN_HEADER);
+    headers.delete(WORKSPACE_ID_HEADER);
+    for (const [name, value] of Object.entries(authHeaders))
+      headers.set(name, value);
+    headers.set("accept", "application/json");
+    if (options.body !== undefined)
+      headers.set("content-type", "application/json");
+    return this.fetcher(url, {
+      method,
+      headers,
+      ...options.body !== undefined ? { body: JSON.stringify(options.body) } : {},
+      signal: options.signal
+    });
+  }
+}
+function accessTokenFromHeaders(headers) {
+  const authorization = headers[DEFAULT_ACCESS_TOKEN_HEADER];
+  const separator = authorization?.indexOf(" ") ?? -1;
+  if (separator < 1 || !authorization?.slice(separator + 1).trim()) {
+    throw new AuthError("http", "Authentication headers did not contain an access token");
+  }
+  return authorization.slice(separator + 1).trim();
+}
+// packages/js/node/auth/index.ts
+var PACKAGE_IDENTIFIER = "@dbx-tools/auth";
+var PACKAGE_VERSION = "0.9.21";

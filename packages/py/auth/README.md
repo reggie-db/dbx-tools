@@ -57,10 +57,10 @@ Regenerate the committed SpiderMonkey bundle after changing its TypeScript
 entry point or the shared lifecycle:
 
 ```sh
-bun run auth:python-bridge
+bun run auth:python-runtime
 ```
 
-Tests and release preparation run `bun run auth:python-bridge:check` so a
+Tests and release preparation run `bun run auth:python-runtime:check` so a
 lifecycle change cannot publish a stale embedded runtime.
 
 ## Modules

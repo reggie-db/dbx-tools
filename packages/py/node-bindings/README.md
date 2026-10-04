@@ -34,7 +34,7 @@ package-specific bundler:
 
 ```sh
 bun projen/tasks/python-node-bindings.ts \
-  --entry packages/js/node/example/src/_python-bridge.ts \
+  --entry packages/js/node/example/index.ts \
   --output packages/py/example/src/dbx_tools/example/_runtime.js \
   --source '@dbx-tools/example for PythonMonkey'
 ```

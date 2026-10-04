@@ -16,6 +16,8 @@ import pythonmonkey as pm
 from .process import run_process
 
 _INITIALIZED = False
+_CONSTRUCT = pm.eval("(constructor, args) => Reflect.construct(constructor, args)")
+_INVOKE = pm.eval("(target, method, args) => Reflect.apply(target[method], target, args)")
 
 
 def _node_platform() -> str:
@@ -256,3 +258,15 @@ def require_runtime(module_file: str | Path, name: str = "_runtime.js") -> Any:
     """Load a committed CommonJS bundle beside a Python module."""
     _install_runtime()
     return pm.require(str(Path(module_file).resolve().with_name(name)))
+
+
+def construct_javascript(constructor: Any, *args: object) -> Any:
+    """Construct a JavaScript class without adding package-specific bridge code."""
+    _install_runtime()
+    return _CONSTRUCT(constructor, list(args))
+
+
+def invoke_javascript(target: Any, method: str, *args: object) -> Any:
+    """Invoke a JavaScript method with its receiver preserved."""
+    _install_runtime()
+    return _INVOKE(target, method, list(args))

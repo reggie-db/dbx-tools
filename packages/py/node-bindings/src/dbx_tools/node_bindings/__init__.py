@@ -3,7 +3,7 @@ from .files import atomic_write_text, ensure_directory, read_text
 from .http import execute_http
 from .locks import FileLeaseLocks, LeaseLocks, MemoryLeaseLocks, with_file_lock
 from .process import run_process
-from .runtime import require_runtime
+from .runtime import construct_javascript, invoke_javascript, require_runtime
 
 executeHttp = execute_http
 runProcess = run_process
@@ -13,9 +13,11 @@ __all__ = [
     "LeaseLocks",
     "MemoryLeaseLocks",
     "atomic_write_text",
+    "construct_javascript",
     "ensure_directory",
     "executeHttp",
     "execute_http",
+    "invoke_javascript",
     "open_browser",
     "read_text",
     "require_runtime",

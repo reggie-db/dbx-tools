@@ -3,7 +3,7 @@
 [project]
 name = "dbx-tools-auth"
 version = "0.9.21"
-description = "PythonMonkey bridge to the shared dbx-tools authentication lifecycle"
+description = "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey"
 readme = "README.md"
 requires-python = ">=3.11,<4"
 license = "Apache-2.0"

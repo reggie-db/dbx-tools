@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from dbx_tools.node_bindings import invoke_javascript
+
 from .client import _access_token, credential_store_to_javascript, javascript_runtime
 from .storage import FileCredentialStore
 from .types import AccessToken, AuthOptions, CredentialStore
@@ -28,13 +30,13 @@ class DatabricksAuth:
         self._client = client
 
     async def challenge(self) -> None:
-        await self._client["login"]()
+        await invoke_javascript(self._client, "challenge")
 
     async def token(self, login: bool | None = None) -> AccessToken:
-        return _access_token(await self._client["token"](login))
+        return _access_token(await invoke_javascript(self._client, "token", login))
 
     async def authenticate(self, login: bool | None = None) -> dict[str, str]:
-        return dict(await self._client["authenticate"](login))
+        return dict(await invoke_javascript(self._client, "authenticate", login))
 
     async def authorization_header_for_url(
         self,
@@ -48,10 +50,17 @@ class DatabricksAuth:
         request_url: str,
         login: bool | None = None,
     ) -> dict[str, str]:
-        return dict(await self._client["requestHeadersForUrl"](request_url, login))
+        return dict(
+            await invoke_javascript(
+                self._client,
+                "requestHeadersForUrl",
+                request_url,
+                login,
+            ),
+        )
 
     async def force_refresh(self, login: bool = True) -> AccessToken:
-        return _access_token(await self._client["forceRefresh"](login))
+        return _access_token(await invoke_javascript(self._client, "forceRefreshToken", login))
 
     async def refresh_rejected_token(
         self,
@@ -59,15 +68,20 @@ class DatabricksAuth:
         login: bool = True,
     ) -> AccessToken:
         return _access_token(
-            await self._client["refreshRejectedToken"](stale_access_token, login),
+            await invoke_javascript(
+                self._client,
+                "refreshRejectedToken",
+                stale_access_token,
+                login,
+            ),
         )
 
     async def logout(self) -> None:
-        await self._client["logout"]()
+        await invoke_javascript(self._client, "logout")
 
     def status(self) -> DatabricksAuthStatus:
-        status = self._client["status"]()
-        workspace_id = self._client["workspaceId"]()
+        status = invoke_javascript(self._client, "status")
+        workspace_id = invoke_javascript(self._client, "workspaceId")
         return DatabricksAuthStatus(
             str(status["profile"]),
             str(status["host"]),
@@ -76,14 +90,14 @@ class DatabricksAuth:
         )
 
     def principal(self) -> str:
-        return str(self._client["principal"]())
+        return str(invoke_javascript(self._client, "principal"))
 
     def workspace_id(self) -> str | None:
-        value = self._client["workspaceId"]()
+        value = invoke_javascript(self._client, "workspaceId")
         return str(value) if value else None
 
     def auth_kind(self) -> str:
-        return str(self._client["authKind"]())
+        return str(invoke_javascript(self._client, "authKind"))
 
 
 async def create_databricks_cli_auth(
@@ -99,15 +113,21 @@ async def create_databricks_cli_auth(
 ) -> DatabricksAuth:
     """Create CLI-first Databricks auth using JavaScript profile selection."""
     selected_store = store or FileCredentialStore(cache_dir)
-    client = await javascript_runtime()["createDatabricksAuth"](
-        {
-            **({"profile": profile} if profile else {}),
-            **({"configFile": str(Path(config_file).expanduser())} if config_file else {}),
-            **({"environment": dict(environment)} if environment is not None else {}),
-            **({"executable": executable} if executable else {}),
-            "preferUserToMachine": prefer_user_to_machine,
-            "auth": (options or AuthOptions()).to_javascript(),
-        },
+    runtime = javascript_runtime()
+    auth_options = {
+        **({"profile": profile} if profile else {}),
+        **({"configFile": str(Path(config_file).expanduser())} if config_file else {}),
+        "preferUserToMachine": prefer_user_to_machine,
+        "auth": (options or AuthOptions()).to_javascript(),
+    }
+    dependencies = {
+        **({"environment": dict(environment)} if environment is not None else {}),
+        **({"resolveCli": lambda _options: executable} if executable else {}),
+    }
+    client = await runtime["createPersistentAuthWithStorage"](
+        auth_options,
         credential_store_to_javascript(selected_store),
+        runtime["Storage"]["Auto"],
+        dependencies,
     )
     return DatabricksAuth(client)

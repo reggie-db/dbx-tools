@@ -239,7 +239,7 @@ const root = new project.DBXToolsNodeProject({
   },
   releasePythonRoot: PYTHON_ROOT,
   releaseValidationTasks: [
-    "auth:python-bridge:check",
+    "auth:python-runtime:check",
     "docs:check-source",
     "docs:check-readmes",
   ],
@@ -1520,7 +1520,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
   {
     directory: "auth",
     description:
-      "PythonMonkey bridge to the shared dbx-tools authentication lifecycle",
+      "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey",
     internalDependencies: ["node-bindings"],
     dependencies: [],
   },
@@ -1577,11 +1577,11 @@ new project.DBXToolsPythonWorkspace(root, {
   },
   release: true,
 });
-root.addTask("auth:python-bridge", {
-  description: "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
+root.addTask("auth:python-runtime", {
+  description: "Bundle the public authentication package for PythonMonkey",
   exec: [
     "bun projen/tasks/python-node-bindings.ts",
-    "--entry packages/js/node/auth/src/_python-bridge.ts",
+    "--entry packages/js/node/auth/index.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
     "--shim-root packages/py/node-bindings/build/shims",
     "--source '@dbx-tools/auth for PythonMonkey'",
@@ -1596,18 +1596,18 @@ const authCliAssetsCheck = root.addTask("auth:cli-assets:check", {
   exec: "bun projen/tasks/databricks-cli-assets.ts --check",
 });
 root.testTask.spawn(authCliAssetsCheck);
-const authPythonBridgeCheck = root.addTask("auth:python-bridge:check", {
-  description: "Verify the committed PythonMonkey authentication bundle is current",
+const authPythonRuntimeCheck = root.addTask("auth:python-runtime:check", {
+  description: "Verify the committed PythonMonkey authentication runtime is current",
   exec: [
     "bun projen/tasks/python-node-bindings.ts",
-    "--entry packages/js/node/auth/src/_python-bridge.ts",
+    "--entry packages/js/node/auth/index.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
     "--shim-root packages/py/node-bindings/build/shims",
     "--source '@dbx-tools/auth for PythonMonkey'",
     "--check",
   ].join(" "),
 });
-root.testTask.spawn(authPythonBridgeCheck);
+root.testTask.spawn(authPythonRuntimeCheck);
 root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
   target: "dbx-tools-graphiti",
   kind: "generated",

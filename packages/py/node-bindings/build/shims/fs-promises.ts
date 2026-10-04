@@ -58,6 +58,10 @@ export async function rm(
   await pythonHost().file.remove(String(path), options.recursive === true, options.force === true);
 }
 
+export async function unlink(path: string): Promise<void> {
+  await pythonHost().file.remove(String(path), false, false);
+}
+
 export async function stat(path: string): Promise<unknown> {
   const value = await pythonHost().file.stat(String(path));
   return {
@@ -103,5 +107,6 @@ export default {
   rename,
   rm,
   stat,
+  unlink,
   writeFile,
 };

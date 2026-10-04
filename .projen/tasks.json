@@ -22,21 +22,21 @@
         }
       ]
     },
-    "auth:python-bridge": {
-      "name": "auth:python-bridge",
-      "description": "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
+    "auth:python-runtime": {
+      "name": "auth:python-runtime",
+      "description": "Bundle the public authentication package for PythonMonkey",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/src/_python-bridge.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root packages/py/node-bindings/build/shims --source '@dbx-tools/auth for PythonMonkey'"
+          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root packages/py/node-bindings/build/shims --source '@dbx-tools/auth for PythonMonkey'"
         }
       ]
     },
-    "auth:python-bridge:check": {
-      "name": "auth:python-bridge:check",
-      "description": "Verify the committed PythonMonkey authentication bundle is current",
+    "auth:python-runtime:check": {
+      "name": "auth:python-runtime:check",
+      "description": "Verify the committed PythonMonkey authentication runtime is current",
       "steps": [
         {
-          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/src/_python-bridge.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root packages/py/node-bindings/build/shims --source '@dbx-tools/auth for PythonMonkey' --check"
+          "exec": "bun projen/tasks/python-node-bindings.ts --entry packages/js/node/auth/index.ts --output packages/py/auth/src/dbx_tools/auth/_runtime.js --shim-root packages/py/node-bindings/build/shims --source '@dbx-tools/auth for PythonMonkey' --check"
         }
       ]
     },
@@ -399,7 +399,7 @@
       "description": "Prepare, validate, locally publish, and upload a draft release candidate",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"auth:python-bridge:check\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"auth:python-runtime:check\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
           "receiveArgs": true
         }
       ]
@@ -478,7 +478,7 @@
           "spawn": "auth:cli-assets:check"
         },
         {
-          "spawn": "auth:python-bridge:check"
+          "spawn": "auth:python-runtime:check"
         },
         {
           "exec": "bun run --filter '*' test"

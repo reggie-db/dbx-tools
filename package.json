@@ -7,8 +7,8 @@
   "scripts": {
     "auth:cli-assets": "projen auth:cli-assets",
     "auth:cli-assets:check": "projen auth:cli-assets:check",
-    "auth:python-bridge": "projen auth:python-bridge",
-    "auth:python-bridge:check": "projen auth:python-bridge:check",
+    "auth:python-runtime": "projen auth:python-runtime",
+    "auth:python-runtime:check": "projen auth:python-runtime:check",
     "barrels": "projen barrels",
     "build": "projen build",
     "bump": "projen bump",
