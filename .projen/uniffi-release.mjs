@@ -327,6 +327,7 @@ const packageNodeFacade = ({ output, nodeDirectory, nodePackage, version, native
   rmSync(resolve(output, "npm-facade"), { recursive: true, force: true });
   mkdirSync(output, { recursive: true });
   cpSync(resolve(root, nodeDirectory), facadeDirectory, { recursive: true });
+  rmSync(join(facadeDirectory, "dist"), { recursive: true, force: true });
   const barrel = join(facadeDirectory, "index.ts");
   const barrelVersion = /^export const PACKAGE_VERSION = "([^"]+)";$/m.exec(
     readFileSync(barrel, "utf8"),
