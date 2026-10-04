@@ -90,6 +90,9 @@ jspm_packages/
 .home/
 .kanna/
 **/.logs/
+!packages/py/node-bindings/build/
+!packages/py/node-bindings/build/shims/
+!packages/py/node-bindings/build/shims/**
 !/packages/js/node/rust-binary/src/_release-binaries.ts
 !/Cargo.lock
 target/

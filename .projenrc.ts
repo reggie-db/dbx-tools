@@ -308,6 +308,9 @@ root.gitignore.addPatterns(
   ".home/",
   ".kanna/",
   "**/.logs/",
+  "!packages/py/node-bindings/build/",
+  "!packages/py/node-bindings/build/shims/",
+  "!packages/py/node-bindings/build/shims/**",
 );
 
 // ---------------------------------------------------------------------------
@@ -1569,6 +1572,7 @@ root.addTask("auth:python-bridge", {
     "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/src/_python-bridge.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
+    "--shim-root packages/py/node-bindings/build/shims",
     "--source '@dbx-tools/auth for PythonMonkey'",
   ].join(" "),
 });
@@ -1587,6 +1591,7 @@ const authPythonBridgeCheck = root.addTask("auth:python-bridge:check", {
     "bun projen/tasks/python-node-bindings.ts",
     "--entry packages/js/node/auth/src/_python-bridge.ts",
     "--output packages/py/auth/src/dbx_tools/auth/_runtime.js",
+    "--shim-root packages/py/node-bindings/build/shims",
     "--source '@dbx-tools/auth for PythonMonkey'",
     "--check",
   ].join(" "),

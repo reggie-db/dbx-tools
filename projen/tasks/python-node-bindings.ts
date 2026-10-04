@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import type { BunPlugin } from "bun";
 import { header, makeReadonly, makeWritable } from "../src/generated.ts";
 
 const { values } = parseArgs({
@@ -11,6 +12,7 @@ const { values } = parseArgs({
     entry: { type: "string" },
     output: { type: "string" },
     root: { type: "string" },
+    "shim-root": { type: "string" },
     source: { type: "string" },
   },
 });
@@ -23,12 +25,34 @@ const root = values.root
   : resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const entrypoint = resolve(root, values.entry);
 const output = resolve(root, values.output);
+const shimRoot = values["shim-root"] ? resolve(root, values["shim-root"]) : undefined;
+const shimAliases = shimRoot
+  ? new Map([
+      ["@dbx-tools/core", resolve(shimRoot, "core.ts")],
+      ["crypto", resolve(shimRoot, "crypto.ts")],
+      ["fs", resolve(shimRoot, "fs.ts")],
+      ["os", resolve(shimRoot, "os.ts")],
+      ["path", resolve(shimRoot, "path.ts")],
+    ])
+  : undefined;
+const shimPlugin: BunPlugin | undefined = shimAliases
+  ? {
+      name: "python-node-shims",
+      setup(build) {
+        build.onResolve({ filter: /.*/ }, ({ path }) => {
+          const shim = shimAliases.get(path.replace(/^node:/, "")) ?? shimAliases.get(path);
+          return shim ? { path: shim } : undefined;
+        });
+      },
+    }
+  : undefined;
 const bun = (
   globalThis as typeof globalThis & {
     Bun?: {
       build(options: {
         entrypoints: string[];
         format: "cjs";
+        plugins?: BunPlugin[];
         target: "browser";
         write: false;
       }): Promise<{
@@ -44,6 +68,7 @@ if (!bun) throw new Error("python-node-bindings must run with Bun");
 const result = await bun.build({
   entrypoints: [entrypoint],
   format: "cjs",
+  ...(shimPlugin ? { plugins: [shimPlugin] } : {}),
   target: "browser",
   write: false,
 });
