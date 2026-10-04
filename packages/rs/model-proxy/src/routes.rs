@@ -1,6 +1,10 @@
 //! HTTP routes for model listing, generation, and embeddings.
 
-use std::{net::SocketAddr, num::NonZeroUsize, time::Instant};
+use std::{
+    net::SocketAddr,
+    num::NonZeroUsize,
+    time::{Duration, Instant},
+};
 
 use aide::axum::ApiRouter;
 use axum::{
@@ -73,6 +77,7 @@ pub(crate) struct AppState {
     runtime: RuntimeManager,
     target: TargetWire,
     image_resize_threshold_bytes: usize,
+    stream_idle_timeout: Duration,
     model_fallback: ModelFallbackPolicy,
     rate_limits: RateLimitGate,
     metrics: MetricsRuntime,
@@ -83,6 +88,7 @@ pub(crate) struct AppState {
 pub(crate) struct AppConfig {
     pub(crate) target: TargetWire,
     pub(crate) image_resize_threshold_bytes: usize,
+    pub(crate) stream_idle_timeout: Duration,
     pub(crate) model_fallback: ModelFallbackPolicy,
     pub(crate) rate_limits: RateLimitPolicy,
     pub(crate) metrics: MetricsRuntime,
@@ -102,6 +108,7 @@ impl AppState {
             runtime,
             target: config.target,
             image_resize_threshold_bytes: config.image_resize_threshold_bytes,
+            stream_idle_timeout: config.stream_idle_timeout,
             model_fallback: config.model_fallback,
             rate_limits,
             metrics: config.metrics,
@@ -1612,6 +1619,7 @@ async fn proxy(
             upstream,
             model.clone(),
             response_headers,
+            state.stream_idle_timeout,
             StreamLogContext {
                 client_wire,
                 target,

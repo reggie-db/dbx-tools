@@ -45,6 +45,8 @@ const DEFAULT_MAX_REQUEST_BYTES: NonZeroUsize =
 const DEFAULT_IMAGE_RESIZE_THRESHOLD: NonZeroUsize =
     NonZeroUsize::new(DEFAULT_IMAGE_RESIZE_THRESHOLD_BYTES)
         .expect("default image resize threshold is non-zero");
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS: NonZeroU64 =
+    NonZeroU64::new(120_000).expect("default stream idle timeout is non-zero");
 const DEFAULT_RATE_LIMIT_RETRIES: u32 = 5;
 const DEFAULT_RATE_LIMIT_INITIAL_DELAY_MS: NonZeroU64 =
     NonZeroU64::new(1_000).expect("default retry delay is non-zero");
@@ -124,6 +126,13 @@ struct ServerOptions {
         default_value_t = DEFAULT_IMAGE_RESIZE_THRESHOLD
     )]
     image_resize_threshold_bytes: NonZeroUsize,
+    /// Maximum time without an upstream SSE byte before terminating the stream.
+    #[arg(
+        long,
+        env = "STREAM_IDLE_TIMEOUT_MS",
+        default_value_t = DEFAULT_STREAM_IDLE_TIMEOUT_MS
+    )]
+    stream_idle_timeout_ms: NonZeroU64,
     /// Override input tokens per minute for pay-per-token models.
     #[arg(long, env = "INPUT_TOKENS_PER_MINUTE")]
     input_tokens_per_minute: Option<NonZeroU64>,
@@ -239,6 +248,11 @@ impl ServerOptions {
             &mut args,
             "--image-resize-threshold-bytes",
             self.image_resize_threshold_bytes,
+        );
+        push_service_argument(
+            &mut args,
+            "--stream-idle-timeout-ms",
+            self.stream_idle_timeout_ms,
         );
         if let Some(limit) = self.input_tokens_per_minute {
             push_service_argument(&mut args, "--input-tokens-per-minute", limit);
@@ -392,6 +406,7 @@ async fn run_server(cli: ServerOptions) -> Result<(), Box<dyn std::error::Error>
         target,
         max_request_bytes,
         image_resize_threshold_bytes,
+        stream_idle_timeout_ms,
         input_tokens_per_minute,
         output_tokens_per_minute,
         provisioned_throughput,
@@ -451,6 +466,7 @@ async fn run_server(cli: ServerOptions) -> Result<(), Box<dyn std::error::Error>
         AppConfig {
             target,
             image_resize_threshold_bytes: image_resize_threshold_bytes.get(),
+            stream_idle_timeout: Duration::from_millis(stream_idle_timeout_ms.get()),
             model_fallback: ModelFallbackPolicy {
                 mode: rate_limit_model_fallback,
                 max_steps: rate_limit_model_fallback_max_steps as usize,
@@ -485,6 +501,7 @@ async fn run_server(cli: ServerOptions) -> Result<(), Box<dyn std::error::Error>
         metrics_public,
         max_request_bytes = max_request_bytes.get(),
         image_resize_threshold_bytes = image_resize_threshold_bytes.get(),
+        stream_idle_timeout_ms = stream_idle_timeout_ms.get(),
         input_tokens_per_minute = input_tokens_per_minute.map(NonZeroU64::get),
         output_tokens_per_minute = output_tokens_per_minute.map(NonZeroU64::get),
         provisioned_throughput,
@@ -538,6 +555,10 @@ mod tests {
             server.image_resize_threshold_bytes,
             DEFAULT_IMAGE_RESIZE_THRESHOLD
         );
+        assert_eq!(
+            server.stream_idle_timeout_ms,
+            DEFAULT_STREAM_IDLE_TIMEOUT_MS
+        );
         assert_eq!(server.input_tokens_per_minute, None);
         assert_eq!(server.output_tokens_per_minute, None);
         assert!(!server.provisioned_throughput);
@@ -579,6 +600,8 @@ mod tests {
             "--show-sensitive",
             "--image-resize-threshold-bytes",
             "3145728",
+            "--stream-idle-timeout-ms",
+            "45000",
             "--input-tokens-per-minute",
             "200000",
             "--output-tokens-per-minute",
@@ -608,6 +631,7 @@ mod tests {
         assert!(server.metrics_public);
         assert!(server.show_sensitive);
         assert_eq!(server.image_resize_threshold_bytes.get(), 3 * 1024 * 1024);
+        assert_eq!(server.stream_idle_timeout_ms.get(), 45_000);
         assert_eq!(server.input_tokens_per_minute.unwrap().get(), 200_000);
         assert_eq!(server.output_tokens_per_minute.unwrap().get(), 20_000);
         assert!(server.provisioned_throughput);
@@ -647,11 +671,16 @@ mod tests {
         };
         let directory = tempfile::tempdir().unwrap();
         let launch = resolve_service_launch(&command.server_args, 4000, directory.path()).unwrap();
+        let default_stream_idle_timeout = DEFAULT_STREAM_IDLE_TIMEOUT_MS.to_string();
         assert_eq!(launch.port, 4100);
         assert!(launch
             .args
             .windows(2)
             .any(|pair| pair == ["--profile", "fixture"]));
+        assert!(launch.args.windows(2).any(|pair| {
+            pair[0] == "--stream-idle-timeout-ms"
+                && pair[1].to_string_lossy() == default_stream_idle_timeout
+        }));
         assert!(!launch
             .args
             .iter()

@@ -305,9 +305,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   Responses, Codex Responses, Anthropic translations, and embeddings reconcile
   process-local input/output reservations with reported actual usage. Native
   pass-through streams observe complete parsed SSE events while forwarding the
-  original bytes unchanged; observation state is capped at 1 MB per event, so
-  malformed or oversized events fall back to estimates without buffering an
-  unbounded response. A smaller
+  original bytes unchanged; observation state is capped at 1 MB per event and
+  disables itself instead of applying backpressure, so malformed, oversized,
+  or unexpectedly queued events fall back to estimates without delaying or
+  buffering an unbounded response. A smaller
   actual output credits the unused reservation immediately, while output usage
   without a requested maximum is added to the current window. Each
   workspace/model queue admits requests FIFO and wakes its head when
@@ -400,11 +401,17 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   flags tune the fallback. Never replay an SSE request after response streaming
   has begun. Native pass-through Responses streams inspect complete bounded SSE
   events for terminal `response.failed` and `error` signals without changing
-  their bytes. Record a semantic rate-limit failure as a 429 and another
-  terminal failure as a 502 in completion logs and metrics even though the HTTP
-  stream connected with 200. Local oversized-input and wait-budget rejections
-  also contribute to the metrics rate-limit totals. Forwarded headers and
-  JWT claims partition the gate only; they do
+  their bytes. Every upstream SSE body has a two-minute inactivity deadline,
+  configurable through `STREAM_IDLE_TIMEOUT_MS` /
+  `--stream-idle-timeout-ms`. Thirty seconds without a byte emits one
+  payload-free warning with byte count, observed-event count, and the last SSE
+  event name. Reaching the deadline emits a downstream SSE error, records a
+  semantic 504, reconciles the token reservation, and closes the upstream body
+  without replaying the request. Record a semantic rate-limit failure as a 429
+  and another terminal failure as a 502 in completion logs and metrics even
+  though the HTTP stream connected with 200. Local oversized-input and
+  wait-budget rejections also contribute to the metrics rate-limit totals.
+  Forwarded headers and JWT claims partition the gate only; they do
   not replace the upstream credential held by the captured runtime generation.
   `RuntimeManager` captures one immutable `Arc` generation at request entry and
   uses it for discovery, upstream calls, retries, fallback, throttling, and
