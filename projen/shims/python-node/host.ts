@@ -126,6 +126,9 @@ const runProcess = evaluate<PythonFunction>(
 const requestHttp = evaluate<PythonFunction>(
   "lambda url, method, headers, body, timeout: __import__('httpx').request(method or 'GET', url, headers=dict(headers) if headers is not None else None, content=body, timeout=(timeout / 1000) if timeout is not None else 30, follow_redirects=True)",
 );
+const chmod = evaluate<PythonFunction>(
+  "lambda path, mode: __import__('os').chmod(path, int(mode))",
+);
 
 const host: PythonRuntimeHost = {
   crypto: {
@@ -138,7 +141,7 @@ const host: PythonRuntimeHost = {
   },
   file: {
     async chmod(path, mode) {
-      await toThread(evaluate<PythonFunction>("__import__('os').chmod"), path, Math.trunc(mode));
+      await toThread(chmod, path, mode);
     },
     async copy(source, destination) {
       await toThread(
@@ -201,8 +204,7 @@ const host: PythonRuntimeHost = {
     },
     async writeBytes(path, content, mode) {
       await toThread(writeBytes, path, content);
-      if (mode !== undefined)
-        await toThread(evaluate<PythonFunction>("__import__('os').chmod"), path, Math.trunc(mode));
+      if (mode !== undefined) await toThread(chmod, path, mode);
     },
   },
   http: {

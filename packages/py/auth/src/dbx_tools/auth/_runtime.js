@@ -1694,7 +1694,7 @@ function installPythonGlobals() {
 function pythonHost() {
   return host;
 }
-var python, toThread, osPath, readBytes, readText, writeBytes, mkdir, listDirectory, statPath, runProcess, requestHttp, host;
+var python, toThread, osPath, readBytes, readText, writeBytes, mkdir, listDirectory, statPath, runProcess, requestHttp, chmod, host;
 var init_host = __esm(() => {
   python = globalThis.python;
   if (!python)
@@ -1718,6 +1718,7 @@ var init_host = __esm(() => {
   statPath = evaluate("lambda path: {'directory': __import__('os').path.isdir(path), 'file': __import__('os').path.isfile(path), 'mode': __import__('os').stat(path).st_mode, 'mtimeMs': __import__('os').stat(path).st_mtime * 1000, 'size': __import__('os').stat(path).st_size}");
   runProcess = evaluate("lambda command, args, environment, input_text, timeout: __import__('subprocess').run([command, *list(args)], env=dict(environment) if environment is not None else None, input=input_text, text=True, capture_output=True, timeout=(timeout / 1000) if timeout is not None else None)");
   requestHttp = evaluate("lambda url, method, headers, body, timeout: __import__('httpx').request(method or 'GET', url, headers=dict(headers) if headers is not None else None, content=body, timeout=(timeout / 1000) if timeout is not None else 30, follow_redirects=True)");
+  chmod = evaluate("lambda path, mode: __import__('os').chmod(path, int(mode))");
   host = {
     crypto: {
       randomBytes: evaluate("lambda length: list(__import__('os').urandom(int(length)))"),
@@ -1725,7 +1726,7 @@ var init_host = __esm(() => {
     },
     file: {
       async chmod(path, mode) {
-        await toThread(evaluate("__import__('os').chmod"), path, Math.trunc(mode));
+        await toThread(chmod, path, mode);
       },
       async copy(source, destination) {
         await toThread(evaluate("__import__('shutil').copyfile"), source, destination);
@@ -1772,7 +1773,7 @@ var init_host = __esm(() => {
       async writeBytes(path, content, mode) {
         await toThread(writeBytes, path, content);
         if (mode !== undefined)
-          await toThread(evaluate("__import__('os').chmod"), path, Math.trunc(mode));
+          await toThread(chmod, path, mode);
       }
     },
     http: {
@@ -7128,19 +7129,39 @@ __export(exports_fs_promises, {
   mkdir: () => mkdir2,
   default: () => fs_promises_default,
   copyFile: () => copyFile,
-  chmod: () => chmod
+  chmod: () => chmod2
 });
 function nodeError(error, code, path) {
   return Object.assign(error instanceof Error ? error : new Error(String(error)), { code, path });
 }
-async function chmod(path, mode) {
+function translatePythonError(cause, path) {
+  const message = String(cause);
+  if (/FileNotFoundError|Errno 2/.test(message))
+    throw nodeError(cause, "ENOENT", path);
+  if (/FileExistsError|Errno 17/.test(message))
+    throw nodeError(cause, "EEXIST", path);
+  if (/PermissionError|Errno 13/.test(message))
+    throw nodeError(cause, "EACCES", path);
+  throw cause;
+}
+async function chmod2(path, mode) {
   await pythonHost().file.chmod(String(path), mode);
 }
 async function copyFile(source, destination) {
   await pythonHost().file.copy(String(source), String(destination));
 }
 async function mkdir2(path, options = {}) {
-  const created = await pythonHost().file.mkdir(String(path), options.recursive === true);
+  let created;
+  try {
+    created = await pythonHost().file.mkdir(String(path), options.recursive === true);
+  } catch (cause) {
+    if (/FileExistsError|Errno 17/.test(String(cause))) {
+      if (options.recursive)
+        return;
+      throw nodeError(cause, "EEXIST", path);
+    }
+    throw cause;
+  }
   if (!created && !options.recursive)
     throw nodeError(new Error(`EEXIST: ${path}`), "EEXIST", path);
   return created ? String(path) : undefined;
@@ -7159,11 +7180,21 @@ async function readdir(path, options = {}) {
     isSymbolicLink: () => false
   }));
 }
-async function readFile(path) {
-  return Uint8Array.from(await pythonHost().file.readBytes(String(path)));
+async function readFile(path, options) {
+  try {
+    const bytes = Uint8Array.from(await pythonHost().file.readBytes(String(path)));
+    const encoding = typeof options === "string" ? options : options?.encoding;
+    return encoding ? new TextDecoder(encoding).decode(bytes) : bytes;
+  } catch (cause) {
+    translatePythonError(cause, path);
+  }
 }
 async function realpath(path) {
-  return pythonHost().file.realpath(String(path));
+  try {
+    return await pythonHost().file.realpath(String(path));
+  } catch (cause) {
+    translatePythonError(cause, path);
+  }
 }
 async function rename(source, destination) {
   await pythonHost().file.rename(String(source), String(destination));
@@ -7172,10 +7203,23 @@ async function rm(path, options = {}) {
   await pythonHost().file.remove(String(path), options.recursive === true, options.force === true);
 }
 async function unlink(path) {
-  await pythonHost().file.remove(String(path), false, false);
+  if (!pythonHost().file.exists(String(path)))
+    return;
+  try {
+    await pythonHost().file.remove(String(path), false, false);
+  } catch (cause) {
+    if (/FileNotFoundError|Errno 2|ENOENT/.test(String(cause)))
+      return;
+    translatePythonError(cause, path);
+  }
 }
 async function stat(path) {
-  const value = await pythonHost().file.stat(String(path));
+  let value;
+  try {
+    value = await pythonHost().file.stat(String(path));
+  } catch (cause) {
+    translatePythonError(cause, path);
+  }
   return {
     mode: value.mode,
     mtime: new Date(value.mtimeMs),
@@ -7199,7 +7243,7 @@ var fs_promises_default;
 var init_fs_promises = __esm(() => {
   init_host();
   fs_promises_default = {
-    chmod,
+    chmod: chmod2,
     copyFile,
     mkdir: mkdir2,
     mkdtemp,
@@ -24844,14 +24888,14 @@ async function ensure(name, url, options = {}) {
       const from = displayUrl(source.url);
       logger3.debug("resolved binary source", { name, from });
       const selected = await selectedBin(destination, source, temp, options);
-      await chmod(selected, 493);
+      await chmod2(selected, 493);
       if (!await isValidBin(selected, options)) {
         throw new Error(`selected binary has no acceptable version: ${selected}`);
       }
       await mkdir2(destination.binDir, { recursive: true });
       staged = join(destination.binDir, `.${name}-${randomUUID()}`);
       await copyFile(selected, staged);
-      await chmod(staged, 493);
+      await chmod2(staged, 493);
       await rename(staged, destination.path);
       staged = undefined;
       if (!await isValidBin(destination.path, options)) {
@@ -25650,7 +25694,7 @@ class FileCredentialStore {
 }
 async function ensureDirectory(path, mode) {
   await mkdir2(path, { recursive: true, mode });
-  await chmod(path, mode);
+  await chmod2(path, mode);
 }
 async function readTextFile(path) {
   try {
@@ -25667,7 +25711,7 @@ async function atomicWriteTextFile(path, content, mode) {
   const temporary = join(parent, `.${basename(path)}-${randomUUID()}.tmp`);
   try {
     await writeFile(temporary, content, { mode, flag: "wx" });
-    await chmod(temporary, mode);
+    await chmod2(temporary, mode);
     await rename(temporary, path);
   } finally {
     await unlink(temporary).catch((cause) => {
