@@ -55,6 +55,8 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "Node local-disk implementation of the dbx-tools browser-safe filesystem contract",
   "packages/js/node/genie": "Server-side Databricks Genie chat drivers",
   "packages/js/node/google-rs": "Node bindings for dbx-tools-google",
+  "packages/js/node/lakebase":
+    "Node-native Lakebase address parsing, resource discovery, and database credentials",
   "packages/js/node/model": "Workspace-aware Databricks Model Serving selection",
   "packages/js/node/path":
     "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
@@ -114,6 +116,7 @@ const SHARED_CORE_DEPENDENT_PATHS = [
   "packages/js/node/email",
   "packages/js/node/fs",
   "packages/js/node/genie",
+  "packages/js/node/lakebase",
   "packages/js/node/model",
   "packages/js/node/path",
   "packages/js/node/postgres",
@@ -549,6 +552,20 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "./python": "./src/python.ts",
     "./package.json": "./package.json",
   });
+});
+
+// node-lakebase: Node-native Lakebase address parsing, workspace discovery,
+// and short-lived database credentials shared by AppKit and the local proxy.
+project.applyToProjects(root, { identifierName: "lakebase", tags: "node" }, (p) => {
+  projectJs.addPackageFiles(p, "exports.ts");
+  p.addDeps(
+    "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+  );
+});
+
+project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
+  p.addDeps("@dbx-tools/lakebase@workspace:^");
 });
 
 // node-databricks: workspace URL/id resolution + cloud provider/region detection (fetches

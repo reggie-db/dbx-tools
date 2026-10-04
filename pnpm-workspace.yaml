@@ -22,6 +22,7 @@ packages:
   - packages/js/node/fs
   - packages/js/node/genie
   - packages/js/node/google-rs
+  - packages/js/node/lakebase
   - packages/js/node/model
   - packages/js/node/model-rs
   - packages/js/node/path

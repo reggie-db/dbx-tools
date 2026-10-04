@@ -112,6 +112,7 @@ packages/js/node/email/index.ts
 packages/js/node/fs/index.ts
 packages/js/node/genie/index.ts
 packages/js/node/google-rs/index.ts
+packages/js/node/lakebase/index.ts
 packages/js/node/model/index.ts
 packages/js/node/model-rs/index.ts
 packages/js/node/path/index.ts

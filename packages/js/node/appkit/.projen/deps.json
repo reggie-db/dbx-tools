@@ -45,6 +45,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/lakebase",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:^",
       "type": "runtime"
