@@ -1,0 +1,47 @@
+# `dbx-tools-model-proxy`
+
+OpenAI-compatible LiteLLM proxy backed by Node-owned Databricks authentication,
+model discovery, ranking, routing, and metadata.
+
+LiteLLM owns request conversion, streaming, transport, and retry behavior. The
+Python host only adapts calls through the generated `dbx-tools-models` client,
+so authentication and model policy remain implemented once in Node.
+
+## Run
+
+```sh
+uv run dbx-model-proxy --port 4000
+```
+
+The proxy listens on `127.0.0.1` unless a different host is forwarded to
+LiteLLM. Select a Databricks profile explicitly when needed:
+
+```sh
+uv run dbx-model-proxy --profile my-workspace --port 4000
+```
+
+The host exposes LiteLLM's OpenAI-compatible APIs, a dynamic `GET /v1/models`
+catalogue, and `GET /lookup` for Node-ranked fuzzy model search. Model requests
+are resolved lazily and receive current Databricks authentication headers from
+the generated client.
+
+The standard model response keeps the OpenAI `data` array. Requests whose
+`originator` header starts with `codex` also receive a Codex `models` array with
+Node-ranked priorities, Databricks AI Gateway model names, reasoning levels,
+and build-cached capability metadata. Embedding, retired, and unsupported Codex
+families remain available through the OpenAI catalogue but are omitted from the
+Codex extension.
+
+## Ownership
+
+- `dbx-tools-models` owns authentication, profile selection, endpoint discovery,
+  caching, fuzzy matching, protocol selection, URLs, and published metadata.
+- LiteLLM owns Chat, Responses, embeddings, streaming, parameter conversion,
+  provider transport, and retries.
+- This package owns only FastAPI route installation, LiteLLM callback wiring,
+  and command-line startup.
+
+The initial implementation intentionally does not reproduce the Rust proxy's
+process-local rate-limit queues, metrics, service management, or protocol
+translation. Those features should be added only where LiteLLM does not already
+provide the equivalent behavior.

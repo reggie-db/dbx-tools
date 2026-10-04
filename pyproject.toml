@@ -4,7 +4,7 @@
 name = "dbx-tools-python-workspace"
 version = "0.9.21"
 requires-python = ">=3.11,<4"
-dependencies = [ "dbx-tools-graphiti" ]
+dependencies = [ "dbx-tools-graphiti", "dbx-tools-model-proxy" ]
 
 [dependency-groups]
 dev = [
@@ -43,6 +43,9 @@ workspace = true
 workspace = true
 
 [tool.uv.sources.dbx-tools-models]
+workspace = true
+
+[tool.uv.sources.dbx-tools-model-proxy]
 workspace = true
 
 [tool.uv.sources.dbx-tools-core]

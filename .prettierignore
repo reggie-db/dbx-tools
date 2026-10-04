@@ -47,6 +47,7 @@ packages/py/core-rs/pyproject.toml
 packages/py/google-rs/pyproject.toml
 packages/py/auth/pyproject.toml
 packages/py/models/pyproject.toml
+packages/py/model-proxy/pyproject.toml
 packages/py/core/pyproject.toml
 packages/py/postgres/pyproject.toml
 packages/py/graphiti/pyproject.toml

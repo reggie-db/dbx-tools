@@ -1559,6 +1559,19 @@ const pythonPackages: project.PythonPackageOptions[] = [
     nodeBindings: pythonNodeBindings("@dbx-tools/model", "@dbx-tools/model/python"),
   },
   {
+    directory: "model-proxy",
+    description:
+      "LiteLLM proxy backed by Node-owned Databricks authentication and dynamic model discovery",
+    internalDependencies: ["models"],
+    dependencies: [
+      "fastapi>=0.116,<1",
+      "litellm[proxy]==1.99.0",
+    ],
+    scripts: {
+      "dbx-model-proxy": "dbx_tools.model_proxy.cli:main",
+    },
+  },
+  {
     directory: "core",
     description:
       "Configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
@@ -1597,7 +1610,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
 new project.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
-  dependencies: ["dbx-tools-graphiti"],
+  dependencies: ["dbx-tools-graphiti", "dbx-tools-model-proxy"],
   // Graphiti supports Python 3.11 through the current Python 3 release line.
   requiresPython: ">=3.11,<4",
   ruffTarget: "py311",
