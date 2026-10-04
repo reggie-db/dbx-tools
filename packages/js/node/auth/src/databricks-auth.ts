@@ -24,6 +24,7 @@ import {
   WORKSPACE_ID_HEADER,
 } from "./types.ts";
 
+/** Injectable host capabilities for Databricks authentication. */
 export interface DatabricksAuthDependencies {
   environment?: Readonly<Record<string, string | undefined>>;
   fetch?: typeof globalThis.fetch;

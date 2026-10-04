@@ -42,6 +42,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 
 ## Python
 
+- `dbx-tools-auth` - Python access to the provider-neutral authentication lifecycle owned by @dbx-tools/auth. The package embeds a CommonJS bundle and executes it through PythonMonkey's SpiderMonkey runtime. Token refresh, check-lock-recheck coordination, login policy, and rejected-token handling stay in the JavaScript implementation instead of being copied into Python. Source: `packages/py/auth`.
 - `dbx-tools-core` - Dependency-free Python configuration, identity, and mise-backed executable helpers shared by dbx-tools packages. Source: `packages/py/core`.
 - `dbx-tools-core-rs` - Generated Python bindings for Databricks authentication, runtime utilities, and Lakebase address parsing from the dbx-tools-core Rust crate. Source: `packages/py/core-rs`.
 - `dbx-tools-google-rs` - Generated Python bindings for Google Application Default Credentials from the dbx-tools-google Rust crate. Source: `packages/py/google-rs`.

@@ -7,6 +7,7 @@ import {
 import type { DatabricksAuthOptions } from "./types.ts";
 import { DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER } from "./types.ts";
 
+/** Options for one Databricks JSON API request. */
 export interface DatabricksRequestOptions {
   method?: string;
   body?: unknown;

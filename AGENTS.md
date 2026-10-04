@@ -154,6 +154,15 @@ Primary package areas:
   contracts remain callback-free and use explicit lease IDs.
   `@dbx-tools/core` owns the Node file-lock implementation and must not depend
   on Rust only for Databricks App detection.
+- `packages/py/auth` executes the provider-neutral `@dbx-tools/auth` lifecycle
+  through a committed PythonMonkey bundle. Keep token refresh,
+  check-lock-recheck coordination, login policy, and rejected-token handling in
+  the JavaScript source of truth. Python supplies host capabilities through
+  narrow protocols and maintained libraries: `filelock` for cross-process
+  locks, `asyncio` for in-process coordination and subprocesses, and
+  `webbrowser` for browser launch. Regenerate the bundle through
+  `bun run auth:python-bridge`; tests and release validation must reject stale
+  generated output.
 - `packages/rs/core` retains the Rust authentication implementation for native
   binaries while Node consumers move to `@dbx-tools/auth`. It also owns shared
   Rust runtime primitives, file caching, file locking, Lakebase address parsing,

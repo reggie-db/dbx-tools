@@ -211,7 +211,7 @@ runtime behavior, module maps, and links to adjacent packages.
 Install the published Python packages by distribution name:
 
 ```bash
-uv add dbx-tools-core dbx-tools-core-rs dbx-tools-google-rs dbx-tools-postgres dbx-tools-graphiti
+uv add dbx-tools-auth dbx-tools-core dbx-tools-core-rs dbx-tools-google-rs dbx-tools-postgres dbx-tools-graphiti
 ```
 
 The Python packages support Python 3.11 through the Python 3 release line.
@@ -226,6 +226,7 @@ matching `@dbx-tools/*-rs` packages.
 
 | Package                                        | Purpose                                                                                                                                                                                                                                                                            |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`dbx-tools-auth`](packages/py/auth)           | Runs the provider-neutral `@dbx-tools/auth` token lifecycle through PythonMonkey while Python supplies library-backed credential storage, file locking, and browser integration.                                                                                                   |
 | [`dbx-tools-core`](packages/py/core)           | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                             |
 | [`dbx-tools-core-rs`](packages/py/core-rs)     | Detects Databricks App runtimes, parses Lakebase addresses, reports CLI availability, and provides U2M, M2M, PAT, profile resolution, token lifecycle, locking, and credential storage through generated Rust bindings.                                                            |
 | [`dbx-tools-google-rs`](packages/py/google-rs) | Resolves Google Application Default Credentials and keeps short-lived access tokens in process memory.                                                                                                                                                                             |

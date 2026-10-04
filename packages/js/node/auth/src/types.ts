@@ -169,10 +169,17 @@ export interface PersistentAuthLike {
   authKind(): AuthKind;
 }
 
+/** Public OAuth client used by Databricks CLI-compatible user authentication. */
 export const DEFAULT_CLIENT_ID = "databricks-cli";
+/** Default Databricks profile configuration path. */
 export const DEFAULT_CONFIG_FILE = "~/.databrickscfg";
+/** Default Databricks account console origin. */
 export const DEFAULT_ACCOUNTS_HOST = "https://accounts.cloud.databricks.com";
+/** Canonical request header carrying a bearer access token. */
 export const DEFAULT_ACCESS_TOKEN_HEADER = "authorization";
+/** Canonical request header carrying the resolved Databricks workspace ID. */
 export const WORKSPACE_ID_HEADER = "x-databricks-workspace-id";
+/** Authentication type for Databricks App on-behalf-of request credentials. */
 export const AUTH_TYPE_APP_OBO = "app_obo";
+/** Authentication type for Databricks App service-principal credentials. */
 export const AUTH_TYPE_APP_SP = "app_sp";

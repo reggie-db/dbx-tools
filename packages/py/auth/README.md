@@ -36,6 +36,9 @@ entry point or the shared lifecycle:
 bun run auth:python-bridge
 ```
 
+Tests and release preparation run `bun run auth:python-bridge:check` so a
+lifecycle change cannot publish a stale embedded runtime.
+
 ## Modules
 
 - `client` loads the bundled runtime and exposes the async `AuthClient` facade.

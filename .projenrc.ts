@@ -238,7 +238,11 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
+  releaseValidationTasks: [
+    "auth:python-bridge:check",
+    "docs:check-source",
+    "docs:check-readmes",
+  ],
   pullRequestTitlePolicy: {
     types: ["feat", "fix", "chore"],
     requireScope: false,
@@ -1545,14 +1549,13 @@ new project.DBXToolsPythonWorkspace(root, {
 });
 root.addTask("auth:python-bridge", {
   description: "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
-  exec: [
-    "bun build packages/js/node/auth/src/_python-bridge.ts",
-    "--target browser",
-    "--format cjs",
-    "--outfile packages/py/auth/src/dbx_tools/auth/_runtime.js",
-    "--banner '// GENERATED from @dbx-tools/auth for PythonMonkey. DO NOT EDIT.'",
-  ].join(" "),
+  exec: "bun projen/tasks/python-auth-bridge.ts",
 });
+const authPythonBridgeCheck = root.addTask("auth:python-bridge:check", {
+  description: "Verify the committed PythonMonkey authentication bundle is current",
+  exec: "bun projen/tasks/python-auth-bridge.ts --check",
+});
+root.testTask.spawn(authPythonBridgeCheck);
 root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
   target: "dbx-tools-graphiti",
   kind: "generated",

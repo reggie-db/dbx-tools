@@ -9,7 +9,16 @@
       "description": "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
       "steps": [
         {
-          "exec": "bun build packages/js/node/auth/src/_python-bridge.ts --target browser --format cjs --outfile packages/py/auth/src/dbx_tools/auth/_runtime.js --banner '// GENERATED from @dbx-tools/auth for PythonMonkey. DO NOT EDIT.'"
+          "exec": "bun projen/tasks/python-auth-bridge.ts"
+        }
+      ]
+    },
+    "auth:python-bridge:check": {
+      "name": "auth:python-bridge:check",
+      "description": "Verify the committed PythonMonkey authentication bundle is current",
+      "steps": [
+        {
+          "exec": "bun projen/tasks/python-auth-bridge.ts --check"
         }
       ]
     },
@@ -372,7 +381,7 @@
       "description": "Prepare, validate, locally publish, and upload a draft release candidate",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-pr.ts --prefix v --base main --python-root \"packages/py\" --validate-task \"auth:python-bridge:check\" --validate-task \"docs:check-source\" --validate-task \"docs:check-readmes\"",
           "receiveArgs": true
         }
       ]
@@ -446,6 +455,9 @@
         },
         {
           "spawn": "test:installer"
+        },
+        {
+          "spawn": "auth:python-bridge:check"
         },
         {
           "exec": "bun run --filter '*' test"

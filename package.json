@@ -6,6 +6,7 @@
   },
   "scripts": {
     "auth:python-bridge": "projen auth:python-bridge",
+    "auth:python-bridge:check": "projen auth:python-bridge:check",
     "barrels": "projen barrels",
     "build": "projen build",
     "bump": "projen bump",
