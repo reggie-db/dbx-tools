@@ -38,7 +38,7 @@ path = "examples/generate-model-contracts.rs"
 required-features = [ "contract-generation" ]
 
 [dependencies.dbx-tools-core]
-version = "0.9.19"
+version = "0.9.20"
 path = "../core"
 
 [dependencies.difflib-fast]
