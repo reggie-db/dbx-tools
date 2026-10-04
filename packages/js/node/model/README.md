@@ -28,6 +28,8 @@ Key features:
   and re-lists once on a resolve miss so a newly deployed model still resolves.
 - Builds the invocations URL and mints per-request auth headers for callers that
   issue their own OpenAI-shaped HTTP requests.
+- Provides build-generated retirement, Responses, image-input, apply-patch,
+  web-search, ITPM, OTPM, and QPH metadata through cached in-process lookups.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
@@ -196,6 +198,22 @@ tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
 The TypeScript helper owns this policy, so Node consumers and generated Python
 bindings share one version threshold without loading a native library.
 
+## Read Published Model Metadata
+
+```ts
+import { metadata } from "@dbx-tools/model";
+
+const capabilities = metadata.modelCapabilitiesFor("databricks-gpt-5-4");
+const limits = metadata.modelRateLimitsFor("gpt-5.4");
+const status = metadata.modelStatusFor("system.ai.gemini-2-5-pro");
+```
+
+The package ships committed snapshots generated from Databricks documentation
+by `bun run model:metadata`. Runtime calls normalize endpoint, display,
+foundation-model, and provider identities into memoized sets and maps; they do
+not fetch documentation. `modelMetadataFor()` returns status, capabilities, and
+published limits together for a string or `ServingEndpointSummary`.
+
 ## Use Static Fallbacks
 
 ```ts
@@ -218,6 +236,8 @@ policy decisions; fallbacks are a last resort.
   search, and endpoint-id resolution.
 - `invoke` - serving-path constants, URL construction, and per-request auth
   headers for calling an endpoint over raw HTTP.
+- `metadata` - build-generated retirement, capability, and rate-limit snapshots
+  with cached normalized lookups.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.
 - `policy` - family, serving-protocol, tool, and reasoning-effort policy.
 - `fallback` - static fallback model ids per class.

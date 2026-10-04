@@ -14,34 +14,12 @@ import {
   supportsToolsByFamily,
   versionTuple,
 } from "./classify.ts";
+import { modelStatusFor } from "./metadata.ts";
 import { modelFamily, modelReasoningEfforts, modelServiceNames } from "./policy.ts";
 
 type ModelClass = model.ModelClass;
 
 const DEFAULT_FUZZY_THRESHOLD = 0.4;
-const RETIRED_MODELS = [
-  "claude 3 7 sonnet",
-  "claude sonnet 4",
-  "dbrx",
-  "dbrx instruct",
-  "gemini 2 5 flash",
-  "gemini 2 5 pro",
-  "gemini 3 pro",
-  "llama 2 13b",
-  "llama 2 70b",
-  "llama 2 7b",
-  "llama 3 70b",
-  "llama 3 8b",
-  "llama 3 1 405b",
-  "mistral 7b",
-  "mixtral 8x7b",
-  "mpt 30b",
-  "mpt 7b",
-  "gpt 5 1 codex max",
-  "gpt 5 1 codex mini",
-  "gpt 5 2 codex",
-] as const;
-
 interface NativeRankingOptions {
   readonly includeDeprecated?: boolean;
   readonly modelClass?: ModelClass;
@@ -92,7 +70,9 @@ export function rankEndpoints(
       const tokenMatches = candidates
         .filter((candidate) => {
           const candidateTokens = new Set(searchableValues(candidate.endpoint).flatMap(tokenize));
-          return searchTokens.length > 0 && searchTokens.every((token) => candidateTokens.has(token));
+          return (
+            searchTokens.length > 0 && searchTokens.every((token) => candidateTokens.has(token))
+          );
         })
         .map((candidate) => ({ ...candidate, score: 0 }));
       if (tokenMatches.length > 0) {
@@ -186,7 +166,7 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
       serviceNames: Object.assign({}, ...identities.map(modelServiceNames)),
       ...(modelServiceName ? { modelServiceName } : {}),
       ...(reasoningEfforts.length ? { reasoningEfforts } : {}),
-      status: { deprecated: identities.some(isRetiredModel) },
+      status: modelStatusFor(...identities),
     };
     return [summary];
   });
@@ -231,15 +211,6 @@ function searchableValues(endpoint: ServingEndpointSummary): string[] {
     endpoint.modelServiceName,
     ...Object.values(endpoint.serviceNames ?? {}),
   ].filter((value): value is string => Boolean(value));
-}
-
-function normalizedIdentity(value: string): string {
-  return tokenize(value.replace(/^system\.ai\./, "").replace(/^databricks-/, "")).join(" ");
-}
-
-function isRetiredModel(value: string): boolean {
-  const normalized = normalizedIdentity(value);
-  return RETIRED_MODELS.some((retired) => normalized.includes(retired));
 }
 
 function modelProfile(entity: Record<string, unknown>) {

@@ -11,6 +11,11 @@
       "type": "build"
     },
     {
+      "name": "cheerio",
+      "version": "^1.2.0",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "type": "build"
     },

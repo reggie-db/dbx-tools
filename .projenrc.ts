@@ -542,6 +542,7 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@databricks/appkit@catalog:",
     "fuse.js@^7.4.2",
   );
+  p.addDevDeps("cheerio@^1.2.0");
 });
 
 // node-databricks: workspace URL/id resolution + cloud provider/region detection (fetches
@@ -1609,15 +1610,11 @@ for (const binary of [
 root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
 root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
 root.annotateGenerated("/packages/js/shared/model/src/generated/**");
+root.annotateGenerated("/packages/js/node/model/src/generated/**");
 new BrandPackageAssets(root);
 root.addTask("model:metadata", {
-  exec: [
-    "cargo run --quiet -p dbx-tools-model --example generate-model-metadata --",
-    "packages/rs/model/assets/retired-models.json",
-    "packages/rs/model/assets/model-capabilities.json",
-    "packages/rs/model/assets/model-rate-limits.json",
-  ].join(" "),
-  description: "Refresh committed model retirement, capability, and rate-limit snapshots",
+  exec: "bun packages/js/node/model/scripts/generate-metadata.ts",
+  description: "Refresh Node-owned model retirement, capability, and rate-limit snapshots",
 });
 const modelContractsTask = root.addTask("model:contracts", {
   exec: [

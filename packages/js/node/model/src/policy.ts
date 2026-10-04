@@ -28,15 +28,7 @@ const FAMILIES = [
 const STANDARD: ReasoningEffort[] = ["low", "medium", "high"];
 const GPT_5_6: ReasoningEffort[] = ["none", "low", "medium", "high", "xhigh", "max"];
 const GPT_5_5_PRO: ReasoningEffort[] = ["medium", "high", "xhigh"];
-const CLAUDE: ReasoningEffort[] = [
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-];
+const CLAUDE: ReasoningEffort[] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 const GEMINI: ReasoningEffort[] = ["minimal", "low", "medium", "high"];
 
 interface ParsedModelName {
@@ -48,6 +40,13 @@ interface ParsedModelName {
 /** Return the normalized family parsed from a model identity. */
 export function modelFamily(name: string): string | undefined {
   return parseModelName(name)?.family;
+}
+
+/** Normalize a recognized model identity into family, version, and variant tokens. */
+export function modelSearchQuery(name: string): string | undefined {
+  const parsed = parseModelName(name);
+  if (!parsed) return undefined;
+  return [parsed.family, ...parsed.version.map(String), ...parsed.model].join(" ");
 }
 
 /** Return the reasoning efforts accepted by a model family. */

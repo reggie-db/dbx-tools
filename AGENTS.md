@@ -290,21 +290,20 @@ Primary package areas:
   The package never invokes gcloud, starts Google login, or rewrites ADC. Use
   `gcloud auth application-default login` to configure local credentials and
   scopes. Keep `google-cloud-auth` exact-pinned at the tested 0.18.0 API.
-- `packages/rs/model` and `packages/js/node/model-rs` own Databricks endpoint
-  discovery, file-backed catalogue caching, model-name parsing, classification,
-  fuzzy ranking, native inference-protocol selection, and model-specific Chat
-  tool reasoning policy.
+- `packages/js/node/model` owns Databricks endpoint discovery, catalogue
+  caching, model-name parsing, classification, fuzzy ranking, inference-protocol
+  selection, model-specific Chat tool reasoning policy, and build-generated
+  Databricks documentation metadata. `bun run model:metadata` refreshes the
+  committed retirement, capability, and rate-limit snapshots through Node and
+  mirrors them into the Rust package only while the Rust proxy remains in the
+  workspace. Runtime metadata lookups are in-memory and do not fetch docs.
   Endpoint catalogue cache files are keyed by normalized host, workspace ID,
   and non-secret principal so profiles sharing a host cannot read one another's
   cached catalogue.
-  The generated UniFFI bindings expose pure catalogue ranking, routing, family parsing,
-  reasoning-effort wire values, and capability policy;
-  `@dbx-tools/model` and `@dbx-tools/appkit-mastra` consume those bindings
-  rather than reimplementing version or effort rules in TypeScript.
-  Rust also owns catalogue normalization, classification, fuzzy resolution, and
-  the model records/enums that cross runtime boundaries. Generate a committed,
-  browser-safe contract projection from those owning definitions; do not retain
-  a handwritten shared-model mirror or a second Fuse-based resolver.
+  `@dbx-tools/model` and `@dbx-tools/appkit-mastra` consume the TypeScript policy
+  directly without a native runtime binding. Keep one TypeScript implementation
+  of catalogue normalization, classification, fuzzy resolution, family parsing,
+  reasoning-effort policy, and model metadata lookup.
   `difflib-fast` supplies stable short-string similarity. The model proxy
   resolves loose names such as `gpt` through this crate before selecting an
   inference route. Across TypeScript and Rust, a GPT family search sorts by
@@ -334,14 +333,10 @@ codex_real_client_discovers_fixture_catalogue --offline` runs the opt-in
   loopback fixture under an isolated `CODEX_HOME`, verifies the
   `originator: codex_cli_rs` request, and compares discovered slug sets. Ordinary
   Rust tests do not require Codex to be installed.
-  Retirement status refreshes the Databricks Foundation Model retirement page
-  through a daily `FileCache` and falls back to the generated
-  `assets/retired-models.json` snapshot. Model capabilities and published
-  pay-per-token limits follow the same daily refresh and generated-fallback
-  policy through a shared documentation cache envelope. The
-  `bun run model:metadata` task invokes the `generate-model-metadata` Rust
-  example to refresh all three committed snapshots. Ordinary Projen synthesis
-  never compiles or runs that network-backed generator.
+  Retirement status, model capabilities, and published pay-per-token limits use
+  the committed Node snapshots. The `bun run model:metadata` task refreshes all
+  three through the TypeScript generator. Ordinary Projen synthesis never runs
+  that network-backed generator.
 - `packages/rs/model-proxy` is the public `dbx-model-proxy` Rust binary that
   exposes OpenAI Chat, OpenAI Responses, Anthropic Messages, Codex Responses,
   OpenAI Embeddings, and live model-list compatibility over Databricks. It depends on `core`
