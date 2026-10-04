@@ -1485,6 +1485,12 @@ const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
 const pythonPackages: project.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
+    directory: "auth",
+    description:
+      "PythonMonkey bridge to the shared dbx-tools authentication lifecycle",
+    dependencies: ["filelock>=3.16,<4", "pythonmonkey>=1.3,<2"],
+  },
+  {
     directory: "core",
     description:
       "Configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
@@ -1536,6 +1542,16 @@ new project.DBXToolsPythonWorkspace(root, {
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },
   release: true,
+});
+root.addTask("auth:python-bridge", {
+  description: "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
+  exec: [
+    "bun build packages/js/node/auth/src/_python-bridge.ts",
+    "--target browser",
+    "--format cjs",
+    "--outfile packages/py/auth/src/dbx_tools/auth/_runtime.js",
+    "--banner '// GENERATED from @dbx-tools/auth for PythonMonkey. DO NOT EDIT.'",
+  ].join(" "),
 });
 root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
   target: "dbx-tools-graphiti",

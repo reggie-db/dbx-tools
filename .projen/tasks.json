@@ -4,6 +4,15 @@
     "PATH": "$(bun --eval \"console.log(process.env.PATH)\")"
   },
   "tasks": {
+    "auth:python-bridge": {
+      "name": "auth:python-bridge",
+      "description": "Bundle the provider-neutral authentication lifecycle for PythonMonkey",
+      "steps": [
+        {
+          "exec": "bun build packages/js/node/auth/src/_python-bridge.ts --target browser --format cjs --outfile packages/py/auth/src/dbx_tools/auth/_runtime.js --banner '// GENERATED from @dbx-tools/auth for PythonMonkey. DO NOT EDIT.'"
+        }
+      ]
+    },
     "barrels": {
       "name": "barrels",
       "steps": [

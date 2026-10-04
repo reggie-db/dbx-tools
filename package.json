@@ -5,6 +5,7 @@
     "url": "git+https://github.com/reggie-db/dbx-tools.git"
   },
   "scripts": {
+    "auth:python-bridge": "projen auth:python-bridge",
     "barrels": "projen barrels",
     "build": "projen build",
     "bump": "projen bump",

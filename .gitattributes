@@ -36,6 +36,7 @@
 /packages/js/node/rust-binary/src/_release-binaries.ts linguist-generated
 /packages/js/openapi/** linguist-generated
 /packages/js/shared/model/src/generated/** linguist-generated
+/packages/py/auth/pyproject.toml linguist-generated
 /packages/py/core-rs/pyproject.toml linguist-generated
 /packages/py/core/pyproject.toml linguist-generated
 /packages/py/google-rs/pyproject.toml linguist-generated
