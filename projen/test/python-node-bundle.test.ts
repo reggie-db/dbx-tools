@@ -87,8 +87,8 @@ describe("PythonNodeBundle", () => {
     assert.equal(await runtime.createSession(), "session");
 
     const bindings = readFileSync(bindingsPath, "utf8");
-    assert.match(bindings, /async def create_session\(\) -> Any:/);
-    assert.match(bindings, /async def token\(\n    login: bool \| object = _MISSING,/);
+    assert.match(bindings, /async def create_session\(\) -> str:/);
+    assert.match(bindings, /async def token\(\n    login: bool \| object = _MISSING,\n\) -> str:/);
     assert.match(bindings, /class SessionOptions:/);
     assert.match(bindings, /workspace_id: str \| None/);
     assert.match(bindings, /headers: dict\[str, str\] \| None/);
@@ -98,8 +98,10 @@ describe("PythonNodeBundle", () => {
       /scopes: list\[str\] \| None = field\(\n        default_factory=lambda: \["default"\]/,
     );
     assert.match(bindings, /async def create_configured\(/);
+    assert.match(bindings, /\) -> SessionOptionsResponse:/);
+    assert.match(bindings, /class SessionOptionsResponse\(TypedDict\):/);
     assert.match(bindings, /options = SessionOptions\(\*\*kwargs\)/);
-    assert.match(bindings, /async def replaced\(\) -> Any:/);
+    assert.match(bindings, /async def replaced\(\) -> str:/);
     assert.match(bindings, /_invoke\("createSession"\)/);
     assert.match(bindings, /class _NodeObject:/);
     assert.match(bindings, /Reflect\.apply\(target\[name\], target, args\)/);
@@ -128,7 +130,7 @@ describe("PythonNodeBundle", () => {
     assert.ok(readFileSync(join(generatedPackageDirectory, "_runtime.js"), "utf8").length > 0);
     assert.match(
       readFileSync(join(generatedPackageDirectory, "node_bindings.py"), "utf8"),
-      /async def create_session/,
+      /class CreateSessionReturnResult\(Protocol\):[\s\S]*async def token\([\s\S]*\) -> str:/,
     );
     assert.match(
       readFileSync(join(generatedPackageDirectory, "__init__.py"), "utf8"),

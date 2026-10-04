@@ -79,7 +79,10 @@ applyOptionDefaults(functionTypes.records, await import(pathToFileURL(entrypoint
 const pythonFunctions = functions.map(({ name, sourceFile, sourceName }) => ({
   javascriptName: name,
   pythonName: pythonFunctionName(name),
-  parameters: functionTypes.functions.get(`${sourceFile}#${sourceName}`) ?? [],
+  ...(functionTypes.functions.get(`${sourceFile}#${sourceName}`) ?? {
+    parameters: [],
+    returnType: "Any",
+  }),
 }));
 const functionsByPythonName = new Map<string, string>();
 for (const functionName of pythonFunctions) {
@@ -183,11 +186,19 @@ async function generate(): Promise<void> {
     tool: "projen/tasks/python-node-bindings.ts",
     source,
   })}\n${await result.outputs[0].text()}`;
-  const bindings = pythonBindings(source, pythonFunctions, functionTypes.records);
+  const bindings = pythonBindings(
+    source,
+    pythonFunctions,
+    functionTypes.records,
+    functionTypes.responses,
+    functionTypes.protocols,
+  );
   const bindingsPackage = pythonBindingsPackage(
     source,
     pythonFunctions,
     functionTypes.records,
+    functionTypes.responses,
+    functionTypes.protocols,
     config.private,
   );
   writeGenerated(runtimeOutput, runtime, "JavaScript runtime");
@@ -226,17 +237,24 @@ function pythonBindings(
   source: string,
   functions: readonly PythonFunctionBinding[],
   records: readonly PythonRecord[],
+  responses: readonly PythonResponse[],
+  protocols: readonly PythonProtocol[],
 ): string {
   const exported = [
     ...records.map(({ name }) => name),
+    ...responses.map(({ name }) => name),
+    ...protocols.map(({ name }) => name),
     ...functions.map(({ pythonName }) => pythonName),
   ]
+    .sort()
     .map((name) => `    ${JSON.stringify(name)},`)
     .join("\n");
   const dataclasses = records.map(pythonDataclass).join("\n\n\n");
+  const responseTypes = responses.map(pythonResponse).join("\n\n\n");
+  const protocolTypes = protocols.map(pythonProtocol).join("\n\n\n");
   const wrappers = functions
-    .map(({ javascriptName, pythonName, parameters }) =>
-      pythonWrapper(javascriptName, pythonName, parameters),
+    .map(({ javascriptName, pythonName, parameters, returnType }) =>
+      pythonWrapper(javascriptName, pythonName, parameters, returnType),
     )
     .join("\n\n\n");
   return [
@@ -250,7 +268,7 @@ function pythonBindings(
     "from collections.abc import Callable",
     "from dataclasses import dataclass, field, fields, is_dataclass",
     "from pathlib import Path",
-    "from typing import Any",
+    "from typing import Any, NotRequired, Protocol, TypedDict",
     "",
     "import pythonmonkey as pm",
     "import pythonmonkey.require",
@@ -357,6 +375,10 @@ function pythonBindings(
     "",
     dataclasses,
     ...(dataclasses ? ["", ""] : []),
+    responseTypes,
+    ...(responseTypes ? ["", ""] : []),
+    protocolTypes,
+    ...(protocolTypes ? ["", ""] : []),
     wrappers,
     "",
     "",
@@ -371,12 +393,16 @@ function pythonBindingsPackage(
   source: string,
   functions: readonly { pythonName: string }[],
   records: readonly PythonRecord[],
+  responses: readonly PythonResponse[],
+  protocols: readonly PythonProtocol[],
   privateBindings: boolean,
 ): string {
   const names = [
     ...records.map(({ name }) => name),
+    ...responses.map(({ name }) => name),
+    ...protocols.map(({ name }) => name),
     ...functions.map(({ pythonName }) => pythonName),
-  ];
+  ].sort();
   const imported = names.map((name) => `    ${name},`).join("\n");
   const exported = names.map((name) => `    ${JSON.stringify(name)},`).join("\n");
   return [
@@ -394,6 +420,7 @@ interface PythonFunctionBinding {
   readonly javascriptName: string;
   readonly parameters: readonly PythonParameter[];
   readonly pythonName: string;
+  readonly returnType: string;
 }
 
 interface PythonParameter {
@@ -417,10 +444,48 @@ interface PythonField {
   readonly type: string;
 }
 
+interface PythonResponse {
+  readonly fields: readonly PythonResponseField[];
+  readonly name: string;
+}
+
+interface PythonResponseField {
+  readonly name: string;
+  readonly required: boolean;
+  readonly type: string;
+}
+
+interface PythonProtocol {
+  readonly methods: readonly PythonProtocolMethod[];
+  readonly name: string;
+}
+
+interface PythonProtocolMethod {
+  readonly name: string;
+  readonly parameters: readonly PythonProtocolParameter[];
+  readonly returnType: string;
+}
+
+interface PythonProtocolParameter {
+  readonly name: string;
+  readonly required: boolean;
+  readonly type: string;
+}
+
+interface PythonFunctionType {
+  readonly parameters: readonly PythonParameter[];
+  readonly returnType: string;
+}
+
 function pythonFunctionTypes(
   entrypoint: string,
   functions: readonly { sourceFile: string; sourceName: string }[],
-): { functions: Map<string, readonly PythonParameter[]>; records: PythonRecord[] } {
+): {
+  functions: Map<string, PythonFunctionType>;
+  protocols: PythonProtocol[];
+  records: PythonRecord[];
+  responses: PythonResponse[];
+} {
   const program = ts.createProgram({
     rootNames: [entrypoint],
     options: {
@@ -429,12 +494,15 @@ function pythonFunctionTypes(
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       noEmit: true,
       skipLibCheck: true,
+      strictNullChecks: true,
       target: ts.ScriptTarget.ESNext,
     },
   });
   const checker = program.getTypeChecker();
   const records = new Map<string, PythonRecord>();
-  const parametersByFunction = new Map<string, readonly PythonParameter[]>();
+  const responses = new Map<string, PythonResponse>();
+  const protocols = new Map<string, PythonProtocol>();
+  const typesByFunction = new Map<string, PythonFunctionType>();
   for (const exported of functions) {
     const sourceFile = program.getSourceFile(exported.sourceFile);
     if (!sourceFile) throw new Error(`TypeScript did not load ${exported.sourceFile}`);
@@ -456,11 +524,25 @@ function pythonFunctionTypes(
         flatten: index === declaration.parameters.length - 1 && !required && Boolean(record),
       };
     });
-    parametersByFunction.set(`${exported.sourceFile}#${exported.sourceName}`, parameters);
+    const signature = checker.getSignatureFromDeclaration(declaration);
+    if (!signature) throw new Error(`Could not resolve signature for ${exported.sourceName}`);
+    const returnType = pythonReturnType(
+      checker,
+      declaration.type ? checker.getTypeFromTypeNode(declaration.type) : signature.getReturnType(),
+      responses,
+      protocols,
+      `${exported.sourceName}.return`,
+    );
+    typesByFunction.set(`${exported.sourceFile}#${exported.sourceName}`, {
+      parameters,
+      returnType,
+    });
   }
   return {
-    functions: parametersByFunction,
+    functions: typesByFunction,
+    protocols: [...protocols.values()].sort((left, right) => left.name.localeCompare(right.name)),
     records: [...records.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    responses: [...responses.values()].sort((left, right) => left.name.localeCompare(right.name)),
   };
 }
 
@@ -528,8 +610,10 @@ function pythonType(
   if (type.flags & ts.TypeFlags.NumberLike) return "int | float";
   if (type.flags & ts.TypeFlags.BooleanLike) return "bool";
   if (type.isUnion()) {
-    const mapped = [...new Set(type.types.map((item) => pythonType(checker, item, records, path)))];
-    return mapped.join(" | ");
+    const mapped = type.types
+      .filter((item) => !(item.flags & ts.TypeFlags.Undefined))
+      .map((item) => pythonType(checker, item, records, path));
+    return pythonUnion(mapped);
   }
   if (checker.isArrayType(type)) {
     const element = checker.getTypeArguments(type as ts.TypeReference)[0];
@@ -548,6 +632,178 @@ function pythonType(
   throw new Error(`${path} uses unsupported TypeScript type ${checker.typeToString(type)}`);
 }
 
+function pythonReturnType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  responses: Map<string, PythonResponse>,
+  protocols: Map<string, PythonProtocol>,
+  path: string,
+): string {
+  if (type.isUnion()) {
+    return pythonUnion(
+      type.types.map((item) => pythonReturnType(checker, item, responses, protocols, path)),
+    );
+  }
+  const symbolName = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+  const targetName = (type as ts.TypeReference).target?.getSymbol()?.getName();
+  if ([symbolName, targetName].some((name) => ["Promise", "PromiseLike"].includes(name ?? ""))) {
+    const [resolved] = checker.getTypeArguments(type as ts.TypeReference);
+    if (!resolved) throw new Error(`${path} promise type could not be resolved`);
+    return pythonReturnType(checker, resolved, responses, protocols, path);
+  }
+  const awaited = checker.getAwaitedType(type) ?? type;
+  if (awaited !== type) return pythonReturnType(checker, awaited, responses, protocols, path);
+  if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return "Any";
+  if (type.flags & (ts.TypeFlags.Void | ts.TypeFlags.Undefined | ts.TypeFlags.Null)) return "None";
+  if (type.flags & ts.TypeFlags.StringLike) return "str";
+  if (type.flags & ts.TypeFlags.NumberLike) return "int | float";
+  if (type.flags & ts.TypeFlags.BooleanLike) return "bool";
+  if (checker.isArrayType(type)) {
+    const element = checker.getTypeArguments(type as ts.TypeReference)[0];
+    if (!element) throw new Error(`${path} array element type could not be resolved`);
+    return `list[${pythonReturnType(checker, element, responses, protocols, `${path}[]`)}]`;
+  }
+  if ([symbolName, targetName].some((name) => ["Map", "ReadonlyMap"].includes(name ?? ""))) {
+    const [key, value] = checker.getTypeArguments(type as ts.TypeReference);
+    if (!key || !value) throw new Error(`${path} map types could not be resolved`);
+    return `dict[${pythonReturnType(checker, key, responses, protocols, `${path}.key`)}, ${pythonReturnType(checker, value, responses, protocols, `${path}.value`)}]`;
+  }
+  if (type.getCallSignatures().length > 0) return "Callable[..., Any]";
+  const stringIndex = checker.getIndexTypeOfType(type, ts.IndexKind.String);
+  if (stringIndex) {
+    return `dict[str, ${pythonReturnType(checker, stringIndex, responses, protocols, `${path}{}`)}]`;
+  }
+  if (!(type.flags & ts.TypeFlags.Object)) {
+    throw new Error(
+      `${path} uses unsupported TypeScript return type ${checker.typeToString(type)}`,
+    );
+  }
+  const properties = checker.getPropertiesOfType(type).filter(publicProperty);
+  const methods = properties.filter((property) => {
+    const declaration = property.valueDeclaration ?? property.declarations?.[0];
+    return Boolean(
+      declaration &&
+      checker.getTypeOfSymbolAtLocation(property, declaration).getCallSignatures().length,
+    );
+  });
+  if (methods.length > 0) {
+    const name = pythonObjectName(type, path, "Result");
+    if (protocols.has(name)) return name;
+    protocols.set(name, { name, methods: [] });
+    const protocolMethods = methods.map((property) => {
+      const declaration = property.valueDeclaration ?? property.declarations?.[0];
+      if (!declaration) throw new Error(`${path}.${property.name} has no TypeScript declaration`);
+      const signatures = checker
+        .getTypeOfSymbolAtLocation(property, declaration)
+        .getCallSignatures();
+      if (signatures.length !== 1) {
+        throw new Error(`${path}.${property.name} must have exactly one call signature`);
+      }
+      const signature = signatures[0];
+      const parameters = signature.getParameters().map((parameter) => {
+        const parameterDeclaration = parameter.valueDeclaration ?? parameter.declarations?.[0];
+        if (!parameterDeclaration) {
+          throw new Error(`${path}.${property.name}.${parameter.name} has no declaration`);
+        }
+        const parameterType = withoutUndefined(
+          checker.getTypeOfSymbolAtLocation(parameter, parameterDeclaration),
+        );
+        return {
+          name: pythonFunctionName(parameter.name),
+          required:
+            !(parameter.flags & ts.SymbolFlags.Optional) &&
+            (!ts.isParameter(parameterDeclaration) ||
+              (!parameterDeclaration.questionToken && !parameterDeclaration.initializer)),
+          type: pythonParameterReturnType(
+            checker,
+            parameterType,
+            responses,
+            protocols,
+            `${path}.${property.name}.${parameter.name}`,
+          ),
+        };
+      });
+      const methodDeclaration = property.declarations?.find(
+        (candidate) => ts.isMethodDeclaration(candidate) || ts.isMethodSignature(candidate),
+      );
+      return {
+        name: pythonFunctionName(property.name),
+        parameters,
+        returnType: pythonReturnType(
+          checker,
+          methodDeclaration?.type
+            ? checker.getTypeFromTypeNode(methodDeclaration.type)
+            : signature.getReturnType(),
+          responses,
+          protocols,
+          `${path}.${property.name}.return`,
+        ),
+      };
+    });
+    protocols.set(name, { name, methods: protocolMethods });
+    return name;
+  }
+  const name = `${pythonObjectName(type, path, "Result")}Response`;
+  if (responses.has(name)) return name;
+  responses.set(name, { name, fields: [] });
+  const fields = properties.map((property) => {
+    const declaration = property.valueDeclaration ?? property.declarations?.[0];
+    if (!declaration) throw new Error(`${path}.${property.name} has no TypeScript declaration`);
+    return {
+      name: property.name,
+      required: !(property.flags & ts.SymbolFlags.Optional),
+      type: pythonReturnType(
+        checker,
+        withoutUndefined(checker.getTypeOfSymbolAtLocation(property, declaration)),
+        responses,
+        protocols,
+        `${path}.${property.name}`,
+      ),
+    };
+  });
+  responses.set(name, { name, fields });
+  return name;
+}
+
+function pythonParameterReturnType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+  responses: Map<string, PythonResponse>,
+  protocols: Map<string, PythonProtocol>,
+  path: string,
+): string {
+  if (!type.isUnion()) return pythonReturnType(checker, type, responses, protocols, path);
+  return pythonUnion(
+    type.types
+      .filter((item) => !(item.flags & ts.TypeFlags.Undefined))
+      .map((item) => pythonReturnType(checker, item, responses, protocols, path)),
+  );
+}
+
+function pythonUnion(types: readonly string[]): string {
+  return [...new Set(types)]
+    .sort((left, right) => (left === "None" ? 1 : right === "None" ? -1 : 0))
+    .join(" | ");
+}
+
+function publicProperty(property: ts.Symbol): boolean {
+  return (property.declarations ?? []).some((declaration) => {
+    const flags = ts.getCombinedModifierFlags(declaration as ts.Declaration);
+    return !(flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected));
+  });
+}
+
+function pythonObjectName(type: ts.Type, path: string, suffix: string): string {
+  const name = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+  if (name && name !== "__type") return name;
+  const identifier = stringUtils.toIdentifierWithOptions({ delimiter: "_" }, path);
+  return `${identifier
+    .split("_")
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join("")}${suffix}`;
+}
+
 function withoutUndefined(type: ts.Type): ts.Type {
   if (!type.isUnion()) return type;
   const retained = type.types.filter((candidate) => !(candidate.flags & ts.TypeFlags.Undefined));
@@ -563,7 +819,7 @@ function pythonDataclass(record: PythonRecord): string {
             ? pythonDefault(field.defaultValue)
             : "default=None";
           return [
-            `    ${field.pythonName}: ${field.type} | None = field(`,
+            `    ${field.pythonName}: ${pythonOptionalType(field.type)} = field(`,
             `        ${defaultArgument},`,
             `        metadata={"javascript_name": ${JSON.stringify(field.javascriptName)}},`,
             "    )",
@@ -572,6 +828,40 @@ function pythonDataclass(record: PythonRecord): string {
         .join("\n")
     : "    pass";
   return `@dataclass(kw_only=True)\nclass ${record.name}:\n${body}`;
+}
+
+function pythonOptionalType(type: string): string {
+  return type.split(" | ").includes("None") ? type : `${type} | None`;
+}
+
+function pythonResponse(response: PythonResponse): string {
+  const body = response.fields.length
+    ? response.fields
+        .map(
+          ({ name, required, type }) => `    ${name}: ${required ? type : `NotRequired[${type}]`}`,
+        )
+        .join("\n")
+    : "    pass";
+  return `class ${response.name}(TypedDict):\n${body}`;
+}
+
+function pythonProtocol(protocol: PythonProtocol): string {
+  const body = protocol.methods.length
+    ? protocol.methods
+        .map((method) => {
+          const parameters = method.parameters.map(
+            ({ name, required, type }) => `        ${name}: ${type}${required ? "" : " = ..."},`,
+          );
+          return [
+            `    async def ${method.name}(`,
+            "        self,",
+            ...parameters,
+            `    ) -> ${method.returnType}: ...`,
+          ].join("\n");
+        })
+        .join("\n\n")
+    : "    pass";
+  return `class ${protocol.name}(Protocol):\n${body}`;
 }
 
 function applyOptionDefaults(
@@ -625,9 +915,10 @@ function pythonWrapper(
   javascriptName: string,
   pythonName: string,
   parameters: readonly PythonParameter[],
+  returnType: string,
 ): string {
   if (parameters.length === 0) {
-    return `async def ${pythonName}() -> Any:\n    return await _invoke(${JSON.stringify(javascriptName)})`;
+    return `async def ${pythonName}() -> ${returnType}:\n    return await _invoke(${JSON.stringify(javascriptName)})`;
   }
   const flattened = parameters.at(-1)?.flatten ? parameters.at(-1) : undefined;
   const positional = flattened ? parameters.slice(0, -1) : parameters;
@@ -662,7 +953,7 @@ function pythonWrapper(
     );
   }
   body.push(`    return await _invoke_positioned(${JSON.stringify(javascriptName)}, arguments)`);
-  return [`async def ${pythonName}(`, ...signature, ") -> Any:", ...body].join("\n");
+  return [`async def ${pythonName}(`, ...signature, `) -> ${returnType}:`, ...body].join("\n");
 }
 
 function writeGenerated(output: string, contents: string, kind: string): void {

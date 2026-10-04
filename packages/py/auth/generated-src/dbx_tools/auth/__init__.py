@@ -3,11 +3,17 @@
 # Hand edits are overwritten; this file is read-only.
 
 from .node_bindings import (
+    AccessTokenResponse,
+    AuthClient,
     AuthOptions,
     CredentialStore,
     DatabricksAuthDependencies,
     DatabricksAuthOptions,
+    DatabricksAuthStatusResponse,
     DatabricksProfile,
+    DatabricksProfileResponse,
+    DatabricksProfileSummaryResponse,
+    PersistentAuth,
     config_profile_exists,
     create_auth_client,
     create_persistent_auth,
@@ -21,11 +27,17 @@ from .node_bindings import (
 )
 
 __all__ = [
+    "AccessTokenResponse",
+    "AuthClient",
     "AuthOptions",
     "CredentialStore",
     "DatabricksAuthDependencies",
     "DatabricksAuthOptions",
+    "DatabricksAuthStatusResponse",
     "DatabricksProfile",
+    "DatabricksProfileResponse",
+    "DatabricksProfileSummaryResponse",
+    "PersistentAuth",
     "config_profile_exists",
     "create_auth_client",
     "create_persistent_auth",

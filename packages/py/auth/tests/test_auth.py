@@ -6,10 +6,15 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import get_type_hints
 
 from dbx_tools.auth import (
+    AccessTokenResponse,
+    AuthClient,
     AuthOptions,
     DatabricksAuthOptions,
+    PersistentAuth,
+    create_auth_client,
     create_persistent_auth,
     normalize_host,
 )
@@ -24,6 +29,9 @@ async def test_generated_function_wrapper_calls_embedded_runtime() -> None:
 
 
 def test_generated_package_exposes_ambient_auth_client() -> None:
+    assert get_type_hints(create_auth_client)["return"] is AuthClient
+    assert get_type_hints(AuthClient.token)["return"] is AccessTokenResponse
+    assert get_type_hints(create_persistent_auth)["return"] is PersistentAuth
     script = """
 import asyncio
 import json

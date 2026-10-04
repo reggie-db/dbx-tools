@@ -91,6 +91,10 @@ optional record can be passed as the dataclass, a dictionary, or direct
 snake-case keyword fields. Generation fails fast when a type cannot be
 represented safely in Python.
 
+Generated return contracts are typed as well. `create_auth_client()` returns an
+`AuthClient` protocol, `create_persistent_auth()` returns `PersistentAuth`, and
+token/profile records use exported `TypedDict` response types instead of `Any`.
+
 ## Debugging
 
 Set `LOG_LEVEL=debug` to receive the shared JavaScript lifecycle logs through

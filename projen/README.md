@@ -175,6 +175,11 @@ trailing optional record can be passed as the dataclass, a dictionary, or direct
 snake-case keyword fields. Generation fails with the property path when a type
 cannot be represented safely in Python.
 
+Return types use the same compiler model. Plain records become generated
+`TypedDict` responses, returned clients and class instances become `Protocol`
+types with typed async methods, and primitives, arrays, maps, promises, and
+optional values retain their corresponding Python annotations.
+
 The workspace creates `<name>:python-runtime`,
 `<name>:python-runtime:check`, and, for workspace Node dependencies,
 `<name>:python-runtime:watch`. The root sync watcher includes the watch task.

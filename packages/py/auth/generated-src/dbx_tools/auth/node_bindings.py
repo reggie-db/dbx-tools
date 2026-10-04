@@ -8,7 +8,7 @@ import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, Protocol, TypedDict
 
 import pythonmonkey as pm
 import pythonmonkey.require
@@ -313,10 +313,124 @@ class DatabricksProfile:
     )
 
 
+class AccessTokenResponse(TypedDict):
+    accessToken: str
+    tokenType: str
+    expiry: NotRequired[str]
+    scopes: list[str]
+
+
+class DatabricksAuthStatusResponse(TypedDict):
+    profile: str
+    host: str
+    storage: str
+
+
+class DatabricksProfileResponse(TypedDict):
+    host: str
+    authType: NotRequired[str]
+    clientId: str
+    groupId: NotRequired[str]
+    scopes: list[str]
+    clientSecret: NotRequired[str]
+    accessToken: NotRequired[str]
+    cacheKey: str
+    principal: str
+    name: str
+    accountId: NotRequired[str]
+    workspaceId: NotRequired[str]
+    target: str
+    authKind: str
+
+
+class DatabricksProfileSummaryResponse(TypedDict):
+    name: str
+    host: NotRequired[str]
+    accountId: NotRequired[str]
+    workspaceId: NotRequired[str]
+    target: str
+    authKind: str
+
+
+class AuthClient(Protocol):
+    async def token(
+        self,
+        login: bool = ...,
+    ) -> AccessTokenResponse: ...
+
+    async def authenticate(
+        self,
+        login: bool = ...,
+    ) -> dict[str, str]: ...
+
+
+class PersistentAuth(Protocol):
+    async def challenge(
+        self,
+    ) -> None: ...
+
+    async def token(
+        self,
+        login: bool = ...,
+    ) -> AccessTokenResponse: ...
+
+    async def authenticate(
+        self,
+        login: bool = ...,
+    ) -> dict[str, str]: ...
+
+    async def authorization_header_for_url(
+        self,
+        request_url: str,
+        login: bool = ...,
+    ) -> str | None: ...
+
+    async def request_headers_for_url(
+        self,
+        request_url: str,
+        login: bool = ...,
+    ) -> dict[str, str]: ...
+
+    async def force_refresh_token(
+        self,
+        login: bool = ...,
+    ) -> AccessTokenResponse: ...
+
+    async def refresh_rejected_token(
+        self,
+        stale_access_token: str,
+        login: bool = ...,
+    ) -> AccessTokenResponse: ...
+
+    async def logout(
+        self,
+    ) -> None: ...
+
+    async def status(
+        self,
+    ) -> DatabricksAuthStatusResponse: ...
+
+    async def principal(
+        self,
+    ) -> str: ...
+
+    async def workspace_id(
+        self,
+    ) -> str | None: ...
+
+    async def auth_kind(
+        self,
+    ) -> str: ...
+
+    async def profile(
+        self,
+    ) -> DatabricksProfileResponse: ...
+
+
 async def config_profile_exists(
     profile: str,
     config_file: str | object = _MISSING,
-) -> Any:
+) -> bool:
     arguments: list[tuple[int, Any]] = []
     arguments.append((0, profile))
     if config_file is not _MISSING:
@@ -324,7 +438,7 @@ async def config_profile_exists(
     return await _invoke_positioned("configProfileExists", arguments)
 
 
-async def create_auth_client() -> Any:
+async def create_auth_client() -> AuthClient:
     return await _invoke("createAuthClient")
 
 
@@ -333,7 +447,7 @@ async def create_persistent_auth(
     storage: str | object = _MISSING,
     dependencies: DatabricksAuthDependencies | dict[str, Any] | None | object = _MISSING,
     **kwargs: Any,
-) -> Any:
+) -> PersistentAuth:
     arguments: list[tuple[int, Any]] = []
     if options is not _MISSING:
         arguments.append((0, options))
@@ -355,7 +469,7 @@ async def create_persistent_auth_with_storage(
     dependencies: DatabricksAuthDependencies | dict[str, Any] | None | object = _MISSING,
     resolved_profile: DatabricksProfile | dict[str, Any] | None | object = _MISSING,
     **kwargs: Any,
-) -> Any:
+) -> PersistentAuth:
     arguments: list[tuple[int, Any]] = []
     arguments.append((0, options))
     arguments.append((1, store))
@@ -374,7 +488,7 @@ async def create_persistent_auth_with_storage(
 
 async def invalidate_config_file(
     config_file: str | object = _MISSING,
-) -> Any:
+) -> None:
     arguments: list[tuple[int, Any]] = []
     if config_file is not _MISSING:
         arguments.append((0, config_file))
@@ -385,7 +499,7 @@ async def list_databricks_profiles(
     config_file: str | object = _MISSING,
     refresh: bool | object = _MISSING,
     environment: dict[str, str] | object = _MISSING,
-) -> Any:
+) -> list[DatabricksProfileSummaryResponse]:
     arguments: list[tuple[int, Any]] = []
     if config_file is not _MISSING:
         arguments.append((0, config_file))
@@ -399,7 +513,7 @@ async def list_databricks_profiles(
 async def normalize_host(
     value: str,
     profile: str | object = _MISSING,
-) -> Any:
+) -> str:
     arguments: list[tuple[int, Any]] = []
     arguments.append((0, value))
     if profile is not _MISSING:
@@ -409,7 +523,7 @@ async def normalize_host(
 
 async def parse_databricks_config(
     source: str,
-) -> Any:
+) -> dict[str, dict[str, str]]:
     arguments: list[tuple[int, Any]] = []
     arguments.append((0, source))
     return await _invoke_positioned("parseDatabricksConfig", arguments)
@@ -418,7 +532,7 @@ async def parse_databricks_config(
 async def resolve_config_file(
     explicit: str | object = _MISSING,
     environment: dict[str, str] | object = _MISSING,
-) -> Any:
+) -> str:
     arguments: list[tuple[int, Any]] = []
     if explicit is not _MISSING:
         arguments.append((0, explicit))
@@ -430,7 +544,7 @@ async def resolve_config_file(
 async def resolve_databricks_profile(
     options: DatabricksAuthOptions | dict[str, Any] | None,
     environment: dict[str, str] | object = _MISSING,
-) -> Any:
+) -> DatabricksProfileResponse:
     arguments: list[tuple[int, Any]] = []
     arguments.append((0, options))
     if environment is not _MISSING:
@@ -439,11 +553,17 @@ async def resolve_databricks_profile(
 
 
 __all__ = [
+    "AccessTokenResponse",
+    "AuthClient",
     "AuthOptions",
     "CredentialStore",
     "DatabricksAuthDependencies",
     "DatabricksAuthOptions",
+    "DatabricksAuthStatusResponse",
     "DatabricksProfile",
+    "DatabricksProfileResponse",
+    "DatabricksProfileSummaryResponse",
+    "PersistentAuth",
     "config_profile_exists",
     "create_auth_client",
     "create_persistent_auth",
