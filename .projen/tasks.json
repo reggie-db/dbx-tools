@@ -373,7 +373,7 @@
       "description": "Rebuild and upload a complete draft release candidate",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-candidate.ts",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-candidate.ts --python-root \"packages/py\"",
           "receiveArgs": true
         }
       ]

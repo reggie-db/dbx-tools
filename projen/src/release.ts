@@ -353,7 +353,13 @@ export class DBXToolsRelease extends Component {
                 "Prepare, validate, locally publish, and upload a draft release candidate",
             },
             "release:assets": {
-              exec: taskScript(project, "release-candidate.ts"),
+              exec: taskScript(
+                project,
+                "release-candidate.ts",
+                options.pythonRoot
+                  ? `--python-root ${JSON.stringify(options.pythonRoot)}`
+                  : undefined,
+              ),
               receiveArgs: true,
               description: "Rebuild and upload a complete draft release candidate",
             },

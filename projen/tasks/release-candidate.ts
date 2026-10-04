@@ -244,6 +244,7 @@ function ensureDraftRelease(options: {
 /** Build the exact release candidate and optionally attach it to a draft release. */
 export function buildReleaseCandidate(options: {
   readonly root: string;
+  readonly pythonRoot: string;
   readonly sha: string;
   readonly tag: string;
   readonly version: string;
@@ -285,7 +286,7 @@ export function buildReleaseCandidate(options: {
     "--output",
     "dist/release/npm-workspace",
   ]);
-  const pythonRoot = join(root, "packages/py");
+  const pythonRoot = resolve(root, options.pythonRoot);
   if (existsSync(pythonRoot)) {
     buildPythonProjects({
       allowEmpty: true,
@@ -372,6 +373,7 @@ if (import.meta.main) {
     .requiredOption("--tag <tag>", "annotated release tag")
     .requiredOption("--sha <sha>", "exact release commit")
     .option("--root <path>", "repository root")
+    .option("--python-root <path>", "Python package root", "packages/py")
     .option("--notes-file <path>", "draft release notes file")
     .option("--upload", "create or update the draft GitHub Release after building")
     .option("--upload-existing", "upload the existing verified candidate without rebuilding")
@@ -381,12 +383,14 @@ if (import.meta.main) {
         tag: string;
         sha: string;
         root?: string;
+        pythonRoot: string;
         notesFile?: string;
         upload?: boolean;
         uploadExisting?: boolean;
       }) => {
         const candidateOptions = {
           root: options.root ?? projectUtils.root() ?? process.cwd(),
+          pythonRoot: options.pythonRoot,
           sha: options.sha,
           tag: options.tag,
           version: options.version,
