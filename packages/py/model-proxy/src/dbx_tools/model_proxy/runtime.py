@@ -58,8 +58,13 @@ class ModelProxyRuntime:
             for endpoint, model_metadata in zip(ordered, metadata, strict=True)
         ]
 
-    async def lookup(self, query: Mapping[str, Any]) -> list[dict[str, Any]]:
-        return await self.client.search_models(dict(query))
+    async def lookup(
+        self,
+        query: Mapping[str, Any],
+        *,
+        refresh: bool = False,
+    ) -> list[dict[str, Any]]:
+        return await self.client.search_models(dict(query), refresh)
 
     async def status(self) -> dict[str, Any]:
         return await self.client.status()

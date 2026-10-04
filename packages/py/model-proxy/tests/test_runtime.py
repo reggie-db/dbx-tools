@@ -57,3 +57,12 @@ async def test_runtime_exposes_status_and_profiles() -> None:
 
     assert await runtime.status() == {"profile": "TEST"}
     assert await runtime.profiles() == [{"name": "TEST"}]
+
+
+@pytest.mark.asyncio
+async def test_lookup_forwards_query_and_refresh() -> None:
+    runtime = ModelProxyRuntime(FakeClient())  # type: ignore[arg-type]
+
+    assert await runtime.lookup({"search": "gpt"}, refresh=False) == [
+        {"endpoint": {"name": "chat-model"}, "modelClass": "chat-fast"}
+    ]

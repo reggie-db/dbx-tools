@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any
 
 from fastapi import Depends, HTTPException, Query, Request, Response
@@ -24,6 +25,12 @@ _REASONING_DESCRIPTIONS = {
     "xhigh": "Use an extra-high reasoning budget",
     "max": "Use the largest available reasoning budget",
 }
+_ROUTED_API_SUFFIXES = (
+    "/chat/completions",
+    "/completions",
+    "/embeddings",
+    "/responses",
+)
 
 
 def install_models_api() -> None:
@@ -33,6 +40,7 @@ def install_models_api() -> None:
     if getattr(app.state, "dbx_models_api", False):
         return
     app.state.dbx_models_api = True
+    _disable_litellm_ui(app)
 
     @app.get("/api/healthz", include_in_schema=False)
     async def health() -> dict[str, bool]:
@@ -70,11 +78,43 @@ def install_models_api() -> None:
         tags=["model management"],
     )
     async def lookup_models(
-        search: str | None = None,
-        model_class: str | None = Query(default=None, alias="modelClass"),
-        requires_tools: bool | None = Query(default=None, alias="requiresTools"),
-        limit: int | None = None,
-        threshold: float | None = None,
+        search: str | None = Query(
+            default=None,
+            description="Optional fuzzy model-name search. Lower scores are closer matches.",
+        ),
+        model_class: str | None = Query(
+            default=None,
+            alias="modelClass",
+            description=(
+                "Model-class ceiling: chat-thinking, chat-balanced, chat-fast, or embedding."
+            ),
+        ),
+        requires_tools: bool | None = Query(
+            default=None,
+            alias="requiresTools",
+            description="Only return endpoints with complete tool-calling support.",
+        ),
+        include_deprecated: bool | None = Query(
+            default=None,
+            alias="includeDeprecated",
+            description="Include retired or deprecated endpoints in ranking.",
+        ),
+        limit: int | None = Query(
+            default=None,
+            ge=1,
+            le=50,
+            description="Maximum number of ranked matches.",
+        ),
+        threshold: float | None = Query(
+            default=None,
+            ge=0,
+            le=1,
+            description="Maximum fuzzy-match distance, where zero is exact.",
+        ),
+        refresh: bool = Query(
+            default=False,
+            description="Refresh the workspace model catalogue before ranking.",
+        ),
     ) -> list[dict[str, Any]]:
         query = {
             key: value
@@ -82,12 +122,13 @@ def install_models_api() -> None:
                 "search": search,
                 "modelClass": model_class,
                 "requiresTools": requires_tools,
+                "includeDeprecated": include_deprecated,
                 "limit": limit,
                 "threshold": threshold,
             }.items()
             if value is not None
         }
-        return await (await get_runtime()).lookup(query)
+        return await (await get_runtime()).lookup(query, refresh=refresh)
 
     @app.middleware("http")
     async def dynamic_models(request: Request, call_next: Any) -> Response:
@@ -102,7 +143,13 @@ def install_models_api() -> None:
         )
         return JSONResponse(payload, status_code=response.status_code, headers=_headers(response))
 
+    base_openapi = app.openapi
     app.openapi_schema = None
+
+    def dbx_openapi() -> dict[str, Any]:
+        return _inject_openapi(base_openapi())
+
+    app.openapi = dbx_openapi
 
 
 def list_models_payload(
@@ -241,6 +288,97 @@ def _is_codex_originator(value: object) -> bool:
 
 def _mapping(value: object) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _disable_litellm_ui(app: Any) -> None:
+    app.router.routes[:] = [
+        route for route in app.router.routes if not _is_litellm_ui_path(getattr(route, "path", ""))
+    ]
+
+
+def _is_litellm_ui_path(path: str) -> bool:
+    normalized = f"/{path.strip('/')}"
+    segments = normalized.strip("/").split("/")
+    return (
+        normalized in {"/login", "/logout", "/onboarding"}
+        or normalized.startswith(("/ui/", "/_next/", "/litellm-asset-prefix/", "/sso/"))
+        or normalized == "/ui"
+        or any(
+            segment == "ui" or segment.startswith("ui_") or segment.endswith("_ui")
+            for segment in segments
+        )
+        or "litellm-ui-config" in normalized
+    )
+
+
+def _inject_openapi(schema: dict[str, Any]) -> dict[str, Any]:
+    paths = schema.setdefault("paths", {})
+    for path in list(paths):
+        if _is_litellm_ui_path(path):
+            del paths[path]
+
+    lookup = _mapping(_mapping(paths.get("/lookup")).get("get"))
+    parameters = lookup.get("parameters")
+    if not isinstance(parameters, list):
+        return schema
+
+    properties: dict[str, Any] = {}
+    for parameter in parameters:
+        if not isinstance(parameter, Mapping) or parameter.get("in") != "query":
+            continue
+        name = parameter.get("name")
+        parameter_schema = parameter.get("schema")
+        if not isinstance(name, str) or not isinstance(parameter_schema, Mapping):
+            continue
+        property_schema = deepcopy(dict(parameter_schema))
+        description = parameter.get("description")
+        if isinstance(description, str):
+            property_schema["description"] = description
+        properties[name] = property_schema
+
+    components = schema.setdefault("components", {}).setdefault("schemas", {})
+    components["DbxToolsModelLookupParameters"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "description": (
+            "dbx-tools model discovery and ranking controls. Use GET /lookup before an "
+            "inference request when a client needs ranked candidates rather than fuzzy model "
+            "resolution alone."
+        ),
+        "properties": properties,
+    }
+    routing_extension = {
+        "lookupPath": "/lookup",
+        "lookupOperationId": lookup.get("operationId", "lookupDatabricksModels"),
+        "parameters": {"$ref": "#/components/schemas/DbxToolsModelLookupParameters"},
+    }
+    for path, path_item in paths.items():
+        if not path.endswith(_ROUTED_API_SUFFIXES) or not isinstance(path_item, Mapping):
+            continue
+        for method in ("post",):
+            operation = path_item.get(method)
+            if not isinstance(operation, dict):
+                continue
+            operation["x-dbx-tools-model-routing"] = routing_extension
+            model_schema = _request_model_schema(operation)
+            if model_schema is not None:
+                model_schema["description"] = (
+                    "Exact Databricks endpoint name or fuzzy model intent resolved through the "
+                    "dbx-tools ranked workspace catalogue."
+                )
+                model_schema["x-dbx-tools-lookup"] = {"$ref": "#/paths/~1lookup/get"}
+    schema["x-dbx-tools"] = {"modelRouting": routing_extension, "uiEnabled": False}
+    return schema
+
+
+def _request_model_schema(operation: Mapping[str, Any]) -> dict[str, Any] | None:
+    request_body = _mapping(operation.get("requestBody"))
+    content = _mapping(request_body.get("content"))
+    media_type = _mapping(content.get("application/json"))
+    body_schema = _mapping(media_type.get("schema"))
+    properties = _mapping(body_schema.get("properties"))
+    model = properties.get("model")
+    return model if isinstance(model, dict) else None
 
 
 def _headers(response: Response) -> dict[str, str]:

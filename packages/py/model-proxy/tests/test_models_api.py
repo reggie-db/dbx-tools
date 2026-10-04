@@ -1,7 +1,9 @@
 from dbx_tools.model_proxy.models_api import (
     _codex_model,
     _deprecated,
+    _inject_openapi,
     _is_codex_originator,
+    _is_litellm_ui_path,
     _openai_model,
     list_models_payload,
 )
@@ -110,3 +112,59 @@ def test_codex_payload_preserves_openai_models_and_filters_unsupported() -> None
 def test_codex_originator_is_case_insensitive() -> None:
     assert _is_codex_originator(" Codex CLI ") is True
     assert _is_codex_originator("other") is False
+
+
+def test_litellm_ui_paths_are_disabled_without_hiding_swagger() -> None:
+    assert _is_litellm_ui_path("/ui") is True
+    assert _is_litellm_ui_path("/get/ui_settings") is True
+    assert _is_litellm_ui_path("/.well-known/litellm-ui-config") is True
+    assert _is_litellm_ui_path("/login") is True
+    assert _is_litellm_ui_path("/openapi.json") is False
+
+
+def test_openapi_injects_lookup_controls_into_inference_routes() -> None:
+    schema = {
+        "paths": {
+            "/ui": {"get": {}},
+            "/get/ui_settings": {"get": {}},
+            "/lookup": {
+                "get": {
+                    "operationId": "lookupDatabricksModels",
+                    "parameters": [
+                        {
+                            "name": "threshold",
+                            "in": "query",
+                            "description": "Maximum fuzzy distance.",
+                            "schema": {"type": "number", "minimum": 0, "maximum": 1},
+                        }
+                    ],
+                }
+            },
+            "/v1/chat/completions": {
+                "post": {
+                    "requestBody": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {"model": {"type": "string"}},
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    }
+
+    injected = _inject_openapi(schema)
+
+    assert "/ui" not in injected["paths"]
+    assert "/get/ui_settings" not in injected["paths"]
+    lookup = injected["components"]["schemas"]["DbxToolsModelLookupParameters"]
+    assert lookup["properties"]["threshold"]["maximum"] == 1
+    operation = injected["paths"]["/v1/chat/completions"]["post"]
+    assert operation["x-dbx-tools-model-routing"]["lookupPath"] == "/lookup"
+    model = operation["requestBody"]["content"]["application/json"]["schema"]["properties"]["model"]
+    assert "fuzzy model intent" in model["description"]
+    assert injected["x-dbx-tools"]["uiEnabled"] is False
