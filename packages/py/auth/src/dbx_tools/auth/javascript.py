@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pythonmonkey as pm
-import pythonmonkey.require  # noqa: F401
+import pythonmonkey.require
 
 _CONSTRUCT = pm.eval("(constructor, args) => Reflect.construct(constructor, args)")
 _INVOKE = pm.eval("(target, method, args) => Reflect.apply(target[method], target, args)")
