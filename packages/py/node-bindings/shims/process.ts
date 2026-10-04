@@ -1,3 +1,7 @@
+import { installPythonGlobals } from "./host.ts";
+
+installPythonGlobals();
+
 export default process;
 export const arch = process.arch;
 export const argv = process.argv;

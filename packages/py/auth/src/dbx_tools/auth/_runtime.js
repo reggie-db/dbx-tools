@@ -1671,12 +1671,146 @@ var require_buffer = __commonJS((exports2) => {
 });
 
 // packages/py/node-bindings/shims/host.ts
+function evaluate(source) {
+  return python.eval(source);
+}
+function installPythonGlobals() {
+  const globals = globalThis;
+  globals.global = globalThis;
+  globals.self = globalThis;
+  globals.window = globalThis;
+  globals.process ??= {
+    arch: String(evaluate("__import__('platform').machine")()).replace("aarch64", "arm64").replace("x86_64", "x64"),
+    argv: [],
+    browser: true,
+    cwd: evaluate("__import__('os').getcwd"),
+    env: evaluate("lambda: dict(__import__('os').environ)")(),
+    nextTick: (callback, ...args) => Promise.resolve().then(() => callback(...args)),
+    platform: { Darwin: "darwin", Linux: "linux", Windows: "win32" }[String(evaluate("__import__('platform').system")())],
+    version: "v22.0.0",
+    versions: {}
+  };
+}
 function pythonHost() {
-  const host = globalThis.__dbxToolsPython;
-  if (!host)
-    throw new Error("dbx-tools Python runtime host is unavailable");
   return host;
 }
+var python, toThread, osPath, readBytes, readText, writeBytes, mkdir, listDirectory, statPath, runProcess, requestHttp, host;
+var init_host = __esm(() => {
+  python = globalThis.python;
+  if (!python)
+    throw new Error("PythonMonkey globalThis.python is unavailable");
+  toThread = evaluate("__import__('asyncio').to_thread");
+  osPath = {
+    basename: evaluate("__import__('os').path.basename"),
+    dirname: evaluate("__import__('os').path.dirname"),
+    exists: evaluate("__import__('os').path.exists"),
+    isAbsolute: evaluate("__import__('os').path.isabs"),
+    join: evaluate("lambda parts: __import__('os').path.join(*list(parts))"),
+    realpath: evaluate("__import__('os').path.realpath"),
+    relative: evaluate("__import__('os').path.relpath"),
+    resolve: evaluate("lambda parts: __import__('os').path.abspath(__import__('os').path.join(*list(parts))) if list(parts) else __import__('os').getcwd()")
+  };
+  readBytes = evaluate("lambda path: list(open(path, 'rb').read())");
+  readText = evaluate("lambda path: open(path, encoding='utf-8').read()");
+  writeBytes = evaluate("lambda path, content: open(path, 'wb').write(bytes(int(value) for value in content))");
+  mkdir = evaluate("lambda path, recursive: __import__('os').makedirs(path, exist_ok=recursive) if recursive else __import__('os').mkdir(path)");
+  listDirectory = evaluate("lambda path: [{'name': entry.name, 'directory': entry.is_dir(), 'file': entry.is_file()} for entry in __import__('pathlib').Path(path).iterdir()]");
+  statPath = evaluate("lambda path: {'directory': __import__('os').path.isdir(path), 'file': __import__('os').path.isfile(path), 'mode': __import__('os').stat(path).st_mode, 'mtimeMs': __import__('os').stat(path).st_mtime * 1000, 'size': __import__('os').stat(path).st_size}");
+  runProcess = evaluate("lambda command, args, environment, input_text, timeout: __import__('subprocess').run([command, *list(args)], env=dict(environment) if environment is not None else None, input=input_text, text=True, capture_output=True, timeout=(timeout / 1000) if timeout is not None else None)");
+  requestHttp = evaluate("lambda url, method, headers, body, timeout: __import__('httpx').request(method or 'GET', url, headers=dict(headers) if headers is not None else None, content=body, timeout=(timeout / 1000) if timeout is not None else 30, follow_redirects=True)");
+  host = {
+    crypto: {
+      randomBytes: evaluate("lambda length: list(__import__('os').urandom(int(length)))"),
+      sha256: evaluate("lambda content: __import__('hashlib').sha256(bytes(int(value) for value in content)).hexdigest()")
+    },
+    file: {
+      async chmod(path, mode) {
+        await toThread(evaluate("__import__('os').chmod"), path, Math.trunc(mode));
+      },
+      async copy(source, destination) {
+        await toThread(evaluate("__import__('shutil').copyfile"), source, destination);
+      },
+      exists: (path) => Boolean(osPath.exists(path)),
+      async mkdir(path, recursive) {
+        if (osPath.exists(path))
+          return false;
+        await toThread(mkdir, path, recursive);
+        return true;
+      },
+      async mkdtemp(prefix) {
+        return toThread(evaluate("__import__('tempfile').mkdtemp"), undefined, prefix);
+      },
+      async readBytes(path) {
+        return toThread(readBytes, path);
+      },
+      async readDirectory(path) {
+        return toThread(listDirectory, path);
+      },
+      readTextSync: (path) => String(readText(path)),
+      async realpath(path) {
+        return String(await toThread(osPath.realpath, path));
+      },
+      async remove(path, recursive, force) {
+        if (!osPath.exists(path)) {
+          if (!force)
+            throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
+          return;
+        }
+        const isDirectory = evaluate("__import__('os').path.isdir")(path);
+        const operation = isDirectory ? recursive ? evaluate("__import__('shutil').rmtree") : evaluate("__import__('os').rmdir") : evaluate("__import__('os').unlink");
+        await toThread(operation, path);
+      },
+      async rename(source, destination) {
+        await toThread(evaluate("__import__('os').replace"), source, destination);
+      },
+      async stat(path) {
+        return toThread(statPath, path);
+      },
+      async touch(path, atimeMs, mtimeMs) {
+        await toThread(evaluate("lambda path, atime, mtime: __import__('os').utime(path, (atime / 1000, mtime / 1000))"), path, atimeMs, mtimeMs);
+      },
+      async writeBytes(path, content, mode) {
+        await toThread(writeBytes, path, content);
+        if (mode !== undefined)
+          await toThread(evaluate("__import__('os').chmod"), path, Math.trunc(mode));
+      }
+    },
+    http: {
+      async fetch(url, method, headers, body, timeoutMs) {
+        const response = await toThread(requestHttp, url, method, headers, body, timeoutMs);
+        return {
+          status: response.status_code,
+          headers: Object.fromEntries(Object.entries(response.headers)),
+          body: Array.from(response.content)
+        };
+      }
+    },
+    os: {
+      homedir: evaluate("lambda: __import__('pathlib').Path.home().as_posix()"),
+      tmpdir: evaluate("__import__('tempfile').gettempdir")
+    },
+    path: {
+      basename: (path) => String(osPath.basename(path)),
+      dirname: (path) => String(osPath.dirname(path)),
+      fileUrlToPath: evaluate("lambda url: __import__('urllib.parse', fromlist=['urlparse']).unquote(__import__('urllib.parse', fromlist=['urlparse']).urlparse(url).path)"),
+      isAbsolute: (path) => Boolean(osPath.isAbsolute(path)),
+      join: (parts) => String(osPath.join(parts)),
+      relative: (from, to) => String(osPath.relative(to, from)),
+      resolve: (parts) => String(osPath.resolve(parts))
+    },
+    process: {
+      async run(command, args, environment, input, timeoutMs) {
+        const result = await toThread(runProcess, command, args, environment, input, timeoutMs);
+        return {
+          exitCode: result.returncode,
+          ...result.stdout?.trim() ? { stdout: result.stdout.trim() } : {},
+          ...result.stderr?.trim() ? { stderr: result.stderr.trim() } : {}
+        };
+      }
+    }
+  };
+  installPythonGlobals();
+});
 
 // packages/py/node-bindings/shims/path.ts
 var exports_path = {};
@@ -1736,6 +1870,7 @@ function resolve(...parts) {
 }
 var sep = "/", delimiter, posix, win32, path_default;
 var init_path = __esm(() => {
+  init_host();
   delimiter = process.platform === "win32" ? ";" : ":";
   posix = {
     basename,
@@ -6990,7 +7125,7 @@ __export(exports_fs_promises, {
   readFile: () => readFile,
   open: () => open,
   mkdtemp: () => mkdtemp,
-  mkdir: () => mkdir,
+  mkdir: () => mkdir2,
   default: () => fs_promises_default,
   copyFile: () => copyFile,
   chmod: () => chmod
@@ -7004,7 +7139,7 @@ async function chmod(path, mode) {
 async function copyFile(source, destination) {
   await pythonHost().file.copy(String(source), String(destination));
 }
-async function mkdir(path, options = {}) {
+async function mkdir2(path, options = {}) {
   const created = await pythonHost().file.mkdir(String(path), options.recursive === true);
   if (!created && !options.recursive)
     throw nodeError(new Error(`EEXIST: ${path}`), "EEXIST", path);
@@ -7062,10 +7197,11 @@ async function open() {
 }
 var fs_promises_default;
 var init_fs_promises = __esm(() => {
+  init_host();
   fs_promises_default = {
     chmod,
     copyFile,
-    mkdir,
+    mkdir: mkdir2,
     mkdtemp,
     open,
     readFile,
@@ -7535,7 +7671,7 @@ __export(exports_fs, {
   promises: () => exports_fs_promises,
   openSync: () => openSync,
   open: () => open2,
-  mkdir: () => mkdir2,
+  mkdir: () => mkdir3,
   lstat: () => lstat,
   existsSync: () => existsSync,
   default: () => fs_default,
@@ -7574,10 +7710,10 @@ function createWriteStream(path, options = {}) {
     }
   });
 }
-function mkdir2(path, options, done) {
+function mkdir3(path, options, done) {
   const settings = typeof options === "function" ? {} : options;
   const callbackValue = typeof options === "function" ? options : done;
-  callback(mkdir(path, settings).then(() => {
+  callback(mkdir2(path, settings).then(() => {
     return;
   }), callbackValue ?? (() => {}));
 }
@@ -7614,6 +7750,7 @@ function closeSync() {}
 var import_node_stream2, lstat, constants, fs_default;
 var init_fs = __esm(() => {
   init_fs_promises();
+  init_host();
   import_node_stream2 = __toESM(require_stream_browserify(), 1);
   lstat = stat2;
   constants = {
@@ -7629,7 +7766,7 @@ var init_fs = __esm(() => {
     createWriteStream,
     existsSync,
     lstat,
-    mkdir: mkdir2,
+    mkdir: mkdir3,
     open: open2,
     openSync,
     promises: exports_fs_promises,
@@ -19946,8 +20083,31 @@ __export(exports_dbx_tools_python_entry, {
 module.exports = __toCommonJS(exports_dbx_tools_python_entry);
 
 // packages/py/node-bindings/shims/bootstrap.ts
+init_host();
 var import_node_buffer = __toESM(require_buffer(), 1);
+installPythonGlobals();
 globalThis.Buffer = import_node_buffer.Buffer;
+var globals = globalThis;
+globals.TextEncoder ??= class TextEncoder2 {
+  encode(value) {
+    const encoded = unescape(encodeURIComponent(String(value)));
+    return Uint8Array.from(encoded, (character) => character.charCodeAt(0));
+  }
+};
+globals.TextDecoder ??= class TextDecoder2 {
+  decode(value) {
+    const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : value ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : new Uint8Array;
+    const encoded = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+    return decodeURIComponent(escape(encoded));
+  }
+};
+globals.fetch ??= async (input, init = {}) => {
+  const response = await pythonHost().http.fetch(String(input), init.method, init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : undefined, typeof init.body === "string" ? init.body : undefined);
+  return new Response(Uint8Array.from(response.body), {
+    status: response.status,
+    headers: response.headers
+  });
+};
 
 // packages/js/node/auth/src/databricks-auth.ts
 var exports_databricks_auth = {};
@@ -19958,6 +20118,7 @@ __export(exports_databricks_auth, {
 });
 
 // packages/py/node-bindings/shims/os.ts
+init_host();
 function homedir() {
   return pythonHost().os.homedir();
 }
@@ -20435,15 +20596,15 @@ function isDatabricksAppEnv(source = process.env) {
   if (override !== undefined)
     return override;
   const name = source.DATABRICKS_APP_NAME?.trim();
-  const host = source.DATABRICKS_HOST?.trim();
+  const host2 = source.DATABRICKS_HOST?.trim();
   const port = source.DATABRICKS_APP_PORT?.trim();
-  if (!name || /\$\{[^}]+\}/.test(name) || !host || !port || !/^\d+$/.test(port))
+  if (!name || /\$\{[^}]+\}/.test(name) || !host2 || !port || !/^\d+$/.test(port))
     return false;
   const parsedPort = Number(port);
   if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > MAX_TCP_PORT)
     return false;
   try {
-    const url = new URL(host);
+    const url = new URL(host2);
     return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
   } catch {
     return false;
@@ -20481,6 +20642,7 @@ __export(exports_databricks_cli, {
 init_path();
 
 // packages/py/node-bindings/shims/child-process.ts
+init_host();
 var import_node_events = __toESM(require_events(), 1);
 var import_node_stream = __toESM(require_stream_browserify(), 1);
 
@@ -20539,6 +20701,8 @@ function execFile(command, args, _options, callback) {
 }
 
 // packages/py/node-bindings/shims/crypto.ts
+init_host();
+
 class PythonHash {
   content = [];
   update(value) {
@@ -20574,6 +20738,7 @@ init_fs_promises();
 init_path();
 
 // packages/py/node-bindings/shims/url.ts
+init_host();
 function fileURLToPath(url) {
   return pythonHost().path.fileUrlToPath(String(url));
 }
@@ -24419,7 +24584,7 @@ function assertBeforeDeadline(lockPath, deadline) {
   }
 }
 async function ensureParentDir(lockPath) {
-  await mkdir(dirname(lockPath), { recursive: true });
+  await mkdir2(dirname(lockPath), { recursive: true });
 }
 
 // packages/js/node/core/src/bin.ts
@@ -24628,7 +24793,7 @@ async function selectedBin(destination, source, temp, options) {
   let selectedSource = downloadPath;
   if (options.autoUnpackage) {
     selectedSource = join(temp, `unpacked-${randomUUID()}`);
-    await mkdir(selectedSource);
+    await mkdir2(selectedSource);
     logger3.debug("unpacking binary archive", {
       archive: downloadPath,
       to: selectedSource
@@ -24683,7 +24848,7 @@ async function ensure(name, url, options = {}) {
       if (!await isValidBin(selected, options)) {
         throw new Error(`selected binary has no acceptable version: ${selected}`);
       }
-      await mkdir(destination.binDir, { recursive: true });
+      await mkdir2(destination.binDir, { recursive: true });
       staged = join(destination.binDir, `.${name}-${randomUUID()}`);
       await copyFile(selected, staged);
       await chmod(staged, 493);
@@ -25050,7 +25215,7 @@ function managedExecutableName() {
 }
 async function compatibleDatabricksCli(executable) {
   try {
-    const result = await runProcess(executable, ["--version"], {}, 1e4);
+    const result = await runProcess2(executable, ["--version"], {}, 1e4);
     if (result.exitCode !== 0)
       return false;
     const version = parseVersion(result);
@@ -25064,7 +25229,7 @@ function platformAsset() {
   return databricks_cli_assets_default.assets[key];
 }
 async function databricksCliLogin(profile, timeoutMs, executable = process.env.DATABRICKS_CLI_PATH ?? "databricks", environment = {}) {
-  const result = await runProcess(executable, ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`], environment);
+  const result = await runProcess2(executable, ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`], environment);
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
 }
@@ -25072,7 +25237,7 @@ async function databricksCliToken(profile, forceRefresh = false, executable = pr
   const args = ["auth", "token", "--profile", profile, "--output", "json"];
   if (forceRefresh)
     args.push("--force-refresh");
-  const result = await runProcess(executable, args, environment);
+  const result = await runProcess2(executable, args, environment);
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth token exited ${result.exitCode}`);
   let value;
@@ -25092,7 +25257,7 @@ async function databricksCliToken(profile, forceRefresh = false, executable = pr
     scopes: Array.isArray(value.scopes) ? value.scopes.filter((scope) => typeof scope === "string") : []
   };
 }
-async function runProcess(command, args, environment, timeoutMs) {
+async function runProcess2(command, args, environment, timeoutMs) {
   const controller = timeoutMs === undefined ? undefined : new AbortController;
   const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
   try {
@@ -25484,7 +25649,7 @@ class FileCredentialStore {
   }
 }
 async function ensureDirectory(path, mode) {
-  await mkdir(path, { recursive: true, mode });
+  await mkdir2(path, { recursive: true, mode });
   await chmod(path, mode);
 }
 async function readTextFile(path) {
@@ -25711,10 +25876,10 @@ function requestOboToken(headers, headerName = DEFAULT_ACCESS_TOKEN_HEADER) {
   const [scheme, ...parts] = value.split(/\s+/);
   return scheme?.toLowerCase() === "bearer" ? nonempty(parts.join(" ")) : undefined;
 }
-function inferTarget(host, accountId) {
-  if (accountId && host) {
+function inferTarget(host2, accountId) {
+  if (accountId && host2) {
     try {
-      if (new URL(normalizeHost(host)).hostname === "accounts.cloud.databricks.com")
+      if (new URL(normalizeHost(host2)).hostname === "accounts.cloud.databricks.com")
         return "account" /* Account */;
     } catch {}
   }
@@ -25782,14 +25947,14 @@ function listDatabricksProfiles(configFile, refresh = false, environment = proce
     return [];
   return [...config.keys()].filter((name) => name !== SETTINGS_SECTION).map((name) => {
     const profile = loadRawProfile(config, name);
-    const host = nonempty(profile.host);
+    const host2 = nonempty(profile.host);
     const accountId = nonempty(profile.accountId);
     return {
       name,
-      ...host ? { host } : {},
+      ...host2 ? { host: host2 } : {},
       ...accountId ? { accountId } : {},
       ...nonempty(profile.workspaceId) ? { workspaceId: nonempty(profile.workspaceId) } : {},
-      target: inferTarget(host, accountId),
+      target: inferTarget(host2, accountId),
       authKind: resolveAuthKind(profile.authType, profile.clientId, profile.clientSecret, profile.accessToken)
     };
   }).sort((left, right) => left.name.localeCompare(right.name));
@@ -25814,7 +25979,7 @@ function resolveDatabricksProfile(options, environment = process.env) {
   const profileName = resolveProfileName(requestedName, explicitProfile, config, options.preferUserToMachine);
   const configured = loadRawProfile(config, profileName);
   const ambient = (name) => ignoreAmbientCredentials ? undefined : nonempty(environment[name]);
-  const host = normalizeHost(options.host ?? ambient("DATABRICKS_HOST") ?? configured.host, profileName);
+  const host2 = normalizeHost(options.host ?? ambient("DATABRICKS_HOST") ?? configured.host, profileName);
   const accountId = nonempty(options.accountId) ?? ambient("DATABRICKS_ACCOUNT_ID") ?? nonempty(configured.accountId);
   const workspaceId = nonempty(options.workspaceId) ?? ambient("DATABRICKS_WORKSPACE_ID") ?? nonempty(configured.workspaceId);
   const clientIdValue = nonempty(options.clientId) ?? ambient("DATABRICKS_CLIENT_ID") ?? nonempty(configured.clientId);
@@ -25824,12 +25989,12 @@ function resolveDatabricksProfile(options, environment = process.env) {
   const authKind = resolveAuthKind(authType, clientIdValue, clientSecret, accessToken);
   const clientId = authKind === "user-to-machine" /* UserToMachine */ ? clientIdValue ?? DEFAULT_CLIENT_ID : authKind === "machine-to-machine" /* MachineToMachine */ || authKind === "app-service-principal" /* AppServicePrincipal */ ? clientIdValue ?? missing(profileName, "client_id") : clientIdValue ?? "";
   const scopes = options.scopes?.length ? cleanList(options.scopes) : cleanList(configured.scopes?.split(",") ?? ["all-apis"]);
-  const target = options.target ? parseTarget(options.target) : inferTarget(host, accountId);
+  const target = options.target ? parseTarget(options.target) : inferTarget(host2, accountId);
   const groupId = nonempty(options.groupId) ?? ambient("DATABRICKS_GROUP_ID") ?? nonempty(configured.groupId);
   const principal = authKind === "machine-to-machine" /* MachineToMachine */ || authKind === "app-service-principal" /* AppServicePrincipal */ ? clientId : profileName;
   const cacheKey = credentialCacheKey({
     name: profileName,
-    host,
+    host: host2,
     accountId,
     workspaceId,
     clientId,
@@ -25840,7 +26005,7 @@ function resolveDatabricksProfile(options, environment = process.env) {
   });
   return {
     name: profileName,
-    host,
+    host: host2,
     ...accountId ? { accountId } : {},
     ...workspaceId ? { workspaceId } : {},
     clientId,
@@ -27189,15 +27354,15 @@ async function providerFor(profile, options, dependencies) {
   }
 }
 async function resolveOAuthEndpoints(profile, fetcher = globalThis.fetch) {
-  const host = profile.host.replace(/\/$/, "");
+  const host2 = profile.host.replace(/\/$/, "");
   if (profile.target === "account" /* Account */) {
     if (!profile.accountId)
       throw new AuthError("config", "Account target requires account_id");
     return {
-      tokenEndpoint: `${host}/oidc/accounts/${profile.accountId}/v1/token`
+      tokenEndpoint: `${host2}/oidc/accounts/${profile.accountId}/v1/token`
     };
   }
-  const discovery = profile.target === "unified" /* Unified */ ? `${host}/oidc/accounts/${requiredAccountId(profile)}/.well-known/oauth-authorization-server` : `${host}/oidc/.well-known/oauth-authorization-server`;
+  const discovery = profile.target === "unified" /* Unified */ ? `${host2}/oidc/accounts/${requiredAccountId(profile)}/.well-known/oauth-authorization-server` : `${host2}/oidc/.well-known/oauth-authorization-server`;
   const response = await fetcher(discovery, { redirect: "manual" });
   if (response.status === 404)
     throw new AuthError("oauth", `OAuth is not supported at ${discovery}`);
@@ -27217,8 +27382,8 @@ function requiredAccountId(profile) {
 function storageFromName(name) {
   return name === "memory" ? "memory" /* Memory */ : "file" /* File */;
 }
-function isLoopbackHttp(host) {
-  const url = new URL(host);
+function isLoopbackHttp(host2) {
+  const url = new URL(host2);
   return url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname);
 }
 function cliEnvironment(profile, configFile) {

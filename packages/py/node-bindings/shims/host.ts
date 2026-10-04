@@ -1,3 +1,19 @@
+interface PythonBridge {
+  eval(source: string): unknown;
+}
+
+interface PythonCompletedProcess {
+  returncode: number;
+  stdout: string | null;
+  stderr: string | null;
+}
+
+interface PythonHttpResponse {
+  status_code: number;
+  headers: Record<string, string>;
+  content: Iterable<number>;
+}
+
 export interface PythonFileHost {
   chmod(path: string, mode: number): Promise<void>;
   copy(source: string, destination: string): Promise<void>;
@@ -51,6 +67,10 @@ export interface PythonRuntimeHost {
   http: {
     fetch(
       url: string,
+      method?: string,
+      headers?: Record<string, string>,
+      body?: string,
+      timeoutMs?: number,
     ): Promise<{ status: number; headers: Record<string, string>; body: number[] }>;
   };
   process: {
@@ -64,12 +84,208 @@ export interface PythonRuntimeHost {
   };
 }
 
+type PythonFunction = (...args: any[]) => any;
+
+const python = (globalThis as typeof globalThis & { python?: PythonBridge }).python;
+if (!python) throw new Error("PythonMonkey globalThis.python is unavailable");
+
+function evaluate<T extends PythonFunction>(source: string): T {
+  return python!.eval(source) as T;
+}
+
+const toThread = evaluate<PythonFunction>("__import__('asyncio').to_thread");
+const osPath = {
+  basename: evaluate<PythonFunction>("__import__('os').path.basename"),
+  dirname: evaluate<PythonFunction>("__import__('os').path.dirname"),
+  exists: evaluate<PythonFunction>("__import__('os').path.exists"),
+  isAbsolute: evaluate<PythonFunction>("__import__('os').path.isabs"),
+  join: evaluate<PythonFunction>("lambda parts: __import__('os').path.join(*list(parts))"),
+  realpath: evaluate<PythonFunction>("__import__('os').path.realpath"),
+  relative: evaluate<PythonFunction>("__import__('os').path.relpath"),
+  resolve: evaluate<PythonFunction>(
+    "lambda parts: __import__('os').path.abspath(__import__('os').path.join(*list(parts))) if list(parts) else __import__('os').getcwd()",
+  ),
+};
+const readBytes = evaluate<PythonFunction>("lambda path: list(open(path, 'rb').read())");
+const readText = evaluate<PythonFunction>("lambda path: open(path, encoding='utf-8').read()");
+const writeBytes = evaluate<PythonFunction>(
+  "lambda path, content: open(path, 'wb').write(bytes(int(value) for value in content))",
+);
+const mkdir = evaluate<PythonFunction>(
+  "lambda path, recursive: __import__('os').makedirs(path, exist_ok=recursive) if recursive else __import__('os').mkdir(path)",
+);
+const listDirectory = evaluate<PythonFunction>(
+  "lambda path: [{'name': entry.name, 'directory': entry.is_dir(), 'file': entry.is_file()} for entry in __import__('pathlib').Path(path).iterdir()]",
+);
+const statPath = evaluate<PythonFunction>(
+  "lambda path: {'directory': __import__('os').path.isdir(path), 'file': __import__('os').path.isfile(path), 'mode': __import__('os').stat(path).st_mode, 'mtimeMs': __import__('os').stat(path).st_mtime * 1000, 'size': __import__('os').stat(path).st_size}",
+);
+const runProcess = evaluate<PythonFunction>(
+  "lambda command, args, environment, input_text, timeout: __import__('subprocess').run([command, *list(args)], env=dict(environment) if environment is not None else None, input=input_text, text=True, capture_output=True, timeout=(timeout / 1000) if timeout is not None else None)",
+);
+const requestHttp = evaluate<PythonFunction>(
+  "lambda url, method, headers, body, timeout: __import__('httpx').request(method or 'GET', url, headers=dict(headers) if headers is not None else None, content=body, timeout=(timeout / 1000) if timeout is not None else 30, follow_redirects=True)",
+);
+
+const host: PythonRuntimeHost = {
+  crypto: {
+    randomBytes: evaluate<PythonFunction>(
+      "lambda length: list(__import__('os').urandom(int(length)))",
+    ),
+    sha256: evaluate<PythonFunction>(
+      "lambda content: __import__('hashlib').sha256(bytes(int(value) for value in content)).hexdigest()",
+    ),
+  },
+  file: {
+    async chmod(path, mode) {
+      await toThread(evaluate<PythonFunction>("__import__('os').chmod"), path, Math.trunc(mode));
+    },
+    async copy(source, destination) {
+      await toThread(
+        evaluate<PythonFunction>("__import__('shutil').copyfile"),
+        source,
+        destination,
+      );
+    },
+    exists: (path) => Boolean(osPath.exists(path)),
+    async mkdir(path, recursive) {
+      if (osPath.exists(path)) return false;
+      await toThread(mkdir, path, recursive);
+      return true;
+    },
+    async mkdtemp(prefix) {
+      return toThread(
+        evaluate<PythonFunction>("__import__('tempfile').mkdtemp"),
+        undefined,
+        prefix,
+      );
+    },
+    async readBytes(path) {
+      return toThread(readBytes, path);
+    },
+    async readDirectory(path) {
+      return toThread(listDirectory, path);
+    },
+    readTextSync: (path) => String(readText(path)),
+    async realpath(path) {
+      return String(await toThread(osPath.realpath, path));
+    },
+    async remove(path, recursive, force) {
+      if (!osPath.exists(path)) {
+        if (!force) throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
+        return;
+      }
+      const isDirectory = evaluate<PythonFunction>("__import__('os').path.isdir")(path);
+      const operation = isDirectory
+        ? recursive
+          ? evaluate<PythonFunction>("__import__('shutil').rmtree")
+          : evaluate<PythonFunction>("__import__('os').rmdir")
+        : evaluate<PythonFunction>("__import__('os').unlink");
+      await toThread(operation, path);
+    },
+    async rename(source, destination) {
+      await toThread(evaluate<PythonFunction>("__import__('os').replace"), source, destination);
+    },
+    async stat(path) {
+      return toThread(statPath, path);
+    },
+    async touch(path, atimeMs, mtimeMs) {
+      await toThread(
+        evaluate<PythonFunction>(
+          "lambda path, atime, mtime: __import__('os').utime(path, (atime / 1000, mtime / 1000))",
+        ),
+        path,
+        atimeMs,
+        mtimeMs,
+      );
+    },
+    async writeBytes(path, content, mode) {
+      await toThread(writeBytes, path, content);
+      if (mode !== undefined)
+        await toThread(evaluate<PythonFunction>("__import__('os').chmod"), path, Math.trunc(mode));
+    },
+  },
+  http: {
+    async fetch(url, method, headers, body, timeoutMs) {
+      const response = (await toThread(
+        requestHttp,
+        url,
+        method,
+        headers,
+        body,
+        timeoutMs,
+      )) as PythonHttpResponse;
+      return {
+        status: response.status_code,
+        headers: Object.fromEntries(Object.entries(response.headers)),
+        body: Array.from(response.content),
+      };
+    },
+  },
+  os: {
+    homedir: evaluate<PythonFunction>("lambda: __import__('pathlib').Path.home().as_posix()"),
+    tmpdir: evaluate<PythonFunction>("__import__('tempfile').gettempdir"),
+  },
+  path: {
+    basename: (path) => String(osPath.basename(path)),
+    dirname: (path) => String(osPath.dirname(path)),
+    fileUrlToPath: evaluate<PythonFunction>(
+      "lambda url: __import__('urllib.parse', fromlist=['urlparse']).unquote(__import__('urllib.parse', fromlist=['urlparse']).urlparse(url).path)",
+    ),
+    isAbsolute: (path) => Boolean(osPath.isAbsolute(path)),
+    join: (parts) => String(osPath.join(parts)),
+    relative: (from, to) => String(osPath.relative(to, from)),
+    resolve: (parts) => String(osPath.resolve(parts)),
+  },
+  process: {
+    async run(command, args, environment, input, timeoutMs) {
+      const result = (await toThread(
+        runProcess,
+        command,
+        args,
+        environment,
+        input,
+        timeoutMs,
+      )) as PythonCompletedProcess;
+      return {
+        exitCode: result.returncode,
+        ...(result.stdout?.trim() ? { stdout: result.stdout.trim() } : {}),
+        ...(result.stderr?.trim() ? { stderr: result.stderr.trim() } : {}),
+      };
+    },
+  },
+};
+
+export function installPythonGlobals(): void {
+  const globals = globalThis as typeof globalThis & {
+    global?: typeof globalThis;
+    self?: typeof globalThis;
+    window?: typeof globalThis;
+    process?: Record<string, unknown>;
+  };
+  globals.global = globalThis;
+  globals.self = globalThis;
+  globals.window = globalThis;
+  globals.process ??= {
+    arch: String(evaluate<PythonFunction>("__import__('platform').machine")())
+      .replace("aarch64", "arm64")
+      .replace("x86_64", "x64"),
+    argv: [],
+    browser: true,
+    cwd: evaluate<PythonFunction>("__import__('os').getcwd"),
+    env: evaluate<PythonFunction>("lambda: dict(__import__('os').environ)")(),
+    nextTick: (callback: (...args: unknown[]) => void, ...args: unknown[]) =>
+      Promise.resolve().then(() => callback(...args)),
+    platform: { Darwin: "darwin", Linux: "linux", Windows: "win32" }[
+      String(evaluate<PythonFunction>("__import__('platform').system")())
+    ],
+    version: "v22.0.0",
+    versions: {},
+  };
+}
+
+installPythonGlobals();
+
 export function pythonHost(): PythonRuntimeHost {
-  const host = (
-    globalThis as typeof globalThis & {
-      __dbxToolsPython?: PythonRuntimeHost;
-    }
-  ).__dbxToolsPython;
-  if (!host) throw new Error("dbx-tools Python runtime host is unavailable");
   return host;
 }
