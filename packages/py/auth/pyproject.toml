@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-auth"
-version = "0.9.21"
+version = "0.9.22"
 description = "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey"
 readme = "README.md"
 requires-python = ">=3.11,<4"
