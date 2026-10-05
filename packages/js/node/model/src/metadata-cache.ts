@@ -25,6 +25,21 @@ import { MODEL_METADATA_TTL_MS } from "./_metadata-contract.ts";
 
 const logger = log.logger("model/metadata-cache");
 
+interface PackageIdentity {
+  readonly identifier: string;
+  readonly version: string;
+}
+
+let packageIdentityPromise: Promise<PackageIdentity> | undefined;
+
+function packageIdentity(): Promise<PackageIdentity> {
+  packageIdentityPromise ??= import("../index.ts").then((mod) => ({
+    identifier: mod.PACKAGE_IDENTIFIER,
+    version: mod.PACKAGE_VERSION,
+  }));
+  return packageIdentityPromise;
+}
+
 /** Envelope stored as JSON bytes in cacache for every key. */
 export interface MetadataCacheRecord<T> {
   readonly refreshedAt: number;
@@ -232,7 +247,7 @@ async function resolveCacheDir(options: {
   readonly version?: string;
 }): Promise<string> {
   if (options.cacheDir) return options.cacheDir;
-  const version = options.version ?? (await import("../index.ts")).PACKAGE_VERSION;
+  const version = options.version ?? (await packageIdentity()).version;
   return defaultMetadataCacheDir(version);
 }
 

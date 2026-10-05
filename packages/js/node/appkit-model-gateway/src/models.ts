@@ -5,6 +5,7 @@
  */
 
 import { isChatClass } from "@dbx-tools/model/classes";
+import { modelFamily } from "@dbx-tools/model/policy";
 import type {
   CodexModel,
   CodexModelListResponse,
@@ -48,7 +49,9 @@ export function listModelsPayload(
     .filter((target) => target.endpoint?.status?.deprecated !== true)
     .filter((target) => !includeCodex || hasChatClass(target))
     .slice()
-    .sort(compareCatalogueTargets);
+    .sort((left, right) =>
+      compareCatalogueTargets(left, right, (target) => target.displayName),
+    );
   if (includeCodex) {
     return {
       models: available.map((target, index) => codexModel(target, index + 1)),
@@ -121,29 +124,44 @@ function codexModel(target: ModelTarget, priority: number): CodexModel {
 }
 
 /**
- * Order listed models by family A-Z, then display name. Targets with no family
- * follow every named family, still sorted by display name.
+ * Order listed models in three groups: non-embedding models with a detected
+ * family, the remaining non-embedding models, then embeddings. Each group is
+ * sorted by the published label (`display_name` for Codex, `name` otherwise)
+ * with numeric segments ordered naturally so "Veo 3.1" precedes "Veo 3.10".
  */
-function compareCatalogueTargets(left: ModelTarget, right: ModelTarget): number {
-  const leftFamily = catalogueFamily(left);
-  const rightFamily = catalogueFamily(right);
-  if (Boolean(leftFamily) !== Boolean(rightFamily)) return leftFamily ? -1 : 1;
-  if (leftFamily && rightFamily) {
-    const familyOrder = leftFamily.localeCompare(rightFamily, undefined, { sensitivity: "base" });
-    if (familyOrder !== 0) return familyOrder;
-  }
-  return catalogueName(left).localeCompare(catalogueName(right), undefined, {
-    sensitivity: "base",
-  });
+function compareCatalogueTargets(
+  left: ModelTarget,
+  right: ModelTarget,
+  label: (target: ModelTarget) => string,
+): number {
+  const group = catalogueGroup(left) - catalogueGroup(right);
+  if (group !== 0) return group;
+  return compareCatalogueLabel(label(left), label(right));
+}
+
+function catalogueGroup(target: ModelTarget): number {
+  if (isEmbeddingTarget(target)) return 2;
+  return catalogueFamily(target) ? 0 : 1;
 }
 
 function catalogueFamily(target: ModelTarget): string | undefined {
-  const family = target.family?.trim() || target.endpoint?.family?.trim();
-  return family || undefined;
+  const stamped = target.family?.trim() || target.endpoint?.family?.trim();
+  return (
+    modelFamily(target.displayName) ??
+    modelFamily(target.id) ??
+    (target.endpoint?.name ? modelFamily(target.endpoint.name) : undefined) ??
+    (stamped ? modelFamily(stamped) : undefined)
+  );
 }
 
-function catalogueName(target: ModelTarget): string {
-  return target.displayName.trim() || target.id;
+function isEmbeddingTarget(target: ModelTarget): boolean {
+  return (
+    target.capabilities.embeddings === true || target.endpoint?.task === "llm/v1/embeddings"
+  );
+}
+
+function compareCatalogueLabel(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
 }
 
 function hasChatClass(target: ModelTarget): boolean {

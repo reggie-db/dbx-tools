@@ -161,13 +161,7 @@ describe("unified release workflow", () => {
     assert.deepEqual(deploy.permissions, { pages: "write", "id-token": "write" });
     assert.equal(step(deploy, "Deploy to GitHub Pages").uses, "actions/deploy-pages@v4");
 
-    const githubRelease = release.jobs["publish-github-release"]!;
-    assert.deepEqual(githubRelease.permissions, { contents: "write" });
-    assert.equal(
-      step(githubRelease, "Create GitHub release").run,
-      'gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||\n' +
-        '  gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes',
-    );
+    assert.equal(release.jobs["publish-github-release"], undefined);
   });
 
   it("contains no cross-workflow handoff", () => {
@@ -379,7 +373,7 @@ describe("optional Node release stage", () => {
       assert.equal(workflow.jobs["deploy-docs"]?.needs, "build-docs");
       assert.equal("release-please" in workflow.jobs, false);
       assert.equal("release-plan" in workflow.jobs, false);
-      assert.equal("publish-github-release" in workflow.jobs, true);
+      assert.equal("publish-github-release" in workflow.jobs, false);
       const tasks = JSON.parse(readFileSync(join(fixedOutdir, ".projen/tasks.json"), "utf8")) as {
         tasks: Record<string, { steps?: Array<{ execArgs?: string[] }> }>;
       };

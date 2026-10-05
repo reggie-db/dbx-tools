@@ -62,8 +62,8 @@ Primary ownership:
 
 - `bun run bump` increments `VERSION` locally and synchronizes generated package versions.
 - Run `bun run release` with no arguments from any branch. It commits and pushes pending branch changes, safely fast-forwards `main` when needed, then calls `bump`, commits the synchronized changes, pushes `main`, creates an annotated `vX.Y.Z` tag, and pushes the tag. It fails instead of creating a merge commit when `main` cannot fast-forward. Use `--no-bump` only for an existing synchronized bump.
-- `.github/workflows/release.yml` runs only for `v*` tag pushes and verifies the tagged commit exactly equals `origin/main` before publishing Node, Python, docs, and the GitHub release.
-- There is no release PR, manual stage recovery, Cargo/native publication, or alternate release entrypoint.
+- `.github/workflows/release.yml` runs only for `v*` tag pushes and verifies the tagged commit exactly equals `origin/main` before publishing Node, Python, and docs.
+- There is no release PR, GitHub Release, manual stage recovery, Cargo/native publication, or alternate release entrypoint.
 - Preserve local application/deployment flows and local npm/Python publication helpers.
 
 ## Validation

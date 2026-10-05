@@ -269,27 +269,6 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
     timeout-minutes: 15
-  publish-github-release:
-    needs:
-      - verify-context
-      - publish-node
-      - publish-pypi-core
-      - publish-pypi-postgres
-      - publish-pypi-graphiti
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ needs.verify-context.outputs.release_tag }}
-    if: ${{ always() && (needs.verify-context.result == 'success') && (needs['publish-node'].result == 'success') && (needs['publish-pypi-core'].result == 'success') && (needs['publish-pypi-postgres'].result == 'success') && (needs['publish-pypi-graphiti'].result == 'success') }}
-    steps:
-      - name: Create GitHub release
-        id: create_github_release
-        run: |-
-          gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||
-            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes
-    timeout-minutes: 10
   publish-pypi-core:
     needs: verify-context
     runs-on: ubuntu-latest

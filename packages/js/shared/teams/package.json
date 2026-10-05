@@ -46,7 +46,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.36",
+  "version": "0.9.37",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [

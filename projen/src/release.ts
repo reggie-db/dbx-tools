@@ -5,7 +5,7 @@ import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { projectReleaseBranch, taskCommand, type DBXToolsJavaScriptProject } from "./project-js.ts";
-import { RELEASE_TAG, RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
+import { RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
 
 const NODE_VERSION = "24";
 const NPM_VERSION = "11.4.2";
@@ -98,51 +98,12 @@ function refreshDocsRegistryDependencies(workflow: GithubWorkflow): void {
   }
 }
 
-function refreshGitHubReleaseDependencies(workflow: GithubWorkflow): void {
-  const release = workflow.getJob("publish-github-release") as Job | undefined;
-  if (!release) return;
-  const registryJobs = Object.keys(workflow.jobs).filter(
-    (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
-  );
-  const needs = ["verify-context", ...registryJobs];
-  workflow.updateJob("publish-github-release", {
-    ...release,
-    needs,
-    if: releaseCondition([
-      "needs.verify-context.result == 'success'",
-      ...registryJobs.map((job) => `needs['${job}'].result == 'success'`),
-    ]),
-  });
-}
-
 /** Keep documentation publication behind every configured package registry. */
 export function refreshReleaseDocsDependencies(project: DBXToolsJavaScriptProject): void {
   const workflow = releaseWorkflows.get(project);
   if (workflow) {
     refreshDocsRegistryDependencies(workflow);
-    refreshGitHubReleaseDependencies(workflow);
   }
-}
-
-function githubReleaseJob(): Job {
-  return {
-    runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.WRITE },
-    timeoutMinutes: 10,
-    env: {
-      GH_TOKEN: "${{ github.token }}",
-      RELEASE_TAG,
-    },
-    steps: [
-      {
-        name: "Create GitHub release",
-        run: [
-          'gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||',
-          '  gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes',
-        ].join("\n"),
-      },
-    ],
-  };
 }
 
 function verifyContextJob(
@@ -336,7 +297,6 @@ export class DBXToolsRelease extends Component {
     if (options.docs) {
       addDocsJobs(workflow, project, options.docs);
     }
-    workflow.addJob("publish-github-release", githubReleaseJob());
     refreshReleaseDocsDependencies(project);
   }
 }

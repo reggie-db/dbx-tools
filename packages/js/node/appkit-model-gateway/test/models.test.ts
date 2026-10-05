@@ -22,7 +22,7 @@ const CAPABILITIES: ModelCapabilities = {
 };
 
 describe("model gateway catalogue", () => {
-  it("publishes Codex models with a chat class, sorted by family then name", () => {
+  it("publishes Codex models with a chat class, sorted by display name", () => {
     const targets = [
       target("gpt", { responses: true, openResponses: false, customTools: true }),
       target("claude", { anthropic: true }),
@@ -49,21 +49,33 @@ describe("model gateway catalogue", () => {
     assert.equal("data" in payload, false);
   });
 
-  it("sorts OpenAI models by family then name, with no-family models last", () => {
+  it("sorts OpenAI models as family chat, other chat, then embeddings, each by name", () => {
     const payload = listModelsPayload(
       [
+        embedding("Test Pt Disabled Legacy It", "bge"),
         named("Zeta", "gpt"),
-        named("Beta", "claude"),
-        named("Alpha", "gpt"),
         unnamed("Zed"),
+        embedding("GTE Large (En)", "gte"),
+        named("Veo 3.1 Generate", "gemini"),
+        named("Beta", "claude"),
         unnamed("Ada"),
+        named("Alpha", "gpt"),
       ],
       false,
     );
 
     assert.deepEqual(
       payload.data.map((entry) => entry.name),
-      ["Beta", "Alpha", "Zeta", "Ada", "Zed"],
+      [
+        "Alpha",
+        "Beta",
+        "Veo 3.1 Generate",
+        "Zeta",
+        "Ada",
+        "Zed",
+        "GTE Large (En)",
+        "Test Pt Disabled Legacy It",
+      ],
     );
   });
 
@@ -116,6 +128,22 @@ function named(displayName: string, family: string): ModelTarget {
       name: displayName.toLowerCase(),
       family,
       class: ModelClass.ChatBalanced,
+      status: { deprecated: false },
+    },
+  };
+}
+
+function embedding(displayName: string, family: string): ModelTarget {
+  const id = displayName.toLowerCase().replaceAll(" ", "_");
+  return {
+    ...unnamed(displayName),
+    id,
+    family,
+    capabilities: { ...CAPABILITIES, embeddings: true, chat: false, tools: false },
+    endpoint: {
+      name: id,
+      family,
+      task: "llm/v1/embeddings",
       status: { deprecated: false },
     },
   };

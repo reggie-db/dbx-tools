@@ -3,6 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-auth";
-export const PACKAGE_VERSION = "0.9.36";
+export const PACKAGE_VERSION = "0.9.37";
 export * as cli from "./src/cli.ts";
 export { CommanderError } from "./src/cli.ts";
