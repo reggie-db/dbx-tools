@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-model-proxy"
-version = "0.9.22"
+version = "0.9.23"
 description = "LiteLLM proxy backed by Node-owned Databricks authentication and dynamic model discovery"
 readme = "README.md"
 requires-python = ">=3.11,<4"
