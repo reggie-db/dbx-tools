@@ -1,8 +1,8 @@
 #!/usr/bin/env -S bun
 /**
  * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run] [--skip-compile]`
- * - verify every workspace member and the Bun lock carry the release version,
- * then pack and publish each package owned by the standard Node release.
+ * - verify every workspace member carries the release version, then pack and
+ * publish each package owned by the standard Node release.
  *
  * Bun has no `pnpm -r publish`, so this loop is the recursive-publish stand-in.
  * It leans on native bun for everything bun already does:
@@ -15,8 +15,6 @@
  *     packed manifest shows `"@scope/x": "<version>"` and the real catalog range,
  *     while the on-disk manifest keeps the protocols.) Setting each member's
  *     version first is the only prerequisite, so a sibling resolves the release
- *     version. When Bun's workspace lock already carries the version, its
- *     refresh is skipped;
  *   - **`publishConfig` substitution** (compiled `lib/` entry points) is done
  *     inside the temporary archive, NOT in the checkout: unlike pnpm/npm, `bun
  *     publish`/`bun pm pack` do NOT fold `publishConfig`'s `main`/`types`/`bin`/
@@ -41,14 +39,14 @@
  * verdaccio); `--exclude <dir>` (repeatable, repo-relative) skips a member owned
  * by another publication flow.
  *
- * The checkout remains byte-for-byte unchanged. A stale manifest or lockfile is
- * a release error rather than something publication repairs.
+ * The checkout remains byte-for-byte unchanged. A stale manifest is a release
+ * error rather than something publication repairs. Local lockfiles are ignored
+ * because configured registries can leak into them.
  */
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
-import ts from "typescript";
 import { parse } from "yaml";
 import {
   npmReleaseMatches,
@@ -57,7 +55,6 @@ import {
   readNpmArchiveIdentity,
 } from "./publish-npm.ts";
 import { runTaskCommand, runTaskCommandAsync } from "../src/_task-command.ts";
-import { toPosix } from "../src/packages.ts";
 
 const logger = log.logger("projen:publish");
 
@@ -82,28 +79,6 @@ function manifestsMatchVersion(members: readonly string[], version: string): boo
     };
     return pkg.version === version;
   });
-}
-
-/** Whether Bun's workspace lock records each live workspace manifest version. */
-function lockfileMatchesManifestVersions(root: string, members: readonly string[]): boolean {
-  const lockfile = join(root, "bun.lock");
-  if (!existsSync(lockfile)) return false;
-  try {
-    const parsed = ts.parseConfigFileTextToJson(lockfile, readFileSync(lockfile, "utf8"));
-    if (parsed.error) return false;
-    const lock = parsed.config as {
-      workspaces?: Record<string, { version?: string }>;
-    };
-    return members.every((dir) => {
-      const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
-        version?: string;
-      };
-      const relative = toPosix(dir.slice(resolve(root).length + 1));
-      return lock.workspaces?.[relative]?.version === manifest.version;
-    });
-  } catch {
-    return false;
-  }
 }
 
 /** Entry-point fields projen writes as `.ts` source in-repo and rewrites to `lib/` for publish. */
@@ -181,11 +156,6 @@ if (!manifestsMatchVersion(members, version)) {
   throw new Error(`workspace manifests do not match release ${version}; run projen`);
 }
 logger.info(`validated ${members.length} selected member manifests`);
-
-if (!lockfileMatchesManifestVersions(root, allMembers)) {
-  throw new Error("bun.lock does not match workspace versions; run bun install and commit it");
-}
-logger.info("validated workspace lock versions");
 
 const publishArgs = [
   "--ignore-scripts",

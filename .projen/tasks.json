@@ -393,10 +393,10 @@
     },
     "release": {
       "name": "release",
-      "description": "Commit the local version bump and push an annotated release tag",
+      "description": "Run bump, commit it, and push an annotated release tag",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release-tag.ts --prefix v --branch main",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/release.ts --prefix v --branch main",
           "receiveArgs": true
         }
       ]

@@ -1,5 +1,5 @@
 #!/usr/bin/env -S bun
-/** Commit a synchronized local version bump, push main, and create its annotated release tag. */
+/** Run the configured release transaction. */
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
@@ -12,11 +12,12 @@ import {
 import { assertReleaseVersion } from "./release-version.ts";
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
-const logger = log.logger("projen:release-tag");
+const logger = log.logger("projen:release");
 
-export function createReleaseTag(options: {
+export function runRelease(options: {
   readonly root: string;
   readonly branch: string;
+  readonly bump?: boolean;
   readonly prefix: string;
   readonly remote: string;
 }): string {
@@ -26,6 +27,18 @@ export function createReleaseTag(options: {
     throw new Error(
       `release must run on ${branch}, current branch is ${currentBranch || "detached"}`,
     );
+  }
+
+  if (options.bump ?? true) {
+    const status = captureGitTaskCommand(
+      root,
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      { check: true },
+    );
+    if (status) {
+      throw new Error("release with automatic bump requires a clean working tree");
+    }
+    runTaskCommand(root, "bun", ["run", "bump"]);
   }
 
   const version = readWorkspaceVersion(root);
@@ -72,10 +85,12 @@ if (import.meta.main) {
     .option("--branch <name>", "release branch", "main")
     .option("--prefix <prefix>", "release tag prefix", "v")
     .option("--remote <name>", "git remote", "origin")
-    .action((options: { root?: string; branch: string; prefix: string; remote: string }) => {
-      createReleaseTag({
+    .option("--no-bump", "use an existing synchronized local version bump")
+    .action((options: { root?: string; branch: string; bump: boolean; prefix: string; remote: string }) => {
+      runRelease({
         root: options.root ?? projectUtils.root() ?? process.cwd(),
         branch: options.branch,
+        bump: options.bump,
         prefix: options.prefix,
         remote: options.remote,
       });

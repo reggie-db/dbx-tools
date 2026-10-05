@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { createReleaseTag } from "../tasks/release-tag.ts";
+import { runRelease } from "../tasks/release.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -23,7 +23,16 @@ function fixture(): { remote: string; root: string } {
   writeFileSync(join(root, "VERSION"), "1.0.0\n");
   writeFileSync(
     join(root, "package.json"),
-    `${JSON.stringify({ name: "fixture", private: true, scripts: { "version:check": "true" } }, null, 2)}\n`,
+    `${JSON.stringify({ name: "fixture", private: true, scripts: { bump: "node bump.mjs", "version:check": "true" } }, null, 2)}\n`,
+  );
+  writeFileSync(
+    join(root, "bump.mjs"),
+    [
+      'import { writeFileSync } from "node:fs";',
+      'writeFileSync("VERSION", "1.0.1\\n");',
+      'writeFileSync("generated.txt", "1.0.1\\n");',
+      "",
+    ].join("\n"),
   );
   git(root, "add", ".");
   git(root, "commit", "-m", "initial");
@@ -36,11 +45,8 @@ describe("direct release tags", () => {
   it("commits the local bump, pushes main, and pushes an annotated tag", () => {
     const { remote, root } = fixture();
     try {
-      writeFileSync(join(root, "VERSION"), "1.0.1\n");
-      writeFileSync(join(root, "generated.txt"), "1.0.1\n");
-
       assert.equal(
-        createReleaseTag({ root, branch: "main", prefix: "v", remote: "origin" }),
+        runRelease({ root, branch: "main", prefix: "v", remote: "origin" }),
         "v1.0.1",
       );
       assert.equal(git(root, "log", "-1", "--pretty=%s"), "chore(release): 1.0.1");
@@ -59,12 +65,26 @@ describe("direct release tags", () => {
     }
   });
 
+  it("can use an existing bump when explicitly requested", () => {
+    const { remote, root } = fixture();
+    try {
+      writeFileSync(join(root, "VERSION"), "1.0.1\n");
+      writeFileSync(join(root, "generated.txt"), "1.0.1\n");
+      assert.equal(
+        runRelease({ root, branch: "main", bump: false, prefix: "v", remote: "origin" }),
+        "v1.0.1",
+      );
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
   it("refuses to tag a non-release branch", () => {
     const { root } = fixture();
     try {
       git(root, "switch", "-c", "feature");
       assert.throws(
-        () => createReleaseTag({ root, branch: "main", prefix: "v", remote: "origin" }),
+        () => runRelease({ root, branch: "main", prefix: "v", remote: "origin" }),
         /release must run on main/,
       );
     } finally {

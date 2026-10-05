@@ -315,11 +315,11 @@ export class DBXToolsRelease extends Component {
             release: {
               exec: taskScript(
                 project,
-                "release-tag.ts",
+                "release.ts",
                 `--prefix ${tagPrefix} --branch ${releaseBranch}`,
               ),
               receiveArgs: true,
-              description: "Commit the local version bump and push an annotated release tag",
+              description: "Run bump, commit it, and push an annotated release tag",
             },
           }
         : {}),

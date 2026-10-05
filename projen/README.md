@@ -375,11 +375,12 @@ list, so a new package is covered without a re-synth. Work from the root:
 | `bun run barrels`              | regenerate the read-only `index.ts` barrels          |
 | `bun run bump`                 | increment `VERSION` and regenerate version surfaces  |
 | `bun run version:check`        | verify every generated version against `VERSION`     |
-| `bun run release`              | commit the bump, push `main`, and push `vX.Y.Z`       |
+| `bun run release`              | run the configured release transaction                |
 
-Run `bun run bump` locally to increment `VERSION` and regenerate versioned
-surfaces. Run exactly `bun run release` to commit that bump, push `main`, and
-push the matching annotated `vX.Y.Z` tag. The tag workflow verifies that the tag
+Run exactly `bun run release` from a clean `main`. It calls the existing `bump`
+task, commits the generated version changes, pushes `main`, and pushes the
+matching annotated `vX.Y.Z` tag. Pass `--no-bump` only to release an existing
+synchronized local bump. The tag workflow verifies that the tag
 points at the exact `origin/main` commit, builds one candidate, publishes npm and
 PyPI artifacts, and deploys documentation. Local npm and Python registry
 publication remains available through the release-candidate tooling.

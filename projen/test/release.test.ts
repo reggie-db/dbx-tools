@@ -173,7 +173,7 @@ describe("release task contracts", () => {
     assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
     assert.match(
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
-      /tasks\/release-tag\.ts --prefix v --branch main/,
+      /tasks\/release\.ts --prefix v --branch main/,
     );
   });
 
@@ -195,6 +195,7 @@ describe("release task contracts", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.doesNotMatch(driver, /--stamp-only|pm", "pkg", "set/);
     assert.ok(driver.includes("workspace manifests do not match release ${version}; run projen"));
+    assert.doesNotMatch(driver, /bun\.lock|lockfileMatchesManifestVersions/);
   });
 });
 
@@ -380,7 +381,7 @@ describe("optional Node release stage", () => {
       const tasks = JSON.parse(readFileSync(join(fixedOutdir, ".projen/tasks.json"), "utf8")) as {
         tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
       };
-      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-tag\.ts/);
+      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /tasks\/release\.ts/);
       const build = readWorkflow(fixedOutdir, "build");
       assert.ok(workflowTrigger(build, "pull_request"));
     } finally {
