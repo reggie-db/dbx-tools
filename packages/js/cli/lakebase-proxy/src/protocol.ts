@@ -2,24 +2,31 @@
 
 import type { Socket } from "node:net";
 
+/** PostgreSQL SSLRequest protocol code. */
 export const SSL_REQUEST = 80_877_103;
+/** PostgreSQL CancelRequest protocol code. */
 export const CANCEL_REQUEST = 80_877_102;
+/** PostgreSQL protocol version 3 code. */
 export const PROTOCOL_3 = 196_608;
 
+/** Parsed PostgreSQL startup packet. */
 export interface StartupMessage {
   kind: "startup";
   protocol: number;
   parameters: Record<string, string>;
 }
 
+/** Parsed PostgreSQL cancellation packet. */
 export interface CancelMessage {
   kind: "cancel";
   processId: number;
   secretKey: number;
 }
 
+/** First supported packet received from a PostgreSQL client. */
 export type InitialMessage = StartupMessage | CancelMessage;
 
+/** Error caused by an invalid or unsupported PostgreSQL startup packet. */
 export class PostgresProtocolError extends Error {}
 
 export async function readInitialMessage(

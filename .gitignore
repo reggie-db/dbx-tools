@@ -32,9 +32,6 @@ jspm_packages/
 !/.prettierignore
 !/.prettierrc.json
 !/pnpm-workspace.yaml
-!/.projen/bun-cache-key.mjs
-!/.github/workflows/build.yml
-!/.mergify.yml
 !/tsconfig.projen.json
 !/bunfig.toml
 !/tsconfig.base.json
@@ -85,6 +82,7 @@ jspm_packages/
 .idea/*
 !/.eslintrc.json
 !/.github/workflows/release.yml
+!/.projen/bun-cache-key.mjs
 .docs-build/
 .astro/
 .home/

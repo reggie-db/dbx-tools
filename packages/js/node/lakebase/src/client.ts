@@ -16,6 +16,7 @@ const DEFAULT_DATABASE = "databricks_postgres";
 const DISCOVERY_TTL_MS = 30_000;
 const SESSION_TTL_MS = 10 * 60_000;
 
+/** Resolved Lakebase endpoint and database connection identity. */
 export interface ResolvedLakebase {
   host: string;
   port: number;
@@ -31,11 +32,13 @@ interface Timed<T> {
   expiresAt: number;
 }
 
+/** Minimal authenticated Databricks API surface used by Lakebase discovery. */
 export interface LakebaseApiClient {
   auth: Pick<AuthClient, "listProfiles">;
   request(path: string, options?: DatabricksRequestOptions): Promise<unknown>;
 }
 
+/** Injectable Lakebase discovery dependencies. */
 export interface LakebaseClientDependencies {
   createClient(options: DatabricksAuthOptions): Promise<LakebaseApiClient>;
   isDatabricksApp(): boolean;
@@ -46,6 +49,7 @@ const DEFAULT_DEPENDENCIES: LakebaseClientDependencies = {
   isDatabricksApp,
 };
 
+/** Cached Lakebase discovery and short-lived database credential client. */
 export class LakebaseClient {
   private readonly sessions = new Map<string, Timed<LakebaseApiClient>>();
   private readonly resolved = new Map<string, Timed<ResolvedLakebase>>();

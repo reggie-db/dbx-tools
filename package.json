@@ -32,7 +32,6 @@
     "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
-    "pr:validate": "projen pr:validate",
     "pre-compile": "projen pre-compile",
     "py:build": "projen py:build",
     "py:format": "projen py:format",

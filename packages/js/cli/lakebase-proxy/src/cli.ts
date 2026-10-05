@@ -7,6 +7,7 @@ import { Command, InvalidArgumentError } from "commander";
 
 import { LakebaseProxy } from "./proxy.ts";
 
+/** Build the Lakebase proxy command-line program. */
 export function buildProgram(name = "dbx lakebase-proxy"): Command {
   const program = new Command(name)
     .description("Run a loopback PostgreSQL proxy for Databricks Lakebase")

@@ -158,19 +158,7 @@ const root = new project.DBXToolsNodeProject({
   packageDescriptions: PACKAGE_DESCRIPTIONS,
   packageTagPaths: { polyglot: ["node"] },
   github: true,
-  buildWorkflow: true,
-  buildWorkflowOptions: {
-    preBuildSteps: [
-      {
-        name: "Validate public source documentation",
-        run: "bun docs/scripts/check-source-docs.mjs",
-      },
-      {
-        name: "Validate README documentation",
-        run: "bun docs/scripts/sync-readmes.mjs",
-      },
-    ],
-  },
+  buildWorkflow: false,
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",
     base: "/",
@@ -219,10 +207,7 @@ const root = new project.DBXToolsNodeProject({
     "docs:check-source",
     "docs:check-readmes",
   ],
-  pullRequestTitlePolicy: {
-    types: ["feat", "fix", "chore"],
-    requireScope: false,
-  },
+  pullRequestTitlePolicy: false,
   workflowCacheIgnorePaths: [DOCS_BUILD_ROOT],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here

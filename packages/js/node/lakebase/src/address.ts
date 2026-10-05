@@ -2,9 +2,12 @@
 
 import { object } from "@dbx-tools/shared-core";
 
+/** Supported PostgreSQL SSL mode values. */
 export const SSL_MODES = ["require", "disable", "prefer"] as const;
+/** PostgreSQL SSL mode accepted by Lakebase address helpers. */
 export type SslMode = (typeof SSL_MODES)[number];
 
+/** Normalized fields parsed from a Lakebase address. */
 export interface LakebaseConnectionInputs {
   project?: string;
   branch?: string;
@@ -18,12 +21,14 @@ export interface LakebaseConnectionInputs {
   sslMode?: SslMode;
 }
 
+/** Parsed Lakebase connection target. */
 export type ParsedAddress = LakebaseConnectionInputs;
 
 const URL_SCHEME_RE = /^(postgres|postgresql):\/\//i;
 const PROJECT_ID_RE = /^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const HOSTNAME_HINT_RE = /^[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$/i;
 
+/** Parse a PostgreSQL URL, Lakebase resource path, hostname, or project ID. */
 export function parseAddress(input: string | null | undefined): ParsedAddress {
   const value = input?.trim();
   if (!value) return {};
@@ -34,6 +39,7 @@ export function parseAddress(input: string | null | undefined): ParsedAddress {
   return {};
 }
 
+/** Parse a canonical Lakebase project, branch, endpoint, or database path. */
 export function parseResourcePath(input: string | null | undefined): ParsedAddress {
   const value = input?.trim();
   if (!value?.startsWith("projects/")) return {};
@@ -54,11 +60,13 @@ export function parseResourcePath(input: string | null | undefined): ParsedAddre
   return {};
 }
 
+/** Parse a supported PostgreSQL SSL mode. */
 export function parseSslMode(input: string | null | undefined): SslMode | undefined {
   const value = input?.trim().toLowerCase();
   return SSL_MODES.find((mode) => mode === value);
 }
 
+/** Parse a Lakebase address or throw when the input is not recognized. */
 export function requireAddress(input: string): ParsedAddress {
   const address = parseAddress(input);
   if (Object.keys(address).length === 0) {
@@ -67,6 +75,7 @@ export function requireAddress(input: string): ParsedAddress {
   return address;
 }
 
+/** Format a local proxy URL whose database path contains the Lakebase target. */
 export function connectionUrl(target: string, host = "localhost", port = 5432): string {
   requireAddress(target);
   const url = new URL("postgresql://localhost");

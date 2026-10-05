@@ -19,6 +19,7 @@ import {
 
 const logger = log.logger("lakebase-proxy");
 
+/** Listener and authentication options for the loopback Lakebase proxy. */
 export interface LakebaseProxyOptions {
   host?: string;
   port?: number;
@@ -44,6 +45,7 @@ interface ParameterStatus {
   parameterValue: string;
 }
 
+/** Loopback PostgreSQL wire proxy backed by Databricks Lakebase credentials. */
 export class LakebaseProxy {
   private readonly client: LakebaseClient;
   private readonly cancellations = new CancellationRegistry();

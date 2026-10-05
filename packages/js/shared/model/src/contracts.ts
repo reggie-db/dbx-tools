@@ -6,6 +6,7 @@ export const ModelClass = {
   ChatFast: "chat-fast",
   Embedding: "embedding",
 } as const;
+/** Intent-oriented endpoint class slug. */
 export type ModelClass = (typeof ModelClass)[keyof typeof ModelClass];
 
 export const ReasoningEffort = {
@@ -17,8 +18,10 @@ export const ReasoningEffort = {
   Xhigh: "xhigh",
   Max: "max",
 } as const;
+/** Reasoning effort value accepted by compatible model endpoints. */
 export type ReasoningEffort = (typeof ReasoningEffort)[keyof typeof ReasoningEffort];
 
+/** Relative quality, speed, and cost scores for an endpoint. */
 export interface ModelProfile {
   /** Relative model quality score. */
   readonly quality?: number;
@@ -28,11 +31,13 @@ export interface ModelProfile {
   readonly cost?: number;
 }
 
+/** Model retirement status. */
 export interface ModelStatus {
   /** Whether Databricks lists the model as retired or deprecated. */
   readonly deprecated: boolean;
 }
 
+/** Browser-safe normalized Model Serving endpoint metadata. */
 export interface ServingEndpointSummary {
   /** Model Serving endpoint name used for invocation. */
   readonly name: string;
@@ -64,6 +69,7 @@ export interface ServingEndpointSummary {
   readonly dimension?: number;
 }
 
+/** Browser-safe model catalogue search and ranking controls. */
 export interface ModelQuery {
   /** Optional fuzzy model-name search. */
   readonly search?: string;
@@ -79,6 +85,7 @@ export interface ModelQuery {
   readonly threshold?: number;
 }
 
+/** One ranked model-search result. */
 export interface RankedModel {
   /** Matching endpoint metadata. */
   readonly endpoint: ServingEndpointSummary;

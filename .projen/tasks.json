@@ -327,18 +327,6 @@
       "name": "post-compile",
       "description": "Runs after successful compilation"
     },
-    "pr:validate": {
-      "name": "pr:validate",
-      "description": "Validate generated files and TypeScript packages",
-      "steps": [
-        {
-          "exec": "bunx projen default"
-        },
-        {
-          "exec": "bun run compile"
-        }
-      ]
-    },
     "pre-compile": {
       "name": "pre-compile",
       "description": "Prepare the project for compilation",

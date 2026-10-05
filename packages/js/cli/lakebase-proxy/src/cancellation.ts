@@ -6,6 +6,7 @@ import { connect as connectTls, type TLSSocket } from "node:tls";
 
 import { cancelRequest, sslRequest, type CancelMessage } from "./protocol.ts";
 
+/** Upstream PostgreSQL backend key used to forward a cancellation request. */
 export interface CancellationTarget {
   host: string;
   port: number;
@@ -13,10 +14,12 @@ export interface CancellationTarget {
   secretKey: number;
 }
 
+/** Sends one PostgreSQL cancellation request to its upstream backend. */
 export type CancellationForwarder = (target: CancellationTarget) => Promise<void>;
 
 let nextProcessId = 10_000;
 
+/** Maps synthetic local backend keys onto real upstream cancellation targets. */
 export class CancellationRegistry {
   private readonly targets = new Map<string, CancellationTarget>();
 

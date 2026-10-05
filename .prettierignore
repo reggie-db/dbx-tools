@@ -44,10 +44,8 @@ packages/py/graphiti/pyproject.toml
 .eslintrc.json
 .gitattributes
 .github/pull_request_template.md
-.github/workflows/build.yml
 .github/workflows/release.yml
 .gitignore
-.mergify.yml
 .prettierignore
 .prettierrc.json
 .projen/bun-cache-key.mjs
