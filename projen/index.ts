@@ -28,7 +28,6 @@ export * as pythonNodeBundle from "./src/python-node-bundle.ts";
 export * as release from "./src/release.ts";
 export * as releaseCatalog from "./src/release-catalog.ts";
 export * as releaseContext from "./src/release-context.ts";
-export * as releaseGithub from "./src/release-github.ts";
 export * as scaffold from "./src/scaffold.ts";
 export * as tags from "./src/tags.ts";
 export * as tsconfig from "./src/tsconfig.ts";
@@ -64,7 +63,6 @@ export type { ReleaseStage, ReleaseDocsOptions, DBXToolsReleaseOptions } from ".
 export { DBXToolsReleaseCatalog } from "./src/release-catalog.ts";
 export type { ReleaseProjectLanguage, ReleaseArtifactKind, ReleaseEdgeKind, ReleasePropagation, ReleaseUnitRule, DBXToolsReleaseCatalogOptions, ReleaseDependencyInput, ReleaseProjectRegistration, ExternalReleaseProjectRegistration, ReleaseArtifactRegistration, ReleaseProjectNode, ReleaseArtifact, ReleaseDependencyEdge, ReleaseUnit, ReleaseUnitGraph } from "./src/release-catalog.ts";
 export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION } from "./src/release-context.ts";
-export type { GithubRepositoryIdentity, GithubAuthenticatedAccount, GithubRepositoryPermissions } from "./src/release-github.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";

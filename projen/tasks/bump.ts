@@ -6,43 +6,34 @@
  */
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
-import { Command } from "commander";
-import {
-  releaseArchitectureOption,
-  releaseLevelOption,
-  releaseOperatingSystemOption,
-  releasePlatformFilter,
-  type ReleaseArch,
-  type ReleaseOs,
-  type VersionLevel,
-} from "../src/_release-platform.ts";
+import { Command, Option } from "commander";
 import { runTaskCommand } from "../src/_task-command.ts";
-import { resolveNextVersion, writeWorkspaceVersion } from "../src/workspace-version.ts";
+import {
+  resolveNextVersion,
+  type VersionLevel,
+  writeWorkspaceVersion,
+} from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:bump");
 
 const program = new Command();
 program
   .description("Increment VERSION and synchronize generated workspace versions")
-  .addOption(releaseLevelOption())
-  .addOption(releaseOperatingSystemOption())
-  .addOption(releaseArchitectureOption())
+  .addOption(
+    new Option("-l, --level <level>", "semver increment")
+      .choices(["patch", "minor", "major"])
+      .default("patch"),
+  )
   .option("--no-synth", "write VERSION without synchronizing generated files")
-  .action((opts: { level: VersionLevel; os: ReleaseOs[]; arch: ReleaseArch[]; synth: boolean }) => {
+  .action((opts: { level: VersionLevel; synth: boolean }) => {
     const root = projectUtils.root() ?? process.cwd();
     const next = resolveNextVersion(root, opts.level);
-    const releasePlatforms = releasePlatformFilter(opts.os, opts.arch);
 
     logger.info(`bump ${next.base} -> ${next.version} (${opts.level})`);
     writeWorkspaceVersion(root, next.version);
 
     if (opts.synth) {
-      runTaskCommand(root, process.execPath, [".projenrc.ts"], {
-        env: {
-          ...process.env,
-          ...(releasePlatforms ? { DBX_TOOLS_RELEASE_PLATFORMS: releasePlatforms } : {}),
-        },
-      });
+      runTaskCommand(root, process.execPath, [".projenrc.ts"]);
     }
     logger.success(`workspace version synchronized at ${next.version}`);
   });
