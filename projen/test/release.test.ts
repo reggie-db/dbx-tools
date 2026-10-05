@@ -72,24 +72,21 @@ describe("unified release workflow", () => {
     assert.deepEqual(release.permissions, { contents: "read" });
 
     const verifyJob = release.jobs["verify-context"]!;
-    assert.deepEqual(verifyJob.permissions, { contents: "write" });
+    assert.deepEqual(verifyJob.permissions, { contents: "read" });
     assert.equal(verifyJob.outputs?.build_mode, undefined);
     assert.equal(step(verifyJob, "Checkout release source").with?.["fetch-depth"], 0);
     const verify = step(verifyJob, "Verify release context");
     assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
     assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
-    assert.deepEqual(step(verifyJob, "Setup uv").with, {
-      "enable-cache": true,
-      "cache-dependency-glob": "**/pyproject.toml",
-    });
+    assert.equal(verifyJob.steps.some((candidate) => candidate.name === "Setup uv"), false);
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse "origin/main")" = "$RELEASE_SHA"'));
-    const candidate = step(verifyJob, "Build and upload release artifacts");
-    assert.ok(candidate.run?.includes("tasks/release-candidate.ts"));
-    assert.ok(candidate.run?.includes("--upload"));
-    assert.ok(candidate.run?.includes('gh release edit "$RELEASE_TAG" --draft=false --latest'));
+    assert.equal(
+      verifyJob.steps.some((candidate) => candidate.name === "Build and upload release artifacts"),
+      false,
+    );
   });
 
   it("publishes npm through the shared authenticated driver", () => {
@@ -110,14 +107,17 @@ describe("unified release workflow", () => {
       false,
     );
 
-    assert.ok(step(job, "Download approved npm archives").run?.includes("release-manifest.ts"));
-    const publish = step(job, "Publish approved npm archives");
+    assert.equal(
+      job.steps.some((candidate) => candidate.name === "Download approved npm archives"),
+      false,
+    );
+    const publish = step(job, "Publish npm workspace");
     assert.equal(publish.env?.NODE_AUTH_TOKEN, "${{ secrets.NPM_TOKEN }}");
     assert.equal(publish.env?.NPM_CONFIG_PROVENANCE, "true");
     assert.equal(publish.env?.ACCEPT_STAGED, undefined);
     assert.equal(publish.env?.NPM_BOOTSTRAP, undefined);
     assert.equal(publish.env?.DRY_RUN, "");
-    assert.ok(publish.run?.includes("tasks/publish-npm.ts"));
+    assert.ok(publish.run?.includes("tasks/publish.ts"));
     assert.doesNotMatch(publish.run ?? "", /release-automation|ACCEPT_STAGED/);
   });
 
@@ -194,6 +194,7 @@ describe("release task contracts", () => {
     assert.match(driver, /\["publish",[\s\S]*archive\]/);
     assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
     assert.match(driver, /\["--access", access\]/);
+    assert.match(driver, /restoreManifestMode/);
   });
 
   it("publishes reviewed versions without repairing manifests", () => {

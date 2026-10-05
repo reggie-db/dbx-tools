@@ -6,12 +6,7 @@ import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflo
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { projectReleaseBranch, type DBXToolsJavaScriptProject } from "./project-js.ts";
 import { applyTasks, taskScript } from "./project.ts";
-import {
-  RELEASE_SHA,
-  RELEASE_TAG,
-  RELEASE_VERSION,
-  releaseSourceSteps,
-} from "./release-context.ts";
+import { RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
 
 const NODE_VERSION = "24";
 const NPM_VERSION = "11.4.2";
@@ -43,9 +38,9 @@ export interface DBXToolsReleaseOptions {
   readonly nodeRelease?: boolean;
   /** Build and deploy generated documentation through GitHub Pages. */
   readonly docs?: ReleaseDocsOptions;
-  /** Python package root passed to local release preparation. */
+  /** Python package root used by attached Python publication jobs. */
   readonly pythonRoot?: string;
-  /** Repository task names run after VERSION generation and before candidate construction. */
+  /** Repository task names run after VERSION verification and before publication. */
   readonly validationTasks?: readonly string[];
 }
 
@@ -155,8 +150,8 @@ function verifyContextJob(
 ): Job {
   return {
     runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.WRITE },
-    timeoutMinutes: 60,
+    permissions: { contents: JobPermission.READ },
+    timeoutMinutes: 30,
     env: { BUN_VERSION, CI: "true" },
     outputs: {
       release_tag: { stepId: "release", outputName: "release_tag" },
@@ -173,7 +168,6 @@ function verifyContextJob(
         },
       },
       ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
-      uvSetupStep(),
       { name: "Install release validation dependencies", run: "bun install --frozen-lockfile" },
       bunCacheSaveStep(),
       {
@@ -208,24 +202,6 @@ function verifyContextJob(
         name: `Validate ${task}`,
         run: `bun run ${task}`,
       })),
-      {
-        name: "Build and upload release artifacts",
-        env: {
-          GH_TOKEN: "${{ github.token }}",
-          RELEASE_SHA: "${{ steps.release.outputs.expected_sha }}",
-          RELEASE_TAG: "${{ steps.release.outputs.release_tag }}",
-          RELEASE_VERSION: "${{ steps.release.outputs.release_version }}",
-        },
-        run: [
-          "bun node_modules/@dbx-tools/projen/tasks/release-candidate.ts \\",
-          '  --version "$RELEASE_VERSION" \\',
-          '  --tag "$RELEASE_TAG" \\',
-          '  --sha "$RELEASE_SHA" \\',
-          `  --python-root ${JSON.stringify(options.pythonRoot ?? "packages/py")}`.concat(" \\"),
-          "  --upload",
-          'gh release edit "$RELEASE_TAG" --draft=false --latest',
-        ].join("\n"),
-      },
     ],
   };
 }
@@ -241,26 +217,9 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
     steps: [
       ...nodeReleaseSetupSteps(project),
       {
-        name: "Download approved npm archives",
-        env: { GH_TOKEN: "${{ github.token }}", RELEASE_SHA, RELEASE_TAG, RELEASE_VERSION },
-        shell: "bash",
-        run: [
-          "rm -rf dist/release-download dist/npm-release",
-          "mkdir -p dist/release-download",
-          'gh release download "$RELEASE_TAG" --pattern release-manifest.json --pattern SHA256SUMS --pattern "*.tgz" --dir dist/release-download',
-          "bun node_modules/@dbx-tools/projen/tasks/release-manifest.ts verify \\",
-          "  --directory dist/release-download \\",
-          '  --tag "$RELEASE_TAG" \\',
-          '  --sha "$RELEASE_SHA" \\',
-          '  --version "$RELEASE_VERSION" \\',
-          "  --kind npm \\",
-          "  --output dist/npm-release",
-        ].join("\n"),
-      },
-      {
-        name: "Publish approved npm archives",
+        name: "Publish npm workspace",
         env: { RELEASE_VERSION, ...npmPublishEnvironment() },
-        run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $DRY_RUN',
+        run: 'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$RELEASE_VERSION" $DRY_RUN',
       },
     ],
   };

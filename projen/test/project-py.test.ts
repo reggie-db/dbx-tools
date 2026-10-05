@@ -106,20 +106,19 @@ describe("DBXToolsPythonWorkspace", () => {
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
     const release = readWorkflow(outdir);
-    const buildPython = release.jobs["build-python"]!;
-    assert.equal(buildPython.needs, "verify-context");
-    assert.equal(buildPython.if, "${{ always() && (needs.verify-context.result == 'success') }}");
-    assert.deepEqual(buildPython.permissions, { contents: "read" });
-    assert.equal(buildPython.env?.BUN_VERSION, "1.3.14");
-    assert.equal(workflowStep(buildPython, "Restore Bun cache").uses, "actions/cache/restore@v5");
-    assert.deepEqual(workflowStep(buildPython, "Setup uv").with, {
+    assert.equal(release.jobs["build-python"], undefined);
+    const publishCore = release.jobs["publish-pypi-core"]!;
+    assert.equal(publishCore.needs, "verify-context");
+    assert.equal(publishCore.env?.BUN_VERSION, "1.3.14");
+    assert.equal(workflowStep(publishCore, "Restore Bun cache").uses, "actions/cache/restore@v5");
+    assert.deepEqual(workflowStep(publishCore, "Setup uv").with, {
       "enable-cache": true,
       "cache-dependency-glob": "**/pyproject.toml",
     });
-    assert.equal(workflowStep(buildPython, "Save Bun cache").uses, "actions/cache/save@v5");
+    assert.equal(workflowStep(publishCore, "Save Bun cache").uses, "actions/cache/save@v5");
     assert.ok(
-      workflowStep(buildPython, "Download approved Python distributions").run?.includes(
-        "gh release download",
+      workflowStep(publishCore, "Build fixture-core distributions").run?.includes(
+        "tasks/publish-python.ts",
       ),
     );
     assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
@@ -136,6 +135,10 @@ describe("DBXToolsPythonWorkspace", () => {
       name: "production-pypi",
       url: "https://pypi.org/project/fixture-app/",
     });
+    assert.deepEqual(release.jobs["publish-pypi-app"]?.needs, [
+      "verify-context",
+      "publish-pypi-core",
+    ]);
     assert.deepEqual(release.jobs["build-docs"]?.needs, [
       "publish-node",
       "publish-pypi-core",
@@ -303,7 +306,7 @@ describe("optional Python release stages", () => {
         group: "release-${{ github.ref_name }}",
         "cancel-in-progress": false,
       });
-      assert.ok(workflow.jobs["build-python"]);
+      assert.equal(workflow.jobs["build-python"], undefined);
       assert.ok(workflow.jobs["publish-pypi-core"]);
       assert.equal(workflow.jobs["publish-node"], undefined);
       assert.equal("repository_dispatch" in workflow.on, false);

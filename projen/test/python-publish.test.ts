@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { parse, stringify } from "smol-toml";
-import { pythonDistributionPaths } from "../tasks/publish-python.ts";
+import { buildPythonProjects, pythonDistributionPaths } from "../tasks/publish-python.ts";
 import { preparePythonProjectForPublication } from "../tasks/python-release.ts";
 
 describe("Python release packaging", () => {
@@ -52,5 +52,30 @@ describe("Python release packaging", () => {
         ),
       /does not match release 1\.2\.3/,
     );
+  });
+
+  it("rejects an unknown selected package before building", () => {
+    const root = mkdtempSync(join(tmpdir(), "python-projects-"));
+    const output = join(root, "dist");
+    try {
+      const project = join(root, "core");
+      mkdirSync(project, { recursive: true });
+      writeFileSync(
+        join(project, "pyproject.toml"),
+        '[project]\nname = "fixture-core"\nversion = "1.2.3"\ndependencies = []\n',
+      );
+      assert.throws(
+        () =>
+          buildPythonProjects({
+            output,
+            packages: ["missing"],
+            root,
+            version: "1.2.3",
+          }),
+        /Unknown Python packages: missing/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

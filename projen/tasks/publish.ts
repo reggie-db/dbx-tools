@@ -43,7 +43,16 @@
  * error rather than something publication repairs. Local lockfiles are ignored
  * because configured registries can leak into them.
  */
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
@@ -265,12 +274,20 @@ await asyncUtils.mapConcurrent(
         }
       }
       logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
-      await runTaskCommandAsync(
-        dir,
-        "bun",
-        ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
-        { env: { ...process.env, PATH: path } },
-      );
+      const manifest = join(dir, "package.json");
+      const manifestMode = lstatSync(manifest).mode & 0o777;
+      const restoreManifestMode = (manifestMode & 0o200) === 0;
+      if (restoreManifestMode) chmodSync(manifest, manifestMode | 0o200);
+      try {
+        await runTaskCommandAsync(
+          dir,
+          "bun",
+          ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
+          { env: { ...process.env, PATH: path } },
+        );
+      } finally {
+        if (restoreManifestMode) chmodSync(manifest, manifestMode);
+      }
     } finally {
       rmSync(packed, { recursive: true, force: true });
     }

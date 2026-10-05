@@ -9,17 +9,11 @@ import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import { hasWorkspaceNodePackage } from "./python-node-bindings.ts";
 import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
-import {
-  RELEASE_SHA,
-  RELEASE_TAG,
-  RELEASE_VERSION,
-  releaseSourceSteps,
-} from "./release-context.ts";
+import { RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
 import {
   refreshReleaseDocsDependencies,
   releaseTagPattern,
   releasePublishCondition,
-  releaseStageCondition,
   tryReleaseWorkflow,
   uvSetupStep,
 } from "./release.ts";
@@ -491,64 +485,6 @@ export class DBXToolsPythonWorkspace extends Component {
     if (!workflow) {
       throw new Error("Python release requires the root dbx-tools release mode");
     }
-    workflow.addJob("build-python", {
-      if: releaseStageCondition("python", ["needs.verify-context.result == 'success'"]),
-      needs: ["verify-context"],
-      runsOn: ["ubuntu-latest"],
-      permissions: { contents: JobPermission.READ },
-      timeoutMinutes: 20,
-      env: { BUN_VERSION },
-      steps: [
-        ...releaseSourceSteps(),
-        ...bunCacheRestoreSteps(project, {
-          ignorePaths: project.workflowCacheIgnorePaths,
-        }),
-        uvSetupStep(),
-        { name: "Install release helpers", run: "bun install" },
-        bunCacheSaveStep(),
-        {
-          name: "Download approved Python distributions",
-          env: { GH_TOKEN: "${{ github.token }}", RELEASE_TAG },
-          run: [
-            "rm -rf dist/release-download",
-            "mkdir -p dist/release-download",
-            'gh release download "$RELEASE_TAG" --pattern release-manifest.json --pattern SHA256SUMS --pattern "*.whl" --pattern "*.tar.gz" --dir dist/release-download',
-          ].join("\n"),
-        },
-        ...allPublications.map((publication) => ({
-          name: `Select ${publication.distribution} distributions`,
-          env: {
-            PACKAGE_NAME: publication.distribution.replaceAll("_", "-").toLowerCase(),
-            RELEASE_SHA,
-            RELEASE_TAG,
-            RELEASE_VERSION,
-          },
-          run: [
-            "bun node_modules/@dbx-tools/projen/tasks/release-manifest.ts verify \\",
-            "  --directory dist/release-download \\",
-            '  --tag "$RELEASE_TAG" \\',
-            '  --sha "$RELEASE_SHA" \\',
-            '  --version "$RELEASE_VERSION" \\',
-            "  --kind pypi \\",
-            '  --package "$PACKAGE_NAME" \\',
-            `  --output dist/${publication.directory}`,
-          ].join("\n"),
-        })),
-        {
-          name: "Validate approved distributions",
-          run: `find ${allPublications.map((publication) => `dist/${publication.directory}`).join(" ")} -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) -print0 | xargs -0 uvx twine check`,
-        },
-        {
-          name: "Upload distributions",
-          uses: "actions/upload-artifact@v7",
-          with: {
-            name: "python-distributions",
-            path: allPublications.map((publication) => `dist/${publication.directory}`).join("\n"),
-            "retention-days": 7,
-          },
-        },
-      ],
-    });
     for (const publication of allPublications) {
       const dependencyJobs = (publication.dependencies ?? []).map(
         (dependency) => `publish-pypi-${dependency}`,
@@ -556,10 +492,9 @@ export class DBXToolsPythonWorkspace extends Component {
       workflow.addJob(`publish-pypi-${publication.directory}`, {
         if: releasePublishCondition("python", [
           "needs.verify-context.result == 'success'",
-          "needs.build-python.result == 'success'",
           ...dependencyJobs.map((job) => `needs['${job}'].result == 'success'`),
         ]),
-        needs: ["verify-context", "build-python", ...dependencyJobs],
+        needs: ["verify-context", ...dependencyJobs],
         environment: {
           name: publication.environment,
           url:
@@ -569,11 +504,24 @@ export class DBXToolsPythonWorkspace extends Component {
         runsOn: ["ubuntu-latest"],
         permissions: { idToken: JobPermission.WRITE },
         timeoutMinutes: 10,
+        env: { BUN_VERSION },
         steps: [
+          ...releaseSourceSteps(),
+          ...bunCacheRestoreSteps(project, {
+            ignorePaths: project.workflowCacheIgnorePaths,
+          }),
+          uvSetupStep(),
+          { name: "Install release helpers", run: "bun install --frozen-lockfile" },
+          bunCacheSaveStep(),
           {
-            name: "Download distributions",
-            uses: "actions/download-artifact@v8",
-            with: { name: "python-distributions", path: "dist" },
+            name: `Build ${publication.distribution} distributions`,
+            env: { RELEASE_VERSION },
+            run: [
+              'bun node_modules/@dbx-tools/projen/tasks/publish-python.ts "$RELEASE_VERSION"',
+              `--root ${JSON.stringify(this.repository.root)}`,
+              `--package ${JSON.stringify(publication.directory)}`,
+              `--output dist/${publication.directory}`,
+            ].join(" \\\n  "),
           },
           {
             name: `Publish ${publication.distribution} to PyPI`,
@@ -595,6 +543,7 @@ export class DBXToolsPythonWorkspace extends Component {
       distribution: pkg.packageOptions.name,
       environment:
         options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
+      dependencies: pkg.packageOptions.internalDependencies,
     }));
   }
 

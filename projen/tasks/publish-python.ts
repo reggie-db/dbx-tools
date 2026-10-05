@@ -90,6 +90,7 @@ export function publishPythonProjects(options: {
 export function buildPythonProjects(options: {
   readonly allowEmpty?: boolean;
   readonly output: string;
+  readonly packages?: readonly string[];
   readonly root: string;
   readonly version: string;
 }): void {
@@ -97,7 +98,14 @@ export function buildPythonProjects(options: {
   const output = resolve(options.output);
   rmSync(output, { recursive: true, force: true });
   const allProjects = pythonProjects(root);
-  const projects = allProjects.filter((project) => !project.private);
+  const requested = new Set(options.packages ?? []);
+  const missing = [...requested].filter(
+    (directory) => !allProjects.some((project) => project.directory === directory),
+  );
+  if (missing.length > 0) throw new Error(`Unknown Python packages: ${missing.join(", ")}`);
+  const projects = allProjects.filter(
+    (project) => !project.private && (requested.size === 0 || requested.has(project.directory)),
+  );
   if (projects.length === 0 && options.allowEmpty) {
     mkdirSync(output, { recursive: true });
     return;
@@ -136,9 +144,10 @@ if (import.meta.main) {
   const program = new Command();
   program
     .argument("<version>", "Python package version")
-    .requiredOption("--index-url <url>", "devpi Simple API URL")
-    .requiredOption("--publish-url <url>", "devpi writable index URL")
+    .option("--index-url <url>", "devpi Simple API URL")
+    .option("--publish-url <url>", "devpi writable index URL")
     .option("--root <path>", "Python workspace package root", "packages/py")
+    .option("--package <directory...>", "Build only selected package directories")
     .option("--output <path>", "Build distributions into a directory without publishing")
     .option("--dry-run", "build and inspect distributions without uploading")
     .action(
@@ -146,8 +155,9 @@ if (import.meta.main) {
         version: string,
         options: {
           dryRun?: boolean;
-          indexUrl: string;
-          publishUrl: string;
+          indexUrl?: string;
+          package?: string[];
+          publishUrl?: string;
           root: string;
           output?: string;
         },
@@ -155,11 +165,21 @@ if (import.meta.main) {
         if (options.output) {
           buildPythonProjects({
             output: options.output,
+            packages: options.package,
             root: options.root,
             version,
           });
         } else {
-          publishPythonProjects({ ...options, version });
+          if (!options.indexUrl || !options.publishUrl) {
+            throw new Error("--index-url and --publish-url are required when publishing");
+          }
+          publishPythonProjects({
+            dryRun: options.dryRun,
+            indexUrl: options.indexUrl,
+            publishUrl: options.publishUrl,
+            root: options.root,
+            version,
+          });
         }
       },
     );

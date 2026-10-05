@@ -380,10 +380,10 @@ list, so a new package is covered without a re-synth. Work from the root:
 Run exactly `bun run release` from a clean `main`. It calls the existing `bump`
 task, commits the generated version changes, pushes `main`, and pushes the
 matching annotated `vX.Y.Z` tag. Pass `--no-bump` only to release an existing
-synchronized local bump. The tag workflow verifies that the tag
-points at the exact `origin/main` commit, builds one candidate, publishes npm and
-PyPI artifacts, and deploys documentation. Local npm and Python registry
-publication remains available through the release-candidate tooling.
+synchronized local bump. The tag workflow verifies that the tag points at the
+exact `origin/main` commit, publishes npm and PyPI directly from that checkout,
+then builds and deploys documentation. Local npm and Python registry publication
+remains available through the direct local publication tooling.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
