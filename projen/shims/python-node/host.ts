@@ -53,6 +53,14 @@ export interface PythonProcessResult {
   stderr?: string;
 }
 
+/** A started subprocess: await {@link wait} for its result, or {@link kill} it. */
+export interface PythonProcessHandle {
+  /** Terminate the child (SIGKILL). No-op once it has already exited. */
+  kill(): void;
+  /** Resolve with the child's result once it exits (runs off the main thread). */
+  wait(): Promise<PythonProcessResult>;
+}
+
 export interface PythonRuntimeHost {
   crypto: {
     randomBytes(length: number): number[];
@@ -74,13 +82,12 @@ export interface PythonRuntimeHost {
     ): Promise<{ status: number; headers: Record<string, string>; body: number[] }>;
   };
   process: {
-    run(
+    start(
       command: string,
       args: string[],
       environment: Record<string, string> | undefined,
       input: string | undefined,
-      timeoutMs: number | undefined,
-    ): Promise<PythonProcessResult>;
+    ): PythonProcessHandle;
   };
 }
 
@@ -120,15 +127,23 @@ const listDirectory = evaluate<PythonFunction>(
 const statPath = evaluate<PythonFunction>(
   "lambda path: {'directory': __import__('os').path.isdir(path), 'file': __import__('os').path.isfile(path), 'mode': __import__('os').stat(path).st_mode, 'mtimeMs': __import__('os').stat(path).st_mtime * 1000, 'size': __import__('os').stat(path).st_size}",
 );
-const runProcess = evaluate<PythonFunction>(
-  "lambda command, args, environment, input_text, timeout: __import__('subprocess').run([command, *list(args)], env=dict(environment) if environment is not None else None, input=input_text, text=True, capture_output=True, timeout=(timeout / 1000) if timeout is not None else None)",
+const popen = evaluate<PythonFunction>(
+  "lambda command, args, environment, input_text: __import__('subprocess').Popen([command, *list(args)], env=dict(environment) if environment is not None else None, stdin=(__import__('subprocess').PIPE if input_text is not None else None), stdout=__import__('subprocess').PIPE, stderr=__import__('subprocess').PIPE, text=True)",
 );
+const communicate = evaluate<PythonFunction>(
+  "lambda proc, input_text: (lambda out: {'returncode': proc.returncode, 'stdout': out[0], 'stderr': out[1]})(proc.communicate(input=input_text))",
+);
+const killProcess = evaluate<PythonFunction>("lambda proc: proc.kill()");
 const requestHttp = evaluate<PythonFunction>(
   "lambda url, method, headers, body, timeout: __import__('httpx').request(method or 'GET', url, headers=dict(headers) if headers is not None else None, content=body, timeout=(timeout / 1000) if timeout is not None else 30, follow_redirects=True)",
 );
 const chmod = evaluate<PythonFunction>(
   "lambda path, mode: __import__('os').chmod(path, int(mode))",
 );
+const isDir = evaluate<PythonFunction>("__import__('os').path.isdir");
+const rmtree = evaluate<PythonFunction>("__import__('shutil').rmtree");
+const rmdir = evaluate<PythonFunction>("__import__('os').rmdir");
+const unlink = evaluate<PythonFunction>("__import__('os').unlink");
 
 const host: PythonRuntimeHost = {
   crypto: {
@@ -152,7 +167,7 @@ const host: PythonRuntimeHost = {
     },
     exists: (path) => Boolean(osPath.exists(path)),
     async mkdir(path, recursive) {
-      if (osPath.exists(path)) return false;
+      if (await toThread(osPath.exists, path)) return false;
       await toThread(mkdir, path, recursive);
       return true;
     },
@@ -174,16 +189,12 @@ const host: PythonRuntimeHost = {
       return String(await toThread(osPath.realpath, path));
     },
     async remove(path, recursive, force) {
-      if (!osPath.exists(path)) {
+      if (!(await toThread(osPath.exists, path))) {
         if (!force) throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
         return;
       }
-      const isDirectory = evaluate<PythonFunction>("__import__('os').path.isdir")(path);
-      const operation = isDirectory
-        ? recursive
-          ? evaluate<PythonFunction>("__import__('shutil').rmtree")
-          : evaluate<PythonFunction>("__import__('os').rmdir")
-        : evaluate<PythonFunction>("__import__('os').unlink");
+      const isDirectory = await toThread(isDir, path);
+      const operation = isDirectory ? (recursive ? rmtree : rmdir) : unlink;
       await toThread(operation, path);
     },
     async rename(source, destination) {
@@ -240,19 +251,32 @@ const host: PythonRuntimeHost = {
     resolve: (parts) => String(osPath.resolve(parts)),
   },
   process: {
-    async run(command, args, environment, input, timeoutMs) {
-      const result = (await toThread(
-        runProcess,
-        command,
-        args,
-        environment,
-        input,
-        timeoutMs,
-      )) as PythonCompletedProcess;
+    start(command, args, environment, input) {
+      // Popen (not subprocess.run) so the child is killable: an aborted caller
+      // can terminate it instead of leaking a background process. There is no
+      // imposed timeout - the child runs to completion (an interactive login may
+      // legitimately take minutes); the caller owns cancellation.
+      const proc = popen(command, args, environment, input);
+      let killed = false;
       return {
-        exitCode: result.returncode,
-        ...(result.stdout?.trim() ? { stdout: result.stdout.trim() } : {}),
-        ...(result.stderr?.trim() ? { stderr: result.stderr.trim() } : {}),
+        kill() {
+          if (killed) return;
+          killed = true;
+          try {
+            killProcess(proc);
+          } catch {
+            // The child already exited; there is nothing to signal.
+          }
+        },
+        async wait() {
+          // communicate() blocks until exit, so run it off the main thread.
+          const result = (await toThread(communicate, proc, input)) as PythonCompletedProcess;
+          return {
+            exitCode: result.returncode,
+            ...(result.stdout?.trim() ? { stdout: result.stdout.trim() } : {}),
+            ...(result.stderr?.trim() ? { stderr: result.stderr.trim() } : {}),
+          };
+        },
       };
     },
   },

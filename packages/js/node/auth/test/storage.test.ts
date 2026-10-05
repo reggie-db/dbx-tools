@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { FileCredentialStore } from "../src/node-storage.ts";
+import { FileCredentialStore } from "../src/file-storage.ts";
 
 const TOKEN = {
   accessToken: "new-token",

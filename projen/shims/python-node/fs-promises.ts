@@ -89,9 +89,10 @@ export async function rm(
 }
 
 export async function unlink(path: string): Promise<void> {
-  if (!pythonHost().file.exists(String(path))) return;
+  // No synchronous existence precheck: let the async remove run and treat a
+  // missing file as success, so this never blocks on a sync Python call.
   try {
-    await pythonHost().file.remove(String(path), false, false);
+    await pythonHost().file.remove(String(path), false, true);
   } catch (cause) {
     if (/FileNotFoundError|Errno 2|ENOENT/.test(String(cause))) return;
     translatePythonError(cause, path);

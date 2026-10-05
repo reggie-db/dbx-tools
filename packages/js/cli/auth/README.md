@@ -57,9 +57,9 @@ fallback.
 - `--target workspace|account|unified` selects the OAuth target.
 - `--storage auto|memory|file` selects credential storage.
 - `--cache-dir <path>` selects the file-storage directory.
-- `--lock-timeout-seconds`, `--login-timeout-seconds`, and
-  `--refresh-buffer-seconds` control auth timing. Browser login defaults to 15
-  minutes.
+- `--lock-timeout-ms`, `--login-timeout-ms`, and `--refresh-buffer-ms` control
+  auth timing in milliseconds. `--lock-timeout-ms` defaults to `0` (wait
+  indefinitely for the refresh lock); browser login defaults to 15 minutes.
 
 The Databricks options also read their standard `DATABRICKS_*` environment
 variables. U2M storage and timeout options read the matching

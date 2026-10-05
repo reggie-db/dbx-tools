@@ -16,9 +16,9 @@ export class TokenLifecycle {
     logger.debug("created authentication lifecycle", {
       credential: credentialId(key),
       storage: store.name(),
-      refreshBufferSeconds: options.refreshBufferSeconds,
-      lockTimeoutSeconds: options.lockTimeoutSeconds,
-      loginTimeoutSeconds: options.loginTimeoutSeconds,
+      refreshBufferMs: options.refreshBufferMs,
+      lockTimeoutMs: options.lockTimeoutMs,
+      loginTimeoutMs: options.loginTimeoutMs,
       silentProvider: provider.canAuthenticateSilently(),
     });
   }
@@ -32,7 +32,7 @@ export class TokenLifecycle {
     return this.withLock(async () => {
       await this.store.prepareWrite();
       const token = validateToken(
-        await this.provider.login(this.options.loginTimeoutSeconds * 1000),
+        await this.provider.login(this.options.loginTimeoutMs),
       );
       await this.store.save(this.key, token);
       logger.debug("interactive login stored credential", {
@@ -137,7 +137,7 @@ export class TokenLifecycle {
         });
         if (!login) throw error;
         logger.debug("falling back to interactive login", this.context());
-        token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+        token = await this.provider.login(this.options.loginTimeoutMs);
       }
     } else if (this.provider.canAuthenticateSilently()) {
       logger.debug("attempting silent credential acquisition", {
@@ -145,7 +145,7 @@ export class TokenLifecycle {
         loginFallback: login,
       });
       try {
-        token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
+        token = await this.provider.authenticate(this.options.loginTimeoutMs);
       } catch (error) {
         logger.debug("silent credential acquisition failed", {
           ...this.context(),
@@ -154,11 +154,11 @@ export class TokenLifecycle {
         });
         if (!login) throw error;
         logger.debug("falling back to interactive login", this.context());
-        token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+        token = await this.provider.login(this.options.loginTimeoutMs);
       }
     } else if (login) {
       logger.debug("provider requires interactive login", this.context());
-      token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+      token = await this.provider.login(this.options.loginTimeoutMs);
     } else {
       throw new AuthError(
         "oauth",
@@ -180,13 +180,17 @@ export class TokenLifecycle {
     if (!isValid(token, this.now())) return false;
     if (!token.expiry) return true;
     return (
-      Date.parse(token.expiry) - this.now().getTime() > this.options.refreshBufferSeconds * 1000
+      Date.parse(token.expiry) - this.now().getTime() > this.options.refreshBufferMs
     );
   }
 
   private async withLock<T>(action: () => Promise<T>): Promise<T> {
     logger.debug("waiting for credential lock", this.context());
-    const lease = await this.store.acquireLock(this.key, this.options.lockTimeoutSeconds * 1000);
+    // Omit the timeout (wait indefinitely) unless a positive cap is configured.
+    // The holder may run for minutes; the caller owns the overall request budget
+    // and the lock is always released when `action` settles (success or error).
+    const lockTimeoutMs = this.options.lockTimeoutMs > 0 ? this.options.lockTimeoutMs : undefined;
+    const lease = await this.store.acquireLock(this.key, lockTimeoutMs);
     logger.debug("credential lock acquired", this.context());
     let failure: unknown;
     try {

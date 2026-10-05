@@ -26,9 +26,9 @@ interface AuthCliOptions {
   target?: string;
   storage: StorageName;
   cacheDir?: string;
-  lockTimeoutSeconds: string;
-  loginTimeoutSeconds: string;
-  refreshBufferSeconds: string;
+  lockTimeoutMs: string;
+  loginTimeoutMs: string;
+  refreshBufferMs: string;
   preferUserToMachine: boolean;
 }
 
@@ -118,17 +118,9 @@ function bindingOptions(options: AuthCliOptions): databricks.DatabricksAuthOptio
     target: options.target,
     cacheDir: options.cacheDir,
     auth: databricks.AuthOptions.create({
-      lockTimeoutSeconds: parseInteger(options.lockTimeoutSeconds, "--lock-timeout-seconds", false),
-      loginTimeoutSeconds: parseInteger(
-        options.loginTimeoutSeconds,
-        "--login-timeout-seconds",
-        false,
-      ),
-      refreshBufferSeconds: parseInteger(
-        options.refreshBufferSeconds,
-        "--refresh-buffer-seconds",
-        true,
-      ),
+      lockTimeoutMs: parseInteger(options.lockTimeoutMs, "--lock-timeout-ms", false),
+      loginTimeoutMs: parseInteger(options.loginTimeoutMs, "--login-timeout-ms", false),
+      refreshBufferMs: parseInteger(options.refreshBufferMs, "--refresh-buffer-ms", true),
     }),
     preferUserToMachine: options.preferUserToMachine,
   });
@@ -217,19 +209,19 @@ function addCommonOptions(program: Command): Command {
       new Option("--cache-dir <path>", "Credential cache directory").env("DBX_TOOLS_U2M_CACHE_DIR"),
     )
     .addOption(
-      new Option("--lock-timeout-seconds <seconds>", "Credential lock timeout")
-        .default(DEFAULT_AUTH_OPTIONS.lockTimeoutSeconds.toString())
-        .env("DBX_TOOLS_U2M_LOCK_TIMEOUT_SECONDS"),
+      new Option("--lock-timeout-ms <ms>", "Credential lock timeout (0 waits indefinitely)")
+        .default(DEFAULT_AUTH_OPTIONS.lockTimeoutMs.toString())
+        .env("DBX_TOOLS_U2M_LOCK_TIMEOUT_MS"),
     )
     .addOption(
-      new Option("--login-timeout-seconds <seconds>", "Browser login timeout")
-        .default(DEFAULT_AUTH_OPTIONS.loginTimeoutSeconds.toString())
-        .env("DBX_TOOLS_U2M_LOGIN_TIMEOUT_SECONDS"),
+      new Option("--login-timeout-ms <ms>", "Browser login timeout")
+        .default(DEFAULT_AUTH_OPTIONS.loginTimeoutMs.toString())
+        .env("DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS"),
     )
     .addOption(
-      new Option("--refresh-buffer-seconds <seconds>", "Token refresh buffer")
-        .default(DEFAULT_AUTH_OPTIONS.refreshBufferSeconds.toString())
-        .env("DBX_TOOLS_U2M_REFRESH_BUFFER_SECONDS"),
+      new Option("--refresh-buffer-ms <ms>", "Token refresh buffer")
+        .default(DEFAULT_AUTH_OPTIONS.refreshBufferMs.toString())
+        .env("DBX_TOOLS_U2M_REFRESH_BUFFER_MS"),
     )
     .option(
       "--no-prefer-user-to-machine",

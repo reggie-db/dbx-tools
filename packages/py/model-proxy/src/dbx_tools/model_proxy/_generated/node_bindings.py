@@ -139,17 +139,17 @@ async def _invoke_positioned(name: str, arguments: list[tuple[int, Any]]) -> Any
 
 @dataclass(kw_only=True)
 class AuthOptions:
-    refresh_buffer_seconds: int | float | None = field(
+    refresh_buffer_ms: int | float | None = field(
         default=None,
-        metadata={"javascript_name": "refreshBufferSeconds"},
+        metadata={"javascript_name": "refreshBufferMs"},
     )
-    lock_timeout_seconds: int | float | None = field(
+    lock_timeout_ms: int | float | None = field(
         default=None,
-        metadata={"javascript_name": "lockTimeoutSeconds"},
+        metadata={"javascript_name": "lockTimeoutMs"},
     )
-    login_timeout_seconds: int | float | None = field(
+    login_timeout_ms: int | float | None = field(
         default=None,
-        metadata={"javascript_name": "loginTimeoutSeconds"},
+        metadata={"javascript_name": "loginTimeoutMs"},
     )
 
 

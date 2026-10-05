@@ -183,11 +183,11 @@ describe("auth CLI", () => {
         "scope-a,scope-b",
         "--scopes",
         "scope-c",
-        "--lock-timeout-seconds",
+        "--lock-timeout-ms",
         "12",
-        "--login-timeout-seconds",
+        "--login-timeout-ms",
         "34",
-        "--refresh-buffer-seconds",
+        "--refresh-buffer-ms",
         "-5",
         "login",
       ],
@@ -200,9 +200,9 @@ describe("auth CLI", () => {
     assert.equal(capturedOptions?.groupId, "group");
     assert.equal(capturedOptions?.preferUserToMachine, false);
     assert.deepEqual(capturedOptions?.scopes, ["scope-a", "scope-b", "scope-c"]);
-    assert.equal(capturedOptions?.auth?.lockTimeoutSeconds, 12);
-    assert.equal(capturedOptions?.auth?.loginTimeoutSeconds, 34);
-    assert.equal(capturedOptions?.auth?.refreshBufferSeconds, -5);
+    assert.equal(capturedOptions?.auth?.lockTimeoutMs, 12);
+    assert.equal(capturedOptions?.auth?.loginTimeoutMs, 34);
+    assert.equal(capturedOptions?.auth?.refreshBufferMs, -5);
     assert.equal(capturedStorage, Storage.Memory);
   });
 });

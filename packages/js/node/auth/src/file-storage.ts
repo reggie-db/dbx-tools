@@ -17,12 +17,12 @@ interface TokenCache {
   tokens: Record<string, unknown>;
 }
 
-class NodeFileLocks implements LockAdapter {
+class FileLocks implements LockAdapter {
   private readonly leases = new Map<string, FileLockLease>();
 
   constructor(private readonly lockDirectory: string) {}
 
-  async acquire(key: string, timeoutMs: number): Promise<string> {
+  async acquire(key: string, timeoutMs?: number): Promise<string> {
     logger.debug("waiting for file lock", {
       credential: credentialId(key),
       timeoutMs,
@@ -55,7 +55,7 @@ export class FileCredentialStore implements CredentialStore {
     private readonly layout = FileLayout.Single,
     locks?: LockAdapter,
   ) {
-    this.locks = locks ?? new NodeFileLocks(join(root, "locks"));
+    this.locks = locks ?? new FileLocks(join(root, "locks"));
   }
 
   async load(key: string): Promise<Token | undefined> {
@@ -103,7 +103,7 @@ export class FileCredentialStore implements CredentialStore {
     });
   }
 
-  acquireLock(key: string, timeoutMs: number): Promise<string> {
+  acquireLock(key: string, timeoutMs?: number): Promise<string> {
     return this.locks.acquire(
       this.layout === FileLayout.Single ? `${this.root}:refresh` : `${this.root}:${key}:refresh`,
       timeoutMs,

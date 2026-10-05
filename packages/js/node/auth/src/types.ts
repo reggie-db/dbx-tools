@@ -44,17 +44,24 @@ export interface AccessToken {
   scopes: string[];
 }
 
-/** Shared lifecycle configuration embedded by every provider. */
+/** Shared lifecycle configuration embedded by every provider. All times in milliseconds. */
 export interface AuthOptions {
-  refreshBufferSeconds: number;
-  lockTimeoutSeconds: number;
-  loginTimeoutSeconds: number;
+  refreshBufferMs: number;
+  /**
+   * Opt-in cap, in milliseconds, on waiting to acquire the per-credential
+   * refresh lock. `0` (the default) means wait indefinitely: a holder may
+   * legitimately run for minutes (an interactive login that opens a browser),
+   * and the caller owns the overall request budget. Set a positive value to
+   * fail fast instead.
+   */
+  lockTimeoutMs: number;
+  loginTimeoutMs: number;
 }
 
 const AUTH_DEFAULTS: AuthOptions = {
-  refreshBufferSeconds: 300,
-  lockTimeoutSeconds: 30,
-  loginTimeoutSeconds: 900,
+  refreshBufferMs: 300_000,
+  lockTimeoutMs: 0,
+  loginTimeoutMs: 900_000,
 };
 
 /** Record-style factory retained for straightforward Node/Python bridging. */
@@ -131,7 +138,8 @@ export interface DatabricksProfile extends DatabricksProfileSummary {
 
 /** Cross-language lease adapter; implementations may use files, databases, or FFI. */
 export interface LockAdapter {
-  acquire(key: string, timeoutMs: number): Promise<string>;
+  /** Acquire the key's lease. Omit `timeoutMs` (or pass `0`) to wait indefinitely. */
+  acquire(key: string, timeoutMs?: number): Promise<string>;
   release(lease: string): Promise<void>;
 }
 
@@ -141,7 +149,7 @@ export interface CredentialStore {
   prepareWrite(): Promise<void>;
   save(key: string, token: Token): Promise<void>;
   remove(key: string): Promise<void>;
-  acquireLock(key: string, timeoutMs: number): Promise<string>;
+  acquireLock(key: string, timeoutMs?: number): Promise<string>;
   releaseLock(lease: string): Promise<void>;
   name(): string;
 }

@@ -28,7 +28,7 @@ describe("authentication debug logging", () => {
         "logging-profile",
         provider,
         new MemoryCredentialStore(),
-        AuthOptions.create({ refreshBufferSeconds: 0 }),
+        AuthOptions.create({ refreshBufferMs: 0 }),
       );
       await client.token();
     `;

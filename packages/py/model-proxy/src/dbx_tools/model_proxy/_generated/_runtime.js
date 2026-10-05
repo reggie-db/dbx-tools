@@ -1694,7 +1694,7 @@ function installPythonGlobals() {
 function pythonHost() {
   return host;
 }
-var python, toThread, osPath, readBytes, readText, writeBytes, mkdir, listDirectory, statPath, runProcess, requestHttp, chmod, host;
+var python, toThread, osPath, readBytes, readText, writeBytes, mkdir, listDirectory, statPath, popen, communicate, killProcess, requestHttp, chmod, isDir, rmtree, rmdir, unlink, host;
 var init_host = __esm(() => {
   python = globalThis.python;
   if (!python)
@@ -1716,9 +1716,15 @@ var init_host = __esm(() => {
   mkdir = evaluate("lambda path, recursive: __import__('os').makedirs(path, exist_ok=recursive) if recursive else __import__('os').mkdir(path)");
   listDirectory = evaluate("lambda path: [{'name': entry.name, 'directory': entry.is_dir(), 'file': entry.is_file()} for entry in __import__('pathlib').Path(path).iterdir()]");
   statPath = evaluate("lambda path: {'directory': __import__('os').path.isdir(path), 'file': __import__('os').path.isfile(path), 'mode': __import__('os').stat(path).st_mode, 'mtimeMs': __import__('os').stat(path).st_mtime * 1000, 'size': __import__('os').stat(path).st_size}");
-  runProcess = evaluate("lambda command, args, environment, input_text, timeout: __import__('subprocess').run([command, *list(args)], env=dict(environment) if environment is not None else None, input=input_text, text=True, capture_output=True, timeout=(timeout / 1000) if timeout is not None else None)");
+  popen = evaluate("lambda command, args, environment, input_text: __import__('subprocess').Popen([command, *list(args)], env=dict(environment) if environment is not None else None, stdin=(__import__('subprocess').PIPE if input_text is not None else None), stdout=__import__('subprocess').PIPE, stderr=__import__('subprocess').PIPE, text=True)");
+  communicate = evaluate("lambda proc, input_text: (lambda out: {'returncode': proc.returncode, 'stdout': out[0], 'stderr': out[1]})(proc.communicate(input=input_text))");
+  killProcess = evaluate("lambda proc: proc.kill()");
   requestHttp = evaluate("lambda url, method, headers, body, timeout: __import__('httpx').request(method or 'GET', url, headers=dict(headers) if headers is not None else None, content=body, timeout=(timeout / 1000) if timeout is not None else 30, follow_redirects=True)");
   chmod = evaluate("lambda path, mode: __import__('os').chmod(path, int(mode))");
+  isDir = evaluate("__import__('os').path.isdir");
+  rmtree = evaluate("__import__('shutil').rmtree");
+  rmdir = evaluate("__import__('os').rmdir");
+  unlink = evaluate("__import__('os').unlink");
   host = {
     crypto: {
       randomBytes: evaluate("lambda length: list(__import__('os').urandom(int(length)))"),
@@ -1733,7 +1739,7 @@ var init_host = __esm(() => {
       },
       exists: (path) => Boolean(osPath.exists(path)),
       async mkdir(path, recursive) {
-        if (osPath.exists(path))
+        if (await toThread(osPath.exists, path))
           return false;
         await toThread(mkdir, path, recursive);
         return true;
@@ -1752,13 +1758,13 @@ var init_host = __esm(() => {
         return String(await toThread(osPath.realpath, path));
       },
       async remove(path, recursive, force) {
-        if (!osPath.exists(path)) {
+        if (!await toThread(osPath.exists, path)) {
           if (!force)
             throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
           return;
         }
-        const isDirectory = evaluate("__import__('os').path.isdir")(path);
-        const operation = isDirectory ? recursive ? evaluate("__import__('shutil').rmtree") : evaluate("__import__('os').rmdir") : evaluate("__import__('os').unlink");
+        const isDirectory = await toThread(isDir, path);
+        const operation = isDirectory ? recursive ? rmtree : rmdir : unlink;
         await toThread(operation, path);
       },
       async rename(source, destination) {
@@ -1800,12 +1806,26 @@ var init_host = __esm(() => {
       resolve: (parts) => String(osPath.resolve(parts))
     },
     process: {
-      async run(command, args, environment, input, timeoutMs) {
-        const result = await toThread(runProcess, command, args, environment, input, timeoutMs);
+      start(command, args, environment, input) {
+        const proc = popen(command, args, environment, input);
+        let killed = false;
         return {
-          exitCode: result.returncode,
-          ...result.stdout?.trim() ? { stdout: result.stdout.trim() } : {},
-          ...result.stderr?.trim() ? { stderr: result.stderr.trim() } : {}
+          kill() {
+            if (killed)
+              return;
+            killed = true;
+            try {
+              killProcess(proc);
+            } catch {}
+          },
+          async wait() {
+            const result = await toThread(communicate, proc, input);
+            return {
+              exitCode: result.returncode,
+              ...result.stdout?.trim() ? { stdout: result.stdout.trim() } : {},
+              ...result.stderr?.trim() ? { stderr: result.stderr.trim() } : {}
+            };
+          }
         };
       }
     }
@@ -7117,7 +7137,7 @@ var require_stream_browserify = __commonJS((exports2, module2) => {
 var exports_fs_promises = {};
 __export(exports_fs_promises, {
   writeFile: () => writeFile,
-  unlink: () => unlink,
+  unlink: () => unlink2,
   stat: () => stat,
   rm: () => rm,
   rename: () => rename,
@@ -7202,11 +7222,9 @@ async function rename(source, destination) {
 async function rm(path, options = {}) {
   await pythonHost().file.remove(String(path), options.recursive === true, options.force === true);
 }
-async function unlink(path) {
-  if (!pythonHost().file.exists(String(path)))
-    return;
+async function unlink2(path) {
   try {
-    await pythonHost().file.remove(String(path), false, false);
+    await pythonHost().file.remove(String(path), false, true);
   } catch (cause) {
     if (/FileNotFoundError|Errno 2|ENOENT/.test(String(cause)))
       return;
@@ -7254,7 +7272,7 @@ var init_fs_promises = __esm(() => {
     rename,
     rm,
     stat,
-    unlink,
+    unlink: unlink2,
     writeFile
   };
 });
@@ -7716,7 +7734,7 @@ var exports_fs = {};
 __export(exports_fs, {
   utimes: () => utimes,
   stat: () => stat2,
-  rmdir: () => rmdir,
+  rmdir: () => rmdir2,
   realpath: () => realpath2,
   readFileSync: () => readFileSync,
   promises: () => exports_fs_promises,
@@ -7774,7 +7792,7 @@ function realpath2(path, done) {
 function stat2(path, done) {
   callback(stat(path), done);
 }
-function rmdir(path, done) {
+function rmdir2(path, done) {
   callback(rm(path).then(() => {
     return;
   }), done);
@@ -7823,7 +7841,7 @@ var init_fs = __esm(() => {
     promises: exports_fs_promises,
     readFileSync,
     realpath: realpath2,
-    rmdir,
+    rmdir: rmdir2,
     stat: stat2,
     utimes
   };
@@ -16230,23 +16248,23 @@ var require_extract_zip = __commonJS((exports2, module2) => {
       const IFDIR = 16384;
       const IFLNK = 40960;
       const symlink = (mode & IFMT) === IFLNK;
-      let isDir = (mode & IFMT) === IFDIR;
-      if (!isDir && entry.fileName.endsWith("/")) {
-        isDir = true;
+      let isDir2 = (mode & IFMT) === IFDIR;
+      if (!isDir2 && entry.fileName.endsWith("/")) {
+        isDir2 = true;
       }
       const madeBy = entry.versionMadeBy >> 8;
-      if (!isDir)
-        isDir = madeBy === 0 && entry.externalFileAttributes === 16;
-      debug("extracting entry", { filename: entry.fileName, isDir, isSymlink: symlink });
-      const procMode = this.getExtractedMode(mode, isDir) & 511;
-      const destDir = isDir ? dest : path.dirname(dest);
+      if (!isDir2)
+        isDir2 = madeBy === 0 && entry.externalFileAttributes === 16;
+      debug("extracting entry", { filename: entry.fileName, isDir: isDir2, isSymlink: symlink });
+      const procMode = this.getExtractedMode(mode, isDir2) & 511;
+      const destDir = isDir2 ? dest : path.dirname(dest);
       const mkdirOptions = { recursive: true };
-      if (isDir) {
+      if (isDir2) {
         mkdirOptions.mode = procMode;
       }
       debug("mkdir", { dir: destDir, ...mkdirOptions });
       await fs.mkdir(destDir, mkdirOptions);
-      if (isDir)
+      if (isDir2)
         return;
       debug("opening read stream", dest);
       const readStream = await promisify(this.zipfile.openReadStream.bind(this.zipfile))(entry);
@@ -16258,10 +16276,10 @@ var require_extract_zip = __commonJS((exports2, module2) => {
         await pipeline(readStream, createWriteStream2(dest, { mode: procMode }));
       }
     }
-    getExtractedMode(entryMode, isDir) {
+    getExtractedMode(entryMode, isDir2) {
       let mode = entryMode;
       if (mode === 0) {
-        if (isDir) {
+        if (isDir2) {
           if (this.opts.defaultDirMode) {
             mode = parseInt(this.opts.defaultDirMode, 10);
           }
@@ -20734,7 +20752,10 @@ var DURATION_UNIT_MS = new Map(DURATION_UNITS.flatMap(([ms, aliases]) => aliases
 
 // packages/js/shared/core/src/environment-utils.ts
 var MAX_TCP_PORT = 65535;
-function isDatabricksAppEnv(source = process.env) {
+function runtimeEnvironment() {
+  return globalThis.process?.env ?? {};
+}
+function isDatabricksAppEnv(source = runtimeEnvironment()) {
   const override = toBoolean(source.DBX_TOOLS_DATABRICKS_APP_ENV);
   if (override !== undefined)
     return override;
@@ -21139,15 +21160,20 @@ class PythonChildProcess extends import_node_events.EventEmitter {
   stdout = new import_node_stream.Readable({ read() {} });
   stderr = new import_node_stream.Readable({ read() {} });
   active = true;
+  handle;
   constructor(command, args, options) {
     super();
+    this.handle = pythonHost().process.start(command, args, options.env, undefined);
     options.signal?.addEventListener("abort", () => {
       if (!this.active)
         return;
       this.active = false;
+      this.handle.kill();
+      this.stdout.push(null);
+      this.stderr.push(null);
       this.emit("error", Object.assign(new Error("Process execution was aborted"), { code: "ABORT_ERR" }));
     });
-    pythonHost().process.run(command, args, options.env, undefined, undefined).then((result) => {
+    this.handle.wait().then((result) => {
       if (!this.active)
         return;
       this.active = false;
@@ -21169,14 +21195,15 @@ class PythonChildProcess extends import_node_events.EventEmitter {
     });
   }
   kill() {
-    return false;
+    this.handle.kill();
+    return true;
   }
 }
 function spawn(command, args = [], options = {}) {
   return new PythonChildProcess(command, args, options);
 }
 function execFile(command, args, _options, callback) {
-  pythonHost().process.run(command, args, undefined, undefined, undefined).then((result) => {
+  pythonHost().process.start(command, args, undefined, undefined).wait().then((result) => {
     if (result.exitCode === 0) {
       callback(null, { stdout: result.stdout ?? "", stderr: result.stderr ?? "" });
     } else {
@@ -25425,7 +25452,7 @@ function managedExecutableName() {
 }
 async function compatibleDatabricksCli(executable) {
   try {
-    const result = await runProcess2(executable, ["--version"], {}, 1e4);
+    const result = await runProcess(executable, ["--version"], {}, 1e4);
     if (result.exitCode !== 0) {
       logger4.debug("Databricks CLI version probe failed", {
         executable,
@@ -25456,7 +25483,7 @@ function platformAsset() {
 }
 async function databricksCliLogin(profile, timeoutMs, executable = process.env.DATABRICKS_CLI_PATH ?? "databricks", environment = {}) {
   logger4.debug("starting Databricks CLI login", { profile, executable, timeoutMs });
-  const result = await runProcess2(executable, ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`], environment);
+  const result = await runProcess(executable, ["auth", "login", "--profile", profile, "--timeout", `${Math.ceil(timeoutMs / 1000)}s`], environment);
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth login exited ${result.exitCode}`);
   logger4.debug("Databricks CLI login completed", { profile, executable });
@@ -25466,7 +25493,7 @@ async function databricksCliToken(profile, forceRefresh = false, executable = pr
   const args = ["auth", "token", "--profile", profile, "--output", "json"];
   if (forceRefresh)
     args.push("--force-refresh");
-  const result = await runProcess2(executable, args, environment);
+  const result = await runProcess(executable, args, environment);
   if (result.exitCode !== 0)
     throw new AuthError("cli", result.stderr || `databricks auth token exited ${result.exitCode}`);
   let value;
@@ -25492,7 +25519,7 @@ async function databricksCliToken(profile, forceRefresh = false, executable = pr
   });
   return token;
 }
-async function runProcess2(command, args, environment, timeoutMs) {
+async function runProcess(command, args, environment, timeoutMs) {
   const controller = timeoutMs === undefined ? undefined : new AbortController;
   const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
   try {
@@ -25579,9 +25606,9 @@ class TokenLifecycle {
     logger5.debug("created authentication lifecycle", {
       credential: credentialId(key),
       storage: store.name(),
-      refreshBufferSeconds: options.refreshBufferSeconds,
-      lockTimeoutSeconds: options.lockTimeoutSeconds,
-      loginTimeoutSeconds: options.loginTimeoutSeconds,
+      refreshBufferMs: options.refreshBufferMs,
+      lockTimeoutMs: options.lockTimeoutMs,
+      loginTimeoutMs: options.loginTimeoutMs,
       silentProvider: provider.canAuthenticateSilently()
     });
   }
@@ -25592,7 +25619,7 @@ class TokenLifecycle {
     logger5.debug("interactive login requested", this.context());
     return this.withLock(async () => {
       await this.store.prepareWrite();
-      const token = validateToken(await this.provider.login(this.options.loginTimeoutSeconds * 1000));
+      const token = validateToken(await this.provider.login(this.options.loginTimeoutMs));
       await this.store.save(this.key, token);
       logger5.debug("interactive login stored credential", {
         ...this.context(),
@@ -25684,7 +25711,7 @@ class TokenLifecycle {
         if (!login)
           throw error;
         logger5.debug("falling back to interactive login", this.context());
-        token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+        token = await this.provider.login(this.options.loginTimeoutMs);
       }
     } else if (this.provider.canAuthenticateSilently()) {
       logger5.debug("attempting silent credential acquisition", {
@@ -25692,7 +25719,7 @@ class TokenLifecycle {
         loginFallback: login
       });
       try {
-        token = await this.provider.authenticate(this.options.loginTimeoutSeconds * 1000);
+        token = await this.provider.authenticate(this.options.loginTimeoutMs);
       } catch (error) {
         logger5.debug("silent credential acquisition failed", {
           ...this.context(),
@@ -25702,11 +25729,11 @@ class TokenLifecycle {
         if (!login)
           throw error;
         logger5.debug("falling back to interactive login", this.context());
-        token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+        token = await this.provider.login(this.options.loginTimeoutMs);
       }
     } else if (login) {
       logger5.debug("provider requires interactive login", this.context());
-      token = await this.provider.login(this.options.loginTimeoutSeconds * 1000);
+      token = await this.provider.login(this.options.loginTimeoutMs);
     } else {
       throw new AuthError("oauth", "No stored credential is available and interactive login is disabled");
     }
@@ -25725,11 +25752,12 @@ class TokenLifecycle {
       return false;
     if (!token.expiry)
       return true;
-    return Date.parse(token.expiry) - this.now().getTime() > this.options.refreshBufferSeconds * 1000;
+    return Date.parse(token.expiry) - this.now().getTime() > this.options.refreshBufferMs;
   }
   async withLock(action) {
     logger5.debug("waiting for credential lock", this.context());
-    const lease = await this.store.acquireLock(this.key, this.options.lockTimeoutSeconds * 1000);
+    const lockTimeoutMs = this.options.lockTimeoutMs > 0 ? this.options.lockTimeoutMs : undefined;
+    const lease = await this.store.acquireLock(this.key, lockTimeoutMs);
     logger5.debug("credential lock acquired", this.context());
     let failure;
     try {
@@ -25778,7 +25806,7 @@ function isValid(token, now) {
   return Boolean(token.accessToken) && (!token.expiry || Date.parse(token.expiry) > now.getTime());
 }
 
-// packages/js/node/auth/src/node-storage.ts
+// packages/js/node/auth/src/file-storage.ts
 init_fs_promises();
 init_path();
 // projen/shims/python-node/file-lock.ts
@@ -25857,9 +25885,9 @@ function lockId2(key) {
 }
 // packages/js/node/auth/src/types.ts
 var AUTH_DEFAULTS = {
-  refreshBufferSeconds: 300,
-  lockTimeoutSeconds: 30,
-  loginTimeoutSeconds: 900
+  refreshBufferMs: 300000,
+  lockTimeoutMs: 0,
+  loginTimeoutMs: 900000
 };
 var AuthOptions = {
   create(options = {}) {
@@ -25876,10 +25904,10 @@ var WORKSPACE_ID_HEADER = "x-databricks-workspace-id";
 var AUTH_TYPE_APP_OBO = "app_obo";
 var AUTH_TYPE_APP_SP = "app_sp";
 
-// packages/js/node/auth/src/node-storage.ts
+// packages/js/node/auth/src/file-storage.ts
 var logger7 = authLogger("file-storage");
 
-class NodeFileLocks {
+class FileLocks {
   lockDirectory;
   leases = new Map;
   constructor(lockDirectory) {
@@ -25916,7 +25944,7 @@ class FileCredentialStore {
   constructor(root = join(homedir(), ".databricks"), layout = "single" /* Single */, locks) {
     this.root = root;
     this.layout = layout;
-    this.locks = locks ?? new NodeFileLocks(join(root, "locks"));
+    this.locks = locks ?? new FileLocks(join(root, "locks"));
   }
   async load(key) {
     const store = this.forKey(key);
@@ -26033,7 +26061,7 @@ async function atomicWriteTextFile(path, content, mode) {
     await chmod2(temporary, mode);
     await rename(temporary, path);
   } finally {
-    await unlink(temporary).catch((cause) => {
+    await unlink2(temporary).catch((cause) => {
       if (cause.code !== "ENOENT")
         throw cause;
     });
@@ -27565,42 +27593,61 @@ class DatabricksServicePrincipalProvider {
 var logger12 = authLogger("memory-storage");
 
 class MemoryLockAdapter {
-  #tails = new Map;
-  #leases = new Map;
+  #states = new Map;
   #sequence = 0;
-  async acquire(key, timeoutMs) {
+  acquire(key, timeoutMs) {
     const credential = credentialId(key);
-    const previous = this.#tails.get(key) ?? Promise.resolve();
-    let release;
-    const current = new Promise((resolve2) => {
-      release = resolve2;
-    });
-    const tail = previous.then(() => current);
-    this.#tails.set(key, tail);
-    try {
-      logger12.debug("waiting for memory lock", { credential, timeoutMs });
-      await withTimeout(previous, timeoutMs, `Timed out waiting for lock ${key}`);
-    } catch (error) {
-      release();
-      if (this.#tails.get(key) === tail)
-        this.#tails.delete(key);
-      throw error;
+    const state = this.#states.get(key);
+    if (!state) {
+      const lease = this.#nextLease(key);
+      this.#states.set(key, { lease, queue: [] });
+      logger12.debug("memory lock acquired", { credential });
+      return Promise.resolve(lease);
     }
-    const lease = `${++this.#sequence}:${key}`;
-    this.#leases.set(lease, () => {
-      release();
-      this.#leases.delete(lease);
-      if (this.#tails.get(key) === tail)
-        this.#tails.delete(key);
+    logger12.debug("waiting for memory lock", { credential, timeoutMs });
+    return new Promise((resolve2, reject) => {
+      let timer;
+      const waiter = {
+        resolve: (lease) => {
+          if (timer)
+            clearTimeout(timer);
+          logger12.debug("memory lock acquired", { credential });
+          resolve2(lease);
+        },
+        reject: (error) => {
+          if (timer)
+            clearTimeout(timer);
+          reject(error);
+        }
+      };
+      state.queue.push(waiter);
+      if (timeoutMs !== undefined && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+        timer = setTimeout(() => {
+          const index = state.queue.indexOf(waiter);
+          if (index >= 0)
+            state.queue.splice(index, 1);
+          waiter.reject(new Error(`Timed out waiting for lock ${key}`));
+        }, timeoutMs);
+      }
     });
-    logger12.debug("memory lock acquired", { credential });
-    return lease;
   }
-  async release(lease) {
-    logger12.debug("releasing memory lock", {
-      credential: credentialId(lease.split(":").slice(1).join(":"))
-    });
-    this.#leases.get(lease)?.();
+  release(lease) {
+    const key = lease.split(":").slice(1).join(":");
+    logger12.debug("releasing memory lock", { credential: credentialId(key) });
+    const state = this.#states.get(key);
+    if (!state || state.lease !== lease)
+      return Promise.resolve();
+    const next = state.queue.shift();
+    if (!next) {
+      this.#states.delete(key);
+      return Promise.resolve();
+    }
+    state.lease = this.#nextLease(key);
+    next.resolve(state.lease);
+    return Promise.resolve();
+  }
+  #nextLease(key) {
+    return `${++this.#sequence}:${key}`;
   }
 }
 
@@ -27638,22 +27685,6 @@ class MemoryCredentialStore {
   }
   name() {
     return "memory";
-  }
-}
-async function withTimeout(promise, timeoutMs, message) {
-  if (!Number.isFinite(timeoutMs) || timeoutMs < 0)
-    throw new TypeError("timeoutMs must be non-negative");
-  let timeout;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_2, reject) => {
-        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timeout)
-      clearTimeout(timeout);
   }
 }
 
@@ -30799,12 +30830,10 @@ function normalizeEndpoints(endpoints) {
     return [summary];
   });
   const classes = classifyEndpointClasses(summaries);
-  for (const summary of summaries) {
+  return summaries.map((summary) => {
     const modelClass = classes.get(summary.name);
-    if (modelClass)
-      summary.class = modelClass;
-  }
-  return summaries;
+    return modelClass ? { ...summary, class: modelClass } : summary;
+  });
 }
 function compareRanked(left, right) {
   const score = Math.round((left.score ?? 0) * 1000) - Math.round((right.score ?? 0) * 1000);
