@@ -55,6 +55,10 @@
         "types": "./lib/src/cli.d.ts",
         "default": "./lib/src/cli.js"
       },
+      "./defaults": {
+        "types": "./lib/src/defaults.d.ts",
+        "default": "./lib/src/defaults.js"
+      },
       "./server": {
         "types": "./lib/src/server.d.ts",
         "default": "./lib/src/server.js"
@@ -62,7 +66,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.35",
+  "version": "0.9.36",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
@@ -73,6 +77,7 @@
   "exports": {
     ".": "./index.ts",
     "./cli": "./src/cli.ts",
+    "./defaults": "./src/defaults.ts",
     "./server": "./src/server.ts",
     "./package.json": "./package.json"
   },

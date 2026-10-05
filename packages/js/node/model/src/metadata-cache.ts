@@ -99,11 +99,13 @@ export function metadataCacheDiskEnabled(environment: NodeJS.ProcessEnv = proces
  */
 export function createMetadataCache<T>(options: MetadataCacheOptions<T>): MetadataCache<T> {
   const ttlMs = options.ttlMs ?? MODEL_METADATA_TTL_MS;
-  const version = options.version ?? PACKAGE_VERSION;
-  const path = options.cacheDir ?? defaultMetadataCacheDir(version);
   const diskEnabled = options.disk ?? metadataCacheDiskEnabled();
   const now = options.now ?? Date.now;
-  const flightKey = `${path}::${options.key}`;
+  const pathPromise = resolveCacheDir(options);
+  let path = options.cacheDir;
+
+  const flightKey = (cachePath: string, suffix = ""): string =>
+    `${cachePath}::${options.key}${suffix}`;
 
   /** Process-local store used when disk is off (Databricks Apps). */
   const memoryOnly = new Map<string, MetadataCacheRecord<T>>();
@@ -113,15 +115,25 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
   const isFresh = (record: MetadataCacheRecord<T> | undefined): boolean =>
     Boolean(record && now() - record.refreshedAt < ttlMs);
 
+  const cachePath = async (): Promise<string> => {
+    path ??= await pathPromise;
+    return path;
+  };
+
   const readRecord = async (): Promise<MetadataCacheRecord<T> | undefined> => {
     if (!diskEnabled) return memoryOnly.get(options.key);
+    const resolvedPath = await cachePath();
     try {
       // cacache reads its in-memory memo first unless memoize is false
-      const entry = await cacache.get(path, options.key);
+      const entry = await cacache.get(resolvedPath, options.key);
       return decodeRecord<T>(entry.data);
     } catch (error) {
       if (isCacheMiss(error)) return undefined;
-      logger.warn("metadata cache cacache read failed", { key: options.key, path, error });
+      logger.warn("metadata cache cacache read failed", {
+        key: options.key,
+        path: resolvedPath,
+        error,
+      });
       return undefined;
     }
   };
@@ -131,13 +143,18 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
       memoryOnly.set(options.key, record);
       return;
     }
+    const resolvedPath = await cachePath();
     try {
-      await cacache.put(path, options.key, `${JSON.stringify(record)}\n`, {
+      await cacache.put(resolvedPath, options.key, `${JSON.stringify(record)}\n`, {
         memoize: true,
         metadata: { refreshedAt: record.refreshedAt },
       });
     } catch (error) {
-      logger.warn("metadata cache cacache write failed", { key: options.key, path, error });
+      logger.warn("metadata cache cacache write failed", {
+        key: options.key,
+        path: resolvedPath,
+        error,
+      });
     }
   };
 
@@ -146,8 +163,9 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
     return value;
   };
 
-  const refresh = async (force: boolean): Promise<T> =>
-    coalesce(flightKey, async () => {
+  const refresh = async (force: boolean): Promise<T> => {
+    const resolvedPath = await cachePath();
+    return coalesce(flightKey(resolvedPath), async () => {
       const previous = await readRecord();
       if (!force && isFresh(previous)) {
         return resolveValue({
@@ -165,7 +183,7 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
           logger.warn("metadata cache refresh failed; keeping last known good", {
             key: options.key,
             error,
-            path,
+            path: resolvedPath,
             diskEnabled,
           });
         }
@@ -181,15 +199,22 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
       }
       return value;
     });
+  };
 
   return {
-    path,
+    get path() {
+      if (!path) {
+        throw new Error("metadata cache path is not resolved until the first cache read");
+      }
+      return path;
+    },
     diskEnabled,
     get: () => refresh(false),
     peek: async () => (await readRecord())?.value,
     refresh: () => refresh(true),
-    update: async (mutator) =>
-      coalesce(`${flightKey}:update`, async () => {
+    update: async (mutator) => {
+      const resolvedPath = await cachePath();
+      return coalesce(flightKey(resolvedPath, ":update"), async () => {
         const previous = await readRecord();
         const baseline = resolveValue({
           fresh: undefined,
@@ -197,8 +222,18 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
           fallback: options.fallback,
         });
         return persist(mutator(baseline));
-      }),
+      });
+    },
   };
+}
+
+async function resolveCacheDir(options: {
+  readonly cacheDir?: string;
+  readonly version?: string;
+}): Promise<string> {
+  if (options.cacheDir) return options.cacheDir;
+  const version = options.version ?? (await import("../index.ts")).PACKAGE_VERSION;
+  return defaultMetadataCacheDir(version);
 }
 
 /** Prefer a non-empty fresh array, else previous, else fallback. */
@@ -270,12 +305,3 @@ function isCacheMiss(error: unknown): boolean {
   );
 }
 
-function packageVersion(): string {
-  const manifest = createRequire(import.meta.url)("../package.json") as {
-    version?: unknown;
-  };
-  if (typeof manifest.version !== "string" || !manifest.version) {
-    throw new Error("package has no version");
-  }
-  return manifest.version;
-}
