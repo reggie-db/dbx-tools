@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
+import * as projectUtils from "@dbx-tools/core/project-utils";
 import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { runTaskCommand } from "../../src/_task-command.ts";
@@ -46,6 +47,59 @@ export type NpmArchiveManifestTransform = (
 
 /** Entry-point fields projected from publishConfig into a packed manifest. */
 const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const;
+const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+] as const;
+
+/** Replace workspace and catalogue protocols with publishable registry ranges. */
+export function materializeWorkspaceManifest(
+  source: Readonly<Record<string, unknown>>,
+  workspace: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const manifest = structuredClone(source) as Record<string, unknown>;
+  const version = workspace.version;
+  const catalog =
+    workspace.catalog && typeof workspace.catalog === "object"
+      ? (workspace.catalog as Readonly<Record<string, unknown>>)
+      : {};
+  if (typeof version !== "string" || !version) {
+    throw new Error("Workspace manifest has no version");
+  }
+  for (const field of DEPENDENCY_FIELDS) {
+    const dependencies = manifest[field];
+    if (!dependencies || typeof dependencies !== "object") continue;
+    manifest[field] = Object.fromEntries(
+      Object.entries(dependencies).map(([name, value]) => [
+        name,
+        materializeDependency(name, value, version, catalog),
+      ]),
+    );
+  }
+  return manifest;
+}
+
+function materializeDependency(
+  name: string,
+  value: unknown,
+  version: string,
+  catalog: Readonly<Record<string, unknown>>,
+): unknown {
+  if (value === "catalog:") {
+    const resolved = catalog[name];
+    if (typeof resolved !== "string" || !resolved) {
+      throw new Error(`Workspace catalog has no version for ${name}`);
+    }
+    return resolved;
+  }
+  if (typeof value !== "string" || !value.startsWith("workspace:")) return value;
+  const selector = value.slice("workspace:".length);
+  if (selector === "*" || !selector) return version;
+  if (selector === "^" || selector === "~") return `${selector}${version}`;
+  return selector;
+}
 
 /**
  * Fold compiled publish entry points onto an archive manifest without changing
@@ -280,11 +334,25 @@ export function packNpmPackage(
 ): string {
   const executable = process.versions.bun ? process.execPath : "bun";
   const manifest = join(directory, "package.json");
+  const originalManifest = readFileSync(manifest, "utf8");
+  const workspaceRoot = projectUtils.root(directory) ?? directory;
+  const workspaceManifest = JSON.parse(
+    readFileSync(join(workspaceRoot, "package.json"), "utf8"),
+  ) as Record<string, unknown>;
+  const packedManifest = `${JSON.stringify(
+    materializeWorkspaceManifest(
+      JSON.parse(originalManifest) as Record<string, unknown>,
+      workspaceManifest,
+    ),
+    null,
+    2,
+  )}\n`;
   const manifestMode = lstatSync(manifest).mode & 0o777;
   const restoreManifestMode = (manifestMode & 0o200) === 0;
   const existingArchives = new Set(readdirSync(destination));
   if (restoreManifestMode) chmodSync(manifest, manifestMode | 0o200);
   try {
+    writeFileSync(manifest, packedManifest);
     exec.spawnSync(
       executable,
       ["pm", "pack", "--destination", destination, "--ignore-scripts", "--quiet"],
@@ -298,6 +366,7 @@ export function packNpmPackage(
       },
     );
   } finally {
+    writeFileSync(manifest, originalManifest);
     if (restoreManifestMode) chmodSync(manifest, manifestMode);
   }
   const archives = readdirSync(destination).filter(

@@ -21,7 +21,6 @@ import * as log from "@dbx-tools/shared-core/log";
 import cacache from "cacache";
 import envPaths from "env-paths";
 
-import { PACKAGE_VERSION } from "../index.ts";
 import { MODEL_METADATA_TTL_MS } from "./_metadata-contract.ts";
 
 const logger = log.logger("model/metadata-cache");
@@ -85,7 +84,7 @@ export interface MetadataCache<T> {
 const inflight = new Map<string, Promise<unknown>>();
 
 /** Default cacache root for a package version under the dbx-tools cache dir. */
-export function defaultMetadataCacheDir(version = PACKAGE_VERSION): string {
+export function defaultMetadataCacheDir(version: string): string {
   const cacheDirectory = envPaths("dbx-tools", { suffix: "" }).cache;
   return resolve(cacheDirectory, "model-gateway", version);
 }
@@ -269,4 +268,14 @@ function isCacheMiss(error: unknown): boolean {
     "code" in error &&
     (error as { code?: string }).code === "ENOENT",
   );
+}
+
+function packageVersion(): string {
+  const manifest = createRequire(import.meta.url)("../package.json") as {
+    version?: unknown;
+  };
+  if (typeof manifest.version !== "string" || !manifest.version) {
+    throw new Error("package has no version");
+  }
+  return manifest.version;
 }

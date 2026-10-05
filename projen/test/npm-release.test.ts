@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import {
+  materializeWorkspaceManifest,
   npmReleaseMatches,
   packNpmPackage,
   readNpmArchiveIdentity,
@@ -35,7 +36,11 @@ before(() => {
   mkdirSync(dependencyDir);
   writeFileSync(
     join(outdir, "package.json"),
-    `${JSON.stringify({ private: true, workspaces: ["package", "dependency"] })}\n`,
+    `${JSON.stringify({
+      private: true,
+      version: "1.2.3",
+      workspaces: ["package", "dependency"],
+    })}\n`,
   );
   writeFileSync(
     join(dependencyDir, "package.json"),
@@ -67,6 +72,26 @@ after(() => {
 });
 
 describe("npm release recovery", () => {
+  it("materializes workspace and catalog dependency protocols", () => {
+    const resolved = materializeWorkspaceManifest(
+      {
+        dependencies: {
+          "@fixture/dependency": "workspace:^",
+          zod: "catalog:",
+        },
+      },
+      {
+        version: "1.2.3",
+        catalog: { zod: "4.3.6" },
+      },
+    );
+
+    assert.deepEqual(resolved.dependencies, {
+      "@fixture/dependency": "^1.2.3",
+      zod: "4.3.6",
+    });
+  });
+
   it("reads and matches an exact staged archive", () => {
     assert.equal(identity.name, "@fixture/native");
     assert.equal(identity.version, "1.2.3");

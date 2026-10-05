@@ -4,6 +4,7 @@
  * @module
  */
 
+import { isChatClass } from "@dbx-tools/model/classes";
 import type {
   CodexModel,
   CodexModelListResponse,
@@ -43,12 +44,14 @@ export function listModelsPayload(
   targets: readonly ModelTarget[],
   includeCodex: boolean,
 ): ModelListResponse {
-  const available = targets.filter((target) => target.endpoint?.status?.deprecated !== true);
+  const available = targets
+    .filter((target) => target.endpoint?.status?.deprecated !== true)
+    .filter((target) => !includeCodex || hasChatClass(target))
+    .slice()
+    .sort(compareCatalogueTargets);
   if (includeCodex) {
     return {
-      models: available
-        .filter(canSatisfyCodex)
-        .map((target, index) => codexModel(target, index + 1)),
+      models: available.map((target, index) => codexModel(target, index + 1)),
     };
   }
   return {
@@ -117,11 +120,33 @@ function codexModel(target: ModelTarget, priority: number): CodexModel {
   };
 }
 
-function canSatisfyCodex(target: ModelTarget): boolean {
-  return (
-    target.capabilities.responses ||
-    target.capabilities.openResponses ||
-    target.capabilities.aiGatewayCodex ||
-    target.capabilities.chat
-  );
+/**
+ * Order listed models by family A-Z, then display name. Targets with no family
+ * follow every named family, still sorted by display name.
+ */
+function compareCatalogueTargets(left: ModelTarget, right: ModelTarget): number {
+  const leftFamily = catalogueFamily(left);
+  const rightFamily = catalogueFamily(right);
+  if (Boolean(leftFamily) !== Boolean(rightFamily)) return leftFamily ? -1 : 1;
+  if (leftFamily && rightFamily) {
+    const familyOrder = leftFamily.localeCompare(rightFamily, undefined, { sensitivity: "base" });
+    if (familyOrder !== 0) return familyOrder;
+  }
+  return catalogueName(left).localeCompare(catalogueName(right), undefined, {
+    sensitivity: "base",
+  });
+}
+
+function catalogueFamily(target: ModelTarget): string | undefined {
+  const family = target.family?.trim() || target.endpoint?.family?.trim();
+  return family || undefined;
+}
+
+function catalogueName(target: ModelTarget): string {
+  return target.displayName.trim() || target.id;
+}
+
+function hasChatClass(target: ModelTarget): boolean {
+  const modelClass = target.endpoint?.class;
+  return modelClass !== undefined && isChatClass(modelClass);
 }
