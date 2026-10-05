@@ -79,7 +79,10 @@ describe("unified release workflow", () => {
     assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
     assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
-    assert.equal(verifyJob.steps.some((candidate) => candidate.name === "Setup uv"), false);
+    assert.equal(
+      verifyJob.steps.some((candidate) => candidate.name === "Setup uv"),
+      false,
+    );
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse "origin/main")" = "$RELEASE_SHA"'));
@@ -166,7 +169,6 @@ describe("unified release workflow", () => {
       assert.equal(existsSync(join(outdir, ".github", "workflows", file)), false);
     }
   });
-
 });
 
 describe("release task contracts", () => {
@@ -191,10 +193,10 @@ describe("release task contracts", () => {
     assert.doesNotMatch(driver, /applyPublishConfig\(manifestPath\)/);
     assert.match(driver, /import \{ delimiter,/);
     assert.doesNotMatch(driver, /split\(":"\)/);
-    assert.match(driver, /\["publish",[\s\S]*archive\]/);
+    assert.match(driver, /"npm",\s*\["publish",[\s\S]*archive\]/);
     assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
     assert.match(driver, /\["--access", access\]/);
-    assert.match(driver, /restoreManifestMode/);
+    assert.doesNotMatch(driver, /restoreManifestMode|chmodSync|lstatSync/);
   });
 
   it("publishes reviewed versions without repairing manifests", () => {

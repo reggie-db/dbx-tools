@@ -9,7 +9,7 @@
  *
  *   - **version validation** fails when any member differs from the reviewed
  *     `VERSION`; publication never repairs committed release metadata;
- *   - **`workspace:` / `catalog:` rewriting** is NOT done here - `bun publish`
+ *   - **`workspace:` / `catalog:` rewriting** is NOT done here - `bun pm pack`
  *     strips both protocols in the PACKED tarball, resolving `workspace:*` to the
  *     sibling's version and `catalog:` to the root catalog entry. (Verified: a
  *     packed manifest shows `"@scope/x": "<version>"` and the real catalog range,
@@ -27,14 +27,14 @@
  *   - **compiled output** is emitted once, before packing, by one root-level
  *     filtered `bun run` that fans out to every publishable member in parallel.
  *     Every package is then packed once with lifecycle scripts disabled. The
- *     exact validated archive is passed to `bun publish`, so upload never
+ *     exact validated archive is passed to `npm publish`, so upload never
  *     repacks or repeats a member's `prepack`. Packages retain `prepack` for
  *     standalone publishes.
  *   - **release recovery** compares each packed archive's integrity and
  *     repository identity with registry metadata. A matching immutable version
  *     is skipped, while any mismatch fails the retry.
  *
- * `--dry-run` forwards to `bun publish`: it packs + validates
+ * `--dry-run` forwards to `npm publish`: it packs + validates
  * but uploads nothing. `--registry` targets a non-default registry (a local
  * verdaccio); `--exclude <dir>` (repeatable, repo-relative) skips a member owned
  * by another publication flow.
@@ -43,16 +43,7 @@
  * error rather than something publication repairs. Local lockfiles are ignored
  * because configured registries can leak into them.
  */
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { asyncUtils, log } from "@dbx-tools/shared-core";
@@ -274,20 +265,12 @@ await asyncUtils.mapConcurrent(
         }
       }
       logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${packageVersion}`);
-      const manifest = join(dir, "package.json");
-      const manifestMode = lstatSync(manifest).mode & 0o777;
-      const restoreManifestMode = (manifestMode & 0o200) === 0;
-      if (restoreManifestMode) chmodSync(manifest, manifestMode | 0o200);
-      try {
-        await runTaskCommandAsync(
-          dir,
-          "bun",
-          ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
-          { env: { ...process.env, PATH: path } },
-        );
-      } finally {
-        if (restoreManifestMode) chmodSync(manifest, manifestMode);
-      }
+      await runTaskCommandAsync(
+        dir,
+        "npm",
+        ["publish", ...(access ? ["--access", access] : []), ...publishArgs, archive],
+        { env: { ...process.env, PATH: path } },
+      );
     } finally {
       rmSync(packed, { recursive: true, force: true });
     }
