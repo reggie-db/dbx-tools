@@ -10,34 +10,26 @@ import {
   runTaskCommand,
 } from "../src/_task-command.ts";
 import { assertReleaseVersion } from "./release-version.ts";
+import { publishLocalRelease } from "./local-publish.ts";
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
 
-export function runRelease(options: {
+export async function runRelease(options: {
   readonly root: string;
   readonly branch: string;
   readonly bump?: boolean;
   readonly prefix: string;
   readonly remote: string;
-}): string {
+  readonly localPublish?: boolean;
+  readonly pythonRoot?: string;
+}): Promise<string> {
   const { branch, prefix, remote, root } = options;
-  const currentBranch = captureGitTaskCommand(root, ["branch", "--show-current"], { check: true });
-  if (currentBranch !== branch) {
-    throw new Error(
-      `release must run on ${branch}, current branch is ${currentBranch || "detached"}`,
-    );
-  }
 
+  // Release runs from any branch: whatever is checked out is fast-forwarded onto
+  // `branch`. The working tree is committed into the release commit unless it is
+  // already clean - the clean tree is a convenience, not a precondition.
   if (options.bump ?? true) {
-    const status = captureGitTaskCommand(
-      root,
-      ["status", "--porcelain=v1", "--untracked-files=all"],
-      { check: true },
-    );
-    if (status) {
-      throw new Error("release with automatic bump requires a clean working tree");
-    }
     runTaskCommand(root, "bun", ["run", "bump"]);
   }
 
@@ -64,36 +56,69 @@ export function runRelease(options: {
     runGitTaskCommand(root, ["commit", "-m", `chore(release): ${version}`]);
   }
 
+  // Fast-forward only: HEAD must already contain the remote branch tip, otherwise
+  // the push would be a non-fast-forward (an unclean merge) and we fail instead
+  // of force-pushing. This holds regardless of which branch is checked out.
   const remoteHead = captureGitTaskCommand(root, ["rev-parse", `${remote}/${branch}`], {
     check: true,
   });
   const head = captureGitTaskCommand(root, ["rev-parse", "HEAD"], { check: true });
   if (!gitTaskCommandSucceeds(root, ["merge-base", "--is-ancestor", remoteHead, head])) {
-    throw new Error(`${branch} must contain ${remote}/${branch} before release`);
+    throw new Error(
+      `cannot fast-forward ${remote}/${branch} to HEAD; ${branch} has diverged (rebase before release)`,
+    );
   }
 
   runGitTaskCommand(root, ["push", remote, `HEAD:${branch}`]);
   runGitTaskCommand(root, ["tag", "--annotate", tag, "--message", tag]);
   runGitTaskCommand(root, ["push", remote, `refs/tags/${tag}`]);
   logger.success(`released ${tag}`, { sha: head });
+
+  // Restore local deploys: when a non-standard (loopback) npm or uv registry is
+  // configured, publish the freshly tagged version to it directly. Detection and
+  // publishing are owned by local-publish.ts; this no-ops on standard registries.
+  if (options.localPublish ?? true) {
+    await publishLocalRelease({
+      localPypi: "auto",
+      localRegistry: "auto",
+      pythonRoot: options.pythonRoot ?? "packages/py",
+      root,
+      version,
+    });
+  }
+
   return tag;
 }
 
 if (import.meta.main) {
-  new Command()
+  await new Command()
     .option("--root <path>", "repository root")
     .option("--branch <name>", "release branch", "main")
     .option("--prefix <prefix>", "release tag prefix", "v")
     .option("--remote <name>", "git remote", "origin")
+    .option("--python-root <path>", "Python package root for local publish", "packages/py")
     .option("--no-bump", "use an existing synchronized local version bump")
-    .action((options: { root?: string; branch: string; bump: boolean; prefix: string; remote: string }) => {
-      runRelease({
-        root: options.root ?? projectUtils.root() ?? process.cwd(),
-        branch: options.branch,
-        bump: options.bump,
-        prefix: options.prefix,
-        remote: options.remote,
-      });
-    })
-    .parse();
+    .option("--no-local-publish", "skip publishing to configured local registries")
+    .action(
+      async (options: {
+        root?: string;
+        branch: string;
+        bump: boolean;
+        prefix: string;
+        remote: string;
+        pythonRoot: string;
+        localPublish: boolean;
+      }) => {
+        await runRelease({
+          root: options.root ?? projectUtils.root() ?? process.cwd(),
+          branch: options.branch,
+          bump: options.bump,
+          prefix: options.prefix,
+          remote: options.remote,
+          pythonRoot: options.pythonRoot,
+          localPublish: options.localPublish,
+        });
+      },
+    )
+    .parseAsync();
 }

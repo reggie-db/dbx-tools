@@ -42,11 +42,11 @@ function fixture(): { remote: string; root: string } {
 }
 
 describe("direct release tags", () => {
-  it("commits the local bump, pushes main, and pushes an annotated tag", () => {
+  it("commits the local bump, pushes main, and pushes an annotated tag", async () => {
     const { remote, root } = fixture();
     try {
       assert.equal(
-        runRelease({ root, branch: "main", prefix: "v", remote: "origin" }),
+        await runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
         "v1.0.1",
       );
       assert.equal(git(root, "log", "-1", "--pretty=%s"), "chore(release): 1.0.1");
@@ -65,13 +65,13 @@ describe("direct release tags", () => {
     }
   });
 
-  it("can use an existing bump when explicitly requested", () => {
+  it("can use an existing bump when explicitly requested", async () => {
     const { remote, root } = fixture();
     try {
       writeFileSync(join(root, "VERSION"), "1.0.1\n");
       writeFileSync(join(root, "generated.txt"), "1.0.1\n");
       assert.equal(
-        runRelease({ root, branch: "main", bump: false, prefix: "v", remote: "origin" }),
+        await runRelease({ root, branch: "main", bump: false, prefix: "v", remote: "origin", localPublish: false }),
         "v1.0.1",
       );
     } finally {
@@ -79,13 +79,40 @@ describe("direct release tags", () => {
     }
   });
 
-  it("refuses to tag a non-release branch", () => {
-    const { root } = fixture();
+  it("fast-forwards main when run from another branch", async () => {
+    const { remote, root } = fixture();
     try {
       git(root, "switch", "-c", "feature");
-      assert.throws(
-        () => runRelease({ root, branch: "main", prefix: "v", remote: "origin" }),
-        /release must run on main/,
+      assert.equal(
+        await runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
+        "v1.0.1",
+      );
+      // The branch commit is fast-forwarded onto main and tagged there.
+      assert.equal(
+        git(root, "rev-parse", "HEAD"),
+        git(remote, "rev-parse", "refs/heads/main"),
+      );
+      assert.equal(
+        git(remote, "rev-parse", "refs/tags/v1.0.1^{commit}"),
+        git(remote, "rev-parse", "refs/heads/main"),
+      );
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
+  it("fails when the branch cannot fast-forward main", async () => {
+    const { root } = fixture();
+    try {
+      // Advance origin/main past the local tip so a fast-forward is impossible.
+      writeFileSync(join(root, "ahead.txt"), "remote\n");
+      git(root, "add", ".");
+      git(root, "commit", "-m", "remote advance");
+      git(root, "push", "origin", "main");
+      git(root, "reset", "--hard", "HEAD~1");
+      await assert.rejects(
+        () => runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
+        /fast-forward/,
       );
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });

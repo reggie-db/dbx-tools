@@ -28,8 +28,14 @@ export function resolveLocalRegistry(value: string): string | undefined {
   return trimmed;
 }
 
+/** Outcome of a local publish: which ecosystems were deployed to a local registry. */
+export interface LocalPublishResult {
+  readonly npm: boolean;
+  readonly python: boolean;
+}
+
 /** Build and publish the current workspace directly to local registries. */
-export async function publishLocalRelease(options: LocalPublishOptions): Promise<void> {
+export async function publishLocalRelease(options: LocalPublishOptions): Promise<LocalPublishResult> {
   const root = resolve(options.root);
   const localRegistry = resolveLocalRegistry(options.localRegistry);
   const activeIndexes = activePythonIndexes();
@@ -76,8 +82,14 @@ export async function publishLocalRelease(options: LocalPublishOptions): Promise
     );
   }
 
+  if (publishes.length === 0) {
+    logger.info("no local registries configured; skipping local publish");
+    return { npm: false, python: false };
+  }
+
   await Promise.all(publishes);
   logger.success(`published local workspace ${options.version}`);
+  return { npm: Boolean(localRegistry), python: Boolean(localPypi) };
 }
 
 if (import.meta.main) {
@@ -88,20 +100,21 @@ if (import.meta.main) {
     .option("--local-registry <url>", "local npm registry", "auto")
     .option("--local-pypi <url>", "local devpi index", "auto")
     .action(
-      (options: {
+      async (options: {
         version: string;
         root?: string;
         pythonRoot: string;
         localRegistry: string;
         localPypi: string;
-      }) =>
-        publishLocalRelease({
+      }) => {
+        await publishLocalRelease({
           localPypi: options.localPypi,
           localRegistry: options.localRegistry,
           pythonRoot: options.pythonRoot,
           root: options.root ?? projectUtils.root() ?? process.cwd(),
           version: options.version,
-        }),
+        });
+      },
     )
     .parseAsync();
 }
