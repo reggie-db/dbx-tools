@@ -15,8 +15,19 @@ from collections.abc import Mapping, Sequence
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 CONTROL_HEADER = "x-model-proxy-control"
+
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
+
+
+def _address_label(url: str) -> str:
+    """Menu label for the proxy address: just the port on loopback, else host:port."""
+    parsed = urlparse(url)
+    if parsed.hostname in _LOOPBACK_HOSTS and parsed.port is not None:
+        return str(parsed.port)
+    return parsed.netloc or url
 
 
 class ProxyApi:
@@ -146,14 +157,16 @@ def run_tray(
         ]
     )
     menu = pystray.Menu(
-        pystray.MenuItem(f"Proxy: {url}", None, enabled=False),
+        # First item is the proxy address (just the port on loopback); clicking it
+        # opens the Swagger docs served at that host:port.
+        pystray.MenuItem(
+            _address_label(url),
+            lambda _icon, _item: webbrowser.open(f"{url}/docs"),
+            default=True,
+        ),
         pystray.MenuItem(
             "Open Models",
             lambda _icon, _item: webbrowser.open(f"{url}/v1/models"),
-        ),
-        pystray.MenuItem(
-            "Open API",
-            lambda _icon, _item: webbrowser.open(f"{url}/docs"),
         ),
         pystray.MenuItem(lambda _item: f"Profile: {current['profile']}", profiles),
         pystray.Menu.SEPARATOR,

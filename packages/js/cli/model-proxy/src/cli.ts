@@ -112,8 +112,13 @@ async function run(
   dependencies: ModelProxyCliDependencies,
 ): Promise<void> {
   const executable = await ensurePythonProxy(dependencies);
+  // restoreInstallArgs returns only the tail after `service install` (with any
+  // Commander-stripped `--` restored), so re-prepend the subcommand - otherwise
+  // the proxy would be launched as a server instead of installing the service.
   const forwarded =
-    args[0] === "service" && args[1] === "install" ? restoreInstallArgs(args) : [...args];
+    args[0] === "service" && args[1] === "install"
+      ? ["service", "install", ...restoreInstallArgs(args)]
+      : [...args];
   const result = await dependencies.run(executable, forwarded, false);
   process.exitCode = result.exitCode;
 }

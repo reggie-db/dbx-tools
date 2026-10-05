@@ -92,6 +92,22 @@ describe("model proxy CLI", () => {
     assert.deepEqual(calls.at(-1), ["/bin/dbx-model-proxy", ["service", "status"], false]);
   });
 
+  it("forwards `service install` with the subcommand preserved", async () => {
+    const calls: Array<[string, readonly string[], boolean]> = [];
+    await buildProgram(
+      "dbx model-proxy",
+      dependencies({ "dbx-model-proxy": "/bin/dbx-model-proxy" }, async (...call) => {
+        calls.push(call);
+        return call[1][0] === "--runtime-info"
+          ? { exitCode: 0, stdout: runtimeInfo(), stderr: "" }
+          : { exitCode: 0, stdout: "", stderr: "" };
+      }),
+    ).parseAsync(["service", "install"], { from: "user" });
+
+    // Must install the service, not fall through to launching the server.
+    assert.deepEqual(calls.at(-1), ["/bin/dbx-model-proxy", ["service", "install"], false]);
+  });
+
   it("restores a Commander-stripped -- before server arguments", () => {
     assert.deepEqual(
       restoreInstallArgs(

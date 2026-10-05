@@ -37,6 +37,11 @@ def main(arguments: Sequence[str] | None = None) -> None:
         if not _has_option(args, "--port"):
             args.extend(["--port", "4001"])
 
+    # The server always binds 4000 unless the caller passes --port or sets
+    # DATABRICKS_APP_PORT, matching the installed service's default.
+    if not _has_option(args, "--port"):
+        args.extend(["--port", os.environ.get("DATABRICKS_APP_PORT", "4000")])
+
     parser = argparse.ArgumentParser(prog="dbx-model-proxy", add_help=False)
     parser.add_argument("--profile")
     known, forwarded = parser.parse_known_args(args)
@@ -46,6 +51,14 @@ def main(arguments: Sequence[str] | None = None) -> None:
     from litellm.proxy.proxy_cli import run_server
 
     from .models_api import install_models_api
+
+    # The local proxy is single-user, stateless, and keyless. Strip any ambient
+    # LiteLLM server configuration (inherited env, or a stray .env that LiteLLM
+    # loads from the working directory) that would otherwise set a master key or
+    # a database and push every request onto the prisma-backed auth path, which
+    # is not a dependency here and raises ModuleNotFoundError at runtime.
+    for variable in ("DATABASE_URL", "STORE_MODEL_IN_DB", "LITELLM_MASTER_KEY", "LITELLM_SALT_KEY"):
+        os.environ.pop(variable, None)
 
     install_models_api()
     config = files("dbx_tools.model_proxy").joinpath("config.yaml")
