@@ -112,3 +112,8 @@ export function defineService(
     version: options.version ?? pkg.version,
   });
 }
+
+/** Resolve a package's single or explicitly named executable entrypoint. */
+export function resolveServicePackageBin(packageReference: string, binName?: string): string {
+  return resolveServicePackage(packageReference).bin(binName);
+}

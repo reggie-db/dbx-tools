@@ -7,4 +7,5 @@ export const PACKAGE_VERSION = "0.9.34";
 export * as cli from "./src/cli.ts";
 export * as server from "./src/server.ts";
 export type { ModelGatewayCliDependencies, ModelGatewayServiceOptions } from "./src/cli.ts";
+export { DEFAULT_HOST, DEFAULT_PORT } from "./src/server.ts";
 export type { StartModelGatewayOptions } from "./src/server.ts";

@@ -30,7 +30,7 @@ import {
   pluginRegistry,
   toolkitEntries,
 } from "@dbx-tools/appkit";
-import { modelGatewayExecutable } from "@dbx-tools/cli-model-gateway/cli";
+import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
 import { configUtils } from "@dbx-tools/core";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
 import { createTool, type Tool } from "@mastra/core/tools";
@@ -425,7 +425,7 @@ export async function ensureGraphitiPython(
 
 /** Resolve the foreground TypeScript model-gateway command used by Graphiti. */
 export function ensureGraphitiModelGateway(
-  executable: () => string = modelGatewayExecutable,
+  executable: () => string = () => resolveServicePackageBin("@dbx-tools/cli-model-gateway"),
 ): string {
   return commandLine([process.execPath, resolvePath(executable())]);
 }

@@ -443,6 +443,7 @@ project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p
   p.addDeps(
     "@dbx-tools/auth@workspace:^",
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-fs@workspace:^",

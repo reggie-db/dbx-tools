@@ -153,7 +153,7 @@ async function resolveWebSearchModel(
   // GPT) when those ids are actually deployed; else take the best capable
   // endpoint.
   const { modelId } = resolveModel(capable, {
-    fallbacks: config.modelFallbacks,
+    fallbacks: [...config.modelFallbacks],
     fuzzy: config.fuzzy,
     threshold: config.fuzzyThreshold,
   });
