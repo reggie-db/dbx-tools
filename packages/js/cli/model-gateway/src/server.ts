@@ -9,11 +9,9 @@ import { modelGateway } from "@dbx-tools/appkit-model-gateway/plugin";
 import { sendHealth } from "@dbx-tools/appkit-model-gateway/routes";
 import { workspaceClient } from "@dbx-tools/databricks";
 
-/** Loopback host used when the CLI or service definition omits `--host`. */
-export const DEFAULT_HOST = "127.0.0.1";
+import { DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
 
-/** Loopback port used when the CLI or service definition omits `--port`. */
-export const DEFAULT_PORT = 4400;
+export { DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
 
 /** Foreground model-gateway server options. */
 export interface StartModelGatewayOptions {

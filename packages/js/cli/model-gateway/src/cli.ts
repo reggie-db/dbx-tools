@@ -10,7 +10,8 @@ import { Command, InvalidArgumentError } from "commander";
 
 import { PACKAGE_VERSION } from "../index.ts";
 import { modelGatewayTrayIcon } from "./_tray-icon.ts";
-import { DEFAULT_HOST, DEFAULT_PORT, startModelGateway } from "./server.ts";
+import { DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
+import { startModelGateway } from "./server.ts";
 
 /** Injectable foreground gateway boundary for CLI tests. */
 export interface ModelGatewayCliDependencies {

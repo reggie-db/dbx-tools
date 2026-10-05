@@ -11,10 +11,10 @@ dbx-model-gateway
 Select a profile and loopback port explicitly when needed:
 
 ```sh
-dbx model-gateway --profile PROFILE --port 4400
+dbx model-gateway --profile PROFILE --port 4000
 ```
 
-Install the default `127.0.0.1:4400` gateway as a current-user service:
+Install the default `127.0.0.1:4000` gateway as a current-user service:
 
 ```sh
 dbx model-gateway service install --port 4401 --profile PROFILE

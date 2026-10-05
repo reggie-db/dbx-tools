@@ -21,7 +21,7 @@ import * as log from "@dbx-tools/shared-core/log";
 import cacache from "cacache";
 import envPaths from "env-paths";
 
-import packageJson from "../package.json" with { type: "json" };
+import { PACKAGE_VERSION } from "../index.ts";
 import { MODEL_METADATA_TTL_MS } from "./_metadata-contract.ts";
 
 const logger = log.logger("model/metadata-cache");
@@ -85,15 +85,13 @@ export interface MetadataCache<T> {
 const inflight = new Map<string, Promise<unknown>>();
 
 /** Default cacache root for a package version under the dbx-tools cache dir. */
-export function defaultMetadataCacheDir(version = packageJson.version): string {
+export function defaultMetadataCacheDir(version = PACKAGE_VERSION): string {
   const cacheDirectory = envPaths("dbx-tools", { suffix: "" }).cache;
   return resolve(cacheDirectory, "model-gateway", version);
 }
 
 /** Whether metadata caches should persist to disk in this process. */
-export function metadataCacheDiskEnabled(
-  environment: NodeJS.ProcessEnv = process.env,
-): boolean {
+export function metadataCacheDiskEnabled(environment: NodeJS.ProcessEnv = process.env): boolean {
   return !environmentUtils.isDatabricksAppEnv(environment);
 }
 
@@ -102,7 +100,7 @@ export function metadataCacheDiskEnabled(
  */
 export function createMetadataCache<T>(options: MetadataCacheOptions<T>): MetadataCache<T> {
   const ttlMs = options.ttlMs ?? MODEL_METADATA_TTL_MS;
-  const version = options.version ?? packageJson.version;
+  const version = options.version ?? PACKAGE_VERSION;
   const path = options.cacheDir ?? defaultMetadataCacheDir(version);
   const diskEnabled = options.disk ?? metadataCacheDiskEnabled();
   const now = options.now ?? Date.now;
@@ -267,8 +265,8 @@ function decodeRecord<T>(data: Buffer): MetadataCacheRecord<T> | undefined {
 function isCacheMiss(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: string }).code === "ENOENT",
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: string }).code === "ENOENT",
   );
 }

@@ -117,7 +117,7 @@ function requireReadme(root, dir) {
 
 /** Published JavaScript package catalogue derived from package manifests. */
 export function discoverJavaScriptPackages(root) {
-  return walk(path.join(root, "packages", "js"))
+  return walk(path.join(root, "packages", "js"), [], ["build", "coverage", "dist", "lib", "out"])
     .filter((file) => path.basename(file) === "package.json")
     .map((manifest) => ({ manifest, packageJson: JSON.parse(read(manifest)) }))
     .filter(({ packageJson }) => packageJson.private !== true)

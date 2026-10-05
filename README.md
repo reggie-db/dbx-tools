@@ -281,10 +281,10 @@ Use [`@dbx-tools/appkit-model-gateway`](packages/js/node/appkit-model-gateway) w
 OpenAI-compatible endpoints with Databricks auth and Model Serving resolution.
 
 ```sh
-dbx model-gateway --profile my-workspace --port 4400
+dbx model-gateway --profile my-workspace --port 4000
 ```
 
-Then point the client at `http://127.0.0.1:4400/v1`. The foreground command
+Then point the client at `http://127.0.0.1:4000/v1`. The foreground command
 keeps the gateway loopback-only and resolves credentials through
 `@dbx-tools/auth`.
 
