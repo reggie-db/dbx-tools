@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth";
-export const PACKAGE_VERSION = "0.9.24";
+export const PACKAGE_VERSION = "0.9.25";
 export * as databricksAuth from "./src/databricks-auth.ts";
 export * as databricksCli from "./src/databricks-cli.ts";
 export * as errors from "./src/errors.ts";

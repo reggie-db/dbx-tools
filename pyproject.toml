@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.9.24"
+version = "0.9.25"
 requires-python = ">=3.11,<4"
 dependencies = [ "dbx-tools-graphiti", "dbx-tools-model-proxy" ]
 
