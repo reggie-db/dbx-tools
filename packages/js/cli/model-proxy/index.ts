@@ -3,6 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-model-proxy";
-export const PACKAGE_VERSION = "0.9.23";
+export const PACKAGE_VERSION = "0.9.24";
 export * as cli from "./src/cli.ts";
 export type { ModelProxyCliDependencies } from "./src/cli.ts";
