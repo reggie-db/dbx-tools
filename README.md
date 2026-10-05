@@ -180,7 +180,7 @@ and typed per-turn Mastra request context without owning authentication.
 | AppKit defaults                | [`@dbx-tools/appkit`](packages/js/node/appkit), [`@dbx-tools/cli-appkit-env`](packages/js/cli/appkit-env)                                                                                                                   |
 | AppKit-hosted agents           | [`@dbx-tools/appkit-mastra`](packages/js/node/appkit-mastra), [`@dbx-tools/shared-mastra`](packages/js/shared/mastra)                                                                                                       |
 | Genie streaming and schemas    | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
-| Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model), [`dbx-tools-models`](packages/py/models)                                                                                |
+| Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model), [`dbx-tools-model-proxy`](packages/py/model-proxy)                                                                     |
 | Local model proxy              | [`dbx-tools-model-proxy`](packages/py/model-proxy), [`@dbx-tools/openapi-model-proxy`](packages/js/openapi/model-proxy)                                                                                                      |
 | Databricks runtime utilities   | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/databricks`](packages/js/node/databricks), [`dbx-tools-core`](packages/py/core)                                                                                      |
 | Lakebase parsing and discovery | [`@dbx-tools/lakebase`](packages/js/node/lakebase), [`@dbx-tools/cli-lakebase-proxy`](packages/js/cli/lakebase-proxy), [`dbx-tools-postgres`](packages/py/postgres)                                                         |
@@ -210,7 +210,7 @@ runtime behavior, module maps, and links to adjacent packages.
 Install the published Python packages by distribution name:
 
 ```bash
-uv add dbx-tools-core dbx-tools-models dbx-tools-model-proxy dbx-tools-postgres dbx-tools-graphiti
+uv add dbx-tools-core dbx-tools-model-proxy dbx-tools-postgres dbx-tools-graphiti
 ```
 
 The Python packages support Python 3.11 through the Python 3 release line.
@@ -223,8 +223,7 @@ their Node owners, while Python-native helpers own configuration and Postgres.
 | Package                                        | Purpose                                                                                                                                                                                                                                                                            |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`dbx-tools-core`](packages/py/core)           | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                             |
-| [`dbx-tools-models`](packages/py/models)       | Runs the `@dbx-tools/model` discovery, ranking, routing, and metadata lifecycle through PythonMonkey.                                                                                                                                                                                |
-| [`dbx-tools-model-proxy`](packages/py/model-proxy) | Hosts the OpenAI-compatible LiteLLM proxy with dbx-tools authentication and model routing.                                                                                                                                                                                       |
+| [`dbx-tools-model-proxy`](packages/py/model-proxy) | Hosts the OpenAI-compatible LiteLLM proxy and embeds the `@dbx-tools/model/python` discovery, ranking, routing, authentication, and metadata lifecycle through PythonMonkey.                                                                                                    |
 | [`dbx-tools-postgres`](packages/py/postgres)   | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
 | [`dbx-tools-graphiti`](packages/py/graphiti)   | Launches upstream Graphiti's MCP server with Neo4j 5 and the managed model proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.                    |
 

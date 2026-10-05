@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Mapping
 from typing import Any
 
-from dbx_tools.models import ModelClient, create_model_client
+from ._generated import ModelClient, create_model_client
 
 _runtime: ModelProxyRuntime | None = None
 _runtime_lock = asyncio.Lock()

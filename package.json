@@ -24,11 +24,11 @@
     "eslint": "projen eslint",
     "eslint:fix": "projen eslint:fix",
     "format": "projen format",
+    "model-proxy:python-runtime": "projen model-proxy:python-runtime",
+    "model-proxy:python-runtime:check": "projen model-proxy:python-runtime:check",
+    "model-proxy:python-runtime:watch": "projen model-proxy:python-runtime:watch",
     "model:contracts": "projen model:contracts",
     "model:metadata": "projen model:metadata",
-    "models:python-runtime": "projen models:python-runtime",
-    "models:python-runtime:check": "projen models:python-runtime:check",
-    "models:python-runtime:watch": "projen models:python-runtime:watch",
     "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
@@ -203,7 +203,7 @@
       "branding/assets"
     ],
     "pythonNodeBindings": [
-      "packages/py/models"
+      "packages/py/model-proxy"
     ],
     "tags": []
   },

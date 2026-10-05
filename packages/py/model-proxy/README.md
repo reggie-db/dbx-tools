@@ -4,8 +4,9 @@ OpenAI-compatible LiteLLM proxy backed by Node-owned Databricks authentication,
 model discovery, ranking, routing, and metadata.
 
 LiteLLM owns request conversion, streaming, transport, and retry behavior. The
-Python host only adapts calls through the generated `dbx-tools-models` client,
-so authentication and model policy remain implemented once in Node.
+Python package embeds the generated `@dbx-tools/model/python` client under its
+private `_generated` submodule, so authentication and model policy remain
+implemented once in Node.
 
 ## Run
 
@@ -67,12 +68,13 @@ tray identity. An explicit `--port` after `--` overrides the concurrent default.
 
 ## Ownership
 
-- `dbx-tools-models` owns authentication, profile selection, endpoint discovery,
-  caching, fuzzy matching, protocol selection, URLs, and published metadata.
+- The embedded `@dbx-tools/model/python` client owns authentication, profile
+  selection, endpoint discovery, caching, fuzzy matching, protocol selection,
+  URLs, and published metadata.
 - LiteLLM owns Chat, Responses, embeddings, streaming, parameter conversion,
   provider transport, and retries.
-- This package owns only FastAPI route installation, LiteLLM callback wiring,
-  and command-line startup.
+- This package owns the generated Python boundary, FastAPI route installation,
+  LiteLLM callback wiring, and command-line startup.
 
 Add proxy-specific controls only where LiteLLM does not already provide
 equivalent behavior.

@@ -76,8 +76,8 @@ const response = await fetch(route.url, {
 });
 ```
 
-`createModelClient()` is the portable auth-backed facade used by the generated
-`dbx-tools-models` Python package. It lists and normalizes endpoints, caches one
+`createModelClient()` is the portable auth-backed facade embedded by the Python
+model proxy. It lists and normalizes endpoints, caches one
 catalogue per host, workspace ID, and principal, refreshes once after an
 unmatched fuzzy request, resolves routes, returns complete authentication
 headers, exposes profiles, and returns the package's generated metadata. Its

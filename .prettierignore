@@ -37,7 +37,6 @@
 **/*-lock.yaml
 **/*-lock.yml
 **/*.lock
-packages/py/models/pyproject.toml
 packages/py/model-proxy/pyproject.toml
 packages/py/core/pyproject.toml
 packages/py/postgres/pyproject.toml

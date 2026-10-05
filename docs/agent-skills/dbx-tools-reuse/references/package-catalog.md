@@ -43,7 +43,6 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `dbx-tools-core` - Dependency-free Python configuration, identity, and mise-backed executable helpers shared by dbx-tools packages. Source: `packages/py/core`.
 - `dbx-tools-graphiti` - Native launcher for Graphiti with local Neo4j and dbx-model-proxy processes configured for Databricks Model Serving. It runs directly on the host without Docker, Podman, or another container runtime. Source: `packages/py/graphiti`.
 - `dbx-tools-model-proxy` - OpenAI-compatible LiteLLM proxy backed by Node-owned Databricks authentication, model discovery, ranking, routing, and metadata. Source: `packages/py/model-proxy`.
-- `dbx-tools-models` - Python access to the model discovery, selection, routing, and metadata lifecycle implemented by @dbx-tools/model. The Python distribution is generated from the Node package and runs its bundled runtime through PythonMonkey. It does not contain a separate Python model implementation. Source: `packages/py/models`.
 - `dbx-tools-postgres` - Python Lakebase/Postgres connection setup, advisory locks, and topic fan-out for services that already hold a Databricks WorkspaceClient. This package is the Python counterpart to @dbx-tools/postgres. Lakebase address parsing comes directly from the Python implementation in this package. Source: `packages/py/postgres`.
 
 ## Shared Contracts

@@ -1215,25 +1215,22 @@ const pythonNodeBindings = (
 });
 const pythonPackages: project.PythonPackageOptions[] = [
   {
-    directory: "models",
-    description:
-      "Python access to Node-owned Databricks model discovery, selection, routing, and metadata",
-    internalDependencies: [],
-    dependencies: pythonNodeBindingDependencies,
-    nodeBindings: pythonNodeBindings("@dbx-tools/model", "@dbx-tools/model/python"),
-  },
-  {
     directory: "model-proxy",
     description:
       "LiteLLM proxy backed by Node-owned Databricks authentication and dynamic model discovery",
-    internalDependencies: ["models"],
+    internalDependencies: [],
     dependencies: [
+      ...pythonNodeBindingDependencies,
       "fastapi>=0.116,<1",
       "hypercorn>=0.17,<1",
       "litellm[proxy]==1.99.0",
       "pillow>=11,<13",
       "pystray==0.19.5",
     ],
+    nodeBindings: {
+      ...pythonNodeBindings("@dbx-tools/model", "@dbx-tools/model/python"),
+      layout: "submodule",
+    },
     scripts: {
       "dbx-model-proxy": "dbx_tools.model_proxy.cli:main",
       "dbx-model-proxy-tray": "dbx_tools.model_proxy.tray:main",

@@ -70,10 +70,7 @@ describe("Node-owned model and Lakebase runtimes", () => {
     });
   }
 
-  for (const manifestPath of [
-    "packages/py/model-proxy/pyproject.toml",
-    "packages/py/models/pyproject.toml",
-  ]) {
+  for (const manifestPath of ["packages/py/model-proxy/pyproject.toml"]) {
     it(`${manifestPath} does not depend on Rust bindings`, () => {
       const manifest = readFileSync(join(root, manifestPath), "utf8");
       for (const packageName of FORBIDDEN_RUNTIME_PACKAGES) {

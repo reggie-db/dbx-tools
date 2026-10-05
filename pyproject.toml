@@ -33,9 +33,6 @@ index-strategy = "unsafe-best-match"
   [tool.uv.workspace]
   members = [ "packages/py/*" ]
 
-[tool.uv.sources.dbx-tools-models]
-workspace = true
-
 [tool.uv.sources.dbx-tools-model-proxy]
 workspace = true
 
@@ -51,7 +48,7 @@ workspace = true
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
 project-excludes = [
-  "packages/py/models/generated-src/dbx_tools/models/_runtime.js",
-  "packages/py/models/generated-src/dbx_tools/models/node_bindings.py",
-  "packages/py/models/generated-src/dbx_tools/models/__init__.py"
+  "packages/py/model-proxy/src/dbx_tools/model_proxy/_generated/_runtime.js",
+  "packages/py/model-proxy/src/dbx_tools/model_proxy/_generated/node_bindings.py",
+  "packages/py/model-proxy/src/dbx_tools/model_proxy/_generated/__init__.py"
 ]

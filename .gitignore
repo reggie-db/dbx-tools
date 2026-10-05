@@ -93,7 +93,6 @@ jspm_packages/
 !projen/shims/python-node/
 !projen/shims/python-node/**
 !/pyproject.toml
-!/packages/py/models/pyproject.toml
 !/packages/py/model-proxy/pyproject.toml
 !/packages/py/core/pyproject.toml
 !/packages/py/postgres/pyproject.toml

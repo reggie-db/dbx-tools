@@ -266,6 +266,33 @@
         }
       ]
     },
+    "model-proxy:python-runtime": {
+      "name": "model-proxy:python-runtime",
+      "description": "Generate Node bindings for Python package model-proxy",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/model-proxy"
+        }
+      ]
+    },
+    "model-proxy:python-runtime:check": {
+      "name": "model-proxy:python-runtime:check",
+      "description": "Verify generated Node bindings for Python package model-proxy",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/model-proxy --check"
+        }
+      ]
+    },
+    "model-proxy:python-runtime:watch": {
+      "name": "model-proxy:python-runtime:watch",
+      "description": "Regenerate Node bindings for Python package model-proxy on changes",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/model-proxy"
+        }
+      ]
+    },
     "model:contracts": {
       "name": "model:contracts",
       "description": "Generate browser-safe Zod model schemas from TypeScript contracts",
@@ -281,33 +308,6 @@
       "steps": [
         {
           "exec": "bun packages/js/node/model/scripts/generate-metadata.ts"
-        }
-      ]
-    },
-    "models:python-runtime": {
-      "name": "models:python-runtime",
-      "description": "Generate Node bindings for Python package models",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/models"
-        }
-      ]
-    },
-    "models:python-runtime:check": {
-      "name": "models:python-runtime:check",
-      "description": "Verify generated Node bindings for Python package models",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/models --check"
-        }
-      ]
-    },
-    "models:python-runtime:watch": {
-      "name": "models:python-runtime:watch",
-      "description": "Regenerate Node bindings for Python package models on changes",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/models"
         }
       ]
     },
@@ -433,7 +433,7 @@
           "spawn": "test:installer"
         },
         {
-          "spawn": "models:python-runtime:check"
+          "spawn": "model-proxy:python-runtime:check"
         },
         {
           "spawn": "auth:cli-assets:check"
