@@ -16,10 +16,12 @@ import {
   releaseSourceSteps,
 } from "./release-context.ts";
 import {
+  refreshReleaseDocsDependencies,
   releaseTagPattern,
   releasePublishCondition,
   releaseStageCondition,
   tryReleaseWorkflow,
+  uvSetupStep,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -501,7 +503,7 @@ export class DBXToolsPythonWorkspace extends Component {
         ...bunCacheRestoreSteps(project, {
           ignorePaths: project.workflowCacheIgnorePaths,
         }),
-        { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+        uvSetupStep(),
         { name: "Install release helpers", run: "bun install" },
         bunCacheSaveStep(),
         {
@@ -584,6 +586,7 @@ export class DBXToolsPythonWorkspace extends Component {
         ],
       });
     }
+    refreshReleaseDocsDependencies(project);
   }
 
   private publications(options: PythonReleaseOptions): readonly PythonPublication[] {

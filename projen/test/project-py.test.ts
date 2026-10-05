@@ -27,6 +27,12 @@ describe("DBXToolsPythonWorkspace", () => {
       defaultTagMixins: false,
       github: true,
       repository: "https://github.com/example/fixture.git",
+      releaseDocs: {
+        siteUrl: "https://docs.example.com",
+        prepareSteps: [],
+        buildSteps: [],
+        artifactPath: "site/dist",
+      },
     });
     assert.equal(project.vsCode?.vsCode, project.vscode);
 
@@ -106,6 +112,10 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.deepEqual(buildPython.permissions, { contents: "read" });
     assert.equal(buildPython.env?.BUN_VERSION, "1.3.14");
     assert.equal(workflowStep(buildPython, "Restore Bun cache").uses, "actions/cache/restore@v5");
+    assert.deepEqual(workflowStep(buildPython, "Setup uv").with, {
+      "enable-cache": true,
+      "cache-dependency-glob": "**/pyproject.toml",
+    });
     assert.equal(workflowStep(buildPython, "Save Bun cache").uses, "actions/cache/save@v5");
     assert.ok(
       workflowStep(buildPython, "Download approved Python distributions").run?.includes(
@@ -126,6 +136,11 @@ describe("DBXToolsPythonWorkspace", () => {
       name: "production-pypi",
       url: "https://pypi.org/project/fixture-app/",
     });
+    assert.deepEqual(release.jobs["build-docs"]?.needs, [
+      "publish-node",
+      "publish-pypi-core",
+      "publish-pypi-app",
+    ]);
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");

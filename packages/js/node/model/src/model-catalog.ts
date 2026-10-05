@@ -129,46 +129,44 @@ export async function listServingEndpointsUncached(
 
 async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpointSummary[]> {
   const startedAt = Date.now();
-  const out = await listServingEndpointsUncached(client);
-  stampModelClasses(out);
-  await measureEmbeddingDimensions(client, out);
+  const classified = stampModelClasses(await listServingEndpointsUncached(client));
+  const out = await measureEmbeddingDimensions(client, classified);
   logger.debug("listed", { count: out.length, elapsedMs: Date.now() - startedAt });
   return out;
 }
 
 /**
  * Stamp each summary's {@link ServingEndpointSummary.class} from the relative
- * classification of the whole set. Mutates `summaries` in place. Endpoints the
- * classifier doesn't recognize (custom, unscored, non-LLM) are left without a
- * class.
+ * classification of the whole set. Endpoints the classifier doesn't recognize
+ * (custom, unscored, non-LLM) are left without a class.
  */
-function stampModelClasses(summaries: ServingEndpointSummary[]): void {
+function stampModelClasses(
+  summaries: readonly ServingEndpointSummary[],
+): ServingEndpointSummary[] {
   const classOf = classifyEndpointClasses(summaries);
-  for (const summary of summaries) {
+  return summaries.map((summary) => {
     const cls = classOf.get(summary.name);
-    if (cls !== undefined) summary.class = cls;
-  }
+    return cls === undefined ? summary : { ...summary, class: cls };
+  });
 }
 
 /**
  * Measure the embedding vector dimension of every {@link ModelClass.Embedding}
- * endpoint by pinging it once, all in parallel. Mutates the matching summaries
- * in place with the resulting `dimension`. Runs only on a cache miss (it's
+ * endpoint by pinging it once, all in parallel. Runs only on a cache miss (it's
  * called from {@link fetchEndpoints}), so the probe cost is amortized across the
- * cached TTL window. Per-endpoint failures are swallowed (logged at warn) so
- * one unreachable embedding model never fails the listing.
+ * cached TTL window. Per-endpoint failures are swallowed (logged at warn) so one
+ * unreachable embedding model never fails the listing.
  */
 async function measureEmbeddingDimensions(
   client: WorkspaceClientLike,
-  summaries: ServingEndpointSummary[],
-): Promise<void> {
-  await Promise.all(
-    summaries
-      .filter((s) => s.class === ModelClass.Embedding)
-      .map(async (summary) => {
-        const dimension = await pingEmbeddingDimension(client, summary.name);
-        if (dimension !== undefined) summary.dimension = dimension;
-      }),
+  summaries: readonly ServingEndpointSummary[],
+): Promise<ServingEndpointSummary[]> {
+  return Promise.all(
+    summaries.map(async (summary) => {
+      if (summary.class !== ModelClass.Embedding) return summary;
+      const dimension = await pingEmbeddingDimension(client, summary.name);
+      return dimension === undefined ? summary : { ...summary, dimension };
+    }),
   );
 }
 

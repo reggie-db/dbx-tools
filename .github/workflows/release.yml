@@ -49,6 +49,9 @@ jobs:
       - name: Setup uv
         id: setup_uv
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
       - name: Install release validation dependencies
         id: install_release_validation_dependencies
         run: bun install --frozen-lockfile
@@ -195,7 +198,12 @@ jobs:
         run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/npm-release --version "$RELEASE_VERSION" $DRY_RUN
     timeout-minutes: 30
   build-docs:
-    needs: verify-context
+    needs:
+      - publish-node
+      - publish-pypi-model-proxy
+      - publish-pypi-core
+      - publish-pypi-postgres
+      - publish-pypi-graphiti
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -354,6 +362,9 @@ jobs:
       - name: Setup uv
         id: setup_uv
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
       - name: Install release helpers
         id: install_release_helpers
         run: bun install

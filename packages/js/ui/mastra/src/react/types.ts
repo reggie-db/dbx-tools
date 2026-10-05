@@ -46,10 +46,10 @@ export type ToolProgress = GenieWriterEvent;
  * rendering of `name`). The picker shows `displayName ?? name`.
  */
 export type ChatModelOption = {
-  name: string;
-  displayName?: string;
-  family?: string;
-  reasoningEfforts?: ReasoningEffort[];
+  readonly name: string;
+  readonly displayName?: string;
+  readonly family?: string;
+  readonly reasoningEfforts?: readonly ReasoningEffort[];
 };
 
 /**

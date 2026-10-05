@@ -79,6 +79,10 @@ describe("unified release workflow", () => {
     assert.equal(verify.env?.RELEASE_TAG, "${{ github.ref_name }}");
     assert.ok(verify.run?.includes("tasks/release-version.ts"));
     assert.equal(step(verifyJob, "Setup Bun").uses, "oven-sh/setup-bun@v2");
+    assert.deepEqual(step(verifyJob, "Setup uv").with, {
+      "enable-cache": true,
+      "cache-dependency-glob": "**/pyproject.toml",
+    });
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse "origin/main")" = "$RELEASE_SHA"'));
@@ -120,6 +124,7 @@ describe("unified release workflow", () => {
   it("builds and selectively deploys docs in the same workflow", () => {
     const build = release.jobs["build-docs"]!;
     assert.equal(build.if, "${{ success() }}");
+    assert.equal(build.needs, "publish-node");
     assert.deepEqual(build.permissions, {
       contents: "read",
       pages: "write",
@@ -371,7 +376,7 @@ describe("optional Node release stage", () => {
       const workflow = readWorkflow(fixedOutdir);
       assert.ok(workflow.jobs["verify-context"]);
       assert.equal(workflow.jobs["publish-node"]?.needs, "verify-context");
-      assert.equal(workflow.jobs["build-docs"]?.needs, "verify-context");
+      assert.equal(workflow.jobs["build-docs"]?.needs, "publish-node");
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_BASE, "/");
       assert.equal(workflow.jobs["deploy-docs"]?.needs, "build-docs");

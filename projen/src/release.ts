@@ -120,6 +120,33 @@ export function npmPublishEnvironment(): Record<string, string> {
   };
 }
 
+/** Install uv and restore its download/build cache using Python manifests. */
+export function uvSetupStep(): JobStep {
+  return {
+    name: "Setup uv",
+    uses: "astral-sh/setup-uv@v7",
+    with: {
+      "enable-cache": true,
+      "cache-dependency-glob": "**/pyproject.toml",
+    },
+  };
+}
+
+function refreshDocsRegistryDependencies(workflow: GithubWorkflow): void {
+  const docs = workflow.getJob("build-docs") as Job | undefined;
+  if (!docs) return;
+  const registryJobs = Object.keys(workflow.jobs).filter(
+    (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
+  );
+  if (registryJobs.length > 0) workflow.updateJob("build-docs", { ...docs, needs: registryJobs });
+}
+
+/** Keep documentation publication behind every configured package registry. */
+export function refreshReleaseDocsDependencies(project: DBXToolsJavaScriptProject): void {
+  const workflow = releaseWorkflows.get(project);
+  if (workflow) refreshDocsRegistryDependencies(workflow);
+}
+
 function verifyContextJob(
   project: DBXToolsJavaScriptProject,
   tagPrefix: string,
@@ -146,7 +173,7 @@ function verifyContextJob(
         },
       },
       ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
-      { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+      uvSetupStep(),
       { name: "Install release validation dependencies", run: "bun install --frozen-lockfile" },
       bunCacheSaveStep(),
       {
@@ -290,6 +317,7 @@ function addDocsJobs(
       },
     ],
   });
+  refreshDocsRegistryDependencies(workflow);
 }
 
 /** Owns the single release workflow and local release preparation tasks. */
@@ -334,6 +362,7 @@ export class DBXToolsRelease extends Component {
         cancelInProgress: false,
       },
     });
+    releaseWorkflows.set(project, workflow);
     workflow.runName = "release ${{ github.ref_name }}";
     workflow.on({
       push: { tags: [`${tagPrefix}*`] },
@@ -346,6 +375,5 @@ export class DBXToolsRelease extends Component {
     if (options.docs) {
       addDocsJobs(workflow, project, options.docs);
     }
-    releaseWorkflows.set(project, workflow);
   }
 }

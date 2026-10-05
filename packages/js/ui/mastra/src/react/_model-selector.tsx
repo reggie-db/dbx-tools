@@ -51,7 +51,7 @@ const ReasoningControl = ({
   value,
   onChange,
 }: {
-  efforts: ReasoningEffort[];
+  efforts: readonly ReasoningEffort[];
   value: ChatViewProps["reasoningEffort"];
   onChange: NonNullable<ChatViewProps["onReasoningEffortChange"]>;
 }) => {

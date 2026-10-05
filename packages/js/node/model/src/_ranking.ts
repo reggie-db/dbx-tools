@@ -173,11 +173,10 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
     return [summary];
   });
   const classes = classifyEndpointClasses(summaries);
-  for (const summary of summaries) {
+  return summaries.map((summary) => {
     const modelClass = classes.get(summary.name);
-    if (modelClass) summary.class = modelClass;
-  }
-  return summaries;
+    return modelClass ? { ...summary, class: modelClass } : summary;
+  });
 }
 
 function compareRanked(left: RankedModel, right: RankedModel): number {
