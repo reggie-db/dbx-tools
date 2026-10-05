@@ -1,9 +1,7 @@
 /**
- * OpenAPI generator for tsoa controllers and code-first Rust producers.
+ * OpenAPI generator for tsoa controllers.
  *
- * TypeScript packages are discovered from tsoa imports. Rust producers are
- * recorded by `DBXToolsRustWorkspace`. Both feed the same optimized generated
- * package:
+ * TypeScript packages are discovered from tsoa imports and feed the optimized generated package:
  *
  *   - `openapi.json`   - the OpenAPI 3 spec (tsoa `generateSpec`, then Speakeasy
  *     optimization to extract duplicate inline schemas into components).
@@ -48,7 +46,6 @@ import {
   toPosix,
   recordedPackages,
 } from "./packages.ts";
-import type { RustOpenApiMapping, RustWorkspaceMapping } from "./project-rs.ts";
 import type { ReleaseUnitGraph } from "./release-catalog.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -100,15 +97,6 @@ function controllerPackages(): object.Sequence<RecordedPackage> {
   return object.sequence(recordedPackages()).filter(isTsoaCandidate).filter(hasTsoaControllers);
 }
 
-function rustOpenapiMappings(): RustOpenApiMapping[] {
-  const manifest = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as unknown;
-  if (!object.isRecord(manifest)) return [];
-  const config = manifest.dbxToolsConfig;
-  if (!object.isRecord(config) || !object.isRecord(config.rust)) return [];
-  const mapping = config.rust as unknown as Partial<RustWorkspaceMapping>;
-  return Array.isArray(mapping.openapi) ? [...mapping.openapi] : [];
-}
-
 function inside(path: string, directory: string): boolean {
   const child = relative(resolve(directory), resolve(path));
   return child === "" || (!child.startsWith("..") && !isAbsolute(child));
@@ -120,16 +108,11 @@ export function isOpenapiProducerSource(path: string, producers: readonly string
   return object.sequence(producers).some((producer) => inside(absolute, producer));
 }
 
-function rustOpenapiSources(mapping: RustOpenApiMapping): string[] {
-  return [resolve(repoRoot, mapping.rust, "src"), resolve(repoRoot, mapping.rust, "Cargo.toml")];
-}
-
-/** Source roots consumed by TypeScript and Rust OpenAPI producers. */
+/** Source roots consumed by TypeScript OpenAPI producers. */
 export function openapiWatchRoots(): string[] {
   return [
     ...controllerPackages()
       .map((pkg) => resolve(tsoaSource(pkg)))
-      .join(object.sequence(rustOpenapiMappings()).flatMap(rustOpenapiSources))
       .distinct(),
   ];
 }
@@ -139,14 +122,6 @@ export function isOpenapiSource(path: string): boolean {
   const absolute = resolve(path);
   const segments = toPosix(relative(repoRoot, absolute)).split("/");
   if (segments.includes(OPENAPI_TAG)) return false;
-  if (
-    object
-      .sequence(rustOpenapiMappings())
-      .flatMap(rustOpenapiSources)
-      .some((source) => inside(absolute, source))
-  ) {
-    return true;
-  }
   return object
     .sequence(recordedPackages())
     .filter(isTsoaCandidate)
@@ -196,28 +171,6 @@ export async function optimizeOpenapiSpec(specPath: string, executable?: string)
   await execFileAsync(openapi, ["spec", "optimize", specPath, "--write", "--non-interactive"]);
 }
 
-/** Cargo arguments that export one Rust producer's aide document. */
-export function rustOpenapiArgs(
-  mapping: RustOpenApiMapping,
-  output: string,
-  targetDir = join(repoRoot, "target/openapi"),
-): string[] {
-  return [
-    "run",
-    "--quiet",
-    "--target-dir",
-    targetDir,
-    "--package",
-    mapping.crate,
-    ...(mapping.noDefaultFeatures ? ["--no-default-features"] : []),
-    ...(mapping.features.length ? ["--features", mapping.features.join(",")] : []),
-    ...(mapping.binary ? ["--bin", mapping.binary] : []),
-    "--",
-    "--generate-spec",
-    output,
-  ];
-}
-
 type OpenApiTypeTools = {
   openapiTS: typeof import("openapi-typescript").default;
   astToString: typeof import("openapi-typescript").astToString;
@@ -257,11 +210,10 @@ async function writeClientPackage(
  */
 export async function generateOpenapi(): Promise<string[]> {
   const pkgs = controllerPackages().toArray();
-  const rustMappings = rustOpenapiMappings();
   // Same reasoning as codegen's empty case: a workspace with no tsoa controllers
   // is not a condition worth a line on every synth.
-  if (pkgs.length === 0 && rustMappings.length === 0) {
-    logger.debug("no TypeScript or Rust OpenAPI producers found");
+  if (pkgs.length === 0) {
+    logger.debug("no TypeScript OpenAPI producers found");
     return [];
   }
 
@@ -340,25 +292,6 @@ export async function generateOpenapi(): Promise<string[]> {
 
     written.push(outDir);
     logger.success(`openapi/${leaf} (from ${p.relPath})`);
-  }
-  for (const mapping of rustMappings) {
-    const outDir = resolve(repoRoot, mapping.output);
-    mkdirSync(outDir, { recursive: true });
-    const specPath = join(outDir, "openapi.json");
-    const tempDir = mkdtempSync(join(outDir, ".openapi-"));
-    const tempSpecPath = join(tempDir, "openapi.json");
-    try {
-      await execFileAsync("cargo", rustOpenapiArgs(mapping, tempSpecPath), { cwd: repoRoot });
-      await optimizeOpenapiSpec(tempSpecPath);
-      makeWritable(specPath);
-      renameSync(tempSpecPath, specPath);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-    makeReadonly(specPath);
-    await writeClientPackage(outDir, `the aide routes in ${mapping.rust}`, tools);
-    written.push(outDir);
-    logger.success(`${mapping.output} (from ${mapping.rust})`);
   }
   return written;
 }

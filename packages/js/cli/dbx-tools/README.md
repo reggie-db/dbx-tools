@@ -29,15 +29,13 @@ Every feature group lives in its own package:
 [`@dbx-tools/cli-appkit-env`](../appkit-env),
 [`@dbx-tools/cli-auth`](../auth), and
 [`@dbx-tools/cli-tunnel`](../tunnel). Each package is imported LAZILY, only once
-its name is matched, so `dbx dev` never pays to load AppKit, native OAuth,
-SMTP, or X.509 code. Run
+its name is matched, so `dbx dev` never pays to load AppKit, OAuth, SMTP, or
+X.509 code. Run
 `dbx <group> --help` for a group's own flags; each forwards `--help` to the child
 program rather than answering it at the root.
 
 The model proxy command installs and runs the exact-version Python/LiteLLM
-package. The Lakebase proxy command runs the pure Node implementation. Rust
-release metadata remains generated for compatibility and release synchronization
-but is not reachable from the `dbx` runtime command graph.
+package. The Lakebase proxy command runs the pure Node implementation.
 
 ## Bootstrap A Workspace
 
@@ -96,8 +94,8 @@ dbx auth token --profile my-workspace
 dbx auth status --profile my-workspace
 ```
 
-The auth command uses the generated Databricks auth bindings for preferred U2M
-browser OAuth, M2M client credentials, refresh, locking, and file or memory
+The auth command uses `@dbx-tools/auth` for preferred U2M browser OAuth, M2M
+client credentials, refresh, locking, and file or memory
 storage. See [`@dbx-tools/cli-auth`](../auth) for the complete command and
 option surface.
 

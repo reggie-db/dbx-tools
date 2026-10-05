@@ -7,7 +7,6 @@ import {
   discoverJavaScriptPackages,
   discoverPythonPackages,
   discoverRepositoryPackages,
-  discoverRustPackages,
   escapeRegExp,
   stripLeadingH1,
   summaryText,
@@ -44,18 +43,11 @@ function fixture() {
     '[project]\nname = "dbx-tools-core"\n',
   );
   writeFileSync(join(root, "packages/py/core/README.md"), "# Core\n\nCore docs.\n");
-  mkdirSync(join(root, "packages/rs/model/src"), { recursive: true });
-  writeFileSync(
-    join(root, "packages/rs/model/Cargo.toml"),
-    '[package]\nname = "dbx-tools-model"\n\n[lib]\nname = "dbx_model"\n',
-  );
-  writeFileSync(join(root, "packages/rs/model/src/lib.rs"), "pub fn model() {}\n");
-  writeFileSync(join(root, "packages/rs/model/README.md"), "# Model\n\nModel docs.\n");
   return root;
 }
 
 describe("repository docs catalogue", () => {
-  it("discovers one shared JavaScript, Python, and Rust package set", () => {
+  it("discovers one shared JavaScript and Python package set", () => {
     const root = fixture();
     assert.deepEqual(
       discoverJavaScriptPackages(root).map((pkg) => pkg.slug),
@@ -66,12 +58,8 @@ describe("repository docs catalogue", () => {
       ["dbx-tools-core"],
     );
     assert.deepEqual(
-      discoverRustPackages(root).map((pkg) => pkg.rustdocTarget),
-      ["dbx_model"],
-    );
-    assert.deepEqual(
       discoverRepositoryPackages(root).map((pkg) => pkg.group),
-      ["python", "rust", "ui"],
+      ["python", "ui"],
     );
   });
 

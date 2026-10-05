@@ -4,9 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
-import { json, log, object } from "@dbx-tools/shared-core";
+import { json, log } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
-import { captureTaskCommand } from "../src/_task-command.ts";
 import { recordedPackages } from "../src/packages.ts";
 import { readWorkspaceVersion } from "../src/workspace-version.ts";
 
@@ -22,30 +21,6 @@ function pythonVersion(path: string): string | undefined {
     project?: { version?: unknown };
   };
   return typeof manifest.project?.version === "string" ? manifest.project.version : undefined;
-}
-
-function cargoVersions(root: string): Array<{ name: string; version: string }> {
-  if (!existsSync(join(root, "Cargo.toml"))) return [];
-  const locked = existsSync(join(root, "Cargo.lock"));
-  const metadata = json.parseRecord(
-    captureTaskCommand(
-      root,
-      "cargo",
-      ["metadata", ...(locked ? ["--locked"] : []), "--format-version", "1", "--no-deps"],
-      { check: true, stderr: "inherit" },
-    ),
-  );
-  if (!Array.isArray(metadata?.packages)) return [];
-  return metadata.packages.flatMap((candidate) => {
-    if (
-      !object.isRecord(candidate) ||
-      typeof candidate.name !== "string" ||
-      typeof candidate.version !== "string"
-    ) {
-      return [];
-    }
-    return [{ name: candidate.name, version: candidate.version }];
-  });
 }
 
 function main(): void {
@@ -71,8 +46,6 @@ function main(): void {
   for (const path of find.findFiles("**/pyproject.toml", { cwd: root })) {
     check(path, pythonVersion(join(root, path)));
   }
-  for (const pkg of cargoVersions(root)) check(`Cargo package ${pkg.name}`, pkg.version);
-
   if (mismatches.length > 0) {
     throw new Error(`Workspace version mismatch:\n${mismatches.join("\n")}`);
   }

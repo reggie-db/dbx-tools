@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { Command } from "commander";
 import { parse, stringify } from "smol-toml";
-import { preparePythonProjectForPublication, pythonProjectInfo } from "./uniffi-python.js";
+import { preparePythonProjectForPublication, pythonProjectInfo } from "./python-release.ts";
 import { runTaskCommand } from "../src/_task-command.ts";
 
 interface PythonProjectFile {
@@ -24,7 +24,6 @@ interface PythonProjectFile {
   readonly path: string;
   readonly private: boolean;
   readonly source: string;
-  readonly uniffi: boolean;
 }
 
 /** Python wheel and source archives accepted by Twine and package indexes. */
@@ -43,7 +42,7 @@ function pythonProjects(root: string): PythonProjectFile[] {
     .sort();
   const allProjects: PythonProjectFile[] = packageFiles.map((path) => {
     const source = readFileSync(path, "utf8");
-    const info = pythonProjectInfo(source, { parse, stringify });
+    const info = pythonProjectInfo(source, { parse });
     return {
       directory: basename(resolve(path, "..")),
       name: info.name,
@@ -51,7 +50,6 @@ function pythonProjects(root: string): PythonProjectFile[] {
       path,
       private: info.private,
       source,
-      uniffi: info.uniffi,
     };
   });
   return allProjects;
@@ -91,7 +89,6 @@ export function publishPythonProjects(options: {
 /** Build the exact Python release distributions without publishing them. */
 export function buildPythonProjects(options: {
   readonly allowEmpty?: boolean;
-  readonly excludeUniFFI?: boolean;
   readonly output: string;
   readonly root: string;
   readonly version: string;
@@ -100,9 +97,7 @@ export function buildPythonProjects(options: {
   const output = resolve(options.output);
   rmSync(output, { recursive: true, force: true });
   const allProjects = pythonProjects(root);
-  const projects = allProjects.filter(
-    (project) => !project.private && (!options.excludeUniFFI || !project.uniffi),
-  );
+  const projects = allProjects.filter((project) => !project.private);
   if (projects.length === 0 && options.allowEmpty) {
     mkdirSync(output, { recursive: true });
     return;

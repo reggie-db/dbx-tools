@@ -530,14 +530,14 @@ def _uv_python() -> str:
     return f"{sys.version_info.major}.{sys.version_info.minor}"
 
 
-_CHILD_NAMESPACE_PACKAGES = ("postgres", "core", "core_rs")
+_CHILD_NAMESPACE_PACKAGES = ("postgres", "core")
 
 
 def _child_python_paths() -> list[str]:
     """Expose launcher package roots without mixing interpreter standard libraries.
 
     The Graphiti child imports this package from source and then loads
-    `dbx_tools.postgres` (and its `core` / `core_rs` namespace siblings).
+    `dbx_tools.postgres` and its `core` namespace sibling.
     Workspace installs are editable: those modules live on `sys.path`
     through `.pth` files, which Python does not apply when site-packages
     is only appended to `PYTHONPATH`. Copy the resolved roots from this

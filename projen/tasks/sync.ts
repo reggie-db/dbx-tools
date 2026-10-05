@@ -2,7 +2,7 @@
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
-import { pythonNodeBindingProjects, readDbxToolsConfig, repoRoot } from "../src/packages.ts";
+import { pythonNodeBindingProjects, repoRoot } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
@@ -33,16 +33,6 @@ function watcher(script: string, name: string, prefixColor: string, ...args: str
     name,
     prefixColor,
   };
-}
-
-/** Whether synth recorded at least one Rust crate for the focused watcher. */
-function hasRustProjects(): boolean {
-  const rust = readDbxToolsConfig(repoRoot)?.rust;
-  if (!rust || typeof rust !== "object" || Array.isArray(rust)) return false;
-  return (
-    Array.isArray((rust as { crates?: unknown }).crates) &&
-    (rust as { crates: unknown[] }).crates.length > 0
-  );
 }
 
 if (!process.argv.includes("--watch")) {
@@ -78,9 +68,6 @@ if (!process.argv.includes("--watch")) {
     watcher("barrels.ts", "barrels", "cyan", "--watch"),
     watcher("openapi.ts", "openapi", "green", "--watch"),
   ];
-  if (hasRustProjects()) {
-    watchers.push(watcher("rust.ts", "rust", "yellow", "--watch"));
-  }
   if (pythonNodeBindingProjects(repoRoot).length > 0) {
     watchers.push(watcher("python-node-bindings-watch.ts", "node-bindings", "blue"));
   }

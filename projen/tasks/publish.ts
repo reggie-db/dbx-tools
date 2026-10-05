@@ -37,10 +37,9 @@
  *     is skipped, while any mismatch fails the retry.
  *
  * `--dry-run` forwards to `bun publish`: it packs + validates
- * but uploads nothing, so the `release` workflow is testable end-to-end via a
- * `workflow_dispatch` run without anything reaching npm. `--registry` targets a
- * non-default registry (a local verdaccio); `--exclude <dir>` (repeatable,
- * repo-relative) skips a member owned by another publication flow.
+ * but uploads nothing. `--registry` targets a non-default registry (a local
+ * verdaccio); `--exclude <dir>` (repeatable, repo-relative) skips a member owned
+ * by another publication flow.
  *
  * The checkout remains byte-for-byte unchanged. A stale manifest or lockfile is
  * a release error rather than something publication repairs.
@@ -206,15 +205,10 @@ for (const dir of members) {
     name?: string;
     version?: string;
     private?: boolean;
-    dbxToolsConfig?: { uniffi?: boolean };
     publishConfig?: { access?: unknown };
   };
   if (pkg.private) {
     logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
-    continue;
-  }
-  if (pkg.dbxToolsConfig?.uniffi === true) {
-    logger.info(`skip UniFFI ${pkg.name ?? dirname(dir)}`);
     continue;
   }
   if (!pkg.version) throw new Error(`Missing package version for ${pkg.name ?? dirname(dir)}`);

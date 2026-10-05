@@ -55,16 +55,15 @@ The proxy writes service output to `service.log` and tray output to `tray.log`.
 Lifecycle operations fail inside Databricks Apps because host service management
 is unavailable there.
 
-For side-by-side A/B testing with the Rust proxy, add `--concurrent`:
+For an isolated test installation, add `--concurrent`:
 
 ```sh
 dbx-model-proxy service install --concurrent -- --profile my-workspace
 ```
 
-Concurrent mode defaults the Python proxy to port `4001` and uses the independent
+Concurrent mode defaults the proxy to port `4001` and uses the independent
 `model-proxy-python` configuration directory, service registration, logs, and
-tray identity. The Rust service can continue using its existing port `4000`
-registration. An explicit `--port` after `--` overrides the concurrent default.
+tray identity. An explicit `--port` after `--` overrides the concurrent default.
 
 ## Ownership
 
@@ -75,7 +74,5 @@ registration. An explicit `--port` after `--` overrides the concurrent default.
 - This package owns only FastAPI route installation, LiteLLM callback wiring,
   and command-line startup.
 
-The initial implementation intentionally does not reproduce the Rust proxy's
-process-local rate-limit queues, metrics, or protocol translation. Those
-features should be added only where LiteLLM does not already provide equivalent
-behavior.
+Add proxy-specific controls only where LiteLLM does not already provide
+equivalent behavior.

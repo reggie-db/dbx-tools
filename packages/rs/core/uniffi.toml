@@ -1,6 +1,0 @@
-
-[bindings.python]
-cdylib_name = "dbx_tools_core"
-
-[bindings.typescript]
-strictTypeChecking = true

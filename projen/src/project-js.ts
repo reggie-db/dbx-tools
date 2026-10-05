@@ -48,7 +48,7 @@ import {
   type ReleaseDependencyInput,
   type ReleaseUnitRule,
 } from "./release-catalog.ts";
-import { DBXToolsRelease, type ReleaseDocsOptions, type ReleaseSummaryOptions } from "./release.ts";
+import { DBXToolsRelease, type ReleaseDocsOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
@@ -384,7 +384,7 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
 
 export { PROJEN_VERSION } from "./projen-version.ts";
 
-/** SPDX license shared by generated JavaScript, Python, and Rust packages. */
+/** SPDX license shared by generated JavaScript and Python packages. */
 export const DBX_TOOLS_LICENSE = "Apache-2.0";
 
 /**
@@ -625,10 +625,6 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releasePythonRoot?: string;
     /** Repository task names run during local release preparation before publication. */
     readonly releaseValidationTasks?: readonly string[];
-    /** Include configured Rust/UniFFI artifacts in tag releases. Defaults to true. */
-    readonly releaseNative?: boolean;
-    /** Optional AI-generated release summary. Defaults to enabled. */
-    readonly releaseSummary?: boolean | ReleaseSummaryOptions;
     /** Set to `false` to omit normal npm workspace publication. */
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
@@ -1582,8 +1578,6 @@ function initProject(
       docs: options.releaseDocs,
       pythonRoot: options.releasePythonRoot,
       validationTasks: options.releaseValidationTasks,
-      nativeRelease: options.releaseNative,
-      summary: options.releaseSummary,
     });
   }
 }

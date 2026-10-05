@@ -33,8 +33,7 @@ export function isDBXToolsProject(): Predicate<IConstruct, DBXToolsProject> {
   return isProject().and(
     (project): project is DBXToolsProject =>
       (project as Partial<DBXToolsProject>).language === "javascript" ||
-      (project as Partial<DBXToolsProject>).language === "python" ||
-      (project as Partial<DBXToolsProject>).language === "rust",
+      (project as Partial<DBXToolsProject>).language === "python",
   );
 }
 

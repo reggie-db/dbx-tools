@@ -22,33 +22,6 @@
         }
       ]
     },
-    "auth:python-runtime": {
-      "name": "auth:python-runtime",
-      "description": "Generate Node bindings for Python package auth",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/auth"
-        }
-      ]
-    },
-    "auth:python-runtime:check": {
-      "name": "auth:python-runtime:check",
-      "description": "Verify generated Node bindings for Python package auth",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/auth --check"
-        }
-      ]
-    },
-    "auth:python-runtime:watch": {
-      "name": "auth:python-runtime:watch",
-      "description": "Regenerate Node bindings for Python package auth on changes",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/auth"
-        }
-      ]
-    },
     "barrels": {
       "name": "barrels",
       "steps": [
@@ -295,10 +268,10 @@
     },
     "model:contracts": {
       "name": "model:contracts",
-      "description": "Generate browser-safe TypeScript and Zod model contracts from Rust",
+      "description": "Generate browser-safe Zod model schemas from TypeScript contracts",
       "steps": [
         {
-          "exec": "cargo run --quiet -p dbx-tools-model --features contract-generation --example generate-model-contracts -- packages/js/shared/model/src/generated/_contracts.ts && bunx ts-to-zod packages/js/shared/model/src/generated/_contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments"
+          "exec": "bunx ts-to-zod packages/js/shared/model/src/contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments"
         }
       ]
     },
@@ -440,47 +413,6 @@
         }
       ]
     },
-    "rs:bindings": {
-      "name": "rs:bindings",
-      "description": "Generate language bindings for UniFFI-enabled Rust crates",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/rust.ts"
-        }
-      ]
-    },
-    "rs:build": {
-      "name": "rs:build",
-      "steps": [
-        {
-          "exec": "cargo build --workspace"
-        }
-      ]
-    },
-    "rs:format": {
-      "name": "rs:format",
-      "steps": [
-        {
-          "exec": "cargo fmt --all"
-        }
-      ]
-    },
-    "rs:lint": {
-      "name": "rs:lint",
-      "steps": [
-        {
-          "exec": "cargo clippy --workspace --all-targets --all-features"
-        }
-      ]
-    },
-    "rs:test": {
-      "name": "rs:test",
-      "steps": [
-        {
-          "exec": "cargo test --workspace"
-        }
-      ]
-    },
     "sync": {
       "name": "sync",
       "steps": [
@@ -499,9 +431,6 @@
         },
         {
           "spawn": "test:installer"
-        },
-        {
-          "spawn": "auth:python-runtime:check"
         },
         {
           "spawn": "models:python-runtime:check"

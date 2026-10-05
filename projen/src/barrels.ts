@@ -16,11 +16,6 @@
  * takes priority. This keeps the barrel auto-generated while letting you add or
  * override individual exports.
  *
- * A UniFFI source triplet (`bindings.ts`, `_bindings.ts`, and
- * `_bindings-ffi.ts`) is one special case: the internal underscore modules stay
- * private, while `bindings.ts` is re-exported directly instead of under a
- * `bindings` namespace. Generation fails when one of those direct binding names
- * conflicts with another top-level package export.
  *
  * Each eligible module becomes `export * as <name> from "./src/x.ts"` (camelCase
  * namespace from its path segments; invalid identifiers suffixed with `Module`),
@@ -121,9 +116,6 @@ const PACKAGE_IDENTIFIER_LINE = `export const ${PACKAGE_IDENTIFIER_EXPORT} = "";
 const PACKAGE_VERSION_LINE = `export const ${PACKAGE_VERSION_EXPORT} = "";`;
 const PACKAGE_IDENTIFIER_LINE_RE = /^export const PACKAGE_IDENTIFIER = .*;$/m;
 const PACKAGE_VERSION_LINE_RE = /^export const PACKAGE_VERSION = .*;$/m;
-const UNIFFI_BINDINGS_FILE = "bindings.ts";
-const UNIFFI_GENERATED_FILE = "_bindings.ts";
-const UNIFFI_FFI_FILE = "_bindings-ffi.ts";
 
 /** `config-tools` / `config_tools` -> `configTools`; `local-fs` -> `localFS`. */
 function moduleSegmentToCamel(segment: string): string {
@@ -295,61 +287,6 @@ function isLegacyBindingsExport(file: string): boolean {
   return readFileSync(file, "utf8").trim() === 'export * from "./src/bindings.ts";';
 }
 
-function hasUniFFIBindings(srcDir: string): boolean {
-  return [UNIFFI_BINDINGS_FILE, UNIFFI_GENERATED_FILE, UNIFFI_FFI_FILE].every((file) =>
-    existsSync(join(srcDir, file)),
-  );
-}
-
-function bindingExportNames(srcDir: string): Set<string> {
-  return new Set(
-    [UNIFFI_BINDINGS_FILE, UNIFFI_GENERATED_FILE].flatMap((file) =>
-      moduleExports(join(srcDir, file)).map((entry) => entry.name),
-    ),
-  );
-}
-
-function barrelExportNames(content: string, customPath: string): Set<string> {
-  const names = new Set<string>([PACKAGE_IDENTIFIER_EXPORT, PACKAGE_VERSION_EXPORT]);
-  for (const match of content.matchAll(/^export \* as (\w+) from /gm)) {
-    names.add(match[1]!);
-  }
-  for (const match of content.matchAll(/^export(?: type)? \{([^}]+)\} from /gm)) {
-    for (const specifier of match[1]!.split(",")) {
-      const parts = specifier.trim().split(/\s+as\s+/);
-      const name = parts.at(-1);
-      if (name) names.add(name);
-    }
-  }
-  if (existsSync(customPath) && !isLegacyBindingsExport(customPath)) {
-    const statements = moduleStatements(customPath) as ReadonlyArray<{
-      type: string;
-      exported?: unknown;
-    }>;
-    if (
-      statements.some(
-        (statement) => statement.type === "ExportAllDeclaration" && !statement.exported,
-      )
-    ) {
-      throw new Error(
-        `Cannot verify UniFFI export conflicts through a bare export in ${customPath}`,
-      );
-    }
-    for (const name of customExportNames(customPath)) names.add(name);
-  }
-  return names;
-}
-
-function assertNoBindingExportConflicts(srcDir: string, content: string, customPath: string): void {
-  const other = barrelExportNames(content, customPath);
-  const conflicts = [...bindingExportNames(srcDir)].filter((name) => other.has(name)).sort();
-  if (conflicts.length > 0) {
-    throw new Error(
-      `UniFFI binding exports conflict with package exports in ${srcDir}: ${conflicts.join(", ")}`,
-    );
-  }
-}
-
 /** Read the authoritative npm package name and version emitted by the package project. */
 function packageMetadata(pkgDir: string): { identifier: string; version: string } {
   const manifestPath = join(pkgDir, "package.json");
@@ -441,10 +378,7 @@ function generateForPackage(pkgDir: string): number {
     if (!existing || (!isSourceExt(existing) && isSourceExt(f))) byModulePath.set(stem, f);
   }
   const modulePaths = [...byModulePath.keys()].sort((a, b) => a.localeCompare(b));
-  const uniffiBindings = hasUniFFIBindings(srcDir);
-  const namespacedModulePaths = uniffiBindings
-    ? modulePaths.filter((modulePath) => modulePath !== "bindings")
-    : modulePaths;
+  const namespacedModulePaths = modulePaths;
 
   // No eligible modules -> no barrel: drop any stale root barrel and bail.
   if (modulePaths.length === 0) {
@@ -479,13 +413,6 @@ function generateForPackage(pkgDir: string): number {
   content = hoistUniqueExports(content, pkgDir, suppress);
   // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
   content = mergeCustomExports(content, pkgDir);
-  if (uniffiBindings) {
-    assertNoBindingExportConflicts(srcDir, content, customPath);
-    content = content.replace(
-      PACKAGE_VERSION_LINE,
-      `${PACKAGE_VERSION_LINE}\nexport * from "./src/bindings.ts";`,
-    );
-  }
 
   // Package metadata is blanked for the structural comparison, then restored
   // from package.json so a version-only change still rewrites the barrel.

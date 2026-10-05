@@ -179,7 +179,7 @@ The package deliberately keeps orchestration separate from Graphiti itself:
    for `dbx_tools.postgres`, so a looser upstream `requires-python` must
    not select a different interpreter.
 7. A generated Neo4j password is stored with mode `0600`.
-8. The Rust model proxy starts against the selected Databricks profile,
+8. The Python LiteLLM model proxy starts against the selected Databricks profile,
    and Graphiti receives its OpenAI-compatible URL and model settings through
    environment variables and CLI flags.
 
@@ -201,7 +201,7 @@ requires the argument. Model and server settings resolve from CLI option,
 environment variable, then package default:
 
 - `--profile` / `DATABRICKS_CONFIG_PROFILE`: an optional Databricks profile
-  override for the managed model proxy. When both are absent, native auth resolves
+  override for the managed model proxy. When both are absent, dbx-tools auth resolves
   the active Databricks identity.
 - `--model` / `MODEL_NAME`: defaults to
   `databricks-gpt-5-nano`.

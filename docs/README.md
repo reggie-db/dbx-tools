@@ -12,13 +12,12 @@ Source of truth:
 
 - `README.md` becomes the docs homepage.
 - `packages/js/**/README.md` and `packages/py/**/README.md` become the package
-  reference, alongside publishable Rust crate READMEs.
+  reference.
 - `docs/*.md` guides become the site's Guides section.
 - `docs/scripts/sync-readmes.mjs` rewrites local README links for the site,
   generates Starlight content, and publishes `llms.txt` / `llms-full.txt`.
 - `docs/scripts/generate-api-docs.mjs` resolves TypeScript entries from npm
-  export maps, generates Python references from source ASTs and docstrings, and
-  runs Cargo rustdoc for publishable Rust crates.
+  export maps and generates Python references from source ASTs and docstrings.
 - `docs/scripts/repository-docs.mjs` owns the package catalogue, route slugging,
   and README summary rules shared by both generators.
 - `docs/toolchain.json` pins the exact Astro, Starlight, TypeDoc, and TypeDoc
@@ -29,8 +28,8 @@ Source of truth:
 - The generated Starlight app under `.docs-build/site/` configures navigation,
   static search, edit links, and the GitHub Pages build output.
 
-The API build requires Python 3.11 or newer and a Rust toolchain in addition to
-Bun. Start locally while editing content:
+The API build requires Python 3.11 or newer in addition to Bun. Start locally
+while editing content:
 
 ```sh
 bun docs/scripts/sync-readmes.mjs

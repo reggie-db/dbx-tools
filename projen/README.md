@@ -188,179 +188,6 @@ Node package does not gain Python callbacks or alternate source files. A
 replacement may use a different export name through `handlerExport`; every
 other export continues to come from the original module.
 
-## Add A Rust Workspace
-
-`DBXToolsRustWorkspace` discovers every source-bearing folder under its
-configurable `root` (default `packages/rs`), generates its Cargo manifest, and
-derives the crate name and repository from the parent project. A crate containing
-`uniffi::setup_scaffolding!()`
-automatically wires matching public Node and Python binding packages using the
-`<name>-rs` folder suffix. Node packages are named `@<scope>/<name>-rs`;
-Python distributions are named `<scope>-<name>-rs` and export generated values
-from `<scope>.<name>_rs`. Binding packages are always dedicated and
-never merge generated code into handwritten Node or Python packages.
-Repository-specific dependencies and features remain
-declarative options in `.projenrc.ts`; generated bindings are built separately
-from projen synthesis. Target-independent Node binding TypeScript is committed
-and remains generated/read-only, while native libraries stay ignored. Node
-facades compile to `lib/` and publish JavaScript entry points that plain Node
-can load from `node_modules`. A complete `bindings.ts` / `_bindings.ts` /
-`_bindings-ffi.ts` triplet is exported directly from the generated package
-barrel. Python keeps `bindings.py` as the generated implementation and leaves
-`__init__.py` as its generated package-root export. Node generation fails when
-direct binding names conflict.
-Do not create a `nodeExports` binding subpath or a handwritten type facade.
-
-Each discovered member is a native Projen `Project`, exposed as
-`DBXToolsRustProject`. The same class also owns standalone Cargo projects with
-the flat object-style options used by the Node and Python project classes:
-
-```ts
-import { project } from "@dbx-tools/projen";
-
-new project.DBXToolsRustProject({
-  name: "my-apps-core",
-  outdir: "native/core",
-  version: "0.1.0",
-  description: "Shared native runtime",
-  repository: "https://github.com/example/my-apps",
-});
-```
-
-The project emits concrete standalone Cargo metadata plus `compile`, `test`,
-`package`, `lint`, `format`, and `format:check` tasks. A nested standalone
-project declares its own empty Cargo workspace so a surrounding repository
-workspace does not absorb it accidentally. The `examples` option emits explicit
-Cargo example targets and `required-features`, so an optional code generator is
-excluded from ordinary workspace tests until its feature is enabled.
-`DBXToolsRustWorkspace` constructs the same class with workspace-owned metadata
-and keeps aggregate binding and release coordination.
-`DBXToolsRustWorkspaceOptions.private` supplies the default Cargo publication
-policy for every discovered crate; a package-level `private` value overrides it.
-Cargo projects use the flat object-style constructor exclusively.
-
-Rust dependencies between binding-enabled workspace crates become Node
-`workspace:*` and Python `internalDependencies` automatically. Python generation
-selects the owning crate and supplies `external_packages` imports. UBRN currently
-emits every linked component; the generation task discards dependency outputs
-and rewrites their imports to the owning package root, including its generated
-`uniffiModule` converter table. It never copies a dependency's records or enums.
-Foreign callback adapters must first be wrapped in an object created by their
-own native library (`createStorageHandle` for auth), because callback registries
-are library-local. Release wheels replace sibling Git requirements with matching
-native-wheel versions, and dependent publishers wait for their dependencies.
-Each crate builds its own `<crate>-uniffi-bindgen` executable so one target row
-has no colliding binary outputs. The executable requires the generated
-`uniffi-bindgen` feature, which enables `uniffi/cli` only in the UniFFI matrix.
-Packaging runs that prebuilt executable.
-Cargo manifests, target config, and UniFFI config are generated from structured
-Projen `TomlFile` objects. Local and release Python generation share one
-dependency-free helper for generator arguments, target-specific executable
-names, generated headers, generated package-root exports, and native-library
-placement.
-
-`sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
-inside an existing UniFFI crate regenerate that crate and its dependent bindings
-in dependency order; adding or
-removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
-without Rust crates start no Rust watcher. When Rust projects are detected,
-Cargo is required and the focused task fails immediately if it is unavailable.
-`rs:bindings` is explicit rather than part of root `pre-compile`, so ordinary
-JavaScript PR builds type-check committed generated bindings without performing
-a host Rust build. Regenerate bindings through the focused watcher or explicit
-task while changing a UniFFI API. Release preparation runs Cargo workspace tests
-without invoking UBRN.
-
-Rust release configuration is generated at `.projen/rust-release.json` from the
-workspace model. The release tasks consume that file directly, so consumers do
-not need a repository-specific helper crate or handwritten target matrix.
-
-The workspace generates one `release.yml` workflow for every ecosystem. The
-root `VERSION` drives every Node, Python, Cargo, native, and GitHub artifact.
-`bun run release` prepares one reviewed PR into `main`; it enables automatic
-merge by default and accepts `--no-approve` for a human-controlled merge.
-
-Release generation writes `release.yml` without scanning for or removing other
-workflow files. Consumers explicitly delete exact workflow files they no longer
-want.
-
-Release preparation uses one checkout. It commits and pushes pending source
-work, switches to `release/v<version>`, increments `VERSION`, synthesizes and
-validates the repository, and opens the release PR. After merge it detaches at
-the exact merge SHA, builds the complete candidate once, optionally publishes
-that candidate to local registries, uploads the same files to a draft GitHub
-Release, and restores the original branch. A failed transaction stores
-uncommitted release-branch state in a `release-resume:<branch>` stash. No Git
-worktree or second production build is involved.
-
-The draft contains `release-manifest.json`, `SHA256SUMS`, every npm archive,
-every Python distribution, every native binding archive, and every Rust binary.
-The manifest records the version, annotated tag, exact Git commit SHA, file size,
-and SHA-256 for each artifact. Publishing the GitHub Release is the production
-promotion event.
-
-`release.yml` runs on `release.published`. Its context job resolves the annotated
-tag, verifies main ancestry, checks out the exact commit, checks `VERSION`, and
-downloads and verifies the approved candidate. npm publishes the approved
-archives directly with the repository `NPM_TOKEN` secret. The job pins npm
-`11.4.2` so token authentication and GitHub provenance do not depend on the npm
-version bundled with the runner's Node release or opt into trusted-publisher
-registry authentication. PyPI
-publishes the approved distributions through trusted-publisher environments.
-Cargo publishes from the verified source checkout with `cargo publish --locked`.
-GitHub-hosted runners do not rebuild native release artifacts.
-
-The workflow accepts stage-specific manual recovery only for an existing
-published tag. npm compares archive identity and content, PyPI uses hash-aware
-existing-file behavior, Cargo checks existing versions, and every stage remains
-bound to the same tag and SHA. Manual runs default to dry-run.
-
-Set a release binary's `cli` package option and the workspace `cliRegistryPath`
-to generate a typed `dbx` command registry from the configured release targets.
-The runtime command uses `@dbx-tools/core` `bin.ensure`; the core installer
-contains no product registry. `releaseExcludeOs` omits a release binary from an
-incompatible target. UniFFI crates still produce every configured target.
-
-Set `LOCAL_CARGO_REGISTRY` to a named Cargo registry such as a loopback
-[Kellnr](https://kellnr.io/) instance and provide `LOCAL_CARGO_TOKEN`. Public
-Cargo crates also publish directly to crates.io
-with `CARGO_REGISTRY_TOKEN`. Override `releaseTargets` only when a consumer has
-additional native runners; ordinary projects inherit the maintained matrix
-automatically. `bun run release` also accepts repeatable `--os` and `--arch`
-selectors; every selected operating system is crossed with every selected
-architecture. Omit both filters to regenerate the complete maintained matrix.
-`DBX_TOOLS_RELEASE_PLATFORMS` can select the generated matrix without repeating
-environment parsing in a consumer.
-
-A manager can rebuild an interrupted candidate from the exact source with
-`bun run release:assets --version <version> --tag <tag> --sha <commit> --upload`.
-Candidate upload is separate from candidate construction, so retries use the
-already-verified files rather than rebuilding them.
-
-Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
-manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
-approved npm archives are dependency-ordered and published directly with the
-repository `NPM_TOKEN` secret with GitHub Actions provenance. Local Verdaccio
-publication does not enable provenance. Python publishes the exact approved wheels and source distributions
-through package-specific PyPI trusted-publisher environments; binding publishers
-wait for their dependencies. Trusted-publisher instructions name `release.yml`
-and the `v*` deployment tag policy. Cargo publication checks the approved source
-commit and skips an already-published version during recovery.
-The docs jobs generate README and TypeScript API content and deploy GitHub Pages
-from the same workflow. When a conventional Node binding path already belongs
-to a root subproject, Rust mapping reuses that project and adds binding
-dependencies and metadata to its existing manifest.
-
-The workspace npm publisher owns compilation for normal release publication. It
-selects every publishable package with compiled entry points, invokes one
-root-level filtered compile, then packs each package exactly once with lifecycle
-scripts disabled. It validates the archive identity, configured access,
-integrity, and repository metadata before publishing those same bytes. Local
-release preparation passes `--skip-compile` only after its immediately preceding
-validation compile and verifies every expected output exists before reuse.
-Package `prepack` tasks remain available for standalone publishes without
-multiplying `tsc --build` across the monorepo release flow.
-
 ## Customize Packages With Mixins
 
 ```ts
@@ -548,35 +375,14 @@ list, so a new package is covered without a re-synth. Work from the root:
 | `bun run barrels`              | regenerate the read-only `index.ts` barrels          |
 | `bun run bump`                 | increment `VERSION` and regenerate version surfaces  |
 | `bun run version:check`        | verify every generated version against `VERSION`     |
-| `bun run release`              | validate, open, and automatically merge a release PR |
-| `bun run release --no-approve` | open the release PR without automatic merge          |
+| `bun run release`              | commit the bump, push `main`, and push `vX.Y.Z`       |
 
-`release` commits and pushes pending source work, switches to a release branch,
-increments `VERSION`, synthesizes manifests and registries, runs validation,
-writes the release summary, and opens one PR. After automatic merge it builds
-the candidate from the exact merge SHA, optionally publishes the same candidate
-to local registries, uploads it to a draft GitHub Release, and returns to the
-original branch. Publishing the draft starts registry deployment. Use
-`--no-approve` to leave the PR for manual merge, `--no-validate` to skip
-repository tests/compile, or `--no-local-publish` to skip local registry
-preflight. `VERSION` is the only base used to calculate the next version.
-The repository host and owner are derived from the Git remote. If the GitHub CLI
-has multiple accounts for that host, release preparation selects the first
-authenticated account with write access to the detected repository. Classic
-tokens must include the `workflow` scope so the release PR can update the
-generated workflow.
-
-The GitHub PR workflow runs the explicit `pr:validate` task through Projen's
-public `BuildWorkflow` `buildTask` option. That task runs synth plus the
-workspace TypeScript compile rather than the complete root build. Release
-preparation has already run Rust tests, workspace type-checking, and local
-package preflight before opening the PR. JavaScript behavior tests remain an
-explicit developer task.
-
-The generated workflow publishes the complete public workspace after the draft
-GitHub Release is published. Cargo, PyPI, npm, and docs share the verified tag,
-commit, manifest, and checksums. Documentation deployment runs only in this
-promotion workflow.
+Run `bun run bump` locally to increment `VERSION` and regenerate versioned
+surfaces. Run exactly `bun run release` to commit that bump, push `main`, and
+push the matching annotated `vX.Y.Z` tag. The tag workflow verifies that the tag
+points at the exact `origin/main` commit, builds one candidate, publishes npm and
+PyPI artifacts, and deploys documentation. Local npm and Python registry
+publication remains available through the release-candidate tooling.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
@@ -605,7 +411,6 @@ from the root instead.
 ## Versioning
 
 `VERSION` is the language-neutral version seam. Real package manifests remain
-Projen-owned and reproduce it exactly across JavaScript, Python, Rust, UniFFI
-bindings, native package metadata, and runtime binary registries. Package and
+Projen-owned and reproduce it exactly across JavaScript and Python packages. Package and
 artifact discovery still supplies publication order and target inventory; it
 does not create independent version ownership.

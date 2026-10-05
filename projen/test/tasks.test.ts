@@ -3,11 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import {
-  DBXToolsNodeProject,
-  DBXToolsRustWorkspace,
-  DBXToolsTypeScriptProject,
-} from "../src/project.ts";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
 
 interface TaskStep {
   spawn?: string;
@@ -152,25 +148,5 @@ describe("workspace validation tasks", () => {
   it("does not register tasks for missing engine scripts", () => {
     const engineProjenrc = readFileSync(join(import.meta.dirname, "..", ".projenrc.ts"), "utf8");
     assert.doesNotMatch(engineProjenrc, /tasks\/demo\.ts/);
-  });
-});
-
-describe("Rust sync tasks", () => {
-  it("records no Rust watcher state when no crates exist", () => {
-    process.env.PROJEN_DISABLE_POST = "1";
-    const outdir = mkdtempSync(join(tmpdir(), "workspace-no-rust-"));
-    const root = new DBXToolsNodeProject({
-      name: "workspace-no-rust",
-      outdir,
-      defaultTagMixins: false,
-      github: false,
-    });
-    const rust = new DBXToolsRustWorkspace(root, { scope: "fixture" });
-    root.dbxToolsConfig.rust = rust.workspaceMapping;
-    root.synth();
-    const manifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
-      dbxToolsConfig?: { rust?: { crates?: string[] } };
-    };
-    assert.deepEqual(manifest.dbxToolsConfig?.rust?.crates, []);
   });
 });

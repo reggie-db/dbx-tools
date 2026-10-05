@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { parse, stringify } from "smol-toml";
 import { pythonDistributionPaths } from "../tasks/publish-python.ts";
-import { preparePythonProjectForPublication } from "../tasks/uniffi-python.js";
+import { preparePythonProjectForPublication } from "../tasks/python-release.ts";
 
 describe("Python release packaging", () => {
   it("selects only publishable distributions", () => {
@@ -27,7 +27,7 @@ describe("Python release packaging", () => {
     const prepared = preparePythonProjectForPublication(
       `[project]\nname = "fixture-app"\nversion = "1.2.3"\ndependencies = ["fixture-core @ git+https://example.invalid/repo.git@main#subdirectory=python/core"]\n`,
       {
-        packages: [{ directory: "core", name: "fixture-core", version: "1.2.3", uniffi: false }],
+        packages: [{ directory: "core", name: "fixture-core" }],
         toml: { parse, stringify },
         version: "1.2.3",
       },

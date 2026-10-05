@@ -32,7 +32,6 @@ before(() => {
           uses: "actions/setup-python@v6",
           with: { "python-version": "3.11" },
         },
-        { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
         { name: "Validate public source documentation", run: "bun tools/check-docs.ts" },
         { name: "Generate docs from READMEs", run: "bun tools/sync-docs.ts" },
       ],
@@ -130,7 +129,6 @@ describe("unified release workflow", () => {
     assert.equal(build.env?.DOCS_BASE, "/fixture/");
     const stepNames = build.steps.map((candidate) => candidate.name);
     assert.equal(step(build, "Setup Python").uses, "actions/setup-python@v6");
-    assert.equal(step(build, "Setup Rust").uses, "dtolnay/rust-toolchain@stable");
     assert.ok(
       stepNames.indexOf("Validate public source documentation") <
         stepNames.indexOf("Generate docs from READMEs"),
@@ -155,8 +153,6 @@ describe("unified release workflow", () => {
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
     for (const file of [
-      "release-dispatch.yml",
-      "rust-release.yml",
       "node-release.yml",
       "python-release.yml",
       "docs.yml",
@@ -166,23 +162,6 @@ describe("unified release workflow", () => {
     }
   });
 
-  it("leaves predecessor workflow removal to the consumer", () => {
-    const existingOutdir = mkdtempSync(join(tmpdir(), "release-existing-"));
-    const workflowPath = join(existingOutdir, ".github", "workflows", "node-release.yml");
-    try {
-      mkdirSync(join(existingOutdir, ".github", "workflows"), { recursive: true });
-      writeFileSync(workflowPath, "name: consumer-owned\n");
-      const project = new DBXToolsNodeProject({
-        name: "existing-release-fixture",
-        outdir: existingOutdir,
-        github: true,
-      });
-      project.synth();
-      assert.equal(readFileSync(workflowPath, "utf8"), "name: consumer-owned\n");
-    } finally {
-      rmSync(existingOutdir, { recursive: true, force: true });
-    }
-  });
 });
 
 describe("release task contracts", () => {
@@ -196,38 +175,6 @@ describe("release task contracts", () => {
       tasks.tasks.release?.steps?.[0]?.exec ?? "",
       /tasks\/release-tag\.ts --prefix v --branch main/,
     );
-    assert.equal(tasks.tasks["release:assets"], undefined);
-  });
-
-  it("keeps legacy summary options source-compatible without changing tag release", () => {
-    const providersOutdir = mkdtempSync(join(tmpdir(), "release-summary-providers-"));
-    const disabledOutdir = mkdtempSync(join(tmpdir(), "release-summary-disabled-"));
-    try {
-      new DBXToolsNodeProject({
-        name: "release-summary-providers",
-        outdir: providersOutdir,
-        github: true,
-        releaseSummary: { providers: ["claude", "codex"] },
-      }).synth();
-      new DBXToolsNodeProject({
-        name: "release-summary-disabled",
-        outdir: disabledOutdir,
-        github: true,
-        releaseSummary: false,
-      }).synth();
-      const command = (directory: string): string => {
-        const tasks = JSON.parse(readFileSync(join(directory, ".projen/tasks.json"), "utf8")) as {
-          tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
-        };
-        return tasks.tasks.release?.steps?.[0]?.exec ?? "";
-      };
-
-      assert.match(command(providersOutdir), /release-tag\.ts --prefix v --branch main/);
-      assert.match(command(disabledOutdir), /release-tag\.ts --prefix v --branch main/);
-    } finally {
-      rmSync(providersOutdir, { recursive: true, force: true });
-      rmSync(disabledOutdir, { recursive: true, force: true });
-    }
   });
 
   it("compiles before projecting publish configuration into archives", () => {
@@ -242,81 +189,6 @@ describe("release task contracts", () => {
     assert.match(driver, /\["publish",[\s\S]*archive\]/);
     assert.doesNotMatch(driver, /runAsync\(dir, "bun", \["publish", \.\.\.publishArgs\]/);
     assert.match(driver, /\["--access", access\]/);
-  });
-
-  it("keeps bump pure and lets release preparation own git and local publication", () => {
-    const bump = readFileSync(join(import.meta.dirname, "..", "tasks", "bump.ts"), "utf8");
-    assert.ok(bump.includes("writeWorkspaceVersion(root, next.version)"));
-    assert.ok(bump.includes('process.execPath, [".projenrc.ts"]'));
-    assert.doesNotMatch(bump, /git\(\[/);
-    assert.doesNotMatch(bump, /publishLocalRelease|publish\.ts|gh/);
-
-    const releasePr = readFileSync(
-      join(import.meta.dirname, "..", "tasks", "release-pr.ts"),
-      "utf8",
-    );
-    assert.ok(releasePr.includes("await withWorkspaceMutationLock(root, async () =>"));
-    assert.ok(
-      releasePr.indexOf('runGitTaskCommand(root, ["commit", "-m", opts.message])') <
-        releasePr.indexOf("pushCurrentBranch(root, currentBranch)"),
-    );
-    assert.ok(
-      releasePr.indexOf("pushCurrentBranch(root, currentBranch)") <
-        releasePr.indexOf('runGitTaskCommand(root, ["switch", "-c", releaseBranch])'),
-    );
-    assert.ok(releasePr.includes('["push", "--set-upstream", "origin", `HEAD:${branch}`]'));
-    assert.doesNotMatch(releasePr, /\bworktree\b/);
-    assert.ok(
-      releasePr.includes('runGitTaskCommand(root, ["merge", "--no-edit", `origin/${opts.base}`])'),
-    );
-    assert.match(releasePr, /"stash",\s*"push",\s*"--include-untracked"/);
-    assert.match(releasePr, /runGitTaskCommand\(root, \["switch", "--detach", mergeSha\]\)/);
-    assert.match(releasePr, /runGitTaskCommand\(root, \["switch", currentBranch\]\)/);
-    assert.match(releasePr, /"test",\s*"--workspace"/);
-    assert.doesNotMatch(releasePr, /cargo",\s*\["metadata"/);
-    assert.doesNotMatch(releasePr, /\["run", "rs:bindings"\]/);
-    assert.doesNotMatch(releasePr, /process\.execPath, \["run", "test"\]/);
-    assert.ok(
-      releasePr.indexOf("runTaskCommand(root, process.execPath, candidateArguments") <
-        releasePr.indexOf('"node_modules/@dbx-tools/projen/tasks/local-publish.ts"'),
-    );
-    assert.ok(
-      releasePr.indexOf('"node_modules/@dbx-tools/projen/tasks/local-publish.ts"') <
-        releasePr.indexOf('...candidateArguments, "--upload-existing"'),
-    );
-    const localCargo = readFileSync(
-      join(import.meta.dirname, "..", "tasks", "publish-uniffi-local.ts"),
-      "utf8",
-    );
-    assert.match(localCargo, /"metadata", "--format-version", "1", "--no-deps", "--locked"/);
-    assert.match(localCargo, /"run",\s*"--no-project",\s*"python"/);
-    assert.ok(localCargo.includes("if (workspaceDependency) visit(workspaceDependency)"));
-    assert.ok(localCargo.includes('mkdtempSync(join(tmpdir(), "dbx-tools-local-cargo-")'));
-    assert.match(localCargo, /"--manifest-path",\s*pkg\.manifest_path/);
-    assert.doesNotMatch(localCargo, /const originals|--allow-dirty|--no-verify/);
-    assert.ok(
-      releasePr.indexOf("generateReleaseSummary({") <
-        releasePr.lastIndexOf('runGitTaskCommand(root, ["add", "-A"])'),
-    );
-    assert.ok(
-      releasePr.indexOf("generateReleaseSummary({") < releasePr.indexOf("if (opts.approve)"),
-    );
-    assert.match(releasePr, /"pr",\s*"create"/);
-    assert.ok(releasePr.includes('"--no-approve",'));
-    assert.ok(releasePr.includes('"--no-wait",'));
-    assert.doesNotMatch(releasePr, /"--build <mode>"/);
-    assert.ok(releasePr.includes('"--no-validate",'));
-    assert.ok(releasePr.includes('"--no-local-publish",'));
-    assert.match(releasePr, /"pr",\s*"merge",\s*releaseBranch,\s*"--auto",\s*"--merge"/);
-    assert.match(releasePr, /"pr",\s*"checks",[\s\S]*"--watch",[\s\S]*"--required"/);
-    assert.ok(releasePr.includes("release-candidate.ts"));
-    assert.ok(releasePr.includes('"--sha",\n              mergeSha'));
-    assert.ok(releasePr.includes('"--upload-existing"'));
-    assert.doesNotMatch(
-      releasePr,
-      /repos\/\$\{account\.owner\}\/\$\{account\.repository\}\/merges/,
-    );
-    assert.doesNotMatch(releasePr, /"--admin"/);
   });
 
   it("publishes reviewed versions without repairing manifests", () => {
@@ -504,38 +376,15 @@ describe("optional Node release stage", () => {
       assert.equal(workflow.jobs["deploy-docs"]?.needs, "build-docs");
       assert.equal("release-please" in workflow.jobs, false);
       assert.equal("release-plan" in workflow.jobs, false);
-      assert.equal("rust-build" in workflow.jobs, false);
       assert.equal("publish-github-release" in workflow.jobs, false);
       const tasks = JSON.parse(readFileSync(join(fixedOutdir, ".projen/tasks.json"), "utf8")) as {
         tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
       };
       assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /release-tag\.ts/);
-      assert.equal(tasks.tasks["release:refresh"], undefined);
       const build = readWorkflow(fixedOutdir, "build");
       assert.ok(workflowTrigger(build, "pull_request"));
     } finally {
       rmSync(fixedOutdir, { recursive: true, force: true });
-    }
-  });
-
-  it("can omit native candidate assets while retaining tag publication", () => {
-    const nativeDisabledOutdir = mkdtempSync(join(tmpdir(), "release-native-disabled-"));
-    try {
-      const project = new DBXToolsNodeProject({
-        name: "native-disabled-release",
-        outdir: nativeDisabledOutdir,
-        github: true,
-        releaseNative: false,
-      });
-      project.synth();
-      const workflow = readWorkflow(nativeDisabledOutdir);
-      assert.ok(
-        step(workflow.jobs["verify-context"]!, "Build and upload release artifacts").run?.includes(
-          "--upload --skip-rust",
-        ),
-      );
-    } finally {
-      rmSync(nativeDisabledOutdir, { recursive: true, force: true });
     }
   });
 });

@@ -79,7 +79,7 @@ function parseInteger(value: string | number, name: string, signed: boolean): nu
   return parsed;
 }
 
-/** Translate the CLI storage name to the generated UniFFI enum. */
+/** Translate the CLI storage name to the authentication storage value. */
 function bindingStorage(storage: StorageName): databricks.Storage {
   switch (storage) {
     case "auto":
@@ -91,7 +91,7 @@ function bindingStorage(storage: StorageName): databricks.Storage {
   }
 }
 
-/** Translate the generated UniFFI enum to the CLI status value. */
+/** Translate the authentication storage value to the CLI status value. */
 function storageName(storage: databricks.Storage): StorageName {
   switch (storage) {
     case databricks.Storage.Auto:

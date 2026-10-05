@@ -14,7 +14,7 @@ import {
   RELEASE_TAG,
   RELEASE_VERSION,
   releaseSourceSteps,
-} from "./release-dispatch.ts";
+} from "./release-context.ts";
 import {
   releaseTagPattern,
   releasePublishCondition,
@@ -42,8 +42,6 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   /** Workspace package directories rendered as standalone Git dependencies. */
   readonly internalDependencies?: readonly string[];
   readonly scripts?: Readonly<Record<string, string>>;
-  /** Publish this package through the Rust UniFFI release flow instead of the Python workflow. */
-  readonly uniffi?: boolean;
   /** Build-time Node package embedded through PythonMonkey. */
   readonly nodeBindings?: PythonNodeBindingsOptions;
   /** Generated source files excluded from strict static analysis. Package-relative. */
@@ -78,8 +76,6 @@ export interface PythonReleaseOptions {
   /** GitHub environment by Python distribution name. Defaults to `pypi-<name>`. */
   readonly environments?: Readonly<Record<string, string>>;
   readonly environmentUrl?: string;
-  /** Publish generated UniFFI wheels. Defaults to true. */
-  readonly includeUniFFI?: boolean;
 }
 
 interface PythonPublication {
@@ -219,9 +215,6 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.scripts) {
       this.uv.file.addOverride("project.scripts", pkg.scripts);
     }
-    if (pkg.uniffi !== undefined) {
-      this.uv.file.addOverride("tool.dbx_tools.config.uniffi", pkg.uniffi);
-    }
     if (pkg.nodeBindings) {
       this.uv.file.addOverride("tool.dbx_tools.node_bindings", {
         package: pkg.nodeBindings.package,
@@ -350,7 +343,7 @@ export class DBXToolsPythonWorkspace extends Component {
             return {
               target: dependency.name,
               kind: "runtime" as const,
-              requirement: pythonReleaseRequirement(version, dependency.uniffi === true),
+              requirement: pythonReleaseRequirement(version),
               propagation: "outside-range" as const,
               publishOrder: true,
               internal: true,
@@ -490,8 +483,7 @@ export class DBXToolsPythonWorkspace extends Component {
   private addReleaseWorkflow(project: javascript.NodeProject, options: PythonReleaseOptions): void {
     if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const publications = this.publications(options);
-    const uniffiPublications = this.uniffiPublications(options);
-    const allPublications = [...publications, ...uniffiPublications];
+    const allPublications = publications;
     if (allPublications.length === 0) return;
     const workflow = tryReleaseWorkflow(project);
     if (!workflow) {
@@ -595,30 +587,12 @@ export class DBXToolsPythonWorkspace extends Component {
   }
 
   private publications(options: PythonReleaseOptions): readonly PythonPublication[] {
-    return this.packages
-      .filter((pkg) => pkg.packageOptions.uniffi !== true)
-      .map((pkg) => ({
-        directory: pkg.packageOptions.directory,
-        distribution: pkg.packageOptions.name,
-        environment:
-          options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
-      }));
-  }
-
-  private uniffiPublications(options: PythonReleaseOptions): readonly PythonPublication[] {
-    if (options.includeUniFFI === false) return [];
-    return this.packages
-      .filter((pkg) => pkg.packageOptions.uniffi === true)
-      .map((pkg) => ({
-        directory: pkg.packageOptions.directory,
-        distribution: pkg.packageOptions.name,
-        environment:
-          pkg.packageOptions.trustedPublisher?.environment ??
-          options.environments?.[pkg.packageOptions.name] ??
-          `pypi-${pkg.packageOptions.name}`,
-        artifacts: pkg.packageOptions.trustedPublisher?.artifacts,
-        dependencies: pkg.packageOptions.internalDependencies,
-      }));
+    return this.packages.map((pkg) => ({
+      directory: pkg.packageOptions.directory,
+      distribution: pkg.packageOptions.name,
+      environment:
+        options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
+    }));
   }
 
   private trustedPublisherPublications(
@@ -628,7 +602,6 @@ export class DBXToolsPythonWorkspace extends Component {
       this.publications(options).map((publication) => [publication.distribution, publication]),
     );
     for (const pkg of this.packages) {
-      if (options.includeUniFFI === false && pkg.packageOptions.uniffi === true) continue;
       const publisher = pkg.packageOptions.trustedPublisher;
       if (!publisher || standard.has(pkg.packageOptions.name)) continue;
       standard.set(pkg.packageOptions.name, {

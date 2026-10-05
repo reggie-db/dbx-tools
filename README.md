@@ -75,7 +75,7 @@ app:
   catalogues, fuzzy matching, class ceilings, cache, and fallbacks.
 - **OpenAI-compatible local proxy** — point OpenAI-shaped clients at Databricks
   Model Serving without hand-managing Databricks auth or endpoint ids.
-- **Managed Graphiti memory** - provision Graphiti, Neo4j, and the Rust model proxy; journal
+- **Managed Graphiti memory** - provision Graphiti, Neo4j, and the model proxy; journal
   graph mutations to Lakebase; enforce per-user graph groups; and republish a
   constrained MCP surface through AppKit.
 - **Approval-gated email workflows** — give agents a `send_email` tool that
@@ -180,11 +180,10 @@ and typed per-turn Mastra request context without owning authentication.
 | AppKit defaults                | [`@dbx-tools/appkit`](packages/js/node/appkit), [`@dbx-tools/cli-appkit-env`](packages/js/cli/appkit-env)                                                                                                                   |
 | AppKit-hosted agents           | [`@dbx-tools/appkit-mastra`](packages/js/node/appkit-mastra), [`@dbx-tools/shared-mastra`](packages/js/shared/mastra)                                                                                                       |
 | Genie streaming and schemas    | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
-| Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model), [`@dbx-tools/model-rs`](packages/js/node/model-rs)                                                                     |
-| Local model proxy              | [`dbx-tools-model-proxy`](packages/rs/model-proxy), [`@dbx-tools/openapi-model-proxy`](packages/js/openapi/model-proxy)                                                                                                     |
-| Native command runtime         | [`@dbx-tools/rust-binary`](packages/js/node/rust-binary)                                                                                                                                                                    |
-| Databricks runtime utilities   | [`dbx-tools-core`](packages/rs/core), [`@dbx-tools/databricks`](packages/js/node/databricks), [`@dbx-tools/core-rs`](packages/js/node/core-rs), [`dbx-tools-core-rs`](packages/py/core-rs)                                  |
-| Lakebase parsing and discovery | [`dbx-tools-core`](packages/rs/core), [`@dbx-tools/core-rs`](packages/js/node/core-rs), [`dbx-tools-core-rs`](packages/py/core-rs), [`dbx-tools-lakebase-proxy`](packages/rs/lakebase-proxy)                                |
+| Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model), [`dbx-tools-models`](packages/py/models)                                                                                |
+| Local model proxy              | [`dbx-tools-model-proxy`](packages/py/model-proxy), [`@dbx-tools/openapi-model-proxy`](packages/js/openapi/model-proxy)                                                                                                      |
+| Databricks runtime utilities   | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/databricks`](packages/js/node/databricks), [`dbx-tools-core`](packages/py/core)                                                                                      |
+| Lakebase parsing and discovery | [`@dbx-tools/lakebase`](packages/js/node/lakebase), [`@dbx-tools/cli-lakebase-proxy`](packages/js/cli/lakebase-proxy), [`dbx-tools-postgres`](packages/py/postgres)                                                         |
 | Databricks OAuth tokens        | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                   |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
 | Passwordless authentication    | [`@dbx-tools/auth-gate`](packages/js/node/auth-gate), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                      |
@@ -211,27 +210,23 @@ runtime behavior, module maps, and links to adjacent packages.
 Install the published Python packages by distribution name:
 
 ```bash
-uv add dbx-tools-auth dbx-tools-core dbx-tools-core-rs dbx-tools-google-rs dbx-tools-postgres dbx-tools-graphiti
+uv add dbx-tools-core dbx-tools-models dbx-tools-model-proxy dbx-tools-postgres dbx-tools-graphiti
 ```
 
 The Python packages support Python 3.11 through the Python 3 release line.
 
 The root uv workspace contains these Python counterparts:
 
-Rust-backed Databricks runtime detection, OAuth, profiles, U2M, M2M, PAT, and
-credential storage are published in
-[`dbx-tools-core-rs`](packages/py/core-rs). Google ADC is available from
-[`dbx-tools-google-rs`](packages/py/google-rs). Generated Node bindings use the
-matching `@dbx-tools/*-rs` packages.
+Python auth and model packages execute the same bundled JavaScript lifecycle as
+their Node owners, while Python-native helpers own configuration and Postgres.
 
 | Package                                        | Purpose                                                                                                                                                                                                                                                                            |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dbx-tools-auth`](packages/py/auth)           | Runs the provider-neutral `@dbx-tools/auth` token lifecycle through PythonMonkey, selects Databricks CLI profiles with the JavaScript rules, and returns authorization plus workspace headers.                                                                                     |
 | [`dbx-tools-core`](packages/py/core)           | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                             |
-| [`dbx-tools-core-rs`](packages/py/core-rs)     | Detects Databricks App runtimes, parses Lakebase addresses, reports CLI availability, and provides U2M, M2M, PAT, profile resolution, token lifecycle, locking, and credential storage through generated Rust bindings.                                                            |
-| [`dbx-tools-google-rs`](packages/py/google-rs) | Resolves Google Application Default Credentials and keeps short-lived access tokens in process memory.                                                                                                                                                                             |
+| [`dbx-tools-models`](packages/py/models)       | Runs the `@dbx-tools/model` discovery, ranking, routing, and metadata lifecycle through PythonMonkey.                                                                                                                                                                                |
+| [`dbx-tools-model-proxy`](packages/py/model-proxy) | Hosts the OpenAI-compatible LiteLLM proxy with dbx-tools authentication and model routing.                                                                                                                                                                                       |
 | [`dbx-tools-postgres`](packages/py/postgres)   | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
-| [`dbx-tools-graphiti`](packages/py/graphiti)   | Launches upstream Graphiti's MCP server with native Neo4j 5 and the managed Rust model proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.       |
+| [`dbx-tools-graphiti`](packages/py/graphiti)   | Launches upstream Graphiti's MCP server with Neo4j 5 and the managed model proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.                    |
 
 ### Load One Brand File
 
@@ -284,7 +279,7 @@ const selected = await resolve.selectModel(client, host, {
 
 ### Run OpenAI-Shaped Tools Against Databricks
 
-Use [`dbx-tools-model-proxy`](packages/rs/model-proxy) when a local tool expects
+Use [`dbx-tools-model-proxy`](packages/py/model-proxy) when a local tool expects
 OpenAI-compatible endpoints with Databricks auth and Model Serving resolution.
 
 ```sh
@@ -296,9 +291,8 @@ dbx model-proxy service status
 Then point the client at `http://127.0.0.1:4000/v1`.
 The installed per-user service starts at login, keeps non-secret settings and
 bounded aggregate metrics under `~/.dbx-tools/model-proxy`, and can start a
-small native tray companion for address and profile selection. State and live
-feeds use GraphQL at `/graphql`; REST controls and generated API documentation
-remain on loopback under `/api`.
+small tray companion for address and profile selection. REST controls and
+generated API documentation remain on loopback.
 
 ### Authenticate With Databricks OAuth
 

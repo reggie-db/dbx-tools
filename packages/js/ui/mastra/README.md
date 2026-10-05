@@ -276,7 +276,7 @@ feedback controls, and composer from props. Use it when your app already has a
 transport or needs to combine Mastra messages with another state model.
 `MastraChat` shows a spinner in the model control while its live default model
 is being resolved. The picker groups endpoints into
-Rust-derived family submenus. Its compact first popup shows only the current
+model-family submenus. Its compact first popup shows only the current
 model, host-owned actions such as Genie Agent Mode, and a reasoning slider when
 the selected endpoint supports it. The current model opens the family picker,
 so the long endpoint catalogue stays out of the primary control popup. Family

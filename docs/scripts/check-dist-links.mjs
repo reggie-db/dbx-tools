@@ -57,12 +57,6 @@ function main() {
 
   let checkedPages = 0;
   for (const [source, content] of html) {
-    // Cargo owns rustdoc's self-contained output. Its generated pages contain
-    // runtime template URLs and rustdoc-specific encoded fragments that this
-    // simple static checker cannot interpret. Keep the files in the target set
-    // so Starlight links into rustdoc are verified, but do not revalidate links
-    // emitted inside rustdoc itself.
-    if (source.startsWith("rustdoc/")) continue;
     checkedPages += 1;
     const route = sourceRoute(path.join(distRoot, source));
     for (const link of links(content)) {

@@ -1,9 +1,0 @@
-
-[bindings.python]
-cdylib_name = "dbx_tools_google"
-
-  [bindings.python.external_packages]
-  dbx_tools_core = "dbx_tools.core_rs.bindings"
-
-[bindings.typescript]
-strictTypeChecking = true

@@ -201,46 +201,6 @@ describe("generateBarrels", () => {
     assert.match(barrel, /export \* as right from/);
   });
 
-  it("directly exports a complete UniFFI binding triplet", () => {
-    const dir = fixturePackage("uniffi");
-    writeFileSync(
-      join(dir, "src", "bindings.ts"),
-      'export * from "./_bindings.ts";\nexport const uniffiModule = {};\n',
-    );
-    writeFileSync(
-      join(dir, "src", "_bindings.ts"),
-      "export class NativeClient {}\nexport function createNativeClient() {}\n",
-    );
-    writeFileSync(join(dir, "src", "_bindings-ffi.ts"), "export type NativePointer = bigint;\n");
-
-    generateBarrels({ dirs: [dir] });
-    const barrel = readFileSync(join(dir, "index.ts"), "utf8");
-
-    assert.match(barrel, /export \* from "\.\/src\/bindings\.ts";/);
-    assert.doesNotMatch(barrel, /export \* as bindings/);
-    assert.match(barrel, /export \* as graph/);
-  });
-
-  it("rejects UniFFI names that conflict with merged package exports", () => {
-    const dir = fixturePackage("uniffi-conflict");
-    writeFileSync(
-      join(dir, "src", "bindings.ts"),
-      'export * from "./_bindings.ts";\nexport const uniffiModule = {};\n',
-    );
-    writeFileSync(join(dir, "src", "_bindings.ts"), "export class SharedClient {}\n");
-    writeFileSync(join(dir, "src", "_bindings-ffi.ts"), "export type NativePointer = bigint;\n");
-    writeFileSync(join(dir, "src", "direct.ts"), "export class SharedClient {}\n");
-
-    assert.throws(
-      () => generateBarrels({ dirs: [dir] }),
-      (error: unknown) => {
-        assert.ok(error instanceof AggregateError);
-        assert.match(String(error.errors[0]), /SharedClient/);
-        return true;
-      },
-    );
-  });
-
   it("uses a generated nested index as the folder facade", () => {
     const dir = fixturePackage("generated-index");
     mkdirSync(join(dir, "src", "generated"), { recursive: true });

@@ -17,10 +17,10 @@ import { toPosix } from "./packages.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /** Runtime family represented by a release project. */
-export type ReleaseProjectLanguage = "javascript" | "python" | "rust";
+export type ReleaseProjectLanguage = "javascript" | "python";
 
 /** Publishable output owned by one release unit. */
-export type ReleaseArtifactKind = "npm" | "pypi" | "cargo" | "github-binary" | "documentation";
+export type ReleaseArtifactKind = "npm" | "pypi" | "documentation";
 
 /** Relationship between two projects or release units. */
 export type ReleaseEdgeKind =
@@ -172,8 +172,6 @@ const IGNORED_DIRECTORIES = new Set([
 ]);
 
 const IGNORED_FILES = new Set([
-  "Cargo.lock",
-  "Cargo.toml",
   "package.json",
   "pyproject.toml",
   "uv.lock",
@@ -184,7 +182,7 @@ const IGNORED_FILES = new Set([
 
 /** Stable default component id for one publishable project. */
 export function defaultReleaseUnitId(language: ReleaseProjectLanguage, identity: string): string {
-  const prefix = language === "javascript" ? "node" : language === "python" ? "python" : "rs";
+  const prefix = language === "javascript" ? "node" : "python";
   const unscoped = identity.includes("/")
     ? identity.slice(identity.lastIndexOf("/") + 1)
     : identity;

@@ -11,8 +11,7 @@ import {
   RELEASE_TAG,
   RELEASE_VERSION,
   releaseSourceSteps,
-  type ReleaseSummaryProviderName,
-} from "./release-dispatch.ts";
+} from "./release-context.ts";
 
 const NODE_VERSION = "24";
 const NPM_VERSION = "11.4.2";
@@ -22,7 +21,7 @@ const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
 const releaseWorkflows = new WeakMap<DBXToolsJavaScriptProject, GithubWorkflow>();
 
 /** Independently recoverable portions of the release workflow. */
-export type ReleaseStage = "all" | "node" | "python" | "cargo" | "docs";
+export type ReleaseStage = "all" | "node" | "python" | "docs";
 
 /** GitHub Pages configuration included in the unified release workflow. */
 export interface ReleaseDocsOptions {
@@ -34,11 +33,6 @@ export interface ReleaseDocsOptions {
   readonly buildSteps: readonly JobStep[];
   /** Directory uploaded as the GitHub Pages artifact. */
   readonly artifactPath: string;
-}
-
-/** Legacy release-summary configuration retained for source compatibility. */
-export interface ReleaseSummaryOptions {
-  readonly providers?: readonly ReleaseSummaryProviderName[];
 }
 
 /** Options for {@link DBXToolsRelease}. */
@@ -53,10 +47,6 @@ export interface DBXToolsReleaseOptions {
   readonly pythonRoot?: string;
   /** Repository task names run after VERSION generation and before candidate construction. */
   readonly validationTasks?: readonly string[];
-  /** Include configured Rust/UniFFI release assets in the tag candidate. Defaults to true. */
-  readonly nativeRelease?: boolean;
-  /** Retained for compatibility; tag releases use GitHub-generated release notes. */
-  readonly summary?: boolean | ReleaseSummaryOptions;
 }
 
 /** Locate the unified workflow so attached language workspaces can add jobs. */
@@ -205,7 +195,7 @@ function verifyContextJob(
           '  --tag "$RELEASE_TAG" \\',
           '  --sha "$RELEASE_SHA" \\',
           `  --python-root ${JSON.stringify(options.pythonRoot ?? "packages/py")}`.concat(" \\"),
-          `  --upload${options.nativeRelease === false ? " --skip-rust" : ""}`,
+          "  --upload",
           'gh release edit "$RELEASE_TAG" --draft=false --latest',
         ].join("\n"),
       },

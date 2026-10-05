@@ -5,18 +5,16 @@ import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "no
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as projectUtils from "@dbx-tools/core/project-utils";
-import { json, log } from "@dbx-tools/shared-core";
+import { log } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 import { readNpmArchiveIdentity } from "./publish-npm.ts";
 import { buildPythonProjects } from "./publish-python.ts";
-import { buildReleaseAssets } from "./release-assets.ts";
 import {
   type ReleaseArtifactInput,
   type ReleaseArtifactRole,
   verifyReleaseManifest,
   writeReleaseManifest,
 } from "./release-manifest.ts";
-import type { RustReleaseConfiguration } from "../src/_rust-release-workflow.ts";
 import { captureTaskCommand, runTaskCommand, taskCommandSucceeds } from "../src/_task-command.ts";
 
 const logger = log.logger("projen:release-candidate");
@@ -119,35 +117,6 @@ function pruneDraftAssets(
     if (!desired.has(name)) {
       runTaskCommand(root, "gh", ["release", "delete-asset", tag, name, "--yes"], { env });
     }
-  }
-}
-
-function rustReleaseConfiguration(root: string): RustReleaseConfiguration | undefined {
-  const path = join(root, ".projen/rust-release.json");
-  return existsSync(path)
-    ? (json.parse(readFileSync(path, "utf8")) as RustReleaseConfiguration)
-    : undefined;
-}
-
-function buildFacades(root: string, version: string): void {
-  const configuration = rustReleaseConfiguration(root);
-  if (!configuration) return;
-  for (const binding of configuration.bindings) {
-    if (!binding.node || !binding.nodePackage) continue;
-    runTaskCommand(root, "node", [
-      ".projen/uniffi-release.mjs",
-      "facade",
-      "--node",
-      binding.node,
-      "--node-package",
-      binding.nodePackage,
-      "--node-triple",
-      "linux-x64-gnu",
-      "--version",
-      version,
-      "--output",
-      `dist/release/${binding.crate}/facade`,
-    ]);
   }
 }
 
@@ -262,7 +231,6 @@ export function buildReleaseCandidate(options: {
   readonly version: string;
   readonly notesFile?: string;
   readonly upload?: boolean;
-  readonly skipRust?: boolean;
   readonly env?: NodeJS.ProcessEnv;
 }): void {
   const root = resolve(options.root);
@@ -288,10 +256,6 @@ export function buildReleaseCandidate(options: {
   if (status) throw new Error("Release candidate source contains tracked changes");
 
   rmSync(join(root, "dist/release"), { recursive: true, force: true });
-  if (!options.skipRust && (rustReleaseConfiguration(root)?.targets.length ?? 0) > 0) {
-    buildReleaseAssets({ root, version: options.version });
-    buildFacades(root, options.version);
-  }
   const publishScript = fileURLToPath(new URL("./publish.ts", import.meta.url));
   runTaskCommand(root, process.execPath, [
     publishScript,
@@ -303,7 +267,6 @@ export function buildReleaseCandidate(options: {
   if (existsSync(pythonRoot)) {
     buildPythonProjects({
       allowEmpty: true,
-      excludeUniFFI: true,
       output: join(root, "dist/release/python-workspace"),
       root: pythonRoot,
       version: options.version,
@@ -389,7 +352,6 @@ if (import.meta.main) {
     .option("--python-root <path>", "Python package root", "packages/py")
     .option("--notes-file <path>", "draft release notes file")
     .option("--upload", "create or update the draft GitHub Release after building")
-    .option("--skip-rust", "omit configured Rust binaries and UniFFI artifacts")
     .option("--upload-existing", "upload the existing verified candidate without rebuilding")
     .action(
       (options: {
@@ -400,7 +362,6 @@ if (import.meta.main) {
         pythonRoot: string;
         notesFile?: string;
         upload?: boolean;
-        skipRust?: boolean;
         uploadExisting?: boolean;
       }) => {
         const candidateOptions = {
@@ -412,12 +373,7 @@ if (import.meta.main) {
           ...(options.notesFile ? { notesFile: options.notesFile } : {}),
         };
         if (options.uploadExisting) uploadReleaseCandidate(candidateOptions);
-        else
-          buildReleaseCandidate({
-            ...candidateOptions,
-            upload: options.upload,
-            skipRust: options.skipRust,
-          });
+        else buildReleaseCandidate({ ...candidateOptions, upload: options.upload });
       },
     )
     .parse();

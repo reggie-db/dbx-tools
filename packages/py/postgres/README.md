@@ -3,7 +3,7 @@
 Python Lakebase/Postgres connection setup, advisory locks, and topic fan-out for
 services that already hold a Databricks `WorkspaceClient`. This package is
 the Python counterpart to `@dbx-tools/postgres`. Lakebase address parsing comes
-directly from the generated `dbx-tools-core-rs` Rust bindings.
+directly from the Python implementation in this package.
 
 Install from PyPI:
 
@@ -20,7 +20,7 @@ pip install "dbx-tools-postgres @ git+https://github.com/reggie-db/dbx-tools.git
 Key features:
 
 - accepts the same Postgres URI, Lakebase resource path, hostname, and project-id
-  address shapes as `@dbx-tools/appkit` through the native Rust parser;
+  address shapes as `@dbx-tools/appkit` through its Python parser;
 - resolves missing autoscaling endpoint fields through
   `WorkspaceClient.postgres`, including SDK-owned pagination and workspace-id
   headers;

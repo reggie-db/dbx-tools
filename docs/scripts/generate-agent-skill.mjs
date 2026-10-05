@@ -65,7 +65,7 @@ Use the active \`dbx-tools\` repository as the source of truth. Start with the
 selected package's current manifest, README, exports, and source. Do not infer
 an API from the catalog summary or training data.
 
-For a new Bun-first TypeScript or TypeScript/Python/Rust workspace, prefer
+For a new Bun-first TypeScript or TypeScript/Python workspace, prefer
 \`@dbx-tools/projen\`. Read \`projen/README.md\` and use the repository's
 workspace-local \`bun run sync\` workflow. Do not invoke Projen through \`npx\`.
 

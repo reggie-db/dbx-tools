@@ -28,10 +28,9 @@ backend before registration. Select `always` to require a supported desktop
 session or `never` for a headless service. Service and tray logs live beside the
 configuration as `service.log` and `tray.log`.
 
-Use `service install --concurrent` for side-by-side A/B testing with the Rust
-proxy. The Python service then uses port `4001`, a separate
-`~/.dbx-tools/model-proxy-python` directory, and independent service and tray
-registrations while the Rust proxy remains on port `4000`.
+Use `service install --concurrent` to install an isolated test instance. It uses
+port `4001`, a separate `~/.dbx-tools/model-proxy-python` directory, and
+independent service and tray registrations.
 
 Lifecycle commands:
 

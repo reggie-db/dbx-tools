@@ -47,10 +47,10 @@ responses.
 
 ## Generation
 
-This package uses the same `PythonNodeBundle` generator and PythonMonkey shim
-set as `dbx-tools-auth`. The public Node package remains the workspace and watch
-dependency; the portable `@dbx-tools/model/python` subpath limits extraction and
-bundling to the auth-backed model client without pulling AppKit into Python.
+This package uses the `PythonNodeBundle` generator and PythonMonkey shim set.
+The public Node package remains the workspace and watch dependency; the
+portable `@dbx-tools/model/python` subpath limits extraction and bundling to the
+auth-backed model client without pulling AppKit into Python.
 
 ```toml
 [tool.dbx_tools.node_bindings]

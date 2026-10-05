@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypedDict, TypeVar, cast
 
-from dbx_tools.core_rs import is_databricks_app_environment
+from urllib.parse import urlparse
 
 ConfigKey = str | Sequence[str]
 ConfigData = Mapping[str, object]
@@ -81,9 +81,33 @@ _YAML_NUMBER_PATTERN = re.compile(
 
 def is_databricks_app_env(source: Mapping[str, str | None] | None = None) -> bool:
     values = os.environ if source is None else source
-    return is_databricks_app_environment(
-        {key: value for key, value in values.items() if value is not None}
-    )
+    override = _boolean(values.get(DATABRICKS_APP_ENV_KEY))
+    if override is not None:
+        return override
+    name = values.get("DATABRICKS_APP_NAME")
+    host = values.get("DATABRICKS_HOST")
+    port = values.get("DATABRICKS_APP_PORT")
+    if not _valid_app_value(name) or not _valid_app_value(host) or not _valid_app_value(port):
+        return False
+    parsed = urlparse(host.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    return port.strip().isdigit() and 0 < int(port) <= MAX_TCP_PORT
+
+
+def _boolean(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"true", "t", "on", "1", "yes", "y"}:
+        return True
+    if normalized in {"false", "f", "off", "0", "no", "n"}:
+        return False
+    return None
+
+
+def _valid_app_value(value: str | None) -> bool:
+    return bool(value and value.strip() and not _INTERPOLATION_PATTERN.search(value))
 
 
 def text(input: ConfigKey, options: ConfigOptions | None = None) -> str | None:

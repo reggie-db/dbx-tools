@@ -66,8 +66,6 @@ export function groupTitle(group) {
       return "React UI";
     case "python":
       return "Python";
-    case "rust":
-      return "Rust";
     default:
       return group.charAt(0).toUpperCase() + group.slice(1);
   }
@@ -167,47 +165,9 @@ export function discoverPythonPackages(root) {
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-/** Published Rust package catalogue derived from Cargo manifests. */
-export function discoverRustPackages(root) {
-  const directory = path.join(root, "packages", "rs");
-  if (!fs.existsSync(directory)) return [];
-  return fs
-    .readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(directory, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, "Cargo.toml")))
-    .map((dir) => {
-      const manifest = path.join(dir, "Cargo.toml");
-      const packageSection = tomlSection(manifest, "package");
-      if (/^\s*publish\s*=\s*false\s*$/m.test(packageSection)) return undefined;
-      const name = tomlString(packageSection, "name") ?? path.basename(dir);
-      const libName = tomlString(tomlSection(manifest, "lib"), "name");
-      const binaryName = tomlString(tomlSection(manifest, "bin", true), "name");
-      const hasLibrary = fs.existsSync(path.join(dir, "src", "lib.rs"));
-      return {
-        name,
-        slug: `rs-${path.basename(dir)}`,
-        dir,
-        manifest,
-        readme: requireReadme(root, dir),
-        relDir: posix(path.relative(root, dir)),
-        group: "rust",
-        binaryName,
-        hasLibrary,
-        rustdocTarget: (libName ?? name).replaceAll("-", "_"),
-      };
-    })
-    .filter(Boolean)
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
 /** Complete published package catalogue used by README-based documentation. */
 export function discoverRepositoryPackages(root) {
-  return [
-    ...discoverJavaScriptPackages(root),
-    ...discoverPythonPackages(root),
-    ...discoverRustPackages(root),
-  ].sort(
+  return [...discoverJavaScriptPackages(root), ...discoverPythonPackages(root)].sort(
     (left, right) => left.group.localeCompare(right.group) || left.name.localeCompare(right.name),
   );
 }

@@ -20,7 +20,6 @@ import {
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../..");
 const nodeOutput = resolve(repositoryRoot, "packages/js/node/model/src/generated");
-const rustCompatibilityOutput = resolve(repositoryRoot, "packages/rs/model/assets");
 const now = Math.floor(Date.now() / 1000);
 
 await Promise.all([
@@ -44,24 +43,19 @@ async function refreshSnapshot<T extends { readonly generatedAt: number }>(
   loadSnapshot: () => Promise<T>,
 ): Promise<void> {
   const primaryPath = resolve(nodeOutput, filename);
-  const compatibilityPath = resolve(rustCompatibilityOutput, filename);
-  const existing =
-    (await readSnapshot<T>(primaryPath)) ?? (await readSnapshot<T>(compatibilityPath));
+  const existing = await readSnapshot<T>(primaryPath);
   if (existing && now - existing.generatedAt < MODEL_METADATA_TTL_MS / 1000) {
     await writeSnapshot(primaryPath, existing);
-    await writeSnapshot(compatibilityPath, existing);
     console.log(`${filename}: current`);
     return;
   }
   try {
     const snapshot = await loadSnapshot();
     await writeSnapshot(primaryPath, snapshot);
-    await writeSnapshot(compatibilityPath, snapshot);
     console.log(`${filename}: refreshed`);
   } catch (error) {
     if (!existing) throw error;
     await writeSnapshot(primaryPath, existing);
-    await writeSnapshot(compatibilityPath, existing);
     console.warn(`${filename}: refresh failed; retained committed snapshot`, error);
   }
 }

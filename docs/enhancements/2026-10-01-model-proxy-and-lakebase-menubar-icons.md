@@ -207,14 +207,14 @@ the `dbx` mark: oat `#F9F7F4` light, navy `#1B3139` dark, glyph in lava red.
 
 ## Export and implementation
 
-The generic no-WebView tray runtime lives in `packages/rs/service`; the
-model-proxy tray binary supplies its M1 pixel mask, title, menu, and profile
-actions from `packages/rs/model-proxy/src/bin/tray.rs`.
+The Python model-proxy package owns its pixel mask, title, menu, profile, and
+lifecycle actions. Lakebase should reuse the same no-WebView tray interaction
+pattern without introducing a second native runtime.
 
 The M1 adapter rasterizes the pixel rectangles directly into a 32px RGBA mask.
-The shared tray shell marks it as a macOS template icon so the system owns
-light/dark inversion; Windows and Linux receive the coral brand color. A future
-Lakebase companion can supply its own RGBA mask without taking a dependency on
+The tray shell marks it as a macOS template icon so the system owns light/dark
+inversion; Windows and Linux receive the coral brand color. A future Lakebase
+companion can supply its own RGBA mask without taking a dependency on
 model-proxy assets.
 
 ## Open questions

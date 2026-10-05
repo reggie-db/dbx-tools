@@ -47,7 +47,6 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "Passwordless authentication runtime built on Better Auth, email OTP, and passkeys",
   "packages/js/node/core":
     "Node helpers for layered configuration, binary installation, process execution, locking, project discovery, and npm dependency resolution",
-  "packages/js/node/core-rs": "Node bindings for dbx-tools-core",
   "packages/js/node/databricks":
     "Databricks workspace, filesystem, cloud, and network utilities",
   "packages/js/node/databricks-zerobus":
@@ -56,7 +55,6 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   "packages/js/node/fs":
     "Node local-disk implementation of the dbx-tools browser-safe filesystem contract",
   "packages/js/node/genie": "Server-side Databricks Genie chat drivers",
-  "packages/js/node/google-rs": "Node bindings for dbx-tools-google",
   "packages/js/node/lakebase":
     "Node-native Lakebase address parsing, resource discovery, and database credentials",
   "packages/js/node/model": "Workspace-aware Databricks Model Serving selection",
@@ -64,8 +62,6 @@ const PACKAGE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "Node filesystem path toolkit for discovery, matching, ignoring, scanning, and watching",
   "packages/js/node/postgres":
     "Connection-correct PostgreSQL advisory locks and LISTEN/NOTIFY topic bus for Node.js",
-  "packages/js/node/rust-binary":
-    "Generated Rust release registry, exact-version binary installation, and process execution",
   "packages/js/node/search":
     "Agent tools, federated search, index lifecycle, and Lakebase full-text extensions for AppKit AI Search",
   "packages/js/node/teams":
@@ -189,22 +185,6 @@ const root = new project.DBXToolsNodeProject({
         uses: "actions/setup-python@v6",
         with: { "python-version": "3.11" },
       },
-      { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
-      {
-        name: "Resolve Rustdoc cache key",
-        id: "rustdoc-cache-key",
-        run: "echo \"key=$(bun docs/scripts/rustdoc-cache-key.mjs)\" >> \"$GITHUB_OUTPUT\"",
-      },
-      {
-        name: "Restore Rustdoc cache",
-        id: "rustdoc-cache",
-        uses: "actions/cache/restore@v5",
-        with: {
-          path: `${DOCS_BUILD_ROOT}/rustdoc-target`,
-          key: "rustdoc-${{ runner.os }}-${{ steps.rustdoc-cache-key.outputs.key }}",
-          "restore-keys": "rustdoc-${{ runner.os }}-",
-        },
-      },
       { name: "Configure Pages", uses: "actions/configure-pages@v5" },
       { name: "Install dependencies", run: "bun install" },
       {
@@ -223,15 +203,6 @@ const root = new project.DBXToolsNodeProject({
         run: "bun docs/scripts/generate-api-docs.mjs",
       },
       {
-        name: "Save Rustdoc cache",
-        if: "${{ steps.rustdoc-cache.outputs.cache-hit != 'true' }}",
-        uses: "actions/cache/save@v5",
-        with: {
-          path: `${DOCS_BUILD_ROOT}/rustdoc-target`,
-          key: "rustdoc-${{ runner.os }}-${{ steps.rustdoc-cache-key.outputs.key }}",
-        },
-      },
-      {
         name: "Check generated titles",
         run: "bun docs/scripts/check-generated-titles.mjs",
       },
@@ -244,9 +215,7 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseNative: false,
   releaseValidationTasks: [
-    "auth:python-runtime:check",
     "docs:check-source",
     "docs:check-readmes",
   ],
@@ -300,9 +269,6 @@ readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
 // on another developer's machine. Local installs still generate both files, but
 // the repo ignores them and CI resolves fresh. Verify before ever committing one:
 //   grep -c 'localhost:4873' bun.lock
-// Rust workspaces override the broad lockfile ignore for root Cargo.lock because
-// Cargo records canonical crates.io identities rather than the configured mirror.
-
 // ---------------------------------------------------------------------------
 // Generated dot-directories
 // ---------------------------------------------------------------------------
@@ -692,13 +658,6 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "concurrently@catalog:",
   );
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "vitest@catalog:");
-});
-
-// node-rust-binary: narrow runtime owner for generated native release metadata,
-// atomic installation, and process/signal forwarding.
-project.applyToProjects(root, { identifierName: "rust-binary", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/core@workspace:^", "@dbx-tools/shared-core@workspace:^");
-  projectJs.addPackageFiles(p, "exports.ts");
 });
 
 // node-postgres: connection-correct Postgres utilities shared by packages.
@@ -1231,333 +1190,6 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 });
 
 // ---------------------------------------------------------------------------
-// Rust Cargo workspace
-// ---------------------------------------------------------------------------
-const rustWorkspace = new project.DBXToolsRustWorkspace(root, {
-  release: true,
-  publishRelease: false,
-  rustVersion: "1.90",
-  cliRegistryPath: "packages/js/node/rust-binary/src/_release-binaries.ts",
-  pythonRoot: PYTHON_ROOT,
-  workspaceDependencies: {
-    aide: {
-      version: "=0.15.1",
-      defaultFeatures: false,
-      features: ["axum", "axum-json", "axum-query", "axum-tokio", "scalar"],
-    },
-    "async-trait": "0.1",
-    "async-stream": "0.3",
-    "async-graphql": "=7.0.17",
-    "async-graphql-axum": "=7.0.17",
-    "auto-launcher": "=1.1.0",
-    axum: "0.8",
-    "axum-typed-routing": { version: "=0.4.7", features: ["aide"] },
-    backon: { version: "=1.6.0", defaultFeatures: false, features: ["tokio-sleep"] },
-    base64: "0.22",
-    bytes: "1",
-    clap: { version: "4.6", features: ["derive", "env"] },
-    configparser: "3",
-    directories: "6",
-    "difflib-fast": "0.3.5",
-    fs4: "0.13",
-    futures: "0.3",
-    "google-cloud-auth": "=0.18.0",
-    hdrhistogram: "7",
-    http: "1",
-    httpdate: "1",
-    image: {
-      version: "0.25",
-      defaultFeatures: false,
-      features: ["jpeg", "png", "webp"],
-    },
-    "openssl-sys": { version: "0.9", features: ["vendored"] },
-    "mini-moka": "0.10",
-    metrics: "0.24",
-    "mime_guess": "2",
-    oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
-    open: "5",
-    "percent-encoding": "2",
-    pgwire: {
-      version: "=0.41.0",
-      defaultFeatures: false,
-      features: ["client-api-ring", "server-api-ring"],
-    },
-    reqwest: { version: "0.12", defaultFeatures: false, features: ["json", "rustls-tls"] },
-    "reqwest-middleware": { version: "=0.4.2", features: ["json"] },
-    regex: "1",
-    rcgen: "0.14",
-    rustls: "0.23",
-    rusqlite: { version: "=0.39.0", features: ["bundled"] },
-    "rusqlite_migration": "=2.5.0",
-    scraper: "0.24",
-    schemars: "=0.9.0",
-    serde: { version: "1", features: ["derive"] },
-    "serde_json": "1",
-    "serde_yaml": "=0.9.34",
-    "service-manager": "=0.11.0",
-    sha2: "0.10",
-    sysinfo: "0.37",
-    tempfile: "3",
-    thiserror: "2",
-    time: { version: "0.3", features: ["serde", "formatting", "parsing"] },
-    "tokenx-rs": "=0.1.0",
-    tokio: {
-      version: "1",
-      features: ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"],
-    },
-    "tokio-postgres": "0.7",
-    "tokio-util": { version: "0.7", features: ["codec"] },
-    "tokio-rustls": "0.26",
-    tracing: "0.1",
-    "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
-    "ts-rs": "=12.0.1",
-    uniffi: { version: "=0.31", features: ["tokio"] },
-    url: { version: "2", features: ["serde"] },
-    uuid: { version: "1", features: ["v4"] },
-    "webpki-roots": "1",
-    wiremock: "0.6",
-  },
-  packages: {
-    core: {
-      description:
-        "Databricks authentication, flexible API requests, Lakebase parsing, caching, and filesystem primitives",
-      dependencies: {
-        "async-trait": { workspace: true },
-        base64: { workspace: true },
-        configparser: { workspace: true },
-        directories: { workspace: true },
-        fs4: { workspace: true },
-        http: { workspace: true },
-        oauth2: { workspace: true },
-        open: { workspace: true },
-        "percent-encoding": { workspace: true },
-        reqwest: { workspace: true },
-        "reqwest-middleware": { workspace: true },
-        serde: { workspace: true },
-        serde_json: { workspace: true },
-        sha2: { workspace: true },
-        tempfile: { workspace: true },
-        thiserror: { workspace: true },
-        time: { workspace: true },
-        tokio: { workspace: true, features: ["signal"] },
-        tracing: { workspace: true },
-        "tracing-subscriber": { workspace: true },
-        uniffi: { workspace: true },
-        url: { workspace: true },
-        uuid: { workspace: true },
-      },
-    },
-    google: {
-      description: "Google integrations including Application Default Credentials",
-      releaseLocalFeatures: ["local-cross"],
-      features: { "local-cross": ["dep:openssl-sys"] },
-      dependencies: {
-        "async-trait": { workspace: true },
-        [`${root.scope}-core`]: { path: "../core" },
-        "google-cloud-auth": { workspace: true },
-        "openssl-sys": { workspace: true, optional: true },
-        time: { workspace: true },
-        tokio: { workspace: true },
-        uniffi: { workspace: true },
-      },
-    },
-    model: {
-      description: "Databricks model discovery, caching, classification, and fuzzy resolution",
-      bindings: ["node"],
-      features: {
-        "contract-generation": ["dep:ts-rs"],
-      },
-      examples: [
-        {
-          name: "generate-model-contracts",
-          path: "examples/generate-model-contracts.rs",
-          requiredFeatures: ["contract-generation"],
-        },
-      ],
-      dependencies: {
-        [`${root.scope}-core`]: { path: "../core" },
-        "difflib-fast": { workspace: true },
-        regex: { workspace: true },
-        reqwest: { workspace: true },
-        scraper: { workspace: true },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        sha2: { workspace: true },
-        tempfile: { workspace: true },
-        thiserror: { workspace: true },
-        tokio: { workspace: true },
-        tracing: { workspace: true },
-        "ts-rs": { workspace: true, optional: true },
-        uniffi: { workspace: true },
-      },
-      devDependencies: {
-        wiremock: { workspace: true },
-      },
-    },
-    service: {
-      description:
-        "Reusable per-user service lifecycle, tray runtime, SQLite state, GraphQL topics, and OpenAPI routing",
-      features: {
-        graphql: [
-          "dep:async-trait",
-          "dep:async-graphql",
-          "dep:async-graphql-axum",
-          "dep:axum",
-        ],
-        openapi: [
-          "dep:aide",
-          "dep:axum",
-          "dep:axum-typed-routing",
-          "dep:schemars",
-          "dep:serde_yaml",
-        ],
-        topics: ["dep:async-stream", "dep:futures", "dep:tokio"],
-        tray: ["dep:tray-icon"],
-      },
-      dependencies: {
-        aide: { workspace: true, optional: true },
-        "async-stream": { workspace: true, optional: true },
-        "async-trait": { workspace: true, optional: true },
-        "async-graphql": { workspace: true, optional: true },
-        "async-graphql-axum": { workspace: true, optional: true },
-        "auto-launcher": { workspace: true },
-        axum: { workspace: true, optional: true },
-        "axum-typed-routing": { workspace: true, optional: true },
-        clap: { workspace: true },
-        directories: { workspace: true },
-        futures: { workspace: true, optional: true },
-        reqwest: { workspace: true, features: ["blocking"] },
-        rusqlite: { workspace: true },
-        "rusqlite_migration": { workspace: true },
-        schemars: { workspace: true, optional: true },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        "serde_yaml": { workspace: true, optional: true },
-        "service-manager": { workspace: true },
-        sysinfo: { workspace: true },
-        "tray-icon": {
-          version: "=0.25.1",
-          defaultFeatures: false,
-          features: ["ksni"],
-          optional: true,
-        },
-        tokio: { workspace: true, optional: true },
-        tracing: { workspace: true },
-      },
-      targetDependencies: {
-        'cfg(any(target_os = "macos", target_os = "windows"))': {
-          tao: {
-            version: "=0.37.1",
-            defaultFeatures: false,
-            features: ["rwh_06"],
-          },
-        },
-      },
-      devDependencies: {
-        futures: { workspace: true },
-        tempfile: { workspace: true },
-        tokio: { workspace: true },
-      },
-    },
-    "model-proxy": {
-      description: "Multi-protocol Databricks model proxy",
-      openapi: { binary: "dbx-model-proxy" },
-      release: true,
-      cli: true,
-      binaryName: "dbx-model-proxy",
-      defaultRun: "dbx-model-proxy",
-      defaultFeatures: ["metrics"],
-      features: {
-        metrics: ["dep:hdrhistogram", "dep:metrics"],
-        tray: [`${root.scope}-service/tray`],
-      },
-      binaries: [
-        {
-          name: "dbx-model-proxy-tray",
-          path: "src/bin/tray.rs",
-          requiredFeatures: ["tray"],
-          release: true,
-          description: "Native tray controls for the dbx-model-proxy service",
-          cli: { command: "model-proxy-tray", hidden: true },
-        },
-      ],
-      dependencies: {
-        aide: { workspace: true },
-        "aigw-anthropic": "=0.6.0",
-        "aigw-core": "=0.6.0",
-        "aigw-openai": "=0.6.0",
-        "async-stream": "0.3",
-        "async-graphql": { workspace: true },
-        axum: { workspace: true },
-        "axum-typed-routing": { workspace: true },
-        backon: { workspace: true },
-        base64: { workspace: true },
-        clap: { workspace: true },
-        [`${root.scope}-core`]: { path: "../core" },
-        [`${root.scope}-model`]: { path: "../model" },
-        [`${root.scope}-service`]: {
-          path: "../service",
-          features: ["graphql", "openapi", "topics"],
-        },
-        "eventsource-stream": "0.2",
-        "futures-util": "0.3",
-        hdrhistogram: { workspace: true, optional: true },
-        image: { workspace: true },
-        httpdate: { workspace: true },
-        metrics: { workspace: true, optional: true },
-        open: { workspace: true },
-        reqwest: { workspace: true, features: ["blocking", "stream"] },
-        schemars: { workspace: true },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        sha2: { workspace: true },
-        thiserror: { workspace: true },
-        "tokenx-rs": { workspace: true },
-        tokio: { workspace: true },
-        tracing: { workspace: true },
-      },
-      devDependencies: {
-        tempfile: { workspace: true },
-        tokio: { workspace: true, features: ["test-util"] },
-        wiremock: { workspace: true },
-      },
-    },
-    "lakebase-proxy": {
-      description: "Loopback PostgreSQL proxy for Databricks Lakebase",
-      private: true,
-      release: true,
-      cli: true,
-      releaseExcludeOs: [project.RustReleaseOs.WINDOWS],
-      binaryName: "dbx-lakebase-proxy",
-      dependencies: {
-        "async-trait": { workspace: true },
-        bytes: { workspace: true },
-        clap: { workspace: true },
-        [`${root.scope}-core`]: { path: "../core" },
-        futures: { workspace: true },
-        "mini-moka": { workspace: true },
-        pgwire: { workspace: true },
-        rustls: { workspace: true },
-        "serde_json": { workspace: true },
-        thiserror: { workspace: true },
-        tokio: { workspace: true },
-        "tokio-util": { workspace: true },
-        "tokio-rustls": { workspace: true },
-        tracing: { workspace: true },
-        url: { workspace: true },
-        "webpki-roots": { workspace: true },
-      },
-      devDependencies: {
-        rcgen: { workspace: true },
-        tempfile: { workspace: true },
-        "tokio-postgres": { workspace: true },
-        wiremock: { workspace: true },
-      },
-    },
-  },
-});
-
-// ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
 const pythonNodeBindingDependencies = [
@@ -1582,15 +1214,6 @@ const pythonNodeBindings = (
   ],
 });
 const pythonPackages: project.PythonPackageOptions[] = [
-  ...rustWorkspace.pythonPackages,
-  {
-    directory: "auth",
-    description:
-      "Python access to the shared dbx-tools authentication lifecycle through PythonMonkey",
-    internalDependencies: [],
-    dependencies: pythonNodeBindingDependencies,
-    nodeBindings: pythonNodeBindings("@dbx-tools/auth"),
-  },
   {
     directory: "models",
     description:
@@ -1620,14 +1243,14 @@ const pythonPackages: project.PythonPackageOptions[] = [
     directory: "core",
     description:
       "Configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
-    internalDependencies: ["core-rs"],
+    internalDependencies: [],
     dependencies: [],
   },
   {
     directory: "postgres",
     description:
       "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus",
-    internalDependencies: ["core", "core-rs"],
+    internalDependencies: ["core"],
     dependencies: [
       "asyncpg>=0.30",
       "databricks-sdk>=0.123.0",
@@ -1667,7 +1290,7 @@ new project.DBXToolsPythonWorkspace(root, {
     "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },
-  release: { includeUniFFI: false },
+  release: true,
 });
 root.addTask("auth:cli-assets", {
   description: "Refresh the pinned Databricks CLI release asset manifest",
@@ -1684,9 +1307,7 @@ root.releaseCatalog.addDependency("@dbx-tools/appkit-graphiti", {
   propagation: "always",
   publishOrder: true,
 });
-root.annotateGenerated("/packages/rs/core/assets/brand.yaml");
-root.annotateGenerated("/packages/rs/core/assets/logo-light.svg");
-root.annotateGenerated("/packages/js/shared/model/src/generated/**");
+root.annotateGenerated("/packages/js/shared/model/src/generated/_schemas.ts");
 root.annotateGenerated("/packages/js/node/model/src/generated/**");
 new BrandPackageAssets(root);
 root.addTask("model:metadata", {
@@ -1694,11 +1315,8 @@ root.addTask("model:metadata", {
   description: "Refresh Node-owned model retirement, capability, and rate-limit snapshots",
 });
 const modelContractsTask = root.addTask("model:contracts", {
-  exec: [
-    "cargo run --quiet -p dbx-tools-model --features contract-generation --example generate-model-contracts -- packages/js/shared/model/src/generated/_contracts.ts",
-    "bunx ts-to-zod packages/js/shared/model/src/generated/_contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments",
-  ].join(" && "),
-  description: "Generate browser-safe TypeScript and Zod model contracts from Rust",
+  exec: "bunx ts-to-zod packages/js/shared/model/src/contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments",
+  description: "Generate browser-safe Zod model schemas from TypeScript contracts",
 });
 root.tasks.tryFind("pre-compile")?.spawn(modelContractsTask);
 root.addTask("demo:emitter", {

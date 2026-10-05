@@ -12,19 +12,8 @@ date and final status.
 
 ## Active plans
 
-- [Repository code-quality audit](2026-10-01-repository-code-quality-audit.md)
-  - Records the model-proxy metrics redesign, conditional passkey flow, reusable
-    Rust Projen project and release helper, release compile ownership, dependency
-    upgrades, package-boundary review, and remaining measured follow-up.
-- [Model proxy adaptive rate-limit and observability plan](2026-09-30-model-proxy-adaptive-rate-limit-decay-plan.md)
-  - Recover auto-mode workspace/model queues from temporary input-token
-    contention through conservative activation, clean-traffic evidence,
-    stepwise relaxation, and eventual deactivation; add concise logging, bounded
-    metrics, optional persistence, and a Figma-designed embedded dashboard.
-- [Singular-version draft-promotion release architecture](2026-09-30-singular-version-content-addressed-rust-release-plan.md)
-  - Tracks the implemented one-checkout transaction, root `VERSION` ownership,
-    immutable candidate manifest, manual GitHub Release approval, and
-    `release.published` registry promotion.
+- [Model-proxy and Lakebase menu-bar icons](2026-10-01-model-proxy-and-lakebase-menubar-icons.md)
+  - Tracks the remaining Lakebase tray adoption and icon work.
 
 ## Cross-repository suggestions
 
