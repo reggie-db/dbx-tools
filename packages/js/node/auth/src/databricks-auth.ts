@@ -7,7 +7,7 @@ import { authLogger, tokenMetadata } from "./_logging.ts";
 import { AuthError } from "./errors.ts";
 import { DatabricksCliProvider, resolveDatabricksCli } from "./databricks-cli.ts";
 import { publicToken, TokenLifecycle } from "./lifecycle.ts";
-import { FileCredentialStore } from "./file-storage.ts";
+import { FileCredentialStore } from "./storage.ts";
 import { DatabricksPersonalAccessTokenProvider } from "./personal-access-token.ts";
 import {
   listDatabricksProfiles,
