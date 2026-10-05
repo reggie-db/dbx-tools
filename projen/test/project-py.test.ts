@@ -140,6 +140,7 @@ describe("DBXToolsPythonWorkspace", () => {
       "publish-pypi-core",
     ]);
     assert.deepEqual(release.jobs["build-docs"]?.needs, [
+      "verify-context",
       "publish-node",
       "publish-pypi-core",
       "publish-pypi-app",

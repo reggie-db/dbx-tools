@@ -133,7 +133,9 @@ function refreshDocsRegistryDependencies(workflow: GithubWorkflow): void {
   const registryJobs = Object.keys(workflow.jobs).filter(
     (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
   );
-  if (registryJobs.length > 0) workflow.updateJob("build-docs", { ...docs, needs: registryJobs });
+  if (registryJobs.length > 0) {
+    workflow.updateJob("build-docs", { ...docs, needs: ["verify-context", ...registryJobs] });
+  }
 }
 
 /** Keep documentation publication behind every configured package registry. */

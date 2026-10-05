@@ -159,6 +159,7 @@ jobs:
     timeout-minutes: 30
   build-docs:
     needs:
+      - verify-context
       - publish-node
       - publish-pypi-model-proxy
       - publish-pypi-core

@@ -127,7 +127,7 @@ describe("unified release workflow", () => {
   it("builds and selectively deploys docs in the same workflow", () => {
     const build = release.jobs["build-docs"]!;
     assert.equal(build.if, "${{ success() }}");
-    assert.equal(build.needs, "publish-node");
+    assert.deepEqual(build.needs, ["verify-context", "publish-node"]);
     assert.deepEqual(build.permissions, {
       contents: "read",
       pages: "write",
@@ -379,7 +379,7 @@ describe("optional Node release stage", () => {
       const workflow = readWorkflow(fixedOutdir);
       assert.ok(workflow.jobs["verify-context"]);
       assert.equal(workflow.jobs["publish-node"]?.needs, "verify-context");
-      assert.equal(workflow.jobs["build-docs"]?.needs, "publish-node");
+      assert.deepEqual(workflow.jobs["build-docs"]?.needs, ["verify-context", "publish-node"]);
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_SITE_URL, "https://docs.example.com");
       assert.equal(workflow.jobs["build-docs"]?.env?.DOCS_BASE, "/");
       assert.equal(workflow.jobs["deploy-docs"]?.needs, "build-docs");
