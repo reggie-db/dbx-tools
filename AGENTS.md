@@ -8,6 +8,9 @@ Canonical instructions for coding agents and contributors.
 - Use the configured corporate registries. Do not work around blocked public registries with direct downloads.
 - Use the root Projen definition as the source of truth. Change `.projenrc.ts` or `projen/src/**`, then run `bunx projen`; do not hand-edit generated files.
 - Before adding helpers, dependencies, generators, or Databricks integrations, inspect existing `@dbx-tools/*` packages and load `dbx-tools-reuse`.
+- Treat installed library and framework functionality as externally owned. Inspect the exact installed API, documentation, types, exports, and source before adding a local implementation for the same concern. Configure public APIs directly; do not wrap, subclass, copy, patch, or keep parallel policy for functionality the owner already provides.
+- For Projen, use native project fields and components directly. A dbx-tools component may own only behavior Projen does not provide, and unsupported behavior must remain separate from the native owner.
+- Prefer typed fields, options, and variables over string-keyed maps. Use maps only when keys are genuinely dynamic or an external API requires them.
 - For Databricks CLI operations that access a workspace, ask the user to select a profile and pass `--profile <name>`.
 - Never use emojis in source, generated output, logs, docs, commit messages, or user-facing text.
 
@@ -25,9 +28,11 @@ Canonical instructions for coding agents and contributors.
 
 Primary ownership:
 
-- `packages/js/node/auth` owns Node/Bun Databricks authentication, profile selection, credential lifecycle, CLI-backed U2M, PAT, M2M, App SP/OBO, and the lightweight authenticated HTTP client. It must not add the Databricks SDK.
+- `packages/js/node/auth` owns Node/Bun Databricks profile selection, credential lifecycle, and token/header production for CLI-backed U2M, PAT, M2M, and App SP/OBO. It does not own workspace HTTP APIs or the Databricks SDK; consuming capability packages own their transport or inject auth into AppKit/SDK clients.
+- `packages/js/shared/auth` owns browser-safe passwordless and Databricks auth values, secret-free profile summaries, profile selections, and auth client field schemas.
 - `packages/js/node/model` owns model discovery, catalogue caching, classification, ranking, protocol selection, reasoning policy, and committed metadata snapshots.
-- `packages/py/model-proxy` is the LiteLLM host. It defaults to `127.0.0.1`, keeps the admin UI disabled, injects dbx-tools lookup/ranking controls into OpenAPI, and delegates policy to Node-owned model/auth packages.
+- `packages/js/shared/model-gateway` owns browser-safe gateway schemas and model discovery clients. `packages/js/node/appkit-model-gateway` owns OpenAI Responses, Chat Completions, Anthropic Messages, embeddings, Codex, and Databricks AI Gateway transport. It reuses model-owned discovery and policy, prefers direct streaming fast paths, and uses AI SDK providers only for cross-protocol translation.
+- `packages/js/cli/model-gateway` owns foreground `dbx model-gateway` and `dbx-model-gateway` execution. There is no Python gateway, service installer, tray, or compatibility command.
 - `packages/js/node/lakebase` and `packages/js/cli/lakebase-proxy` own Lakebase parsing, discovery, credentials, and the loopback PostgreSQL proxy.
 - `packages/js/node/postgres` and `packages/py/postgres` own advisory locks, topic buses, and Postgres/Lakebase helpers in their respective runtimes.
 - `packages/js/node/appkit*`, `packages/js/shared/*`, and `packages/js/ui/*` own AppKit integrations and browser-safe contracts/UI. Before changing AppKit-facing APIs, inspect `bunx @databricks/appkit docs` and installed AppKit `.d.ts` files.
@@ -39,8 +44,9 @@ Primary ownership:
 - Keep `@dbx-tools/shared-core` logging dependency-free.
 - Python Node bundles contain no production Python callbacks. Compatibility belongs in build-time shims.
 - OpenAPI package files are generated from the owning service schema. Do not manually maintain parallel contracts.
-- `packages/js/shared/model/src/contracts.ts` owns browser-safe model contracts; `model:contracts` generates matching Zod schemas.
-- `bun run model:metadata` refreshes committed model metadata. Normal synthesis must not perform network-backed metadata refreshes.
+- `packages/js/shared/model/src/contracts.ts` owns browser-safe model contracts; the package-local `contracts` task generates matching Zod schemas.
+- `packages/js/shared/model-gateway` owns compositional Zod gateway and browser-client contracts.
+- `bun run --filter '@dbx-tools/model' metadata` refreshes committed model metadata. Normal synthesis must not perform network-backed metadata refreshes.
 - Documentation is generated from root/package READMEs by `docs/scripts/sync-readmes.mjs`, with API pages from `docs/scripts/generate-api-docs.mjs`.
 
 ## Documentation

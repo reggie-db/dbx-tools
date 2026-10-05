@@ -4,29 +4,14 @@
     "PATH": "$(bun --eval \"console.log(process.env.PATH)\")"
   },
   "tasks": {
-    "auth:cli-assets": {
-      "name": "auth:cli-assets",
-      "description": "Refresh the pinned Databricks CLI release asset manifest",
-      "steps": [
-        {
-          "exec": "bun projen/tasks/databricks-cli-assets.ts"
-        }
-      ]
-    },
-    "auth:cli-assets:check": {
-      "name": "auth:cli-assets:check",
-      "description": "Verify the pinned Databricks CLI release asset manifest",
-      "steps": [
-        {
-          "exec": "bun projen/tasks/databricks-cli-assets.ts --check"
-        }
-      ]
-    },
     "barrels": {
       "name": "barrels",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/barrels.ts"
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/barrels.ts"
+          ]
         }
       ]
     },
@@ -59,7 +44,10 @@
       "description": "Increment VERSION and synchronize generated workspace versions",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts",
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/bump.ts"
+          ],
           "receiveArgs": true
         }
       ]
@@ -68,7 +56,10 @@
       "name": "clean",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/clean.ts",
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/clean.ts"
+          ],
           "receiveArgs": true
         }
       ]
@@ -123,7 +114,10 @@
       "description": "Only compile",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/compile-workspace.ts"
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/compile-workspace.ts"
+          ]
         }
       ]
     },
@@ -164,15 +158,6 @@
       "steps": [
         {
           "exec": "bun scripts/run-demo.ts"
-        }
-      ]
-    },
-    "demo:emitter": {
-      "name": "demo:emitter",
-      "description": "Emit local Python hello-world messages onto the demo bus",
-      "steps": [
-        {
-          "exec": "bun scripts/run-demo.ts --emitter-only"
         }
       ]
     },
@@ -266,56 +251,14 @@
         }
       ]
     },
-    "model-proxy:python-runtime": {
-      "name": "model-proxy:python-runtime",
-      "description": "Generate Node bindings for Python package model-proxy",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/model-proxy"
-        }
-      ]
-    },
-    "model-proxy:python-runtime:check": {
-      "name": "model-proxy:python-runtime:check",
-      "description": "Verify generated Node bindings for Python package model-proxy",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/model-proxy --check"
-        }
-      ]
-    },
-    "model-proxy:python-runtime:watch": {
-      "name": "model-proxy:python-runtime:watch",
-      "description": "Regenerate Node bindings for Python package model-proxy on changes",
-      "steps": [
-        {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/model-proxy"
-        }
-      ]
-    },
-    "model:contracts": {
-      "name": "model:contracts",
-      "description": "Generate browser-safe Zod model schemas from TypeScript contracts",
-      "steps": [
-        {
-          "exec": "bunx ts-to-zod packages/js/shared/model/src/contracts.ts packages/js/shared/model/src/generated/_schemas.ts --keepComments"
-        }
-      ]
-    },
-    "model:metadata": {
-      "name": "model:metadata",
-      "description": "Refresh Node-owned model retirement, capability, and rate-limit snapshots",
-      "steps": [
-        {
-          "exec": "bun packages/js/node/model/scripts/generate-metadata.ts"
-        }
-      ]
-    },
     "openapi": {
       "name": "openapi",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/openapi.ts"
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/openapi.ts"
+          ]
         }
       ]
     },
@@ -327,14 +270,38 @@
       "name": "post-compile",
       "description": "Runs after successful compilation"
     },
-    "pre-compile": {
-      "name": "pre-compile",
-      "description": "Prepare the project for compilation",
+    "postgres:python-runtime": {
+      "name": "postgres:python-runtime",
+      "description": "Generate Node bindings for Python package postgres",
       "steps": [
         {
-          "spawn": "model:contracts"
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
+            "--project",
+            "packages/py/postgres"
+          ]
         }
       ]
+    },
+    "postgres:python-runtime:check": {
+      "name": "postgres:python-runtime:check",
+      "description": "Verify generated Node bindings for Python package postgres",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
+            "--project",
+            "packages/py/postgres",
+            "--check"
+          ]
+        }
+      ]
+    },
+    "pre-compile": {
+      "name": "pre-compile",
+      "description": "Prepare the project for compilation"
     },
     "py:build": {
       "name": "py:build",
@@ -396,7 +363,20 @@
       "description": "Run bump, commit it, and push an annotated release tag",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/release.ts --prefix v --branch main",
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/release.ts",
+            "--prefix",
+            "v",
+            "--branch",
+            "main",
+            "--python-root",
+            "packages/py",
+            "--validate",
+            "docs:check-source",
+            "--validate",
+            "docs:check-readmes"
+          ],
           "receiveArgs": true
         }
       ]
@@ -405,7 +385,10 @@
       "name": "sync",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/sync.ts",
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/sync.ts"
+          ],
           "receiveArgs": true
         }
       ]
@@ -421,10 +404,7 @@
           "spawn": "test:installer"
         },
         {
-          "spawn": "model-proxy:python-runtime:check"
-        },
-        {
-          "spawn": "auth:cli-assets:check"
+          "spawn": "postgres:python-runtime:check"
         },
         {
           "exec": "bun run --filter '*' test"
@@ -445,7 +425,10 @@
       "description": "Verify every package and generated barrel matches VERSION",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/version-check.ts"
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/version-check.ts"
+          ]
         }
       ]
     }

@@ -1,122 +1,74 @@
 # `@dbx-tools/auth`
 
-Persistent Databricks authentication for Node.js and Bun without a native
-binding requirement.
+Databricks profile resolution and token or authentication-header production for
+Node.js and Bun.
 
-Outside Databricks Apps, the package reads PAT credentials directly, uses direct
-client credentials for service principals, and delegates U2M authentication to
-the Databricks CLI. CLI resolution is lazy: the package checks the installed CLI
-only when U2M reaches token acquisition, then checksum-verifies and installs the
-pinned build asset through `@dbx-tools/core/bin` when needed. Inside Databricks
-Apps, it accepts request-scoped App OBO headers or App SP environment
-credentials. No browser OAuth flow is implemented.
+The package resolves profile configuration, selects PAT, M2M, CLI U2M, App
+service-principal, or App OBO authentication, and coordinates token acquisition
+in process memory. It does not own workspace HTTP APIs or construct Databricks
+SDK clients.
 
 ## Features
 
-- Lazy, version-checked CLI U2M outside Databricks Apps.
-- Direct PAT and M2M/App SP credentials.
-- Request-scoped App OBO authentication inside Databricks Apps.
-- Databricks profile parsing with `__settings__.default_profile`, `DEFAULT`, and
-  sole-profile selection.
-- Optional preference for one matching CLI U2M profile over an implicit M2M
-  default. Explicit profiles are never remapped.
-- Check-lock-recheck token acquisition and rejected-token refresh.
-- Process-memory credential storage by default, with explicit file or
-  caller-defined storage and lock adapters.
-- Same-origin authorization headers and one rejected-token retry in the bundled
-  fetch client.
-- Secret-free profile enumeration with explicit cache refresh.
+- Standard `.databrickscfg` parsing and default-profile selection.
+- Secret-free configured profile enumeration.
+- CLI-backed U2M token and login commands.
+- Direct PAT, M2M, App service-principal, and request-scoped App OBO tokens.
+- Check-lock-recheck token acquisition and explicit token refresh.
+- Authentication headers with the resolved workspace ID when available.
+- No SDK, generic HTTP client, executable installer, or persistent token cache.
 
-When a cached U2M credential is missing or cannot refresh, the shared lifecycle
-holds the credential lock, runs `databricks auth login`, and then re-reads the
-CLI token. Passing `false` to token or header acquisition disables this
-interactive fallback.
-
-## Relationship to the Databricks Python SDK
-
-The default provider shape intentionally follows the official Python SDK:
-
-| Concern            | Python SDK behavior                                                                                                   | `@dbx-tools/auth` behavior                                                                                                                                                                             |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| PAT                | Reads the configured token directly.                                                                                  | Same.                                                                                                                                                                                                  |
-| Service principal  | Uses direct OAuth client credentials.                                                                                 | Same, including account and workspace targets.                                                                                                                                                         |
-| U2M                | Delegates token acquisition to `databricks auth token`.                                                               | Same token command, but automatically runs `databricks auth login` under the credential lock when acquisition or refresh fails and login is allowed.                                                   |
-| Configuration      | Parses `.databrickscfg` with a standard INI parser.                                                                   | Uses the maintained `ini` package, caches each absolute config path, and exposes explicit invalidation.                                                                                                |
-| Implicit profile   | Uses `__settings__.default_profile`, `DEFAULT`, or a sole profile.                                                    | Same, plus an optional unique matching CLI-U2M profile preference when the selected implicit default is M2M. Explicit profiles are never remapped.                                                     |
-| Token coordination | Providers manage their own acquisition behavior.                                                                      | Adds memory/file caching and check-lock-recheck coordination shared by Node and PythonMonkey callers.                                                                                                  |
-| CLI availability   | Requires a compatible CLI already installed.                                                                          | Resolves lazily, reuses a compatible installed or managed CLI, and can checksum-install a pinned build outside Apps.                                                                                   |
-| Databricks Apps    | Earlier App credentials normally prevent reaching the CLI; the default chain can still reach it when they are absent. | App OBO and App SP remain preferred. Standard profile/PAT/M2M/U2M resolution continues when they are absent. CLI lookup stays lazy and never installs in an App unless `installCliInApp: true` is set. |
-
-Unlike the Python SDK, this package does not implement a separate native
-external-browser provider. Interactive U2M remains CLI-owned so login, token
-format, and credential persistence stay consistent with Databricks tooling.
+CLI-backed U2M requires an available `databricks` executable or an explicit
+`DATABRICKS_CLI_PATH`. The Databricks CLI remains responsible for its own login
+and credential persistence.
 
 ## Basic use
 
 ```ts
-import { createAuthClient } from "@dbx-tools/auth";
+import { client, profile } from "@dbx-tools/auth";
 
-const auth = await createAuthClient();
-const headers = await auth.authenticate();
-const profile = auth.profile();
-const namedProfile = auth.profile("DEFAULT");
-const profiles = auth.listProfiles();
+const auth = await client.createAuthClient({ profile: "DEFAULT" });
+const token = await auth.token();
+const headers = await auth.headers();
+const host = auth.host;
+const profiles = profile.listProfiles();
 ```
 
-`createAuthClient()` is the package's public factory. The returned client owns
-token and header acquisition, the selected secret-free profile, configured
-profile listing, lifecycle status, refresh, logout, and same-origin request
-headers.
+`headers()` returns the authorization header and
+`x-databricks-workspace-id` when the selected profile has a workspace ID. Pass
+`{ login: false }` to token or authentication acquisition to disable
+interactive login. Pass `{ refresh: true }` to bypass a reusable cached token.
 
-`authenticate()` returns the complete request header record, including
-`authorization` and `x-databricks-workspace-id` when the selected profile has a
-`workspace_id`. It allows login when a credential is missing or cannot refresh.
-Pass `false` to keep the call non-interactive:
+Browser and UI code should import auth-type values, target values, profile
+summaries, profile selections, and client-configuration schemas from
+`@dbx-tools/shared-auth`.
+
+## Consumer-owned clients
+
+Capability packages should use the returned `AuthClient` directly:
 
 ```ts
-const headers = await auth.authenticate(false);
+const auth = await client.createAuthClient({ profile: "DEFAULT" });
+const headers = await auth.headers();
 ```
 
-`token()` remains available when only the token record is needed.
+Use those headers in a capability-specific request, or inject the token and host
+into an AppKit or Databricks SDK workspace client. Keep request paths, payloads,
+response parsing, and retry policy in the consuming package.
 
-## Portable storage
+## Public modules
 
-`createAuthClient()` keeps acquired credentials in process memory by default for
-CLI U2M, PAT, M2M, App SP, and App OBO flows. Pass `Storage.File` as the second
-argument when disk persistence is explicitly required.
+- `client` owns `createAuthClient`, `AuthClient`, access-token results, and
+  token lifecycle operations.
+- `config` owns secret-bearing profile options, lifecycle timing, and canonical
+  header names.
+- `profile` owns profile resolution and listing operations.
 
-```ts
-import { createAuthClient, DatabricksAuthOptions, Storage } from "@dbx-tools/auth";
-
-const auth = await createAuthClient(
-  DatabricksAuthOptions.create({ profile: "DEFAULT" }),
-  Storage.File,
-);
-```
-
-The opt-in file store uses `node:fs` with `@dbx-tools/core/file-lock` and
-preserves unrelated entries in `~/.databricks/token-cache.json`.
+Provider, lifecycle, lock, and storage types are private implementation details.
 
 ## Debug logging
 
-Set `LOG_LEVEL=debug` to trace profile selection, configuration caching, CLI
-resolution, provider choice, credential locks, cache reuse, refresh/login
-fallback, OAuth discovery, same-origin header decisions, and HTTP retry state.
-
-```sh
-LOG_LEVEL=debug bun run my-auth-command
-```
-
-Debug records include profile and host metadata, storage/backend choices,
-header names, token expiry state, and scope counts. They never include access
+Set `LOG_LEVEL=debug` to trace profile selection, provider choice, credential
+locks, cache reuse, token refresh, and login fallback. Logs never include access
 tokens, refresh tokens, client secrets, authorization values, raw request
-headers, token-cache contents, or request/response bodies.
-
-## Modules
-
-- `databricksAuth` provides `PersistentAuth` and Databricks provider construction.
-- `profile` parses and resolves Databricks configuration.
-- `lifecycle` implements provider-neutral token coordination.
-- `storage` and `nodeStorage` provide memory and file adapters.
-- `servicePrincipal` provides Databricks client-credentials authentication.
-- `httpClient` provides a small fetch-based Databricks JSON client.
+headers, or request bodies.

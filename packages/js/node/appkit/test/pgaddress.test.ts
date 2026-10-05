@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 
-await polygotTest(
+await polyglotTest(
   () => import("../index.ts"),
   "pgaddress",
   (implementation, language) => {

@@ -6,21 +6,22 @@ task:
 
 ```bash
 databricks workspace import /Shared/dbx-tools-bus-lakebase \
-  --file packages/example/notebooks/bus-lakebase.py \
-  --format SOURCE --language PYTHON --overwrite
+  --profile <profile> \
+  --file packages/example/notebooks/bus-lakebase.ipynb \
+  --format JUPYTER --overwrite
 ```
 
-| Notebook                             | What it proves                                                                    |
-| ------------------------------------ | --------------------------------------------------------------------------------- |
-| [`bus-lakebase.py`](bus-lakebase.py) | `dbx-tools-postgres` publish/listen on Lakebase, on the driver and in a Spark UDF |
+- [`bus-lakebase.ipynb`](bus-lakebase.ipynb) exercises
+  `dbx-tools-postgres` publish/listen on Lakebase on the driver and in a Spark
+  UDF.
 
-## `bus-lakebase.py`
+## `bus-lakebase.ipynb`
 
 Set the `endpoint` widget to a Lakebase endpoint (a canonical resource path, a
-Postgres URI, a bare host, or a bare project id — anything
+Postgres URI, a bare host, or a bare project id, using anything
 `dbx_tools.postgres.parse_address` understands). It then:
 
-1. resolves host/database/user through `WorkspaceClient` with
+1. creates an auth-backed `WorkspaceClient`, then resolves host/database/user with
    `resolve_postgres_connection`, minting credentials at connect time rather than
    baking them into a URL;
 2. runs a driver-side `listen` -> `broadcast` -> assert-received round trip;

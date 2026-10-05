@@ -1,6 +1,6 @@
 /**
  * Compatibility exports for the browser client now owned by
- * `@dbx-tools/shared-auth/client`.
+ * `@dbx-tools/shared-auth/browser`.
  */
 
 export {
@@ -17,5 +17,5 @@ export {
   requestEmailOtp,
   signInPasskey,
   verifyEmailOtp,
-} from "@dbx-tools/shared-auth/client";
-export type { Passkey, PasskeyOperation } from "@dbx-tools/shared-auth/client";
+} from "@dbx-tools/shared-auth/browser";
+export type { Passkey, PasskeyOperation } from "@dbx-tools/shared-auth/browser";

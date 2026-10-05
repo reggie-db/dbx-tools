@@ -22,7 +22,7 @@ from honcho.process import Popen as HonchoPopen
 from .constants import UPSTREAM_MCP_PATH_ENV, persistence_configured
 from .settings import ModelSettings
 
-"""Installation and native process lifecycle for Graphiti, its model proxy, and Neo4j."""
+"""Installation and native process lifecycle for Graphiti, its model gateway, and Neo4j."""
 
 GRAPHITI_VERSION = "0.29.3"
 NEO4J_VERSION = "5.26.12"
@@ -126,6 +126,7 @@ class Runtime:
             "dbx_tools.graphiti.supervisor",
             "--home",
             str(self.paths.root),
+            *(["--profile", settings.profile] if settings.profile else []),
             "--",
             *(extra_args or []),
         ]
@@ -163,16 +164,16 @@ class Runtime:
         state = self.read_state(required=False)
         pid = state.get("graphiti_pid")
         model_settings = state.get("model_settings")
-        manages_model_proxy = (
-            model_settings.get("manage_model_proxy") if isinstance(model_settings, dict) else None
+        manages_model_gateway = (
+            model_settings.get("manage_model_gateway") if isinstance(model_settings, dict) else None
         )
-        model_proxy_url = (
-            model_settings.get("model_proxy_url") if isinstance(model_settings, dict) else None
+        model_gateway_url = (
+            model_settings.get("model_gateway_url") if isinstance(model_settings, dict) else None
         )
-        model_proxy_running = (
-            manages_model_proxy is True
-            and isinstance(model_proxy_url, str)
-            and _url_ready(f"{model_proxy_url.removesuffix('/v1')}/api/healthz")
+        model_gateway_running = (
+            manages_model_gateway is True
+            and isinstance(model_gateway_url, str)
+            and _url_ready(f"{model_gateway_url.removesuffix('/v1')}/api/healthz")
         )
         neo4j_running = False
         if (self.paths.neo4j / "bin" / "neo4j").exists():
@@ -184,11 +185,11 @@ class Runtime:
             "graphiti_pid": pid,
             "neo4j": "running" if neo4j_running else "stopped",
             "mcp_url": f"http://{_graphiti_host()}:{_graphiti_port()}/mcp/",
-            "model_proxy": (
+            "model_gateway": (
                 "running"
-                if model_proxy_running
+                if model_gateway_running
                 else "external"
-                if manages_model_proxy is False
+                if manages_model_gateway is False
                 else "stopped"
             ),
             "models": model_settings,
@@ -206,6 +207,7 @@ class Runtime:
             "python",
             "-m",
             "dbx_tools.graphiti.server",
+            *(["--profile", settings.profile] if settings.profile else []),
             "--host",
             _graphiti_host(),
             "--port",
@@ -268,7 +270,7 @@ class Runtime:
         settings: ModelSettings,
         extra_args: list[str],
     ) -> int:
-        """Run Graphiti and its managed model proxy under Honcho."""
+        """Run Graphiti and its managed model gateway under Honcho."""
         state = self.read_state()
         manager = Manager()
         state.update(
@@ -280,17 +282,17 @@ class Runtime:
         )
         self._write_state(state)
         try:
-            if settings.manage_model_proxy:
+            if settings.manage_model_gateway:
                 if _url_ready(settings.health_url):
                     raise RuntimeError(
-                        f"Managed model proxy port {settings.model_proxy_port} is already in use; "
-                        "set MODEL_PROXY_URL to use an external proxy"
+                        f"Managed model gateway port {settings.model_gateway_port} is already in use; "
+                        "set MODEL_GATEWAY_URL to use an external gateway"
                     )
                 _add_process(
                     manager,
-                    "model-proxy",
-                    self._model_proxy_command(settings),
-                    env=self._model_proxy_environment(settings),
+                    "model-gateway",
+                    self._model_gateway_command(settings),
+                    env=self._model_gateway_environment(settings),
                 )
             _add_process(
                 manager,
@@ -311,14 +313,14 @@ class Runtime:
         environment.update(settings.graphiti_environment())
         environment.update(
             {
-                "MANAGE_MODEL_PROXY": "true" if settings.manage_model_proxy else "false",
-                "MODEL_PROXY_HOST": settings.model_proxy_host,
-                "MODEL_PROXY_PORT": str(settings.model_proxy_port),
-                "MODEL_PROXY_URL": settings.openai_api_url,
+                "MANAGE_MODEL_GATEWAY": "true" if settings.manage_model_gateway else "false",
+                "MODEL_GATEWAY_HOST": settings.model_gateway_host,
+                "MODEL_GATEWAY_PORT": str(settings.model_gateway_port),
+                "MODEL_GATEWAY_URL": settings.openai_api_url,
             }
         )
-        if settings.model_proxy_command:
-            environment["MODEL_PROXY_COMMAND"] = settings.model_proxy_command
+        if settings.model_gateway_command:
+            environment["MODEL_GATEWAY_COMMAND"] = settings.model_gateway_command
         return environment
 
     def _wait_for_supervisor(self, pid: int) -> None:
@@ -394,27 +396,26 @@ class Runtime:
         if result.returncode:
             self._neo4j_command("start")
 
-    def _model_proxy_command(self, settings: ModelSettings) -> list[str]:
-        configured = settings.model_proxy_command
+    def _model_gateway_command(self, settings: ModelSettings) -> list[str]:
+        configured = settings.model_gateway_command
         if configured:
             command = shlex.split(configured)
             if not command:
-                raise ValueError("MODEL_PROXY_COMMAND must contain an executable")
+                raise ValueError("MODEL_GATEWAY_COMMAND must contain an executable")
         else:
-            installed = shutil.which("dbx-model-proxy")
-            command = [installed] if installed else [shutil.which("dbx") or "dbx", "model-proxy"]
+            installed = shutil.which("dbx-model-gateway")
+            command = [installed] if installed else [shutil.which("dbx") or "dbx", "model-gateway"]
         return [
             *command,
+            *(["--profile", settings.profile] if settings.profile else []),
             "--host",
-            settings.model_proxy_host,
+            settings.model_gateway_host,
             "--port",
-            str(settings.model_proxy_port),
+            str(settings.model_gateway_port),
         ]
 
-    def _model_proxy_environment(self, settings: ModelSettings) -> dict[str, str]:
-        environment = os.environ.copy()
-        environment.update(settings.databricks_environment())
-        return environment
+    def _model_gateway_environment(self, settings: ModelSettings) -> dict[str, str]:
+        return os.environ.copy()
 
     def _neo4j_command(
         self,
@@ -530,7 +531,7 @@ def _uv_python() -> str:
     return f"{sys.version_info.major}.{sys.version_info.minor}"
 
 
-_CHILD_NAMESPACE_PACKAGES = ("postgres", "core")
+_CHILD_NAMESPACE_PACKAGES = ("auth", "postgres", "core")
 
 
 def _child_python_paths() -> list[str]:

@@ -226,6 +226,11 @@ export function trimToNull(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+/** Trim `value` and return `undefined` when no non-empty string remains. */
+export function trimToUndefined(value: unknown): string | undefined {
+  return trimToNull(value) ?? undefined;
+}
+
 // Config lists arrive either already split (an array) or as one env-var string
 // with entries separated by commas and/or whitespace.
 const LIST_SEPARATOR_REGEXP = /[\s,]+/;

@@ -2,7 +2,7 @@
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
-import { pythonNodeBindingProjects, repoRoot } from "../src/packages.ts";
+import { repoRoot } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { withWorkspaceMutationLock } from "../src/workspace-lock.ts";
 
@@ -35,79 +35,80 @@ function watcher(script: string, name: string, prefixColor: string, ...args: str
   };
 }
 
-if (!process.argv.includes("--watch")) {
-  // One-shot: full synth (+install + barrels via the post-synth component). This is
-  // the scriptable path, so a failed synth stays a failed exit code.
-  logger.start("synthesizing");
-  await withWorkspaceMutationLock(repoRoot, () => runSynth({ post: true }));
-  logger.success("synced");
-} else {
-  // Watch: one initial full synth to bring the tree up to date, then focused
-  // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
-  // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts` or
-  // a configured `syncResynthPaths` entry changes, while barrels/openapi keep generated
-  // OUTPUT fresh on source edits with no full synth.
-  //
-  // VS Code auto-runs this on folder open, so from here down nothing is allowed to be
-  // fatal: errors are logged and retried, and only a stop signal ends the task.
-  logger.start("initial sync");
-  try {
+export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
+  if (!args.includes("--watch")) {
+    // One-shot: full synth (+install + barrels via the post-synth component). This is
+    // the scriptable path, so a failed synth stays a failed exit code.
+    logger.start("synthesizing");
     await withWorkspaceMutationLock(repoRoot, () => runSynth({ post: true }));
-    logger.success("synced - watching (Ctrl-C to stop)");
-  } catch (err) {
-    // A tree that doesn't synth is precisely when the watcher is most useful: the edit
-    // that repairs it is the one the projenrc watcher is sitting there waiting for.
-    logger.error(
-      "initial sync failed - watching anyway:",
-      err instanceof Error ? err.message : err,
-    );
+    logger.success("synced");
+  } else {
+    // Watch: one initial full synth to bring the tree up to date, then focused
+    // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
+    // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts` or
+    // a configured `syncResynthPaths` entry changes, while barrels/openapi keep generated
+    // OUTPUT fresh on source edits with no full synth.
+    //
+    // VS Code auto-runs this on folder open, so from here down nothing is allowed to be
+    // fatal: errors are logged and retried, and only a stop signal ends the task.
+    logger.start("initial sync");
+    try {
+      await withWorkspaceMutationLock(repoRoot, () => runSynth({ post: true }));
+      logger.success("synced - watching (Ctrl-C to stop)");
+    } catch (err) {
+      // A tree that doesn't synth is precisely when the watcher is most useful: the edit
+      // that repairs it is the one the projenrc watcher is sitting there waiting for.
+      logger.error(
+        "initial sync failed - watching anyway:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    const watchers = [
+      watcher("projenrc.ts", "projenrc", "magenta"),
+      watcher("barrels.ts", "barrels", "cyan", "--watch"),
+      watcher("openapi.ts", "openapi", "green", "--watch"),
+    ];
+    const { result } = concurrently(watchers, {
+      prefix: "name",
+      // No `killOthersOn`: one watcher falling over is no reason to tear the other two
+      // down. `-1` is concurrently's spelling for "restart forever", so a crashed
+      // watcher comes back instead of silently leaving its outputs stale.
+      restartTries: -1,
+      restartDelay: RESTART_DELAY_MS,
+    });
+
+    let stopping = false;
+
+    /**
+     * Wind the watchers down for good.
+     *
+     * Restarting forever means an ordinary SIGTERM would be answered by respawning every
+     * watcher, so the task has to opt out explicitly. SIGINT is the one signal concurrently
+     * neutralizes - it rewrites that exit to 0 before the restart controller sees it - so
+     * re-emitting it is how we say "stop" in a language the supervisor understands.
+     *
+     * Killing is asynchronous (concurrently shells out to `ps` to walk each process tree)
+     * and can outlive `result`. The timer keeps the process open until the kills
+     * land, which prevents orphaned watchers after SIGTERM. It also stops waiting
+     * if one of them wedges.
+     */
+    function stop(): void {
+      if (stopping) return;
+      stopping = true;
+      process.emit("SIGINT", "SIGINT");
+      setTimeout(() => process.exit(0), STOP_GRACE_MS);
+    }
+
+    // Registered after `concurrently()` so its own signal handler - the one that actually
+    // kills the children - is already in place by the time ours can fire.
+    for (const signal of ["SIGTERM", "SIGHUP"] as const) process.on(signal, stop);
+
+    // With infinite restarts this settles only once a stop signal has wound the watchers
+    // down, so there is no failure left to report. When `stop()` is driving, the pending
+    // grace timer keeps us alive past this point and owns the exit.
+    await result.catch(() => {});
   }
-
-  const watchers = [
-    watcher("projenrc.ts", "projenrc", "magenta"),
-    watcher("barrels.ts", "barrels", "cyan", "--watch"),
-    watcher("openapi.ts", "openapi", "green", "--watch"),
-  ];
-  if (pythonNodeBindingProjects(repoRoot).length > 0) {
-    watchers.push(watcher("python-node-bindings-watch.ts", "node-bindings", "blue"));
-  }
-  const { result } = concurrently(watchers, {
-    prefix: "name",
-    // No `killOthersOn`: one watcher falling over is no reason to tear the other two
-    // down. `-1` is concurrently's spelling for "restart forever", so a crashed
-    // watcher comes back instead of silently leaving its outputs stale.
-    restartTries: -1,
-    restartDelay: RESTART_DELAY_MS,
-  });
-
-  let stopping = false;
-
-  /**
-   * Wind the watchers down for good.
-   *
-   * Restarting forever means an ordinary SIGTERM would be answered by respawning every
-   * watcher, so the task has to opt out explicitly. SIGINT is the one signal concurrently
-   * neutralizes - it rewrites that exit to 0 before the restart controller sees it - so
-   * re-emitting it is how we say "stop" in a language the supervisor understands.
-   *
-   * Killing is asynchronous (concurrently shells out to `ps` to walk each process tree)
-   * and can outlive `result`. The timer keeps the process open until the kills
-   * land, which prevents orphaned watchers after SIGTERM. It also stops waiting
-   * if one of them wedges.
-   */
-  function stop(): void {
-    if (stopping) return;
-    stopping = true;
-    process.emit("SIGINT", "SIGINT");
-    setTimeout(() => process.exit(0), STOP_GRACE_MS);
-  }
-
-  // Registered after `concurrently()` so its own signal handler - the one that actually
-  // kills the children - is already in place by the time ours can fire.
-  for (const signal of ["SIGTERM", "SIGHUP"] as const) process.on(signal, stop);
-
-  // With infinite restarts this settles only once a stop signal has wound the watchers
-  // down, so there is no failure left to report. When `stop()` is driving, the pending
-  // grace timer keeps us alive past this point and owns the exit.
-  await result.catch(() => {});
 }
+
+if (import.meta.main) await main();

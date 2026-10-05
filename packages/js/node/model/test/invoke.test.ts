@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  aiGatewayCodexResponsesUrl,
+  anthropicMessagesUrl,
   chatCompletionsUrl,
   invocationsUrl,
   isResponsesOnly,
@@ -29,6 +31,14 @@ describe("Model Serving invocation URLs", () => {
     assert.equal(
       chatCompletionsUrl("https://workspace.example.com/"),
       "https://workspace.example.com/serving-endpoints/chat/completions",
+    );
+    assert.equal(
+      aiGatewayCodexResponsesUrl("https://workspace.example.com/"),
+      "https://workspace.example.com/ai-gateway/codex/v1/responses",
+    );
+    assert.equal(
+      anthropicMessagesUrl("https://workspace.example.com/"),
+      "https://workspace.example.com/serving-endpoints/anthropic/v1/messages",
     );
   });
 

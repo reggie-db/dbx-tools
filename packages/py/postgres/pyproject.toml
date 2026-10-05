@@ -9,12 +9,13 @@ requires-python = ">=3.11,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
 dependencies = [
+  "httpx>=0.28,<1",
+  "pythonmonkey>=1.3,<2",
   "asyncpg>=0.30",
   "databricks-sdk>=0.123.0",
   "greenlet>=3.2",
   "psycopg[binary]>=3.2.9",
-  "sqlalchemy>=2.0.41",
-  "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core"
+  "sqlalchemy>=2.0.41"
 ]
 
   [project.urls]
@@ -28,3 +29,10 @@ build-backend = "uv_build"
 module-name = "dbx_tools.postgres"
 module-root = "src"
 namespace = true
+
+[[tool.dbx_tools.node_bindings]]
+package = "@dbx-tools/auth"
+
+[[tool.dbx_tools.node_bindings]]
+package = "@dbx-tools/postgres"
+modules = [ "identity" ]

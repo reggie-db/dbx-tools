@@ -17,8 +17,6 @@ function resynthWatchPaths(): string[] {
   return paths;
 }
 
-const WATCH_PATHS = resynthWatchPaths();
-
 // Watch-only: `sync --watch` runs this under `concurrently` as the intelligent
 // re-synth trigger. It watches `.projenrc.ts` plus any `dbxToolsConfig.syncResynthPaths`
 // entries (from the root's `syncResynthPaths` option) and re-synths (+install) on edit -
@@ -26,13 +24,17 @@ const WATCH_PATHS = resynthWatchPaths();
 // makes the watch intelligent vs stock `projen --watch`, which re-synths on any tree
 // change. `{ dot: false }` keeps the default dotfile ignore group from pruning dotfile
 // targets. (A one-shot "projenrc" is just a synth, i.e. `bun run default`.)
-watchLoop(
-  "projenrc",
-  WATCH_PATHS,
-  () => {
-    logger.start("projenrc changed - re-synthesizing (+install)");
-    runSynth({ post: true });
-    logger.success("re-synth complete");
-  },
-  { dot: false },
-);
+export function main(): void {
+  watchLoop(
+    "projenrc",
+    resynthWatchPaths(),
+    () => {
+      logger.start("projenrc changed - re-synthesizing (+install)");
+      runSynth({ post: true });
+      logger.success("re-synth complete");
+    },
+    { ignoreOptions: { dot: false } },
+  );
+}
+
+if (import.meta.main) main();

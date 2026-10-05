@@ -34,6 +34,12 @@ const BASE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
  * Packages type-check against their own projen-generated tsconfigs via `compile`.
  */
 export class DBXToolsRootTsconfig extends Component {
+  /** Shared compiler floor inherited by the root program. */
+  readonly base?: javascript.TypescriptConfig;
+
+  /** Root program config inherited by the generated Projen config. */
+  readonly config?: javascript.TypescriptConfig;
+
   constructor(scope: Project) {
     super(scope);
 
@@ -41,13 +47,12 @@ export class DBXToolsRootTsconfig extends Component {
       return;
     }
 
-    const base = new javascript.TypescriptConfig(scope, {
+    this.base = new javascript.TypescriptConfig(scope, {
       fileName: "tsconfig.base.json",
       compilerOptions: BASE_COMPILER_OPTIONS,
     });
-    base.file.readonly = true;
-    const root = new javascript.TypescriptConfig(scope, {
-      extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([base]),
+    this.config = new javascript.TypescriptConfig(scope, {
+      extends: javascript.TypescriptConfigExtends.fromTypescriptConfigs([this.base]),
       compilerOptions: {
         lib: ["ESNext"],
         types: ["node"],
@@ -55,6 +60,5 @@ export class DBXToolsRootTsconfig extends Component {
       include: [".projenrc.ts"],
       exclude: ["node_modules", "**/dist", "**/node_modules"],
     });
-    root.file.readonly = true;
   }
 }

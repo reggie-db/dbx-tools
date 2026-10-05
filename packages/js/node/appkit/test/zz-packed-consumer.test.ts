@@ -1,18 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { it } from "node:test";
+import { applyPublishConfig, packNpmPackage } from "@dbx-tools/projen/release-packaging";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 const bun = process.execPath;
@@ -26,22 +18,7 @@ function run(command: string, args: string[], cwd: string): void {
 }
 
 function pack(directory: string, archives: string): string {
-  const existing = new Set(readdirSync(archives));
-  const manifestPath = join(directory, "package.json");
-  const manifest = readFileSync(manifestPath);
-  const manifestMode = statSync(manifestPath).mode;
-  chmodSync(manifestPath, 0o644);
-  try {
-    run(bun, ["pm", "pack", "--ignore-scripts", "--destination", archives], directory);
-  } finally {
-    writeFileSync(manifestPath, manifest);
-    chmodSync(manifestPath, manifestMode);
-  }
-  const created = readdirSync(archives).filter(
-    (file) => file.endsWith(".tgz") && !existing.has(file),
-  );
-  assert.equal(created.length, 1, `expected one archive from ${directory}`);
-  return join(archives, created[0]!);
+  return packNpmPackage(directory, archives, process.env.PATH, applyPublishConfig);
 }
 
 it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 }, () => {
@@ -56,6 +33,8 @@ it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 
     const packageArchives = {
       "@dbx-tools/shared-core": pack(resolve(packageRoot, "../../shared/core"), archives),
       "@dbx-tools/core": pack(resolve(packageRoot, "../core"), archives),
+      "@dbx-tools/auth": pack(resolve(packageRoot, "../auth"), archives),
+      "@dbx-tools/lakebase": pack(resolve(packageRoot, "../lakebase"), archives),
       "@dbx-tools/appkit": pack(packageRoot, archives),
     };
     const internalDependencies = Object.fromEntries(

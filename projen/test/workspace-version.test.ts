@@ -4,7 +4,6 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { generateBarrels } from "../src/barrels.ts";
 import { DBXToolsNodeProject } from "../src/project.ts";
 import {
   parseSemver,
@@ -48,11 +47,6 @@ describe("workspace version synthesis", () => {
         version: string;
       };
       assert.equal(manifest.version, "9.8.7");
-      generateBarrels({ dirs: [join(outdir, "tooling")] });
-      assert.match(
-        readFileSync(join(outdir, "tooling/index.ts"), "utf8"),
-        /PACKAGE_VERSION = "9\.8\.7"/,
-      );
     } finally {
       delete process.env.PROJEN_DISABLE_POST;
       rmSync(outdir, { recursive: true, force: true });

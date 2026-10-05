@@ -9,7 +9,7 @@ import type { JSONSchema7 } from "json-schema";
 
 export interface GraphitiPluginConfig extends BasePluginConfig {
   graphitiPort?: number;
-  modelProxyPort?: number;
+  modelGatewayPort?: number;
   proxyPort?: number;
   python?: string;
   journalNamespace?: string;
@@ -17,7 +17,7 @@ export interface GraphitiPluginConfig extends BasePluginConfig {
 
 export interface ResolvedGraphitiPluginConfig extends GraphitiPluginConfig {
   graphitiPort: number;
-  modelProxyPort: number;
+  modelGatewayPort: number;
   proxyPort: number;
   python: string;
   journalNamespace: string;
@@ -27,7 +27,7 @@ export const GRAPHITI_CONFIG_SCHEMA = {
   type: "object",
   properties: {
     graphitiPort: { type: "integer", minimum: 1, maximum: 65535 },
-    modelProxyPort: { type: "integer", minimum: 1, maximum: 65535 },
+    modelGatewayPort: { type: "integer", minimum: 1, maximum: 65535 },
     proxyPort: { type: "integer", minimum: 1, maximum: 65535 },
     python: { type: "string" },
     journalNamespace: { type: "string" },
@@ -45,14 +45,14 @@ export function resolveGraphitiConfig(
     0,
     configUtils.ENV_ONLY,
   );
-  const modelProxyPort = configUtils.port(
-    config.modelProxyPort,
-    "MODEL_PROXY_PORT",
+  const modelGatewayPort = configUtils.port(
+    config.modelGatewayPort,
+    "MODEL_GATEWAY_PORT",
     0,
     configUtils.ENV_ONLY,
   );
   const proxyPort = configUtils.port(config.proxyPort, "PROXY_PORT", 0, configUtils.ENV_ONLY);
-  const configuredPorts = [graphitiPort, modelProxyPort, proxyPort].filter(Boolean);
+  const configuredPorts = [graphitiPort, modelGatewayPort, proxyPort].filter(Boolean);
   if (new Set(configuredPorts).size !== configuredPorts.length) {
     throw new ConfigurationError("Graphiti sidecar ports must be distinct");
   }
@@ -66,7 +66,7 @@ export function resolveGraphitiConfig(
     "default";
   return {
     graphitiPort,
-    modelProxyPort,
+    modelGatewayPort,
     proxyPort,
     python,
     journalNamespace,

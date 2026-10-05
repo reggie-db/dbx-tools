@@ -14,9 +14,23 @@ class PythonHash {
     return this;
   }
 
-  digest(encoding: "hex"): string {
-    if (encoding !== "hex") throw new Error(`Unsupported digest encoding: ${encoding}`);
-    return pythonHost().crypto.sha256(this.content);
+  digest(encoding?: "hex"): string | Uint8Array {
+    const hex = pythonHost().crypto.sha256(this.content);
+    if (encoding === "hex") return hex;
+    if (encoding !== undefined) {
+      throw new Error(`Unsupported digest encoding: ${encoding}`);
+    }
+    const bytes = Uint8Array.from(
+      hex.match(/.{2}/g)?.map((value) => Number.parseInt(value, 16)) ?? [],
+    ) as Uint8Array & { readBigInt64BE(offset: number): bigint };
+    bytes.readBigInt64BE = (offset) => {
+      let value = 0n;
+      for (const byte of bytes.slice(offset, offset + 8)) {
+        value = (value << 8n) | BigInt(byte);
+      }
+      return BigInt.asIntN(64, value);
+    };
+    return bytes;
   }
 }
 

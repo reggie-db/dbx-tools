@@ -1290,11 +1290,11 @@ export function toDuration(value: unknown, options: ToDurationOptions = {}): num
   let sign = 1;
   for (const [, explicitSign, amount, unit] of terms) {
     if (explicitSign) sign = explicitSign === "-" ? -1 : 1;
-    const unitMs = DURATION_UNIT_MS.get(unit) ?? DURATION_UNIT_MS.get(unit.replace(/s$/, ""));
+    const unitMs = DURATION_UNIT_MS.get(unit!) ?? DURATION_UNIT_MS.get(unit!.replace(/s$/, ""));
     if (unitMs === undefined) {
       return options.parseDate === false ? undefined : dateAsDuration(value);
     }
-    total += sign * Number(amount) * unitMs;
+    total += sign * Number(amount!) * unitMs;
   }
   return negate ? -total : total;
 }

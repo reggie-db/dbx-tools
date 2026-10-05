@@ -9,9 +9,8 @@ import {
 } from "@dbx-tools/shared-core";
 import { IConstruct } from "constructs";
 import { Project } from "projen";
-import { project } from "..";
 import { toPosix } from "./packages.ts";
-import type { DBXToolsJavaScriptProject } from "./project-js.ts";
+import { identifier, type DBXToolsJavaScriptProject } from "./project-js.ts";
 import type { DBXToolsProject } from "./project.ts";
 
 /**
@@ -77,7 +76,7 @@ export function hasIdentifierPackageName(
 ): Predicate<IConstruct, Project> {
   const matchers = projectMatchers(...patterns);
   return isProject().and((p) => {
-    const packageName = project.identifier(p).packageName;
+    const packageName = identifier(p).packageName;
     return matchers.every((matcher) => matcher(packageName));
   });
 }
@@ -88,7 +87,7 @@ export function hasIdentifierName(
 ): Predicate<IConstruct, Project> {
   const matchers = projectMatchers(...patterns);
   return isProject().and((p) => {
-    const name = project.identifier(p).name;
+    const name = identifier(p).name;
     return matchers.every((matcher) => matcher(name));
   });
 }
@@ -99,7 +98,7 @@ export function hasIdentifierScope(
 ): Predicate<IConstruct, Project> {
   const matchers = projectMatchers(...patterns);
   return isProject().and((p) => {
-    const scope = project.identifier(p).scope;
+    const scope = identifier(p).scope;
     return scope && matchers.every((matcher) => matcher(scope));
   });
 }

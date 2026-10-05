@@ -58,7 +58,6 @@ describe("ModelClient", () => {
         ],
       })),
     );
-    assert.equal((await client.resolveModel({ explicit: "gpt" })).modelId, "databricks-gpt-5-4");
     const route = await client.route({ explicit: "gpt", protocol: "responses" });
     assert.equal(route.protocol, "responses");
     assert.equal(route.url, `${HOST}/serving-endpoints/responses`);
@@ -104,25 +103,16 @@ function endpoint(name: string, task = "llm/v1/chat") {
 
 function fakeClient(load: () => Promise<unknown>, principal = "principal") {
   const auth = {
-    status: () => ({ profile: "DEFAULT", host: HOST, storage: "memory" }),
-    principal: () => principal,
-    workspaceId: () => "123",
-    authenticate: async () => ({
+    profile: "DEFAULT",
+    host: HOST,
+    workspaceId: "123",
+    target: "workspace",
+    authType: "pat",
+    principal,
+    headers: async () => ({
       authorization: "Bearer token",
       "x-databricks-workspace-id": "123",
     }),
-    requestHeadersForUrl: async (url: string) =>
-      new URL(url).origin === HOST
-        ? { authorization: "Bearer token", "x-databricks-workspace-id": "123" }
-        : {},
-    profile: (name?: string) => ({
-      name: name ?? "DEFAULT",
-      host: HOST,
-      workspaceId: "123",
-      target: "workspace",
-      authKind: "pat",
-    }),
-    listProfiles: () => [],
   } as unknown as AuthClient;
   return {
     auth,

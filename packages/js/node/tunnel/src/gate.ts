@@ -126,6 +126,7 @@ function injectIdentity(req: IncomingMessage, email: string): void {
   req.headers[token.USER_EMAIL_HEADER] = email;
 }
 
+/** Convert Node request headers to web-platform headers with caller IP context. */
 export function webHeaders(req: IncomingMessage): Headers {
   const headers = new Headers();
   for (const [name, value] of Object.entries(req.headers)) {
@@ -139,6 +140,7 @@ export function webHeaders(req: IncomingMessage): Headers {
   return headers;
 }
 
+/** Convert an incoming Node request to a web-platform request. */
 export function webRequest(req: IncomingMessage): globalThis.Request {
   const host = req.headers.host ?? "localhost";
   const hostname = host.split(":")[0]?.toLowerCase();
@@ -147,6 +149,7 @@ export function webRequest(req: IncomingMessage): globalThis.Request {
   return getRequest({ request: req, base: `${protocol}://${host}` });
 }
 
+/** Send a web-platform response through a Node server response. */
 export async function sendWebResponse(
   res: ServerResponse,
   response: globalThis.Response,

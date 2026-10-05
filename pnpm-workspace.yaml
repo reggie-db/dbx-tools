@@ -7,11 +7,12 @@ packages:
   - packages/js/cli/auth
   - packages/js/cli/dbx-tools
   - packages/js/cli/lakebase-proxy
-  - packages/js/cli/model-proxy
+  - packages/js/cli/model-gateway
   - packages/js/cli/tunnel
   - packages/js/node/appkit
   - packages/js/node/appkit-graphiti
   - packages/js/node/appkit-mastra
+  - packages/js/node/appkit-model-gateway
   - packages/js/node/appkit-web-search
   - packages/js/node/auth
   - packages/js/node/auth-gate
@@ -28,7 +29,6 @@ packages:
   - packages/js/node/search
   - packages/js/node/teams
   - packages/js/node/tunnel
-  - packages/js/openapi/model-proxy
   - packages/js/shared/auth
   - packages/js/shared/core
   - packages/js/shared/email
@@ -37,6 +37,7 @@ packages:
   - packages/js/shared/genie
   - packages/js/shared/mastra
   - packages/js/shared/model
+  - packages/js/shared/model-gateway
   - packages/js/shared/search
   - packages/js/shared/teams
   - packages/js/ui/appkit
@@ -59,13 +60,11 @@ catalog:
   express: ^5.1.0
   zod: 4.3.6
   typescript: ^5.9.3
-  tsx: ^4.23.0
   commander: ^15.0.0
   "@clack/prompts": ^1.7.0
   openapi-fetch: ^0.17.0
   tsoa: ^6.6.0
   concurrently: ^10.0.3
-  pnpm: ^11.0.6
   "@databricks/appkit": 0.81.0
   "@databricks/appkit-ui": 0.81.0
   "@databricks/sdk-experimental": ^0.17.0

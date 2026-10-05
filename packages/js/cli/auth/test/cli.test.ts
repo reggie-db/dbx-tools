@@ -1,14 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  type AccessToken,
-  type AuthClient,
-  AuthKind,
-  type DatabricksAuthOptions,
-  Storage,
-  TargetKind,
-} from "@dbx-tools/auth";
+import { type AccessToken, type AuthClient, type DatabricksAuthOptions } from "@dbx-tools/auth";
+import { AuthType, TargetKind } from "@dbx-tools/shared-auth";
 
 import { buildProgram } from "../src/cli.ts";
 
@@ -21,60 +15,20 @@ const TOKEN: AccessToken = {
 
 function fakeAuth(calls: string[]): AuthClient {
   return {
-    async challenge() {
-      calls.push("challenge");
-    },
-    async refreshRejectedToken() {
-      return TOKEN;
-    },
-    async forceRefreshToken(login) {
-      calls.push(`force-refresh:${String(login)}`);
-      return TOKEN;
-    },
+    profile: "TEST",
+    host: "https://example.cloud.databricks.com",
+    target: TargetKind.Workspace,
+    authType: AuthType.DatabricksCli,
+    principal: "TEST",
     async logout() {
       calls.push("logout");
     },
-    status() {
-      calls.push("status");
-      return {
-        profile: "TEST",
-        host: "https://example.cloud.databricks.com",
-        storage: Storage.File,
-      };
-    },
-    async token(login) {
-      calls.push(`token:${String(login)}`);
+    async token(options) {
+      calls.push(`token:${JSON.stringify(options ?? {})}`);
       return TOKEN;
     },
-    async authenticate() {
+    async headers() {
       return { authorization: "Bearer access" };
-    },
-    async authorizationHeaderForUrl() {
-      return "Bearer access";
-    },
-    async requestHeadersForUrl() {
-      return { authorization: "Bearer access" };
-    },
-    principal() {
-      return "TEST";
-    },
-    workspaceId() {
-      return undefined;
-    },
-    authKind() {
-      return AuthKind.UserToMachine;
-    },
-    profile() {
-      calls.push("profile");
-      return {
-        name: "TEST",
-        host: "https://example.cloud.databricks.com",
-        target: TargetKind.Workspace,
-        authKind: AuthKind.UserToMachine,
-      };
-    },
-    listProfiles() {
-      return [];
     },
   };
 }
@@ -82,13 +36,13 @@ function fakeAuth(calls: string[]): AuthClient {
 describe("auth CLI", () => {
   it("routes login and token operations through AuthClient", async () => {
     const cases = [
-      { args: ["login"], expected: "token:true" },
-      { args: ["token"], expected: "token:undefined" },
-      { args: ["token", "--no-login"], expected: "token:false" },
-      { args: ["token", "--force-refresh"], expected: "force-refresh:undefined" },
+      { args: ["login"], expected: 'token:{"login":true}' },
+      { args: ["token"], expected: "token:{}" },
+      { args: ["token", "--no-login"], expected: 'token:{"login":false}' },
+      { args: ["token", "--force-refresh"], expected: 'token:{"refresh":true}' },
       {
         args: ["token", "--force-refresh", "--no-login"],
-        expected: "force-refresh:false",
+        expected: 'token:{"login":false,"refresh":true}',
       },
     ];
 
@@ -125,12 +79,14 @@ describe("auth CLI", () => {
       createAuthClient: async () => fakeAuth(statusCalls),
       writeJson: (value) => output.push(value),
     }).parseAsync(["status"], { from: "user" });
-    assert.deepEqual(statusCalls, ["status"]);
+    assert.deepEqual(statusCalls, []);
     assert.deepEqual(output, [
       {
         profile: "TEST",
         host: "https://example.cloud.databricks.com",
-        storage: "file",
+        target: TargetKind.Workspace,
+        authType: AuthType.DatabricksCli,
+        principal: "TEST",
       },
     ]);
 
@@ -140,7 +96,7 @@ describe("auth CLI", () => {
       createAuthClient: async () => fakeAuth(profileCalls),
       writeText: (value) => profileOutput.push(value),
     }).parseAsync(["profile"], { from: "user" });
-    assert.deepEqual(profileCalls, ["profile"]);
+    assert.deepEqual(profileCalls, []);
     assert.deepEqual(profileOutput, ["TEST"]);
   });
 
@@ -157,12 +113,10 @@ describe("auth CLI", () => {
 
   it("translates common options to the generated binding record", async () => {
     let capturedOptions: DatabricksAuthOptions | undefined;
-    let capturedStorage: Storage | undefined;
 
     await buildProgram("dbx auth", {
-      createAuthClient: async (options, storage) => {
+      createAuthClient: async (options) => {
         capturedOptions = options;
-        capturedStorage = storage;
         return fakeAuth([]);
       },
       writeJson: () => {},
@@ -173,12 +127,10 @@ describe("auth CLI", () => {
         "--target",
         "workspace",
         "--auth-type",
-        "oauth-m2m",
+        AuthType.OAuthM2M,
         "--group-id",
         "group",
         "--no-prefer-user-to-machine",
-        "--storage",
-        "memory",
         "--scopes",
         "scope-a,scope-b",
         "--scopes",
@@ -196,13 +148,12 @@ describe("auth CLI", () => {
 
     assert.equal(capturedOptions?.profile, "TEST");
     assert.equal(capturedOptions?.target, "workspace");
-    assert.equal(capturedOptions?.authType, "oauth-m2m");
+    assert.equal(capturedOptions?.authType, AuthType.OAuthM2M);
     assert.equal(capturedOptions?.groupId, "group");
     assert.equal(capturedOptions?.preferUserToMachine, false);
     assert.deepEqual(capturedOptions?.scopes, ["scope-a", "scope-b", "scope-c"]);
     assert.equal(capturedOptions?.auth?.lockTimeoutMs, 12);
     assert.equal(capturedOptions?.auth?.loginTimeoutMs, 34);
     assert.equal(capturedOptions?.auth?.refreshBufferMs, -5);
-    assert.equal(capturedStorage, Storage.Memory);
   });
 });

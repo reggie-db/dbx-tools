@@ -73,6 +73,24 @@ describe("searchServingEndpoints / resolveModelId", () => {
     );
   });
 
+  it("text-searches live chat endpoints without requiring a quality band", () => {
+    const grok = {
+      name: "databricks-grok-4-7",
+      displayName: "Grok 4.7",
+      family: "grok",
+      task: CHAT_TASK,
+      supportsTools: true,
+    };
+    const [match] = lookupModels([grok], {
+      search: "grok 4",
+      requiresTools: true,
+      limit: 1,
+    });
+
+    assert.equal(match?.endpoint.name, grok.name);
+    assert.equal(match?.score, 0);
+  });
+
   it("searches explicit custom endpoint records through the model ranker", () => {
     const custom = { name: "approved-custom-endpoint" };
     assert.deepEqual(searchServingEndpoints("approved custom", [custom]), [
@@ -97,6 +115,24 @@ describe("listServingEndpointsUncached model policy", () => {
       servingEndpoints: {
         async *list() {
           yield { name: "databricks-gpt-5-3-codex", task: CHAT_TASK };
+          yield {
+            name: "databricks-grok-4-7",
+            task: CHAT_TASK,
+            capabilities: { function_calling: true },
+            config: {
+              served_entities: [
+                {
+                  entity_name: "system.ai.databricks-grok-4-7",
+                  foundation_model: {
+                    name: "system.ai.databricks-grok-4-7",
+                    display_name: "Grok 4.7",
+                    description: "xAI reasoning model",
+                    model_class: "grok",
+                  },
+                },
+              ],
+            },
+          };
           yield { name: "databricks-gemini-3-5-flash", task: CHAT_TASK };
           yield {
             name: "databricks-gemini-2-5-pro",
@@ -134,6 +170,12 @@ describe("listServingEndpointsUncached model policy", () => {
           supportsTools: true,
         },
         {
+          name: "databricks-grok-4-7",
+          family: "grok",
+          reasoningEfforts: undefined,
+          supportsTools: true,
+        },
+        {
           name: "databricks-gemini-3-5-flash",
           family: "gemini",
           reasoningEfforts: ["minimal", "low", "medium", "high"],
@@ -147,7 +189,18 @@ describe("listServingEndpointsUncached model policy", () => {
         },
       ],
     );
-    assert.deepEqual(endpoints[2], {
+    assert.deepEqual(endpoints[1], {
+      name: "databricks-grok-4-7",
+      displayName: "Grok 4.7",
+      family: "grok",
+      task: CHAT_TASK,
+      description: "xAI reasoning model",
+      supportsTools: true,
+      serviceNames: { xai: "grok-4.7" },
+      modelServiceName: "system.ai.databricks-grok-4-7",
+      status: { deprecated: false },
+    });
+    assert.deepEqual(endpoints[3], {
       name: "databricks-gemini-2-5-pro",
       displayName: "Gemini Pro",
       family: "gemini",

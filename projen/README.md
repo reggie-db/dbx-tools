@@ -125,63 +125,71 @@ VS Code component; dbx-tools reuses it rather than constructing a second
 
 ### Bundle Node Code For PythonMonkey
 
-Add `nodeBindings` to any `DBXToolsPythonWorkspace` package to generate a
-committed CommonJS runtime and async Python wrappers from a public Node package.
-The configuration is written to `pyproject.toml`, so the generation task also
-works in consuming repositories after `@dbx-tools/projen` is installed.
+Add `nodeBindings` to any `DBXToolsPythonWorkspace` package to generate
+committed CommonJS runtimes and Python wrappers from public Node packages. Pass
+one binding object or an array. Projen writes one
+`[tool.dbx_tools.node_bindings]` table or multiple
+`[[tool.dbx_tools.node_bindings]]` tables accordingly, so generation also works
+in consuming repositories after `@dbx-tools/projen` is installed.
 
 ```ts
 new project.DBXToolsPythonWorkspace(root, {
   root: "packages/py",
   packages: [
     {
-      directory: "auth",
-      description: "Python bindings for example auth",
-      nodeBindings: {
-        package: "@example/auth",
-        layout: "package",
-        private: false,
-        shimRoot: "projen/shims/python-node",
-        functionOverrides: [
-          {
-            module: "@example/core/file-lock",
-            export: "acquireFileLock",
-            handler: "projen/shims/python-node/file-lock.ts",
-          },
-        ],
-      },
+      directory: "postgres",
+      description: "Python bindings for example Postgres helpers",
+      nodeBindings: [
+        {
+          package: "@example/postgres",
+          modules: ["identity", "config"],
+        },
+        {
+          package: "@example/lakebase",
+          modules: ["address"],
+        },
+      ],
     },
   ],
 });
 ```
 
-`layout: "package"` owns the complete Python package under `generated-src`.
-Use the default `layout: "submodule"` to place generated bindings under
-`<module>._generated` beside handwritten source. Generated wrappers convert
-public function names to `snake_case`, await promises, recursively convert plain
-records and arrays, and proxy returned JavaScript class instances with
-`snake_case` async methods.
-
-Set `private: true` to keep every generated symbol out of the generated
-`__init__.py`. The runtime and `node_bindings.py` remain available for a
-handwritten consuming package to import selectively. The default is `false`.
+Bindings always live under
+`<python-module>/_generated/node/`. Each Python package receives one shared
+`_runtime.js`; typed wrappers live under `<node-package>/<module>.py`. This
+preserves Node module singleton identity across all bindings in the Python
+process. The intermediate directories remain implicit namespace packages with
+no generated `__init__.py`. Omit `modules` to discover every exported package
+namespace that contains plain functions, or supply one module string or an array
+explicitly.
+Generated wrappers convert public function names to `snake_case`, preserve
+synchronous functions, await promises, recursively convert plain records and
+arrays, and proxy returned JavaScript class instances with `snake_case` async
+methods.
 
 Every function parameter is resolved through the TypeScript compiler API and
 rendered with its Python-equivalent name and type. Supported record types become
 keyword-only Python dataclasses, nested records become nested dataclasses, and a
 same-named exported companion's `defaults()` method supplies field defaults. A
-trailing optional record can be passed as the dataclass, a dictionary, or direct
-snake-case keyword fields. Generation fails with the property path when a type
-cannot be represented safely in Python.
+record parameter can be passed as the generated dataclass or a dictionary.
+Generation fails with the property path when a type cannot be represented safely
+in Python.
 
 Return types use the same compiler model. Plain records become generated
 `TypedDict` responses, returned clients and class instances become `Protocol`
 types with typed async methods, and primitives, arrays, maps, promises, and
 optional values retain their corresponding Python annotations.
 
-The workspace creates `<name>:python-runtime`,
-`<name>:python-runtime:check`, and, for workspace Node dependencies,
-`<name>:python-runtime:watch`. The root sync watcher includes the watch task.
+The generator resolves portable Node built-ins through standard browser
+polyfills. Python-host-backed adapters for process execution, files, crypto,
+OS values, and process state are included automatically, so packages do not
+configure a shim directory.
+
+The workspace creates `<name>:python-runtime` and
+`<name>:python-runtime:check`. Full synthesis regenerates bindings and removes
+stale `_generated/node` trees by reconciling them with the current
+`pyproject.toml` files, including the resynthesis triggered by a `.projenrc.ts`
+change.
 Built-in shims can make ordinary Node imports work under PythonMonkey.
 `functionOverrides` replaces named exports only in the generated runtime, so the
 Node package does not gain Python callbacks or alternate source files. A
@@ -264,15 +272,14 @@ barrels.generateBarrels();
 
 `generateCodegen()` reads `package.json` `codegen.inputs` and writes generated
 schema modules. They are written read-only, and the root ESLint task runs with
-`--fix` (which fails on a read-only file), so each generated module is added to
+an explicit separate fix task, so each generated module is added to
 `ignorePatterns` at synth - named individually via `codegen.codegenModulePaths()`,
 never as a blanket `<package>/src/**`. A codegen package may hold hand-written
 modules beside its generated ones, and those must stay linted.
 
 `generateBarrels()` writes package-root `index.ts` barrels with module
-namespaces, flat unique type exports, `PACKAGE_IDENTIFIER`, and
-`PACKAGE_VERSION`, returning the number that actually changed. A name two
-modules both declare is ambiguous and stays namespace-only —
+namespaces, flat unique type exports, and `PACKAGE_IDENTIFIER`, returning the
+number that actually changed. A name two modules both declare is ambiguous and stays namespace-only,
 except when one of them is generated: the hand-written module is the curated view
 of the generated shape (`shared-genie`'s `genie-model.ts` extends its own
 codegen'd `dashboards.ts`), so it owns the name and stays hoisted. A barrel whose export surface is unchanged is left untouched,
@@ -325,10 +332,7 @@ tree ROOT only; a member package never gets a nested one.
 import { clean, watch } from "@dbx-tools/projen";
 
 const generated = clean.listGeneratedFiles();
-watch.watchLoop({
-  roots: watch.watchRoots(),
-  onChange: async (files) => console.log(files),
-});
+watch.watchLoop("workspace", watch.watchRoots(), async (files) => refresh(files));
 ```
 
 Use these modules for maintenance tasks that should follow the same generated
@@ -346,7 +350,6 @@ file contract as the CLI.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
 - `openapi` - tsoa/OpenAPI package generation.
-- `releaseCatalog` - cross-language package ownership and publication order.
 - `bunApp` / `tsconfig` / `vscode` - generated support files/components.
 - `generated` / `clean` / `watch` / `scaffold` - read-only file ownership,
   cleanup, watchers, and synth orchestration.
@@ -366,16 +369,16 @@ packages in up to four `tsc --build` processes and runs custom compile tasks alo
 `test` delegates with `bun run --filter '*'`. Both read the current workspace
 list, so a new package is covered without a re-synth. Work from the root:
 
-| Task                           | What it does                                         |
-| ------------------------------ | ---------------------------------------------------- |
-| `bun run build`                | synth + workspace compile and tests                  |
-| `bun run compile`              | Batched `tsc --build` plus custom member compiles    |
-| `bun run test`                 | `eslint` once, then each member's tests              |
-| `bun run sync`                 | re-synth (`--watch` to keep synthing)                |
-| `bun run barrels`              | regenerate the read-only `index.ts` barrels          |
-| `bun run bump`                 | increment `VERSION` and regenerate version surfaces  |
-| `bun run version:check`        | verify every generated version against `VERSION`     |
-| `bun run release`              | run the configured release transaction                |
+| Task                    | What it does                                        |
+| ----------------------- | --------------------------------------------------- |
+| `bun run build`         | synth + workspace compile and tests                 |
+| `bun run compile`       | Batched `tsc --build` plus custom member compiles   |
+| `bun run test`          | `eslint` once, then each member's tests             |
+| `bun run sync`          | re-synth (`--watch` to keep synthing)               |
+| `bun run barrels`       | regenerate the read-only `index.ts` barrels         |
+| `bun run bump`          | increment `VERSION` and regenerate version surfaces |
+| `bun run version:check` | verify every generated version against `VERSION`    |
+| `bun run release`       | run the configured release transaction              |
 
 Run exactly `bun run release` from a clean `main`. It calls the existing `bump`
 task, commits the generated version changes, pushes `main`, and pushes the
@@ -412,6 +415,6 @@ from the root instead.
 ## Versioning
 
 `VERSION` is the language-neutral version seam. Real package manifests remain
-Projen-owned and reproduce it exactly across JavaScript and Python packages. Package and
-artifact discovery still supplies publication order and target inventory; it
-does not create independent version ownership.
+Projen-owned and reproduce it exactly across JavaScript and Python packages.
+Release jobs publish the generated workspace inventory in dependency-safe
+workflow order without introducing another version owner.

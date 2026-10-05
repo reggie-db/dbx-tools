@@ -5,13 +5,13 @@ import { pathToFileURL } from "node:url";
 
 describe("authentication debug logging", () => {
   it("reports lifecycle decisions without serializing credentials", () => {
-    const lifecycle = moduleUrl("src/lifecycle.ts");
-    const storage = moduleUrl("src/storage.ts");
-    const types = moduleUrl("src/types.ts");
+    const lifecycle = moduleUrl("src/_lifecycle.ts");
+    const storage = moduleUrl("src/_storage.ts");
+    const config = moduleUrl("src/config.ts");
     const script = `
       import { TokenLifecycle } from ${JSON.stringify(lifecycle)};
       import { MemoryCredentialStore } from ${JSON.stringify(storage)};
-      import { AuthOptions } from ${JSON.stringify(types)};
+      import { AUTH_DEFAULTS } from ${JSON.stringify(config)};
       const provider = {
         authenticate: async () => ({
           accessToken: "SECRET_ACCESS_VALUE",
@@ -28,7 +28,7 @@ describe("authentication debug logging", () => {
         "logging-profile",
         provider,
         new MemoryCredentialStore(),
-        AuthOptions.create({ refreshBufferMs: 0 }),
+        { ...AUTH_DEFAULTS, refreshBufferMs: 0 },
       );
       await client.token();
     `;

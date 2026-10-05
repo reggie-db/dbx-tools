@@ -1,17 +1,22 @@
 /**
  * `dbx auth` Commander program for Databricks OAuth.
  *
- * The command delegates profile resolution, browser OAuth, token refresh,
- * locking, and credential storage to `@dbx-tools/auth`.
+ * The command delegates profile resolution and token lifecycle to
+ * `@dbx-tools/auth`.
  *
  * @module
  */
 
 import * as databricks from "@dbx-tools/auth";
+import {
+  AuthType,
+  type AuthType as AuthTypeValue,
+  TargetKind,
+  type TargetKind as TargetKindValue,
+} from "@dbx-tools/shared-auth";
+import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth/client";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
-
-type StorageName = "auto" | "memory" | "file";
 
 interface AuthCliOptions {
   profile?: string;
@@ -21,11 +26,9 @@ interface AuthCliOptions {
   configFile?: string;
   clientId?: string;
   groupId?: string;
-  authType?: string;
+  authType?: AuthTypeValue;
   scopes?: string[];
-  target?: string;
-  storage: StorageName;
-  cacheDir?: string;
+  target?: TargetKindValue;
   lockTimeoutMs: string;
   loginTimeoutMs: string;
   refreshBufferMs: string;
@@ -40,19 +43,18 @@ interface TokenCommandOptions {
 interface AuthContext {
   auth: databricks.AuthClient;
   close(): Promise<void>;
-  storage?: StorageName;
 }
 
 interface AuthCliDependencies {
-  createAuthClient: typeof databricks.createAuthClient;
+  createAuthClient: typeof databricks.client.createAuthClient;
   writeJson(value: unknown): void;
   writeText(value: string): void;
 }
 
-const DEFAULT_AUTH_OPTIONS = databricks.AuthOptions.create({});
+const DEFAULT_AUTH_OPTIONS = databricks.AUTH_DEFAULTS;
 
 const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
-  createAuthClient: databricks.createAuthClient,
+  createAuthClient: databricks.client.createAuthClient,
   writeJson: (value) => {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   },
@@ -74,38 +76,15 @@ function parseInteger(value: string | number, name: string, signed: boolean): nu
     throw new InvalidArgumentError(`${name} must be a ${signed ? "" : "non-negative "}integer`);
   }
   const parsed = Number(text);
-  if (!Number.isSafeInteger(parsed))
+  if (!Number.isSafeInteger(parsed)) {
     throw new InvalidArgumentError(`${name} is outside the safe integer range`);
+  }
   return parsed;
 }
 
-/** Translate the CLI storage name to the authentication storage value. */
-function bindingStorage(storage: StorageName): databricks.Storage {
-  switch (storage) {
-    case "auto":
-      return databricks.Storage.Auto;
-    case "memory":
-      return databricks.Storage.Memory;
-    case "file":
-      return databricks.Storage.File;
-  }
-}
-
-/** Translate the authentication storage value to the CLI status value. */
-function storageName(storage: databricks.Storage): StorageName {
-  switch (storage) {
-    case databricks.Storage.Auto:
-      return "auto";
-    case databricks.Storage.Memory:
-      return "memory";
-    case databricks.Storage.File:
-      return "file";
-  }
-}
-
-/** Build the generated options record from parsed Commander values. */
+/** Build authentication options from parsed Commander values. */
 function bindingOptions(options: AuthCliOptions): databricks.DatabricksAuthOptions {
-  return databricks.DatabricksAuthOptions.create({
+  return {
     profile: options.profile,
     host: options.host,
     accountId: options.accountId,
@@ -116,26 +95,22 @@ function bindingOptions(options: AuthCliOptions): databricks.DatabricksAuthOptio
     authType: options.authType,
     scopes: options.scopes?.length ? options.scopes : undefined,
     target: options.target,
-    cacheDir: options.cacheDir,
-    auth: databricks.AuthOptions.create({
+    auth: {
       lockTimeoutMs: parseInteger(options.lockTimeoutMs, "--lock-timeout-ms", false),
       loginTimeoutMs: parseInteger(options.loginTimeoutMs, "--login-timeout-ms", false),
       refreshBufferMs: parseInteger(options.refreshBufferMs, "--refresh-buffer-ms", true),
-    }),
+    },
     preferUserToMachine: options.preferUserToMachine,
-  });
+  };
 }
 
-/** Open the selected binding storage and retain any owned cleanup work. */
+/** Open the selected authentication client. */
 async function openAuth(
   options: AuthCliOptions,
   dependencies: AuthCliDependencies,
 ): Promise<AuthContext> {
   return {
-    auth: await dependencies.createAuthClient(
-      bindingOptions(options),
-      bindingStorage(options.storage),
-    ),
+    auth: await dependencies.createAuthClient(bindingOptions(options)),
     close: async () => {},
   };
 }
@@ -164,6 +139,19 @@ function tokenJson(token: databricks.AccessToken): Record<string, unknown> {
   };
 }
 
+/** Select the serializable identity fields from an authentication client. */
+function clientInfo(auth: databricks.AuthClient): DatabricksAuthClientInfo {
+  return {
+    ...(auth.profile ? { profile: auth.profile } : {}),
+    host: auth.host,
+    ...(auth.accountId ? { accountId: auth.accountId } : {}),
+    ...(auth.workspaceId ? { workspaceId: auth.workspaceId } : {}),
+    target: auth.target,
+    authType: auth.authType,
+    principal: auth.principal,
+  };
+}
+
 /** Register options shared by every auth operation. */
 function addCommonOptions(program: Command): Command {
   return program
@@ -186,7 +174,7 @@ function addCommonOptions(program: Command): Command {
     )
     .addOption(
       new Option("--auth-type <type>", "Databricks authentication type")
-        .choices(["databricks-cli", "oauth-m2m"])
+        .choices(Object.values(AuthType))
         .env("DATABRICKS_AUTH_TYPE"),
     )
     .addOption(
@@ -196,17 +184,8 @@ function addCommonOptions(program: Command): Command {
     )
     .addOption(
       new Option("--target <target>", "OAuth target")
-        .choices(["workspace", "account", "unified"])
+        .choices(Object.values(TargetKind))
         .env("DBX_TOOLS_U2M_TARGET"),
-    )
-    .addOption(
-      new Option("--storage <storage>", "Credential storage")
-        .choices(["auto", "memory", "file"])
-        .default("auto")
-        .env("DBX_TOOLS_U2M_STORAGE"),
-    )
-    .addOption(
-      new Option("--cache-dir <path>", "Credential cache directory").env("DBX_TOOLS_U2M_CACHE_DIR"),
     )
     .addOption(
       new Option("--lock-timeout-ms <ms>", "Credential lock timeout (0 waits indefinitely)")
@@ -248,7 +227,7 @@ export function buildProgram(
     .description("Force browser login and return an access token")
     .action(async () => {
       await withAuth(options(), dependencies, async ({ auth }) => {
-        dependencies.writeJson(tokenJson(await auth.token(true)));
+        dependencies.writeJson(tokenJson(await auth.token({ login: true })));
       });
     });
 
@@ -260,9 +239,10 @@ export function buildProgram(
     .action(async (tokenOptions: TokenCommandOptions) => {
       await withAuth(options(), dependencies, async ({ auth }) => {
         const login = tokenOptions.login === false ? false : undefined;
-        const token = tokenOptions.forceRefresh
-          ? await auth.forceRefreshToken(login)
-          : await auth.token(login);
+        const token = await auth.token({
+          ...(login === undefined ? {} : { login }),
+          refresh: tokenOptions.forceRefresh,
+        });
         dependencies.writeJson(tokenJson(token));
       });
     });
@@ -272,7 +252,7 @@ export function buildProgram(
     .description("Print the configured or automatically detected profile")
     .action(async () => {
       await withAuth(options(), dependencies, async ({ auth }) => {
-        dependencies.writeText(auth.profile().name);
+        dependencies.writeText(auth.profile ?? "ambient");
       });
     });
 
@@ -287,15 +267,10 @@ export function buildProgram(
 
   program
     .command("status")
-    .description("Show the resolved profile, host, and storage backend")
+    .description("Show the resolved authentication client configuration")
     .action(async () => {
-      await withAuth(options(), dependencies, async (context) => {
-        const status = context.auth.status();
-        dependencies.writeJson({
-          profile: status.profile,
-          host: status.host,
-          storage: context.storage ?? storageName(status.storage),
-        });
+      await withAuth(options(), dependencies, async ({ auth }) => {
+        dependencies.writeJson(clientInfo(auth));
       });
     });
 

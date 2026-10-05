@@ -41,9 +41,8 @@ search instead of Vector Search.
   `deleteIndex`, `listIndexes`, and `ensureEndpoint` - each inferring the
   endpoint, embedding model, primary key, and columns from sensible defaults.
 - Wire up a real index on boot with `ensureOnSetup`: the plugin provisions the
-  endpoint + index and seeds documents in the background using the app's SDK
-  auth (env or `DATABRICKS_CONFIG_PROFILE`), so a fresh deployment is searchable
-  with no manual setup.
+  endpoint + index and seeds documents in the background using the native AppKit
+  workspace client, so a fresh deployment is searchable with no manual setup.
 - An explicit **Lakebase full-text provider**: register `lakebaseAiSearch`
   instead of native `aiSearch` to serve the same aliases, query routes, filters,
   and result shape from a Postgres `tsvector` index.
@@ -190,7 +189,7 @@ should be able to set up or refresh indexes.
 ### Provision a real index on boot
 
 `ensureOnSetup` makes the plugin wire up a real index when the app starts, using
-the boot-time SDK auth (env vars or a `DATABRICKS_CONFIG_PROFILE`). It ensures
+the native AppKit workspace client. It ensures
 the endpoint + index exist and seeds documents only when the index is empty, all
 in the background so a slow first-time endpoint build never blocks the server.
 The default is a managed direct-access index, so the seed rows are plain

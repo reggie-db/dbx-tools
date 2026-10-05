@@ -1,3 +1,5 @@
+import type { ModelRateLimits } from "@dbx-tools/shared-model/contracts";
+
 /** One day, matching the refresh cadence of Databricks model documentation. */
 export const MODEL_METADATA_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -35,13 +37,6 @@ export interface ModelCapabilityCatalogue {
 export interface ModelCapabilitiesSnapshot {
   readonly generatedAt: number;
   readonly capabilities: ModelCapabilityCatalogue;
-}
-
-/** Published pay-per-token limits for one model. */
-export interface ModelRateLimits {
-  readonly inputTokensPerMinute: number | null;
-  readonly outputTokensPerMinute: number | null;
-  readonly queriesPerHour: number | null;
 }
 
 /** Model limits keyed by normalized Databricks model identity. */

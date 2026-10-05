@@ -65,8 +65,9 @@ async function loadPage(url: string): Promise<string> {
     headers: { "user-agent": "dbx-tools-model-metadata/1" },
     signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(`Databricks documentation returned HTTP ${response.status}: ${url}`);
+  }
   return response.text();
 }
 

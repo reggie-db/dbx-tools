@@ -58,6 +58,8 @@ export interface ConfigOptions {
   data?: ConfigData | readonly ConfigData[];
   /** Parsed bundle data used instead of loading `databricks.yml`. */
   bundleData?: ConfigFile | Record<string, unknown>;
+  /** Auth-resolved Databricks profile passed explicitly to bundle validation. */
+  bundleProfile?: string;
   /** Parsed app YAML data used instead of loading `app.yaml`. */
   appData?: ConfigFile | Record<string, unknown>;
   /** Sources in precedence order. Default: `config`, `env`, `dotenv`, `bundle`, `app`. */
@@ -502,7 +504,7 @@ export function list(
  * Parsed validation output is cached by bundle path and Databricks profile.
  *
  */
-export function bundleFile(cwd?: string | null): ConfigFile | undefined {
+export function bundleFile(cwd?: string | null, profile?: string | null): ConfigFile | undefined {
   const override = object.toBoolean(process.env[CONFIG_BUNDLE_KEY]);
   if (override === false) return undefined;
   if (
@@ -512,7 +514,7 @@ export function bundleFile(cwd?: string | null): ConfigFile | undefined {
     return undefined;
   }
   const resolved = resolveWorkingDirectory(cwd);
-  return loadBundleFile(resolved, stringUtils.trimToNull(process.env.DATABRICKS_CONFIG_PROFILE));
+  return loadBundleFile(resolved, stringUtils.trimToNull(profile));
 }
 
 /** The parsed `app.yaml` / `app.yml` for `cwd`, when local App config reads are enabled. */
@@ -524,7 +526,8 @@ export function appFile(cwd?: string | null): ConfigFile | undefined {
 
 /** The single bundle App's resolved environment, when available. */
 function bundleEnvironment(options: ConfigOptions): Record<string, string> | undefined {
-  const data = sourceData(options.bundleData) ?? bundleFile(options.cwd)?.data;
+  const data =
+    sourceData(options.bundleData) ?? bundleFile(options.cwd, options.bundleProfile)?.data;
   return data ? flattenBundleEnv(data) : undefined;
 }
 
@@ -653,8 +656,11 @@ function loadBundleFile(cwd: string, profile: string | null): ConfigFile | undef
       "json",
       ...(profile === null ? [] : ["--profile", profile]),
     ];
+    const environment = { ...process.env };
+    delete environment.DATABRICKS_CONFIG_PROFILE;
     const result = spawnSync("databricks", args, {
       cwd: resolve(path, ".."),
+      env: environment,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });

@@ -17,6 +17,7 @@
     },
     {
       "name": "typescript",
+      "version": "^5.9.3",
       "type": "build"
     },
     {

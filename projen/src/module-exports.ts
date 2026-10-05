@@ -69,6 +69,7 @@ export interface PublicFunctionExport {
   readonly name: string;
   readonly sourceFile: string;
   readonly sourceName: string;
+  readonly async: boolean;
 }
 
 /** Declaration node types that are inherently type-only. */
@@ -149,8 +150,29 @@ export function moduleExports(file: string): ModuleExport[] {
  */
 export function publicFunctionExports(file: string): PublicFunctionExport[] {
   return [...collectPublicFunctions(resolve(file), new Set()).values()]
-    .map(({ name, sourceFile, sourceName }) => ({ name, sourceFile, sourceName }))
+    .map(({ name, sourceFile, sourceName, async }) => ({
+      name,
+      sourceFile,
+      sourceName,
+      async,
+    }))
     .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/** Names of namespace exports declared as `export * as name from "..."`. */
+export function publicNamespaceExports(file: string): string[] {
+  return moduleStatements(file)
+    .flatMap((statement) => {
+      if (statement.type !== "ExportAllDeclaration") return [];
+      const exported = (
+        statement as {
+          exported?: { name?: string; value?: string } | null;
+        }
+      ).exported;
+      const name = exported?.name ?? exported?.value;
+      return name ? [name] : [];
+    })
+    .sort((left, right) => left.localeCompare(right));
 }
 
 interface ResolvedFunctionExport extends PublicFunctionExport {
@@ -230,13 +252,15 @@ function collectPublicFunctions(
         const local = specifier.local?.name ?? specifier.local?.value;
         const exportedName = specifier.exported?.name ?? specifier.exported?.value;
         const target = local ? available.get(local) : undefined;
-        if (target && exportedName)
+        if (target && exportedName) {
           add({
             name: exportedName,
             source: target.source,
             sourceFile: target.sourceFile,
             sourceName: target.sourceName,
+            async: target.async,
           });
+        }
       }
       continue;
     }
@@ -252,6 +276,7 @@ function collectPublicFunctions(
           source: parsed.source,
           sourceFile: parsed.sourceFile,
           sourceName: parsed.sourceName,
+          async: parsed.async,
         });
       }
     }
@@ -267,6 +292,7 @@ interface FunctionNode {
   readonly generator?: boolean;
   readonly declare?: boolean;
   readonly body?: unknown;
+  readonly async?: boolean;
 }
 
 function parseFunctionNode(file: string, node: FunctionNode): ResolvedFunctionExport {
@@ -276,7 +302,13 @@ function parseFunctionNode(file: string, node: FunctionNode): ResolvedFunctionEx
   if (node.type === "TSDeclareFunction" || node.declare || !node.body) {
     throw new Error(`Declaration-only function export ${name} is not supported in ${file}`);
   }
-  return { name, source: `${file}#${name}`, sourceFile: file, sourceName: name };
+  return {
+    name,
+    source: `${file}#${name}`,
+    sourceFile: file,
+    sourceName: name,
+    async: node.async === true,
+  };
 }
 
 function resolveModuleSpecifier(importer: string, specifier: string): string {

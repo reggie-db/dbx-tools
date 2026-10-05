@@ -7,6 +7,7 @@ import {
 } from "@databricks/zerobus-ingest-sdk";
 import { workspaceClient, cloud } from "@dbx-tools/databricks";
 
+/** Create a Zerobus SDK client for the active Databricks workspace. */
 export async function createSdk(): Promise<ZerobusSdk> {
   const workspaceUrl = await workspaceClient.getWorkspaceUrl();
   if (!workspaceUrl) {
@@ -28,6 +29,7 @@ export async function createSdk(): Promise<ZerobusSdk> {
   return new ZerobusSdk(zerobusEndpoint, workspaceUrl.toString());
 }
 
+/** Create an authenticated Zerobus stream for a Unity Catalog table. */
 export async function createStream(
   sdk: ZerobusSdk,
   table: TableProperties | string,

@@ -29,6 +29,7 @@ export type InitialMessage = StartupMessage | CancelMessage;
 /** Error caused by an invalid or unsupported PostgreSQL startup packet. */
 export class PostgresProtocolError extends Error {}
 
+/** Read and classify the first PostgreSQL frontend message from a socket. */
 export async function readInitialMessage(
   socket: Socket,
   timeoutMs: number,
@@ -56,14 +57,17 @@ export async function readInitialMessage(
   }
 }
 
+/** Build a PostgreSQL SSL negotiation request packet. */
 export function sslRequest(): Buffer {
   return requestPacket(SSL_REQUEST);
 }
 
+/** Build a PostgreSQL cancellation request packet. */
 export function cancelRequest(processId: number, secretKey: number): Buffer {
   return requestPacket(CANCEL_REQUEST, processId, secretKey);
 }
 
+/** Build the backend messages that complete PostgreSQL startup. */
 export function startupComplete(
   parameters: ReadonlyMap<string, string>,
   processId: number,
@@ -80,6 +84,7 @@ export function startupComplete(
   ]);
 }
 
+/** Replace client startup identity with the resolved upstream identity. */
 export function upstreamStartupParameters(
   parameters: Record<string, string>,
   user: string,
@@ -88,6 +93,7 @@ export function upstreamStartupParameters(
   return { ...parameters, user, database };
 }
 
+/** Build a fatal PostgreSQL error response. */
 export function fatalError(message: string, sqlstate = "08001"): Buffer {
   return backendMessage(
     "E",
@@ -118,8 +124,9 @@ async function readPacket(socket: Socket, deadline: number): Promise<Buffer> {
   if (length < 8 || length > 1024 * 1024) {
     throw new PostgresProtocolError("Invalid PostgreSQL startup packet");
   }
-  while (buffer.length < length)
+  while (buffer.length < length) {
     buffer = Buffer.concat([buffer, await readChunk(socket, deadline)]);
+  }
   const remainder = buffer.subarray(length);
   if (remainder.length) socket.unshift(remainder);
   return buffer.subarray(0, length);
@@ -127,8 +134,9 @@ async function readPacket(socket: Socket, deadline: number): Promise<Buffer> {
 
 function readChunk(socket: Socket, deadline: number): Promise<Buffer> {
   const remaining = deadline - Date.now();
-  if (remaining <= 0)
+  if (remaining <= 0) {
     return Promise.reject(new PostgresProtocolError("PostgreSQL startup timed out"));
+  }
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => finish(new PostgresProtocolError("PostgreSQL startup timed out")),

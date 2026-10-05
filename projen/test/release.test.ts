@@ -43,9 +43,14 @@ before(() => {
     },
     releasePythonRoot: "python/packages",
     releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
-    pullRequestTitlePolicy: {
-      types: ["feature", "maintenance"],
-      requireScope: true,
+    githubOptions: {
+      pullRequestLint: true,
+      pullRequestLintOptions: {
+        semanticTitleOptions: {
+          types: ["feature", "maintenance"],
+          requireScope: true,
+        },
+      },
     },
     workflowCacheIgnorePaths: ["custom-site"],
   });
@@ -119,7 +124,7 @@ describe("unified release workflow", () => {
     assert.equal(publish.env?.NPM_CONFIG_PROVENANCE, "true");
     assert.equal(publish.env?.ACCEPT_STAGED, undefined);
     assert.equal(publish.env?.NPM_BOOTSTRAP, undefined);
-    assert.equal(publish.env?.DRY_RUN, "");
+    assert.equal(publish.env?.DRY_RUN, undefined);
     assert.ok(publish.run?.includes("tasks/publish.ts"));
     assert.doesNotMatch(publish.run ?? "", /release-automation|ACCEPT_STAGED/);
   });
@@ -155,37 +160,54 @@ describe("unified release workflow", () => {
     });
     assert.deepEqual(deploy.permissions, { pages: "write", "id-token": "write" });
     assert.equal(step(deploy, "Deploy to GitHub Pages").uses, "actions/deploy-pages@v4");
+
+    const githubRelease = release.jobs["publish-github-release"]!;
+    assert.deepEqual(githubRelease.permissions, { contents: "write" });
+    assert.equal(
+      step(githubRelease, "Create GitHub release").run,
+      'gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||\n' +
+        '  gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes',
+    );
   });
 
   it("contains no cross-workflow handoff", () => {
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
-    for (const file of [
-      "node-release.yml",
-      "python-release.yml",
-      "docs.yml",
-      "pull-request-lint.yml",
-    ]) {
+    for (const file of ["node-release.yml", "python-release.yml", "docs.yml"]) {
       assert.equal(existsSync(join(outdir, ".github", "workflows", file)), false);
     }
+    assert.equal(existsSync(join(outdir, ".github/workflows/pull-request-lint.yml")), true);
   });
 });
 
 describe("release task contracts", () => {
   it("exposes pure bump, version check, and direct tag release tasks", () => {
     const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
-      tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
+      tasks: Record<string, { steps?: Array<{ execArgs?: string[] }> }>;
     };
-    assert.match(tasks.tasks.bump?.steps?.[0]?.exec ?? "", /tasks\/bump\.ts$/);
-    assert.match(tasks.tasks["version:check"]?.steps?.[0]?.exec ?? "", /tasks\/version-check\.ts/);
-    assert.match(
-      tasks.tasks.release?.steps?.[0]?.exec ?? "",
-      /tasks\/release\.ts --prefix v --branch main/,
-    );
+    assert.deepEqual(tasks.tasks.bump?.steps?.[0]?.execArgs, [
+      "bun",
+      "node_modules/@dbx-tools/projen/tasks/bump.ts",
+    ]);
+    assert.deepEqual(tasks.tasks["version:check"]?.steps?.[0]?.execArgs, [
+      "bun",
+      "node_modules/@dbx-tools/projen/tasks/version-check.ts",
+    ]);
+    assert.deepEqual(tasks.tasks.release?.steps?.[0]?.execArgs?.slice(0, 6), [
+      "bun",
+      "node_modules/@dbx-tools/projen/tasks/release.ts",
+      "--prefix",
+      "v",
+      "--branch",
+      "main",
+    ]);
   });
 
   it("compiles before projecting publish configuration into archives", () => {
-    const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
+    const driver = readFileSync(
+      join(import.meta.dirname, "..", "tasks", "lib", "publish.ts"),
+      "utf8",
+    );
     assert.ok(
       driver.indexOf("compiling ${compiled.length}") <
         driver.indexOf("packNpmPackage(dir, packed, path, applyPublishConfig)"),
@@ -200,7 +222,10 @@ describe("release task contracts", () => {
   });
 
   it("publishes reviewed versions without repairing manifests", () => {
-    const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
+    const driver = readFileSync(
+      join(import.meta.dirname, "..", "tasks", "lib", "publish.ts"),
+      "utf8",
+    );
     assert.doesNotMatch(driver, /--stamp-only|pm", "pkg", "set/);
     assert.ok(driver.includes("workspace manifests do not match release ${version}; run projen"));
     assert.doesNotMatch(driver, /bun\.lock|lockfileMatchesManifestVersions/);
@@ -229,28 +254,8 @@ describe("generated workflow safety", () => {
       build.jobs.build?.if,
       "${{ github.event_name != 'pull_request' || github.event.action != 'closed' }}",
     );
-    assert.equal(step(build.jobs.build!, "pr:validate").run, "bunx projen pr:validate");
-    const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
-      tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
-    };
-    assert.deepEqual(
-      tasks.tasks["pr:validate"]?.steps?.map((taskStep) => taskStep.exec),
-      ["bunx projen default", "bun run compile"],
-    );
-
-    assert.equal(build.jobs["pr-title"]?.name, "Validate PR title");
-    assert.equal(
-      build.jobs["pr-title"]?.if,
-      "${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}",
-    );
-    assert.equal(
-      step(build.jobs["pr-title"]!, "Validate semantic title").uses,
-      "amannn/action-semantic-pull-request@v6",
-    );
-    assert.deepEqual(step(build.jobs["pr-title"]!, "Validate semantic title").with, {
-      types: "feature\nmaintenance",
-      requireScope: true,
-    });
+    assert.equal(step(build.jobs.build!, "build").run, "bunx projen build");
+    assert.equal(existsSync(join(outdir, ".github/workflows/pull-request-lint.yml")), true);
   });
 
   it("uses a dependency-only Bun cache key", () => {
@@ -263,19 +268,6 @@ describe("generated workflow safety", () => {
 });
 
 describe("optional Node release stage", () => {
-  it("rejects inherited native release options at runtime", () => {
-    const nativeOptions = {
-      name: "native-release-fixture",
-      outdir: mkdtempSync(join(tmpdir(), "native-release-option-")),
-      release: true,
-    } as unknown as ConstructorParameters<typeof DBXToolsNodeProject>[0];
-    try {
-      assert.throws(() => new DBXToolsNodeProject(nativeOptions), /native Projen release option/);
-    } finally {
-      rmSync(nativeOptions.outdir, { recursive: true, force: true });
-    }
-  });
-
   it("rejects publication configuration when release mode is disabled", () => {
     const disabledOutdir = mkdtempSync(join(tmpdir(), "release-conflict-"));
     try {
@@ -321,11 +313,13 @@ describe("optional Node release stage", () => {
         outdir: disabledOutdir,
         github: true,
         buildWorkflow: true,
-        pullRequestTitlePolicy: false,
+        githubOptions: { pullRequestLint: false },
       });
       project.synth();
-      const workflow = readWorkflow(disabledOutdir, "build");
-      assert.equal(workflow.jobs["pr-title"], undefined);
+      assert.equal(
+        existsSync(join(disabledOutdir, ".github/workflows/pull-request-lint.yml")),
+        false,
+      );
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
     }
@@ -385,11 +379,14 @@ describe("optional Node release stage", () => {
       assert.equal(workflow.jobs["deploy-docs"]?.needs, "build-docs");
       assert.equal("release-please" in workflow.jobs, false);
       assert.equal("release-plan" in workflow.jobs, false);
-      assert.equal("publish-github-release" in workflow.jobs, false);
+      assert.equal("publish-github-release" in workflow.jobs, true);
       const tasks = JSON.parse(readFileSync(join(fixedOutdir, ".projen/tasks.json"), "utf8")) as {
-        tasks: Record<string, { steps?: Array<{ exec?: string }> }>;
+        tasks: Record<string, { steps?: Array<{ execArgs?: string[] }> }>;
       };
-      assert.match(tasks.tasks.release?.steps?.[0]?.exec ?? "", /tasks\/release\.ts/);
+      assert.equal(
+        tasks.tasks.release?.steps?.[0]?.execArgs?.[1],
+        "node_modules/@dbx-tools/projen/tasks/release.ts",
+      );
       const build = readWorkflow(fixedOutdir, "build");
       assert.ok(workflowTrigger(build, "pull_request"));
     } finally {

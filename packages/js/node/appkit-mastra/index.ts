@@ -3,7 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.9.32";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as chat from "./src/chat.ts";
@@ -69,7 +68,6 @@ export { MastraServer } from "./src/server.ts";
 export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";
 export { MASTRA_MODEL_OVERRIDE_KEY } from "./src/serving.ts";
 export type { ModelOverrideRequest } from "./src/serving.ts";
-export type { ServingChatMessage, RewrittenServingRequest } from "./src/serving-sanitize.ts";
 export { ASSISTANT_SHARED_SKILLS_PATH } from "./src/skill-paths.ts";
 export { STATEMENT_ROW_CAP } from "./src/statement.ts";
 export { TYPOGRAPHY_RULE } from "./src/style.ts";

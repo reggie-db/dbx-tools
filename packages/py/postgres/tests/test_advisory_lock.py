@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from typing import Any
 
 import pytest
-from dbx_tools.postgres import (
+from dbx_tools.postgres.advisory_lock import (
     acquire_advisory_lock,
     acquire_advisory_lock_async,
     advisory_lock,

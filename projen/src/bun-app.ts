@@ -14,10 +14,9 @@
  *   JS API, NOT the `bun build` CLI, which does not load it), plus Vite-compatible
  *   staging of an optional `public/` directory.
  *
- * Each file supports an unmanaged OVERRIDE beside it (`bunfig.override.toml`,
- * `bun-dev.override.ts`, `bun-build.override.ts`): the dev/build scripts import
- * the override's default export and merge it over the generated options, so a
- * package tweaks its server/bundle WITHOUT editing the projen-owned file.
+ * The dev and build scripts support unmanaged `bun-dev.override.ts` and
+ * `bun-build.override.ts` modules beside them. Each script imports the override's
+ * default export and merges it over the generated options.
  *
  * bun runs these `.ts` files directly. Being package-ROOT files (not under
  * `src/`), they are outside the package's `tsconfig` include, so their `Bun.*`
@@ -30,8 +29,8 @@ import { type Project, TextFile } from "projen";
 export const BUN_DEV_OVERRIDE = "bun-dev.override.ts";
 /** Unmanaged build override module, merged over the generated options if present. */
 export const BUN_BUILD_OVERRIDE = "bun-build.override.ts";
-/** Unmanaged bunfig override (documented; merging TOML is left to the user). */
-export const BUN_APP_OVERRIDES = ["bunfig.override.toml", BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE];
+/** Unmanaged generated-script overrides excluded from formatting and linting. */
+export const BUN_APP_OVERRIDES = [BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE];
 
 /**
  * Root `bunfig.toml`: pin bun's HOISTED linker workspace-wide.

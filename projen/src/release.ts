@@ -1,22 +1,17 @@
 /** Unified default-branch release workflow generation. */
 import { stringUtils } from "@dbx-tools/shared-core";
-import { Component } from "projen";
+import { Component, github } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
-import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
-import { projectReleaseBranch, type DBXToolsJavaScriptProject } from "./project-js.ts";
-import { applyTasks, taskScript } from "./project.ts";
-import { RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
+import { BUN_VERSION } from "./bun-workflow.ts";
+import { projectReleaseBranch, taskCommand, type DBXToolsJavaScriptProject } from "./project-js.ts";
+import { RELEASE_TAG, RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
 
 const NODE_VERSION = "24";
 const NPM_VERSION = "11.4.2";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
-const nodeReleaseProjects = new WeakSet<DBXToolsJavaScriptProject>();
 const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
 const releaseWorkflows = new WeakMap<DBXToolsJavaScriptProject, GithubWorkflow>();
-
-/** Independently recoverable portions of the release workflow. */
-export type ReleaseStage = "all" | "node" | "python" | "docs";
 
 /** GitHub Pages configuration included in the unified release workflow. */
 export interface ReleaseDocsOptions {
@@ -44,21 +39,9 @@ export interface DBXToolsReleaseOptions {
   readonly validationTasks?: readonly string[];
 }
 
-/** Locate the unified workflow so attached language workspaces can add jobs. */
-export function releaseWorkflow(project: DBXToolsJavaScriptProject): GithubWorkflow {
-  const workflow = releaseWorkflows.get(project);
-  if (!workflow) throw new Error("Release workflow is not configured");
-  return workflow;
-}
-
 /** Locate the unified workflow when release generation is enabled. */
 export function tryReleaseWorkflow(project: DBXToolsJavaScriptProject): GithubWorkflow | undefined {
   return releaseWorkflows.get(project);
-}
-
-/** Whether the unified workflow publishes the normal npm workspace. */
-export function hasNodeRelease(project: DBXToolsJavaScriptProject): boolean {
-  return nodeReleaseProjects.has(project);
 }
 
 /** Tag pattern created by release jobs and accepted by manual recovery. */
@@ -68,29 +51,17 @@ export function releaseTagPattern(project: DBXToolsJavaScriptProject): string {
   return `${prefix}*`;
 }
 
-/** Run a release stage after its prerequisite tag-build jobs succeed. */
-export function releaseStageCondition(
-  _stage: Exclude<ReleaseStage, "all">,
-  prerequisites: readonly string[] = [],
-): string {
+/** Run a release job after all explicit prerequisite results succeed. */
+export function releaseCondition(prerequisites: readonly string[] = []): string {
   if (prerequisites.length === 0) return "${{ success() }}";
   return `\${{ always() && ${prerequisites.map((condition) => `(${condition})`).join(" && ")} }}`;
 }
 
-/** Publish a release stage after its prerequisite tag-build jobs succeed. */
-export function releasePublishCondition(
-  _stage: Exclude<ReleaseStage, "all">,
-  prerequisites: readonly string[] = [],
-): string {
-  if (prerequisites.length === 0) return "${{ success() }}";
-  return `\${{ always() && ${prerequisites.map((condition) => `(${condition})`).join(" && ")} }}`;
-}
-
-/** Shared Bun, Node, cache, and install setup for Node release jobs. */
+/** Native project setup plus npm publication authentication. */
 export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): readonly JobStep[] {
   return [
     ...releaseSourceSteps(),
-    ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
+    ...project.renderWorkflowSetup({ mutable: false }),
     {
       name: "Setup Node.js",
       uses: "actions/setup-node@v6",
@@ -101,18 +72,7 @@ export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): reado
       },
     },
     { name: "Install npm CLI", run: `npm install --global npm@${NPM_VERSION}` },
-    { name: "Install", run: "bun install" },
-    bunCacheSaveStep(),
   ];
-}
-
-/** Token authentication, GitHub provenance, and dry-run values shared by npm publishers. */
-export function npmPublishEnvironment(): Record<string, string> {
-  return {
-    NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-    NPM_CONFIG_PROVENANCE: "true",
-    DRY_RUN: "",
-  };
 }
 
 /** Install uv and restore its download/build cache using Python manifests. */
@@ -138,10 +98,51 @@ function refreshDocsRegistryDependencies(workflow: GithubWorkflow): void {
   }
 }
 
+function refreshGitHubReleaseDependencies(workflow: GithubWorkflow): void {
+  const release = workflow.getJob("publish-github-release") as Job | undefined;
+  if (!release) return;
+  const registryJobs = Object.keys(workflow.jobs).filter(
+    (name) => name === "publish-node" || name.startsWith("publish-pypi-"),
+  );
+  const needs = ["verify-context", ...registryJobs];
+  workflow.updateJob("publish-github-release", {
+    ...release,
+    needs,
+    if: releaseCondition([
+      "needs.verify-context.result == 'success'",
+      ...registryJobs.map((job) => `needs['${job}'].result == 'success'`),
+    ]),
+  });
+}
+
 /** Keep documentation publication behind every configured package registry. */
 export function refreshReleaseDocsDependencies(project: DBXToolsJavaScriptProject): void {
   const workflow = releaseWorkflows.get(project);
-  if (workflow) refreshDocsRegistryDependencies(workflow);
+  if (workflow) {
+    refreshDocsRegistryDependencies(workflow);
+    refreshGitHubReleaseDependencies(workflow);
+  }
+}
+
+function githubReleaseJob(): Job {
+  return {
+    runsOn: ["ubuntu-latest"],
+    permissions: { contents: JobPermission.WRITE },
+    timeoutMinutes: 10,
+    env: {
+      GH_TOKEN: "${{ github.token }}",
+      RELEASE_TAG,
+    },
+    steps: [
+      {
+        name: "Create GitHub release",
+        run: [
+          'gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||',
+          '  gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes',
+        ].join("\n"),
+      },
+    ],
+  };
 }
 
 function verifyContextJob(
@@ -161,17 +162,14 @@ function verifyContextJob(
       release_version: { stepId: "release", outputName: "release_version" },
     },
     steps: [
-      {
+      github.WorkflowSteps.checkout({
         name: "Checkout release source",
-        uses: "actions/checkout@v6",
         with: {
           ref: "${{ github.ref_name }}",
-          "fetch-depth": 0,
+          fetchDepth: 0,
         },
-      },
-      ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
-      { name: "Install release validation dependencies", run: "bun install --frozen-lockfile" },
-      bunCacheSaveStep(),
+      }),
+      ...project.renderWorkflowSetup({ mutable: false }),
       {
         name: "Verify release context",
         id: "release",
@@ -210,7 +208,7 @@ function verifyContextJob(
 
 function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
   return {
-    if: releaseStageCondition("node"),
+    if: releaseCondition(),
     needs: ["verify-context"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
@@ -220,7 +218,11 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
       ...nodeReleaseSetupSteps(project),
       {
         name: "Publish npm workspace",
-        env: { RELEASE_VERSION, ...npmPublishEnvironment() },
+        env: {
+          RELEASE_VERSION,
+          NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+          NPM_CONFIG_PROVENANCE: "true",
+        },
         run: 'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$RELEASE_VERSION" $DRY_RUN',
       },
     ],
@@ -233,7 +235,7 @@ function addDocsJobs(
   options: ReleaseDocsOptions,
 ): void {
   workflow.addJob("build-docs", {
-    if: releaseStageCondition("docs"),
+    if: releaseCondition(),
     needs: ["verify-context"],
     runsOn: ["ubuntu-latest"],
     permissions: {
@@ -249,9 +251,8 @@ function addDocsJobs(
     },
     steps: [
       ...releaseSourceSteps(),
-      ...bunCacheRestoreSteps(project, { ignorePaths: project.workflowCacheIgnorePaths }),
+      ...project.renderWorkflowSetup({ mutable: false }),
       ...options.prepareSteps,
-      bunCacheSaveStep(),
       ...options.buildSteps,
       {
         name: "Upload Pages artifact",
@@ -261,7 +262,7 @@ function addDocsJobs(
     ],
   });
   workflow.addJob("deploy-docs", {
-    if: releasePublishCondition("docs"),
+    if: releaseCondition(),
     needs: ["build-docs"],
     environment: {
       name: "github-pages",
@@ -288,31 +289,30 @@ export class DBXToolsRelease extends Component {
     const tagPrefix = options.tagPrefix ?? "v";
     const releaseBranch = projectReleaseBranch(project);
     releaseTagPrefixes.set(project, tagPrefix);
-    if (options.nodeRelease !== false) nodeReleaseProjects.add(project);
-    applyTasks(project, {
-      bump: {
-        exec: taskScript(project, "bump.ts"),
-        receiveArgs: true,
-        description: "Increment VERSION and synchronize generated workspace versions",
-      },
-      "version:check": {
-        exec: taskScript(project, "version-check.ts"),
-        description: "Verify every package and generated barrel matches VERSION",
-      },
-      ...(project.github
-        ? {
-            release: {
-              exec: taskScript(
-                project,
-                "release.ts",
-                `--prefix ${tagPrefix} --branch ${releaseBranch}`,
-              ),
-              receiveArgs: true,
-              description: "Run bump, commit it, and push an annotated release tag",
-            },
-          }
-        : {}),
+    project.addTask("bump", {
+      execArgs: taskCommand("bump.ts"),
+      receiveArgs: true,
+      description: "Increment VERSION and synchronize generated workspace versions",
     });
+    project.addTask("version:check", {
+      execArgs: taskCommand("version-check.ts"),
+      description: "Verify every package and generated barrel matches VERSION",
+    });
+    if (project.github) {
+      project.addTask("release", {
+        execArgs: taskCommand(
+          "release.ts",
+          "--prefix",
+          tagPrefix,
+          "--branch",
+          releaseBranch,
+          ...(options.pythonRoot ? ["--python-root", options.pythonRoot] : []),
+          ...(options.validationTasks ?? []).flatMap((task) => ["--validate", task]),
+        ),
+        receiveArgs: true,
+        description: "Run bump, commit it, and push an annotated release tag",
+      });
+    }
     if (!project.github) return;
 
     const workflow = new GithubWorkflow(project.github, "release", {
@@ -336,5 +336,7 @@ export class DBXToolsRelease extends Component {
     if (options.docs) {
       addDocsJobs(workflow, project, options.docs);
     }
+    workflow.addJob("publish-github-release", githubReleaseJob());
+    refreshReleaseDocsDependencies(project);
   }
 }

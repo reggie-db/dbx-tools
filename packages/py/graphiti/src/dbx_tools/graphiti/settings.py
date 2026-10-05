@@ -6,26 +6,25 @@ from dataclasses import dataclass
 
 from dbx_tools.core import config
 
-"""Model and proxy settings for the native Graphiti launcher."""
+"""Model and gateway settings for the native Graphiti launcher."""
 
-DEFAULT_MODEL_PROXY_HOST = "127.0.0.1"
-DEFAULT_MODEL_PROXY_PORT = 4000
+DEFAULT_MODEL_GATEWAY_HOST = "127.0.0.1"
+DEFAULT_MODEL_GATEWAY_PORT = 4400
 DEFAULT_MODEL = "databricks-gpt-5-nano"
 DEFAULT_EMBEDDER_MODEL = "databricks-gte-large-en"
 DEFAULT_EMBEDDER_DIMENSIONS = 1024
 DEFAULT_STRUCTURED_OUTPUT_MODE = "json_object"
-_PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
 
 
 @dataclass(frozen=True)
 class ModelSettings:
-    """Resolved Graphiti model settings and model proxy ownership policy."""
+    """Resolved Graphiti model settings and model gateway ownership policy."""
 
     profile: str | None
-    manage_model_proxy: bool
-    model_proxy_host: str
-    model_proxy_port: int
-    model_proxy_command: str | None
+    manage_model_gateway: bool
+    model_gateway_host: str
+    model_gateway_port: int
+    model_gateway_command: str | None
     openai_api_url: str
     openai_api_key: str
     model: str
@@ -41,11 +40,11 @@ class ModelSettings:
         model: str | None = None,
         embedder_model: str | None = None,
         embedder_dimensions: int | None = None,
-        model_proxy_host: str | None = None,
-        model_proxy_port: int | None = None,
-        model_proxy_url: str | None = None,
-        model_proxy_command: str | None = None,
-        manage_model_proxy: bool | None = None,
+        model_gateway_host: str | None = None,
+        model_gateway_port: int | None = None,
+        model_gateway_url: str | None = None,
+        model_gateway_command: str | None = None,
+        manage_model_gateway: bool | None = None,
         environ: Mapping[str, str] | None = None,
     ) -> ModelSettings:
         """Resolve CLI values over environment values and defaults."""
@@ -56,44 +55,45 @@ class ModelSettings:
             "data": env,
         }
         resolved_host = (
-            config.string(model_proxy_host, "MODEL_PROXY_HOST", options) or DEFAULT_MODEL_PROXY_HOST
+            config.string(model_gateway_host, "MODEL_GATEWAY_HOST", options)
+            or DEFAULT_MODEL_GATEWAY_HOST
         )
         resolved_port = config.positive_int(
-            model_proxy_port,
-            "MODEL_PROXY_PORT",
-            DEFAULT_MODEL_PROXY_PORT,
+            model_gateway_port,
+            "MODEL_GATEWAY_PORT",
+            DEFAULT_MODEL_GATEWAY_PORT,
             options,
         )
-        configured_proxy_url = config.string(
-            model_proxy_url,
-            "MODEL_PROXY_URL",
+        configured_gateway_url = config.string(
+            model_gateway_url,
+            "MODEL_GATEWAY_URL",
             options,
         )
         configured_openai_url = config.string(None, "OPENAI_API_URL", options)
         configured_manage = config.boolean(
-            manage_model_proxy,
-            "MANAGE_MODEL_PROXY",
+            manage_model_gateway,
+            "MANAGE_MODEL_GATEWAY",
             options,
         )
         resolved_manage = (
             configured_manage
             if configured_manage is not None
-            else configured_proxy_url is None and configured_openai_url is None
+            else configured_gateway_url is None and configured_openai_url is None
         )
         local_url = f"http://{resolved_host}:{resolved_port}/v1"
         openai_url = (
             local_url
             if resolved_manage
-            else configured_proxy_url or configured_openai_url or local_url
+            else configured_gateway_url or configured_openai_url or local_url
         )
-        proxy_mode = resolved_manage or configured_proxy_url is not None
+        gateway_mode = resolved_manage or configured_gateway_url is not None
         api_key = config.string(None, "OPENAI_API_KEY", options)
         if api_key is None:
-            if proxy_mode:
+            if gateway_mode:
                 api_key = "not-required"
             else:
                 raise ValueError(
-                    "OPENAI_API_KEY is required when the managed model proxy is disabled "
+                    "OPENAI_API_KEY is required when the managed model gateway is disabled "
                     "and OPENAI_API_URL points at an external provider"
                 )
         dimensions = config.positive_int(
@@ -102,15 +102,15 @@ class ModelSettings:
             DEFAULT_EMBEDDER_DIMENSIONS,
             options,
         )
-        resolved_profile = config.string(profile, _PROFILE_ENV, options)
+        resolved_profile = profile.strip() if profile and profile.strip() else None
         return cls(
             profile=resolved_profile,
-            manage_model_proxy=resolved_manage,
-            model_proxy_host=resolved_host,
-            model_proxy_port=resolved_port,
-            model_proxy_command=config.string(
-                model_proxy_command,
-                "MODEL_PROXY_COMMAND",
+            manage_model_gateway=resolved_manage,
+            model_gateway_host=resolved_host,
+            model_gateway_port=resolved_port,
+            model_gateway_command=config.string(
+                model_gateway_command,
+                "MODEL_GATEWAY_COMMAND",
                 options,
             ),
             openai_api_url=openai_url.rstrip("/"),
@@ -128,14 +128,13 @@ class ModelSettings:
 
     @property
     def health_url(self) -> str:
-        """Health endpoint for the configured OpenAI-compatible model proxy."""
+        """Health endpoint for the configured OpenAI-compatible model gateway."""
         base = self.openai_api_url.removesuffix("/v1")
         return f"{base}/api/healthz"
 
     def graphiti_environment(self) -> dict[str, str]:
         """Non-secret settings injected into the upstream Graphiti process."""
         return {
-            **self.databricks_environment(),
             "OPENAI_API_URL": self.openai_api_url,
             "OPENAI_API_KEY": self.openai_api_key,
             "LLM__PROVIDERS__OPENAI__API_URL": self.openai_api_url,
@@ -150,18 +149,12 @@ class ModelSettings:
             "LLM_STRUCTURED_OUTPUT_MODE": self.structured_output_mode,
         }
 
-    def databricks_environment(self) -> dict[str, str]:
-        """Resolved profile environment shared by managed child processes."""
-        if self.profile:
-            return {_PROFILE_ENV: self.profile}
-        return {}
-
     def public_settings(self) -> dict[str, object]:
         """Settings safe to include in status and environment output."""
         return {
             "profile": self.profile,
-            "manage_model_proxy": self.manage_model_proxy,
-            "model_proxy_url": self.openai_api_url,
+            "manage_model_gateway": self.manage_model_gateway,
+            "model_gateway_url": self.openai_api_url,
             "model": self.model,
             "embedder_model": self.embedder_model,
             "embedder_dimensions": self.embedder_dimensions,

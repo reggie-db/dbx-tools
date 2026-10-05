@@ -64,6 +64,7 @@ export interface PasswordlessAuthRuntime {
   close(): Promise<void>;
 }
 
+/** Create the passwordless authentication runtime and its storage lifecycle. */
 export async function createPasswordlessAuth(
   config: PasswordlessAuthOptions,
 ): Promise<PasswordlessAuthRuntime> {

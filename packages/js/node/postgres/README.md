@@ -65,7 +65,8 @@ await withAdvisoryTransactionLock(pool, { schema: "my_feature", version: 1 }, as
 });
 ```
 
-`advisoryLockId(key)` exposes the same reduction on its own. A `bigint` key is
+`identity.advisoryLockId(key)` exposes the same reduction as a JSON-safe decimal
+string. A `bigint` key is
 used directly (narrowed to 64 bits) rather than hashed, so a lock can interoperate
 with another implementation that publishes its numeric lock id — `pgmq`'s
 installer lock, for instance. Anything else is canonicalized with
@@ -282,7 +283,7 @@ order does not matter; a different spelling does. Read `bus.channelName` to see
 what a set of parts resolved to, or to confirm two processes agree. Defaults to a
 shared `dbx_tools_topic_bus` channel.
 
-`topicBus.channelName(parts)` exposes the derivation without constructing a bus,
+`identity.channelName(parts)` exposes the derivation without constructing a bus,
 which is useful for configuration checks and cross-runtime contract tests.
 
 ## Why A Separate Package?
@@ -303,7 +304,8 @@ native surface to prefer here.
 | Module         | Purpose                                                                |
 | -------------- | ---------------------------------------------------------------------- |
 | `advisoryLock` | Stable lock IDs plus session- and transaction-scoped lock helpers.     |
-| `topicBus`     | Topic bus, message contracts, and deterministic `channelName`.         |
+| `identity`     | Cross-runtime advisory-lock and channel identity policy.               |
+| `topicBus`     | Topic bus and message contracts.                                       |
 | `persistence`  | Stored-message schema, grants, TTL cleanup, history, and pointer wire. |
 
 Both modules are also flattened onto the package root, so

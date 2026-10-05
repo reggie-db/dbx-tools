@@ -1,5 +1,5 @@
 import type { GenieWriterEvent } from "@dbx-tools/shared-mastra";
-import type { ReasoningEffort } from "@dbx-tools/shared-model";
+import type { ReasoningEffort, ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { UIMessage } from "ai";
 import type { ReactNode } from "react";
 import type { ExportFormat } from "../support/export.ts";
@@ -45,12 +45,10 @@ export type ToolProgress = GenieWriterEvent;
  * `/models` endpoint derives (Databricks-provided name, else a title-cased
  * rendering of `name`). The picker shows `displayName ?? name`.
  */
-export type ChatModelOption = {
-  readonly name: string;
-  readonly displayName?: string;
-  readonly family?: string;
-  readonly reasoningEfforts?: readonly ReasoningEffort[];
-};
+export type ChatModelOption = Pick<
+  ServingEndpointSummary,
+  "name" | "displayName" | "family" | "reasoningEfforts"
+>;
 
 /**
  * A steer message submitted while a turn was already streaming. It waits in a

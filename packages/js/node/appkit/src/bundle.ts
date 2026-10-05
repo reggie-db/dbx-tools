@@ -7,6 +7,7 @@
  * @module
  */
 
+import { profile as authProfile } from "@dbx-tools/auth";
 import { configUtils } from "@dbx-tools/core";
 
 export type BundleValidateJson = Record<string, unknown>;
@@ -20,13 +21,28 @@ export const flattenAppYamlEnv = configUtils.flattenAppEnv;
 export const flattenAppEnv = configUtils.flattenBundleEnv;
 export const getBundlePath = configUtils.getBundlePath;
 
-export function bundle(cwd?: string): Promise<ConfigFile | undefined> {
-  return Promise.resolve(configUtils.bundleFile(cwd));
+/** Load the active Databricks bundle configuration. */
+export function bundle(cwd?: string, profile?: string): Promise<ConfigFile | undefined> {
+  return Promise.resolve(configUtils.bundleFile(cwd, profile ?? resolvedProfile()));
 }
 
+/** Resolve a layered AppKit configuration value. */
 export function resolveConfigValue(
   name: string,
   options: ResolveConfigValueOptions = {},
 ): Promise<string | undefined> {
-  return Promise.resolve(configUtils.resolveValue(name, options));
+  return Promise.resolve(
+    configUtils.resolveValue(name, {
+      ...options,
+      bundleProfile: options.bundleProfile ?? resolvedProfile(),
+    }),
+  );
+}
+
+function resolvedProfile(): string | undefined {
+  try {
+    return authProfile.resolveProfile().name;
+  } catch {
+    return undefined;
+  }
 }

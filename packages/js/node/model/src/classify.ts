@@ -27,6 +27,8 @@
  */
 
 import {
+  type EndpointCapabilities,
+  type FamilyClass,
   ModelClass as ModelClassValues,
   type ModelClass as ModelClassType,
   type ServingEndpointSummary,
@@ -40,16 +42,6 @@ const CHAT_TASK = "llm/v1/chat";
 
 /** Task hint Databricks stamps on embedding endpoints. */
 const EMBEDDING_TASK = "llm/v1/embeddings";
-
-/** What an endpoint can be asked to do, as derived by {@link endpointCapabilities}. */
-export interface EndpointCapabilities {
-  /** OpenAI chat/completions + Responses: the surface a chat agent needs. */
-  chat: boolean;
-  /** Embedding (vector) endpoint. */
-  embedding: boolean;
-  /** Complete function-tool round-trip (call plus function_call_output replay). */
-  tools: boolean;
-}
 
 /**
  * Provider families verified against Databricks Responses/Open Responses with
@@ -90,14 +82,6 @@ export function endpointCapabilities(endpoint: ServingEndpointSummary): Endpoint
   const chat = !embedding && (endpoint.task === CHAT_TASK || endpoint.class !== undefined);
   const tools = chat && (endpoint.supportsTools ?? supportsToolsByFamily(endpoint.name));
   return { chat, embedding, tools };
-}
-
-/** Family-heuristic classification of a single endpoint name. */
-export interface FamilyClass {
-  /** Chat capability band the family maps to (never embedding). */
-  class: ModelClass;
-  /** Intra-family ordering hint (higher is newer / more capable). */
-  rank: number;
 }
 
 /**

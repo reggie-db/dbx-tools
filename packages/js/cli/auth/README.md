@@ -3,17 +3,16 @@
 Databricks OAuth commands mounted under `dbx auth`.
 
 The package uses [`@dbx-tools/auth`](../../node/auth) for profile resolution,
-CLI-first U2M with browser fallback, M2M client credentials, PAT access, token
-refresh, locking, and credential storage.
+CLI-owned U2M, M2M client credentials, PAT access, token refresh, and locking.
 
 Key features:
 
-- browser login for workspace, account, and unified OAuth targets;
+- Databricks CLI login for workspace, account, and unified OAuth targets;
 - M2M client-credentials tokens with HTTP Basic client authentication;
 - PAT profiles from Databricks configuration or `DATABRICKS_TOKEN`;
 - U2M preference by default, with standard M2M resolution available through
   `--no-prefer-user-to-machine`;
-- Databricks CLI refresh when available, with native file fallback;
+- Databricks CLI token refresh;
 - access-token lookup with automatic login, a non-interactive opt-out, and
   forced refresh;
 - profile and host resolution compatible with Databricks configuration;
@@ -36,7 +35,7 @@ dbx auth logout --profile DEFAULT
 runs login when a U2M credential is missing or cannot refresh; `--no-login`
 makes it fail instead. The same policy applies with `--force-refresh`.
 `profile` writes only the configured or detected profile name. `status` writes
-the resolved profile, host, and storage name. `logout` produces no output when
+the resolved profile and identity. `logout` produces no output when
 it succeeds.
 
 Implicit profile selection uses `__settings__.default_profile`, an existing
@@ -51,33 +50,25 @@ fallback.
 - `--config-file <path>` selects the Databricks configuration file.
 - `--client-id <id>` selects the OAuth client.
 - `--group-id <id>` requests an assumed group role for M2M.
-- `--auth-type databricks-cli|oauth-m2m|pat` selects the auth strategy.
+- `--auth-type <type>` selects a canonical Databricks auth type.
 - `--no-prefer-user-to-machine` keeps an implicitly selected M2M profile.
 - `--scopes <scopes>` accepts a comma-separated value and may be repeated.
 - `--target workspace|account|unified` selects the OAuth target.
-- `--storage auto|memory|file` selects credential storage.
-- `--cache-dir <path>` selects the file-storage directory.
 - `--lock-timeout-ms`, `--login-timeout-ms`, and `--refresh-buffer-ms` control
   auth timing in milliseconds. `--lock-timeout-ms` defaults to `0` (wait
   indefinitely for the refresh lock); browser login defaults to 15 minutes.
 
 The Databricks options also read their standard `DATABRICKS_*` environment
-variables. U2M storage and timeout options read the matching
-`DBX_TOOLS_U2M_*` variables shown by `dbx auth --help`.
+variables. Timeout options read the matching `DBX_TOOLS_U2M_*` variables shown
+by `dbx auth --help`.
 M2M reads `client_id` and `client_secret` from the selected profile or their
 standard Databricks environment variables. The secret is not accepted as a CLI
 argument or included in generated binding records.
 PAT reads `token` from the selected profile or `DATABRICKS_TOKEN`.
 
-For U2M with automatic storage, `@dbx-tools/auth` checks
-`databricks auth --help` once per process outside Databricks Apps. When
-available, token refresh runs through
-`databricks auth token --profile <name>`. Otherwise it uses the native
-file-backed OAuth flow. Automatic storage resolves to memory inside a
-Databricks App. Explicit file storage always uses the native flow. Memory
-storage uses neither the Databricks CLI nor file persistence. M2M always uses
-the native client-credentials flow. Automatic profile selection ignores PAT
-configuration inside a Databricks App; an explicit profile can still use PAT.
+U2M requires an available Databricks CLI and delegates login, token acquisition,
+refresh, and persistent credentials to it. M2M uses direct client credentials.
+PAT and App credentials are resolved directly without persistent auth storage.
 
 ## Package use
 

@@ -29,6 +29,7 @@ import { asyncUtils, errorUtils, hash, json, object, stringUtils } from "@dbx-to
 import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
+import { channelName } from "./identity.ts";
 import {
   cleanupExpired,
   decodePointer,
@@ -52,16 +53,6 @@ type SerializableValue = object.SerializableValue;
 
 /** Channel parts used when a caller names no channel of its own. */
 const DEFAULT_CHANNEL = "dbx_tools_topic_bus";
-/**
- * `NAMEDATALEN - 1`. Postgres TRUNCATES a longer channel name rather than
- * rejecting it, which would split publishers and listeners onto different
- * channels while every call looked like it succeeded.
- */
-const MAX_CHANNEL_LENGTH = 63;
-/** Base-32 chars of the channel's identity suffix. Max 7 - the digest is 32 bits. */
-const CHANNEL_HASH_LENGTH = 6;
-/** Body used when the parts tokenize to nothing, or lead with a digit. */
-const CHANNEL_FALLBACK = "bus";
 /**
  * Encoded-envelope ceiling. PostgreSQL caps a `NOTIFY` payload at 8000 bytes and
  * fails the statement past that, so the bus rejects the message first with a size
@@ -275,60 +266,6 @@ async function senderMetadata(): Promise<TopicMetadata> {
   } catch {
     return {};
   }
-}
-
-/**
- * Derive a legal Postgres channel name from whatever a caller used to identify
- * the channel.
- *
- * Callers think in terms of what the channel IS - an app name, a tenant id, a
- * `[env, feature]` pair, a config object - and none of those are identifiers.
- * Rejecting them pushed the sanitizing onto every call site, which is how two
- * services end up disagreeing about whether the channel is `my-app`, `my_app`,
- * or `myApp` and silently never hear each other.
- *
- * The parts are tokenized and joined into an identifier, then a short hash of the
- * ORIGINAL parts is appended. The hash is what makes the mapping trustworthy:
- * tokenizing alone is lossy, so `my-app` and `my_app` and `myApp` would collapse
- * onto one channel, and a name long enough to hit `NAMEDATALEN` would collide
- * with anything sharing its leading tokens. With the suffix, the readable part
- * stays readable and distinct inputs stay distinct.
- *
- * Deterministic across processes and runs, which is the whole point - two
- * services given the same parts must land on the same channel without
- * coordinating. Hash inputs are structure-aware, so `["a", "b"]` and `["a_b"]`
- * differ, and object key order does not.
- */
-export function channelName(value: unknown): string {
-  const parts = object.toOneOrMany(value);
-  // Hash the CANONICAL form, the same rule `advisoryLockId` uses, so structure and
-  // types decide identity: `["a","b"]` differs from `["ab"]`, `1` from `"1"`, and
-  // object key order does not matter. Hashing the raw parts would instead lean on
-  // the hash module's canonicalizer, which folds every `Date` onto one token.
-  const suffix = hash.fnvHashWithOptions(
-    { length: CHANNEL_HASH_LENGTH },
-    parts.map((part) => object.toStableKey(part)).join("\u0000"),
-  );
-  // Only parts that stringify to something a reader recognizes contribute to the
-  // readable half. An object would tokenize from `String(value)` as
-  // `object_object`, which is noise - it still shapes the hash, so identity is
-  // unaffected.
-  const labelled = parts.filter((part) => {
-    const type = typeof part;
-    return type === "string" || type === "number" || type === "boolean" || type === "bigint";
-  });
-  // Truncate rather than cap through the tokenizer: `trim` would DROP a single
-  // token longer than the budget, turning one long name into the bare fallback and
-  // making every long name look alike. The hash still separates them, but the
-  // channel is unreadable in a log.
-  const body = stringUtils
-    .toIdentifierWithOptions({ delimiter: "_" }, ...labelled)
-    .slice(0, MAX_CHANNEL_LENGTH - suffix.length - 1)
-    .replace(/_+$/, "");
-  // An identifier cannot start with a digit and the hash alphabet is
-  // digit-leading, so a numeric or empty body needs a letter in front.
-  const prefix = /^[A-Za-z_]/.test(body) ? body : `${CHANNEL_FALLBACK}_${body}`;
-  return `${prefix}_${suffix}`.replace(/_+/g, "_");
 }
 
 /** Quote a validated channel for `LISTEN`/`UNLISTEN`, which take no parameters. */

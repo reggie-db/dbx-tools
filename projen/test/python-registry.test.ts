@@ -6,11 +6,10 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import {
   configuredPublishUrl,
   devpiRegistry,
-  parseUvDefaultIndex,
   parseUvIndexes,
   parseUvPublishUrls,
   resolveLocalPypi,
-} from "../tasks/python-registry.ts";
+} from "../tasks/lib/python-registry.ts";
 
 describe("local Python registry detection", () => {
   // devpiRegistry() consults the global uv config for an explicit publish-url,
@@ -32,20 +31,6 @@ describe("local Python registry detection", () => {
     if (savedPublish === undefined) delete process.env.UV_PUBLISH_URL;
     else process.env.UV_PUBLISH_URL = savedPublish;
   });
-  it("reads uv's default index", () => {
-    assert.equal(
-      parseUvDefaultIndex(`
-[[index]]
-url = "https://example.invalid/simple/"
-
-[[index]]
-url = "http://localhost:3141/reggie/dev/+simple/"
-default = true
-`),
-      "http://localhost:3141/reggie/dev/+simple/",
-    );
-  });
-
   it("reads every uv index, default first then extras in file order", () => {
     assert.deepEqual(
       parseUvIndexes(`

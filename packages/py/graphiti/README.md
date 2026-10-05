@@ -1,7 +1,7 @@
 # `dbx-tools-graphiti`
 
 Native launcher for [Graphiti](https://github.com/getzep/graphiti) with local
-Neo4j and `dbx-model-proxy` processes configured for Databricks Model Serving. It runs
+Neo4j and `dbx-model-gateway` processes configured for Databricks Model Serving. It runs
 directly on the host without Docker, Podman, or another container runtime.
 
 Install from PyPI:
@@ -20,9 +20,9 @@ uv add "dbx-tools-graphiti @ git+https://github.com/reggie-db/dbx-tools.git@main
 
 - launches upstream Graphiti's HTTP MCP server at `http://127.0.0.1:8000/mcp/`;
 - runs Neo4j Community 5.26 as a native background process;
-- starts `dbx-model-proxy` with an optional profile override, resolved local
+- starts `dbx-model-gateway` with an optional profile override, resolved local
   Databricks authentication, or ambient Databricks App authentication;
-- supervises Graphiti and the managed model proxy with Honcho so they share one
+- supervises Graphiti and the managed model gateway with Honcho so they share one
   lifecycle, receive SIGTERM as process groups, and receive SIGKILL after
   Honcho's bounded shutdown grace if needed;
 - journals attempted graph mutations to Postgres and reconstructs an
@@ -39,23 +39,22 @@ uv add "dbx-tools-graphiti @ git+https://github.com/reggie-db/dbx-tools.git@main
 
 Outside a Databricks App, configure a working Databricks CLI profile. A
 Databricks App uses its ambient service-principal authentication. The launcher
-installs mise when needed, handles Java, the model proxy, Graphiti, and Neo4j, and
+installs mise when needed, handles Java, the model gateway, Graphiti, and Neo4j, and
 installs `uv` only when it is not already available:
 
 ```bash
 uv run dbx-graphiti start
 ```
 
-The launcher passes `--profile` or `DATABRICKS_CONFIG_PROFILE` through when
-set. Otherwise `dbx-model-proxy` delegates profile and ambient App
-authentication to its native Databricks client.
+The launcher passes an explicit `--profile` to managed children. Without that
+flag, dbx-tools auth owns default profile and ambient App authentication.
 
 The first run downloads about 120 MB of Neo4j plus the pinned Graphiti release,
 creates Graphiti's `uv` environment, generates a local Neo4j password, starts
-the model proxy and Neo4j, and then runs Graphiti in the foreground. Later runs reuse
+the model gateway and Neo4j, and then runs Graphiti in the foreground. Later runs reuse
 the installed assets.
 
-Honcho stops the sibling process when Graphiti or the managed model proxy exits. On
+Honcho stops the sibling process when Graphiti or the managed model gateway exits. On
 Ctrl-C or SIGTERM it forwards SIGTERM to each child process group, waits up to
 five seconds, then sends SIGKILL to any remaining group. The launcher stops
 Neo4j after Honcho finishes.
@@ -70,12 +69,12 @@ uv run dbx-graphiti down
 
 ## Commands
 
-- `start` starts Neo4j, then runs Graphiti and the managed model proxy under Honcho in
+- `start` starts Neo4j, then runs Graphiti and the managed model gateway under Honcho in
   the foreground. Missing prerequisites are installed on demand. This is the
   default.
 - `up` starts all three services in the background.
 - `down` signals the Honcho supervisor, which stops Graphiti and the managed
-  model proxy before the launcher stops Neo4j.
+  model gateway before the launcher stops Neo4j.
 - `status` prints process state, model selection, and the MCP URL as JSON.
 - `env` prints resolved database, proxy, and model settings as JSON. Its output
   includes the Neo4j password and must be treated as secret.
@@ -100,14 +99,14 @@ namespaced append-only JSONB journal and accepts the async SQLAlchemy engine
 created by `dbx-tools-postgres`:
 
 ```python
-from databricks.sdk import WorkspaceClient
 from dbx_tools.graphiti.persistence import (
     DelegatingGraphDriver,
     PostgresWriteStorage,
 )
-from dbx_tools.postgres import create_async_engine
+from dbx_tools.postgres.engine import create_async_engine, create_workspace_client
 
-engine = create_async_engine(WorkspaceClient(), pool_pre_ping=True)
+workspace = await create_workspace_client()
+engine = create_async_engine(workspace, pool_pre_ping=True)
 storage = PostgresWriteStorage(engine, namespace="memory-service")
 driver = DelegatingGraphDriver(graph_driver, storage)
 ```
@@ -179,7 +178,7 @@ The package deliberately keeps orchestration separate from Graphiti itself:
    for `dbx_tools.postgres`, so a looser upstream `requires-python` must
    not select a different interpreter.
 7. A generated Neo4j password is stored with mode `0600`.
-8. The Python LiteLLM model proxy starts against the selected Databricks profile,
+8. The TypeScript AppKit model gateway starts against the selected Databricks profile,
    and Graphiti receives its OpenAI-compatible URL and model settings through
    environment variables and CLI flags.
 
@@ -200,21 +199,20 @@ temporary YAML file for the lifetime of the upstream process because upstream
 requires the argument. Model and server settings resolve from CLI option,
 environment variable, then package default:
 
-- `--profile` / `DATABRICKS_CONFIG_PROFILE`: an optional Databricks profile
-  override for the managed model proxy. When both are absent, dbx-tools auth resolves
-  the active Databricks identity.
+- `--profile`: an optional explicit Databricks profile override. When absent,
+  dbx-tools auth resolves the active Databricks identity.
 - `--model` / `MODEL_NAME`: defaults to
   `databricks-gpt-5-nano`.
 - `--embedder-model` / `EMBEDDER_MODEL`: defaults to
   `databricks-gte-large-en`.
 - `--embedder-dimensions` / `EMBEDDER_DIMENSIONS`: defaults to `1024`.
-- `--model-proxy-host` / `MODEL_PROXY_HOST`: defaults to `127.0.0.1`.
-- `--model-proxy-port` / `MODEL_PROXY_PORT`: defaults to `4000`.
-- `--model-proxy-url` / `MODEL_PROXY_URL`: selects an external OpenAI-compatible
+- `--model-gateway-host` / `MODEL_GATEWAY_HOST`: defaults to `127.0.0.1`.
+- `--model-gateway-port` / `MODEL_GATEWAY_PORT`: defaults to `4400`.
+- `--model-gateway-url` / `MODEL_GATEWAY_URL`: selects an external OpenAI-compatible
   endpoint.
-- `--manage-model-proxy`, `--no-manage-model-proxy` / `MANAGE_MODEL_PROXY`: explicitly
-  controls whether the launcher owns the proxy.
-- `MODEL_PROXY_COMMAND`: executable and arguments used for managed mode.
+- `--manage-model-gateway`, `--no-manage-model-gateway` / `MANAGE_MODEL_GATEWAY`: explicitly
+  controls whether the launcher owns the gateway.
+- `MODEL_GATEWAY_COMMAND`: executable and arguments used for managed mode.
 - `LLM_STRUCTURED_OUTPUT_MODE`: defaults to `json_object`.
 - `GRAPHITI_GROUP_ID`: defaults upstream to `main`.
 - `GRAPHITI_HOST` and `GRAPHITI_PORT`: environment-only listener settings.
@@ -231,14 +229,14 @@ To use a separately managed OpenAI-compatible proxy:
 
 ```bash
 uv run dbx-graphiti start \
-  --model-proxy-url https://models.example/v1 \
-  --no-manage-model-proxy
+  --model-gateway-url https://models.example/v1 \
+  --no-manage-model-gateway
 ```
 
-Setting `MODEL_PROXY_URL` also selects external mode automatically. A direct
+Setting `MODEL_GATEWAY_URL` also selects external mode automatically. A direct
 `OPENAI_API_URL` selects external OpenAI-compatible mode and requires
-`OPENAI_API_KEY`. `--manage-model-proxy` overrides either environment choice when
-the launcher should still own the local proxy.
+`OPENAI_API_KEY`. `--manage-model-gateway` overrides either environment choice when
+the launcher should still own the local gateway.
 
 Explicit `NEO4J_*` values override generated defaults, which lets the Graphiti
 process use an existing Neo4j server. The launcher still manages its local
@@ -255,7 +253,7 @@ for its complete API.
 ## Modules
 
 - `cli`: Cyclopts commands and CLI-over-environment option binding;
-- `settings`: model, embedding, profile, and model-proxy resolution;
+- `settings`: model, embedding, profile, and model-gateway resolution;
 - `runtime`: on-demand provisioning and Honcho lifecycle;
 - `server`: upstream MCP entry point, temporary config, and persistence wiring;
 - `proxy`: loopback Caddy process used by the AppKit plugin;

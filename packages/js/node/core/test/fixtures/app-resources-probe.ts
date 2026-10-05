@@ -5,7 +5,11 @@ if (!projectBoundary) throw new Error("project boundary is required");
 
 const maximum = limit ? Number.parseInt(limit, 10) : undefined;
 const resources: Record<string, unknown>[] = [];
-for await (const { bundleFailure, ...resource } of bundle.appResources(projectBoundary, cwd)) {
+for await (const { bundleFailure, ...resource } of bundle.appResources(
+  projectBoundary,
+  cwd,
+  process.env.PROBE_BUNDLE_PROFILE,
+)) {
   resources.push({
     ...resource,
     ...((bundleFailure && { bundleFailure: bundleFailure.message }) ?? {}),

@@ -174,7 +174,7 @@ interface ParsedSpawnArgs<T extends SpawnOptions> {
 
 function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpawnArgs<T> {
   let [value, ...values] = input;
-  const [command, ...commandArgs] = shlex(value);
+  const [command, ...commandArgs] = shlex(value!);
 
   const last = values.at(-1);
   const options =
@@ -186,7 +186,7 @@ function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpaw
       : argumentValues;
 
   return {
-    command,
+    command: command!,
     commandArgs: [...commandArgs, ...valueArgs],
     options: options as T,
   };

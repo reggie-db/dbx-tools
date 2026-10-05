@@ -193,6 +193,7 @@ export async function probePortrPublicUrl(publicUrl: string): Promise<boolean> {
   return true;
 }
 
+/** Supervise the Portr client for a resolved tunnel configuration. */
 export function supervisePortr(
   config: PortrConfig,
   childEnv: NodeJS.ProcessEnv,

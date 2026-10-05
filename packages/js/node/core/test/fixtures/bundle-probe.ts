@@ -11,15 +11,20 @@ import { bundleFile, text } from "../../src/config-utils.ts";
 
 const root = process.argv[2]!;
 const keys = process.argv.slice(3);
+const profile = process.env.PROBE_BUNDLE_PROFILE;
 const originalCwd = process.cwd();
 process.chdir(root);
 try {
   process.stdout.write(
     `${JSON.stringify({
-      file: bundleFile(null) !== undefined,
+      file: bundleFile(null, profile) !== undefined,
       values: keys.map(
         (key, index) =>
-          text(key, { cwd: index % 2 === 0 ? "" : process.cwd(), scope: [] as const }) ?? null,
+          text(key, {
+            cwd: index % 2 === 0 ? "" : process.cwd(),
+            scope: [] as const,
+            bundleProfile: profile,
+          }) ?? null,
       ),
     })}\n`,
   );

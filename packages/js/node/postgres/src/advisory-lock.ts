@@ -8,11 +8,9 @@
  * @module
  */
 
-import { createHash } from "node:crypto";
-import { object } from "@dbx-tools/shared-core";
 import type { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 
-const SIGNED_BIGINT_BITS = 64;
+import { advisoryLockId } from "./identity.ts";
 
 /**
  * What names a lock. Anything reducible to a stable identity: a string, an id, a
@@ -37,27 +35,6 @@ export interface PgQueryable {
 }
 
 type UnlockRow = QueryResultRow & { unlocked: boolean };
-
-/**
- * Convert an arbitrary structured key into PostgreSQL's signed 64-bit advisory
- * lock namespace. A bigint is preserved directly so callers can interoperate
- * with another implementation that publishes its lock ID.
- *
- * Everything else is canonicalized with `object.toStableKey` and hashed, so key
- * order in an object does not matter while a `1` and a `"1"` stay different locks.
- * A cycle, a non-finite number, or a function/symbol key throws `TypeError`
- * rather than yielding an identity two callers could disagree about.
- */
-export function advisoryLockId(key: AdvisoryLockKey): bigint {
-  if (typeof key === "bigint") return BigInt.asIntN(SIGNED_BIGINT_BITS, key);
-  const parts = object.toOneOrMany(key);
-  const digest = createHash("sha256");
-  parts.forEach((part, index) => {
-    if (index > 0) digest.update(Buffer.from([0]));
-    digest.update(object.toStableKey(part), "utf8");
-  });
-  return digest.digest().readBigInt64BE(0);
-}
 
 async function acquire(client: PgQueryable, id: bigint, transaction: boolean): Promise<void> {
   const fn = transaction ? "pg_advisory_xact_lock" : "pg_advisory_lock";
@@ -85,7 +62,7 @@ export async function withAdvisoryLock<T>(
   key: AdvisoryLockKey,
   fn: (client: PoolClient) => Promise<T> | T,
 ): Promise<T> {
-  const id = advisoryLockId(key);
+  const id = BigInt(advisoryLockId(key));
   const client = await pool.connect();
   let acquired = false;
   let failed = false;
@@ -127,7 +104,7 @@ export async function withAdvisoryTransactionLock<T>(
   key: AdvisoryLockKey,
   fn: (client: PoolClient) => Promise<T> | T,
 ): Promise<T> {
-  const id = advisoryLockId(key);
+  const id = BigInt(advisoryLockId(key));
   const client = await pool.connect();
   let releaseError: Error | undefined;
   try {

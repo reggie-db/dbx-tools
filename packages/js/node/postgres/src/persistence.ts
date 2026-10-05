@@ -122,6 +122,8 @@ function after(value: string | undefined, scope: TopicPersistenceScope): string 
   }
   return decoded[1];
 }
+
+/** Convert a persistence TTL to milliseconds, preserving disabled retention. */
 export function ttlMilliseconds(value: DurationInput | false): number | null {
   if (value === false) return null;
   const milliseconds = object.toDuration(value);
@@ -131,6 +133,7 @@ export function ttlMilliseconds(value: DurationInput | false): number | null {
   return milliseconds;
 }
 
+/** Delete one bounded batch of expired persisted topic messages. */
 export async function cleanupExpired(
   queryable: PgQueryable,
   options: ResolvedTopicBusPersistenceOptions,
@@ -149,6 +152,8 @@ type HistoryRow = QueryResultRow & {
   expires_at: Date | string | null;
   envelope: TopicMessage;
 };
+
+/** Read a cursor-paginated page of persisted topic history. */
 export async function history<TBody extends object.SerializableValue>(
   queryable: PgQueryable,
   channel: string,
@@ -174,6 +179,7 @@ export async function history<TBody extends object.SerializableValue>(
   };
 }
 
+/** Persist a topic message and notify listeners in one transaction. */
 export async function persistedNotify(
   client: PgQueryable,
   channel: string,

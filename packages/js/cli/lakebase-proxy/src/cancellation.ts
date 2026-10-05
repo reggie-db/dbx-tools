@@ -44,6 +44,7 @@ export class CancellationRegistry {
   }
 }
 
+/** Forward a PostgreSQL cancellation request over a verified TLS connection. */
 export async function forwardCancellation(target: CancellationTarget): Promise<void> {
   const socket = createConnection({ host: target.host, port: target.port });
   await event(socket, "connect");

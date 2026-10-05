@@ -132,9 +132,9 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
 
   addForwardedCommand(
     program,
-    "model-proxy",
-    "Run or manage the Python Databricks model proxy",
-    async () => (await import("@dbx-tools/cli-model-proxy/cli")).buildProgram,
+    "model-gateway",
+    "Run the foreground AppKit Databricks model gateway",
+    async () => (await import("@dbx-tools/cli-model-gateway/cli")).buildProgram,
   );
 
   return program;

@@ -21,11 +21,11 @@ _APP = App(
 
 @dataclass
 class ModelOptions:
-    """Model, profile, and managed model proxy settings shared by commands."""
+    """Model, profile, and managed model gateway settings shared by commands."""
 
     profile: Annotated[
         str | None,
-        Parameter(name="--profile", env_var="DATABRICKS_CONFIG_PROFILE"),
+        Parameter(name="--profile"),
     ] = None
     model: Annotated[str | None, Parameter(name="--model", env_var="MODEL_NAME")] = None
     embedder_model: Annotated[
@@ -36,28 +36,28 @@ class ModelOptions:
         int | None,
         Parameter(name="--embedder-dimensions", env_var="EMBEDDER_DIMENSIONS"),
     ] = None
-    model_proxy_url: Annotated[
+    model_gateway_url: Annotated[
         str | None,
-        Parameter(name="--model-proxy-url", env_var="MODEL_PROXY_URL"),
+        Parameter(name="--model-gateway-url", env_var="MODEL_GATEWAY_URL"),
     ] = None
-    model_proxy_host: Annotated[
+    model_gateway_host: Annotated[
         str | None,
-        Parameter(name="--model-proxy-host", env_var="MODEL_PROXY_HOST"),
+        Parameter(name="--model-gateway-host", env_var="MODEL_GATEWAY_HOST"),
     ] = None
-    model_proxy_port: Annotated[
+    model_gateway_port: Annotated[
         int | None,
-        Parameter(name="--model-proxy-port", env_var="MODEL_PROXY_PORT"),
+        Parameter(name="--model-gateway-port", env_var="MODEL_GATEWAY_PORT"),
     ] = None
-    model_proxy_command: Annotated[
+    model_gateway_command: Annotated[
         str | None,
-        Parameter(name="--model-proxy-command", env_var="MODEL_PROXY_COMMAND"),
+        Parameter(name="--model-gateway-command", env_var="MODEL_GATEWAY_COMMAND"),
     ] = None
-    manage_model_proxy: Annotated[
+    manage_model_gateway: Annotated[
         bool | None,
         Parameter(
-            name="--manage-model-proxy",
-            env_var="MANAGE_MODEL_PROXY",
-            negative="--no-manage-model-proxy",
+            name="--manage-model-gateway",
+            env_var="MANAGE_MODEL_GATEWAY",
+            negative="--no-manage-model-gateway",
         ),
     ] = None
 
@@ -68,18 +68,18 @@ class ModelOptions:
             model=self.model,
             embedder_model=self.embedder_model,
             embedder_dimensions=self.embedder_dimensions,
-            model_proxy_url=self.model_proxy_url,
-            model_proxy_host=self.model_proxy_host,
-            model_proxy_port=self.model_proxy_port,
-            model_proxy_command=self.model_proxy_command,
-            manage_model_proxy=self.manage_model_proxy,
+            model_gateway_url=self.model_gateway_url,
+            model_gateway_host=self.model_gateway_host,
+            model_gateway_port=self.model_gateway_port,
+            model_gateway_command=self.model_gateway_command,
+            manage_model_gateway=self.manage_model_gateway,
         )
 
 
 @_APP.command
 @dataclass
 class Start(ModelOptions):
-    """Start Neo4j, the model proxy, and Graphiti."""
+    """Start Neo4j, the model gateway, and Graphiti."""
 
     graphiti_args: list[str] = field(default_factory=list, init=False)
 
@@ -90,7 +90,7 @@ class Start(ModelOptions):
 @_APP.command
 @dataclass
 class Up(ModelOptions):
-    """Start Neo4j, the model proxy, and Graphiti in the background."""
+    """Start Neo4j, the model gateway, and Graphiti in the background."""
 
     graphiti_args: list[str] = field(default_factory=list, init=False)
 
@@ -107,7 +107,7 @@ class Up(ModelOptions):
 @_APP.command
 @dataclass
 class Down:
-    """Stop Graphiti, the model proxy, and Neo4j."""
+    """Stop Graphiti, the model gateway, and Neo4j."""
 
     def __call__(self) -> None:
         Runtime().stop()

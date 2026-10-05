@@ -51,6 +51,7 @@ interface BunSqliteModule {
 
 const MIGRATION_LOCK = ["auth", "better-auth", "migrations"] as const;
 
+/** Resolve explicit or environment-driven authentication storage settings. */
 export function resolveAuthStorageConfig(
   config: AuthStorageConfig = {},
 ): ResolvedAuthStorageConfig {
@@ -65,6 +66,7 @@ export function resolveAuthStorageConfig(
   };
 }
 
+/** Return whether the resolved authentication storage uses Lakebase. */
 export function shouldUseLakebase(config: AuthStorageConfig = {}): boolean {
   const resolved = resolveAuthStorageConfig(config);
   if (resolved.mode === "lakebase") return true;
@@ -72,6 +74,7 @@ export function shouldUseLakebase(config: AuthStorageConfig = {}): boolean {
   return Boolean(process.env.LAKEBASE_ENDPOINT ?? process.env.PGHOST);
 }
 
+/** Create the configured Better Auth storage backend. */
 export async function createAuthStorage(
   config: AuthStorageConfig,
   pool?: PgPoolLike,
@@ -118,6 +121,7 @@ export async function createAuthStorage(
   }
 }
 
+/** Apply Better Auth migrations to persistent authentication storage. */
 export async function migrateAuth(options: BetterAuthOptions, storage: AuthStorage): Promise<void> {
   // The in-memory adapter builds its schema in memory on init — there is no
   // database to migrate.

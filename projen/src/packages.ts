@@ -29,6 +29,7 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
 import { json, object, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
+import { isGenerated } from "./generated.ts";
 
 /** Resolve the nearest package/projenrc root at call time. */
 export function resolveRepoRoot(cwd: string = process.cwd()): string {
@@ -86,24 +87,9 @@ function nestingTagsFromSegments(segments: readonly string[]): string[] {
 /** Matches a barrel `index.<ext>` (as a basename or a posix path tail). */
 const BARREL_RE = /(^|\/)index\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
-/** Basenames this toolchain generates (projen manifests/tsconfigs + bun app scaffolding). */
-const GENERATED_BASENAMES = new Set([
-  "package.json",
-  "tsconfig.json",
-  "tsconfig.dev.json",
-  "bunfig.toml",
-  "dev.ts",
-  "build.ts",
-]);
-
-/**
- * True if the file matches the watcher's generated-file heuristic: projen manifest
- * basenames, package-root barrels (`index.ts`), bun app scaffolding, or declaration
- * files. Other read-only toolchain output (e.g. openapi artifacts) is not covered here.
- */
+/** True when a durable generated-file marker identifies the file's owner. */
 export function isGeneratedFile(file: string): boolean {
-  const base = file.split(sep).pop() ?? "";
-  return GENERATED_BASENAMES.has(base) || BARREL_RE.test(base) || base.endsWith(".d.ts");
+  return isGenerated(file);
 }
 
 /** A re-exportable source module: ts/tsx/js/jsx/mjs/cjs, not a barrel/test/decl. */
@@ -289,19 +275,6 @@ function readManifestTags(dir: string): string[] | undefined {
 export function syncResynthPaths(projectRoot: string = resolveRepoRoot()): string[] {
   const paths = readDbxToolsConfig(projectRoot)?.syncResynthPaths;
   return Array.isArray(paths) ? stringUtils.parseList(paths.map((p) => String(p))) : [];
-}
-
-/** Python projects with Node bindings registered for the root sync watcher. */
-export function pythonNodeBindingProjects(projectRoot: string = resolveRepoRoot()): string[] {
-  const configured = readDbxToolsConfig(projectRoot)?.pythonNodeBindings;
-  if (!Array.isArray(configured)) return [];
-  return [
-    ...new Set(
-      configured.flatMap((value) =>
-        typeof value === "string" && value.trim() ? [value.trim()] : [],
-      ),
-    ),
-  ].sort();
 }
 
 /**

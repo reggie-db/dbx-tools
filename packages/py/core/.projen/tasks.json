@@ -90,32 +90,6 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
-    "publish": {
-      "name": "publish",
-      "description": "Uploads the package to PyPI.",
-      "steps": [
-        {
-          "execArgs": [
-            "uv",
-            "publish"
-          ]
-        }
-      ]
-    },
-    "publish:test": {
-      "name": "publish:test",
-      "description": "Uploads the package against a test PyPI endpoint.",
-      "steps": [
-        {
-          "execArgs": [
-            "uv",
-            "publish",
-            "--index",
-            "testpypi"
-          ]
-        }
-      ]
-    },
     "test": {
       "name": "test",
       "description": "Run tests"

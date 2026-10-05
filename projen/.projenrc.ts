@@ -13,7 +13,7 @@
  * declared `workspace:^` and bun links them from local source.
  */
 import { fileURLToPath } from "node:url";
-import { javascript, typescript } from "projen";
+import { DependencyType, javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
 import { PROJEN_VERSION } from "./src/projen-version.ts";
 import { readWorkspaceVersion } from "./src/workspace-version.ts";
@@ -76,11 +76,13 @@ const project = new typescript.TypeScriptProject({
     "concurrently@^10.0.3",
     "constructs@^10.6.0",
     "is-identifier@^1",
+    "node-stdlib-browser@^1.3.1",
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
     "semver@^7.7.3",
     "smol-toml@1.8.0",
     "ts-to-zod@^5.1.0",
+    "typescript@^5.9.3",
     "yaml@^2.9.0",
   ],
   peerDeps: [`projen@${PROJEN_VERSION}`],
@@ -98,6 +100,22 @@ const project = new typescript.TypeScriptProject({
     "tsoa@^6.6.0",
   ],
 });
+new javascript.TypescriptConfig(project, {
+  fileName: "shims/python-node/tsconfig.json",
+  compilerOptions: {
+    target: "ES2022",
+    module: "ESNext",
+    moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
+    lib: ["ES2022", "DOM"],
+    types: ["node"],
+    noEmit: true,
+    skipLibCheck: true,
+    strict: false,
+  },
+  include: ["*.ts"],
+});
+project.deps.removeDependency("constructs", DependencyType.BUILD);
+project.deps.removeDependency("typescript", DependencyType.BUILD);
 
 // Preserve the version read from the shared workspace VERSION. The TypeScriptProject
 // constructor's `version` option is ignored when `release: false`, so write the
@@ -116,6 +134,7 @@ project.package.addField("main", "index.ts");
 project.package.addField("types", "index.ts");
 project.package.addField("exports", {
   ".": "./index.ts",
+  "./release-packaging": "./tasks/lib/publish-npm.ts",
   "./package.json": "./package.json",
 });
 
@@ -132,9 +151,11 @@ project.package.addField("files", ["index.ts", "src", "tasks"]);
 // Keep `.projenrc.ts`/`projenrc/` out of the published tarball.
 project.npmignore?.exclude(".projenrc.ts", "projenrc/");
 
-// Run `.projenrc.ts` through bun (bun runs `.ts` directly). `nodejs()` runner
-// declares no ts-node/tsx dep; the exec is reset to a plain `bun` below.
-new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.nodejs() });
+const projenrc = new typescript.ProjenrcTs(project, {
+  runner: typescript.TypeScriptRunner.nodejs(),
+});
+if (project.tsconfig) projenrc.tsconfig.addExtends(project.tsconfig);
+projenrc.tsconfig.removeInclude("**/*.ts");
 project.defaultTask?.reset("bun .projenrc.ts");
 project.addTask("test:external-consumer", {
   description: "Pack the engine and validate an isolated consumer lifecycle",

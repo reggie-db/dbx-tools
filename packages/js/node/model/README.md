@@ -76,8 +76,8 @@ const response = await fetch(route.url, {
 });
 ```
 
-`createModelClient()` is the portable auth-backed facade embedded by the Python
-model proxy. It lists and normalizes endpoints, caches one
+`createModelClient()` is the portable auth-backed facade used by Node clients.
+It lists and normalizes endpoints, caches one
 catalogue per host, workspace ID, and principal, refreshes once after an
 unmatched fuzzy request, resolves routes, returns complete authentication
 headers, exposes profiles, and returns the package's generated metadata. Its
@@ -240,7 +240,7 @@ const status = metadata.modelStatusFor("system.ai.gemini-2-5-pro");
 ```
 
 The package ships committed snapshots generated from Databricks documentation
-by `bun run model:metadata`. Runtime calls normalize endpoint, display,
+by `bun run --filter '@dbx-tools/model' metadata`. Runtime calls normalize endpoint, display,
 foundation-model, and provider identities into memoized sets and maps; they do
 not fetch documentation. `modelMetadataFor()` returns status, capabilities, and
 published limits together for a string or `ServingEndpointSummary`.

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://databricks.github.io/appkit/schemas/plugin-manifest.schema.json",
+  "name": "modelGateway",
+  "displayName": "Model Gateway",
+  "description": "OpenAI, Anthropic, Codex, and AI Gateway compatibility backed by Databricks",
+  "author": "dbx-tools",
+  "license": "Apache-2.0",
+  "stability": "beta",
+  "resources": {
+    "required": [],
+    "optional": []
+  }
+}

@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
-from dbx_tools.postgres import PostgresTopicBus, TopicPublishInput
+from dbx_tools.postgres.topic_bus import PostgresTopicBus, TopicPublishInput
 
 
 class FakeSqlConnection:

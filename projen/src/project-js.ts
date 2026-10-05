@@ -12,24 +12,17 @@ import * as projectUtils from "@dbx-tools/core/project-utils";
 import { ignore, match } from "@dbx-tools/path";
 import { object, stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
-import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
-import { BuildWorkflow } from "projen/lib/build";
-import { AutoMerge } from "projen/lib/github";
+import { Component, IgnoreFile, Project, javascript, typescript } from "projen";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import type { ReleaseProjectOptions } from "projen/lib/release";
-import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
-import {
-  BUN_APP_OVERRIDES,
-  BunBuildFile,
-  BunDevServerFile,
-  BunfigFile,
-  RootBunfigFile,
-} from "./bun-app.ts";
+
+import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
 import { resolvePkgRoot } from "./engine-root.ts";
+import * as mixin from "./mixin.ts";
 import {
   DEFAULT_PACKAGE_ROOTS,
   type DiscoveredPackage,
@@ -42,17 +35,12 @@ import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-wo
 import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
 import { PROJEN_VERSION } from "./projen-version.ts";
 import { applyCompiledPublish } from "./publish.ts";
-import {
-  DBXToolsReleaseCatalog,
-  type ExternalReleaseProjectRegistration,
-  type ReleaseDependencyInput,
-  type ReleaseUnitRule,
-} from "./release-catalog.ts";
+import { generatePythonNodeBindings } from "./python-node-bindings.ts";
 import { DBXToolsRelease, type ReleaseDocsOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
-import { DBXToolsVsCode } from "./vscode.ts";
-import { syncWorkspaceManifestVersion } from "./workspace-version.ts";
+import { configureVsCode } from "./vscode.ts";
+import { readWorkspaceVersion, syncWorkspaceManifestVersion } from "./workspace-version.ts";
 
 /**
  * The dbx-tools project surface, backed by projen's Node toolchain. A single
@@ -73,12 +61,8 @@ export interface DBXToolsJavaScriptProject extends DBXToolsProject, javascript.N
   pnpmWorkspace?: PnpmWorkspaceState;
   /** Root projenrc tsconfigs - only a tree ROOT has one. */
   rootTsconfig?: DBXToolsRootTsconfig;
-  /** Root `.vscode/*` - only a tree ROOT has one. */
-  vsCode?: DBXToolsVsCode;
   /** Repository outputs excluded from generated workflow dependency-cache hashing. */
   readonly workflowCacheIgnorePaths: readonly string[];
-  /** Cross-language release-unit ownership and version lookup. */
-  readonly releaseCatalog: DBXToolsReleaseCatalog;
 }
 
 /** Parsed npm package identifier: optional scope plus the unscoped package name. */
@@ -140,7 +124,8 @@ export class PackageIdentifier {
 
 /** Parsed `package.json` `name` for a projen `NodeProject`. */
 export function identifier(project: Project): PackageIdentifier {
-  return PackageIdentifier.parse(project.name) ?? new PackageIdentifier(undefined, project.name);
+  const name = javascript.NodePackage.of(project)?.packageName ?? project.name;
+  return PackageIdentifier.parse(name) ?? new PackageIdentifier(undefined, name);
 }
 
 /** Root-only `package.json` fields. */
@@ -149,25 +134,19 @@ function configureRootPackage(project: javascript.NodeProject): void {
   project.package.addField("private", true);
 }
 
-/**
- * Stamp `repository` on a package's manifest so npm provenance can validate the
- * published source (without it, publish fails with E422). A child also carries the
- * monorepo `directory` subpath (its path relative to the root); the root omits it.
- * No-op when no git remote is detected and no `repository` override was supplied.
- * The URL is auto-detected + cached by {@link projectUtils.repositoryUrl} (gh, then
- * a normalized git remote), in npm's `git+https://.../repo.git` form.
- */
-function applyRepository(project: javascript.NodeProject, override?: string): void {
-  const workspaceRoot = resolve(project.root.outdir);
-  const url =
-    override && override.length ? override : projectUtils.repositoryUrl(workspaceRoot, "npm");
-  if (!url) return;
-  const directory = toPosix(relative(workspaceRoot, resolve(project.outdir)));
-  project.package.addField("repository", {
-    type: "git",
-    url,
-    ...(directory ? { directory } : {}),
-  });
+function repositoryOptions(
+  options: DBXToolsJavaScriptProjectOptions,
+): Pick<javascript.NodeProjectOptions, "repository" | "repositoryDirectory"> {
+  const workspaceRoot = resolve(options.parent?.root.outdir ?? options.outdir ?? process.cwd());
+  const repository = options.repository ?? projectUtils.repositoryUrl(workspaceRoot, "npm");
+  const projectRoot = options.parent
+    ? resolve(options.parent.outdir, options.outdir ?? ".")
+    : resolve(options.outdir ?? process.cwd());
+  const directory = options.parent ? toPosix(relative(workspaceRoot, projectRoot)) : undefined;
+  return {
+    ...(repository ? { repository } : {}),
+    ...(directory ? { repositoryDirectory: directory } : {}),
+  };
 }
 
 /** Inherit a parent's package manager, else bun. */
@@ -200,16 +179,6 @@ export function applyCompilerOptions(
 export function applyIncludes(pkg: javascript.NodeProject, ...includes: string[]): void {
   if (!(pkg instanceof typescript.TypeScriptProject)) return;
   for (const include of includes) pkg.tsconfig?.addInclude(include);
-}
-
-/** Apply a tag's `tasks` through projen's task system. */
-export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, TaskOptions>): void {
-  if (!tasks) return;
-  for (const [name, options] of Object.entries(tasks)) {
-    const owned = name === "build" ? pkg.compileTask : pkg.tasks.tryFind(name);
-    if (owned) owned.reset(options.exec, options);
-    else pkg.addTask(name, options);
-  }
 }
 
 /**
@@ -313,8 +282,9 @@ export function addPackageFiles(pkg: javascript.NodeProject, ...entries: string[
 }
 
 /**
- * The `./<name>` -> `./src/<name>.ts` subpath map for a package's top-level `src`
- * modules, skipping `_`-prefixed private modules and declaration files.
+ * The automatic subpath map for a package's public top-level TypeScript and CSS
+ * files plus directory entrypoints, skipping `_`-prefixed private modules and
+ * declaration files.
  *
  * This widens no API surface: the root `index.ts` barrel already re-exports every
  * non-`_` module, so those names are public through `.` either way - the subpaths
@@ -326,9 +296,23 @@ export function srcModuleExports(pkg: javascript.NodeProject): Record<string, st
   if (!existsSync(srcDir)) return {};
 
   const exports: Record<string, string> = {};
-  for (const file of readdirSync(srcDir).sort()) {
-    if (file.startsWith("_") || !file.endsWith(".ts") || file.endsWith(".d.ts")) continue;
-    exports[`./${file.slice(0, -".ts".length)}`] = `./src/${file}`;
+  for (const entry of readdirSync(srcDir, { withFileTypes: true }).sort((left, right) =>
+    left.name.localeCompare(right.name),
+  )) {
+    if (entry.name.startsWith("_")) continue;
+    if (entry.isFile() && /\.(?:ts|tsx)$/.test(entry.name) && !entry.name.endsWith(".d.ts")) {
+      exports[`./${entry.name.replace(/\.tsx?$/, "")}`] = `./src/${entry.name}`;
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(".css")) {
+      exports[`./${entry.name}`] = `./src/${entry.name}`;
+      continue;
+    }
+    if (!entry.isDirectory()) continue;
+    const index = ["index.ts", "index.tsx"].find((file) =>
+      existsSync(join(srcDir, entry.name, file)),
+    );
+    if (index) exports[`./${entry.name}`] = `./src/${entry.name}/${index}`;
   }
   return exports;
 }
@@ -405,6 +389,7 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // phase installs with pnpm - so a deployed app keeps its catalog + build
     // allowances even though the local/CI manager is bun.
     packageManager: javascript.NodePackageManager.BUN,
+    bunVersion: BUN_VERSION,
     // Pinned rather than left to projen's "latest": this is the co-tested release
     // whose `NodePackage` renders bun's `trustedDependencies` natively. Under bun,
     // projen does NOT create the `pnpm-workspace.yaml` component itself (that call
@@ -412,7 +397,6 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     // PnpmWorkspaceState}). Floating would let an install cross that boundary
     // silently, so the co-tested version is stated here and bumped deliberately.
     projenVersion: PROJEN_VERSION,
-    defaultReleaseBranch: "main",
     projenrcJs: false,
     // Every CHILD is a publishable package, so it needs
     // `publishConfig.access: public` - projen renders that from `npmAccess`
@@ -437,8 +421,6 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     jest: false,
     github: false,
     npmignoreEnabled: false,
-    license: DBX_TOOLS_LICENSE,
-    licensed: true,
     entrypoint: "",
     depsUpgrade: false,
     // Bins are declared explicitly via `p.package.addBin(...)`. projen's default
@@ -448,7 +430,6 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
     autoDetectBin: false,
     peerDependencyOptions: { pinnedDevDependency: false },
     addPackageManagerToDevEngines: false,
-    devDeps: ["@types/node@^24.6.0"],
     ...(isRoot
       ? {
           prettier: true,
@@ -461,13 +442,14 @@ function defaultProjectOptions(options: DBXToolsJavaScriptProjectOptions) {
           },
         }
       : {}),
+    ...repositoryOptions(options),
     ...options,
-    buildWorkflow: false,
-    release: false,
-    githubOptions: {
-      ...options.githubOptions,
-      pullRequestLint: false,
+    buildWorkflowOptions: {
+      mutableBuild: false,
+      permissions: { contents: JobPermission.READ },
+      ...options.buildWorkflowOptions,
     },
+    release: false,
     ...copiedGitIgnoreOptions(options),
   };
 }
@@ -502,11 +484,14 @@ function defaultTypeScriptProjectOptions(options: DBXToolsTypeScriptProjectOptio
   return {
     ...base,
     sampleCode: false,
-    entrypoint: undefined,
+    entrypoint: "index.ts",
+    entrypointTypes: "index.ts",
+    typescriptVersion: options.typescriptVersion ?? "^5.9.3",
+    projenrcTs: false,
     // ESLint is configured once on the ROOT (see initProject) and lints the whole
     // tree, so packages don't emit their own config. A caller can still override.
     eslint: false,
-    devDeps: [...(base.devDeps ?? []), "typescript@^5.9.3", `@types/bun@${BUN_VERSION}`],
+    devDeps: [...(base.devDeps ?? [])],
     ...options,
     ...copiedGitIgnoreOptions(options),
   };
@@ -514,37 +499,12 @@ function defaultTypeScriptProjectOptions(options: DBXToolsTypeScriptProjectOptio
 
 // Pinned to match the subproject defaults so bun resolves one TypeScript and
 // one runtime-compatible set of Bun globals across the workspace.
-const DEV_DEPS_ROOT: string[] = ["typescript@^5.9.3", `@types/bun@${BUN_VERSION}`];
-const NATIVE_RELEASE_OPTIONS = [
-  "jsiiReleaseVersion",
-  "majorVersion",
-  "minMajorVersion",
-  "npmDistTag",
-  "prerelease",
-  "publishDryRun",
-  "publishTasks",
-  "releasableCommits",
-  "release",
-  "releaseBranches",
-  "releaseEnvironment",
-  "releaseEveryCommit",
-  "releaseFailureIssue",
-  "releaseFailureIssueLabel",
-  "releaseToNpm",
-  "releaseTrigger",
-  "releaseWorkflowName",
-  "releaseWorkflowSetupSteps",
-  "versionrcOptions",
-] as const;
-
+const DEV_DEPS_ROOT: string[] = [
+  "typescript@^5.9.3",
+  `@types/bun@${BUN_VERSION}`,
+  "@types/node@^24.6.0",
+];
 function validateReleaseOptions(options: DBXToolsJavaScriptProjectOptions): void {
-  for (const key of NATIVE_RELEASE_OPTIONS) {
-    if ((options as Record<string, unknown>)[key] !== undefined) {
-      throw new Error(
-        `${key} is a native Projen release option; use dbx-tools release options instead`,
-      );
-    }
-  }
   if (
     options.releaseMode === "disabled" &&
     (options.releaseDocs !== undefined || options.nodeRelease !== undefined)
@@ -555,14 +515,6 @@ function validateReleaseOptions(options: DBXToolsJavaScriptProjectOptions): void
 
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export type DBXToolsReleaseMode = "dbx-tools" | "disabled";
-
-/** Optional semantic pull request title policy for the generated build workflow. */
-export interface PullRequestTitlePolicyOptions {
-  /** Allowed semantic title types. */
-  readonly types: readonly string[];
-  /** Require a semantic title scope. Defaults to `false`. */
-  readonly requireScope?: boolean;
-}
 
 type SupportedWorkflowOptions = Pick<
   ReleaseProjectOptions,
@@ -587,12 +539,6 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      */
     readonly packageRoots?: readonly string[];
     /**
-     * Descriptions for published packages, keyed by repository-relative package
-     * directory. When configured, synthesis rejects every public JavaScript
-     * package whose final manifest has no non-empty description.
-     */
-    readonly packageDescriptions?: Readonly<Record<string, string>>;
-    /**
      * Leading path segment(s) dropped from a discovered package's relative path
      * before its npm name is derived, so a tier folder doesn't become a name
      * prefix. E.g. with the default `"node"`, `packages/node/path` names as
@@ -602,6 +548,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
      * disable. Defaults to `"node"`.
      */
     readonly omitRelativePrefix?: OneOrMany<string>;
+    /** Resolve a discovered package name before its project is constructed. */
+    readonly resolvePackageName?: (pkg: DiscoveredPackage, defaultPackageName: string) => string;
     /**
      * Maps a path token / relPath / glob to tag(s), unioned into a package's
      * path-derived tags. Defaults to an identity map over the known tag names; a
@@ -629,14 +577,8 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly nodeRelease?: boolean;
     /** Unified dbx-tools release workflow, or no release surface. Defaults to `dbx-tools`. */
     readonly releaseMode?: DBXToolsReleaseMode;
-    /** Explicit stable release-unit grouping rules. */
-    readonly releaseUnits?: readonly ReleaseUnitRule[];
-    /** Publishable workspace members synthesized outside the attached project tree. */
-    readonly externalReleaseProjects?: readonly ExternalReleaseProjectRegistration[];
     /** Prefix for generated release tags. Defaults to `v`. */
     readonly releaseTagPrefix?: string;
-    /** Semantic PR title validation policy. Omitted or `false` disables title validation. */
-    readonly pullRequestTitlePolicy?: false | PullRequestTitlePolicyOptions;
     /** Repository output paths excluded from generated workflow dependency-cache hashing. */
     readonly workflowCacheIgnorePaths?: readonly string[];
     /**
@@ -663,10 +605,17 @@ export type DBXToolsTypeScriptProjectOptions = Partial<
     keyof ReleaseProjectOptions | "release" | "releaseToNpm"
   >
 > &
-  DBXToolsJavaScriptProjectOptions & {
-    /** Emit the projen-owned bun app scaffolding (`bunfig.toml`/`dev.ts`/`build.ts`). */
-    readonly bunApp?: boolean;
-  };
+  DBXToolsJavaScriptProjectOptions;
+
+const initializingWorkflowCachePaths = new Map<string, readonly string[]>();
+
+function configuredOutdir(
+  options: Pick<DBXToolsJavaScriptProjectOptions, "parent" | "outdir">,
+): string {
+  return options.parent
+    ? resolve(options.parent.outdir, options.outdir ?? ".")
+    : resolve(options.outdir ?? process.cwd());
+}
 
 /**
  * A monorepo root. Scans `packageRoots` and appends a
@@ -682,11 +631,9 @@ export class DBXToolsNodeProject
   readonly dbxToolsConfig: DBXToolsConfig;
   pnpmWorkspace?: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
-  vsCode?: DBXToolsVsCode;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
   readonly workflowCacheIgnorePaths: readonly string[];
-  readonly releaseCatalog: DBXToolsReleaseCatalog;
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
@@ -699,6 +646,8 @@ export class DBXToolsNodeProject
     // into `package.json` (`workspaces`/`catalog`) for bun to read. The
     // `pnpm-workspace.yaml` is still emitted for the Databricks Apps pnpm install.
     const pnpmWorkspace = new PnpmWorkspaceState(options);
+    const outdir = configuredOutdir(options);
+    initializingWorkflowCachePaths.set(outdir, options.workflowCacheIgnorePaths ?? []);
     super({
       ...defaultProjectOptions(options),
       pnpmOptions: {
@@ -713,19 +662,14 @@ export class DBXToolsNodeProject
     // component, but the file is still required by the Databricks Apps platform
     // (its build phase installs with pnpm and reads catalog + `allowBuilds`).
     pnpmWorkspace.attachWorkspaceFile(this);
-    this.releaseCatalog = new DBXToolsReleaseCatalog(this, {
-      units: options.releaseUnits,
-      externalProjects: options.externalReleaseProjects,
-    });
-    registerJavaScriptReleaseProject(this);
-    this.package.addField("version", () => this.releaseCatalog.versionFor(this));
+    this.package.addVersion(readWorkspaceVersion(this.outdir));
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
     this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
+    initializingWorkflowCachePaths.delete(outdir);
     this.rootInstallOnly = options.rootInstallOnly !== false;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
-    configureBuildWorkflow(this, options);
     initProject(this, options);
   }
 
@@ -734,9 +678,16 @@ export class DBXToolsNodeProject
     if (this.parent) return steps;
     return steps.flatMap((step) => {
       if (step.uses?.startsWith("oven-sh/setup-bun@")) {
-        return [...bunCacheRestoreSteps(this, { ignorePaths: this.workflowCacheIgnorePaths })];
+        return [
+          ...bunCacheRestoreSteps(this, {
+            ignorePaths:
+              this.workflowCacheIgnorePaths ??
+              initializingWorkflowCachePaths.get(resolve(this.outdir)) ??
+              [],
+          }),
+        ];
       }
-      if (step.run === "bun install") {
+      if (step.run?.startsWith("bun install")) {
         return [
           step,
           bunCacheSaveStep({
@@ -799,11 +750,9 @@ export class DBXToolsTypeScriptProject
   readonly dbxToolsConfig: DBXToolsConfig;
   pnpmWorkspace?: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
-  vsCode?: DBXToolsVsCode;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
   readonly workflowCacheIgnorePaths: readonly string[];
-  readonly releaseCatalog: DBXToolsReleaseCatalog;
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
@@ -846,14 +795,6 @@ export class DBXToolsTypeScriptProject
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
     this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
     this.rootInstallOnly = options.rootInstallOnly !== false;
-    this.releaseCatalog =
-      parent &&
-      (parent instanceof DBXToolsNodeProject || parent instanceof DBXToolsTypeScriptProject)
-        ? parent.releaseCatalog
-        : new DBXToolsReleaseCatalog(this, {
-            units: options.releaseUnits,
-            externalProjects: options.externalReleaseProjects,
-          });
     // Pairs with `jsx` in SHARED_COMPILER_OPTIONS: projen's default `include` is
     // `src/**/*.ts` only, which silently omits a `.tsx` file from the program
     // instead of failing, so authoring a React component would otherwise need
@@ -863,25 +804,18 @@ export class DBXToolsTypeScriptProject
     // Source-first entry: point the package at its package-ROOT `index.ts` barrel
     // so packages resolve each other's `@scope/pkg` imports to source.
     this.package.addField("type", "module");
-    this.package.addField("main", "index.ts");
-    this.package.addField("types", "index.ts");
     this.package.addField("exports", {
       ".": "./index.ts",
+      ...srcModuleExports(this),
       "./package.json": "./package.json",
     });
-    this.package.addField("version", () => this.releaseCatalog.versionFor(this));
-    registerJavaScriptReleaseProject(this);
+    this.package.addVersion(readWorkspaceVersion(this.root.outdir));
     addPackageFiles(this, "index.ts", "src");
+    if (existsSync(join(this.outdir, "exports.ts"))) addPackageFiles(this, "exports.ts");
     // `bun test` intercepts `node:test` (the suites keep using node:test) and
     // runs it with bun's own fast runner. The native no-tests option is portable
     // across Windows and Unix and lets packages without tests remain a no-op.
     this.testTask.exec("bun test test --pass-with-no-tests");
-    if (options.bunApp ?? false) {
-      new BunfigFile(this);
-      new BunDevServerFile(this);
-      new BunBuildFile(this);
-    }
-    configureBuildWorkflow(this, options);
     initProject(this, options);
   }
 
@@ -891,88 +825,6 @@ export class DBXToolsTypeScriptProject
     resolveRootWorkspace(this, this.extraWorkspaceMembers);
     preSynthesizeProject(this);
   }
-}
-
-function registerJavaScriptReleaseProject(project: DBXToolsJavaScriptProject): void {
-  const projectPath = toPosix(relative(project.root.outdir, project.outdir));
-  project.releaseCatalog.registerProject(project, {
-    language: "javascript",
-    identity: () => String(project.package.manifest.name ?? project.name),
-    publish: () => project.package.manifest.private !== true,
-    sourcePaths: ["src", "bin", "tasks"].map((path) =>
-      projectPath ? `${projectPath}/${path}` : path,
-    ),
-    dependencies: () =>
-      project.deps.all.map<ReleaseDependencyInput>((dependency) => ({
-        target: dependency.name,
-        kind:
-          dependency.type === "devenv" || dependency.type === "override"
-            ? "development"
-            : dependency.type,
-        ...(dependency.version ? { requirement: dependency.version } : {}),
-      })),
-  });
-}
-
-function configureBuildWorkflow(
-  project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
-  options: DBXToolsJavaScriptProjectOptions,
-): void {
-  if (project.parent || !options.buildWorkflow || !project.github) return;
-  const validation = project.addTask("pr:validate", {
-    description: "Validate generated files and TypeScript packages",
-  });
-  validation.exec("bunx projen default");
-  validation.exec("bun run compile");
-  const configured = { ...options.buildWorkflowOptions };
-  const compatibility = nodeWorkflowCompatibility(project);
-  const configuredRunner = configured.runsOn !== undefined || configured.runsOnGroup !== undefined;
-  const workflow = new BuildWorkflow(project, {
-    buildTask: validation,
-    artifactsDirectory: project.artifactsDirectory,
-    containerImage: options.workflowContainerImage,
-    gitIdentity: options.workflowGitIdentity,
-    permissions: { idToken: compatibility.determineIdTokenPermissions(options) },
-    ...configured,
-    preBuildSteps: [
-      ...project.renderWorkflowSetup({
-        installStepConfiguration: {
-          workingDirectory: compatibility.determineInstallWorkingDirectory(),
-        },
-        mutable: configured.mutableInstall ?? configured.mutableBuild ?? true,
-      }),
-      ...(configured.preBuildSteps ?? []),
-    ],
-    postBuildSteps: [...(options.postBuildSteps ?? [])],
-    runsOn: configuredRunner ? configured.runsOn : options.workflowRunsOn,
-    runsOnGroup: configuredRunner ? configured.runsOnGroup : options.workflowRunsOnGroup,
-  });
-  workflow.addPostBuildSteps(...compatibility.renderUploadCoverageJobStep(options));
-  compatibility.buildWorkflow = workflow;
-
-  if ((options.autoMerge ?? true) && project.github.mergify) {
-    const autoMerge = new AutoMerge(project.github, options.autoMergeOptions);
-    autoMerge.addConditionsLater({
-      render: () => workflow.buildJobIds.map((id) => `status-success=${id}`),
-    });
-    compatibility.autoMerge = autoMerge;
-  }
-}
-
-interface NodeWorkflowCompatibility {
-  autoMerge?: AutoMerge;
-  buildWorkflow?: BuildWorkflow;
-  determineIdTokenPermissions(options: DBXToolsJavaScriptProjectOptions): JobPermission | undefined;
-  determineInstallWorkingDirectory(): string | undefined;
-  renderUploadCoverageJobStep(options: DBXToolsJavaScriptProjectOptions): JobStep[];
-}
-
-/**
- * Access the narrow NodeProject workflow hooks that have no public equivalent.
- * BuildWorkflow itself is created exclusively through its public constructor.
- */
-function nodeWorkflowCompatibility(project: javascript.NodeProject): NodeWorkflowCompatibility {
-  return project as unknown as NodeWorkflowCompatibility;
 }
 
 function prepareRootSynthesis(
@@ -987,22 +839,17 @@ function resolveRootWorkspace(
   extraWorkspaceMembers: readonly string[],
 ): void {
   if (project.parent) return;
+  const version = readWorkspaceVersion(project.outdir);
   for (const member of extraWorkspaceMembers) {
-    syncWorkspaceManifestVersion(
-      join(project.outdir, member, "package.json"),
-      project.releaseCatalog.versionForPath(member),
-    );
+    syncWorkspaceManifestVersion(join(project.outdir, member, "package.json"), version);
   }
   project.pnpmWorkspace?.resolveMembers(project, extraWorkspaceMembers);
 }
 
 /**
- * Regenerates the repo's generated source after synth: first the codegen
- * modules (ts-to-zod schemas from each `codegen`-declaring package's upstream
- * `.d.ts`), then every package's root `index.ts` barrel - so a freshly
- * generated module is namespaced into its barrel in the same pass. This is the
- * "generate on resynth" path for plain `projen`; codegen inputs (SDK `.d.ts`)
- * change rarely, so a synth-time regen is enough and there's no separate watch.
+ * Regenerates the repo's generated source after synth: codegen modules, Python
+ * Node bindings, then package barrels. Python binding generation owns cleanup,
+ * so removing a configured package or module cannot leave stale files behind.
  *
  * projen only runs `postSynthesize` when `PROJEN_DISABLE_POST` is unset, so this
  * is skipped during the watcher's fast `runSynth` (which sets it); there barrels
@@ -1010,10 +857,36 @@ function resolveRootWorkspace(
  * install, so codegen's `node_modules/...` inputs resolve.
  */
 class GeneratedSource extends Component {
+  public override preSynthesize(): void {
+    const root = resolve(this.project.outdir);
+    for (const subproject of this.project.subprojects) {
+      if (!(subproject instanceof javascript.NodeProject)) continue;
+      const codegen = subproject.package.manifest.codegen as { inputs?: string[] } | undefined;
+      const packagePath = toPosix(relative(root, subproject.outdir));
+      const modules = codegenModulePaths(codegen?.inputs ?? []);
+      for (const module of modules) {
+        this.project.annotateGenerated(`/${packagePath}/${module}`);
+      }
+      if (modules.length === 0) continue;
+      const current = (subproject.package.manifest.exports ?? {}) as Record<string, unknown>;
+      const sourceExports = Object.fromEntries(
+        modules.map((module) => [`./${module.slice("src/".length, -".ts".length)}`, `./${module}`]),
+      );
+      subproject.package.addField("exports", {
+        ...Object.fromEntries(
+          Object.entries(current).filter(([subpath]) => subpath !== "./package.json"),
+        ),
+        ...sourceExports,
+        ...(current["./package.json"] ? { "./package.json": current["./package.json"] } : {}),
+      });
+    }
+  }
+
   public override postSynthesize(): void {
     const projectRoot = this.project.outdir;
     const includeRoot = this.project instanceof DBXToolsTypeScriptProject;
     generateCodegen(projectRoot, { includeRoot });
+    generatePythonNodeBindings(projectRoot);
     generateBarrels({ projectRoot, includeRoot });
   }
 }
@@ -1042,7 +915,7 @@ class WorkspaceValidationTasks extends Component {
     if (project.subprojects.length === 0 && project.extraWorkspaceMembers.length === 0) {
       return;
     }
-    project.compileTask.exec(taskScript(project, "compile-workspace.ts"));
+    project.compileTask.execArgs(taskCommand("compile-workspace.ts"));
     project.testTask.exec("bun run --filter '*' test");
   }
 }
@@ -1055,35 +928,7 @@ class WorkspaceValidationTasks extends Component {
  * off) do not gain new files.
  */
 class WorkflowDefaults extends Component {
-  constructor(
-    project: javascript.NodeProject,
-    private readonly pullRequestTitlePolicy: false | PullRequestTitlePolicyOptions | undefined,
-  ) {
-    super(project);
-  }
-
   public override preSynthesize(): void {
-    const project = this.project as javascript.NodeProject;
-    const workflow = project.buildWorkflow?.workflow;
-    if (workflow && this.pullRequestTitlePolicy) {
-      workflow.addJob("pr-title", {
-        name: "Validate PR title",
-        runsOn: ["ubuntu-latest"],
-        permissions: { pullRequests: JobPermission.READ },
-        if: "${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}",
-        steps: [
-          {
-            name: "Validate semantic title",
-            uses: "amannn/action-semantic-pull-request@v6",
-            env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" },
-            with: {
-              types: this.pullRequestTitlePolicy.types.join("\n"),
-              requireScope: this.pullRequestTitlePolicy.requireScope ?? false,
-            },
-          },
-        ],
-      });
-    }
     const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
     build?.addOverride("on.pull_request.types", ["opened", "synchronize", "reopened", "closed"]);
     build?.addOverride(
@@ -1261,70 +1106,19 @@ function resolveTags(p: DiscoveredPackage, tagPaths: Record<string, string[]>): 
 
 /** Register the native projen tasks on the monorepo root. */
 function registerRootTasks(project: javascript.NodeProject): void {
-  applyTasks(project, {
-    barrels: { exec: taskScript(project, "barrels.ts") },
-    openapi: { exec: taskScript(project, "openapi.ts") },
-    clean: { exec: taskScript(project, "clean.ts"), receiveArgs: true },
-    // `receiveArgs` forwards `--watch`, so `bun run sync -- --watch` syncs once
-    // then starts the single node-path watcher loop.
-    sync: { exec: taskScript(project, "sync.ts"), receiveArgs: true },
+  project.addTask("barrels", { execArgs: taskCommand("barrels.ts") });
+  project.addTask("openapi", { execArgs: taskCommand("openapi.ts") });
+  project.addTask("clean", { execArgs: taskCommand("clean.ts"), receiveArgs: true });
+  project.addTask("sync", {
+    execArgs: taskCommand("sync.ts"),
+    receiveArgs: true,
   });
 }
 
-function descendantJavaScriptProjects(
-  parent: Project,
-): Array<DBXToolsNodeProject | DBXToolsTypeScriptProject> {
-  return parent.subprojects.flatMap((subproject) => [
-    ...(subproject instanceof DBXToolsNodeProject || subproject instanceof DBXToolsTypeScriptProject
-      ? [subproject]
-      : []),
-    ...descendantJavaScriptProjects(subproject),
-  ]);
-}
-
-class PublishedPackageDescriptionValidation extends Component {
-  constructor(
-    project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
-    private readonly configuredDescriptions: Readonly<Record<string, string>>,
-  ) {
-    super(project);
-  }
-
-  public override preSynthesize(): void {
-    const root = this.project as DBXToolsNodeProject | DBXToolsTypeScriptProject;
-    const packages = new Map(
-      descendantJavaScriptProjects(root).map((pkg) => [
-        toPosix(relative(root.outdir, pkg.outdir)),
-        pkg,
-      ]),
-    );
-    for (const packagePath of Object.keys(this.configuredDescriptions)) {
-      if (!packages.has(packagePath)) {
-        throw new Error(`Package description targets unknown package ${packagePath}`);
-      }
-    }
-    for (const [packagePath, pkg] of packages) {
-      if (pkg.package.manifest.private === true) continue;
-      const description = pkg.package.manifest.description;
-      if (typeof description !== "string" || !description.trim()) {
-        throw new Error(`Published package ${packagePath} requires a non-empty description`);
-      }
-    }
-  }
-}
-
-/**
- * `bun node_modules/@dbx-tools/projen/tasks/<script>` command for a projen task.
- *
- * Use the stable package symlink, never `require.resolve()`'s physical store
- * path. A later install can change the peer-hash directory while leaving the
- * package symlink valid; persisting the physical path made every generated task
- * fail with ERR_MODULE_NOT_FOUND after such an update. bun runs the `.ts`
- * directly (no tsx, no build step).
- */
-export function taskScript(_project: Project, script: string, args = ""): string {
+/** Stable argv for a TypeScript task shipped by `@dbx-tools/projen`. */
+export function taskCommand(script: string, ...args: string[]): string[] {
   const scriptPath = toPosix(join("node_modules", "@dbx-tools", "projen", "tasks", script));
-  return args ? `bun ${scriptPath} ${args}` : `bun ${scriptPath}`;
+  return ["bun", scriptPath, ...args];
 }
 
 /**
@@ -1349,15 +1143,17 @@ function initProject(
     // `build` already compiles before its `package` phase. Keep the package's
     // `prepack` for standalone `bun publish`, but suppress lifecycle scripts in
     // this generated pack step so a direct child build does not compile twice.
-    const packageStep = project.packageTask.steps.find(
+    const packageSteps = project.packageTask.steps;
+    const packageStepIndex = packageSteps.findIndex(
       (step) => step.execArgs?.[0] === "npm" && step.execArgs[1] === "pack",
     );
+    const packageStep = packageSteps[packageStepIndex];
     if (packageStep?.execArgs && !packageStep.execArgs.includes("--ignore-scripts")) {
-      packageStep.execArgs.push("--ignore-scripts");
+      project.packageTask.updateStep(packageStepIndex, {
+        ...packageStep,
+        execArgs: [...packageStep.execArgs, "--ignore-scripts"],
+      });
     }
-    // Stamp `repository` (with this package's `directory` subpath) so a published
-    // package passes npm provenance validation.
-    applyRepository(project, options.repository);
     // Only a ROOT configures the workspace; a child just swaps its default-laden
     // `.gitignore` for a fresh one that carries package-specific patterns only.
     swapChildGitignore(project, options);
@@ -1365,14 +1161,16 @@ function initProject(
   }
   project.package.file.readonly = false;
 
-  // NodeProject has no built-in TS projenrc support (unlike TypeScriptProject), so
-  // wire `.projenrc.ts` through a runner - this also populates the `default` task
-  // that `bunx projen` runs (and that the `sync` watcher invokes to re-synth).
-  // The runner choice is immaterial since the exec is reset to plain `bun` below;
-  // `nodejs()` avoids declaring a `ts-node`/`tsx` dependency.
-  new typescript.ProjenrcTs(project, {
+  if (project instanceof DBXToolsNodeProject) {
+    project.rootTsconfig = new DBXToolsRootTsconfig(project);
+  }
+  const projenrc = new typescript.ProjenrcTs(project, {
     runner: typescript.TypeScriptRunner.nodejs(),
   });
+  const projenrcBase =
+    project instanceof DBXToolsTypeScriptProject ? project.tsconfig : project.rootTsconfig?.config;
+  if (projenrcBase) projenrc.tsconfig.addExtends(projenrcBase);
+  projenrc.tsconfig.removeInclude("**/*.ts");
   // bun runs `.projenrc.ts` directly (native TS, no loader to register). Reset to
   // a plain `bun` exec rather than any wrapper: the default task is spawned by
   // nested installs/synths, and a wrapper that exported `npm_config_*` broke them.
@@ -1387,19 +1185,15 @@ function initProject(
   // always apply; the self-dep is added only when the engine is an installed pkg.
   const selfDep = engineSelfDependency(project);
   if (selfDep) project.addDevDeps(selfDep);
-  project.addDevDeps(...DEV_DEPS_ROOT, "concurrently@catalog:");
+  project.addDevDeps(...DEV_DEPS_ROOT);
   configureRootPackage(project);
-  // Root carries the bare `repository` (no `directory`); children add their subpath.
-  applyRepository(project, options.repository);
-
   const roots = options.packageRoots ?? DEFAULT_PACKAGE_ROOTS;
   project.dbxToolsConfig.packageRoots = [...roots];
   if (options.syncResynthPaths?.length) {
     project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
   }
 
-  project.rootTsconfig = new DBXToolsRootTsconfig(project);
-  project.vsCode = new DBXToolsVsCode(project);
+  configureVsCode(project);
 
   registerRootTasks(project);
   if (options.prettier || project.prettier) {
@@ -1425,6 +1219,7 @@ function initProject(
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);
+    project.annotateGenerated(`/${root}/**/src/generated/**`);
   }
   for (const member of project.extraWorkspaceMembers) {
     project.annotateGenerated(`/${member}/index.ts`);
@@ -1536,21 +1331,13 @@ function initProject(
       found.dbxToolsConfig.tags.push(...tags);
       continue;
     }
+    const defaultPackageName = packageNameFor(project.scope, p.relPath, omitPrefixes);
     new DBXToolsTypeScriptProject({
       parent: project,
       outdir: p.memberPath,
-      name: packageNameFor(project.scope, p.relPath, omitPrefixes),
+      name: options.resolvePackageName?.(p, defaultPackageName) ?? defaultPackageName,
       tags,
     });
-  }
-
-  if (options.packageDescriptions) {
-    for (const pkg of descendantJavaScriptProjects(project)) {
-      const packagePath = toPosix(relative(rootAbs, pkg.outdir));
-      const description = options.packageDescriptions[packagePath];
-      if (description !== undefined) pkg.package.addField("description", description.trim());
-    }
-    new PublishedPackageDescriptionValidation(project, options.packageDescriptions);
   }
 
   // The root project may itself carry tags (via a `""`/`"."` tag-path key).
@@ -1565,10 +1352,10 @@ function initProject(
   }
 
   new WorkspaceValidationTasks(project);
-  new WorkflowDefaults(project, options.pullRequestTitlePolicy);
+  new WorkflowDefaults(project);
   new PrettierIgnoreGenerated(project);
-
   new GeneratedSource(project);
+
   // Version mutation, reviewed release preparation, and public publication are
   // separate surfaces owned by one release component.
   if (options.releaseMode !== "disabled") {
@@ -1659,7 +1446,7 @@ function preSynthesizeProject(project: javascript.NodeProject): void {
       if (p.tryRemoveFile(path)) {
         const rootPath = resolve(p.outdir, path);
         if (existsSync(rootPath)) {
-          console.log(`Removed ${rootPath} from ${p.name}`);
+          p.logger.info(`Removed ${rootPath} from ${p.name}`);
         }
       }
     }

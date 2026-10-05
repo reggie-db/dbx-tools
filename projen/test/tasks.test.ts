@@ -65,8 +65,8 @@ describe("workspace validation tasks", () => {
   // package.json member list, so a new package needs no re-synth.
   it("covers every workspace member from root compile and test", () => {
     assert.deepEqual(
-      tasks.root.tasks.compile.steps?.map((step) => step.exec),
-      ["bun node_modules/@dbx-tools/projen/tasks/compile-workspace.ts"],
+      tasks.root.tasks.compile.steps?.map((step) => step.execArgs),
+      [["bun", "node_modules/@dbx-tools/projen/tasks/compile-workspace.ts"]],
     );
     assert.deepEqual(
       tasks.root.tasks.test.steps?.map((step) => step.exec ?? `spawn:${step.spawn}`),
@@ -112,8 +112,8 @@ describe("workspace validation tasks", () => {
     );
   });
 
-  it("installs the root watcher and tracks generated extra-member barrels", () => {
-    assert.equal(tasks.packageJson.devDependencies?.concurrently, "catalog:");
+  it("keeps watcher dependencies in the engine and tracks generated extra-member barrels", () => {
+    assert.equal(tasks.packageJson.devDependencies?.concurrently, undefined);
     assert.match(tasks.prettierIgnore, /^tooling\/index\.ts$/m);
     assert.match(tasks.attributes, /^\/tooling\/index\.ts linguist-generated$/m);
   });

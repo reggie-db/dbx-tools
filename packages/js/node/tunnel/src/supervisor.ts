@@ -42,6 +42,7 @@ export interface ProcessSupervisorOptions {
   healthCheckFailures?: number;
 }
 
+/** Supervise and restart a long-running child process until explicitly stopped. */
 export function superviseProcessForever(options: ProcessSupervisorOptions): ProcessSupervisor {
   const controller = new AbortController();
   let child: ChildProcess | undefined;

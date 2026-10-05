@@ -101,7 +101,7 @@ async function buildClient(): Promise<void> {
   );
 }
 
-/** Start only the Python bus emitter for the `demo:emitter` task. */
+/** Start only the Python bus emitter when the emitter-only option is selected. */
 async function runEmitter(): Promise<void> {
   const env = await demoEnv();
   await run(["uv", "run", "python", "packages/example/python/bus-emitter.py"], {

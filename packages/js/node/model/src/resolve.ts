@@ -3,25 +3,24 @@
  *
  * @module
  */
-import type { ModelQuery, RankedModel, ServingEndpointSummary } from "@dbx-tools/shared-model";
+import type {
+  ModelQuery,
+  RankedModel,
+  ResolvedModel,
+  ResolvedModelSelection,
+  ResolveModelInput,
+  ResolveModelOptions,
+  ServingEndpointSummary,
+} from "@dbx-tools/shared-model";
 
-import {
-  lookupModels,
-  rankModelId,
-  type ResolveModelInput,
-  type ResolvedModelSelection,
-  resolveModel,
-} from "./_selection.ts";
+import { lookupModels, rankModelId, resolveModel } from "./_selection.ts";
 import {
   listServingEndpoints,
   type ListServingEndpointsOptions,
-  type ResolvedModel,
-  type ResolveModelOptions,
   type WorkspaceClientLike,
 } from "./model-catalog.ts";
 
 export { lookupModels, rankModelId, resolveModel } from "./_selection.ts";
-export type { ResolveModelInput, ResolvedModelSelection } from "./_selection.ts";
 
 /** Intent plus catalogue cache controls passed to {@link selectModel}. */
 export interface SelectModelInput extends ResolveModelInput {

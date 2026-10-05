@@ -88,6 +88,8 @@ const DEFAULT_DATABASE = "databricks_postgres";
  * it has enough context (typically a `project`).
  */
 export interface LakebaseResolverInputs extends LakebaseConnectionInputs {
+  /** Auth-resolved profile used only for Databricks bundle validation. */
+  bundleProfile?: string;
   /**
    * What to do when no project exists in the workspace at all.
    * - `undefined` (default): derive a project id from
@@ -264,10 +266,12 @@ export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal)
 export async function readLakebaseInputs(
   config?: LakebaseResolverInputs,
 ): Promise<LakebaseResolverInputs> {
-  const rawAddress = config?.endpoint ?? configUtils.resolveValue("LAKEBASE_ENDPOINT");
+  const configOptions = { bundleProfile: config?.bundleProfile };
+  const rawAddress =
+    config?.endpoint ?? configUtils.resolveValue("LAKEBASE_ENDPOINT", configOptions);
   const parsed = parseAddress(rawAddress);
-  const portEnv = parsePort(configUtils.resolveValue("PGPORT"));
-  const sslModeEnv = parseSslMode(configUtils.resolveValue("PGSSLMODE"));
+  const portEnv = parsePort(configUtils.resolveValue("PGPORT", configOptions));
+  const sslModeEnv = parseSslMode(configUtils.resolveValue("PGSSLMODE", configOptions));
   const configuredSslMode = parseSslMode(config?.sslMode);
   const parsedSslMode = parseSslMode(parsed.sslMode);
   return {
@@ -277,8 +281,9 @@ export async function readLakebaseInputs(
     // bare hostnames set `host` instead and leave `endpoint` undefined
     // until the REST resolver fills it in.
     endpoint: parsed.endpoint,
-    database: config?.database ?? configUtils.resolveValue("PGDATABASE") ?? parsed.database,
-    host: config?.host ?? configUtils.resolveValue("PGHOST") ?? parsed.host,
+    database:
+      config?.database ?? configUtils.resolveValue("PGDATABASE", configOptions) ?? parsed.database,
+    host: config?.host ?? configUtils.resolveValue("PGHOST", configOptions) ?? parsed.host,
     port: config?.port ?? portEnv ?? parsed.port,
     sslMode: configuredSslMode ?? sslModeEnv ?? parsedSslMode,
     autoCreate: config?.autoCreate,

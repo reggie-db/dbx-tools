@@ -25,7 +25,13 @@ import { createHash } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { errorUtils, log } from "@dbx-tools/shared-core";
-import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import {
+  model,
+  type ResolvedModel,
+  type ResolveModelOptions,
+  type ScoredEndpoint,
+  type ServingEndpointSummary,
+} from "@dbx-tools/shared-model";
 
 import { classifyEndpointClasses, normalizeEndpoints, rankEndpoints } from "./_ranking.ts";
 
@@ -140,9 +146,7 @@ async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpo
  * classification of the whole set. Endpoints the classifier doesn't recognize
  * (custom, unscored, non-LLM) are left without a class.
  */
-function stampModelClasses(
-  summaries: readonly ServingEndpointSummary[],
-): ServingEndpointSummary[] {
+function stampModelClasses(summaries: readonly ServingEndpointSummary[]): ServingEndpointSummary[] {
   const classOf = classifyEndpointClasses(summaries);
   return summaries.map((summary) => {
     const cls = classOf.get(summary.name);
@@ -218,27 +222,6 @@ export async function clearServingEndpointsCache(
  * callers can fall back to the original input (Databricks will then return a
  * clean 404).
  */
-export interface ResolvedModel {
-  modelId: string;
-  matched: boolean;
-  score?: number;
-}
-
-/** Options accepted by {@link resolveModelId} / {@link searchServingEndpoints}. */
-export interface ResolveModelOptions {
-  /** Fuzzy distance threshold (0 = exact, 1 = anything). Default `0.4`. */
-  threshold?: number;
-  /** Require a model verified for a complete function-tool round-trip. */
-  requiresTools?: boolean;
-}
-
-/** A serving endpoint paired with its fuzzy-match distance for a query. */
-export interface ScoredEndpoint {
-  endpoint: ServingEndpointSummary;
-  /** Fuzzy distance: `0` is exact, `1` is no match. */
-  score: number;
-}
-
 /**
  * Fuzzy-rank endpoints by how closely their `name` matches `input`, best
  * (lowest score) first, keeping only those within `threshold`:

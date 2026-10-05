@@ -12,8 +12,7 @@ date and final status.
 
 ## Active plans
 
-- [Model-proxy and Lakebase menu-bar icons](2026-10-01-model-proxy-and-lakebase-menubar-icons.md)
-  - Tracks the remaining Lakebase tray adoption and icon work.
+- [Promote Mastra chat turns as MLflow root traces with input and output](2026-10-05-mlflow-root-chat-input-output.md)
 
 ## Cross-repository suggestions
 

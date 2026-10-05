@@ -1,18 +1,22 @@
 /**
  * Build-generated Databricks model retirement, capability, and rate-limit metadata.
  *
- * The committed snapshots are refreshed by `bun run model:metadata`. Runtime
+ * The committed snapshots are refreshed by
+ * `bun run --filter '@dbx-tools/model' metadata`. Runtime
  * lookups build their normalized sets and maps once per process and perform no
  * documentation network requests.
  *
  * @module
  */
 import * as functionUtils from "@dbx-tools/shared-core/function-utils";
-import type { ModelStatus, ServingEndpointSummary } from "@dbx-tools/shared-model/contracts";
+import type {
+  ModelCapabilities,
+  ModelMetadata,
+  ModelRateLimits,
+  ModelStatus,
+  ServingEndpointSummary,
+} from "@dbx-tools/shared-model/contracts";
 
-import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
-import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
-import retiredModelsSnapshotJson from "./generated/retired-models.json" with { type: "json" };
 import {
   MODEL_METADATA_TTL_MS,
   MODEL_RATE_LIMITS_URL,
@@ -21,10 +25,12 @@ import {
   WEB_SEARCH_MODELS_URL,
   type ModelCapabilitiesSnapshot,
   type ModelCapabilityCatalogue,
-  type ModelRateLimits,
   type ModelRateLimitsSnapshot,
   type RetiredModelsSnapshot,
 } from "./_metadata-contract.ts";
+import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
+import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
+import retiredModelsSnapshotJson from "./generated/retired-models.json" with { type: "json" };
 import { modelSearchQuery } from "./policy.ts";
 
 export {
@@ -34,33 +40,9 @@ export {
   RETIRED_MODELS_URL,
   WEB_SEARCH_MODELS_URL,
 };
-export type {
-  ModelCapabilitiesSnapshot,
-  ModelCapabilityCatalogue,
-  ModelRateLimitCatalogue,
-  ModelRateLimits,
-  ModelRateLimitsSnapshot,
-  RetiredModelsSnapshot,
-} from "./_metadata-contract.ts";
-
 const retiredModelsSnapshot = retiredModelsSnapshotJson as RetiredModelsSnapshot;
 const capabilitiesSnapshot = capabilitiesSnapshotJson as ModelCapabilitiesSnapshot;
 const rateLimitsSnapshot = rateLimitsSnapshotJson as ModelRateLimitsSnapshot;
-
-/** Documented capabilities resolved for one model identity. */
-export interface ModelCapabilities {
-  readonly responses: boolean;
-  readonly imageInput: boolean;
-  readonly applyPatch: boolean;
-  readonly webSearch: boolean;
-}
-
-/** Combined build-generated metadata resolved for one model identity. */
-export interface ModelMetadata {
-  readonly status: ModelStatus;
-  readonly capabilities: ModelCapabilities;
-  readonly rateLimits?: ModelRateLimits;
-}
 
 interface MetadataIndex {
   readonly retiredNames: readonly string[];

@@ -35,7 +35,8 @@ import {
 // AppKit's root barrel re-exports `PluginData` but not `PluginMap`; the package
 // publishes this subpath for exactly that type.
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
-import { asyncUtils, log } from "@dbx-tools/shared-core";
+import { profile as authProfile } from "@dbx-tools/auth";
+import { asyncUtils, environmentUtils, log } from "@dbx-tools/shared-core";
 
 import { resolveAutoConfigurePolicy } from "./_auto-configure.ts";
 import { createSoftPersistentStorage } from "./_cache-storage.ts";
@@ -137,6 +138,7 @@ export async function autoConfigure<T extends AppKitPlugins>(
   config?: CreateAppConfig<T>,
   signal?: AbortSignal,
 ): Promise<LakebaseConnection | undefined> {
+  const bundleProfile = applyDefaultProfile();
   const plugins = pluginNames(config);
   const policy = resolveAutoConfigurePolicy(plugins, config?.autoConfigure);
   logger.debug("autoConfigure: start", {
@@ -166,7 +168,7 @@ export async function autoConfigure<T extends AppKitPlugins>(
     provision: policy.provision,
     mode: policy.mode,
   });
-  const resolved = await autoConfigureLakebase(policy.provision, controller.signal);
+  const resolved = await autoConfigureLakebase(policy.provision, controller.signal, bundleProfile);
   logger.debug("autoConfigure: done", {
     mode: policy.mode,
     lakebasePluginPresent: policy.lakebasePluginPresent,
@@ -192,9 +194,10 @@ export async function autoConfigure<T extends AppKitPlugins>(
 async function autoConfigureLakebase(
   provision: boolean,
   signal: AbortSignal,
+  bundleProfile?: string,
 ): Promise<LakebaseConnection> {
   logger.debug("autoConfigureLakebase: applyLakebaseEnv");
-  const { resolved, user } = await applyLakebaseEnv(undefined, signal);
+  const { resolved, user } = await applyLakebaseEnv({ bundleProfile }, signal);
   logger.debug("autoConfigureLakebase: env applied", {
     ...redactLakebaseConnection(resolved),
     user,
@@ -216,6 +219,24 @@ async function autoConfigureLakebase(
     logger.debug("autoConfigureLakebase: skip provision (mode=env)");
   }
   return resolved;
+}
+
+function applyDefaultProfile(): string | undefined {
+  const configured = process.env.DATABRICKS_CONFIG_PROFILE?.trim();
+  if (configured || environmentUtils.isDatabricksAppEnv()) return configured;
+  try {
+    const resolved = authProfile.resolveProfile();
+    process.env.DATABRICKS_CONFIG_PROFILE = resolved.name;
+    logger.debug("autoConfigure: selected default Databricks profile", {
+      profile: resolved.name,
+    });
+    return resolved.name;
+  } catch (error) {
+    logger.debug("autoConfigure: no default Databricks profile", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
 }
 
 /**

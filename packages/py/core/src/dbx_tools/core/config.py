@@ -10,7 +10,6 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TypedDict, TypeVar, cast
-
 from urllib.parse import urlparse
 
 ConfigKey = str | Sequence[str]
@@ -24,6 +23,7 @@ class ConfigOptions(TypedDict, total=False):
     cwd: str
     data: ConfigData | Sequence[ConfigData]
     bundleData: ConfigFile | Mapping[str, object]
+    bundleProfile: str
     appData: ConfigFile | Mapping[str, object]
     sources: ConfigSource | Sequence[ConfigSource]
 
@@ -195,15 +195,12 @@ def list(
     return from_config or _parse_list(text(input, options), transform)
 
 
-def bundle_file(cwd: str | None = None) -> ConfigFile | None:
+def bundle_file(cwd: str | None = None, *, profile: str | None = None) -> ConfigFile | None:
     production = _trim_to_none(os.environ.get("NODE_ENV"))
     default_enabled = (production or "").lower() != "production" and not is_databricks_app_env()
     if not _file_source_enabled(CONFIG_BUNDLE_KEY, default_enabled):
         return None
-    return _load_bundle_file(
-        _resolve_working_directory(cwd),
-        _trim_to_none(os.environ.get("DATABRICKS_CONFIG_PROFILE")),
-    )
+    return _load_bundle_file(_resolve_working_directory(cwd), _trim_to_none(profile))
 
 
 def app_file(cwd: str | None = None) -> ConfigFile | None:
@@ -271,7 +268,7 @@ def _read(source: ConfigSource, options: ConfigOptions) -> Iterator[Mapping[str,
     elif source == "bundle":
         data = _source_data(options.get("bundleData"))
         if data is None:
-            data = bundle_file(options.get("cwd"))
+            data = bundle_file(options.get("cwd"), profile=options.get("bundleProfile"))
             data = data.data if data is not None else None
         if data is not None:
             yield flatten_bundle_env(data)
@@ -413,10 +410,13 @@ def _validate_bundle(path: str, profile: str | None) -> dict[str, object] | None
     arguments = ["databricks", "bundle", "validate", "--output", "json"]
     if profile is not None:
         arguments.extend(["--profile", profile])
+    environment = dict(os.environ)
+    environment.pop("DATABRICKS_CONFIG_PROFILE", None)
     try:
         result = subprocess.run(
             arguments,
             cwd=str(Path(path).parent),
+            env=environment,
             check=False,
             capture_output=True,
             text=True,

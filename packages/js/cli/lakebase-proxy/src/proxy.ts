@@ -2,7 +2,6 @@
 
 import { createServer, isIP, type Server, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
-import { DatabricksAuthOptions } from "@dbx-tools/auth";
 import { LakebaseClient, requireAddress } from "@dbx-tools/lakebase";
 import { log } from "@dbx-tools/shared-core";
 import { Client } from "pg";
@@ -57,7 +56,7 @@ export class LakebaseProxy {
   private active = 0;
 
   constructor(private readonly options: LakebaseProxyOptions = {}) {
-    this.client = new LakebaseClient(DatabricksAuthOptions.create({ profile: options.profile }));
+    this.client = new LakebaseClient({ profile: options.profile });
   }
 
   async listen(): Promise<{ host: string; port: number }> {

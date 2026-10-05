@@ -81,7 +81,6 @@ describe("Bun app eslint ignores", () => {
     for (const pattern of [
       "**/dev.ts",
       "**/build.ts",
-      "**/bunfig.override.toml",
       "**/bun-dev.override.ts",
       "**/bun-build.override.ts",
     ]) {

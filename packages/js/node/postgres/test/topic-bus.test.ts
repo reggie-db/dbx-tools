@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { describe, it } from "node:test";
-import { polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 import type { Notification, QueryResult } from "pg";
 
 import { PACKAGE_IDENTIFIER } from "../index.ts";
@@ -37,9 +37,9 @@ function fixture() {
   return { client, pool, queries };
 }
 
-await polygotTest(
+await polyglotTest(
   () => import("../index.ts"),
-  "topicBus",
+  "identity",
   (implementation, language) => {
     describe(`channelName (${language})`, () => {
       it("keeps default, scalar, parts, and structured identities compatible", () => {
@@ -73,9 +73,14 @@ await polygotTest(
       });
     });
   },
+  {
+    identifiers: {
+      [Language.Python]: "dbx_tools.postgres._generated.node.postgres.identity",
+    },
+  },
 );
 
-await polygotTest(
+await polyglotTest(
   async () => ({ PACKAGE_IDENTIFIER, topicBusConstants }),
   "topicBusConstants",
   (implementation, language) => {
@@ -83,9 +88,6 @@ await polygotTest(
       it("keeps channel and notification limits wire-compatible", () => {
         assert.deepEqual(implementation, {
           defaultChannel: "dbx_tools_topic_bus",
-          maxChannelLength: 63,
-          channelHashLength: 6,
-          channelFallback: "bus",
           maxNotifyBytes: 7_900,
           minReconnectDelay: 0.25,
           maxReconnectDelay: 5,

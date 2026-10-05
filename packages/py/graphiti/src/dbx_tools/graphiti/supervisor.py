@@ -19,11 +19,12 @@ class SupervisorOptions:
     """Detached Graphiti supervisor inputs."""
 
     home: Annotated[Path, Parameter(name="--home", env_var="DBX_GRAPHITI_HOME")]
+    profile: Annotated[str | None, Parameter(name="--profile")] = None
     graphiti_args: list[str] = field(default_factory=list, init=False)
 
     def __call__(self) -> int:
         return Runtime(RuntimePaths(self.home)).supervise(
-            ModelSettings.resolve(),
+            ModelSettings.resolve(profile=self.profile),
             self.graphiti_args,
         )
 

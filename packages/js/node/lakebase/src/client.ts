@@ -1,11 +1,12 @@
 /** Cached Databricks Lakebase discovery and database credentials. */
 
 import {
+  client as authClient,
+  profile as authProfile,
   type AuthClient,
-  DatabricksAuthOptions,
-  DatabricksClient,
-  type DatabricksRequestOptions,
+  type DatabricksAuthOptions,
 } from "@dbx-tools/auth";
+import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
 import { log } from "@dbx-tools/shared-core";
 
 import type { ParsedAddress } from "./address.ts";
@@ -34,8 +35,14 @@ interface Timed<T> {
 
 /** Minimal authenticated Databricks API surface used by Lakebase discovery. */
 export interface LakebaseApiClient {
-  auth: Pick<AuthClient, "listProfiles">;
-  request(path: string, options?: DatabricksRequestOptions): Promise<unknown>;
+  profiles(): DatabricksProfileSummary[];
+  request(path: string, options?: LakebaseRequestOptions): Promise<unknown>;
+}
+
+/** Lakebase-owned request options for its Databricks APIs. */
+export interface LakebaseRequestOptions {
+  body?: unknown;
+  signal?: AbortSignal;
 }
 
 /** Injectable Lakebase discovery dependencies. */
@@ -45,7 +52,13 @@ export interface LakebaseClientDependencies {
 }
 
 const DEFAULT_DEPENDENCIES: LakebaseClientDependencies = {
-  createClient: (options) => DatabricksClient.create(options),
+  createClient: async (options) => {
+    const auth = await authClient.createAuthClient(options);
+    return {
+      profiles: () => authProfile.listProfiles(),
+      request: (path, requestOptions) => request(auth, path, requestOptions),
+    };
+  },
   isDatabricksApp,
 };
 
@@ -55,7 +68,7 @@ export class LakebaseClient {
   private readonly resolved = new Map<string, Timed<ResolvedLakebase>>();
 
   constructor(
-    private readonly authOptions = DatabricksAuthOptions.create(),
+    private readonly authOptions: DatabricksAuthOptions = {},
     private readonly dependencies = DEFAULT_DEPENDENCIES,
   ) {}
 
@@ -97,7 +110,7 @@ export class LakebaseClient {
     const candidate = startupUser?.trim();
     if (!candidate || this.dependencies.isDatabricksApp()) return undefined;
     const client = await this.session();
-    const exists = client.auth.listProfiles().some((profile) => profile.name === candidate);
+    const exists = client.profiles().some((profile) => profile.name === candidate);
     logger.debug("resolved Lakebase startup profile", { startupUser: candidate, exists });
     return exists ? candidate : undefined;
   }
@@ -288,6 +301,41 @@ function endpointHosts(value: object): string[] {
 
 function isDatabricksApp(): boolean {
   return Boolean(process.env.DATABRICKS_APP_NAME || process.env.DATABRICKS_APP_PORT);
+}
+
+async function request(
+  auth: AuthClient,
+  path: string,
+  options: LakebaseRequestOptions = {},
+): Promise<unknown> {
+  const url = new URL(path, `${auth.host.replace(/\/$/, "")}/`).toString();
+  let headers = await auth.headers();
+  let response = await send(url, headers, options);
+  if (response.status === 401) {
+    headers = await auth.headers({ refresh: true });
+    response = await send(url, headers, options);
+  }
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Databricks Lakebase API ${path} returned HTTP ${response.status}: ${text}`);
+  }
+  return text ? JSON.parse(text) : undefined;
+}
+
+function send(
+  url: string,
+  authHeaders: Readonly<Record<string, string>>,
+  options: LakebaseRequestOptions,
+): Promise<Response> {
+  const headers = new Headers(authHeaders);
+  headers.set("accept", "application/json");
+  if (options.body !== undefined) headers.set("content-type", "application/json");
+  return fetch(url, {
+    method: options.body === undefined ? "GET" : "POST",
+    headers,
+    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    signal: options.signal,
+  });
 }
 
 function timed<T>(value: T, ttlMs: number): Timed<T> {

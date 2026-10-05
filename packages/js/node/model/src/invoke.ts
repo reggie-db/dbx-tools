@@ -48,6 +48,12 @@ export const OPEN_RESPONSES_PATH = "serving-endpoints/open-responses";
  */
 export const CHAT_COMPLETIONS_PATH = "serving-endpoints/chat/completions";
 
+/** Unity Gateway OpenAI Responses path used by Codex-compatible model services. */
+export const AI_GATEWAY_CODEX_RESPONSES_PATH = "ai-gateway/codex/v1/responses";
+
+/** Workspace Anthropic Messages path for native Claude requests. */
+export const ANTHROPIC_MESSAGES_PATH = "serving-endpoints/anthropic/v1/messages";
+
 /**
  * The OpenAI-compatible chat-completions invocations URL for an endpoint id.
  *
@@ -75,6 +81,16 @@ export function openResponsesUrl(host: string): string {
 /** Workspace OpenAI Chat Completions URL (`POST`, model in the body). */
 export function chatCompletionsUrl(host: string): string {
   return new URL(CHAT_COMPLETIONS_PATH, host).toString();
+}
+
+/** Unity Gateway Codex Responses URL (`POST`, model service in the body). */
+export function aiGatewayCodexResponsesUrl(host: string): string {
+  return new URL(AI_GATEWAY_CODEX_RESPONSES_PATH, host).toString();
+}
+
+/** Workspace Anthropic Messages URL (`POST`, model in the body). */
+export function anthropicMessagesUrl(host: string): string {
+  return new URL(ANTHROPIC_MESSAGES_PATH, host).toString();
 }
 
 /**

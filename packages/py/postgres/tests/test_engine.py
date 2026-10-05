@@ -9,7 +9,8 @@ from typing import Any
 import dbx_tools.postgres.engine as engine_module
 import pytest
 from databricks.sdk.service.postgres import PostgresAPI
-from dbx_tools.postgres import (
+from dbx_tools.postgres.address import NativeSslMode
+from dbx_tools.postgres.engine import (
     PostgresEngineConfig,
     ResolvedPostgresConnection,
     autoscaling_credential_provider,
@@ -17,7 +18,6 @@ from dbx_tools.postgres import (
     resolve_postgres_connection,
     workspace_credential_provider,
 )
-from dbx_tools.postgres.address import NativeSslMode
 from sqlalchemy import create_engine
 
 
@@ -61,6 +61,35 @@ def workspace(responses: dict[object, dict[str, Any]] | None = None) -> Any:
         database=FakeDatabase(),
         postgres=PostgresAPI(api_client),
     )
+
+
+async def test_create_workspace_client_uses_node_auth(monkeypatch: Any) -> None:
+    class Auth:
+        def __init__(self) -> None:
+            self.host = "https://workspace.example.com"
+            self.profile = "TEST"
+            self.workspace_id = "1234567890"
+
+    async def create_auth_client() -> Auth:
+        return Auth()
+
+    monkeypatch.setattr(engine_module, "create_auth_client", create_auth_client)
+    monkeypatch.setattr(engine_module, "WorkspaceClient", lambda **values: values)
+
+    assert await engine_module.create_workspace_client() == {
+        "host": "https://workspace.example.com",
+        "profile": "TEST",
+        "workspace_id": "1234567890",
+    }
+
+
+def test_generated_modules_share_one_pythonmonkey_runtime() -> None:
+    from dbx_tools.postgres._generated.node import _runtime
+    from dbx_tools.postgres._generated.node.auth import client as auth_binding
+    from dbx_tools.postgres._generated.node.postgres import identity as postgres_binding
+
+    assert auth_binding._invoke_positioned is postgres_binding._invoke_positioned
+    assert _runtime.get_runtime() is _runtime.get_runtime()
 
 
 def test_resolve_provisioned_instance_with_workspace_client() -> None:

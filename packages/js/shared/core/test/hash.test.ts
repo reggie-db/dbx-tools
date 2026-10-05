@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 import { PACKAGE_IDENTIFIER, hash } from "../index.ts";
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -25,7 +25,7 @@ const withCrypto = (value: unknown, body: () => void) => {
   }
 };
 
-await polygotTest(
+await polyglotTest(
   async () => ({ PACKAGE_IDENTIFIER, hash: hashContract }),
   "hash",
   (implementation, language) => {
@@ -54,10 +54,10 @@ await polygotTest(
   },
 );
 
-describe("polygotTest package metadata", () => {
+describe("polyglotTest package metadata", () => {
   it("requires PACKAGE_IDENTIFIER when Python inference needs it", async () => {
     await assert.rejects(
-      polygotTest(
+      polyglotTest(
         async () => ({ hash }),
         "hash",
         () => undefined,
@@ -68,7 +68,7 @@ describe("polygotTest package metadata", () => {
 
   it("does not require package metadata with an explicit Python identifier", async () => {
     const languages: Language[] = [];
-    await polygotTest(
+    await polyglotTest(
       async () => ({ hash }),
       "hash",
       (_implementation, language) => languages.push(language),
@@ -79,7 +79,7 @@ describe("polygotTest package metadata", () => {
 
   it("accepts an explicit package identifier and loader", async () => {
     const languages: Language[] = [];
-    await polygotTest(
+    await polyglotTest(
       { packageIdentifier: "@dbx-tools/shared-core", loader: async () => ({ hash }) },
       "hash",
       (_implementation, language) => languages.push(language),

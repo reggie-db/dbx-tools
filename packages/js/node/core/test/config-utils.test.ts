@@ -110,9 +110,20 @@ describe("default bundle source", () => {
     assert.deepEqual(result.values, ["app", "app"]);
     assert.equal(result.calls, 1);
   });
+
+  it("passes only the explicit profile to bundle validation", () => {
+    const result = probe({ resources: { apps: { demo: { config: { env: [] } } } } }, [], {
+      ambientProfile: "ambient",
+      profile: "resolved",
+    });
+    assert.deepEqual(result.arguments.slice(-2), ["--profile", "resolved"]);
+    assert.equal(result.childProfile, "unset");
+  });
 });
 
 interface ProbeResult {
+  arguments: string[];
+  childProfile: string;
   file: boolean;
   values: (string | null)[];
   calls: number;
@@ -123,18 +134,34 @@ interface ProbeResult {
  * `payload`. Earlier default sources are empty, so lookup reaches the bundle
  * without any AppKit context or package dependency.
  */
-function probe(payload: Record<string, unknown>, keys: string[]): ProbeResult {
+function probe(
+  payload: Record<string, unknown>,
+  keys: string[],
+  options: { ambientProfile?: string; profile?: string } = {},
+): ProbeResult {
   const root = mkdtempSync(join(tmpdir(), "dbx-tools-config-"));
   try {
     const bin = join(root, "bin");
     const counter = join(root, ".calls");
+    const argumentsFile = join(root, ".arguments");
+    const profileFile = join(root, ".profile");
     const output = join(root, ".output");
     mkdirSync(bin, { recursive: true });
     writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
     writeFileSync(join(root, "databricks.yml"), "bundle: {}\n");
     writeFileSync(output, JSON.stringify(payload));
     const stub = join(bin, "databricks");
-    writeFileSync(stub, `#!/bin/sh\necho call >> ${quote(counter)}\ncat ${quote(output)}\n`);
+    writeFileSync(
+      stub,
+      [
+        "#!/bin/sh",
+        `echo call >> ${quote(counter)}`,
+        `printf '%s\\n' "$@" > ${quote(argumentsFile)}`,
+        `printf '%s' "\${DATABRICKS_CONFIG_PROFILE-unset}" > ${quote(profileFile)}`,
+        `cat ${quote(output)}`,
+        "",
+      ].join("\n"),
+    );
     chmodSync(stub, 0o755);
     const fixture = resolve(dirname(new URL(import.meta.url).pathname), "fixtures/bundle-probe.ts");
     const env: Record<string, string> = {};
@@ -143,6 +170,8 @@ function probe(payload: Record<string, unknown>, keys: string[]): ProbeResult {
     }
     delete env.DBX_TOOLS_CONFIG_BUNDLE;
     delete env.NODE_ENV;
+    if (options.ambientProfile) env.DATABRICKS_CONFIG_PROFILE = options.ambientProfile;
+    if (options.profile) env.PROBE_BUNDLE_PROFILE = options.profile;
     env.PATH = `${bin}:${process.env.PATH ?? ""}`;
     const result = spawnSync(process.execPath, [fixture, root, ...keys], {
       encoding: "utf8",
@@ -150,7 +179,12 @@ function probe(payload: Record<string, unknown>, keys: string[]): ProbeResult {
     });
     assert.equal(result.status, 0, result.stderr);
     const parsed = JSON.parse(result.stdout.trim()) as Omit<ProbeResult, "calls">;
-    return { ...parsed, calls: lineCount(counter) };
+    return {
+      ...parsed,
+      arguments: readFileSync(argumentsFile, "utf8").trim().split("\n"),
+      childProfile: readFileSync(profileFile, "utf8"),
+      calls: lineCount(counter),
+    };
   } finally {
     rmSync(root, { force: true, recursive: true });
   }

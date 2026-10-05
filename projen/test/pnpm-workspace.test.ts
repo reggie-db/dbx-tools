@@ -103,7 +103,7 @@ describe("pnpm-workspace.yaml", () => {
   it("carries overrides added after construction, without dropping constructed ones", () => {
     // `overrides` is seeded in the constructor purely so this reference is the
     // one projen captured; a key added later must still reach the file, and must
-    // not displace what `workspaceYaml` passed in.
+    // not displace what native workspace options supplied.
     assert.match(yaml, /^ {2}zod: \^4\.3\.6$/m);
     assert.match(yaml, /^ {2}bun: 1\.3\.14$/m);
     assert.match(yaml, /^ {2}glob: \^13\.0\.0$/m);

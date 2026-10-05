@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import { pathToFileURL } from "node:url";
 
 import { Project } from "projen";
 
@@ -19,33 +19,35 @@ afterEach(() => {
 });
 
 describe("PythonNodeBundle", () => {
-  it("generates convention-based build, check, and watch tasks", () => {
+  it("generates convention-based build and check tasks", () => {
     const project = new Project({ name: "fixture" });
     const bundle = new PythonNodeBundle(project, {
       name: "auth",
       projectDirectory: "packages/py/auth",
-      watch: true,
     });
 
-    assert.equal(
-      bundle.buildTask.steps[0]?.exec,
-      "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts --project packages/py/auth",
-    );
-    assert.equal(bundle.checkTask.steps[0]?.exec, `${bundle.buildTask.steps[0]?.exec} --check`);
-    assert.equal(
-      bundle.watchTask?.steps[0]?.exec,
-      "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project packages/py/auth",
-    );
+    assert.deepEqual(bundle.buildTask.steps[0]?.execArgs, [
+      "bun",
+      "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
+      "--project",
+      "packages/py/auth",
+    ]);
+    assert.deepEqual(bundle.checkTask.steps[0]?.execArgs, [
+      ...bundle.buildTask.steps[0]!.execArgs!,
+      "--check",
+    ]);
     assert.ok(project.testTask.steps.some((step) => step.spawn === bundle.checkTask.name));
   });
 
-  it("discovers re-exported functions and generates Python wrappers", async () => {
+  it("discovers re-exported functions and generates Python wrappers", () => {
     const directory = temporaryDirectory();
     const targetDirectory = packageDirectory(directory, "fixture-target");
     writeFileSync(
       join(targetDirectory, "index.ts"),
       [
+        'import { basename } from "node:path";',
         'export const preserved = "original";',
+        "export function fileName(value: string): string { return basename(value); }",
         'export function replaced(): string { return "original"; }',
         'export async function createSession(): Promise<string> { return "session"; }',
         "export async function token(login?: boolean): Promise<string> { return String(login); }",
@@ -76,22 +78,17 @@ describe("PythonNodeBundle", () => {
     const result = runBindingTask(directory);
     assert.equal(result.exitCode, 0, result.stderr.toString());
 
-    const runtimePath = join(directory, "python/src/fixture/runtime/_generated/_runtime.js");
-    const bindingsPath = join(directory, "python/src/fixture/runtime/_generated/node_bindings.py");
-    const packagePath = join(directory, "python/src/fixture/runtime/_generated/__init__.py");
-    const runtime = (await import(pathToFileURL(runtimePath).href)) as {
-      createSession(): Promise<string>;
-      preserved: string;
-      replaced(): string;
-    };
-    assert.equal(runtime.preserved, "original");
-    assert.equal(runtime.replaced(), "override");
-    assert.equal(await runtime.createSession(), "session");
+    const nodeBindings = join(directory, "python/src/fixture/runtime/_generated/node");
+    const generated = join(nodeBindings, "fixture_entry");
+    const runtimePath = join(nodeBindings, "_runtime.js");
+    const runtimeLoaderPath = join(nodeBindings, "_runtime.py");
+    const bindingsPath = join(generated, "index.py");
+    const packagePath = join(generated, "__init__.py");
+    assert.match(readFileSync(runtimePath, "utf8"), /override/);
 
     const bindings = readFileSync(bindingsPath, "utf8");
     assert.match(bindings, /async def create_session\(\) -> str:/);
-    assert.match(bindings, /_INVOKE_METHOD = pm\.eval\(/);
-    assert.match(bindings, /result = json\.loads\(encoded\)/);
+    assert.doesNotMatch(bindings, /pm\.eval|json\.loads/);
     assert.match(bindings, /async def token\(\n    login: bool \| object = _MISSING,\n\) -> str:/);
     assert.match(bindings, /class SessionOptions:/);
     assert.match(bindings, /workspace_id: str \| None/);
@@ -101,47 +98,49 @@ describe("PythonNodeBundle", () => {
       bindings,
       /scopes: list\[str\] \| None = field\(\n        default_factory=lambda: \["default"\]/,
     );
-    assert.match(bindings, /async def create_configured\(/);
+    assert.match(bindings, /def create_configured\(/);
     assert.match(bindings, /\) -> SessionOptionsResponse:/);
     assert.match(bindings, /class SessionOptionsResponse\(TypedDict\):/);
     assert.match(bindings, /SessionResultResponse = TypedDict\(/);
     assert.match(bindings, /"class": str,/);
-    assert.match(bindings, /options = SessionOptions\(\*\*kwargs\)/);
-    assert.match(bindings, /async def replaced\(\) -> str:/);
-    assert.match(bindings, /_invoke\("createSession"\)/);
-    assert.match(bindings, /class _NodeObject:/);
-    assert.match(bindings, /Reflect\.apply\(target\[name\], target, args\)/);
+    assert.doesNotMatch(bindings, /\*\*kwargs/);
+    assert.match(bindings, /def replaced\(\) -> str:/);
+    assert.match(
+      bindings,
+      /await _invoke_positioned\("fixture_entry", "createSession", arguments\)/,
+    );
+    assert.match(readFileSync(runtimeLoaderPath, "utf8"), /class _NodeObject:/);
+    assert.match(
+      readFileSync(runtimePath, "utf8"),
+      /Reflect\.apply\(target\[name\], target, args\)/,
+    );
     assert.doesNotMatch(bindings, /preserved/);
-    assert.match(readFileSync(packagePath, "utf8"), /from \.node_bindings import/);
+    assert.equal(existsSync(packagePath), false);
 
     const check = runBindingTask(directory, "--check");
     assert.equal(check.exitCode, 0, check.stderr.toString());
   });
 
-  it("can generate an entire Python package under a dedicated source root", () => {
+  it("always generates bindings beneath the Python package generated tree", () => {
     const directory = temporaryDirectory();
     const entryDirectory = packageDirectory(directory, "fixture-entry");
     writeFileSync(
       join(entryDirectory, "index.ts"),
       "export function createSession(): { token(): string } { return { token: () => 'token' }; }\n",
     );
-    writeFixturePyproject(directory, ['package = "fixture-entry"', 'layout = "package"'], {
-      moduleRoot: "generated-src",
-    });
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
 
     const result = runBindingTask(directory);
     assert.equal(result.exitCode, 0, result.stderr.toString());
 
-    const generatedPackageDirectory = join(directory, "python/generated-src/fixture/runtime");
-    assert.ok(readFileSync(join(generatedPackageDirectory, "_runtime.js"), "utf8").length > 0);
+    const nodeBindings = join(directory, "python/src/fixture/runtime/_generated/node");
+    const generatedPackageDirectory = join(nodeBindings, "fixture_entry");
+    assert.ok(readFileSync(join(nodeBindings, "_runtime.js"), "utf8").length > 0);
     assert.match(
-      readFileSync(join(generatedPackageDirectory, "node_bindings.py"), "utf8"),
+      readFileSync(join(generatedPackageDirectory, "index.py"), "utf8"),
       /class CreateSessionReturnResult\(Protocol\):[\s\S]*async def token\([\s\S]*\) -> str:/,
     );
-    assert.match(
-      readFileSync(join(generatedPackageDirectory, "__init__.py"), "utf8"),
-      /create_session/,
-    );
+    assert.equal(existsSync(join(generatedPackageDirectory, "__init__.py")), false);
   });
 
   it("binds a portable package subpath while retaining the owning package", () => {
@@ -172,31 +171,123 @@ describe("PythonNodeBundle", () => {
     assert.equal(result.exitCode, 0, result.stderr.toString());
 
     const bindings = readFileSync(
-      join(directory, "python/src/fixture/runtime/_generated/node_bindings.py"),
+      join(directory, "python/src/fixture/runtime/_generated/node/fixture_entry/index.py"),
       "utf8",
     );
     assert.match(bindings, /Regenerated from fixture-entry\/python/);
-    assert.match(bindings, /async def portable\(\) -> str:/);
+    assert.match(bindings, /def portable\(\) -> str:/);
     assert.doesNotMatch(bindings, /browser_only/);
   });
 
-  it("keeps generated bindings private when configured", () => {
+  it("binds multiple automatically generated package modules independently", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      ['export * as identity from "./identity.ts";', 'export * as config from "./config.ts";'].join(
+        "\n",
+      ),
+    );
+    writeFileSync(
+      join(entryDirectory, "identity.ts"),
+      "export function lockId(value: string): string { return value; }\n",
+    );
+    writeFileSync(
+      join(entryDirectory, "config.ts"),
+      "export async function loadConfig(): Promise<string> { return 'config'; }\n",
+    );
+    writeFixturePyproject(directory, [
+      'package = "fixture-entry"',
+      'modules = [ "identity", "config" ]',
+    ]);
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+    const nodeBindings = join(directory, "python/src/fixture/runtime/_generated/node");
+    const generated = join(nodeBindings, "fixture_entry");
+    assert.match(readFileSync(join(generated, "identity.py"), "utf8"), /def lock_id\(/);
+    assert.match(readFileSync(join(generated, "config.py"), "utf8"), /async def load_config\(/);
+    assert.ok(readFileSync(join(nodeBindings, "_runtime.js"), "utf8").length > 0);
+    assert.equal(existsSync(join(generated, "__init__.py")), false);
+
+    const stale = join(generated, "removed.py");
+    writeFileSync(stale, "stale = True\n");
+    const staleCheck = runBindingTask(directory, "--check");
+    assert.notEqual(staleCheck.exitCode, 0);
+    assert.match(staleCheck.stderr.toString(), /removed\.py/);
+    assert.equal(runBindingTask(directory).exitCode, 0);
+    assert.equal(existsSync(stale), false);
+  });
+
+  it("accepts an array of binding tables for multiple Node packages", () => {
+    const directory = temporaryDirectory();
+    const first = packageDirectory(directory, "fixture-first");
+    writeFileSync(
+      join(first, "index.ts"),
+      [
+        'export * as constants from "./constants.ts";',
+        'export * as identity from "./identity.ts";',
+      ].join("\n"),
+    );
+    writeFileSync(join(first, "constants.ts"), "export const value = 1;\n");
+    writeFileSync(
+      join(first, "identity.ts"),
+      "export function lockId(value: string): string { return value; }\n",
+    );
+    const second = packageDirectory(directory, "fixture-second");
+    writeFileSync(join(second, "index.ts"), 'export * as config from "./config.ts";\n');
+    writeFileSync(
+      join(second, "config.ts"),
+      "export async function loadConfig(): Promise<string> { return 'config'; }\n",
+    );
+    writeFixturePyprojectSource(
+      directory,
+      [
+        "[[tool.dbx_tools.node_bindings]]",
+        'package = "fixture-first"',
+        "",
+        "[[tool.dbx_tools.node_bindings]]",
+        'package = "fixture-second"',
+        'modules = [ "config" ]',
+      ].join("\n"),
+    );
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+    const generated = join(directory, "python/src/fixture/runtime/_generated/node");
+    assert.match(
+      readFileSync(join(generated, "fixture_first/identity.py"), "utf8"),
+      /def lock_id\(/,
+    );
+    assert.match(
+      readFileSync(join(generated, "fixture_second/config.py"), "utf8"),
+      /async def load_config\(/,
+    );
+    assert.equal(existsSync(join(generated, "fixture_first/constants.py")), false);
+    assert.ok(readFileSync(join(generated, "_runtime.py"), "utf8").includes("_LOCK = Lock()"));
+    assert.ok(readFileSync(join(generated, "_runtime.js"), "utf8").length > 0);
+    assert.equal(existsSync(join(generated, "fixture_first/_runtime.js")), false);
+    assert.equal(existsSync(join(generated, "fixture_second/_runtime.js")), false);
+    assert.equal(existsSync(join(generated, "fixture_first/__init__.py")), false);
+  });
+
+  it("does not generate namespace package initializers", () => {
     const directory = temporaryDirectory();
     const entryDirectory = packageDirectory(directory, "fixture-entry");
     writeFileSync(
       join(entryDirectory, "index.ts"),
       "export function value(): number { return 1; }\n",
     );
-    writeFixturePyproject(directory, ['package = "fixture-entry"', "private = true"]);
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
 
     const result = runBindingTask(directory);
     assert.equal(result.exitCode, 0, result.stderr.toString());
-    const packageSource = readFileSync(
-      join(directory, "python/src/fixture/runtime/_generated/__init__.py"),
-      "utf8",
+    assert.equal(
+      existsSync(
+        join(directory, "python/src/fixture/runtime/_generated/node/fixture_entry/__init__.py"),
+      ),
+      false,
     );
-    assert.doesNotMatch(packageSource, /from \.node_bindings import/);
-    assert.match(packageSource, /__all__ = \[\]/);
   });
 
   it("fails fast for unsupported option property types", () => {
@@ -282,6 +373,18 @@ function writeFixturePyproject(
   nodeBindings: readonly string[],
   options: { readonly moduleRoot?: string } = {},
 ): void {
+  writeFixturePyprojectSource(
+    root,
+    ["[tool.dbx_tools.node_bindings]", ...nodeBindings].join("\n"),
+    options,
+  );
+}
+
+function writeFixturePyprojectSource(
+  root: string,
+  nodeBindings: string,
+  options: { readonly moduleRoot?: string } = {},
+): void {
   const directory = join(root, "python");
   mkdirSync(directory, { recursive: true });
   writeFileSync(
@@ -291,17 +394,19 @@ function writeFixturePyproject(
       'module-name = "fixture.runtime"',
       `module-root = ${JSON.stringify(options.moduleRoot ?? "src")}`,
       "",
-      "[tool.dbx_tools.node_bindings]",
-      ...nodeBindings,
+      nodeBindings,
       "",
     ].join("\n"),
   );
 }
 
-function runBindingTask(root: string, ...args: string[]): ReturnType<typeof Bun.spawnSync> {
-  return Bun.spawnSync(
+function runBindingTask(
+  root: string,
+  ...args: string[]
+): { exitCode: number; stderr: Buffer; stdout: Buffer } {
+  const result = spawnSync(
+    "bun",
     [
-      "bun",
       join(import.meta.dirname, "../tasks/python-node-bindings.ts"),
       "--root",
       root,
@@ -309,8 +414,13 @@ function runBindingTask(root: string, ...args: string[]): ReturnType<typeof Bun.
       "python",
       ...args,
     ],
-    { stderr: "pipe", stdout: "pipe" },
+    { encoding: "buffer" },
   );
+  return {
+    exitCode: result.status ?? 1,
+    stderr: result.stderr ?? Buffer.alloc(0),
+    stdout: result.stdout ?? Buffer.alloc(0),
+  };
 }
 
 function temporaryDirectory(): string {

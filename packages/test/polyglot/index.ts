@@ -3,8 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/test-polyglot";
-export const PACKAGE_VERSION = "0.9.32";
-export * as polygotTest from "./src/polygot-test.ts";
-export * as pythonTest from "./src/python-test.ts";
-export { Language } from "./src/polygot-test.ts";
-export type { PolyglotTarget, ModuleReference, PolyglotOptions } from "./src/polygot-test.ts";
+export * as polyglot from "./src/polyglot.ts";
+export * as python from "./src/python.ts";
+export { Language } from "./src/polyglot.ts";
+export type { PolyglotTarget, ModuleReference, PolyglotOptions } from "./src/polyglot.ts";

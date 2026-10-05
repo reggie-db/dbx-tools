@@ -3,7 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
-export const PACKAGE_VERSION = "0.9.32";
 export * as classes from "./src/classes.ts";
 export * as classify from "./src/classify.ts";
 export * as fallback from "./src/fallback.ts";
@@ -12,18 +11,17 @@ export * as metadata from "./src/metadata.ts";
 export * as modelCatalog from "./src/model-catalog.ts";
 export * as modelClient from "./src/model-client.ts";
 export * as policy from "./src/policy.ts";
-export * as python from "./src/python.ts";
 export * as resolve from "./src/resolve.ts";
+export * as servingWire from "./src/serving-wire.ts";
 export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./src/classes.ts";
-export type { EndpointCapabilities, FamilyClass } from "./src/classify.ts";
 export { FALLBACK_MODEL_IDS } from "./src/fallback.ts";
-export { INVOCATIONS_SUFFIX, RESPONSES_PATH, OPEN_RESPONSES_PATH, CHAT_COMPLETIONS_PATH } from "./src/invoke.ts";
+export { INVOCATIONS_SUFFIX, RESPONSES_PATH, OPEN_RESPONSES_PATH, CHAT_COMPLETIONS_PATH, AI_GATEWAY_CODEX_RESPONSES_PATH, ANTHROPIC_MESSAGES_PATH } from "./src/invoke.ts";
 export type { AuthenticatingClientLike } from "./src/invoke.ts";
 export { MODEL_METADATA_TTL_MS, MODEL_RATE_LIMITS_URL, OPENAI_RESPONSES_MODELS_URL, RETIRED_MODELS_URL, WEB_SEARCH_MODELS_URL } from "./src/metadata.ts";
-export type { ModelCapabilities, ModelMetadata } from "./src/metadata.ts";
 export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD } from "./src/model-catalog.ts";
-export type { WorkspaceClientLike, ListServingEndpointsOptions, ResolvedModel, ResolveModelOptions, ScoredEndpoint } from "./src/model-catalog.ts";
+export type { WorkspaceClientLike, ListServingEndpointsOptions } from "./src/model-catalog.ts";
 export { DEFAULT_MODEL_CLIENT_CACHE_TTL_MS } from "./src/model-client.ts";
-export type { ModelClientOptions, ModelClientStatus, ModelProtocol, ModelRouteInput, ModelRoute, ModelClient } from "./src/model-client.ts";
+export type { ModelAuthOptions, ModelClientOptions, ModelClientStatus, ModelProtocol, ModelRouteInput, ModelRoute, ModelClient } from "./src/model-client.ts";
 export type { SelectModelInput, SearchModelsInput } from "./src/resolve.ts";
+export type { ServingChatMessage, RewrittenServingRequest } from "./src/serving-wire.ts";
 export * from "./exports.ts";

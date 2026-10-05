@@ -30,7 +30,7 @@ import {
   pluginRegistry,
   toolkitEntries,
 } from "@dbx-tools/appkit";
-import { ensurePythonProxy } from "@dbx-tools/cli-model-proxy/cli";
+import { modelGatewayExecutable } from "@dbx-tools/cli-model-gateway/cli";
 import { configUtils } from "@dbx-tools/core";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
 import { createTool, type Tool } from "@mastra/core/tools";
@@ -125,18 +125,18 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
 
   private async startSidecars(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
-    const [graphitiPort, modelProxyPort, proxyPort] = await distinctPorts(
+    const [graphitiPort, modelGatewayPort, proxyPort] = await distinctPorts(
       configUtils.port(undefined, "DATABRICKS_APP_PORT", 8000, configUtils.ENV_ONLY),
       configured.graphitiPort,
-      configured.modelProxyPort,
+      configured.modelGatewayPort,
       configured.proxyPort,
     );
     await ensureGraphitiPython(configured.python);
-    const modelProxyCommand = await ensureGraphitiModelProxy();
+    const modelGatewayCommand = ensureGraphitiModelGateway();
     this.resolved = {
       ...configured,
       graphitiPort,
-      modelProxyPort,
+      modelGatewayPort,
       proxyPort,
     };
     this.supervision = concurrently(
@@ -149,10 +149,10 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
             GRAPHITI_HOST: "127.0.0.1",
             GRAPHITI_PORT: String(this.resolved.graphitiPort),
             JOURNAL_NAMESPACE: this.resolved.journalNamespace,
-            MANAGE_MODEL_PROXY: "true",
-            MODEL_PROXY_COMMAND: modelProxyCommand,
-            MODEL_PROXY_HOST: "127.0.0.1",
-            MODEL_PROXY_PORT: String(this.resolved.modelProxyPort),
+            MANAGE_MODEL_GATEWAY: "true",
+            MODEL_GATEWAY_COMMAND: modelGatewayCommand,
+            MODEL_GATEWAY_HOST: "127.0.0.1",
+            MODEL_GATEWAY_PORT: String(this.resolved.modelGatewayPort),
           },
         },
         {
@@ -187,7 +187,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.mcpServerSweep.unref();
     this.logger.info("sidecars launched", {
       graphitiPort: this.resolved.graphitiPort,
-      modelProxyPort: this.resolved.modelProxyPort,
+      modelGatewayPort: this.resolved.modelGatewayPort,
       proxyPort: this.resolved.proxyPort,
       mcpPath: MCP_PATH,
     });
@@ -423,11 +423,11 @@ export async function ensureGraphitiPython(
   }
 }
 
-/** Install the exact-version Python model proxy used by the Python sidecar. */
-export async function ensureGraphitiModelProxy(
-  install: typeof ensurePythonProxy = ensurePythonProxy,
-): Promise<string> {
-  return resolvePath(await install());
+/** Resolve the foreground TypeScript model-gateway command used by Graphiti. */
+export function ensureGraphitiModelGateway(
+  executable: () => string = modelGatewayExecutable,
+): string {
+  return commandLine([process.execPath, resolvePath(executable())]);
 }
 
 export const graphiti = toPlugin(GraphitiPlugin);
@@ -520,11 +520,11 @@ async function availablePort(): Promise<number> {
 async function distinctPorts(
   appPort: number,
   graphitiPort: number,
-  modelProxyPort: number,
+  modelGatewayPort: number,
   proxyPort: number,
 ): Promise<[number, number, number]> {
   const ports = [appPort];
-  for (const configuredPort of [graphitiPort, modelProxyPort, proxyPort]) {
+  for (const configuredPort of [graphitiPort, modelGatewayPort, proxyPort]) {
     if (configuredPort && ports.includes(configuredPort)) {
       throw new ConfigurationError("Graphiti sidecar ports must differ from DATABRICKS_APP_PORT");
     }

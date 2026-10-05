@@ -32,10 +32,10 @@ jspm_packages/
 !/.prettierignore
 !/.prettierrc.json
 !/pnpm-workspace.yaml
-!/tsconfig.projen.json
-!/bunfig.toml
 !/tsconfig.base.json
 !/tsconfig.json
+!/tsconfig.projen.json
+!/bunfig.toml
 !/.vscode/settings.json
 !/.vscode/extensions.json
 !/.vscode/tasks.json
@@ -91,7 +91,6 @@ jspm_packages/
 !projen/shims/python-node/
 !projen/shims/python-node/**
 !/pyproject.toml
-!/packages/py/model-proxy/pyproject.toml
 !/packages/py/core/pyproject.toml
 !/packages/py/postgres/pyproject.toml
 !/packages/py/graphiti/pyproject.toml

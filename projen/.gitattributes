@@ -11,6 +11,7 @@
 /bun.lockb linguist-generated
 /LICENSE linguist-generated
 /package.json linguist-generated
+/shims/python-node/tsconfig.json linguist-generated linguist-language=JSON-with-Comments
 /test/tsconfig.json linguist-generated linguist-language=JSON-with-Comments
 /tsconfig.json linguist-generated linguist-language=JSON-with-Comments
 /tsconfig.projen.json linguist-generated linguist-language=JSON-with-Comments

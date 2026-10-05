@@ -3,17 +3,18 @@
 [project]
 name = "dbx-tools-graphiti"
 version = "0.9.32"
-description = "Native Graphiti MCP and Neo4j launcher with Databricks models through dbx-model-proxy"
+description = "Native Graphiti MCP and Neo4j launcher with Databricks models through model-gateway"
 readme = "README.md"
 requires-python = ">=3.11,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
 dependencies = [
   "cyclopts>=4.11,<6",
+  "databricks-sdk>=0.123.0",
   "graphiti-core==0.29.3",
   "honcho>=2,<3",
-  "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core",
-  "dbx-tools-postgres @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/postgres"
+  "dbx-tools-core",
+  "dbx-tools-postgres"
 ]
 
   [project.urls]

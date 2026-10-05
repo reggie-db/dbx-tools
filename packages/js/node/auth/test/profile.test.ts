@@ -3,14 +3,14 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { AuthType, databricksProfileListSchema, TargetKind } from "@dbx-tools/shared-auth";
 
 import {
   invalidateConfigFile,
   listDatabricksProfiles,
   parseDatabricksConfig,
   resolveDatabricksProfile,
-} from "../src/_profile.ts";
-import { AuthKind, DatabricksAuthOptions, TargetKind } from "../src/types.ts";
+} from "../src/_profile-config.ts";
 
 async function withConfig(source: string, action: (path: string) => void | Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), "dbx-tools-auth-profile-"));
@@ -37,9 +37,9 @@ describe("Databricks profile resolution", () => {
     await withConfig(
       `[__settings__]\ndefault_profile = service\n\n[service]\nhost = https://example.cloud.databricks.com\nclient_id = service-id\nclient_secret = secret\n\n[user]\nhost = https://example.cloud.databricks.com\nauth_type = databricks-cli\n`,
       (configFile) => {
-        const profile = resolveDatabricksProfile(DatabricksAuthOptions.create({ configFile }), {});
+        const profile = resolveDatabricksProfile({ configFile }, {});
         assert.equal(profile.name, "user");
-        assert.equal(profile.authKind, AuthKind.UserToMachine);
+        assert.equal(profile.authType, AuthType.DatabricksCli);
       },
     );
   });
@@ -48,12 +48,9 @@ describe("Databricks profile resolution", () => {
     await withConfig(
       `[service]\nhost = https://example.cloud.databricks.com\nclient_id = service-id\nclient_secret = secret\n\n[user]\nhost = https://example.cloud.databricks.com\nauth_type = databricks-cli\n`,
       (configFile) => {
-        const profile = resolveDatabricksProfile(
-          DatabricksAuthOptions.create({ configFile, profile: "service" }),
-          {},
-        );
+        const profile = resolveDatabricksProfile({ configFile, profile: "service" }, {});
         assert.equal(profile.name, "service");
-        assert.equal(profile.authKind, AuthKind.MachineToMachine);
+        assert.equal(profile.authType, AuthType.OAuthM2M);
       },
     );
   });
@@ -62,38 +59,41 @@ describe("Databricks profile resolution", () => {
     await withConfig(
       `[selected]\nhost = https://selected.cloud.databricks.com\nworkspace_id = selected-workspace\nauth_type = pat\ntoken = selected-token\n`,
       (configFile) => {
-        const profile = resolveDatabricksProfile(DatabricksAuthOptions.create({ configFile }), {
-          DATABRICKS_CONFIG_PROFILE: "selected",
-          DATABRICKS_HOST: "https://ambient.cloud.databricks.com",
-          DATABRICKS_WORKSPACE_ID: "ambient-workspace",
-          DATABRICKS_AUTH_TYPE: "pat",
-          DATABRICKS_TOKEN: "ambient-token",
-        });
+        const profile = resolveDatabricksProfile(
+          { configFile },
+          {
+            DATABRICKS_CONFIG_PROFILE: "selected",
+            DATABRICKS_HOST: "https://ambient.cloud.databricks.com",
+            DATABRICKS_WORKSPACE_ID: "ambient-workspace",
+            DATABRICKS_AUTH_TYPE: "pat",
+            DATABRICKS_TOKEN: "ambient-token",
+          },
+        );
         assert.equal(profile.host, "https://selected.cloud.databricks.com");
         assert.equal(profile.workspaceId, "selected-workspace");
         assert.equal(profile.accessToken, "selected-token");
-        assert.equal(profile.authKind, AuthKind.PersonalAccessToken);
+        assert.equal(profile.authType, AuthType.PersonalAccessToken);
       },
     );
   });
 
   it("changes the PAT cache identity when the configured token changes", () => {
     const left = resolveDatabricksProfile(
-      DatabricksAuthOptions.create({
+      {
         profile: "PAT",
         host: "https://example.cloud.databricks.com",
-        authType: "pat",
+        authType: AuthType.PersonalAccessToken,
         accessToken: "left",
-      }),
+      },
       {},
     );
     const right = resolveDatabricksProfile(
-      DatabricksAuthOptions.create({
+      {
         profile: "PAT",
         host: "https://example.cloud.databricks.com",
-        authType: "pat",
+        authType: AuthType.PersonalAccessToken,
         accessToken: "right",
-      }),
+      },
       {},
     );
     assert.notEqual(left.cacheKey, right.cacheKey);
@@ -112,23 +112,22 @@ describe("Databricks profile resolution", () => {
             host: "https://accounts.cloud.databricks.com",
             accountId: "account-id",
             target: TargetKind.Account,
-            authKind: AuthKind.MachineToMachine,
+            authType: AuthType.OAuthM2M,
+            principal: "client-id",
           },
         ]);
+        assert.deepEqual(databricksProfileListSchema.parse(profiles), profiles);
         assert.equal(JSON.stringify(profiles).includes("do-not-return"), false);
-        assert.equal(
-          resolveDatabricksProfile(DatabricksAuthOptions.create({ configFile }), {}).name,
-          "account",
-        );
+        assert.equal(resolveDatabricksProfile({ configFile }, {}).name, "account");
       },
     );
   });
 
   it("prefers App OBO over App SP when a request token exists", () => {
     const profile = resolveDatabricksProfile(
-      DatabricksAuthOptions.create({
+      {
         requestHeaders: { Authorization: "Bearer request-token" },
-      }),
+      },
       {
         DBX_TOOLS_DATABRICKS_APP_ENV: "true",
         DATABRICKS_HOST: "https://example.cloud.databricks.com",
@@ -136,7 +135,7 @@ describe("Databricks profile resolution", () => {
         DATABRICKS_CLIENT_SECRET: "app-secret",
       },
     );
-    assert.equal(profile.authKind, AuthKind.AppOnBehalfOf);
+    assert.equal(profile.authType, AuthType.AppOnBehalfOf);
     assert.equal(profile.accessToken, "request-token");
   });
 });

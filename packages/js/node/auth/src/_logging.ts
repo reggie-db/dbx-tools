@@ -1,8 +1,8 @@
 import * as hash from "@dbx-tools/shared-core/hash";
 import * as log from "@dbx-tools/shared-core/log";
 
-import { AuthError } from "./errors.ts";
-import type { Token } from "./types.ts";
+import { AuthError } from "./_errors.ts";
+import type { Token } from "./_types.ts";
 
 /** Auth logger with a stable capability-specific tag. */
 export function authLogger(scope: string): log.Logger {

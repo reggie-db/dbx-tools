@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { parse } from "smol-toml";
 import { readWorkflow, workflowStep } from "./workflow.ts";
 import { DBXToolsNodeProject, DBXToolsPythonWorkspace } from "../src/project.ts";
+import { generatePythonNodeBindings } from "../src/python-node-bindings.ts";
 
 let outdir: string;
 
@@ -34,7 +35,7 @@ describe("DBXToolsPythonWorkspace", () => {
         artifactPath: "site/dist",
       },
     });
-    assert.equal(project.vsCode?.vsCode, project.vscode);
+    assert.ok(project.vscode);
 
     new DBXToolsPythonWorkspace(project, {
       root: "python/packages",
@@ -89,10 +90,7 @@ describe("DBXToolsPythonWorkspace", () => {
       readFileSync(join(outdir, "python/packages/app/LICENSE"), "utf8"),
       /Apache License/,
     );
-    assert.match(
-      app,
-      /fixture-core @ git\+https:\/\/github\.com\/example\/fixture\.git@main#subdirectory=python\/packages\/core/,
-    );
+    assert.match(app, /dependencies = \[\s*"fixture-core"\s*\]/);
     assert.doesNotMatch(app, /\[dependency-groups\]/);
 
     const settings = readFileSync(join(outdir, ".vscode/settings.json"), "utf8");
@@ -190,7 +188,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.ok(project.tasks.tryFind("py:build"));
   });
 
-  it("registers pyproject-driven Node bindings with the workspace sync watcher", () => {
+  it("discovers pyproject-driven Node bindings during root synthesis", () => {
     const bindingsOutdir = mkdtempSync(join(tmpdir(), "project-py-node-bindings-"));
     try {
       mkdirSync(join(bindingsOutdir, "packages/js/node/auth/src"), { recursive: true });
@@ -198,6 +196,22 @@ describe("DBXToolsPythonWorkspace", () => {
         join(bindingsOutdir, "packages/js/node/auth/src/auth.ts"),
         "export function authenticate(): void {}\n",
       );
+      for (const [name, module, source] of [
+        ["auth", "client", "export function authenticate(): void {}\n"],
+        ["core", "config", "export function configure(): void {}\n"],
+      ]) {
+        const directory = join(bindingsOutdir, "node_modules/@fixture", name);
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+          join(directory, "package.json"),
+          JSON.stringify({ name: `@fixture/${name}`, type: "module", exports: "./index.ts" }),
+        );
+        writeFileSync(
+          join(directory, "index.ts"),
+          `export * as ${module} from "./${module}.ts";\n`,
+        );
+        writeFileSync(join(directory, `${module}.ts`), source);
+      }
       const project = new DBXToolsNodeProject({
         name: "fixture",
         outdir: bindingsOutdir,
@@ -211,67 +225,85 @@ describe("DBXToolsPythonWorkspace", () => {
           {
             directory: "auth",
             description: "Fixture auth bindings",
-            nodeBindings: {
-              package: "@fixture/auth",
-              entrypoint: "@fixture/auth/python",
-              layout: "package",
-              private: true,
-              shimRoot: "projen/shims/python-node",
-              functionOverrides: [
-                {
-                  module: "@fixture/core/file-lock",
-                  export: "acquireFileLock",
-                  handler: "projen/shims/python-node/file-lock.ts",
-                },
-              ],
-            },
+            nodeBindings: [
+              {
+                package: "@fixture/auth",
+                functionOverrides: [
+                  {
+                    module: "@fixture/core/file-lock",
+                    export: "acquireFileLock",
+                    handler: "projen/shims/python-node/file-lock.ts",
+                  },
+                ],
+              },
+              {
+                package: "@fixture/core",
+                modules: ["config"],
+              },
+            ],
           },
         ],
       });
 
       project.synth();
+      generatePythonNodeBindings(bindingsOutdir);
 
-      const pyproject = parse(
-        readFileSync(join(bindingsOutdir, "python/packages/auth/pyproject.toml"), "utf8"),
-      ) as {
+      const packagePyproject = join(bindingsOutdir, "python/packages/auth/pyproject.toml");
+      const pyproject = parse(readFileSync(packagePyproject, "utf8")) as {
         tool: {
           dbx_tools: {
-            node_bindings: {
+            node_bindings: Array<{
               package: string;
-              entrypoint: string;
-              layout: string;
-              private: boolean;
-              shim_root: string;
-              function_overrides: Array<Record<string, string>>;
-            };
+              modules?: string[];
+              function_overrides?: Array<Record<string, string>>;
+            }>;
           };
           uv: { "build-backend": { "module-root": string } };
         };
       };
-      assert.deepEqual(pyproject.tool.dbx_tools.node_bindings, {
-        package: "@fixture/auth",
-        entrypoint: "@fixture/auth/python",
-        layout: "package",
-        private: true,
-        shim_root: "projen/shims/python-node",
-        function_overrides: [
-          {
-            module: "@fixture/core/file-lock",
-            export: "acquireFileLock",
-            handler: "projen/shims/python-node/file-lock.ts",
-          },
-        ],
-      });
-      assert.equal(pyproject.tool.uv["build-backend"]["module-root"], "generated-src");
-      const manifest = JSON.parse(readFileSync(join(bindingsOutdir, "package.json"), "utf8")) as {
-        dbxToolsConfig?: { pythonNodeBindings?: string[] };
-      };
-      assert.deepEqual(manifest.dbxToolsConfig?.pythonNodeBindings, ["python/packages/auth"]);
+      assert.deepEqual(pyproject.tool.dbx_tools.node_bindings, [
+        {
+          package: "@fixture/auth",
+          function_overrides: [
+            {
+              module: "@fixture/core/file-lock",
+              export: "acquireFileLock",
+              handler: "projen/shims/python-node/file-lock.ts",
+            },
+          ],
+        },
+        {
+          package: "@fixture/core",
+          modules: ["config"],
+        },
+      ]);
+      assert.equal(pyproject.tool.uv["build-backend"]["module-root"], "src");
+      assert.equal(
+        existsSync(
+          join(
+            bindingsOutdir,
+            "python/packages/auth/src/fixture/auth/_generated/node/auth/client.py",
+          ),
+        ),
+        true,
+      );
+      assert.equal(
+        existsSync(
+          join(
+            bindingsOutdir,
+            "python/packages/auth/src/fixture/auth/_generated/node/core/config.py",
+          ),
+        ),
+        true,
+      );
       assert.ok(project.tasks.tryFind("auth:python-runtime"));
       assert.ok(project.tasks.tryFind("auth:python-runtime:check"));
+      assert.equal(project.tasks.tryFind("auth:python-runtime:watch"), undefined);
+      rmSync(packagePyproject);
+      generatePythonNodeBindings(bindingsOutdir);
       assert.equal(
-        project.tasks.tryFind("auth:python-runtime:watch")?.steps[0]?.exec,
-        "bun node_modules/@dbx-tools/projen/tasks/python-node-bindings-watch.ts --project python/packages/auth",
+        existsSync(join(bindingsOutdir, "python/packages/auth/src/fixture/auth/_generated/node")),
+        false,
       );
     } finally {
       rmSync(bindingsOutdir, { recursive: true, force: true });

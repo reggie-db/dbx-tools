@@ -110,17 +110,12 @@ export function syncWorkspaceManifestVersion(manifestPath: string, version: stri
   return true;
 }
 
-/** The checked-in version a release increment starts from. */
-export function resolveBaseVersion(root: string): string {
-  return readWorkspaceVersion(root);
-}
-
 /** Resolve the next release version without mutating the workspace. */
 export function resolveNextVersion(
   root: string,
   level: VersionLevel,
 ): { base: string; version: string } {
-  const base = resolveBaseVersion(root);
+  const base = readWorkspaceVersion(root);
   const parsed = parseSemver(base) ?? [0, 0, 1];
   return {
     base: parsed.join("."),

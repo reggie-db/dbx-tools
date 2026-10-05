@@ -3,27 +3,10 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth";
-export const PACKAGE_VERSION = "0.9.32";
-export * as databricksAuth from "./src/databricks-auth.ts";
-export * as databricksCli from "./src/databricks-cli.ts";
-export * as errors from "./src/errors.ts";
-export * as httpClient from "./src/http-client.ts";
-export * as lifecycle from "./src/lifecycle.ts";
-export * as personalAccessToken from "./src/personal-access-token.ts";
-export * as servicePrincipal from "./src/service-principal.ts";
-export * as storage from "./src/storage.ts";
-export * as types from "./src/types.ts";
-export type { DatabricksAuthDependencies } from "./src/databricks-auth.ts";
-export { DatabricksCliProvider } from "./src/databricks-cli.ts";
-export type { DatabricksCliResolver, DatabricksCliResolutionOptions } from "./src/databricks-cli.ts";
-export { AuthError } from "./src/errors.ts";
-export { DatabricksClient } from "./src/http-client.ts";
-export type { DatabricksRequestOptions } from "./src/http-client.ts";
-export { TokenLifecycle } from "./src/lifecycle.ts";
-export { DatabricksPersonalAccessTokenProvider } from "./src/personal-access-token.ts";
-export { DatabricksServicePrincipalProvider } from "./src/service-principal.ts";
-export type { DatabricksServicePrincipalConfig } from "./src/service-principal.ts";
-export { MemoryLockAdapter, MemoryCredentialStore, FileCredentialStore } from "./src/storage.ts";
-export { AuthKind, TargetKind, Storage, FileLayout, DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE, DEFAULT_ACCOUNTS_HOST, DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER, AUTH_TYPE_APP_OBO, AUTH_TYPE_APP_SP } from "./src/types.ts";
-export type { Token, AccessToken, DatabricksProfileSummary, DatabricksAuthStatus, DatabricksProfile, LockAdapter, CredentialStore, TokenProvider, AuthClient } from "./src/types.ts";
-export * from "./exports.ts";
+export * as client from "./src/client.ts";
+export * as config from "./src/config.ts";
+export * as profile from "./src/profile.ts";
+export type { AccessToken, TokenOptions, AuthClient, DatabricksAuthDependencies } from "./src/client.ts";
+export { AUTH_DEFAULTS, DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE, DEFAULT_ACCESS_TOKEN_HEADER, WORKSPACE_ID_HEADER } from "./src/config.ts";
+export type { AuthOptions, DatabricksAuthOptions } from "./src/config.ts";
+export type { ListProfilesOptions } from "./src/profile.ts";

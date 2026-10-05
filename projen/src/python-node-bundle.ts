@@ -1,6 +1,5 @@
 import { Component, type Project, type Task } from "projen";
-import { taskScript } from "./project-js.ts";
-import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
+import { taskCommand } from "./project-js.ts";
 
 /** One function replaced only in a generated PythonMonkey bundle. */
 export interface PythonNodeFunctionOverride {
@@ -20,12 +19,8 @@ export interface PythonNodeBindingsOptions {
   readonly package: string;
   /** Optional portable package subpath to bind. Defaults to {@link package}. */
   readonly entrypoint?: string;
-  /** Generated bindings own the package or live under `_generated`. Defaults to `submodule`. */
-  readonly layout?: "package" | "submodule";
-  /** Keep generated symbols out of the generated package `__init__`. Defaults to false. */
-  readonly private?: boolean;
-  /** Repository-relative directory containing Node built-in shims. */
-  readonly shimRoot?: string;
+  /** Automatically generated root namespace modules to bind independently. */
+  readonly modules?: readonly string[];
   /** Functions replaced only while generating the Python runtime. */
   readonly functionOverrides?: readonly PythonNodeFunctionOverride[];
 }
@@ -38,55 +33,24 @@ export interface PythonNodeBundleOptions {
   readonly projectDirectory: string;
   /** Add the freshness check to the project's test task. Defaults to true. */
   readonly test?: boolean;
-  /** Regenerate during the root workspace watch loop. Defaults to false. */
-  readonly watch?: boolean;
 }
 
 /** Owns paired generation and freshness-check tasks for one Python package. */
 export class PythonNodeBundle extends Component {
   readonly buildTask: Task;
   readonly checkTask: Task;
-  readonly watchTask?: Task;
 
   constructor(project: Project, options: PythonNodeBundleOptions) {
     super(project);
-    const command = taskScript(
-      project,
-      "python-node-bindings.ts",
-      `--project ${shellQuote(options.projectDirectory)}`,
-    );
+    const command = taskCommand("python-node-bindings.ts", "--project", options.projectDirectory);
     this.buildTask = project.addTask(`${options.name}:python-runtime`, {
       description: `Generate Node bindings for Python package ${options.name}`,
-      exec: command,
+      execArgs: command,
     });
     this.checkTask = project.addTask(`${options.name}:python-runtime:check`, {
       description: `Verify generated Node bindings for Python package ${options.name}`,
-      exec: `${command} --check`,
+      execArgs: [...command, "--check"],
     });
     if (options.test ?? true) project.testTask.spawn(this.checkTask);
-    if (options.watch) {
-      this.watchTask = project.addTask(`${options.name}:python-runtime:watch`, {
-        description: `Regenerate Node bindings for Python package ${options.name} on changes`,
-        exec: taskScript(
-          project,
-          "python-node-bindings-watch.ts",
-          `--project ${shellQuote(options.projectDirectory)}`,
-        ),
-      });
-      if (isDBXToolsJavaScriptProject()(project)) {
-        const configured = project.dbxToolsConfig.pythonNodeBindings;
-        const projects = Array.isArray(configured)
-          ? configured.filter((value): value is string => typeof value === "string")
-          : [];
-        project.dbxToolsConfig.pythonNodeBindings = [
-          ...new Set([...projects, options.projectDirectory]),
-        ];
-      }
-    }
   }
-}
-
-function shellQuote(value: string): string {
-  if (/^[A-Za-z0-9_./:@=+#-]+$/.test(value)) return value;
-  return `'${value.replaceAll("'", `'\\''`)}'`;
 }

@@ -1,6 +1,6 @@
 /** Node-native Lakebase PostgreSQL address parsing and local proxy URLs. */
 
-import { object } from "@dbx-tools/shared-core";
+import * as object from "@dbx-tools/shared-core/object";
 
 /** Supported PostgreSQL SSL mode values. */
 export const SSL_MODES = ["require", "disable", "prefer"] as const;

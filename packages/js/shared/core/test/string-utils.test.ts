@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 import { PACKAGE_IDENTIFIER, stringUtils } from "../index.ts";
 
 const identifierContract = {
@@ -28,6 +28,14 @@ describe("stringUtils.trimToEmpty", () => {
     assert.equal(stringUtils.trimToEmpty(null), "");
     assert.equal(stringUtils.trimToEmpty(42), "");
     assert.equal(stringUtils.trimToEmpty("   "), "");
+  });
+});
+
+describe("stringUtils.trimToUndefined", () => {
+  it("trims strings and returns undefined for empty values", () => {
+    assert.equal(stringUtils.trimToUndefined("  hi  "), "hi");
+    assert.equal(stringUtils.trimToUndefined("  "), undefined);
+    assert.equal(stringUtils.trimToUndefined(null), undefined);
   });
 });
 
@@ -105,7 +113,7 @@ describe("stringUtils.dedent", () => {
   });
 });
 
-await polygotTest(
+await polyglotTest(
   async () => ({ PACKAGE_IDENTIFIER, string: identifierContract }),
   "string",
   (implementation, language) => {

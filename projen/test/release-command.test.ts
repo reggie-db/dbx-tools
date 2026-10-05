@@ -46,7 +46,13 @@ describe("direct release tags", () => {
     const { remote, root } = fixture();
     try {
       assert.equal(
-        await runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
+        await runRelease({
+          root,
+          branch: "main",
+          prefix: "v",
+          remote: "origin",
+          localPublish: false,
+        }),
         "v1.0.1",
       );
       assert.equal(git(root, "log", "-1", "--pretty=%s"), "chore(release): 1.0.1");
@@ -70,8 +76,17 @@ describe("direct release tags", () => {
     try {
       writeFileSync(join(root, "VERSION"), "1.0.1\n");
       writeFileSync(join(root, "generated.txt"), "1.0.1\n");
+      git(root, "add", ".");
+      git(root, "commit", "-m", "chore(release): 1.0.1");
       assert.equal(
-        await runRelease({ root, branch: "main", bump: false, prefix: "v", remote: "origin", localPublish: false }),
+        await runRelease({
+          root,
+          branch: "main",
+          bump: false,
+          prefix: "v",
+          remote: "origin",
+          localPublish: false,
+        }),
         "v1.0.1",
       );
     } finally {
@@ -79,22 +94,20 @@ describe("direct release tags", () => {
     }
   });
 
-  it("fast-forwards main when run from another branch", async () => {
+  it("rejects release from another branch", async () => {
     const { remote, root } = fixture();
     try {
       git(root, "switch", "-c", "feature");
-      assert.equal(
-        await runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
-        "v1.0.1",
-      );
-      // The branch commit is fast-forwarded onto main and tagged there.
-      assert.equal(
-        git(root, "rev-parse", "HEAD"),
-        git(remote, "rev-parse", "refs/heads/main"),
-      );
-      assert.equal(
-        git(remote, "rev-parse", "refs/tags/v1.0.1^{commit}"),
-        git(remote, "rev-parse", "refs/heads/main"),
+      await assert.rejects(
+        () =>
+          runRelease({
+            root,
+            branch: "main",
+            prefix: "v",
+            remote: "origin",
+            localPublish: false,
+          }),
+        /must run from main/,
       );
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
@@ -111,7 +124,8 @@ describe("direct release tags", () => {
       git(root, "push", "origin", "main");
       git(root, "reset", "--hard", "HEAD~1");
       await assert.rejects(
-        () => runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
+        () =>
+          runRelease({ root, branch: "main", prefix: "v", remote: "origin", localPublish: false }),
         /fast-forward/,
       );
     } finally {

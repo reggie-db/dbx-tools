@@ -8,7 +8,6 @@ import json
 import math
 import os
 import platform
-import re
 import socket
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
@@ -16,9 +15,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol, TypeAlias
 
-from dbx_tools.core import fnv_hash, to_identifier, to_stable_key
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+
+from ._generated.node.postgres.identity import channel_name as _node_channel_name
 
 SerializableValue: TypeAlias = (
     str | int | float | bool | None | list["SerializableValue"] | dict[str, "SerializableValue"]
@@ -35,9 +35,6 @@ TopicMetadataProvider: TypeAlias = Callable[[], Awaitable[TopicMetadata] | Topic
 """Synchronous or asynchronous provider evaluated for each broadcast."""
 
 _DEFAULT_CHANNEL = "dbx_tools_topic_bus"
-_MAX_CHANNEL_LENGTH = 63
-_CHANNEL_HASH_LENGTH = 6
-_CHANNEL_FALLBACK = "bus"
 _MAX_NOTIFY_BYTES = 7_900
 _MIN_RECONNECT_DELAY = 0.25
 _MAX_RECONNECT_DELAY = 5.0
@@ -351,15 +348,7 @@ def channel_name(channel: object = _DEFAULT_CHANNEL) -> str:
     63-byte identifier limit and remains deterministic across runtimes.
     """
 
-    parts = list(channel) if isinstance(channel, (list, tuple)) else [channel]
-    stable = "\0".join(to_stable_key(part) for part in parts)
-    suffix = fnv_hash(stable, length=_CHANNEL_HASH_LENGTH)
-    labels = [part for part in parts if isinstance(part, (str, int, float, bool))]
-    body = to_identifier(*labels, delimiter="_")[: _MAX_CHANNEL_LENGTH - len(suffix) - 1].rstrip(
-        "_"
-    )
-    prefix = body if re.match(r"^[A-Za-z_]", body) else f"{_CHANNEL_FALLBACK}_{body}"
-    return re.sub(r"_+", "_", f"{prefix}_{suffix}")
+    return _node_channel_name(channel)
 
 
 def _publish_input(value: TopicPublishInput | Mapping[str, Any]) -> TopicPublishInput:
@@ -446,6 +435,3 @@ def _is_serializable(value: object, seen: set[int] | None = None) -> bool:
 
 async def _maybe_await(value: object) -> object:
     return await value if inspect.isawaitable(value) else value
-
-
-channelName = channel_name

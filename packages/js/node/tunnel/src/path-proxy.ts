@@ -12,6 +12,7 @@ function stripPathPrefix(request: IncomingMessage, prefix: string): void {
   }
 }
 
+/** Start a loopback proxy that mounts an application beneath one path. */
 export async function startPathProxy(
   appPort: number,
   path: string,

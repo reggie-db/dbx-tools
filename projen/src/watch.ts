@@ -90,19 +90,13 @@ export interface WatchLoopOptions {
   check?: (changed: string[]) => boolean | Promise<boolean>;
 }
 
-function resolveWatchLoopOptions(config?: IgnoreGroupOptions | WatchLoopOptions): WatchLoopOptions {
-  if (!config) return {};
-  if ("check" in config || "ignoreOptions" in config) return config as WatchLoopOptions;
-  return { ignoreOptions: config as IgnoreGroupOptions };
-}
-
 export function watchLoop(
   tag: string,
   paths: string[],
   onBatch: (changed: string[]) => void | Promise<void>,
-  config?: IgnoreGroupOptions | WatchLoopOptions,
+  config: WatchLoopOptions = {},
 ): void {
-  const { ignoreOptions, check } = resolveWatchLoopOptions(config);
+  const { ignoreOptions, check } = config;
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let running = false;

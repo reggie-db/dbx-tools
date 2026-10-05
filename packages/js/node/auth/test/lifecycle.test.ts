@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { TokenLifecycle } from "../src/lifecycle.ts";
-import { MemoryCredentialStore, MemoryLockAdapter } from "../src/storage.ts";
-import { AuthOptions, type Token, type TokenProvider } from "../src/types.ts";
+import { TokenLifecycle } from "../src/_lifecycle.ts";
+import { MemoryCredentialStore, MemoryLockAdapter } from "../src/_storage.ts";
+import type { Token, TokenProvider } from "../src/_types.ts";
+import { AUTH_DEFAULTS } from "../src/config.ts";
 
 function token(accessToken: string): Token {
   return {
@@ -28,12 +29,10 @@ describe("authentication lifecycle", () => {
       refresh: async () => token("refresh"),
       canAuthenticateSilently: () => true,
     };
-    const client = new TokenLifecycle(
-      "profile",
-      provider,
-      new MemoryCredentialStore(),
-      AuthOptions.create({ refreshBufferMs: 0 }),
-    );
+    const client = new TokenLifecycle("profile", provider, new MemoryCredentialStore(), {
+      ...AUTH_DEFAULTS,
+      refreshBufferMs: 0,
+    });
 
     assert.equal((await client.tokenOrLogin()).accessToken, "login");
     assert.equal(logins, 1);
@@ -51,47 +50,15 @@ describe("authentication lifecycle", () => {
       refresh: async () => token("refresh"),
       canAuthenticateSilently: () => true,
     };
-    const client = new TokenLifecycle(
-      "profile",
-      provider,
-      new MemoryCredentialStore(),
-      AuthOptions.create({ refreshBufferMs: 0 }),
-    );
+    const client = new TokenLifecycle("profile", provider, new MemoryCredentialStore(), {
+      ...AUTH_DEFAULTS,
+      refreshBufferMs: 0,
+    });
 
     const [left, right] = await Promise.all([client.token(), client.token()]);
     assert.equal(left.accessToken, "shared");
     assert.equal(right.accessToken, "shared");
     assert.equal(acquisitions, 1);
-  });
-
-  it("reuses a replacement written while a rejected token waited for the lock", async () => {
-    const store = new MemoryCredentialStore();
-    await store.save("profile", token("stale"));
-    let refreshes = 0;
-    const provider: TokenProvider = {
-      authenticate: async () => token("authenticated"),
-      login: async () => token("login"),
-      async refresh() {
-        refreshes += 1;
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        return token("replacement");
-      },
-      canAuthenticateSilently: () => true,
-    };
-    const client = new TokenLifecycle(
-      "profile",
-      provider,
-      store,
-      AuthOptions.create({ refreshBufferMs: 0 }),
-    );
-
-    const [left, right] = await Promise.all([
-      client.refreshRejectedToken("stale"),
-      client.refreshRejectedToken("stale"),
-    ]);
-    assert.equal(left.accessToken, "replacement");
-    assert.equal(right.accessToken, "replacement");
-    assert.equal(refreshes, 1);
   });
 
   it("does not poison the in-memory queue when a waiter times out", async () => {

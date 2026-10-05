@@ -70,6 +70,7 @@ function serverApplication(context: GateMountContext): GateServerApplication | u
     : undefined;
 }
 
+/** Mount the authentication gate on an AppKit-compatible server context. */
 export function mountGateOnContext(context: GateMountContext, options: GateOptions): void {
   const application = serverApplication(context);
   if (application) {

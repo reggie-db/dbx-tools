@@ -9,6 +9,16 @@ import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.t
 
 let temp: string;
 
+interface ProjenTsconfig {
+  readonly extends?: string | string[];
+  readonly include?: string[];
+}
+
+function readProjenTsconfig(path: string): ProjenTsconfig {
+  const source = readFileSync(path, "utf8").replace(/^\/\/[^\n]*\n/, "");
+  return JSON.parse(source) as ProjenTsconfig;
+}
+
 before(() => {
   process.env.PROJEN_DISABLE_POST = "1";
   temp = mkdtempSync(join(tmpdir(), "dbx-tools-external-"));
@@ -61,6 +71,9 @@ describe("external project roots", () => {
       assert.equal(child.name, "@consumer-repo/widget");
       assert.equal(child.repository?.url, root.repository?.url);
       assert.equal(child.repository?.directory, "modules/widget");
+      const projenTsconfig = readProjenTsconfig(join(outdir, "tsconfig.projen.json"));
+      assert.deepEqual([projenTsconfig.extends].flat(), ["./tsconfig.json"]);
+      assert.deepEqual(projenTsconfig.include, [".projenrc.ts", "projenrc/**/*.ts"]);
     },
   );
 
@@ -95,5 +108,8 @@ describe("external project roots", () => {
     assert.equal(tasks.tasks.bump, undefined);
     assert.equal(tasks.tasks["version:check"], undefined);
     assert.equal(existsSync(join(outdir, ".github/workflows/release.yml")), false);
+    const projenTsconfig = readProjenTsconfig(join(outdir, "tsconfig.projen.json"));
+    assert.deepEqual([projenTsconfig.extends].flat(), ["./tsconfig.build.json"]);
+    assert.deepEqual(projenTsconfig.include, [".projenrc.ts", "projenrc/**/*.ts"]);
   });
 });

@@ -208,6 +208,7 @@ export function startFrp(
   return spawn("frpc", ["-c", configPath], { env: childEnv, stdio: "inherit" });
 }
 
+/** Supervise the FRP client for a resolved tunnel configuration. */
 export function superviseFrp(
   resolved: FrpConfig,
   childEnv: NodeJS.ProcessEnv,

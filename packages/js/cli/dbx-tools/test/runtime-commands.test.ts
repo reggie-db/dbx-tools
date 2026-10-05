@@ -7,7 +7,7 @@ describe("runtime commands", () => {
   it("registers lazy proxy commands without executing them", () => {
     const help = buildProgram().helpInformation();
 
-    assert.match(help, /model-proxy/);
+    assert.match(help, /model-gateway/);
     assert.match(help, /lakebase-proxy/);
   });
 });

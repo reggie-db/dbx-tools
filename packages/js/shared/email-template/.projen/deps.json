@@ -1,22 +1,13 @@
 {
   "dependencies": [
     {
-      "name": "@types/bun",
-      "version": "1.3.14",
-      "type": "build"
-    },
-    {
-      "name": "@types/node",
-      "version": "^24.6.0",
-      "type": "build"
-    },
-    {
       "name": "@types/react",
       "version": "catalog:",
       "type": "build"
     },
     {
       "name": "typescript",
+      "version": "^5.9.3",
       "type": "build"
     },
     {

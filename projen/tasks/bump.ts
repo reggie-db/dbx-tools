@@ -16,26 +16,30 @@ import {
 
 const logger = log.logger("projen:bump");
 
-const program = new Command();
-program
-  .description("Increment VERSION and synchronize generated workspace versions")
-  .addOption(
-    new Option("-l, --level <level>", "semver increment")
-      .choices(["patch", "minor", "major"])
-      .default("patch"),
-  )
-  .option("--no-synth", "write VERSION without synchronizing generated files")
-  .action((opts: { level: VersionLevel; synth: boolean }) => {
-    const root = projectUtils.root() ?? process.cwd();
-    const next = resolveNextVersion(root, opts.level);
+export async function main(): Promise<void> {
+  const program = new Command();
+  program
+    .description("Increment VERSION and synchronize generated workspace versions")
+    .addOption(
+      new Option("-l, --level <level>", "semver increment")
+        .choices(["patch", "minor", "major"])
+        .default("patch"),
+    )
+    .option("--no-synth", "write VERSION without synchronizing generated files")
+    .action((opts: { level: VersionLevel; synth: boolean }) => {
+      const root = projectUtils.root() ?? process.cwd();
+      const next = resolveNextVersion(root, opts.level);
 
-    logger.info(`bump ${next.base} -> ${next.version} (${opts.level})`);
-    writeWorkspaceVersion(root, next.version);
+      logger.info(`bump ${next.base} -> ${next.version} (${opts.level})`);
+      writeWorkspaceVersion(root, next.version);
 
-    if (opts.synth) {
-      runTaskCommand(root, process.execPath, [".projenrc.ts"]);
-    }
-    logger.success(`workspace version synchronized at ${next.version}`);
-  });
+      if (opts.synth) {
+        runTaskCommand(root, process.execPath, [".projenrc.ts"]);
+      }
+      logger.success(`workspace version synchronized at ${next.version}`);
+    });
 
-await program.parseAsync();
+  await program.parseAsync();
+}
+
+if (import.meta.main) await main();

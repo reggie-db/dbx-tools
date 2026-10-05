@@ -30,10 +30,22 @@
       "description": "Only compile",
       "steps": [
         {
+          "spawn": "contracts"
+        },
+        {
           "execArgs": [
             "tsc",
             "--build"
           ]
+        }
+      ]
+    },
+    "contracts": {
+      "name": "contracts",
+      "description": "Generate Zod schemas from the browser-safe model contracts",
+      "steps": [
+        {
+          "exec": "bunx ts-to-zod src/contracts.ts src/generated/_schemas.ts --keepComments"
         }
       ]
     },

@@ -1,11 +1,6 @@
 {
   "dependencies": [
     {
-      "name": "@types/bun",
-      "version": "1.3.14",
-      "type": "build"
-    },
-    {
       "name": "@types/ini",
       "version": "^4.1.1",
       "type": "build"
@@ -17,10 +12,16 @@
     },
     {
       "name": "typescript",
+      "version": "^5.9.3",
       "type": "build"
     },
     {
       "name": "@dbx-tools/core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-auth",
       "version": "workspace:^",
       "type": "runtime"
     },

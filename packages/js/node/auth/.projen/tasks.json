@@ -86,12 +86,7 @@
     },
     "pre-compile": {
       "name": "pre-compile",
-      "description": "Prepare the project for compilation",
-      "steps": [
-        {
-          "exec": "bun ../../../../projen/tasks/databricks-cli-assets.ts --root ../../../.."
-        }
-      ]
+      "description": "Prepare the project for compilation"
     },
     "prepack": {
       "name": "prepack",

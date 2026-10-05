@@ -19,7 +19,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/bun": "1.3.14",
     "@types/express": "catalog:",
     "@types/node": "catalog:",
     "@types/pg": "^8",
@@ -71,14 +70,179 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./agents": {
+        "types": "./lib/src/agents.d.ts",
+        "default": "./lib/src/agents.js"
+      },
+      "./chart": {
+        "types": "./lib/src/chart.d.ts",
+        "default": "./lib/src/chart.js"
+      },
+      "./chat": {
+        "types": "./lib/src/chat.d.ts",
+        "default": "./lib/src/chat.js"
+      },
+      "./config": {
+        "types": "./lib/src/config.d.ts",
+        "default": "./lib/src/config.js"
+      },
+      "./defaults": {
+        "types": "./lib/src/defaults.d.ts",
+        "default": "./lib/src/defaults.js"
+      },
+      "./evaluation": {
+        "types": "./lib/src/evaluation.d.ts",
+        "default": "./lib/src/evaluation.js"
+      },
+      "./filesystems": {
+        "types": "./lib/src/filesystems.d.ts",
+        "default": "./lib/src/filesystems.js"
+      },
+      "./genie": {
+        "types": "./lib/src/genie.d.ts",
+        "default": "./lib/src/genie.js"
+      },
+      "./identity": {
+        "types": "./lib/src/identity.d.ts",
+        "default": "./lib/src/identity.js"
+      },
+      "./mcp": {
+        "types": "./lib/src/mcp.d.ts",
+        "default": "./lib/src/mcp.js"
+      },
+      "./memory": {
+        "types": "./lib/src/memory.d.ts",
+        "default": "./lib/src/memory.js"
+      },
+      "./mlflow": {
+        "types": "./lib/src/mlflow.d.ts",
+        "default": "./lib/src/mlflow.js"
+      },
+      "./model": {
+        "types": "./lib/src/model.d.ts",
+        "default": "./lib/src/model.js"
+      },
+      "./monty-sandbox": {
+        "types": "./lib/src/monty-sandbox.d.ts",
+        "default": "./lib/src/monty-sandbox.js"
+      },
+      "./observability": {
+        "types": "./lib/src/observability.d.ts",
+        "default": "./lib/src/observability.js"
+      },
+      "./plugin": {
+        "types": "./lib/src/plugin.d.ts",
+        "default": "./lib/src/plugin.js"
+      },
+      "./processors": {
+        "types": "./lib/src/processors.d.ts",
+        "default": "./lib/src/processors.js"
+      },
+      "./remote-skills": {
+        "types": "./lib/src/remote-skills.d.ts",
+        "default": "./lib/src/remote-skills.js"
+      },
+      "./rest": {
+        "types": "./lib/src/rest.d.ts",
+        "default": "./lib/src/rest.js"
+      },
+      "./sandbox": {
+        "types": "./lib/src/sandbox.d.ts",
+        "default": "./lib/src/sandbox.js"
+      },
+      "./server": {
+        "types": "./lib/src/server.d.ts",
+        "default": "./lib/src/server.js"
+      },
+      "./serving-sanitize": {
+        "types": "./lib/src/serving-sanitize.d.ts",
+        "default": "./lib/src/serving-sanitize.js"
+      },
+      "./serving": {
+        "types": "./lib/src/serving.d.ts",
+        "default": "./lib/src/serving.js"
+      },
+      "./skill-paths": {
+        "types": "./lib/src/skill-paths.d.ts",
+        "default": "./lib/src/skill-paths.js"
+      },
+      "./statement": {
+        "types": "./lib/src/statement.d.ts",
+        "default": "./lib/src/statement.js"
+      },
+      "./storage-schema": {
+        "types": "./lib/src/storage-schema.d.ts",
+        "default": "./lib/src/storage-schema.js"
+      },
+      "./style": {
+        "types": "./lib/src/style.d.ts",
+        "default": "./lib/src/style.js"
+      },
+      "./summarize": {
+        "types": "./lib/src/summarize.d.ts",
+        "default": "./lib/src/summarize.js"
+      },
+      "./trace-io": {
+        "types": "./lib/src/trace-io.d.ts",
+        "default": "./lib/src/trace-io.js"
+      },
+      "./validation": {
+        "types": "./lib/src/validation.d.ts",
+        "default": "./lib/src/validation.js"
+      },
+      "./workspaces": {
+        "types": "./lib/src/workspaces.d.ts",
+        "default": "./lib/src/workspaces.js"
+      },
+      "./writer": {
+        "types": "./lib/src/writer.d.ts",
+        "default": "./lib/src/writer.js"
+      },
       "./package.json": "./package.json"
     }
   },
   "version": "0.9.32",
   "types": "index.ts",
+  "dbxToolsConfig": {
+    "tags": [
+      "node"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./agents": "./src/agents.ts",
+    "./chart": "./src/chart.ts",
+    "./chat": "./src/chat.ts",
+    "./config": "./src/config.ts",
+    "./defaults": "./src/defaults.ts",
+    "./evaluation": "./src/evaluation.ts",
+    "./filesystems": "./src/filesystems.ts",
+    "./genie": "./src/genie.ts",
+    "./identity": "./src/identity.ts",
+    "./mcp": "./src/mcp.ts",
+    "./memory": "./src/memory.ts",
+    "./mlflow": "./src/mlflow.ts",
+    "./model": "./src/model.ts",
+    "./monty-sandbox": "./src/monty-sandbox.ts",
+    "./observability": "./src/observability.ts",
+    "./plugin": "./src/plugin.ts",
+    "./processors": "./src/processors.ts",
+    "./remote-skills": "./src/remote-skills.ts",
+    "./rest": "./src/rest.ts",
+    "./sandbox": "./src/sandbox.ts",
+    "./server": "./src/server.ts",
+    "./serving-sanitize": "./src/serving-sanitize.ts",
+    "./serving": "./src/serving.ts",
+    "./skill-paths": "./src/skill-paths.ts",
+    "./statement": "./src/statement.ts",
+    "./storage-schema": "./src/storage-schema.ts",
+    "./style": "./src/style.ts",
+    "./summarize": "./src/summarize.ts",
+    "./trace-io": "./src/trace-io.ts",
+    "./validation": "./src/validation.ts",
+    "./workspaces": "./src/workspaces.ts",
+    "./writer": "./src/writer.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -90,11 +254,6 @@
     "skills": {
       "optional": true
     }
-  },
-  "dbxToolsConfig": {
-    "tags": [
-      "node"
-    ]
   },
   "//": "~~ Generated by projen. To modify, edit .projenrc.js and run \"bunx projen\"."
 }

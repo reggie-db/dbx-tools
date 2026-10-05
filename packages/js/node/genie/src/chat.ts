@@ -330,8 +330,7 @@ export async function* genieEventChat(
  *
  *   1. Caller-supplied `options.workspaceClient`.
  *   2. AppKit's per-request execution-context client inside a request scope.
- *   3. Fresh `createWorkspaceClient()` (env-var auth via
- *      `DATABRICKS_CONFIG_PROFILE` / `DATABRICKS_HOST` / `DATABRICKS_TOKEN`).
+ *   3. Fresh native AppKit `createWorkspaceClient()`.
  *
  */
 async function getWorkspaceClient(options?: GenieChatOptions): Promise<WorkspaceClient> {

@@ -5,7 +5,7 @@ import {
   requestEmailOtp,
   type PasskeyOperation,
   verifyEmailOtp,
-} from "@dbx-tools/shared-auth/client";
+} from "@dbx-tools/shared-auth/browser";
 
 const emailForm = document.querySelector<HTMLFormElement>("#email-form")!;
 const codeForm = document.querySelector<HTMLFormElement>("#code-form")!;

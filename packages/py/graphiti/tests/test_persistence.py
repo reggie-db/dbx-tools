@@ -19,7 +19,11 @@ from dbx_tools.graphiti.persistence import (
     _encode_value,
     is_write_query,
 )
-from dbx_tools.graphiti.server import _persistent_graphiti_constructor, persistence_configured
+from dbx_tools.graphiti.server import (
+    _persistent_graphiti_constructor,
+    _workspace_client,
+    persistence_configured,
+)
 from graphiti_core.driver.driver import GraphDriver, GraphDriverSession, GraphProvider
 from graphiti_core.driver.query_executor import Transaction
 
@@ -433,9 +437,9 @@ def test_persistent_constructor_wraps_any_explicit_driver(monkeypatch) -> None:
         captured.update(kwargs)
         return object()
 
-    monkeypatch.setattr("dbx_tools.graphiti.server._postgres_storage", lambda: storage)
+    monkeypatch.setattr("dbx_tools.graphiti.server._postgres_storage", lambda _client: storage)
 
-    _persistent_graphiti_constructor(graphiti_constructor)(graph_driver=delegate)
+    _persistent_graphiti_constructor(graphiti_constructor, None)(graph_driver=delegate)
 
     driver = captured["graph_driver"]
     assert isinstance(driver, DelegatingGraphDriver)
@@ -447,3 +451,14 @@ def test_persistence_activation_uses_postgres_environment() -> None:
     assert persistence_configured({"JOURNAL_DATABASE_URL": "postgresql://example/db"})
     assert not persistence_configured({"PGHOST": "  "})
     assert not persistence_configured({})
+
+
+def test_workspace_client_uses_node_auth_profile_resolution(monkeypatch) -> None:
+    async def create(options):
+        return options
+
+    monkeypatch.setattr("dbx_tools.graphiti.server.create_workspace_client", create)
+
+    workspace = asyncio.run(_workspace_client("PROFILE"))
+
+    assert workspace.profile == "PROFILE"

@@ -1,4 +1,5 @@
 /** Verified release context shared by every job in the unified workflow. */
+import { github } from "projen";
 import type { JobStep } from "projen/lib/github/workflows-model";
 
 export const RELEASE_TAG = "${{ needs.verify-context.outputs.release_tag }}";
@@ -8,14 +9,13 @@ export const RELEASE_VERSION = "${{ needs.verify-context.outputs.release_version
 /** Check out and verify the immutable commit selected by the release tag. */
 export function releaseSourceSteps(): readonly JobStep[] {
   return [
-    {
+    github.WorkflowSteps.checkout({
       name: "Checkout release commit",
-      uses: "actions/checkout@v6",
       with: {
         ref: RELEASE_SHA,
-        "fetch-depth": 1,
+        fetchDepth: 1,
       },
-    },
+    }),
     {
       name: "Verify release source",
       shell: "bash",

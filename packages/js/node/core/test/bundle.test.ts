@@ -138,6 +138,27 @@ describe("appResources", () => {
     }
   });
 
+  it("passes only the explicit profile to bundle validation", () => {
+    const fixture = createFixture();
+    try {
+      writeBundle(fixture.root, { resources: { apps: {} } });
+
+      const result = runProbe(fixture, {
+        ambientProfile: "ambient",
+        profile: "resolved",
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(readFileSync(fixture.argumentsPath, "utf8").trim().split("\n").slice(-2), [
+        "--profile",
+        "resolved",
+      ]);
+      assert.equal(readFileSync(fixture.profilePath, "utf8"), "unset");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   it("yields nothing for unusable boundaries and working directories", async () => {
     const fixture = createFixture();
     const boundary = join(fixture.root, "bundles");
@@ -166,6 +187,8 @@ type Fixture = {
   appDirectory: string;
   binDirectory: string;
   callsPath: string;
+  argumentsPath: string;
+  profilePath: string;
   cleanup: () => void;
 };
 
@@ -174,6 +197,8 @@ function createFixture(): Fixture {
   const appDirectory = join(root, "apps", "demo");
   const binDirectory = join(root, "bin");
   const callsPath = join(root, ".bundle-calls");
+  const argumentsPath = join(root, ".bundle-arguments");
+  const profilePath = join(root, ".bundle-profile");
   mkdirSync(appDirectory, { recursive: true });
   mkdirSync(binDirectory);
 
@@ -183,6 +208,8 @@ function createFixture(): Fixture {
     [
       "#!/bin/sh",
       'if [ -n "$BUNDLE_CALLS" ]; then echo "$PWD" >> "$BUNDLE_CALLS"; fi',
+      'if [ -n "$BUNDLE_ARGUMENTS" ]; then printf \'%s\\n\' "$@" > "$BUNDLE_ARGUMENTS"; fi',
+      'if [ -n "$BUNDLE_PROFILE" ]; then printf \'%s\' "${DATABRICKS_CONFIG_PROFILE-unset}" > "$BUNDLE_PROFILE"; fi',
       'cat "$PWD/.validation-output"',
       'if [ -f "$PWD/.validation-error" ]; then',
       '  cat "$PWD/.validation-error" >&2',
@@ -198,6 +225,8 @@ function createFixture(): Fixture {
     appDirectory,
     binDirectory,
     callsPath,
+    argumentsPath,
+    profilePath,
     cleanup: () => {
       rmSync(root, { recursive: true, force: true });
     },
@@ -213,22 +242,32 @@ type ProbeResource = {
   bundleFailure?: string;
 };
 
-function runProbe(fixture: Fixture, limit?: number) {
+type ProbeOptions = {
+  limit?: number;
+  profile?: string;
+  ambientProfile?: string;
+};
+
+function runProbe(fixture: Fixture, options: ProbeOptions = {}) {
   const probe = join(import.meta.dir, "fixtures", "app-resources-probe.ts");
   const args = [probe, fixture.root, fixture.appDirectory];
-  if (limit !== undefined) args.push(String(limit));
+  if (options.limit !== undefined) args.push(String(options.limit));
   return spawnSync(process.execPath, args, {
     encoding: "utf8",
     env: {
       ...process.env,
+      ...(options.ambientProfile ? { DATABRICKS_CONFIG_PROFILE: options.ambientProfile } : {}),
       BUNDLE_CALLS: fixture.callsPath,
+      BUNDLE_ARGUMENTS: fixture.argumentsPath,
+      BUNDLE_PROFILE: fixture.profilePath,
+      ...(options.profile ? { PROBE_BUNDLE_PROFILE: options.profile } : {}),
       PATH: `${fixture.binDirectory}:${process.env.PATH ?? ""}`,
     },
   });
 }
 
 function readResources(fixture: Fixture, limit?: number): ProbeResource[] {
-  const result = runProbe(fixture, limit);
+  const result = runProbe(fixture, { limit });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout) as ProbeResource[];
 }

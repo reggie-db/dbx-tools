@@ -5,13 +5,9 @@
  * `@clack/prompts` multiselect picker with all preselected, the TTY guard) lives in
  * `tasks/clean.ts`, which forwards to these functions.
  *
- * "Generated" is detected structurally, not by a hardcoded list: every file this
- * toolchain writes is set READ-ONLY (projen's own config + the generated barrels; see
- * {@link isReadonly}), while every hand-authored source stays writable. So a read-only
- * file under the repo is a clean target - EXCEPT anything inside a dot-prefixed folder
- * (`.projen`, `.vscode`, `.git`, ...) and `.gitignore` itself, which clean always leaves
- * alone (projen re-syncs `.projen`/`.vscode` on the next synth). `node_modules` is
- * enumerated separately (see {@link listNodeModulesDirs}) as whole directories.
+ * Generated files come from Projen's `.projen/files.json` inventories plus the
+ * durable header used by dynamic dbx-tools generators. File mode is edit
+ * protection only and is never treated as ownership evidence.
  *
  * Deleting only generated files is never destructive to the ability to regenerate:
  * `.projenrc.ts` imports the engine by SOURCE path (relative into the repo, e.g.
@@ -21,10 +17,11 @@
  * `bun install` first - the engine's runtime deps live there - so a clean that takes
  * `node_modules` must be followed by reinstall, then re-synth.
  */
-import { existsSync, rmSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { find } from "@dbx-tools/path";
-import { isReadonly, makeWritable } from "./generated.ts";
+import { json } from "@dbx-tools/shared-core";
+import { isGenerated, makeWritable } from "./generated.ts";
 import { resolveRepoRoot, toPosix } from "./packages.ts";
 
 /**
@@ -35,16 +32,41 @@ import { resolveRepoRoot, toPosix } from "./packages.ts";
 const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
 
 /**
- * Every generated (read-only) file in the workspace, as absolute paths sorted by
+ * Every generated file in the workspace, as absolute paths sorted by
  * repo-relative posix path. Skips vendor/build/VCS dirs via node-path's built-in
  * ignores AND every dot-prefixed folder (`.projen`, `.vscode`, `.github`, ...), and
  * {@link CLEAN_SKIP_FILES} entry (`.gitignore`).
  */
+function nativeGeneratedFiles(root: string): string[] {
+  const files = new Set<string>();
+  for (const manifestPath of find.findFiles("**/.projen/files.json", {
+    cwd: root,
+    ignoreOptions: { dot: false },
+  })) {
+    const manifest = json.parseRecord(readFileSync(resolve(root, manifestPath), "utf8"));
+    const projectRoot = dirname(dirname(resolve(root, manifestPath)));
+    const entries = manifest?.files;
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (typeof entry === "string") files.add(resolve(projectRoot, entry));
+    }
+  }
+  return [...files];
+}
+
 export function listGeneratedFiles(root: string = resolveRepoRoot()): string[] {
   const rel = (f: string): string => toPosix(relative(root, f));
-  return [...find.findFiles("**/*", { cwd: root })]
+  const custom = [...find.findFiles("**/*", { cwd: root })]
     .map((f) => join(root, f))
-    .filter(isReadonly)
+    .filter(isGenerated);
+  return [...new Set([...nativeGeneratedFiles(root), ...custom])]
+    .filter(existsSync)
+    .filter(
+      (file) =>
+        !rel(file)
+          .split("/")
+          .some((part) => part.startsWith(".")),
+    )
     .filter((f) => !CLEAN_SKIP_FILES.has(basename(f)))
     .sort((a, b) => rel(a).localeCompare(rel(b)));
 }
@@ -74,15 +96,19 @@ export function listNodeModulesDirs(root: string = resolveRepoRoot()): string[] 
  */
 export function removePaths(paths: readonly string[]): number {
   let removed = 0;
+  const failures: unknown[] = [];
   for (const path of paths) {
     try {
       if (!existsSync(path)) continue;
       if (statSync(path).isFile()) makeWritable(path);
       rmSync(path, { recursive: true, force: true });
       removed++;
-    } catch {
-      // Already gone, or racing the watcher - nothing to do.
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") failures.push(error);
     }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, `Could not remove ${failures.length} selected path(s)`);
   }
   return removed;
 }

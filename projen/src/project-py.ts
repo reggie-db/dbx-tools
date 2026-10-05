@@ -1,19 +1,18 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import * as projectUtils from "@dbx-tools/core/project-utils";
-import { stringUtils } from "@dbx-tools/shared-core";
-import { Component, License, TextFile, type Project, javascript, python, vscode } from "projen";
+import { stringUtils, type OneOrMany } from "@dbx-tools/shared-core";
+import { Component, License, TextFile, type Project, javascript, python } from "projen";
 import { JobPermission } from "projen/lib/github/workflows-model";
-import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
+import { BUN_VERSION } from "./bun-workflow.ts";
 import { DBX_TOOLS_LICENSE, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
-import { hasWorkspaceNodePackage } from "./python-node-bindings.ts";
-import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
+import { PythonNodeBundle, type PythonNodeBindingsOptions } from "./python-node-bundle.ts";
 import { RELEASE_VERSION, releaseSourceSteps } from "./release-context.ts";
 import {
   refreshReleaseDocsDependencies,
+  releaseCondition,
   releaseTagPattern,
-  releasePublishCondition,
   tryReleaseWorkflow,
   uvSetupStep,
 } from "./release.ts";
@@ -38,23 +37,15 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   /** Workspace package directories rendered as standalone Git dependencies. */
   readonly internalDependencies?: readonly string[];
   readonly scripts?: Readonly<Record<string, string>>;
-  /** Build-time Node package embedded through PythonMonkey. */
-  readonly nodeBindings?: PythonNodeBindingsOptions;
+  /** One or more build-time Node packages embedded through PythonMonkey. */
+  readonly nodeBindings?: OneOrMany<PythonNodeBindingsOptions>;
   /** Generated source files excluded from strict static analysis. Package-relative. */
   readonly generatedSources?: readonly string[];
-  /** Trusted publisher used outside the standard Python release workflow. */
-  readonly trustedPublisher?: PythonTrustedPublisherOptions;
 }
 
 interface ResolvedPythonPackageOptions extends PythonPackageOptions {
   readonly name: string;
   readonly module: string;
-}
-
-/** GitHub Actions publisher for a Python package released by another workflow. */
-export interface PythonTrustedPublisherOptions {
-  readonly environment: string;
-  readonly artifacts?: string;
 }
 
 /** Options for one projen-native Python workspace member. */
@@ -78,7 +69,6 @@ interface PythonPublication {
   readonly directory: string;
   readonly distribution: string;
   readonly environment: string;
-  readonly artifacts?: string;
   readonly dependencies?: readonly string[];
 }
 
@@ -117,30 +107,9 @@ export function pythonPackagePath(repository: PythonRepositoryOptions, directory
   return `${repository.root ?? "packages/py"}/${directory}`;
 }
 
-/** PEP 508 dependency pointing at a sibling package in a Git repository. */
-export function pythonGitDependency(
-  repository: PythonRepositoryOptions,
-  name: string,
-  directory: string,
-): string {
-  return `${name} @ git+${repository.url}@${repository.ref ?? "main"}#subdirectory=${pythonPackagePath(repository, directory)}`;
-}
-
 /** Derive a dotted Python module from an npm-style scope and package directory. */
 export function pythonModuleName(scope: string, directory: string): string {
   return [scope, ...directory.split("/")].map((part) => part.replaceAll("-", "_")).join(".");
-}
-
-/** Published requirement for one internal Python dependency. */
-export function pythonReleaseRequirement(version: string, exact = false): string {
-  if (exact) return `==${version}`;
-  const [major, minor] = version.split(".").map(Number);
-  const upper = major === 0 ? `0.${minor + 1}.0` : `${major + 1}.0.0`;
-  return `>=${version},<${upper}`;
-}
-
-function projectVscode(project: Project): vscode.VsCode | undefined {
-  return (project as Project & { readonly vscode?: vscode.VsCode }).vscode;
 }
 
 /** A Python package implemented with projen's `PythonProject` and uv backend. */
@@ -151,6 +120,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
 
   constructor(options: DBXToolsPythonProjectOptions) {
     const pkg = options.package;
+    const nodeBindings = pythonNodeBindings(pkg);
     super({
       parent: options.parent,
       outdir: pythonPackagePath(options.repository, pkg.directory),
@@ -182,6 +152,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
           licenseFiles: ["LICENSE"],
           requiresPython: options.requiresPython,
           dependencies: [...(pkg.dependencies ?? [])],
+          scripts: pkg.scripts,
           urls: {
             Source: `${options.repository.url.replace(/\.git$/, "")}/tree/${options.repository.ref}/${pythonPackagePath(options.repository, pkg.directory)}`,
           },
@@ -193,8 +164,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
         uv: {
           buildBackend: {
             moduleName: pkg.module,
-            moduleRoot:
-              pkg.moduleRoot ?? (pkg.nodeBindings?.layout === "package" ? "generated-src" : "src"),
+            moduleRoot: pkg.moduleRoot ?? "src",
             namespace: true,
           },
         },
@@ -206,29 +176,16 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
       throw new Error(`Expected uv packaging for ${pkg.name}`);
     }
     this.uv = this.packagingManager;
+    this.tasks.removeTask("publish");
+    this.tasks.removeTask("publish:test");
     this.uv.file.addDeletionOverride("project.authors");
     this.uv.file.addDeletionOverride("dependency-groups");
-    if (pkg.scripts) {
-      this.uv.file.addOverride("project.scripts", pkg.scripts);
-    }
-    if (pkg.nodeBindings) {
-      this.uv.file.addOverride("tool.dbx_tools.node_bindings", {
-        package: pkg.nodeBindings.package,
-        ...(pkg.nodeBindings.entrypoint ? { entrypoint: pkg.nodeBindings.entrypoint } : {}),
-        ...(pkg.nodeBindings.layout ? { layout: pkg.nodeBindings.layout } : {}),
-        ...(pkg.nodeBindings.private ? { private: true } : {}),
-        ...(pkg.nodeBindings.shimRoot ? { shim_root: pkg.nodeBindings.shimRoot } : {}),
-        ...(pkg.nodeBindings.functionOverrides?.length
-          ? {
-              function_overrides: pkg.nodeBindings.functionOverrides.map((override) => ({
-                module: override.module,
-                export: override.export,
-                handler: override.handler,
-                ...(override.handlerExport ? { handler_export: override.handlerExport } : {}),
-              })),
-            }
-          : {}),
-      });
+    if (nodeBindings.length > 0) {
+      const rendered = nodeBindings.map(renderPythonNodeBindings);
+      this.uv.file.addOverride(
+        "tool.dbx_tools.node_bindings",
+        rendered.length === 1 ? rendered[0] : rendered,
+      );
     }
     this.uv.file.readonly = true;
 
@@ -286,7 +243,7 @@ export class DBXToolsPythonWorkspace extends Component {
               `Python package ${pkg.directory} references unknown internal package ${directory}`,
             );
           }
-          return pythonGitDependency(this.repository, dependency.name, dependency.directory);
+          return dependency.name;
         }),
       ],
     }));
@@ -301,52 +258,16 @@ export class DBXToolsPythonWorkspace extends Component {
           package: pkg,
           repository: this.repository,
           requiresPython: this.requiresPython,
-          version: isDBXToolsJavaScriptProject()(project)
-            ? project.releaseCatalog.versionForRegistration(
-                "python",
-                pkg.name,
-                pythonPackagePath(this.repository, pkg.directory),
-              )
-            : this.version,
+          version: this.version,
         }),
     );
     for (const pkg of this.packages) {
-      if (!pkg.packageOptions.nodeBindings) continue;
+      const bindings = pythonNodeBindings(pkg.packageOptions);
+      if (bindings.length === 0) continue;
       new PythonNodeBundle(project, {
         name: pkg.packageOptions.directory,
         projectDirectory: pythonPackagePath(this.repository, pkg.packageOptions.directory),
-        watch: hasWorkspaceNodePackage(project, pkg.packageOptions.nodeBindings.package),
       });
-    }
-    if (isDBXToolsJavaScriptProject()(project)) {
-      for (const pkg of this.packages) {
-        project.releaseCatalog.registerProject(pkg, {
-          language: "python",
-          identity: pkg.packageOptions.name,
-          sourcePaths: [`${pythonPackagePath(this.repository, pkg.packageOptions.directory)}/src`],
-          dependencies: (pkg.packageOptions.internalDependencies ?? []).map((directory) => {
-            const dependency = packagesByDirectory.get(directory);
-            if (!dependency) {
-              throw new Error(
-                `Python package ${pkg.packageOptions.directory} references unknown internal package ${directory}`,
-              );
-            }
-            const version = project.releaseCatalog.versionForRegistration(
-              "python",
-              dependency.name,
-              pythonPackagePath(this.repository, dependency.directory),
-            );
-            return {
-              target: dependency.name,
-              kind: "runtime" as const,
-              requirement: pythonReleaseRequirement(version),
-              propagation: "outside-range" as const,
-              publishOrder: true,
-              internal: true,
-            };
-          }),
-        });
-      }
     }
     for (const pkg of this.packages) {
       const pyproject = `/${pythonPackagePath(this.repository, pkg.packageOptions.directory)}/pyproject.toml`;
@@ -370,7 +291,7 @@ export class DBXToolsPythonWorkspace extends Component {
 
     const interpreterPath = options.interpreterPath ?? "${workspaceFolder}/.venv/bin/python";
     if (interpreterPath !== false) {
-      projectVscode(project)?.settings.addSetting("python.defaultInterpreterPath", interpreterPath);
+      project.vscode?.settings.addSetting("python.defaultInterpreterPath", interpreterPath);
     }
 
     if (options.release && this.packages.length > 0) {
@@ -381,11 +302,6 @@ export class DBXToolsPythonWorkspace extends Component {
   /** Repository-relative package directory. */
   packagePath(directory: string): string {
     return pythonPackagePath(this.repository, directory);
-  }
-
-  /** PEP 508 dependency pointing at a sibling package in the configured repository. */
-  gitDependency(name: string, directory: string): string {
-    return pythonGitDependency(this.repository, name, directory);
   }
 
   private emitWorkspace(
@@ -490,7 +406,7 @@ export class DBXToolsPythonWorkspace extends Component {
         (dependency) => `publish-pypi-${dependency}`,
       );
       workflow.addJob(`publish-pypi-${publication.directory}`, {
-        if: releasePublishCondition("python", [
+        if: releaseCondition([
           "needs.verify-context.result == 'success'",
           ...dependencyJobs.map((job) => `needs['${job}'].result == 'success'`),
         ]),
@@ -507,12 +423,8 @@ export class DBXToolsPythonWorkspace extends Component {
         env: { BUN_VERSION },
         steps: [
           ...releaseSourceSteps(),
-          ...bunCacheRestoreSteps(project, {
-            ignorePaths: project.workflowCacheIgnorePaths,
-          }),
+          ...project.renderWorkflowSetup({ mutable: false }),
           uvSetupStep(),
-          { name: "Install release helpers", run: "bun install --frozen-lockfile" },
-          bunCacheSaveStep(),
           {
             name: `Build ${publication.distribution} distributions`,
             env: { RELEASE_VERSION },
@@ -547,31 +459,12 @@ export class DBXToolsPythonWorkspace extends Component {
     }));
   }
 
-  private trustedPublisherPublications(
-    options: PythonReleaseOptions,
-  ): readonly PythonPublication[] {
-    const standard = new Map(
-      this.publications(options).map((publication) => [publication.distribution, publication]),
-    );
-    for (const pkg of this.packages) {
-      const publisher = pkg.packageOptions.trustedPublisher;
-      if (!publisher || standard.has(pkg.packageOptions.name)) continue;
-      standard.set(pkg.packageOptions.name, {
-        directory: pkg.packageOptions.directory,
-        distribution: pkg.packageOptions.name,
-        environment: publisher.environment,
-        artifacts: publisher.artifacts,
-      });
-    }
-    return [...standard.values()];
-  }
-
   private addTrustedPublisherInstructionsTask(
     project: javascript.NodeProject,
     options: PythonReleaseOptions,
   ): void {
     const repository = this.githubRepository();
-    const publications = this.trustedPublisherPublications(options);
+    const publications = this.publications(options);
     const releaseTag =
       isDBXToolsJavaScriptProject()(project) && tryReleaseWorkflow(project)
         ? releaseTagPattern(project)
@@ -641,7 +534,6 @@ export class DBXToolsPythonWorkspace extends Component {
           "- Workflow name: release.yml",
           `- Environment name: ${publication.environment}`,
           `- GitHub environment tag: ${releaseTag}`,
-          ...(publication.artifacts ? [`- Artifacts: ${publication.artifacts}`] : []),
           "",
         ];
       }),
@@ -689,16 +581,35 @@ export class DBXToolsPythonWorkspace extends Component {
   }
 }
 
-function pythonNodeGeneratedSources(pkg: ResolvedPythonPackageOptions): string[] {
+function pythonNodeBindings(
+  pkg: Pick<PythonPackageOptions, "nodeBindings">,
+): readonly PythonNodeBindingsOptions[] {
   if (!pkg.nodeBindings) return [];
-  const moduleRoot =
-    pkg.moduleRoot ?? (pkg.nodeBindings.layout === "package" ? "generated-src" : "src");
+  return Array.isArray(pkg.nodeBindings) ? pkg.nodeBindings : [pkg.nodeBindings];
+}
+
+function renderPythonNodeBindings(binding: PythonNodeBindingsOptions): Record<string, unknown> {
+  return {
+    package: binding.package,
+    ...(binding.entrypoint ? { entrypoint: binding.entrypoint } : {}),
+    ...(binding.modules?.length ? { modules: binding.modules } : {}),
+    ...(binding.functionOverrides?.length
+      ? {
+          function_overrides: binding.functionOverrides.map((override) => ({
+            module: override.module,
+            export: override.export,
+            handler: override.handler,
+            ...(override.handlerExport ? { handler_export: override.handlerExport } : {}),
+          })),
+        }
+      : {}),
+  };
+}
+
+function pythonNodeGeneratedSources(pkg: ResolvedPythonPackageOptions): string[] {
+  const bindings = pythonNodeBindings(pkg);
+  if (bindings.length === 0) return [];
+  const moduleRoot = pkg.moduleRoot ?? "src";
   const moduleDirectory = `${moduleRoot}/${pkg.module.replaceAll(".", "/")}`;
-  const generatedDirectory =
-    pkg.nodeBindings.layout === "package" ? moduleDirectory : `${moduleDirectory}/_generated`;
-  return [
-    `${generatedDirectory}/_runtime.js`,
-    `${generatedDirectory}/node_bindings.py`,
-    `${generatedDirectory}/__init__.py`,
-  ];
+  return [`${moduleDirectory}/_generated/**`];
 }

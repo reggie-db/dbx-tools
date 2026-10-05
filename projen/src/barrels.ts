@@ -29,10 +29,8 @@
  * `export { ... }`. The module namespaces stay either way, so a namespaced call
  * site keeps working.
  *
- * Every generated barrel also exports `PACKAGE_IDENTIFIER` and
- * `PACKAGE_VERSION` from the package's own `package.json`. Runtime helpers can
- * retain package identity without trying to recover it from an ESM namespace
- * object or loader function.
+ * Every generated barrel also exports `PACKAGE_IDENTIFIER` from the package's
+ * own `package.json`.
  *
  * Uniqueness is tallied over types and values TOGETHER: a name carried by two
  * modules is ambiguous whichever kind it is, and hoisting one module's value
@@ -111,11 +109,8 @@ const BARREL_HEADER: HeaderOpts = {
 
 /** Generated package metadata exports, reserved against source-module hoisting. */
 const PACKAGE_IDENTIFIER_EXPORT = "PACKAGE_IDENTIFIER";
-const PACKAGE_VERSION_EXPORT = "PACKAGE_VERSION";
 const PACKAGE_IDENTIFIER_LINE = `export const ${PACKAGE_IDENTIFIER_EXPORT} = "";`;
-const PACKAGE_VERSION_LINE = `export const ${PACKAGE_VERSION_EXPORT} = "";`;
 const PACKAGE_IDENTIFIER_LINE_RE = /^export const PACKAGE_IDENTIFIER = .*;$/m;
-const PACKAGE_VERSION_LINE_RE = /^export const PACKAGE_VERSION = .*;$/m;
 
 /** `config-tools` / `config_tools` -> `configTools`; `local-fs` -> `localFS`. */
 function moduleSegmentToCamel(segment: string): string {
@@ -123,7 +118,8 @@ function moduleSegmentToCamel(segment: string): string {
     ...stringUtils.tokenizeWithOptions({ lowerCase: true, capitalize: true }, segment),
   ];
   if (tokens.length === 0) return segment;
-  const [first, ...rest] = tokens;
+  const first = tokens[0]!;
+  const rest = tokens.slice(1);
   // Standalone acronym modules (`fs`, `ai`) stay lowercase so they match
   // Node-style namespaces (`import * as fs`). Trailing / mid acronyms keep
   // their override casing (`localFS`).
@@ -274,7 +270,7 @@ function customExportNames(file: string): Set<string> {
  */
 function mergeCustomExports(content: string, pkgDir: string): string {
   const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
-  if (!existsSync(customPath) || isLegacyBindingsExport(customPath)) return content;
+  if (!existsSync(customPath)) return content;
   const overridden = customExportNames(customPath);
   const kept = content.split("\n").filter((line) => {
     const ns = /^export \* as (\w+) from /.exec(line)?.[1];
@@ -283,12 +279,8 @@ function mergeCustomExports(content: string, pkgDir: string): string {
   return `${kept.join("\n").replace(/\n+$/, "")}\nexport * from "./exports.ts";\n`;
 }
 
-function isLegacyBindingsExport(file: string): boolean {
-  return readFileSync(file, "utf8").trim() === 'export * from "./src/bindings.ts";';
-}
-
-/** Read the authoritative npm package name and version emitted by the package project. */
-function packageMetadata(pkgDir: string): { identifier: string; version: string } {
+/** Read the authoritative npm package name emitted by the package project. */
+function packageIdentifier(pkgDir: string): string {
   const manifestPath = join(pkgDir, "package.json");
   const manifest = existsSync(manifestPath)
     ? json.parseRecord(readFileSync(manifestPath, "utf8"))
@@ -297,32 +289,21 @@ function packageMetadata(pkgDir: string): { identifier: string; version: string 
   if (typeof name !== "string" || !name.trim()) {
     throw new Error(`Cannot generate barrel without package.json name: ${manifestPath}`);
   }
-  const version = manifest?.version;
-  if (typeof version !== "string" || !version.trim()) {
-    throw new Error(`Cannot generate barrel without package.json version: ${manifestPath}`);
-  }
-  return { identifier: name, version };
+  return name;
 }
 
 /** Normalize package metadata before comparing the barrel's export structure. */
 function withoutPackageMetadata(content: string): string {
-  return content
-    .replace(PACKAGE_IDENTIFIER_LINE_RE, PACKAGE_IDENTIFIER_LINE)
-    .replace(PACKAGE_VERSION_LINE_RE, PACKAGE_VERSION_LINE);
+  return content.replace(PACKAGE_IDENTIFIER_LINE_RE, PACKAGE_IDENTIFIER_LINE);
 }
 
 /** Resolve and insert package metadata when a barrel is about to be written. */
 function withPackageMetadata(content: string, pkgDir: string): string {
-  const metadata = packageMetadata(pkgDir);
-  return content
-    .replace(
-      PACKAGE_IDENTIFIER_LINE_RE,
-      () => `export const ${PACKAGE_IDENTIFIER_EXPORT} = ${JSON.stringify(metadata.identifier)};`,
-    )
-    .replace(
-      PACKAGE_VERSION_LINE_RE,
-      () => `export const ${PACKAGE_VERSION_EXPORT} = ${JSON.stringify(metadata.version)};`,
-    );
+  const identifier = packageIdentifier(pkgDir);
+  return content.replace(
+    PACKAGE_IDENTIFIER_LINE_RE,
+    () => `export const ${PACKAGE_IDENTIFIER_EXPORT} = ${JSON.stringify(identifier)};`,
+  );
 }
 
 /**
@@ -400,26 +381,19 @@ function generateForPackage(pkgDir: string): number {
       return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
     })
     .join("\n");
-  let content = `${PACKAGE_IDENTIFIER_LINE}\n${PACKAGE_VERSION_LINE}\n${namespaceExports}`;
+  let content = `${PACKAGE_IDENTIFIER_LINE}\n${namespaceExports}`;
   // Hoist package-unique named exports to the top level. Names a hand-authored
   // `exports.ts` declares are suppressed so that file stays authoritative.
   const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
-  const suppress =
-    existsSync(customPath) && !isLegacyBindingsExport(customPath)
-      ? customExportNames(customPath)
-      : new Set<string>();
+  const suppress = existsSync(customPath) ? customExportNames(customPath) : new Set<string>();
   suppress.add(PACKAGE_IDENTIFIER_EXPORT);
-  suppress.add(PACKAGE_VERSION_EXPORT);
   content = hoistUniqueExports(content, pkgDir, suppress);
   // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
   content = mergeCustomExports(content, pkgDir);
 
   // Package metadata is blanked for the structural comparison, then restored
-  // from package.json so a version-only change still rewrites the barrel.
-  // If the structural result and package metadata match what's on disk, leave
-  // the file and its read-only bit untouched and report no change (0). This
-  // keeps the watcher quiet on ordinary in-file edits while allowing a version
-  // bump to update PACKAGE_VERSION.
+  // from package.json. If the result matches what's on disk, leave the file and
+  // its read-only bit untouched and report no change.
   content = `${content.replace(/\n+$/, "")}\n`;
   const template = `${header(BARREL_HEADER)}\n${content}`;
   const next = withPackageMetadata(template, pkgDir);

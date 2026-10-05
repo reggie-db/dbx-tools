@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
-from dbx_tools.core import to_stable_key
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+
+from ._generated.node.postgres.identity import advisory_lock_id as _node_advisory_lock_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,21 +34,14 @@ class AsyncQueryable(Protocol):
 def advisory_lock_id(key: object) -> int:
     """Return the deterministic signed 64-bit Postgres lock id for ``key``.
 
-    Lists and tuples are treated as ordered composite keys. Other values are
-    canonicalized with :func:`dbx_tools.core.to_stable_key`, joined with a null
-    separator, and hashed with SHA-256. ``ExplicitAdvisoryLockId`` values are
-    normalized directly into Postgres's signed 64-bit range.
+    Lists and tuples are treated as ordered composite keys. Other values use the
+    canonical Node identity implementation. ``ExplicitAdvisoryLockId`` values
+    are normalized directly into Postgres's signed 64-bit range.
     """
 
     if isinstance(key, ExplicitAdvisoryLockId):
-        return _signed_64(key.value)
-    parts = key if isinstance(key, (list, tuple)) else [key]
-    digest = hashlib.sha256()
-    for index, part in enumerate(parts):
-        if index:
-            digest.update(b"\0")
-        digest.update(to_stable_key(part).encode())
-    return int.from_bytes(digest.digest()[:8], byteorder="big", signed=True)
+        return int(_node_advisory_lock_id(str(key.value), True))
+    return int(_node_advisory_lock_id(key))
 
 
 def explicit_advisory_lock_id(value: int) -> ExplicitAdvisoryLockId:
@@ -264,10 +257,6 @@ def _function_name(*, transaction: bool, wait: bool) -> str:
     if transaction:
         return "pg_advisory_xact_lock" if wait else "pg_try_advisory_xact_lock"
     return "pg_advisory_lock" if wait else "pg_try_advisory_lock"
-
-
-def _signed_64(value: int) -> int:
-    return ((value + 2**63) % 2**64) - 2**63
 
 
 def _capture_release(connection: SyncQueryable, key: object) -> Exception | None:

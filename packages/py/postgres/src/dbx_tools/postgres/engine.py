@@ -10,6 +10,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.postgres import (
     Endpoint,
     EndpointType,
@@ -20,6 +21,7 @@ from sqlalchemy import create_engine as sqlalchemy_create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import create_async_engine as sqlalchemy_create_async_engine
 
+from ._generated.node.auth.client import DatabricksAuthOptions, create_auth_client
 from .address import (
     SSL_MODES,
     NativeSslMode,
@@ -43,13 +45,34 @@ _DEFAULT_PORT = 5432
 _DEFAULT_SSL_MODE: SslMode = NativeSslMode.REQUIRE
 
 
+async def create_workspace_client(
+    options: DatabricksAuthOptions | None = None,
+) -> WorkspaceClient:
+    """Create a lazily authenticated SDK client from Node-resolved configuration."""
+
+    auth = await (create_auth_client() if options is None else create_auth_client(options))
+    workspace_options: dict[str, Any] = {"host": auth.host}
+    if profile := auth.profile:
+        workspace_options["profile"] = profile
+    if workspace_id := auth.workspace_id:
+        workspace_options["workspace_id"] = workspace_id
+    return WorkspaceClient(**workspace_options)
+
+
 class WorkspaceClientLike(Protocol):
     """WorkspaceClient surface required for Lakebase discovery and credentials."""
 
-    config: Any
-    current_user: Any
-    database: Any
-    postgres: PostgresAPI
+    @property
+    def config(self) -> Any: ...
+
+    @property
+    def current_user(self) -> Any: ...
+
+    @property
+    def database(self) -> Any: ...
+
+    @property
+    def postgres(self) -> PostgresAPI: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -520,11 +543,3 @@ def _first(*values: Any) -> Any:
 
 def _string(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
-
-
-createEngine = create_engine
-createAsyncEngine = create_async_engine
-installCredentialInjection = install_credential_injection
-resolvePostgresConnection = resolve_postgres_connection
-workspaceCredentialProvider = workspace_credential_provider
-autoscalingCredentialProvider = autoscaling_credential_provider

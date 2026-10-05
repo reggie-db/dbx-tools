@@ -14,18 +14,18 @@
  * callers add their own afterward.
  */
 import type { IMixin as ConstructsMixin } from "constructs";
-import { javascript } from "projen";
+import { DependencyType, javascript } from "projen";
 import { BunBuildFile, BunDevServerFile, BunfigFile } from "./bun-app.ts";
+import { BUN_VERSION } from "./bun-workflow.ts";
 import { create } from "./mixin.ts";
-import * as projectPredicate from "./project-predicate.ts";
 import {
   addPackageFiles,
   applyCompilerOptions,
   applyExports,
   applyIncludes,
-  applyTasks,
   srcModuleExports,
-} from "./project.ts";
+} from "./project-js.ts";
+import * as projectPredicate from "./project-predicate.ts";
 
 /** Node compiler options: ES2022 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
@@ -36,6 +36,10 @@ const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
 
 /** The DOM-capable lib list shared by the browser tags (`ui`, `openapi`). */
 const DOM_LIB = ["ES2022", "DOM", "DOM.Iterable"];
+
+function removeNodeTypes(project: javascript.NodeProject): void {
+  project.deps.removeDependency("@types/node", DependencyType.BUILD);
+}
 
 /**
  * The agnostic floor every package gets at construction: ES2022 stdlib plus the
@@ -64,6 +68,7 @@ export const PACKAGE_TAG_MIXINS = {
   // compile (typecheck). No app build / index.html: a full browser app is an
   // `app`-tagged package (see below) that layers Bun's build tooling on top.
   ui: create(projectPredicate.hasTag("ui"), (p) => {
+    removeNodeTypes(p);
     p.addPeerDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps(
       "react@catalog:",
@@ -79,13 +84,10 @@ export const PACKAGE_TAG_MIXINS = {
       target: "ES2022",
       lib: [...DOM_LIB],
     });
-    // A component library's standard subpath surface: `./react` (components),
-    // `./styles.css` (Tailwind entry), and `./package.json`. A package that
-    // ships more (e.g. ui-appkit's `./vite` preset) overrides this in its own
-    // mixin; an `app`-tagged package replaces it with a `.` root (see below).
+    // UI libraries are subpath-only. Their React entrypoint, optional stylesheet,
+    // and any other public source modules are discovered from the source tree.
     applyExports(p, {
-      "./react": "./src/react/index.ts",
-      "./styles.css": "./src/styles.css",
+      ...srcModuleExports(p),
       "./package.json": "./package.json",
     });
   }),
@@ -95,8 +97,10 @@ export const PACKAGE_TAG_MIXINS = {
   // `Bun.build`). Tailwind v4 is compiled by `bun-plugin-tailwind` (wired in the
   // generated `bunfig.toml`). No Vite.
   app: create(projectPredicate.hasTag("app"), (p) => {
+    removeNodeTypes(p);
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps(
+      `@types/bun@${BUN_VERSION}`,
       "@types/react@catalog:",
       "@types/react-dom@catalog:",
       // The Tailwind plugin the dev server + build load. Tailwind itself is a
@@ -121,10 +125,8 @@ export const PACKAGE_TAG_MIXINS = {
     // and `preview` serves the already-built bundle. `Bun.serve` builds on request,
     // so `preview` could only be spelled the same as `dev` - two names for one
     // command, and a reader would reasonably assume the second one served `dist/`.
-    applyTasks(p, {
-      dev: { exec: "bun dev.ts" },
-      build: { exec: "bun build.ts" },
-    });
+    (p.tasks.tryFind("dev") ?? p.addTask("dev")).reset("bun dev.ts");
+    p.compileTask.reset("bun build.ts");
     new BunfigFile(p);
     new BunDevServerFile(p);
     new BunBuildFile(p);
@@ -172,19 +174,19 @@ export const PACKAGE_TAG_MIXINS = {
     });
     // bun runs the server `.ts` directly (native TS, no tsx). `--watch` restarts
     // on change - the tsx-watch replacement.
-    applyTasks(p, {
-      dev: { exec: "bun --watch src/server.ts" },
-      start: { exec: "bun src/server.ts" },
-    });
+    (p.tasks.tryFind("dev") ?? p.addTask("dev")).reset("bun --watch src/server.ts");
+    (p.tasks.tryFind("start") ?? p.addTask("start")).reset("bun src/server.ts");
   }),
   node: create(projectPredicate.hasTag("node"), (p) => {
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
   }),
   shared: create(projectPredicate.hasTag("shared"), (p) => {
+    removeNodeTypes(p);
     applyCompilerOptions(p, AGNOSTIC_COMPILER_OPTIONS);
   }),
   openapi: create(projectPredicate.hasTag("openapi"), (p) => {
+    removeNodeTypes(p);
     p.addDeps("openapi-fetch@catalog:");
     applyCompilerOptions(p, { target: "ES2022", lib: [...DOM_LIB], types: [] });
     addPackageFiles(p, "openapi.json");

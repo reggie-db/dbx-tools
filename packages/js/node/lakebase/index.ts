@@ -3,11 +3,10 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/lakebase";
-export const PACKAGE_VERSION = "0.9.32";
 export * as address from "./src/address.ts";
 export * as client from "./src/client.ts";
 export { SSL_MODES } from "./src/address.ts";
 export type { SslMode, LakebaseConnectionInputs, ParsedAddress } from "./src/address.ts";
 export { LakebaseClient } from "./src/client.ts";
-export type { ResolvedLakebase, LakebaseApiClient, LakebaseClientDependencies } from "./src/client.ts";
+export type { ResolvedLakebase, LakebaseApiClient, LakebaseRequestOptions, LakebaseClientDependencies } from "./src/client.ts";
 export * from "./exports.ts";

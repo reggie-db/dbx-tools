@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { AuthKind, TargetKind, type DatabricksAuthOptions } from "@dbx-tools/auth";
+import type { DatabricksAuthOptions } from "@dbx-tools/auth";
+import { AuthType, TargetKind } from "@dbx-tools/shared-auth";
 import { parseAddress } from "../src/address.ts";
 import {
   LakebaseClient,
@@ -88,7 +89,7 @@ describe("Lakebase discovery", () => {
       ["/api/2.0/postgres/credentials", { token: "database-token" }],
     ]);
     const api: LakebaseApiClient = {
-      auth: { listProfiles: () => [profile("PROFILE")] },
+      profiles: () => [profile("PROFILE")],
       async request(path, options) {
         calls.push({ path, body: options?.body });
         if (!responses.has(path)) throw new Error(`Unexpected request ${path}`);
@@ -126,6 +127,7 @@ function profile(name: string) {
     name,
     host: "https://workspace.example",
     target: TargetKind.Workspace,
-    authKind: AuthKind.PersonalAccessToken,
+    authType: AuthType.PersonalAccessToken,
+    principal: name,
   };
 }

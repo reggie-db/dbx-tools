@@ -1,10 +1,12 @@
 /** Shared pyproject-backed configuration for PythonMonkey Node bindings. */
-import { readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { object } from "@dbx-tools/shared-core";
-import type { Project } from "projen";
+import { readFileSync, rmSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { find } from "@dbx-tools/path";
+import { object, stringUtils } from "@dbx-tools/shared-core";
 import { parse } from "smol-toml";
-import { workspaceDependencyDirectories } from "./packages.ts";
+import { runTaskCommand } from "./_task-command.ts";
+import { resolveRepoRoot, workspaceDependencyDirectories } from "./packages.ts";
 
 export interface ResolvedPythonNodeFunctionOverride {
   readonly handlerExport: string;
@@ -14,82 +16,142 @@ export interface ResolvedPythonNodeFunctionOverride {
 }
 
 export interface ResolvedPythonNodeBindings {
-  readonly bindingsPackageOutput: string;
-  readonly bindingsOutput: string;
+  readonly bindingDirectory: string;
+  readonly bindingName: string;
   readonly functionOverrides: readonly ResolvedPythonNodeFunctionOverride[];
   readonly entrypoint: string;
   readonly moduleDirectory: string;
-  readonly layout: "package" | "submodule";
-  readonly private: boolean;
+  readonly modules: readonly string[];
   readonly package: string;
   readonly project: string;
   readonly projectDirectory: string;
   readonly pyproject: string;
   readonly runtimeOutput: string;
-  readonly shimRoot?: string;
   readonly workspaceDirectories: readonly string[];
 }
 
-/** Resolve one Python package's Node binding configuration and conventional outputs. */
+/** Standard PythonMonkey host adapters shipped with the binding generator. */
+export const PYTHON_NODE_SHIM_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../shims/python-node",
+);
+
+/** Regenerate every pyproject-configured Node binding in a repository. */
+export function generatePythonNodeBindings(projectRoot: string = resolveRepoRoot()): void {
+  const task = resolve(dirname(fileURLToPath(import.meta.url)), "../tasks/python-node-bindings.ts");
+  const configuredProjects = pythonNodeBindingProjects(projectRoot);
+  const directories = new Set<string>();
+  for (const project of configuredProjects) {
+    for (const config of resolvePythonNodeBindings(projectRoot, project)) {
+      directories.add(relative(projectRoot, join(config.moduleDirectory, "_generated", "node")));
+    }
+  }
+  for (const directory of existingBindingDirectories(projectRoot)) {
+    if (!directories.has(directory)) {
+      rmSync(resolve(projectRoot, directory), { recursive: true, force: true });
+    }
+  }
+  for (const project of configuredProjects) {
+    runTaskCommand(projectRoot, "bun", [task, "--root", projectRoot, "--project", project]);
+  }
+}
+
+function pythonNodeBindingProjects(projectRoot: string): string[] {
+  return [
+    ...find
+      .findFiles("**/pyproject.toml", { cwd: projectRoot })
+      .filter((file) => {
+        const manifest = parse(readFileSync(resolve(projectRoot, file), "utf8")) as {
+          tool?: { dbx_tools?: { node_bindings?: unknown } };
+        };
+        return manifest.tool?.dbx_tools?.node_bindings !== undefined;
+      })
+      .map((file) => dirname(file)),
+  ].sort();
+}
+
+function existingBindingDirectories(projectRoot: string): string[] {
+  const directories = new Set<string>();
+  for (const file of find.findFiles("**/_generated/node/**/*", {
+    cwd: projectRoot,
+    ignore: () => false,
+  })) {
+    const segments = file.split("/");
+    const generated = segments.lastIndexOf("_generated");
+    if (generated >= 0 && segments[generated + 1] === "node") {
+      directories.add(segments.slice(0, generated + 2).join("/"));
+    }
+  }
+  return [...directories].sort();
+}
+
+/** Resolve one Python package's Node binding configurations and conventional outputs. */
 export function resolvePythonNodeBindings(
   root: string,
   project: string,
-): ResolvedPythonNodeBindings {
+): ResolvedPythonNodeBindings[] {
   const projectDirectory = resolve(root, project);
   const pyproject = resolve(projectDirectory, "pyproject.toml");
   const manifest = record(parse(readFileSync(pyproject, "utf8")), "pyproject.toml");
   const tool = record(manifest.tool, "tool");
   const dbxTools = record(tool.dbx_tools, "tool.dbx_tools");
-  const bindings = record(dbxTools.node_bindings, "tool.dbx_tools.node_bindings");
+  const configuredBindings = Array.isArray(dbxTools.node_bindings)
+    ? dbxTools.node_bindings
+    : [dbxTools.node_bindings];
+  if (configuredBindings.length === 0) {
+    throw new Error("tool.dbx_tools.node_bindings must contain at least one table");
+  }
   const uv = record(tool.uv, "tool.uv");
   const backend = record(uv["build-backend"], "tool.uv.build-backend");
-  const packageName = requiredString(bindings.package, "tool.dbx_tools.node_bindings.package");
-  const entrypoint =
-    optionalString(bindings.entrypoint, "tool.dbx_tools.node_bindings.entrypoint") ?? packageName;
-  const layout = nodeBindingsLayout(bindings.layout);
   const moduleName = requiredString(backend["module-name"], "tool.uv.build-backend.module-name");
   const moduleRoot = requiredString(backend["module-root"], "tool.uv.build-backend.module-root");
-  const configuredOverrides = bindings.function_overrides ?? [];
-  if (!Array.isArray(configuredOverrides)) {
-    throw new Error("tool.dbx_tools.node_bindings.function_overrides must be an array");
-  }
   const moduleDirectory = resolve(projectDirectory, moduleRoot, ...moduleName.split("."));
-  const generatedDirectory =
-    layout === "package" ? moduleDirectory : join(moduleDirectory, "_generated");
-  const shimRoot = optionalString(bindings.shim_root, "tool.dbx_tools.node_bindings.shim_root");
-  return {
-    project,
-    projectDirectory,
-    pyproject,
-    package: packageName,
-    entrypoint,
-    layout,
-    private: optionalBoolean(bindings.private, "tool.dbx_tools.node_bindings.private") ?? false,
-    moduleDirectory,
-    runtimeOutput: join(generatedDirectory, "_runtime.js"),
-    bindingsOutput: join(generatedDirectory, "node_bindings.py"),
-    bindingsPackageOutput: join(generatedDirectory, "__init__.py"),
-    ...(shimRoot ? { shimRoot: resolve(root, shimRoot) } : {}),
-    functionOverrides: configuredOverrides.map((candidate, index) => {
-      const path = `tool.dbx_tools.node_bindings.function_overrides[${index}]`;
-      const override = record(candidate, path);
-      const targetExport = requiredString(override.export, `${path}.export`);
-      return {
-        targetModule: requiredString(override.module, `${path}.module`),
-        targetExport,
-        handlerFile: resolve(root, requiredString(override.handler, `${path}.handler`)),
-        handlerExport:
-          optionalString(override.handler_export, `${path}.handler_export`) ?? targetExport,
-      };
-    }),
-    workspaceDirectories: workspaceDependencyDirectories(packageName, root),
-  };
-}
-
-function nodeBindingsLayout(value: unknown): "package" | "submodule" {
-  if (value === undefined) return "submodule";
-  if (value === "package" || value === "submodule") return value;
-  throw new Error("tool.dbx_tools.node_bindings.layout must be package or submodule");
+  const configs = configuredBindings.map((candidate, bindingIndex) => {
+    const bindingPath = Array.isArray(dbxTools.node_bindings)
+      ? `tool.dbx_tools.node_bindings[${bindingIndex}]`
+      : "tool.dbx_tools.node_bindings";
+    const bindings = record(candidate, bindingPath);
+    const packageName = requiredString(bindings.package, `${bindingPath}.package`);
+    const entrypoint =
+      optionalString(bindings.entrypoint, `${bindingPath}.entrypoint`) ?? packageName;
+    const modules = optionalStrings(bindings.modules, `${bindingPath}.modules`);
+    if (bindings.layout !== undefined || bindings.private !== undefined) {
+      throw new Error(`${bindingPath} no longer supports layout or private`);
+    }
+    const configuredOverrides = bindings.function_overrides ?? [];
+    if (!Array.isArray(configuredOverrides)) {
+      throw new Error(`${bindingPath}.function_overrides must be an array`);
+    }
+    const bindingName = nodePackageName(packageName);
+    const bindingDirectory = join(moduleDirectory, "_generated", "node", bindingName);
+    return {
+      project,
+      projectDirectory,
+      pyproject,
+      package: packageName,
+      entrypoint,
+      modules,
+      bindingName,
+      bindingDirectory,
+      moduleDirectory,
+      runtimeOutput: join(moduleDirectory, "_generated", "node", "_runtime.js"),
+      functionOverrides: configuredOverrides.map((overrideCandidate, overrideIndex) => {
+        const path = `${bindingPath}.function_overrides[${overrideIndex}]`;
+        const override = record(overrideCandidate, path);
+        const targetExport = requiredString(override.export, `${path}.export`);
+        return {
+          targetModule: requiredString(override.module, `${path}.module`),
+          targetExport,
+          handlerFile: resolve(root, requiredString(override.handler, `${path}.handler`)),
+          handlerExport:
+            optionalString(override.handler_export, `${path}.handler_export`) ?? targetExport,
+        };
+      }),
+      workspaceDirectories: workspaceDependencyDirectories(packageName, root),
+    };
+  });
+  validateBindings(configs);
+  return configs;
 }
 
 /** All paths that can change a workspace-backed generated Node runtime. */
@@ -100,16 +162,26 @@ export function pythonNodeBindingWatchInputs(config: ResolvedPythonNodeBindings)
   return [
     config.pyproject,
     ...config.workspaceDirectories,
-    ...(config.shimRoot ? [config.shimRoot] : []),
+    PYTHON_NODE_SHIM_ROOT,
     ...config.functionOverrides.map(({ handlerFile }) => handlerFile),
   ];
 }
 
-/** Whether a Projen tree already contains the configured Node package. */
-export function hasWorkspaceNodePackage(project: Project, packageName: string): boolean {
-  return (
-    project.name === packageName || project.subprojects.some((child) => child.name === packageName)
-  );
+function validateBindings(configs: readonly ResolvedPythonNodeBindings[]): void {
+  const names = configs.map(({ bindingName }) => bindingName);
+  if (new Set(names).size !== names.length) {
+    throw new Error("tool.dbx_tools.node_bindings package names must be unique");
+  }
+  for (const config of configs) {
+    if (new Set(config.modules).size !== config.modules.length) {
+      throw new Error(`${config.package} Node binding module names must be unique`);
+    }
+  }
+}
+
+function nodePackageName(packageName: string): string {
+  const unscoped = packageName.split("/").at(-1) ?? packageName;
+  return stringUtils.toIdentifierWithOptions({ delimiter: "_" }, unscoped);
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
@@ -131,8 +203,9 @@ function optionalString(value: unknown, path: string): string | undefined {
   return value.trim();
 }
 
-function optionalBoolean(value: unknown, path: string): boolean | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "boolean") throw new Error(`${path} must be a boolean`);
-  return value;
+function optionalStrings(value: unknown, path: string): string[] {
+  if (value === undefined) return [];
+  if (typeof value === "string") return [requiredString(value, path)];
+  if (!Array.isArray(value)) throw new Error(`${path} must be a string or array`);
+  return value.map((candidate, index) => requiredString(candidate, `${path}[${index}]`));
 }

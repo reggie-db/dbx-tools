@@ -20,20 +20,11 @@
  * consuming workspace, which is where they already live. Speakeasy's `openapi`
  * binary is installed lazily through `@dbx-tools/core`'s binary cache.
  */
-import { execFile } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { promisify } from "node:util";
 import * as bin from "@dbx-tools/core/bin";
+import * as exec from "@dbx-tools/core/exec";
 import { find } from "@dbx-tools/path";
 import { log, object, stringUtils } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
@@ -46,7 +37,6 @@ import {
   toPosix,
   recordedPackages,
 } from "./packages.ts";
-import type { ReleaseUnitGraph } from "./release-catalog.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 const logger = log.logger("projen:openapi");
@@ -57,7 +47,6 @@ const OPENAPI_TAG = "openapi";
 const TSOA_IMPORT = /from\s+['"](?:tsoa|@tsoa\/runtime)['"]/;
 const SPEAKEASY_OPENAPI_VERSION = "1.24.0";
 const SPEAKEASY_OPENAPI_RELEASE_URL = `https://github.com/speakeasy-api/openapi/releases/download/v${SPEAKEASY_OPENAPI_VERSION}`;
-const execFileAsync = promisify(execFile);
 
 // prettier-ignore
 const CLIENT_SRC =
@@ -100,12 +89,6 @@ function controllerPackages(): object.Sequence<RecordedPackage> {
 function inside(path: string, directory: string): boolean {
   const child = relative(resolve(directory), resolve(path));
   return child === "" || (!child.startsWith("..") && !isAbsolute(child));
-}
-
-/** Whether one changed source belongs to any producing package directory. */
-export function isOpenapiProducerSource(path: string, producers: readonly string[]): boolean {
-  const absolute = resolve(path);
-  return object.sequence(producers).some((producer) => inside(absolute, producer));
 }
 
 /** Source roots consumed by TypeScript OpenAPI producers. */
@@ -168,7 +151,10 @@ async function speakeasyOpenapiPath(): Promise<string> {
 /** Deduplicate inline schemas into `components.schemas` with Speakeasy. */
 export async function optimizeOpenapiSpec(specPath: string, executable?: string): Promise<void> {
   const openapi = executable ?? (await speakeasyOpenapiPath());
-  await execFileAsync(openapi, ["spec", "optimize", specPath, "--write", "--non-interactive"]);
+  await exec.spawn(openapi, ["spec", "optimize", specPath, "--write", "--non-interactive"], {
+    stdin: "ignore",
+    check: true,
+  });
 }
 
 type OpenApiTypeTools = {
@@ -234,28 +220,14 @@ export async function generateOpenapi(): Promise<string[]> {
           const runtime = lazyRequire<typeof ts>(require, "typescript", "openapi generation");
           return {
             generateSpec,
-            compilerOptions: {
-              experimentalDecorators: true,
-              target: runtime.ScriptTarget.ES2022,
-              module: runtime.ModuleKind.ESNext,
-              moduleResolution: runtime.ModuleResolutionKind.Bundler,
-              esModuleInterop: true,
-              skipLibCheck: true,
-            } satisfies ts.CompilerOptions,
+            runtime,
           };
         })()
       : undefined;
 
-  const releaseGraphPath = join(repoRoot, ".projen/release-units.json");
-  const releaseGraph = existsSync(releaseGraphPath)
-    ? (JSON.parse(readFileSync(releaseGraphPath, "utf8")) as ReleaseUnitGraph)
-    : undefined;
+  const version = readWorkspaceVersion(repoRoot);
   const written: string[] = [];
   for (const p of pkgs) {
-    const releaseProject = releaseGraph?.projects.find((project) => project.path === p.path);
-    const specVersion =
-      releaseGraph?.units.find((unit) => unit.id === releaseProject?.unit)?.version ??
-      readWorkspaceVersion(repoRoot);
     // The generated package's folder is the source's leaf folder name (`api`), not
     // its npm name - `p.name` is the (possibly-overridden) manifest name.
     const leaf = p.relPath.split("/").pop() ?? p.relPath;
@@ -268,6 +240,30 @@ export async function generateOpenapi(): Promise<string[]> {
     const tempDir = mkdtempSync(join(outDir, ".openapi-"));
     const tempSpecPath = join(tempDir, "openapi.json");
     try {
+      const tsconfigPath = join(p.dir, "tsconfig.json");
+      const config = typescript!.runtime.readConfigFile(
+        tsconfigPath,
+        typescript!.runtime.sys.readFile,
+      );
+      if (config.error) {
+        throw new Error(
+          typescript!.runtime.flattenDiagnosticMessageText(config.error.messageText, "\n"),
+        );
+      }
+      const parsed = typescript!.runtime.parseJsonConfigFileContent(
+        config.config,
+        typescript!.runtime.sys,
+        p.dir,
+      );
+      if (parsed.errors.length > 0) {
+        throw new Error(
+          parsed.errors
+            .map((error) =>
+              typescript!.runtime.flattenDiagnosticMessageText(error.messageText, "\n"),
+            )
+            .join("\n"),
+        );
+      }
       await typescript!.generateSpec(
         {
           entryFile: "",
@@ -277,9 +273,9 @@ export async function generateOpenapi(): Promise<string[]> {
           specFileBaseName: "openapi",
           specVersion: 3,
           name: `${p.relPath} API`,
-          version: specVersion,
+          version,
         },
-        typescript!.compilerOptions,
+        parsed.options,
       );
       await optimizeOpenapiSpec(tempSpecPath);
       makeWritable(specPath);

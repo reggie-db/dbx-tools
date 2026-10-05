@@ -25,12 +25,13 @@ let outdir: string;
 let archive: string;
 let identity: NpmReleaseIdentity;
 let packageDir: string;
+let dependencyDir: string;
 
 before(() => {
   outdir = mkdtempSync(join(tmpdir(), "npm-release-"));
   packageDir = join(outdir, "package");
   mkdirSync(packageDir);
-  const dependencyDir = join(outdir, "dependency");
+  dependencyDir = join(outdir, "dependency");
   mkdirSync(dependencyDir);
   writeFileSync(
     join(outdir, "package.json"),
@@ -85,6 +86,17 @@ describe("npm release recovery", () => {
     mkdirSync(destination);
     const packed = packNpmPackage(packageDir, destination);
     assert.equal(readNpmArchiveIdentity(packed).name, "@fixture/native");
+  });
+
+  it("packs multiple packages into one requested directory", () => {
+    const destination = join(outdir, "packed-workspace");
+    mkdirSync(destination);
+
+    const dependency = packNpmPackage(dependencyDir, destination);
+    const native = packNpmPackage(packageDir, destination);
+
+    assert.equal(readNpmArchiveIdentity(dependency).name, "@fixture/dependency");
+    assert.equal(readNpmArchiveIdentity(native).name, "@fixture/native");
   });
 
   it("repacks transformed manifests without registry-invalid directory entries", () => {

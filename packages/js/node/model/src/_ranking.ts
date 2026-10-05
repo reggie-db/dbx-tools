@@ -52,15 +52,28 @@ export function rankEndpoints(
   const requestedClass = options.modelClass ?? query.modelClass;
   const eligible = requestedClass ? classesAtOrBelow(requestedClass) : CHAT_CLASS_ORDER;
   const candidates: RankedModel[] = [];
-  for (const modelClass of eligible) {
-    for (const endpoint of classified[modelClass]) {
+  const search = query.search?.trim();
+  if (search && requestedClass === undefined) {
+    const classByName = classifyEndpointClasses(normalized);
+    for (const endpoint of normalized) {
       if (!options.includeDeprecated && endpoint.status?.deprecated) continue;
-      if (query.requiresTools && !endpointCapabilities(endpoint).tools) continue;
-      candidates.push({ endpoint, modelClass });
+      const capabilities = endpointCapabilities(endpoint);
+      if (!capabilities.chat || (query.requiresTools && !capabilities.tools)) continue;
+      candidates.push({
+        endpoint,
+        modelClass: classByName.get(endpoint.name) ?? ModelClass.ChatBalanced,
+      });
+    }
+  } else {
+    for (const modelClass of eligible) {
+      for (const endpoint of classified[modelClass]) {
+        if (!options.includeDeprecated && endpoint.status?.deprecated) continue;
+        if (query.requiresTools && !endpointCapabilities(endpoint).tools) continue;
+        candidates.push({ endpoint, modelClass });
+      }
     }
   }
 
-  const search = query.search?.trim();
   let ranked = candidates;
   if (search) {
     const exact = candidates.find((candidate) => candidate.endpoint.name === search);
@@ -147,11 +160,19 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
           stringValue(record(entity.foundation_model).name) ?? stringValue(entity.entity_name),
       )
       .find(Boolean);
-    const family = identities.map(modelFamily).find(Boolean);
+    const foundationModels = entities.map((entity) => record(entity.foundation_model));
+    const family =
+      foundationModels.map((model) => stringValue(model.model_class)).find(Boolean) ??
+      identities.map(modelFamily).find(Boolean);
     const reasoningEfforts =
       identities.map(modelReasoningEfforts).sort((left, right) => right.length - left.length)[0] ??
       [];
     const profile = entities.map(modelProfile).find(Boolean);
+    const capabilitiesRecord = record(endpoint.capabilities);
+    const foundationDescription = foundationModels
+      .map((model) => stringValue(model.description))
+      .find(Boolean);
+    const description = stringValue(endpoint.description) ?? foundationDescription;
     const summary: ServingEndpointSummary = {
       name,
       displayName: toModelDisplayName(name, providedDisplayName(endpoint, entities)),
@@ -160,10 +181,9 @@ export function normalizeEndpoints(endpoints: readonly unknown[]): ServingEndpoi
       ...(stringValue(record(endpoint.state).ready)
         ? { state: stringValue(record(endpoint.state).ready) }
         : {}),
-      ...(stringValue(endpoint.description)
-        ? { description: stringValue(endpoint.description) }
-        : {}),
-      supportsTools: identities.some(supportsToolsByFamily),
+      ...(description ? { description } : {}),
+      supportsTools:
+        booleanValue(capabilitiesRecord.function_calling) ?? identities.some(supportsToolsByFamily),
       ...(profile ? { profile } : {}),
       serviceNames: Object.assign({}, ...identities.map(modelServiceNames)),
       ...(modelServiceName ? { modelServiceName } : {}),
@@ -236,7 +256,12 @@ function providedDisplayName(
     const value = stringValue(tag.value);
     if (value) return value;
   }
-  return entities.map((entity) => stringValue(record(entity.external_model).name)).find(Boolean);
+  return (
+    entities
+      .map((entity) => stringValue(record(entity.foundation_model).display_name))
+      .find(Boolean) ??
+    entities.map((entity) => stringValue(record(entity.external_model).name)).find(Boolean)
+  );
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -257,4 +282,8 @@ function stringValue(value: unknown): string | undefined {
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }

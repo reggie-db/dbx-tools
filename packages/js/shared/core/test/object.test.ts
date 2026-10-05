@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 import { PACKAGE_IDENTIFIER, object } from "../index.ts";
 
 describe("object.sequence", () => {
@@ -276,7 +276,7 @@ describe("object.isSerializableValue", () => {
   });
 });
 
-await polygotTest(
+await polyglotTest(
   () => import("../index.ts"),
   "object",
   (implementation, language) => {
@@ -312,7 +312,7 @@ await polygotTest(
   },
 );
 
-await polygotTest(
+await polyglotTest(
   async () => ({
     PACKAGE_IDENTIFIER,
     stableKeyCycle: {

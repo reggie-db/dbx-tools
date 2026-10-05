@@ -11,7 +11,6 @@ Available commands:
 | `dbx appkit env`     | Print the environment an AppKit app resolves, as eval-able shell output. |
 | `dbx auth`           | Generate U2M or M2M OAuth tokens with secure credential storage.         |
 | `dbx tunnel`         | Front any command with a public portr tunnel and an email-OTP gate.      |
-| `dbx model-proxy`    | Run the multi-protocol Databricks Model Serving proxy.                   |
 | `dbx lakebase-proxy` | Run the loopback PostgreSQL proxy for Databricks Lakebase.               |
 
 Key features:
@@ -34,8 +33,7 @@ X.509 code. Run
 `dbx <group> --help` for a group's own flags; each forwards `--help` to the child
 program rather than answering it at the root.
 
-The model proxy command installs and runs the exact-version Python/LiteLLM
-package. The Lakebase proxy command runs the pure Node implementation.
+The Lakebase proxy command runs the pure Node implementation.
 
 ## Bootstrap A Workspace
 

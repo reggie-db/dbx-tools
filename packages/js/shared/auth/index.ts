@@ -3,7 +3,18 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-auth";
-export const PACKAGE_VERSION = "0.9.32";
 export * as auth from "./src/auth.ts";
+export * as browser from "./src/browser.ts";
+export * as client from "./src/client.ts";
+export * as config from "./src/config.ts";
+export * as configSchema from "./src/config-schema.ts";
+export * as profile from "./src/profile.ts";
 export { AUTH_BASE_PATH, SESSION_COOKIE_NAME, authRequestSchema, authRequestResultSchema, authVerifySchema, authVerifyResultSchema, authLogoutResultSchema, authStatusSchema } from "./src/auth.ts";
 export type { AuthRequest, AuthRequestResult, AuthVerify, AuthVerifyResult, AuthLogoutResult, AuthStatus } from "./src/auth.ts";
+export type { PasskeyOperation } from "./src/browser.ts";
+export { databricksAuthClientInfoSchema } from "./src/client.ts";
+export type { DatabricksAuthClientInfo } from "./src/client.ts";
+export { AuthType, TargetKind } from "./src/config.ts";
+export { authTypeSchema, targetKindSchema } from "./src/config-schema.ts";
+export { databricksProfileSummarySchema, databricksProfileListSchema, databricksProfileSelectionSchema } from "./src/profile.ts";
+export type { DatabricksProfileSummary, DatabricksProfileList, DatabricksProfileSelection } from "./src/profile.ts";

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from dbx_tools.core import config
@@ -91,6 +92,26 @@ def test_resolve_value_reads_bundle_and_app_resources() -> None:
         )
         == "appdb"
     )
+
+
+def test_bundle_validation_uses_only_the_explicit_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "databricks.yml").write_text("bundle: {}\n")
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def run(arguments, **options):
+        calls.append((arguments, options["env"]))
+        return SimpleNamespace(returncode=0, stdout='{"resources": {}}', stderr="")
+
+    monkeypatch.setattr(config, "_project_root", lambda path: path)
+    monkeypatch.setattr(config.subprocess, "run", run)
+    monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "ambient")
+
+    assert config.bundle_file(str(tmp_path), profile="resolved") is not None
+    assert calls[0][0][-2:] == ["--profile", "resolved"]
+    assert "DATABRICKS_CONFIG_PROFILE" not in calls[0][1]
 
 
 def test_databricks_app_detection_honors_validated_values_and_override() -> None:

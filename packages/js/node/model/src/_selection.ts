@@ -5,35 +5,20 @@
  */
 import * as object from "@dbx-tools/shared-core/object";
 import type {
-  ModelClass,
   ModelQuery,
   RankedModel,
+  ResolvedModel,
+  ResolvedModelSelection,
+  ResolveModelInput,
+  ResolveModelOptions,
   ServingEndpointSummary,
 } from "@dbx-tools/shared-model/contracts";
 
 import { rankEndpoints } from "./_ranking.ts";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
-import type { ResolvedModel, ResolveModelOptions } from "./model-catalog.ts";
 import { endpointSupportsTools } from "./policy.ts";
 
 const DEFAULT_MODEL_FAMILY_SEARCH = "gpt";
-
-/** Caller intent passed to {@link resolveModel}. */
-export interface ResolveModelInput {
-  explicit?: string;
-  fuzzy?: boolean;
-  threshold?: number;
-  requiresTools?: boolean;
-  modelClass?: ModelClass;
-  fallbacks?: readonly string[];
-  liveOnly?: boolean;
-}
-
-/** Outcome of {@link resolveModel}: the chosen id plus how it was reached. */
-export interface ResolvedModelSelection {
-  modelId: string;
-  source: "explicit" | "fuzzy-match" | "class" | "fallback";
-}
 
 /** Rank a catalogue against a model query, best-first. */
 export function lookupModels(

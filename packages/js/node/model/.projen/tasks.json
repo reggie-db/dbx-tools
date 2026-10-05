@@ -55,6 +55,15 @@
       "name": "install:ci",
       "description": "Install project dependencies using frozen lockfile"
     },
+    "metadata": {
+      "name": "metadata",
+      "description": "Refresh model retirement, capability, and rate-limit snapshots",
+      "steps": [
+        {
+          "exec": "bun scripts/generate-metadata.ts"
+        }
+      ]
+    },
     "package": {
       "name": "package",
       "description": "Creates the distribution package",

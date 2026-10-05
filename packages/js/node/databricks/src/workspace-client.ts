@@ -7,18 +7,62 @@
  */
 
 import {
-  createWorkspaceClient,
+  createWorkspaceClient as _createWorkspaceClient,
   type WorkspaceClient as AppKitWorkspaceClient,
 } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
+import { client as authClient, type AuthClient, type DatabricksAuthOptions } from "@dbx-tools/auth";
 import { functionUtils, net } from "@dbx-tools/shared-core";
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
 const WORKSPACE_ID_REGEX = /\d{10,20}/;
+const workspaceAuth = new WeakMap<AppKitWorkspaceClient, AuthClient>();
 
 /** Legacy SDK client exposed by AppKit for APIs not yet on its facade. */
 export type WorkspaceClient = ReturnType<AppKitWorkspaceClient["toLegacyWorkspaceClient"]>;
 type Config = WorkspaceClient["config"];
+
+/**
+ * Create an AppKit workspace client whose SDK credential visitor delegates to
+ * `@dbx-tools/auth`.
+ *
+ * The auth package resolves the active profile, host, token lifecycle, and
+ * unified-workspace header without requiring callers to mirror profile values
+ * into environment variables. The SDK still owns workspace APIs and request
+ * execution.
+ */
+export async function createWorkspaceClient(
+  options: DatabricksAuthOptions = {},
+): Promise<AppKitWorkspaceClient> {
+  const auth = await authClient.createAuthClient(options);
+  const client = _createWorkspaceClient({ host: auth.host });
+  client.config.credentials = {
+    name: "pat",
+    async configure() {
+      return async (headers) => {
+        for (const [name, value] of Object.entries(await auth.headers())) {
+          headers.set(name, value);
+        }
+      };
+    },
+  };
+  workspaceAuth.set(client, auth);
+  return client;
+}
+
+/**
+ * Refresh the dbx-tools credential lifecycle attached by
+ * {@link createWorkspaceClient}. Returns `false` for externally supplied
+ * AppKit clients whose credential owner is unknown.
+ */
+export async function refreshWorkspaceClientAuthentication(
+  client: AppKitWorkspaceClient,
+): Promise<boolean> {
+  const auth = workspaceAuth.get(client);
+  if (!auth) return false;
+  await auth.headers({ login: false, refresh: true });
+  return true;
+}
 
 /** Resolve AppKit's facade or an existing legacy client to the legacy SDK surface. */
 export function toLegacyWorkspaceClient(
@@ -33,7 +77,7 @@ export function toLegacyWorkspaceClient(
  * AppKit execution context to borrow a client from.
  */
 const getDefaultWorkspaceClient = functionUtils.memoize(async () =>
-  createWorkspaceClient().toLegacyWorkspaceClient(),
+  (await createWorkspaceClient()).toLegacyWorkspaceClient(),
 );
 
 /**

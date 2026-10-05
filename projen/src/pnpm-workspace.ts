@@ -14,13 +14,11 @@
  *   `packages` straight through; nothing derives it from `project.subprojects`.
  *   The root's scan attaches packages AFTER construction, so the list is
  *   resolved in `preSynthesize`.
- * - **The catalog is accumulated.** pnpm's `catalog:` has no projen API at all,
- *   and tag mixins plus a consumer's `.projenrc.ts` add pins after construction.
+ * - **The catalog is accumulated.** Tag mixins and a consumer's `.projenrc.ts`
+ *   add pins after construction, after Projen has captured the options object.
  * - **Build allowances are the `allowBuilds` MAP.** projen's `allowScripts`
  *   renders `onlyBuiltDependencies`, and the pnpm this repo installs with (10.33)
- *   does not read that key at ALL - its only build gate is `allowBuilds`, which
- *   projen's schema does not type. Rendering the list would install with every
- *   build script silently skipped.
+ *   does not read that key at ALL - its only build gate is `allowBuilds`.
  *
  * Late mutation works because projen renders lazily (its `YamlFile` takes
  * `obj: () => toJson_PnpmWorkspaceYamlSchema(options)`) and because
@@ -44,16 +42,12 @@ import { BUN_VERSION } from "./bun-workflow.ts";
 import { toPosix } from "./packages.ts";
 
 /**
- * The pnpm `catalog:` version registry: dependency name -> version range. A
- * pnpm-workspace feature (packages reference it via a `catalog:` specifier), so
- * there is no projen type for it - it's just a string map.
+ * The pnpm `catalog:` version registry typed by Projen's workspace schema.
  */
-export type Catalog = Record<string, string>;
+export type Catalog = NonNullable<javascript.PnpmWorkspaceYamlOptions["catalog"]>;
 
 /**
- * pnpm's `allowBuilds`: dependency name -> may its install scripts run. Not in
- * projen's schema, whose build gate is the `onlyBuiltDependencies` LIST that
- * current pnpm ignores.
+ * Stronger local type for Projen's permissively typed `allowBuilds` field.
  */
 export type AllowBuilds = Record<string, boolean>;
 
@@ -80,13 +74,11 @@ const DEFAULT_CATALOG: Catalog = {
   // `@mastra/core`'s `^3.25.0 || ^4.0.0` peer range.
   zod: "4.3.6",
   typescript: "^5.9.3",
-  tsx: "^4.23.0",
   commander: "^15.0.0",
   "@clack/prompts": "^1.7.0",
   "openapi-fetch": "^0.17.0",
   tsoa: "^6.6.0",
   concurrently: "^10.0.3",
-  pnpm: "^11.0.6",
   "@databricks/appkit": "0.81.0",
   "@databricks/appkit-ui": "0.81.0",
   "@databricks/sdk-experimental": "^0.17.0",
@@ -125,7 +117,8 @@ const DEFAULT_OVERRIDES: Readonly<Record<string, string>> = {
 /**
  * pnpm settings this engine applies to every workspace, beyond members, catalog,
  * and allowances. Each is stated because pnpm's own default is the weaker choice
- * for a projen-managed monorepo; a caller's `workspaceYaml` overrides any.
+ * for a projen-managed monorepo; native `pnpmOptions.workspaceYamlOptions`
+ * override any.
  */
 const DEFAULT_WORKSPACE_YAML: javascript.PnpmWorkspaceYamlOptions = {
   // The catalog is GENERATED (`addCatalog` in `.projenrc.ts` / a tag mixin), so
@@ -150,8 +143,6 @@ export interface DBXToolsPNPMWorkspaceOptions {
   readonly catalog?: Catalog;
   /** Initial build allowances, merged over `{ esbuild: true }`. */
   readonly allowBuilds?: AllowBuilds;
-  /** Any other pnpm-workspace setting, typed by projen's schema. */
-  readonly workspaceYaml?: javascript.PnpmWorkspaceYamlOptions;
 }
 
 /**
@@ -167,25 +158,26 @@ export class PnpmWorkspaceState {
    * The options object handed to projen, whose members are mutated in place.
    * Held as the live reference the native component captured.
    *
-   * Widened with `allowBuilds`, which projen's schema type does not declare;
-   * projen renders unrecognized keys verbatim, so it reaches the file.
    */
-  readonly options: javascript.PnpmWorkspaceYamlOptions & { allowBuilds: AllowBuilds };
+  readonly options: javascript.PnpmWorkspaceYamlOptions;
 
   private readonly packages: string[] = [];
   private readonly catalog: Catalog;
   private readonly allowBuilds: AllowBuilds;
   private readonly overrides: Record<string, string>;
 
-  constructor(options: DBXToolsPNPMWorkspaceOptions = {}) {
+  constructor(
+    options: DBXToolsPNPMWorkspaceOptions & Pick<javascript.NodeProjectOptions, "pnpmOptions"> = {},
+  ) {
+    const workspaceOptions = options.pnpmOptions?.workspaceYamlOptions;
     this.catalog = { ...DEFAULT_CATALOG, ...options.catalog };
     this.allowBuilds = { ...DEFAULT_ALLOW_BUILDS, ...options.allowBuilds };
     // Seeded even when empty so `addOverride` has a reference projen already
     // captured; projen's `omitEmpty` drops the key while it stays empty.
-    this.overrides = { ...DEFAULT_OVERRIDES, ...options.workspaceYaml?.overrides };
+    this.overrides = { ...DEFAULT_OVERRIDES, ...workspaceOptions?.overrides };
     this.options = {
       ...DEFAULT_WORKSPACE_YAML,
-      ...options.workspaceYaml,
+      ...workspaceOptions,
       packages: this.packages,
       catalog: this.catalog,
       allowBuilds: this.allowBuilds,
@@ -238,8 +230,9 @@ export class PnpmWorkspaceState {
    * (e.g. a future projen that DOES create it under bun).
    */
   public attachWorkspaceFile(project: Project): void {
-    const exists = project.files.some((file) => file.path === "pnpm-workspace.yaml");
-    if (!exists) new javascript.PnpmWorkspaceYaml(project, this.options);
+    if (!javascript.PnpmWorkspaceYaml.of(project)) {
+      new javascript.PnpmWorkspaceYaml(project, this.options);
+    }
   }
 
   /**
@@ -280,7 +273,9 @@ export class PnpmWorkspaceState {
       pkg.addField("catalog", { ...this.catalog });
     }
     if (Object.keys(this.overrides).length > 0) {
-      pkg.addField("overrides", { ...this.overrides });
+      pkg.addPackageResolutions(
+        ...Object.entries(this.overrides).map(([name, version]) => `${name}@${version}`),
+      );
     }
     // projen renders bun's `trustedDependencies` from `allowedScripts`.
     const allowed = Object.entries(this.allowBuilds)

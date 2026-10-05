@@ -50,12 +50,11 @@ function dependencyReach(
 
 describe("Node-owned model and Lakebase runtimes", () => {
   const manifests = workspaceManifests();
-  const root = resolve(import.meta.dirname, "../../../../..");
 
   for (const packageName of [
     "@dbx-tools/cli",
     "@dbx-tools/model",
-    "@dbx-tools/cli-model-proxy",
+    "@dbx-tools/cli-model-gateway",
     "@dbx-tools/appkit-graphiti",
     "@dbx-tools/appkit",
     "@dbx-tools/postgres",
@@ -67,15 +66,6 @@ describe("Node-owned model and Lakebase runtimes", () => {
         FORBIDDEN_RUNTIME_PACKAGES.has(dependency),
       );
       assert.deepEqual(forbidden, []);
-    });
-  }
-
-  for (const manifestPath of ["packages/py/model-proxy/pyproject.toml"]) {
-    it(`${manifestPath} does not depend on Rust bindings`, () => {
-      const manifest = readFileSync(join(root, manifestPath), "utf8");
-      for (const packageName of FORBIDDEN_RUNTIME_PACKAGES) {
-        assert.doesNotMatch(manifest, new RegExp(packageName.replace("-", "\\-")));
-      }
     });
   }
 });

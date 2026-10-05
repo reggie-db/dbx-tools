@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun
 /** Verify that every committed package version matches the root VERSION file. */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as projectUtils from "@dbx-tools/core/project-utils";
 import { find } from "@dbx-tools/path";
@@ -23,7 +23,7 @@ function pythonVersion(path: string): string | undefined {
   return typeof manifest.project?.version === "string" ? manifest.project.version : undefined;
 }
 
-function main(): void {
+export function main(): void {
   const root = projectUtils.root() ?? process.cwd();
   const version = readWorkspaceVersion(root);
   const mismatches: string[] = [];
@@ -34,13 +34,6 @@ function main(): void {
   check("package.json", manifestVersion(join(root, "package.json")));
   for (const pkg of recordedPackages(root)) {
     check(`${pkg.path}/package.json`, manifestVersion(join(pkg.dir, "package.json")));
-    const barrel = join(pkg.dir, "index.ts");
-    if (existsSync(barrel)) {
-      const actual = /export const PACKAGE_VERSION = "([^"]+)";/.exec(
-        readFileSync(barrel, "utf8"),
-      )?.[1];
-      check(`${pkg.path}/index.ts`, actual);
-    }
   }
 
   for (const path of find.findFiles("**/pyproject.toml", { cwd: root })) {
@@ -52,4 +45,4 @@ function main(): void {
   logger.success(`all workspace package versions match ${version}`);
 }
 
-main();
+if (import.meta.main) main();

@@ -8,7 +8,7 @@ import {
   DatabricksCliProvider,
   resetDatabricksCliResolution,
   resolveDatabricksCli,
-} from "../src/databricks-cli.ts";
+} from "../src/_databricks-cli.ts";
 
 describe("Databricks CLI resolution", () => {
   it("reuses an installed CLI that satisfies the JSON token contract", async () => {

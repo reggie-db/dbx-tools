@@ -58,6 +58,7 @@ type AppResource = {
 export async function* appResources(
   projectBoundary: string,
   cwd?: string,
+  profile?: string,
 ): AsyncGenerator<AppResource, void, void> {
   const boundary = await resolveDirectory(projectBoundary);
   const startDirectory = await resolveStartDirectory(cwd);
@@ -66,7 +67,7 @@ export async function* appResources(
   }
 
   for await (const bundlePath of bundlePaths(boundary, startDirectory)) {
-    const validated = await validateBundle(bundlePath);
+    const validated = await validateBundle(bundlePath, profile);
     for (const [key, config] of Object.entries(bundleApps(validated.data))) {
       if (!object.isRecord(config)) continue;
       yield {
@@ -159,13 +160,21 @@ async function* descendBundlePaths(
 
 async function validateBundle(
   bundlePath: string,
+  profile?: string,
 ): Promise<Pick<AppResource, "data" | "bundleFailure">> {
-  const result = await spawn("databricks", ["bundle", "validate", "--output", "json"], {
-    cwd: dirname(bundlePath),
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "capture",
-  });
+  const environment = { ...process.env };
+  delete environment.DATABRICKS_CONFIG_PROFILE;
+  const result = await spawn(
+    "databricks",
+    ["bundle", "validate", "--output", "json", ...(profile ? ["--profile", profile] : [])],
+    {
+      cwd: dirname(bundlePath),
+      env: environment,
+      stdin: "ignore",
+      stdout: "capture",
+      stderr: "capture",
+    },
+  );
   const detail = stringUtils.trimToNull(result.stderr) ?? stringUtils.trimToNull(result.stdout);
   const bundleFailure =
     result.exitCode === 0

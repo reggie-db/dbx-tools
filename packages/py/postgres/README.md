@@ -2,8 +2,8 @@
 
 Python Lakebase/Postgres connection setup, advisory locks, and topic fan-out for
 services that already hold a Databricks `WorkspaceClient`. This package is
-the Python counterpart to `@dbx-tools/postgres`. Lakebase address parsing comes
-directly from the Python implementation in this package.
+the Python counterpart to `@dbx-tools/postgres`. Shared address parsing and
+identity rules are generated from the public Node package modules.
 
 Install from PyPI:
 
@@ -19,8 +19,10 @@ pip install "dbx-tools-postgres @ git+https://github.com/reggie-db/dbx-tools.git
 
 Key features:
 
+- creates a Python SDK `WorkspaceClient` from Node-resolved host, profile, and
+  workspace-id configuration while leaving token acquisition and refresh lazy;
 - accepts the same Postgres URI, Lakebase resource path, hostname, and project-id
-  address shapes as `@dbx-tools/appkit` through its Python parser;
+  address shapes as `@dbx-tools/appkit` through generated Node bindings;
 - resolves missing autoscaling endpoint fields through
   `WorkspaceClient.postgres`, including SDK-owned pagination and workspace-id
   headers;
@@ -40,11 +42,15 @@ Key features:
   the same lifecycle and wire envelope as the Node package.
 
 ```python
-from databricks.sdk import WorkspaceClient
-from dbx_tools.postgres import PostgresEngineConfig, create_async_engine
+from dbx_tools.postgres.engine import (
+    PostgresEngineConfig,
+    create_async_engine,
+    create_workspace_client,
+)
 
+workspace = await create_workspace_client()
 engine = create_async_engine(
-    WorkspaceClient(),
+    workspace,
     PostgresEngineConfig(instance_name="my-lakebase", database="databricks_postgres"),
     pool_pre_ping=True,
     pool_recycle=1800,
@@ -56,7 +62,7 @@ another source. A custom provider owns its own cache, expiry, and refresh
 serialization policy.
 
 ```python
-from dbx_tools.postgres import advisory_transaction_lock
+from dbx_tools.postgres.advisory_lock import advisory_transaction_lock
 
 with advisory_transaction_lock(engine, ["schema-install", "v2"]) as connection:
     connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS ...")
@@ -80,7 +86,7 @@ Channel derivation ports the Node stable-key and FNV rules, so equivalent channe
 parts resolve to the same PostgreSQL identifier in Python and Node.
 
 ```python
-from dbx_tools.postgres import PostgresTopicBus, TopicPublishInput
+from dbx_tools.postgres.topic_bus import PostgresTopicBus, TopicPublishInput
 
 bus = PostgresTopicBus(engine, channel=["billing", "production"])
 
@@ -97,7 +103,7 @@ table or queue when consumers need replay or acknowledgements.
 ## Databricks notebooks and Spark
 
 Verified end to end against a Lakebase endpoint on serverless notebook compute.
-[`packages/example/notebooks/bus-lakebase.py`](../../example/notebooks/bus-lakebase.py)
+[`packages/example/notebooks/bus-lakebase.ipynb`](../../example/notebooks/bus-lakebase.ipynb)
 is the runnable version of everything below.
 
 Two things about the Databricks Python runtime change how the bus is called, and
@@ -128,10 +134,10 @@ builds a plain SQLAlchemy engine and installs the token as its provider:
 
 ```python
 from sqlalchemy.ext.asyncio import create_async_engine
-from dbx_tools.postgres import (
+from dbx_tools.postgres.engine import install_credential_injection
+from dbx_tools.postgres.topic_bus import (
     PostgresTopicBus,
     TopicPublishInput,
-    install_credential_injection,
 )
 
 # driver: resolve once, capture in the closure

@@ -8,30 +8,28 @@
  * @module
  */
 import {
-  DatabricksClient,
+  client as authClient,
+  profile as authProfile,
   type AuthClient,
   type DatabricksAuthDependencies,
-  type DatabricksAuthOptions,
-  type DatabricksProfileSummary,
 } from "@dbx-tools/auth";
+import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
 import * as log from "@dbx-tools/shared-core/log";
 import * as object from "@dbx-tools/shared-core/object";
 import {
   ModelClass,
+  type ModelMetadata,
   type ModelQuery,
   type RankedModel,
+  type ResolvedModelSelection,
+  type ResolveModelInput,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model/contracts";
 
 import { normalizeEndpoints } from "./_ranking.ts";
-import {
-  lookupModels,
-  type ResolveModelInput,
-  type ResolvedModelSelection,
-  resolveModel,
-} from "./_selection.ts";
+import { lookupModels, resolveModel } from "./_selection.ts";
 import { chatCompletionsUrl, invocationsUrl, responsesUpstreamUrl } from "./invoke.ts";
-import { type ModelMetadata, modelMetadataFor } from "./metadata.ts";
+import { modelMetadataFor } from "./metadata.ts";
 import { modelServingApi } from "./policy.ts";
 
 const logger = log.logger("model/client");
@@ -39,17 +37,23 @@ const logger = log.logger("model/client");
 /** Default lifetime for one live endpoint catalogue. */
 export const DEFAULT_MODEL_CLIENT_CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Authentication options exposed by the portable model client. */
+export interface ModelAuthOptions {
+  /** Databricks profile name. */
+  profile?: string;
+}
+
 /** Construction options for {@link createModelClient}. */
 export interface ModelClientOptions {
   /** Databricks authentication and profile selection options. */
-  auth?: DatabricksAuthOptions;
+  auth?: ModelAuthOptions;
   /** In-memory endpoint catalogue TTL in milliseconds. */
   cacheTtlMs?: number;
 }
 
 /** Secret-free runtime identity and cache configuration. */
 export interface ModelClientStatus {
-  readonly profile: string;
+  readonly profile?: string;
   readonly host: string;
   readonly principal: string;
   readonly workspaceId?: string;
@@ -86,13 +90,9 @@ export interface ModelRoute {
 export interface ModelClient {
   listModels(refresh?: boolean): Promise<ServingEndpointSummary[]>;
   searchModels(query?: ModelQuery, refresh?: boolean): Promise<RankedModel[]>;
-  resolveModel(input?: ResolveModelInput, refresh?: boolean): Promise<ResolvedModelSelection>;
   route(input?: ModelRouteInput): Promise<ModelRoute>;
-  authenticate(login?: boolean): Promise<Record<string, string>>;
   metadata(model: string | ServingEndpointSummary): ModelMetadata;
   status(): ModelClientStatus;
-  profile(name?: string): DatabricksProfileSummary;
-  listProfiles(refresh?: boolean): DatabricksProfileSummary[];
 }
 
 interface DatabricksModelClient {
@@ -101,6 +101,42 @@ interface DatabricksModelClient {
   principal(): string;
   workspaceId(): string | undefined;
   request(path: string): Promise<unknown>;
+}
+
+class AuthenticatedModelClient implements DatabricksModelClient {
+  constructor(
+    readonly auth: AuthClient,
+    private readonly fetcher: typeof globalThis.fetch,
+  ) {}
+
+  host(): string {
+    return this.auth.host;
+  }
+
+  principal(): string {
+    return this.auth.principal;
+  }
+
+  workspaceId(): string | undefined {
+    return this.auth.workspaceId;
+  }
+
+  async request(path: string): Promise<unknown> {
+    const url = new URL(path, `${this.host().replace(/\/$/, "")}/`).toString();
+    let headers = await this.auth.headers();
+    let response = await this.fetcher(url, { headers });
+    if (response.status === 401) {
+      headers = await this.auth.headers({ refresh: true });
+      response = await this.fetcher(url, { headers });
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `Databricks Model Serving API ${path} returned HTTP ${response.status}: ${text}`,
+      );
+    }
+    return text ? JSON.parse(text) : undefined;
+  }
 }
 
 interface CatalogueEntry {
@@ -127,18 +163,6 @@ class DefaultModelClient implements ModelClient {
     }));
   }
 
-  async resolveModel(
-    input: ResolveModelInput = {},
-    refresh = false,
-  ): Promise<ResolvedModelSelection> {
-    const catalogue = await this.catalogue(refresh);
-    const resolved = resolveModel(catalogue, input);
-    if (isUnmatchedExplicit(catalogue, input, resolved)) {
-      return resolveModel(await this.catalogue(true), input);
-    }
-    return resolved;
-  }
-
   async route(input: ModelRouteInput = {}): Promise<ModelRoute> {
     const { refresh = false, protocol: requestedProtocol, login, ...selection } = input;
     const effectiveSelection =
@@ -156,7 +180,7 @@ class DefaultModelClient implements ModelClient {
     const protocol = requestedProtocol ?? inferProtocol(endpoint, resolved.modelId);
     const host = this.client.host();
     const url = routeUrl(host, resolved.modelId, protocol);
-    const headers = await this.client.auth.requestHeadersForUrl(url, login);
+    const headers = await this.client.auth.headers({ login });
     return {
       modelId: resolved.modelId,
       ...(endpoint ? { endpoint: cloneEndpoint(endpoint) } : {}),
@@ -170,30 +194,18 @@ class DefaultModelClient implements ModelClient {
     };
   }
 
-  authenticate(login?: boolean): Promise<Record<string, string>> {
-    return this.client.auth.authenticate(login);
-  }
-
   metadata(model: string | ServingEndpointSummary): ModelMetadata {
     return modelMetadataFor(model);
   }
 
   status(): ModelClientStatus {
     return {
-      profile: this.client.auth.status().profile,
+      ...(this.client.auth.profile ? { profile: this.client.auth.profile } : {}),
       host: this.client.host(),
       principal: this.client.principal(),
       ...(this.client.workspaceId() ? { workspaceId: this.client.workspaceId() } : {}),
       cacheTtlMs: this.cacheTtlMs,
     };
-  }
-
-  profile(name?: string): DatabricksProfileSummary {
-    return this.client.auth.profile(name);
-  }
-
-  listProfiles(refresh = false): DatabricksProfileSummary[] {
-    return this.client.auth.listProfiles(refresh);
   }
 
   private catalogue(refresh: boolean): Promise<readonly ServingEndpointSummary[]> {
@@ -234,7 +246,15 @@ class DefaultModelClient implements ModelClient {
 /** Create an authentication-aware Databricks model client. */
 export async function createModelClient(options: ModelClientOptions = {}): Promise<ModelClient> {
   const cacheTtlMs = validateCacheTtl(options.cacheTtlMs);
-  return new DefaultModelClient(await DatabricksClient.create(options.auth), cacheTtlMs);
+  return new DefaultModelClient(
+    new AuthenticatedModelClient(await authClient.createAuthClient(options.auth), globalThis.fetch),
+    cacheTtlMs,
+  );
+}
+
+/** List configured Databricks profiles outside the model client facade. */
+export function listProfiles(refresh = false): DatabricksProfileSummary[] {
+  return authProfile.listProfiles({ refresh });
 }
 
 /** @internal Construct a model client around a test or host-owned Databricks client. */
@@ -251,7 +271,10 @@ export async function createModelClientWithDependencies(
   dependencies: DatabricksAuthDependencies,
 ): Promise<ModelClient> {
   return new DefaultModelClient(
-    await DatabricksClient.create(options.auth, dependencies),
+    new AuthenticatedModelClient(
+      await authClient.createAuthClient(options.auth, dependencies),
+      dependencies.fetch ?? globalThis.fetch,
+    ),
     validateCacheTtl(options.cacheTtlMs),
   );
 }
