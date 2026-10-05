@@ -102,15 +102,6 @@
         }
       ]
     },
-    "start": {
-      "name": "start",
-      "description": "Start the AppKit model gateway",
-      "steps": [
-        {
-          "exec": "bun src/_server.ts"
-        }
-      ]
-    },
     "test": {
       "name": "test",
       "description": "Run tests",

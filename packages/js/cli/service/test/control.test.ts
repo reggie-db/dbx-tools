@@ -51,4 +51,22 @@ describe("CLI service control socket", () => {
     assert.equal((await requestServiceControl(address, "status"))?.pid, 303);
     await closeServiceControl(server, address);
   });
+
+  it("flushes the stop response before invoking shutdown", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-tools-cli-service-control-"));
+    const address = join(root, "service.sock");
+    let stopped = false;
+    const server = await listenForServiceControl(
+      address,
+      () => ({ running: true, pid: 404 }),
+      () => {
+        stopped = true;
+      },
+    );
+
+    assert.equal((await requestServiceControl(address, "stop"))?.pid, 404);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(stopped, true);
+    await closeServiceControl(server, address);
+  });
 });

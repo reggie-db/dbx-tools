@@ -6,6 +6,8 @@
 
 import { z } from "zod";
 
+import { resolveServicePackage, servicePackageDefaults } from "./_package.ts";
+
 const SAFE_URL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
 function isSafeUrl(value: string): boolean {
@@ -21,14 +23,21 @@ export const CliServiceCommandSchema = z
   .object({
     executable: z.string().min(1).optional(),
     entrypoint: z.string().min(1).optional(),
+    binName: z.string().min(1).optional(),
     arguments: z.array(z.string()).readonly().optional(),
+    environment: z.record(z.string(), z.string()).readonly().optional(),
     cwd: z.string().min(1).optional(),
   })
   .superRefine((command, context) => {
-    if (Number(command.executable !== undefined) + Number(command.entrypoint !== undefined) !== 1) {
+    if (
+      Number(command.executable !== undefined) +
+        Number(command.entrypoint !== undefined) +
+        Number(command.binName !== undefined) >
+      1
+    ) {
       context.addIssue({
         code: "custom",
-        message: "command requires exactly one of executable or entrypoint",
+        message: "command accepts at most one of executable, entrypoint, or binName",
       });
     }
   })
@@ -68,7 +77,8 @@ export const CliServiceDefinitionSchema = z
       .max(128)
       .regex(/^[a-z0-9][a-z0-9._-]*$/, "service id must be filesystem safe"),
     name: z.string().min(1),
-    version: z.string().min(1),
+    packageName: z.string().min(1),
+    version: z.string().min(1).optional(),
     icon: z.string().min(1),
     isTemplateIcon: z.boolean().optional(),
     dataDirectory: z.string().min(1).optional(),
@@ -79,3 +89,26 @@ export const CliServiceDefinitionSchema = z
 
 /** Complete serializable definition consumed by the lifecycle manager and tray host. */
 export type CliServiceDefinition = z.infer<typeof CliServiceDefinitionSchema>;
+
+/** Package-derived service fields plus caller-owned icon, process, and menu options. */
+export type CliServiceDefinitionOptions = Omit<
+  CliServiceDefinition,
+  "packageName" | "id" | "name" | "version"
+> &
+  Partial<Pick<CliServiceDefinition, "id" | "name" | "version">>;
+
+/** Define a service from an owning module URL or installed package name. */
+export function defineService(
+  packageReference: string,
+  options: CliServiceDefinitionOptions,
+): CliServiceDefinition {
+  const pkg = resolveServicePackage(packageReference);
+  const defaults = servicePackageDefaults(pkg);
+  return CliServiceDefinitionSchema.parse({
+    ...options,
+    packageName: pkg.name,
+    id: options.id ?? defaults.id,
+    name: options.name ?? defaults.name,
+    version: options.version ?? pkg.version,
+  });
+}

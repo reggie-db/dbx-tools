@@ -23,6 +23,7 @@ describe("CLI service lifecycle", () => {
       {
         id: "com.example.gateway",
         name: "Example Gateway",
+        packageName: "@dbx-tools/cli-service",
         version: "1.2.3",
         icon: join(root, "icon.png"),
         dataDirectory,
@@ -45,6 +46,7 @@ describe("CLI service lifecycle", () => {
           await writeFile(output, "#!/bin/sh\nexit 0\n");
           await chmod(output, 0o755);
         },
+        async installRuntime() {},
       },
     );
 
@@ -61,20 +63,20 @@ describe("CLI service lifecycle", () => {
     assert.equal(configuration.command.entrypoint, undefined);
     assert.equal(
       configuration.command.executable,
-      join(globalHomeDirectory, "bin", "com.example.gateway-1.2.3-command"),
+      join(globalHomeDirectory, "bin", "example-gateway-command"),
     );
     assert.deepEqual(compiled, [commandEntrypoint, hostEntrypoint]);
     const startup = await readFile(
       join(root, "config", "autostart", "com.example.gateway.desktop"),
       "utf8",
     );
-    assert.match(startup, /com\.example\.gateway-1\.2\.3-service/);
+    assert.match(startup, /example-gateway/);
     await stat(join(globalHomeDirectory, "bin", "traybin", "tray_linux_release"));
 
     await service.uninstall();
 
     await assert.rejects(() => stat(dataDirectory), { code: "ENOENT" });
-    await stat(join(globalHomeDirectory, "bin", "com.example.gateway-1.2.3-service"));
+    await stat(join(globalHomeDirectory, "bin", "example-gateway"));
     await assert.rejects(
       () => stat(join(root, "config", "autostart", "com.example.gateway.desktop")),
       { code: "ENOENT" },

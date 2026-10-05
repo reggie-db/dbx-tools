@@ -1,19 +1,22 @@
 /**
- * Agnostic daily metadata cache backed by {@link https://www.npmjs.com/package/cacache | cacache}.
+ * Agnostic daily metadata cache on {@link https://www.npmjs.com/package/cacache | cacache}.
  *
- * Hot reads use cacache's in-memory memoization (`memoize: true` on write;
- * reads hit memory by default). Misses and mutations also persist under
- * `env-paths("dbx-tools").cache/model-gateway/<version>/` so restarts reuse
- * the last good payload for one day (or a custom TTL).
+ * Uses cacache's built-in memory memoization (`memoize: true` on put; gets read
+ * the in-memory layer by default) with content-addressed disk under
+ * `env-paths("dbx-tools").cache/model-gateway/<version>/`. Disk persistence is
+ * disabled inside a Databricks App ({@link environmentUtils.isDatabricksAppEnv});
+ * those processes keep a process-local Map only.
  *
  * Each cache owns a key, hard-coded fallback, optional network loader, and a
- * merger that combines fresh / previous / fallback values.
+ * merger that combines fresh / previous / fallback values. Freshness is the
+ * envelope `refreshedAt` window (default one day), not cacache's short LRU TTL.
  *
  * @module
  */
 
 import { resolve } from "node:path";
 
+import * as environmentUtils from "@dbx-tools/shared-core/environment-utils";
 import * as log from "@dbx-tools/shared-core/log";
 import cacache from "cacache";
 import envPaths from "env-paths";
@@ -31,7 +34,7 @@ export interface MetadataCacheRecord<T> {
 
 /** Factory inputs for one named metadata cache. */
 export interface MetadataCacheOptions<T> {
-  /** Stable cacache key (also used for in-flight coalescing). */
+  /** Stable cacache key. */
   readonly key: string;
   /** Hard-coded / committed baseline used when store and load both miss. */
   readonly fallback: T;
@@ -48,6 +51,10 @@ export interface MetadataCacheOptions<T> {
   readonly version?: string;
   /** Override the cacache root directory (tests). */
   readonly cacheDir?: string;
+  /**
+   * Force disk on/off. Defaults to off inside Databricks Apps, on otherwise.
+   */
+  readonly disk?: boolean;
   /** Clock override for tests. */
   readonly now?: () => number;
 }
@@ -59,10 +66,12 @@ export interface MetadataCacheMergeInput<T> {
   readonly fallback: T;
 }
 
-/** One versioned, write-through metadata cache. */
+/** One versioned metadata cache (cacache memory + optional disk). */
 export interface MetadataCache<T> {
-  /** Absolute cacache root for this package version. */
+  /** Absolute cacache root for this package version (unused when disk is off). */
   readonly path: string;
+  /** Whether cacache disk persistence is enabled for this instance. */
+  readonly diskEnabled: boolean;
   /** Return a fresh-or-fallback value, refreshing when stale. */
   get(): Promise<T>;
   /** Read memory / disk without refreshing. */
@@ -75,47 +84,44 @@ export interface MetadataCache<T> {
 
 const inflight = new Map<string, Promise<unknown>>();
 
-function coalesce<T>(key: string, work: () => Promise<T>): Promise<T> {
-  const existing = inflight.get(key);
-  if (existing) return existing as Promise<T>;
-  const pending = work().finally(() => {
-    if (inflight.get(key) === pending) inflight.delete(key);
-  });
-  inflight.set(key, pending);
-  return pending;
-}
-
 /** Default cacache root for a package version under the dbx-tools cache dir. */
 export function defaultMetadataCacheDir(version = packageJson.version): string {
   const cacheDirectory = envPaths("dbx-tools", { suffix: "" }).cache;
   return resolve(cacheDirectory, "model-gateway", version);
 }
 
+/** Whether metadata caches should persist to disk in this process. */
+export function metadataCacheDiskEnabled(
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return !environmentUtils.isDatabricksAppEnv(environment);
+}
+
 /**
- * Create one daily write-through cache backed by cacache (disk) with memory
- * memoization on top.
+ * Create one daily cache backed by cacache memoization, with optional disk.
  */
 export function createMetadataCache<T>(options: MetadataCacheOptions<T>): MetadataCache<T> {
   const ttlMs = options.ttlMs ?? MODEL_METADATA_TTL_MS;
   const version = options.version ?? packageJson.version;
   const path = options.cacheDir ?? defaultMetadataCacheDir(version);
+  const diskEnabled = options.disk ?? metadataCacheDiskEnabled();
   const now = options.now ?? Date.now;
   const flightKey = `${path}::${options.key}`;
 
+  /** Process-local store used when disk is off (Databricks Apps). */
+  const memoryOnly = new Map<string, MetadataCacheRecord<T>>();
+
   const resolveValue = (input: MetadataCacheMergeInput<T>): T => options.merge(input);
 
+  const isFresh = (record: MetadataCacheRecord<T> | undefined): boolean =>
+    Boolean(record && now() - record.refreshedAt < ttlMs);
+
   const readRecord = async (): Promise<MetadataCacheRecord<T> | undefined> => {
+    if (!diskEnabled) return memoryOnly.get(options.key);
     try {
+      // cacache reads its in-memory memo first unless memoize is false
       const entry = await cacache.get(path, options.key);
-      const parsed = JSON.parse(entry.data.toString("utf8")) as unknown;
-      if (
-        !parsed ||
-        typeof parsed !== "object" ||
-        typeof (parsed as MetadataCacheRecord<T>).refreshedAt !== "number"
-      ) {
-        return undefined;
-      }
-      return parsed as MetadataCacheRecord<T>;
+      return decodeRecord<T>(entry.data);
     } catch (error) {
       if (isCacheMiss(error)) return undefined;
       logger.warn("metadata cache cacache read failed", { key: options.key, path, error });
@@ -124,6 +130,10 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
   };
 
   const writeRecord = async (record: MetadataCacheRecord<T>): Promise<void> => {
+    if (!diskEnabled) {
+      memoryOnly.set(options.key, record);
+      return;
+    }
     try {
       await cacache.put(path, options.key, `${JSON.stringify(record)}\n`, {
         memoize: true,
@@ -133,9 +143,6 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
       logger.warn("metadata cache cacache write failed", { key: options.key, path, error });
     }
   };
-
-  const isFresh = (record: MetadataCacheRecord<T> | undefined): boolean =>
-    Boolean(record && now() - record.refreshedAt < ttlMs);
 
   const persist = async (value: T, refreshedAt = now()): Promise<T> => {
     await writeRecord({ refreshedAt, value });
@@ -162,6 +169,7 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
             key: options.key,
             error,
             path,
+            diskEnabled,
           });
         }
       }
@@ -179,6 +187,7 @@ export function createMetadataCache<T>(options: MetadataCacheOptions<T>): Metada
 
   return {
     path,
+    diskEnabled,
     get: () => refresh(false),
     peek: async () => (await readRecord())?.value,
     refresh: () => refresh(true),
@@ -216,7 +225,7 @@ export function mergePreferFreshRecord<T>(
   };
 }
 
-/** Test helper: wipe a cacache root and clear process memoization. */
+/** Test helper: wipe a cacache root and clear cacache memoization. */
 export async function resetMetadataCacheDir(cacheDir: string): Promise<void> {
   try {
     await cacache.rm.all(cacheDir);
@@ -226,6 +235,32 @@ export async function resetMetadataCacheDir(cacheDir: string): Promise<void> {
   cacache.clearMemoized();
   for (const key of [...inflight.keys()]) {
     if (key.startsWith(`${cacheDir}::`)) inflight.delete(key);
+  }
+}
+
+function coalesce<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<T>;
+  const pending = work().finally(() => {
+    if (inflight.get(key) === pending) inflight.delete(key);
+  });
+  inflight.set(key, pending);
+  return pending;
+}
+
+function decodeRecord<T>(data: Buffer): MetadataCacheRecord<T> | undefined {
+  try {
+    const parsed = JSON.parse(data.toString("utf8")) as unknown;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof (parsed as MetadataCacheRecord<T>).refreshedAt !== "number"
+    ) {
+      return undefined;
+    }
+    return parsed as MetadataCacheRecord<T>;
+  } catch {
+    return undefined;
   }
 }
 

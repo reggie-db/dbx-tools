@@ -30,6 +30,10 @@ export async function requestServiceControl(
     });
     socket.once("end", () => {
       clearTimeout(timeout);
+      if (!response.trim()) {
+        resolve(undefined);
+        return;
+      }
       try {
         const value = JSON.parse(response) as Partial<ServiceControlResponse>;
         if (value.running === true && typeof value.pid === "number") {
@@ -101,8 +105,10 @@ function handleConnection(
       socket.end();
       return;
     }
+    if (command === "stop") {
+      socket.once("finish", () => setImmediate(stop));
+    }
     socket.end(`${JSON.stringify(status())}\n`);
-    if (command === "stop") setImmediate(stop);
   });
 }
 

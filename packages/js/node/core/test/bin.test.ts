@@ -140,6 +140,25 @@ describe("bin.ensure", () => {
     }
   });
 
+  it("reinstalls an accepted executable when forced", async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-force-"));
+    try {
+      const first = await bin.ensure("example", executableUrl("#!/bin/sh\necho first\n"), {
+        homeDir,
+        skipVersionCheck: true,
+      });
+      await bin.ensure("example", executableUrl("#!/bin/sh\necho second\n"), {
+        homeDir,
+        skipVersionCheck: true,
+        force: true,
+      });
+
+      assert.match(await readFile(first.path, "utf8"), /second/);
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it("checks again under the process lock before downloading", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-lock-"));
     let resolutions = 0;

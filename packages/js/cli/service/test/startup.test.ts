@@ -7,6 +7,7 @@ import type { CliServiceDefinition } from "../src/definition.ts";
 const DEFINITION: CliServiceDefinition = {
   id: "com.example.gateway",
   name: "Example Gateway",
+  packageName: "@example/gateway",
   version: "1.2.3",
   icon: "/Applications/Example & Gateway/icon.png",
 };

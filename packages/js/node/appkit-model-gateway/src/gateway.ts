@@ -8,6 +8,7 @@ import { log } from "@dbx-tools/shared-core";
 import { ModelClass } from "@dbx-tools/shared-model";
 import type {
   ClientProtocol,
+  GatewayRoute,
   ModelCapabilityOverride,
   ModelListResponse,
 } from "@dbx-tools/shared-model-gateway";
@@ -18,6 +19,10 @@ import {
   type ModelRegistry,
   type ModelRegistryOptions,
 } from "./registry.ts";
+import {
+  adaptInferenceReasoning,
+  learnAndAdaptReasoningRetry,
+} from "./reasoning-adapt.ts";
 import { isCodexOriginator, requestedFeatures, resolveRoute } from "./router.ts";
 import { translateGatewayRequest } from "./translation.ts";
 import { fetchDatabricks, gatewayResponseHeaders } from "./transport.ts";
@@ -96,14 +101,25 @@ export class ModelGateway {
       model: target.id,
       upstreamProtocol: route.upstreamProtocol,
     });
+
+    const adapted = adaptInferenceReasoning(target.id, body);
+    let response = await this.forward(route, adapted.body, headers, signal);
+    const retryBody = await learnAndAdaptReasoningRetry({
+      model: target.id,
+      body,
+      response,
+      previousWireEffort: adapted.wireEffort,
+    });
+    if (retryBody) {
+      await response.body?.cancel().catch(() => undefined);
+      response = await this.forward(route, retryBody, headers, signal);
+    }
+
+    logResponse(route.upstreamProtocol, target.id, response);
     if (route.upstreamProtocol === "ai-sdk") {
-      const response = await translateGatewayRequest(route, body, signal);
       response.headers.set("x-dbx-tools-upstream", route.upstreamProtocol);
-      logResponse(route.upstreamProtocol, target.id, response);
       return response;
     }
-    const response = await fetchDatabricks({ route, body, headers, signal });
-    logResponse(route.upstreamProtocol, target.id, response);
     const forwarded = gatewayResponseHeaders(response.headers);
     forwarded.set("x-dbx-tools-upstream", route.upstreamProtocol);
     return new Response(response.body, {
@@ -117,6 +133,18 @@ export class ModelGateway {
   refresh(): Promise<void> {
     logger.debug("refreshing model catalogue");
     return this.registry.refresh();
+  }
+
+  private async forward(
+    route: GatewayRoute,
+    body: Readonly<Record<string, unknown>>,
+    headers: Headers,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    if (route.upstreamProtocol === "ai-sdk") {
+      return translateGatewayRequest(route, body, signal);
+    }
+    return fetchDatabricks({ route, body, headers, signal });
   }
 }
 

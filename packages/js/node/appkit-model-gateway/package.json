@@ -14,7 +14,6 @@
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
     "prepack": "projen prepack",
-    "start": "projen start",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"
@@ -63,6 +62,10 @@
         "types": "./lib/src/plugin.d.ts",
         "default": "./lib/src/plugin.js"
       },
+      "./reasoning-adapt": {
+        "types": "./lib/src/reasoning-adapt.d.ts",
+        "default": "./lib/src/reasoning-adapt.js"
+      },
       "./registry": {
         "types": "./lib/src/registry.d.ts",
         "default": "./lib/src/registry.js"
@@ -74,10 +77,6 @@
       "./routes": {
         "types": "./lib/src/routes.d.ts",
         "default": "./lib/src/routes.js"
-      },
-      "./server": {
-        "types": "./lib/src/server.d.ts",
-        "default": "./lib/src/server.js"
       },
       "./translation": {
         "types": "./lib/src/translation.d.ts",
@@ -103,10 +102,10 @@
     "./gateway": "./src/gateway.ts",
     "./models": "./src/models.ts",
     "./plugin": "./src/plugin.ts",
+    "./reasoning-adapt": "./src/reasoning-adapt.ts",
     "./registry": "./src/registry.ts",
     "./router": "./src/router.ts",
     "./routes": "./src/routes.ts",
-    "./server": "./src/server.ts",
     "./translation": "./src/translation.ts",
     "./transport": "./src/transport.ts",
     "./package.json": "./package.json"
@@ -114,7 +113,6 @@
   "files": [
     "index.ts",
     "src",
-    "exports.ts",
     "dist/plugins",
     "lib"
   ],

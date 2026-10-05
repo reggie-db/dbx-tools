@@ -18,7 +18,7 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/appkit` - Node-side helpers for Databricks AppKit apps. Source: `packages/js/node/appkit`.
 - `@dbx-tools/appkit-graphiti` - AppKit process plugin for the Python dbx-tools-graphiti MCP runtime. Source: `packages/js/node/appkit-graphiti`.
 - `@dbx-tools/appkit-mastra` - AppKit plugin and server-side toolkit for hosting Mastra agents inside a Databricks App. Source: `packages/js/node/appkit-mastra`.
-- `@dbx-tools/appkit-model-gateway` - AppKit plugin and standalone Bun server for OpenAI, Anthropic, Codex, and Databricks AI Gateway model traffic. Source: `packages/js/node/appkit-model-gateway`.
+- `@dbx-tools/appkit-model-gateway` - Raw AppKit plugin for OpenAI, Anthropic, Codex, and Databricks AI Gateway model traffic. Source: `packages/js/node/appkit-model-gateway`.
 - `@dbx-tools/appkit-web-search` - Server-side web-search runtime, Mastra tools, and AppKit plugin. Source: `packages/js/node/appkit-web-search`.
 - `@dbx-tools/auth` - Databricks profile resolution and token or authentication-header production for Node.js and Bun. Source: `packages/js/node/auth`.
 - `@dbx-tools/auth-gate` - Passwordless authentication runtime built on Better Auth, email OTP, passkeys, and caller-provided identity policy and delivery. Source: `packages/js/node/auth-gate`.

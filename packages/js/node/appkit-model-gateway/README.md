@@ -1,7 +1,7 @@
 # @dbx-tools/appkit-model-gateway
 
-AppKit plugin and standalone Bun server for OpenAI, Anthropic, Codex, and
-Databricks AI Gateway model traffic.
+Raw AppKit plugin for OpenAI, Anthropic, Codex, and Databricks AI Gateway model
+traffic.
 
 The gateway discovers the active workspace model catalogue dynamically through
 `@dbx-tools/model`. AppKit supplies the service-context Databricks client and
@@ -11,42 +11,16 @@ The gateway discovers the active workspace model catalogue dynamically through
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
-import { modelGateway, mountModelGatewayRoutes } from "@dbx-tools/appkit-model-gateway";
+import { modelGateway } from "@dbx-tools/appkit-model-gateway";
 
 await createApp({
   plugins: [modelGateway(), server()],
-  onPluginsReady(appkit) {
-    appkit.server.extend((application) => {
-      mountModelGatewayRoutes(application, appkit.modelGateway);
-    });
-  },
 });
 ```
 
-AppKit mounts the plugin routes under `/api/model-gateway/v1/*`. The server
-extension in the example also exposes the standard root paths:
-
-- `GET /api/healthz`
-- `GET /v1/models?search=<intent>`
-- `POST /v1/chat/completions`
-- `POST /v1/responses`
-- `POST /v1/messages`
-- `POST /v1/embeddings`
-
-## Standalone server
-
-From the workspace root:
-
-```sh
-dbx model-gateway --profile PROFILE --port 4400
-```
-
-The foreground server binds to `127.0.0.1:4400` by default.
-`@dbx-tools/databricks` constructs the AppKit workspace client and delegates its
-SDK credential visitor to `@dbx-tools/auth`, which resolves the active profile
-and refreshes credentials automatically.
-Standalone root routes are loopback-only and keyless. The gateway applies the
-resolved Databricks authentication headers to upstream requests.
+AppKit mounts the plugin routes under `/api/model-gateway/v1/*`. The
+`@dbx-tools/cli-model-gateway` package owns foreground server construction and
+standard root compatibility paths.
 
 ## Routing
 

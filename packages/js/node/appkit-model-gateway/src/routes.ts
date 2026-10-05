@@ -15,41 +15,6 @@ import { UnsupportedGatewayFeatureError } from "./router.ts";
 
 const logger = log.logger("appkit/model-gateway/http");
 
-/** HTTP methods exported by the AppKit plugin for root route mounting. */
-export interface ModelGatewayHttpApi {
-  models(request: express.Request, response: express.Response): Promise<void>;
-  inference(
-    protocol: ClientProtocol,
-    request: express.Request,
-    response: express.Response,
-  ): Promise<void>;
-}
-
-/** Mount exact OpenAI and Anthropic compatibility paths on an AppKit server. */
-export function mountModelGatewayRoutes(
-  application: express.Application,
-  gateway: ModelGatewayHttpApi,
-): void {
-  application.get("/api/healthz", (_request, response) => {
-    sendHealth(response);
-  });
-  application.get("/v1/models", (request, response) => {
-    void gateway.models(request, response);
-  });
-  application.post("/v1/chat/completions", (request, response) => {
-    void gateway.inference("openai-chat", request, response);
-  });
-  application.post("/v1/responses", (request, response) => {
-    void gateway.inference("openai-responses", request, response);
-  });
-  application.post("/v1/messages", (request, response) => {
-    void gateway.inference("anthropic-messages", request, response);
-  });
-  application.post("/v1/embeddings", (request, response) => {
-    void gateway.inference("openai-embeddings", request, response);
-  });
-}
-
 /** Send the lightweight compatibility health response. */
 export function sendHealth(response: express.Response): void {
   response.json({ ready: true });

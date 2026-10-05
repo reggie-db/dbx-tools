@@ -29,8 +29,8 @@
  * `export { ... }`. The module namespaces stay either way, so a namespaced call
  * site keeps working.
  *
- * Every generated barrel also exports `PACKAGE_IDENTIFIER` from the package's
- * own `package.json`.
+ * Every generated barrel also exports `PACKAGE_IDENTIFIER` and `PACKAGE_VERSION`
+ * from the package's own `package.json`.
  *
  * Uniqueness is tallied over types and values TOGETHER: a name carried by two
  * modules is ambiguous whichever kind it is, and hoisting one module's value
@@ -111,6 +111,9 @@ const BARREL_HEADER: HeaderOpts = {
 const PACKAGE_IDENTIFIER_EXPORT = "PACKAGE_IDENTIFIER";
 const PACKAGE_IDENTIFIER_LINE = `export const ${PACKAGE_IDENTIFIER_EXPORT} = "";`;
 const PACKAGE_IDENTIFIER_LINE_RE = /^export const PACKAGE_IDENTIFIER = .*;$/m;
+const PACKAGE_VERSION_EXPORT = "PACKAGE_VERSION";
+const PACKAGE_VERSION_LINE = `export const ${PACKAGE_VERSION_EXPORT} = "";`;
+const PACKAGE_VERSION_LINE_RE = /^export const PACKAGE_VERSION = .*;$/m;
 
 /** `config-tools` / `config_tools` -> `configTools`; `local-fs` -> `localFS`. */
 function moduleSegmentToCamel(segment: string): string {
@@ -279,8 +282,11 @@ function mergeCustomExports(content: string, pkgDir: string): string {
   return `${kept.join("\n").replace(/\n+$/, "")}\nexport * from "./exports.ts";\n`;
 }
 
-/** Read the authoritative npm package name emitted by the package project. */
-function packageIdentifier(pkgDir: string): string {
+/** Read the authoritative npm package metadata emitted by the package project. */
+function packageMetadata(pkgDir: string): {
+  identifier: string;
+  version: string;
+} {
   const manifestPath = join(pkgDir, "package.json");
   const manifest = existsSync(manifestPath)
     ? json.parseRecord(readFileSync(manifestPath, "utf8"))
@@ -289,21 +295,32 @@ function packageIdentifier(pkgDir: string): string {
   if (typeof name !== "string" || !name.trim()) {
     throw new Error(`Cannot generate barrel without package.json name: ${manifestPath}`);
   }
-  return name;
+  const version = manifest?.version;
+  if (typeof version !== "string" || !version.trim()) {
+    throw new Error(`Cannot generate barrel without package.json version: ${manifestPath}`);
+  }
+  return { identifier: name, version };
 }
 
 /** Normalize package metadata before comparing the barrel's export structure. */
 function withoutPackageMetadata(content: string): string {
-  return content.replace(PACKAGE_IDENTIFIER_LINE_RE, PACKAGE_IDENTIFIER_LINE);
+  return content
+    .replace(PACKAGE_IDENTIFIER_LINE_RE, PACKAGE_IDENTIFIER_LINE)
+    .replace(PACKAGE_VERSION_LINE_RE, PACKAGE_VERSION_LINE);
 }
 
 /** Resolve and insert package metadata when a barrel is about to be written. */
 function withPackageMetadata(content: string, pkgDir: string): string {
-  const identifier = packageIdentifier(pkgDir);
-  return content.replace(
-    PACKAGE_IDENTIFIER_LINE_RE,
-    () => `export const ${PACKAGE_IDENTIFIER_EXPORT} = ${JSON.stringify(identifier)};`,
-  );
+  const metadata = packageMetadata(pkgDir);
+  return content
+    .replace(
+      PACKAGE_IDENTIFIER_LINE_RE,
+      () => `export const ${PACKAGE_IDENTIFIER_EXPORT} = ${JSON.stringify(metadata.identifier)};`,
+    )
+    .replace(
+      PACKAGE_VERSION_LINE_RE,
+      () => `export const ${PACKAGE_VERSION_EXPORT} = ${JSON.stringify(metadata.version)};`,
+    );
 }
 
 /**
@@ -381,12 +398,13 @@ function generateForPackage(pkgDir: string): number {
       return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
     })
     .join("\n");
-  let content = `${PACKAGE_IDENTIFIER_LINE}\n${namespaceExports}`;
+  let content = `${PACKAGE_IDENTIFIER_LINE}\n${PACKAGE_VERSION_LINE}\n${namespaceExports}`;
   // Hoist package-unique named exports to the top level. Names a hand-authored
   // `exports.ts` declares are suppressed so that file stays authoritative.
   const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
   const suppress = existsSync(customPath) ? customExportNames(customPath) : new Set<string>();
   suppress.add(PACKAGE_IDENTIFIER_EXPORT);
+  suppress.add(PACKAGE_VERSION_EXPORT);
   content = hoistUniqueExports(content, pkgDir, suppress);
   // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
   content = mergeCustomExports(content, pkgDir);

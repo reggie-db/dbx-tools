@@ -3,5 +3,8 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-model-gateway";
+export const PACKAGE_VERSION = "0.9.33";
 export * as cli from "./src/cli.ts";
+export * as server from "./src/server.ts";
 export type { ModelGatewayCliDependencies, ModelGatewayServiceOptions } from "./src/cli.ts";
+export type { StartModelGatewayOptions } from "./src/server.ts";

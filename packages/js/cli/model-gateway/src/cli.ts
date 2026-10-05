@@ -4,20 +4,16 @@
  * @module
  */
 
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { startModelGateway } from "@dbx-tools/appkit-model-gateway";
-import type { CliServiceDefinition } from "@dbx-tools/cli-service";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
-import { json, object } from "@dbx-tools/shared-core";
+import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
 import { Command, InvalidArgumentError } from "commander";
 
+import { PACKAGE_VERSION } from "../index.ts";
 import { modelGatewayTrayIcon } from "./_tray-icon.ts";
+import { startModelGateway } from "./server.ts";
 
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 4400;
+const DEFAULT_PORT = 4000;
 
 /** Injectable foreground gateway boundary for CLI tests. */
 export interface ModelGatewayCliDependencies {
@@ -45,31 +41,17 @@ const DEFAULT_DEPENDENCIES: ModelGatewayCliDependencies = {
   start: startModelGateway,
 };
 
-/** Resolve the package's foreground executable by absolute path. */
-export function modelGatewayExecutable(): string {
-  const manifest = fileURLToPath(import.meta.resolve("@dbx-tools/cli-model-gateway/package.json"));
-  const bin = json.parseRecord(readFileSync(manifest, "utf8"))?.bin;
-  const target = object.isRecord(bin) ? bin["dbx-model-gateway"] : undefined;
-  if (typeof target !== "string") {
-    throw new Error("could not resolve dbx-model-gateway executable");
-  }
-  return resolve(dirname(manifest), target);
-}
-
 /** Build the tray-only model-gateway service definition. */
 export function modelGatewayServiceDefinition(
   options: ModelGatewayServiceOptions = {},
 ): CliServiceDefinition {
   const port = options.port ?? DEFAULT_PORT;
   parsePort(String(port));
-  return {
-    id: "com.dbx-tools.model-gateway",
-    name: "dbx model gateway",
-    version: packageVersion(),
+  return defineService(import.meta.url, {
     icon: modelGatewayTrayIcon(),
     isTemplateIcon: process.platform === "darwin",
     command: {
-      entrypoint: modelGatewayExecutable(),
+      environment: { NODE_ENV: "production" },
       arguments: [
         "--host",
         DEFAULT_HOST,
@@ -85,7 +67,7 @@ export function modelGatewayServiceDefinition(
         url: `http://${DEFAULT_HOST}:${port}/v1/models`,
       },
     ],
-  };
+  });
 }
 
 /** Build foreground and service model-gateway commands without starting a server. */
@@ -93,7 +75,7 @@ export function buildProgram(
   name = "dbx model-gateway",
   dependencies: ModelGatewayCliDependencies = DEFAULT_DEPENDENCIES,
 ): Command {
-  const version = packageVersion();
+  const version = PACKAGE_VERSION;
   const program = new Command()
     .name(name)
     .description("Run or manage the AppKit Databricks model gateway")
@@ -136,19 +118,4 @@ function validateLoopbackHost(host: string): void {
   if (!["127.0.0.1", "::1", "localhost"].includes(host.trim().toLowerCase())) {
     throw new InvalidArgumentError("model-gateway host must be loopback");
   }
-}
-
-function packageVersion(): string {
-  for (const location of [
-    new URL("../package.json", import.meta.url),
-    new URL("../../package.json", import.meta.url),
-  ]) {
-    try {
-      const version = json.parseRecord(readFileSync(location, "utf8"))?.version;
-      if (typeof version === "string" && version) return version;
-    } catch {
-      continue;
-    }
-  }
-  throw new Error("could not resolve @dbx-tools/cli-model-gateway version");
 }

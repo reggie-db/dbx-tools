@@ -37,6 +37,7 @@ function program(calls: string[], output: string[]): ReturnType<typeof buildServ
     {
       id: "com.example.gateway",
       name: "Example Gateway",
+      packageName: "@example/gateway",
       version: "1.2.3",
       icon: "/icon.png",
     },

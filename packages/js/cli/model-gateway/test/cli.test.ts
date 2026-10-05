@@ -29,10 +29,18 @@ describe("model gateway CLI", () => {
       {
         type: "url",
         label: "Models",
-        url: "http://127.0.0.1:4400/v1/models",
+        url: "http://127.0.0.1:4000/v1/models",
       },
     ]);
-    assert.match(definition.command?.entrypoint ?? "", /dbx-model-gateway\.(ts|js)$/);
+    assert.equal(definition.packageName, "@dbx-tools/cli-model-gateway");
+    assert.equal(definition.id, "dbx-tools.cli-model-gateway");
+    assert.equal(definition.name, "dbx model gateway");
+    assert.match(definition.version ?? "", /^\d+\.\d+\.\d+/);
+    assert.equal(definition.command?.entrypoint, undefined);
+    assert.equal(definition.command?.executable, undefined);
+    assert.deepEqual(definition.command?.environment, {
+      NODE_ENV: "production",
+    });
   });
 
   it("persists service port and profile options", async () => {

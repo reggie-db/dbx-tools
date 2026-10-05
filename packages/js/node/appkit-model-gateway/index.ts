@@ -3,15 +3,16 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-model-gateway";
+export const PACKAGE_VERSION = "0.9.33";
 export * as gateway from "./src/gateway.ts";
 export * as models from "./src/models.ts";
 export * as plugin from "./src/plugin.ts";
 export * as protocolsDecode from "./src/protocols/decode.ts";
 export * as protocolsEncode from "./src/protocols/encode.ts";
+export * as reasoningAdapt from "./src/reasoning-adapt.ts";
 export * as registry from "./src/registry.ts";
 export * as router from "./src/router.ts";
 export * as routes from "./src/routes.ts";
-export * as server from "./src/server.ts";
 export * as translation from "./src/translation.ts";
 export * as transport from "./src/transport.ts";
 export { ModelGatewayError, ModelGateway } from "./src/gateway.ts";
@@ -20,10 +21,8 @@ export { ModelGatewayPlugin, modelGateway } from "./src/plugin.ts";
 export type { ModelGatewayPluginConfig } from "./src/plugin.ts";
 export type { DecodedGatewayRequest } from "./src/protocols/decode.ts";
 export type { CompletedGeneration } from "./src/protocols/encode.ts";
+export type { AdaptedInferenceBody } from "./src/reasoning-adapt.ts";
 export { DatabricksModelRegistry } from "./src/registry.ts";
 export type { ModelRegistryResolveOptions, ModelRegistry, ModelRegistryOptions } from "./src/registry.ts";
 export { UnsupportedGatewayFeatureError } from "./src/router.ts";
-export type { ModelGatewayHttpApi } from "./src/routes.ts";
-export type { StartModelGatewayOptions } from "./src/server.ts";
 export type { DatabricksTransportRequest } from "./src/transport.ts";
-export * from "./exports.ts";

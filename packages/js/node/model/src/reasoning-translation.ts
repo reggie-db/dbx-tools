@@ -6,10 +6,13 @@
  *
  * - {@link parseReasoning}: fuzzy-match one label onto {@link ReasoningLevel}
  * - {@link parseReasoningLevels}: unwrap nested / double-encoded error bodies
+ * - {@link remapReasoning} / {@link adaptRequestReasoning}: map a request onto a
+ *   supported ladder and rewrite `reasoning_effort` / `reasoning.effort`
  *
  * Documented model ladders come from the committed HTML snapshot refreshed by
  * `bun run --filter '@dbx-tools/model' metadata` (same cache path as
- * capabilities / rate limits). Error-body parsing is never cached.
+ * capabilities / rate limits). Error-body parsing is never cached; callers
+ * persist learned ladders via the metadata module.
  *
  * Error bodies arrive as complete HTTP JSON whether the request asked for
  * streaming or not (Databricks rejects unsupported efforts with 400 before SSE
@@ -263,6 +266,125 @@ export function reasoningLevelsFor(
  */
 export function formatReasoning(level: ReasoningLevel): string {
   return level === ReasoningLevel.ExtraHigh ? "xhigh" : level;
+}
+
+/** Wire tokens that mean "do not reason" rather than "use a low budget". */
+const DISABLED_REASONING_TOKENS = new Set(["none", "off", "disable", "disabled"]);
+
+/**
+ * Remap a requested effort onto the nearest supported {@link ReasoningLevel}.
+ *
+ * `none` / `off` (and disable aliases) are not a low budget: when the model
+ * requires reasoning, they snap to the supported level closest to
+ * {@link ReasoningLevel.Medium}. Other requests prefer the highest allowed
+ * level at or below the request, otherwise the lowest allowed level.
+ *
+ * Returns `undefined` when the request cannot be parsed or `levels` is empty.
+ */
+export function remapReasoning(
+  requested: unknown,
+  levels: readonly ReasoningLevel[],
+): ReasoningLevel | undefined {
+  if (levels.length === 0) return undefined;
+  if (isDisabledReasoningToken(requested)) {
+    return nearestReasoning(ReasoningLevel.Medium, levels);
+  }
+  const parsed = parseReasoning(requested);
+  if (!parsed) return undefined;
+  if (levels.includes(parsed)) return parsed;
+  const requestedIndex = REASONING_LEVELS.indexOf(parsed);
+  let best: ReasoningLevel | undefined;
+  let bestIndex = Number.NEGATIVE_INFINITY;
+  for (const level of levels) {
+    const index = REASONING_LEVELS.indexOf(level);
+    if (index <= requestedIndex && index > bestIndex) {
+      best = level;
+      bestIndex = index;
+    }
+  }
+  return best ?? levels[0];
+}
+
+function isDisabledReasoningToken(value: unknown): boolean {
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+    return false;
+  }
+  return DISABLED_REASONING_TOKENS.has(normalizeReasoningToken(String(value)));
+}
+
+/** Closest supported level to `target`; ties prefer the higher budget. */
+function nearestReasoning(
+  target: ReasoningLevel,
+  levels: readonly ReasoningLevel[],
+): ReasoningLevel | undefined {
+  if (levels.length === 0) return undefined;
+  if (levels.includes(target)) return target;
+  const targetIndex = REASONING_LEVELS.indexOf(target);
+  let best: ReasoningLevel | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const level of levels) {
+    const distance = Math.abs(REASONING_LEVELS.indexOf(level) - targetIndex);
+    if (
+      distance < bestDistance ||
+      (distance === bestDistance &&
+        REASONING_LEVELS.indexOf(level) > REASONING_LEVELS.indexOf(best ?? level))
+    ) {
+      best = level;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** Result of adapting reasoning fields on a gateway request body. */
+export interface AdaptedRequestReasoning {
+  /** Body with remapped wire tokens (same reference when unchanged). */
+  readonly body: Readonly<Record<string, unknown>>;
+  /** True when any reasoning field was rewritten. */
+  readonly changed: boolean;
+  /** Wire token written when a reasoning field was present and remapped. */
+  readonly wireEffort?: string;
+}
+
+/**
+ * Rewrite `reasoning_effort` / `reasoning.effort` onto a supported ladder.
+ *
+ * Model-agnostic: callers supply the allowed levels (learned, documented, or
+ * defaults). Bodies without reasoning fields are returned unchanged.
+ */
+export function adaptRequestReasoning(
+  body: Readonly<Record<string, unknown>>,
+  levels: readonly ReasoningLevel[],
+): AdaptedRequestReasoning {
+  if (levels.length === 0) return { body, changed: false };
+
+  const topLevel = body.reasoning_effort;
+  const reasoning = isRecord(body.reasoning) ? body.reasoning : undefined;
+  const nested = reasoning?.effort;
+  const requested = topLevel ?? nested;
+  if (requested === undefined) return { body, changed: false };
+
+  const remapped = remapReasoning(requested, levels);
+  if (!remapped) return { body, changed: false };
+  const wire = formatReasoning(remapped);
+
+  let changed = false;
+  let next: Record<string, unknown> = { ...body };
+
+  if (typeof topLevel === "string" || typeof topLevel === "number") {
+    if (String(topLevel) !== wire) {
+      next = { ...next, reasoning_effort: wire };
+      changed = true;
+    }
+  }
+  if (reasoning && (typeof nested === "string" || typeof nested === "number")) {
+    if (String(nested) !== wire) {
+      next = { ...next, reasoning: { ...reasoning, effort: wire } };
+      changed = true;
+    }
+  }
+
+  return changed ? { body: next, changed: true, wireEffort: wire } : { body, changed: false, wireEffort: wire };
 }
 
 /** Normalize labels for alias lookup (`Extra High` → `extra-high`). */

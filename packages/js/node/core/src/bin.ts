@@ -86,6 +86,8 @@ export interface BinOptions {
   versionParser?: BinVersionParser;
   /** Skip `--version` and treat an executable file as acceptable. */
   skipVersionCheck?: boolean;
+  /** Reinstall even when the destination already passes validation. */
+  force?: boolean;
 }
 
 /** Temporary directory created for one `ensure` attempt after the install lock. */
@@ -365,14 +367,14 @@ export async function ensure(
     throw new TypeError(`invalid minimum binary version: ${options.minVersion}`);
   }
   const destination = context(name, options.homeDir ?? homedir(), options.destination);
-  if (await isValidBin(destination.path, options)) {
+  if (!options.force && (await isValidBin(destination.path, options))) {
     logger.debug("using installed binary", { name, path: destination.path });
     return destination;
   }
 
   logger.debug("waiting for binary install lock", { name, path: destination.path });
   return withFileLock(["bin.ensure", destination.path], async () => {
-    if (await isValidBin(destination.path, options)) {
+    if (!options.force && (await isValidBin(destination.path, options))) {
       logger.debug("using binary installed by another caller", {
         name,
         path: destination.path,

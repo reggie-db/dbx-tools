@@ -1,14 +1,13 @@
 /**
- * Foreground AppKit model-gateway startup API.
+ * Foreground model-gateway server owned by the CLI package.
  *
  * @module
  */
 
 import { createApp, server } from "@databricks/appkit";
+import { modelGateway } from "@dbx-tools/appkit-model-gateway/plugin";
+import { sendHealth } from "@dbx-tools/appkit-model-gateway/routes";
 import { workspaceClient } from "@dbx-tools/databricks";
-
-import { modelGateway } from "./plugin.ts";
-import { mountModelGatewayRoutes } from "./routes.ts";
 
 /** Foreground model-gateway server options. */
 export interface StartModelGatewayOptions {
@@ -33,7 +32,22 @@ export async function startModelGateway(options: StartModelGatewayOptions = {}):
     ],
     onPluginsReady(appkit) {
       appkit.server.extend((application) => {
-        mountModelGatewayRoutes(application, appkit.modelGateway);
+        application.get("/api/healthz", (_request, response) => {
+          sendHealth(response);
+        });
+        application.get("/v1/models", (request, response) => {
+          void appkit.modelGateway.models(request, response);
+        });
+        for (const [path, protocol] of [
+          ["/v1/chat/completions", "openai-chat"],
+          ["/v1/responses", "openai-responses"],
+          ["/v1/messages", "anthropic-messages"],
+          ["/v1/embeddings", "openai-embeddings"],
+        ] as const) {
+          application.post(path, (request, response) => {
+            void appkit.modelGateway.inference(protocol, request, response);
+          });
+        }
       });
     },
   });

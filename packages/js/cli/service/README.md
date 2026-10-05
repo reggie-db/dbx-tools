@@ -18,41 +18,44 @@ Custom menu items can open an external URL, run a command, or add a separator.
 import { fileURLToPath } from "node:url";
 
 import { buildServiceCommand } from "@dbx-tools/cli-service/cli";
+import { defineService } from "@dbx-tools/cli-service/definition";
 import { Command } from "commander";
 
 const program = new Command("example");
 program.addCommand(
-  buildServiceCommand({
-    id: "com.example.gateway",
-    name: "Example Gateway",
-    version: "1.0.0",
-    icon: fileURLToPath(new URL("../assets/icon.png", import.meta.url)),
-    command: {
-      entrypoint: fileURLToPath(new URL("../src/cli.ts", import.meta.url)),
-      arguments: ["serve"],
-    },
-    menu: [
-      {
-        type: "url",
-        label: "Models",
-        url: "http://127.0.0.1:4400/v1/models",
+  buildServiceCommand(
+    defineService(import.meta.url, {
+      icon: fileURLToPath(new URL("../assets/icon.png", import.meta.url)),
+      command: {
+        arguments: ["serve"],
       },
-    ],
-  }),
+      menu: [
+        {
+          type: "url",
+          label: "Models",
+          url: "http://127.0.0.1:4400/v1/models",
+        },
+      ],
+    }),
+  ),
 );
 ```
 
-The service definition is serialized at install time. Use absolute paths for
-file-based tray images, managed executables, and working directories so login
-startup does not depend on a shell or its `PATH`. `systray2` also accepts
-base64-encoded icon content.
+`defineService()` accepts an owning module's `import.meta.url` or a package name.
+It derives package name, version, service ID, display name, and a single default
+bin from the package manifest. Package names resolve from installed packages
+first and then from current monorepo workspace manifests. Override `version`,
+`id`, `name`, or `command.binName` only when those defaults are not appropriate.
 
 `service install` uses the package's Bun dependency to compile the tray host and
-every command with an `entrypoint`. Standalone executables are installed under
-`~/.dbx-tools/bin` through `@dbx-tools/core/bin`, and systray2's native helper is
-installed under `~/.dbx-tools/bin/traybin`. Startup therefore does not require a
-globally installed Node or Bun runtime. Set `command.executable` only for an
-already-built external program that should not be compiled.
+each package bin or explicit command entrypoint. Standalone executables are
+installed under `~/.dbx-tools/bin` through `@dbx-tools/core/bin`. Direct
+third-party package dependencies are derived from the owner manifest and
+installed under `~/.dbx-tools/node_modules`; callers do not maintain an external
+package list. systray2's native helper is installed under
+`~/.dbx-tools/bin/traybin`. Startup therefore does not require a globally
+installed Node or Bun runtime. Set `command.executable` only for an already-built
+external program that should not be compiled.
 
 macOS installs a per-user LaunchAgent, Linux installs an XDG autostart desktop
 entry, and Windows installs a current-user Startup command. Start, stop, and

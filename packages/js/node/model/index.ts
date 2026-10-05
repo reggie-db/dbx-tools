@@ -3,6 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
+export const PACKAGE_VERSION = "0.9.33";
 export * as classes from "./src/classes.ts";
 export * as classify from "./src/classify.ts";
 export * as fallback from "./src/fallback.ts";
@@ -26,7 +27,7 @@ export type { WorkspaceClientLike, ListServingEndpointsOptions } from "./src/mod
 export { DEFAULT_MODEL_CLIENT_CACHE_TTL_MS } from "./src/model-client.ts";
 export type { ModelAuthOptions, ModelClientOptions, ModelClientStatus, ModelProtocol, ModelRouteInput, ModelRoute, ModelClient } from "./src/model-client.ts";
 export { REASONING_LEVELS } from "./src/reasoning-translation.ts";
-export type { ReasoningLevel, ReasoningModelCatalogue } from "./src/reasoning-translation.ts";
+export type { ReasoningLevel, ReasoningModelCatalogue, AdaptedRequestReasoning } from "./src/reasoning-translation.ts";
 export type { SelectModelInput, SearchModelsInput } from "./src/resolve.ts";
 export type { ServingChatMessage, RewrittenServingRequest } from "./src/serving-wire.ts";
 export * from "./exports.ts";

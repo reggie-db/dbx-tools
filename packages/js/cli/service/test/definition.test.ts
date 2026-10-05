@@ -1,13 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { CliServiceDefinitionSchema } from "../src/definition.ts";
+import { CliServiceDefinitionSchema, defineService } from "../src/definition.ts";
 
 describe("CLI service definition", () => {
+  it("derives package identity from the calling module URL", () => {
+    const definition = defineService(import.meta.url, {
+      icon: "/opt/example/icon.png",
+    });
+
+    assert.equal(definition.packageName, "@dbx-tools/cli-service");
+    assert.equal(definition.id, "dbx-tools.cli-service");
+    assert.equal(definition.name, "dbx service");
+    assert.match(definition.version ?? "", /^\d+\.\d+\.\d+/);
+  });
+
   it("accepts a tray, managed command, and URL item", () => {
     const definition = CliServiceDefinitionSchema.parse({
       id: "com.example.gateway",
       name: "Example Gateway",
+      packageName: "@example/gateway",
       version: "1.2.3",
       icon: "/opt/example/icon.png",
       command: {
@@ -33,6 +45,7 @@ describe("CLI service definition", () => {
         CliServiceDefinitionSchema.parse({
           id: "../example",
           name: "Example",
+          packageName: "@example/gateway",
           version: "1.0.0",
           icon: "/icon.png",
         }),
@@ -43,6 +56,7 @@ describe("CLI service definition", () => {
         CliServiceDefinitionSchema.parse({
           id: "com.example.gateway",
           name: "Example",
+          packageName: "@example/gateway",
           version: "1.0.0",
           icon: "/icon.png",
           menu: [{ type: "url", label: "Unsafe", url: "javascript:alert(1)" }],
@@ -54,6 +68,7 @@ describe("CLI service definition", () => {
         CliServiceDefinitionSchema.parse({
           id: "com.example.gateway",
           name: "Example",
+          packageName: "@example/gateway",
           version: "1.0.0",
           icon: "/icon.png",
           command: {
@@ -61,7 +76,7 @@ describe("CLI service definition", () => {
             entrypoint: "/opt/example.ts",
           },
         }),
-      /exactly one/,
+      /at most one/,
     );
   });
 });

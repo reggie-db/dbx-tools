@@ -3,11 +3,12 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-service";
+export const PACKAGE_VERSION = "0.9.33";
 export * as cli from "./src/cli.ts";
 export * as definition from "./src/definition.ts";
 export * as service from "./src/service.ts";
 export type { CliServiceDefinitionSource, CliServiceCliDependencies } from "./src/cli.ts";
 export { CliServiceCommandSchema, CliServiceMenuItemSchema, CliServiceDefinitionSchema } from "./src/definition.ts";
-export type { CliServiceCommand, CliServiceMenuItem, CliServiceDefinition } from "./src/definition.ts";
+export type { CliServiceCommand, CliServiceMenuItem, CliServiceDefinition, CliServiceDefinitionOptions } from "./src/definition.ts";
 export { CliService } from "./src/service.ts";
-export type { CliServiceCompiler, CliServiceRuntimeOptions, CliServiceInstallOptions, CliServiceStatus, CliServiceLifecycle } from "./src/service.ts";
+export type { CliServiceCompiler, CliServiceRuntimeInstaller, CliServiceRuntimeOptions, CliServiceInstallOptions, CliServiceStatus, CliServiceLifecycle } from "./src/service.ts";

@@ -351,9 +351,15 @@ project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) =
 project.applyToProjects(root, { identifierName: "cli-model-gateway", tags: "cli" }, (p) => {
   p.package.addField("description", "Foreground and system-tray AppKit model-gateway CLI");
   p.addDeps(
+    "@babel/preset-typescript@7.28.5",
+    "@mlflow/core@0.4.0",
+    "@vitejs/plugin-react@5.1.1",
+    "@databricks/appkit@catalog:",
     "@dbx-tools/appkit-model-gateway@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
+    "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
+    "esbuild@0.28.2",
   );
   p.package.addBin({ "dbx-model-gateway": "./bin/dbx-model-gateway.ts" });
 });
@@ -679,9 +685,10 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
   projectJs.addOptionalPeer(p, "skills@^1");
 });
 
-// node-appkit-model-gateway: AppKit plugin and standalone OpenAI/Anthropic
-// protocol gateway. Direct Databricks and Unity Gateway paths stream without
-// protocol re-encoding; ProviderV4 AI SDK packages own fallback translation.
+// node-appkit-model-gateway: raw AppKit OpenAI/Anthropic protocol plugin.
+// Direct Databricks and Unity Gateway paths stream without protocol re-encoding;
+// ProviderV4 AI SDK packages own fallback translation. Foreground server
+// construction belongs to cli-model-gateway.
 project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -710,10 +717,6 @@ project.applyToProjects(root, { identifierName: "appkit-model-gateway", tags: "n
   p.compileTask.prependExec(
     "bun -e 'import { rm } from \"node:fs/promises\"; await rm(\"lib\", { recursive: true, force: true })'",
   );
-  p.addTask("start", {
-    description: "Start the AppKit model gateway",
-    exec: "bun src/_server.ts",
-  });
   p.tasks.tryFind("post-compile")?.exec("bun scripts/copy-manifest.ts");
   projectJs.addPackageFiles(p, "dist/plugins");
 });

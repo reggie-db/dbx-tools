@@ -6,7 +6,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -16,11 +16,13 @@ import * as exec from "@dbx-tools/core/exec";
 
 import { readServiceDefinition, writeServiceDefinition } from "./_config.ts";
 import { requestServiceControl } from "./_control.ts";
+import { resolveServicePackage, type ServicePackage } from "./_package.ts";
 import {
   defaultRuntimeContext,
   resolveServicePaths,
   type ServiceRuntimeContext,
 } from "./_paths.ts";
+import { externalRuntimePackages, installServiceRuntime } from "./_runtime.ts";
 import { installStartup, removeStartup, type ServiceLaunch } from "./_startup.ts";
 import {
   CliServiceDefinitionSchema,
@@ -34,7 +36,19 @@ const DEFAULT_STOP_TIMEOUT_MILLISECONDS = 10_000;
 const POLL_INTERVAL_MILLISECONDS = 100;
 
 /** Compile one TypeScript or JavaScript entrypoint into a standalone executable. */
-export type CliServiceCompiler = (entrypoint: string, output: string) => Promise<void>;
+export type CliServiceCompiler = (
+  entrypoint: string,
+  output: string,
+  workingDirectory: string,
+  external?: readonly string[],
+) => Promise<void>;
+
+/** Install exact external runtime dependencies into the dbx-tools home. */
+export type CliServiceRuntimeInstaller = (
+  bunExecutable: string,
+  directory: string,
+  dependencies: Readonly<Record<string, string>>,
+) => Promise<void>;
 
 /** Host runtime overrides for tests, embedded distributions, and nonstandard homes. */
 export interface CliServiceRuntimeOptions {
@@ -52,6 +66,8 @@ export interface CliServiceRuntimeOptions {
   readonly bunExecutable?: string;
   /** Standalone compiler override. */
   readonly compile?: CliServiceCompiler;
+  /** External runtime dependency installer override. */
+  readonly installRuntime?: CliServiceRuntimeInstaller;
   /** System-tray host source entrypoint override. */
   readonly hostEntrypoint?: string;
   /** systray2 native executable override. */
@@ -100,6 +116,7 @@ export class CliService implements CliServiceLifecycle {
   private readonly globalHomeDirectory: string;
   private readonly bunExecutable: string;
   private readonly compiler: CliServiceCompiler;
+  private readonly runtimeInstaller: CliServiceRuntimeInstaller;
   private readonly hostEntrypoint: string;
   private readonly trayExecutable: string;
 
@@ -123,20 +140,32 @@ export class CliService implements CliServiceLifecycle {
     this.bunExecutable = options.bunExecutable ?? resolveBunExecutable();
     this.compiler =
       options.compile ??
-      ((entrypoint, output) => compileWithBun(this.bunExecutable, entrypoint, output));
+      ((entrypoint, output, workingDirectory, external) =>
+        compileWithBun(this.bunExecutable, entrypoint, output, workingDirectory, external));
+    this.runtimeInstaller = options.installRuntime ?? installServiceRuntime;
     this.hostEntrypoint = options.hostEntrypoint ?? resolveHostEntrypoint();
     this.trayExecutable = options.trayExecutable ?? resolveTrayExecutable(this.runtime.platform);
   }
 
   /** Install the login entry and optionally start the service. */
   async install(options: CliServiceInstallOptions = {}): Promise<void> {
+    const owner = resolveServicePackage(this.definition.packageName);
+    const dependencies = owner.dependencies();
+    const external = new Set(externalRuntimePackages(dependencies));
+    await this.runtimeInstaller(
+      this.bunExecutable,
+      this.globalHomeDirectory,
+      Object.fromEntries(Object.entries(dependencies).filter(([name]) => external.has(name))),
+    );
     const paths = resolveServicePaths(this.definition, this.runtime);
-    const installedDefinition = await this.installDefinition();
+    const installedDefinition = await this.installDefinition(owner);
     const host = await this.ensureCompiledBinary(
       this.binaryName(installedDefinition, "service"),
       this.hostEntrypoint,
+      resolve(dirname(this.hostEntrypoint), ".."),
     );
     await this.ensureTrayBinary();
+    await this.stop();
     await writeServiceDefinition(paths.configFile, installedDefinition);
     await installStartup(
       installedDefinition,
@@ -237,55 +266,76 @@ export class CliService implements CliServiceLifecycle {
     };
   }
 
-  private async installDefinition(): Promise<CliServiceDefinition> {
-    const command = this.definition.command
-      ? await this.installCommand(this.definition.command, "command")
+  private async installDefinition(owner: ServicePackage): Promise<CliServiceDefinition> {
+    const definition = CliServiceDefinitionSchema.parse({
+      ...this.definition,
+      version: this.definition.version ?? owner.version,
+    });
+    const command = definition.command
+      ? await this.installCommand(definition, owner, definition.command, "command")
       : undefined;
     const menu: CliServiceMenuItem[] = [];
-    for (const [index, item] of (this.definition.menu ?? []).entries()) {
+    for (const [index, item] of (definition.menu ?? []).entries()) {
       menu.push(
         item.type === "command"
           ? {
               ...item,
-              command: await this.installCommand(item.command, `menu-${index + 1}`),
+              command: await this.installCommand(
+                definition,
+                owner,
+                item.command,
+                `menu-${index + 1}`,
+              ),
             }
           : item,
       );
     }
     return CliServiceDefinitionSchema.parse({
-      ...this.definition,
+      ...definition,
       ...(command ? { command } : {}),
       ...(menu.length > 0 ? { menu } : {}),
     });
   }
 
   private async installCommand(
+    definition: CliServiceDefinition,
+    owner: ServicePackage,
     command: CliServiceCommand,
     purpose: string,
   ): Promise<CliServiceCommand> {
-    if (!command.entrypoint) return command;
+    if (command.executable) return command;
+    const entrypoint = command.entrypoint ?? owner.bin(command.binName);
     const installed = await this.ensureCompiledBinary(
-      this.binaryName(this.definition, purpose),
-      resolve(command.entrypoint),
+      this.binaryName(definition, purpose),
+      resolve(entrypoint),
+      owner.directory,
+      externalRuntimePackages(owner.dependencies()),
     );
     return {
       executable: installed.path,
       ...(command.arguments ? { arguments: command.arguments } : {}),
-      ...(command.cwd ? { cwd: command.cwd } : {}),
+      ...(command.environment ? { environment: command.environment } : {}),
+      cwd: command.cwd ?? this.globalHomeDirectory,
     };
   }
 
-  private async ensureCompiledBinary(name: string, entrypoint: string): Promise<bin.BinContext> {
+  private async ensureCompiledBinary(
+    name: string,
+    entrypoint: string,
+    workingDirectory: string,
+    external: readonly string[] = [],
+  ): Promise<bin.BinContext> {
     return bin.ensure(
       name,
       async ({ tempDir }) => {
         const output = join(tempDir, executableName(name, this.runtime.platform));
-        await this.compiler(entrypoint, output);
+        await this.compiler(entrypoint, output, workingDirectory, external);
         return pathToFileURL(output).href;
       },
       {
         destination: this.binaryContext(name),
         skipVersionCheck: true,
+        force: true,
       },
     );
   }
@@ -313,7 +363,8 @@ export class CliService implements CliServiceLifecycle {
   }
 
   private binaryName(definition: CliServiceDefinition, purpose: string): string {
-    return `${definition.id}-${safeToken(definition.version)}-${purpose}`;
+    const name = safeToken(definition.name.toLowerCase()).replace(/[._]+/g, "-");
+    return purpose === "service" ? name : `${name}-${purpose}`;
   }
 }
 
@@ -357,13 +408,53 @@ async function compileWithBun(
   bunExecutable: string,
   entrypoint: string,
   output: string,
+  workingDirectory: string,
+  external: readonly string[] = [],
 ): Promise<void> {
-  await exec.spawn(bunExecutable, ["build", entrypoint, "--compile", "--outfile", output], {
-    check: true,
-    stdin: "ignore",
-    stdout: "capture",
-    stderr: "capture",
-  });
+  const before = await bunBuildArtifacts(workingDirectory);
+  try {
+    await exec.spawn(
+      bunExecutable,
+      [
+        "build",
+        entrypoint,
+        "--compile",
+        "--compile-autoload-package-json",
+        "--outfile",
+        output,
+        ...external.flatMap((dependency) => ["--external", dependency]),
+      ],
+      {
+        check: true,
+        cwd: workingDirectory,
+        env: {
+          ...process.env,
+          BUN_TMPDIR: dirname(output),
+          TMPDIR: dirname(output),
+        },
+        stdin: "ignore",
+        stdout: "capture",
+        stderr: "capture",
+      },
+    );
+  } finally {
+    for (const artifact of await bunBuildArtifacts(workingDirectory)) {
+      if (!before.has(artifact)) {
+        await rm(join(workingDirectory, artifact), {
+          recursive: true,
+          force: true,
+        });
+      }
+    }
+  }
+}
+
+async function bunBuildArtifacts(directory: string): Promise<Set<string>> {
+  return new Set(
+    (await readdir(directory))
+      .filter((name) => name.startsWith(".") && name.endsWith(".bun-build"))
+      .sort(),
+  );
 }
 
 async function waitForState(

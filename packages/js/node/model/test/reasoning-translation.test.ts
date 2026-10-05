@@ -2,13 +2,19 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { parseReasoningModels } from "../src/_metadata-generator.ts";
-import { modelReasoningLevelsFor, reasoningModelCatalogue } from "../src/metadata.ts";
 import {
+  learnReasoningLevelsFromError,
+  modelReasoningLevelsFor,
+  reasoningModelCatalogue,
+} from "../src/metadata.ts";
+import {
+  adaptRequestReasoning,
   defaultReasoningLevels,
   formatReasoning,
   parseReasoning,
   parseReasoningLevels,
   ReasoningLevel,
+  remapReasoning,
 } from "../src/reasoning-translation.ts";
 
 describe("parseReasoning", () => {
@@ -131,5 +137,84 @@ describe("committed reasoning catalogue", () => {
       modelReasoningLevelsFor("system.ai.grok-4-7"),
       defaultReasoningLevels("grok-4-7"),
     );
+  });
+});
+
+describe("remapReasoning and adaptRequestReasoning", () => {
+  it("remaps onto the nearest supported level and formats wire tokens", () => {
+    assert.equal(
+      remapReasoning("max", [
+        ReasoningLevel.Low,
+        ReasoningLevel.Medium,
+        ReasoningLevel.High,
+        ReasoningLevel.ExtraHigh,
+      ]),
+      ReasoningLevel.ExtraHigh,
+    );
+
+    const adapted = adaptRequestReasoning(
+      {
+        model: "databricks-grok-4-6",
+        reasoning_effort: "none",
+        reasoning: { effort: "none" },
+      },
+      [
+        ReasoningLevel.Low,
+        ReasoningLevel.Medium,
+        ReasoningLevel.High,
+        ReasoningLevel.ExtraHigh,
+      ],
+    );
+    assert.equal(adapted.changed, true);
+    assert.equal(adapted.wireEffort, "medium");
+    assert.equal(adapted.body.reasoning_effort, "medium");
+    assert.deepEqual(adapted.body.reasoning, { effort: "medium" });
+  });
+
+  it("maps none onto the supported level closest to medium", () => {
+    assert.equal(
+      remapReasoning("none", [
+        ReasoningLevel.Low,
+        ReasoningLevel.Medium,
+        ReasoningLevel.High,
+        ReasoningLevel.ExtraHigh,
+      ]),
+      ReasoningLevel.Medium,
+    );
+    assert.equal(
+      remapReasoning("none", [ReasoningLevel.High, ReasoningLevel.Max]),
+      ReasoningLevel.High,
+    );
+    assert.equal(
+      remapReasoning("off", [ReasoningLevel.Low, ReasoningLevel.High, ReasoningLevel.Max]),
+      ReasoningLevel.High,
+    );
+  });
+});
+
+describe("learnReasoningLevelsFromError", () => {
+  it("parses a nested BAD_REQUEST body and updates the learned cache", async () => {
+    const body = {
+      error_code: "BAD_REQUEST",
+      message: JSON.stringify({
+        message: JSON.stringify({
+          error: {
+            code: "unsupported_value",
+            message:
+              "Unsupported value: 'none' is not supported with this model. Supported values are: 'low', 'medium', 'high', and 'xhigh'.",
+            param: "reasoning_effort",
+            type: "invalid_request_error",
+          },
+        }),
+      }),
+    };
+    const learned = await learnReasoningLevelsFromError("databricks-grok-4-6", body);
+    assert.deepEqual(learned, [
+      ReasoningLevel.Low,
+      ReasoningLevel.Medium,
+      ReasoningLevel.High,
+      ReasoningLevel.ExtraHigh,
+    ]);
+    assert.deepEqual(modelReasoningLevelsFor("databricks-grok-4-6"), learned);
   });
 });

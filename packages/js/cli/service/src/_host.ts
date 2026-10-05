@@ -3,7 +3,9 @@ import { closeSync, openSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import SysTray, { type MenuItem } from "systray2";
+import * as systrayModule from "systray2";
+import type SysTrayType from "systray2";
+import type { MenuItem } from "systray2";
 
 import { readServiceDefinition } from "./_config.ts";
 import {
@@ -15,16 +17,26 @@ import { defaultRuntimeContext, resolveServicePaths, type ServicePaths } from ".
 import type { CliServiceCommand, CliServiceDefinition, CliServiceMenuItem } from "./definition.ts";
 
 const CHILD_STOP_TIMEOUT_MILLISECONDS = 5_000;
+const SysTray = systrayConstructor();
 
 interface ActionMenuItem extends MenuItem {
   readonly click?: () => void;
+}
+
+function systrayConstructor(): typeof SysTrayType {
+  const loaded: unknown = systrayModule.default;
+  if (typeof loaded === "function") return loaded as typeof SysTrayType;
+  const nested =
+    loaded && typeof loaded === "object" ? (loaded as { default?: unknown }).default : undefined;
+  if (typeof nested === "function") return nested as typeof SysTrayType;
+  throw new TypeError("systray2 did not provide a constructor");
 }
 
 class CliServiceHost {
   private readonly definition: CliServiceDefinition;
   private readonly paths: ServicePaths;
   private readonly requestStop: () => void;
-  private tray?: SysTray;
+  private tray?: SysTrayType;
   private service?: ChildProcess;
   private control?: Awaited<ReturnType<typeof listenForServiceControl>>;
   private stopping = false;
@@ -96,7 +108,7 @@ class CliServiceHost {
     const logDescriptor = openSync(this.paths.processLog, "a");
     const child = spawn(command.executable, command.arguments ?? [], {
       cwd: command.cwd,
-      env: process.env,
+      env: { ...process.env, ...command.environment },
       stdio: ["ignore", logDescriptor, logDescriptor],
     });
     closeSync(logDescriptor);
@@ -113,7 +125,7 @@ class CliServiceHost {
     return child;
   }
 
-  private createTray(): SysTray {
+  private createTray(): SysTrayType {
     return new SysTray({
       menu: {
         icon: this.definition.icon,

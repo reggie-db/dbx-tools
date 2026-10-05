@@ -4,9 +4,9 @@
  * docs and error-learned reasoning ladders.
  *
  * Committed snapshots seed every process. {@link refreshModelMetadata} pulls
- * documentation through {@link createMetadataCache} (memory + SQLite) and
+ * documentation through {@link createMetadataCache} (cacache memoize + disk) and
  * rebuilds the in-memory index. Error-learned efforts use the same store via
- * {@link rememberReasoningLevels}; error bodies themselves are never cached.
+ * {@link rememberReasoningLevels}. Disk writes are skipped in Databricks Apps.
  *
  * @module
  */
@@ -54,6 +54,7 @@ import {
   defaultReasoningLevels,
   documentedReasoningLevels,
   parseReasoning,
+  parseReasoningLevels,
   type ReasoningLevel,
   type ReasoningModelCatalogue,
   uniqueReasoningLevels,
@@ -321,6 +322,20 @@ export async function rememberReasoningLevels(
     learnedReasoning: freezeLearnedCatalogue(catalogue),
   };
   return [...unique];
+}
+
+/**
+ * Parse an upstream error body and persist the supported ladder for `model`.
+ *
+ * Accepts the same nested Databricks envelopes as {@link parseReasoningLevels}.
+ * Returns the levels that were stored (or the current lookup when parse yields
+ * nothing). The raw error body is never written to disk.
+ */
+export async function learnReasoningLevelsFromError(
+  model: string,
+  body: unknown,
+): Promise<ReasoningLevel[]> {
+  return rememberReasoningLevels(model, parseReasoningLevels(body));
 }
 
 /** Resolve whether any supplied identity is listed in the retirement snapshot. */
