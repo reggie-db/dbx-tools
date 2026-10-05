@@ -87,7 +87,7 @@ function selectionInput(
     fuzzy: serving.fuzzy,
     threshold: serving.threshold,
     ...(modelClass !== undefined ? { modelClass } : {}),
-    fallbacks: serving.fallbacks,
+    fallbacks: serving.fallbacks.slice(),
     liveOnly: requested === undefined,
     ttlMs: serving.ttlMs,
   };

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildProgram, type ModelGatewayCliDependencies } from "../src/cli.ts";
+import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
+import {
+  buildProgram,
+  modelGatewayServiceDefinition,
+  type ModelGatewayCliDependencies,
+} from "../src/cli.ts";
 
 describe("model gateway CLI", () => {
   it("constructs without starting the gateway", () => {
@@ -13,7 +18,64 @@ describe("model gateway CLI", () => {
     });
 
     assert.match(program.helpInformation(), /--profile/);
+    assert.match(program.helpInformation(), /service/);
     assert.equal(started, false);
+  });
+
+  it("defines a tray-only service with a models URL item", () => {
+    const definition = modelGatewayServiceDefinition();
+
+    assert.deepEqual(definition.menu, [
+      {
+        type: "url",
+        label: "Models",
+        url: "http://127.0.0.1:4400/v1/models",
+      },
+    ]);
+    assert.match(definition.command?.entrypoint ?? "", /dbx-model-gateway\.(ts|js)$/);
+  });
+
+  it("persists service port and profile options", async () => {
+    let definition: CliServiceDefinition | undefined;
+    const service: CliServiceLifecycle = {
+      async install() {},
+      async start() {},
+      async stop() {},
+      async restart() {},
+      async uninstall() {},
+      async status() {
+        return { installed: false, running: false };
+      },
+    };
+    await buildProgram("dbx model-gateway", {
+      async start() {},
+      service: {
+        create(value) {
+          definition = value;
+          return service;
+        },
+        write() {},
+      },
+    }).parseAsync(
+      ["service", "install", "--no-start", "--port", "4401", "--profile", "SERVICE-PROFILE"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(definition?.command?.arguments?.slice(-6), [
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "4401",
+      "--profile",
+      "SERVICE-PROFILE",
+    ]);
+    assert.deepEqual(definition?.menu, [
+      {
+        type: "url",
+        label: "Models",
+        url: "http://127.0.0.1:4401/v1/models",
+      },
+    ]);
   });
 
   it("starts the foreground gateway with typed options", async () => {

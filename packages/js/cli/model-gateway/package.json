@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/cli-model-gateway",
-  "description": "Foreground AppKit model-gateway CLI",
+  "description": "Foreground and system-tray AppKit model-gateway CLI",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@dbx-tools/appkit-model-gateway": "workspace:^",
+    "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "commander": "catalog:"
   },

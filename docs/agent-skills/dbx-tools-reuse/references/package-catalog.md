@@ -1,6 +1,6 @@
 # dbx-tools package catalog
 
-Generated from repository manifests and package READMEs for dbx-tools 0.9.32.
+Generated from repository manifests and package READMEs for dbx-tools 0.9.33.
 Inspect the installed manifest, README, exports, and source before relying on a capability.
 
 ## CLI Tools
@@ -9,7 +9,8 @@ Inspect the installed manifest, README, exports, and source before relying on a 
 - `@dbx-tools/cli-appkit-env` - CLI and formatting helpers for exporting AppKit auto-configuration results. Source: `packages/js/cli/appkit-env`.
 - `@dbx-tools/cli-auth` - Databricks OAuth commands mounted under dbx auth. Source: `packages/js/cli/auth`.
 - `@dbx-tools/cli-lakebase-proxy` - Pure Node loopback PostgreSQL proxy for Databricks Lakebase. It uses @dbx-tools/lakebase for Node-owned address parsing, profile-aware resource discovery, and per-connection database credentials. The upstream connection is authenticated by pg over certificate-verified TLS, then tunneled opaquely. Source: `packages/js/cli/lakebase-proxy`.
-- `@dbx-tools/cli-model-gateway` - Foreground command for @dbx-tools/appkit-model-gateway. Source: `packages/js/cli/model-gateway`.
+- `@dbx-tools/cli-model-gateway` - Foreground and system-tray service commands for @dbx-tools/appkit-model-gateway. Source: `packages/js/cli/model-gateway`.
+- `@dbx-tools/cli-service` - Product-agnostic system-tray service lifecycle for Node and Bun CLIs. A consuming Commander program gets service install, start, stop, restart, status, and uninstall commands from one typed definition. Source: `packages/js/cli/service`.
 - `@dbx-tools/cli-tunnel` - Wrap any command in a public Portr, FRP, or combined tunnel fronted by @dbx-tools/auth-gate email OTP and passkeys. Source: `packages/js/cli/tunnel`.
 
 ## Node and AppKit

@@ -46,6 +46,7 @@ import { projectUtils } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { Observability } from "@mastra/observability";
 import { OtelBridge } from "@mastra/otel-bridge";
+import { propagation } from "@opentelemetry/api";
 
 import { TRACE_REQUEST_CONTEXT_KEYS } from "./config.ts";
 import { mlflowEnabled } from "./mlflow.ts";
@@ -93,6 +94,21 @@ export function isOtlpTracingConfigured(): boolean {
   return Boolean(
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
   );
+}
+
+/**
+ * Honor the standard no-op propagator setting after AppKit registers its
+ * tracer provider. AppKit 0.81 installs W3C propagation unconditionally, so
+ * disabling only the global propagator keeps async span context active while
+ * preventing ingress extraction and downstream injection.
+ */
+export function configureOtelPropagation(): boolean {
+  if (process.env.OTEL_PROPAGATORS?.trim().toLowerCase() !== "none") return false;
+  propagation.disable();
+  logger.info("OpenTelemetry propagation disabled", {
+    setting: "OTEL_PROPAGATORS=none",
+  });
+  return true;
 }
 
 /**

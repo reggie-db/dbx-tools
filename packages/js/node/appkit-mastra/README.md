@@ -762,9 +762,11 @@ MLflow reporting, OTel tracing, or the official AI SDK chat route.
 configured. `mlflow.resolveFeedbackEnabled()` turns MLflow feedback on when both
 trace export and an MLflow experiment are configured, unless the plugin config
 forces a value. The plugin also stamps each chat turn's request/response onto
-the HTTP root span via `traceIo.attachChatTurnTraceIo()` so MLflow's UC
-`*_trace_unified` view can show them (Mastra's own `mastra.agent_run.*`
-attributes sit on a child span that view never reads).
+the request's exported root span via `traceIo.attachChatTurnTraceIo()` so
+MLflow's UC `*_trace_unified` view can show them. It uses AppKit's HTTP server
+span when present and creates one request-lifetime fallback span otherwise.
+Mastra's own `mastra.agent_run.*` attributes sit on a child span that the view
+never reads.
 
 ```ts
 mastra({
@@ -807,7 +809,8 @@ resources:
           # Apps ingress stamps traceparent on every request. Without this,
           # every HTTP span is a child of a platform span that never lands in
           # the UC tables, so `*_trace_unified` (root = empty parent_span_id)
-          # discards every chat turn.
+          # discards every chat turn. appkit-mastra applies this setting after
+          # AppKit starts, before the server accepts requests.
           - name: OTEL_PROPAGATORS
             value: none
       telemetry_export_destinations:
@@ -920,14 +923,14 @@ Every value can also be set through plugin config, which wins. These are the
 fallbacks, so a deployment that already follows AppKit's Databricks env naming
 needs no extra wiring.
 
-| Variable                                                            | Effect                                                                                                                  |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Optional model override used when neither the agent nor `defaultModel` names one; omit for live highest-rank selection. |
-| `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                                                                       |
-| `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO), `service-principal`, or `auto` for the agents' Databricks calls.                                 |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these. |
-| `OTEL_PROPAGATORS`                                                  | Set to `none` on Databricks Apps so ingress `traceparent` does not hide every chat trace from UC `*_trace_unified`.     |
-| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset.                                               |
+| Variable                                                            | Effect                                                                                                                                             |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Optional model override used when neither the agent nor `defaultModel` names one; omit for live highest-rank selection.                            |
+| `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                                                                                                  |
+| `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO), `service-principal`, or `auto` for the agents' Databricks calls.                                                            |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these.                            |
+| `OTEL_PROPAGATORS`                                                  | Set to `none` on Databricks Apps. The plugin disables extraction and injection before serving requests while retaining local async span parenting. |
+| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset.                                                                          |
 
 ## Configuration Reference
 

@@ -14,6 +14,79 @@ import { readWorkspaceVersion } from "../../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
 
+function gitHead(root: string, ref: string): string | undefined {
+  if (!taskCommandSucceeds(root, "git", ["rev-parse", "--verify", ref])) return undefined;
+  return captureTaskCommand(root, "git", ["rev-parse", ref], { check: true });
+}
+
+function assertAncestor(root: string, ancestor: string, descendant: string, message: string): void {
+  if (!taskCommandSucceeds(root, "git", ["merge-base", "--is-ancestor", ancestor, descendant])) {
+    throw new Error(message);
+  }
+}
+
+function prepareReleaseBranch(options: {
+  readonly branch: string;
+  readonly remote: string;
+  readonly root: string;
+}): void {
+  const { branch, remote, root } = options;
+  const sourceBranch = captureTaskCommand(root, "git", ["branch", "--show-current"], {
+    check: true,
+  });
+  if (!sourceBranch) throw new Error("release cannot run from a detached HEAD");
+
+  const status = captureTaskCommand(
+    root,
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all"],
+    { check: true },
+  );
+  if (status) {
+    runTaskCommand(root, "git", ["add", "--all"]);
+    runTaskCommand(root, "git", ["commit", "-m", "chore: prepare release"]);
+  }
+
+  runTaskCommand(root, "git", ["fetch", "--prune", remote, "--tags"]);
+  const sourceHead = captureTaskCommand(root, "git", ["rev-parse", "HEAD"], { check: true });
+  const remoteSourceHead = gitHead(root, `refs/remotes/${remote}/${sourceBranch}`);
+  if (remoteSourceHead) {
+    assertAncestor(
+      root,
+      remoteSourceHead,
+      sourceHead,
+      `cannot fast-forward ${remote}/${sourceBranch} to ${sourceBranch}`,
+    );
+  }
+  runTaskCommand(root, "git", ["push", remote, `HEAD:${sourceBranch}`]);
+
+  if (sourceBranch === branch) return;
+
+  const remoteMain = gitHead(root, `refs/remotes/${remote}/${branch}`);
+  if (!remoteMain) throw new Error(`release branch ${remote}/${branch} does not exist`);
+  assertAncestor(
+    root,
+    remoteMain,
+    sourceHead,
+    `cannot safely merge ${sourceBranch} into ${branch}; ${branch} is not an ancestor`,
+  );
+
+  const localMain = gitHead(root, `refs/heads/${branch}`);
+  if (localMain) {
+    assertAncestor(
+      root,
+      localMain,
+      sourceHead,
+      `cannot safely fast-forward local ${branch} to ${sourceBranch}`,
+    );
+  } else {
+    runTaskCommand(root, "git", ["branch", branch, `${remote}/${branch}`]);
+  }
+  runTaskCommand(root, "git", ["switch", branch]);
+  runTaskCommand(root, "git", ["merge", "--ff-only", sourceBranch]);
+  runTaskCommand(root, "git", ["push", remote, `HEAD:${branch}`]);
+}
+
 export async function runRelease(options: {
   readonly root: string;
   readonly branch: string;
@@ -26,21 +99,7 @@ export async function runRelease(options: {
 }): Promise<string> {
   const { branch, prefix, remote, root } = options;
 
-  const currentBranch = captureTaskCommand(root, "git", ["branch", "--show-current"], {
-    check: true,
-  });
-  if (currentBranch !== branch) {
-    throw new Error(
-      `release must run from ${branch}, current branch is ${currentBranch || "detached"}`,
-    );
-  }
-  const initialStatus = captureTaskCommand(
-    root,
-    "git",
-    ["status", "--porcelain=v1", "--untracked-files=all"],
-    { check: true },
-  );
-  if (initialStatus) throw new Error("release requires a clean working tree");
+  prepareReleaseBranch({ branch, remote, root });
 
   runTaskCommand(root, "git", ["fetch", remote, branch, "--tags"]);
   if (options.bump ?? true) {

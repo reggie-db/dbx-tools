@@ -175,6 +175,9 @@ root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.5.11");
 root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.27.1");
 root.pnpmWorkspace?.addCatalog("@pydantic/monty", "0.0.23");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
+root.pnpmWorkspace?.addCatalog("@opentelemetry/core", "2.11.0");
+root.pnpmWorkspace?.addCatalog("@opentelemetry/sdk-trace-base", "2.8.0");
+root.pnpmWorkspace?.addCatalog("@opentelemetry/sdk-trace-node", "2.8.0");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
 // pulls it, but the pin belongs with the other add-on runtime deps.
 root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
@@ -183,6 +186,7 @@ root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "1.7.6");
 root.pnpmWorkspace?.addCatalog("@simplewebauthn/browser", "13.3.0");
 root.pnpmWorkspace?.addCatalog("better-call", "1.4.0");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
+root.pnpmWorkspace?.addCatalog("cacache", "^21.0.1");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
 // v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
@@ -202,6 +206,7 @@ root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
 root.pnpmWorkspace?.addCatalog("echarts-for-react", "^3.0.2");
 root.pnpmWorkspace?.addCatalog("shiki", "^3.0.0");
 root.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
+root.pnpmWorkspace?.addCatalog("systray2", "^2.1.4");
 // The Adaptive Cards JavaScript renderer, used by the `ui-teams` package to
 // render Teams cards in the browser. Browser-only (loaded in ui-tagged code).
 root.pnpmWorkspace?.addCatalog("adaptivecards", "^3.0.5");
@@ -344,9 +349,10 @@ project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) =
 });
 
 project.applyToProjects(root, { identifierName: "cli-model-gateway", tags: "cli" }, (p) => {
-  p.package.addField("description", "Foreground AppKit model-gateway CLI");
+  p.package.addField("description", "Foreground and system-tray AppKit model-gateway CLI");
   p.addDeps(
     "@dbx-tools/appkit-model-gateway@workspace:^",
+    "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
   );
   p.package.addBin({ "dbx-model-gateway": "./bin/dbx-model-gateway.ts" });
@@ -393,12 +399,14 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
     "@dbx-tools/shared-model@workspace:^",
     "@dbx-tools/appkit@workspace:^",
     "@databricks/appkit@catalog:",
+    "cacache@catalog:",
+    "env-paths@catalog:",
     "fuse.js@^7.4.2",
   );
-  p.addDevDeps("cheerio@^1.2.0");
+  p.addDevDeps("cheerio@^1.2.0", "@types/cacache@^20.0.1");
   p.addTask("metadata", {
     exec: "bun scripts/generate-metadata.ts",
-    description: "Refresh model retirement, capability, and rate-limit snapshots",
+    description: "Refresh model retirement, capability, rate-limit, and reasoning snapshots",
   });
 });
 
@@ -653,10 +661,17 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@mastra/pg@catalog:",
     "@pydantic/monty@catalog:",
     "@opentelemetry/api@catalog:",
+    "@opentelemetry/core@catalog:",
     "zod@catalog:",
     "pg@^8.22.0",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/pg@^8", "vitest@catalog:");
+  p.addDevDeps(
+    "@opentelemetry/sdk-trace-base@catalog:",
+    "@opentelemetry/sdk-trace-node@catalog:",
+    "@types/express@catalog:",
+    "@types/pg@^8",
+    "vitest@catalog:",
+  );
   // `skills` (https://www.npmjs.com/package/skills) is the OPTIONAL Agent-Skills
   // CLI `remote-skills.ts` shells out to when present. Left as an optional peer
   // so consumers opt in; the runtime falls back to a direct fetch when it is
@@ -851,6 +866,22 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // The projen engine (`@dbx-tools/projen`) lives in `projen/`, now a member of
 // the single bun workspace (added via `extraWorkspaceMembers`). It synthesizes
 // itself, so there is no engine rule here.
+
+// cli-service: a product-agnostic systray host plus Commander lifecycle command.
+// It remains public because consuming published CLIs load its compiled runtime;
+// marking it private would leave those manifests with an unresolvable dependency.
+project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p) => {
+  p.package.addField(
+    "description",
+    "Cross-platform service lifecycle and system tray menus for CLIs",
+  );
+  p.addDeps(
+    "@dbx-tools/core@workspace:^",
+    `bun@${bunWorkflow.BUN_VERSION}`,
+    "systray2@catalog:",
+    "zod@catalog:",
+  );
+});
 
 // cli-dbx-tools: the published CLI package. It uses the concise
 // `@dbx-tools/cli` package name and ships the `dbx-tools` command plus the short

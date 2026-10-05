@@ -6,15 +6,18 @@ import {
   MODEL_METADATA_TTL_MS,
   MODEL_RATE_LIMITS_URL,
   OPENAI_RESPONSES_MODELS_URL,
+  QUERY_REASON_MODELS_URL,
   RETIRED_MODELS_URL,
   WEB_SEARCH_MODELS_URL,
   type ModelCapabilitiesSnapshot,
   type ModelRateLimitsSnapshot,
+  type ReasoningModelsSnapshot,
   type RetiredModelsSnapshot,
 } from "../src/_metadata-contract.ts";
 import {
   parseModelCapabilities,
   parseModelRateLimits,
+  parseReasoningModels,
   parseRetiredModels,
 } from "../src/_metadata-generator.ts";
 
@@ -35,6 +38,9 @@ await Promise.all([
   }),
   refreshSnapshot<ModelRateLimitsSnapshot>("model-rate-limits.json", async () =>
     parseModelRateLimits(await loadPage(MODEL_RATE_LIMITS_URL), now),
+  ),
+  refreshSnapshot<ReasoningModelsSnapshot>("model-reasoning.json", async () =>
+    parseReasoningModels(await loadPage(QUERY_REASON_MODELS_URL), now),
   ),
 ]);
 

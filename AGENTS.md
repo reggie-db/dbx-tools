@@ -32,7 +32,8 @@ Primary ownership:
 - `packages/js/shared/auth` owns browser-safe passwordless and Databricks auth values, secret-free profile summaries, profile selections, and auth client field schemas.
 - `packages/js/node/model` owns model discovery, catalogue caching, classification, ranking, protocol selection, reasoning policy, and committed metadata snapshots.
 - `packages/js/shared/model-gateway` owns browser-safe gateway schemas and model discovery clients. `packages/js/node/appkit-model-gateway` owns OpenAI Responses, Chat Completions, Anthropic Messages, embeddings, Codex, and Databricks AI Gateway transport. It reuses model-owned discovery and policy, prefers direct streaming fast paths, and uses AI SDK providers only for cross-protocol translation.
-- `packages/js/cli/model-gateway` owns foreground `dbx model-gateway` and `dbx-model-gateway` execution. There is no Python gateway, service installer, tray, or compatibility command.
+- `packages/js/cli/service` owns product-agnostic current-user install, start, stop, restart, status, uninstall, package-local Bun compilation into `~/.dbx-tools/bin`, and systray2 menu behavior for consuming CLIs.
+- `packages/js/cli/model-gateway` owns foreground `dbx model-gateway` and `dbx-model-gateway` execution plus its tray-only service definition and Models URL menu item. There is no Python gateway or compatibility command.
 - `packages/js/node/lakebase` and `packages/js/cli/lakebase-proxy` own Lakebase parsing, discovery, credentials, and the loopback PostgreSQL proxy.
 - `packages/js/node/postgres` and `packages/py/postgres` own advisory locks, topic buses, and Postgres/Lakebase helpers in their respective runtimes.
 - `packages/js/node/appkit*`, `packages/js/shared/*`, and `packages/js/ui/*` own AppKit integrations and browser-safe contracts/UI. Before changing AppKit-facing APIs, inspect `bunx @databricks/appkit docs` and installed AppKit `.d.ts` files.
@@ -60,7 +61,7 @@ Primary ownership:
 ## Releases
 
 - `bun run bump` increments `VERSION` locally and synchronizes generated package versions.
-- Run `bun run release` with no arguments from a clean `main`. It calls `bump`, commits the synchronized changes, pushes `main`, creates an annotated `vX.Y.Z` tag, and pushes the tag. Use `--no-bump` only for an existing synchronized bump.
+- Run `bun run release` with no arguments from any branch. It commits and pushes pending branch changes, safely fast-forwards `main` when needed, then calls `bump`, commits the synchronized changes, pushes `main`, creates an annotated `vX.Y.Z` tag, and pushes the tag. It fails instead of creating a merge commit when `main` cannot fast-forward. Use `--no-bump` only for an existing synchronized bump.
 - `.github/workflows/release.yml` runs only for `v*` tag pushes and verifies the tagged commit exactly equals `origin/main` before publishing Node, Python, docs, and the GitHub release.
 - There is no release PR, manual stage recovery, Cargo/native publication, or alternate release entrypoint.
 - Preserve local application/deployment flows and local npm/Python publication helpers.

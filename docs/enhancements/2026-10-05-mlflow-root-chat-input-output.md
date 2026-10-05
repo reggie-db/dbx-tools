@@ -1,6 +1,6 @@
 # Promote Mastra chat turns as MLflow root traces with input and output
 
-Status: Open
+Status: In Progress
 
 ## Summary
 
@@ -115,18 +115,39 @@ Do not create two independent root traces for one request. Agent, model, tool,
 memory, and processor spans must remain children of the root carrying the
 visible input and output.
 
-## Acceptance tests
+## Local implementation
 
-- With an incoming `traceparent` and `OTEL_PROPAGATORS=none`, the exported chat
-  trace contains exactly one span whose `parent_span_id` is null.
-- The root span contains non-empty `mlflow.spanInputs` and
-  `mlflow.spanOutputs`.
-- `*_trace_unified.request` and `*_trace_unified.response` contain the user
-  message and final assistant answer.
-- The experiment UI displays Input and Output for streamed and non-streamed
-  agent turns.
-- Agent, model, tool, memory, and processor spans share the root trace ID.
-- Trace context is not propagated to downstream workspace calls when
-  propagation is disabled.
-- Normal W3C propagation continues to work when propagation is enabled.
-- The fix requires no application-level `propagation.disable()` workaround.
+`appkit-mastra` now applies `OTEL_PROPAGATORS=none` during AppKit's
+`setup:complete` lifecycle event. This runs after AppKit registers its tracer
+provider and before the HTTP server starts. It disables only the global
+propagator, leaving the async context manager active for in-process parent-child
+relationships.
+
+The chat I/O middleware now resolves AppKit's HTTP server span from OpenTelemetry
+RPC metadata instead of assuming the active Express span is the exported root.
+When no recording server or active span exists, it creates one request-lifetime
+server span under the current context. With propagation disabled that span is
+the sole local root. With W3C propagation enabled it remains a child of the
+incoming remote parent.
+
+The same selected root receives request messages and the final assistant text.
+The output collector supports both Mastra SSE `text-delta` shapes, split UTF-8
+chunks, and non-streaming `/generate` JSON responses.
+
+## Acceptance status
+
+- [x] A local incoming-`traceparent` test with `OTEL_PROPAGATORS=none` exports
+      exactly one span whose parent is null.
+- [x] The local root span contains non-empty `mlflow.spanInputs` and
+      `mlflow.spanOutputs`.
+- [ ] `*_trace_unified.request` and `*_trace_unified.response` contain the user
+      message and final assistant answer in a deployed Databricks App.
+- [ ] The experiment UI displays Input and Output for deployed streamed and
+      non-streamed agent turns.
+- [x] Local agent, model, tool, memory, and processor spans share the root trace
+      ID.
+- [x] Local downstream injection emits no `traceparent` when propagation is
+      disabled.
+- [x] Local W3C extraction, parentage, and injection continue to work when
+      propagation is enabled.
+- [x] Applications no longer need to call `propagation.disable()` themselves.

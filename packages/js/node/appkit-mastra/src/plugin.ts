@@ -101,7 +101,7 @@ import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
 import { resolveDefaultModelId } from "./model.ts";
-import { buildObservability } from "./observability.ts";
+import { buildObservability, configureOtelPropagation } from "./observability.ts";
 import { provisionRemoteSkills } from "./remote-skills.ts";
 import {
   attachRoutePatchMiddleware,
@@ -252,6 +252,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // Wait until sibling plugins (e.g. `lakebase`) finish `setup()` so
     // the lakebase pool is valid when storage/memory are enabled.
     this.context?.onLifecycle("setup:complete", async () => {
+      configureOtelPropagation();
       this.applyLakebaseAutoDefaults();
       await this.buildAgentAndServer();
     });

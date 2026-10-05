@@ -10,6 +10,7 @@ import {
   modelCapabilitiesFor,
   modelMetadataFor,
   modelRateLimitsFor,
+  modelReasoningLevelsFor,
   modelStatusFor,
   retiredModelNames,
 } from "../src/metadata.ts";
@@ -83,5 +84,11 @@ describe("model metadata lookup", () => {
     assert.deepEqual(modelRateLimitsFor(endpoint), modelRateLimitsFor("gpt-5.4"));
     assert.equal(modelRateLimitsFor("system.ai.bge-large-en")?.queriesPerHour, 2_160_000);
     assert.deepEqual(modelMetadataFor(endpoint).status, { deprecated: false });
+    assert.deepEqual(modelReasoningLevelsFor("databricks-grok-4-6"), [
+      "low",
+      "medium",
+      "high",
+      "extra-high",
+    ]);
   });
 });

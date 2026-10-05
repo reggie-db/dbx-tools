@@ -1,0 +1,89 @@
+/**
+ * Commander command group for a system-tray service lifecycle.
+ *
+ * @module
+ */
+
+import { Command } from "commander";
+
+import type { CliServiceDefinition } from "./definition.ts";
+import { CliService, type CliServiceLifecycle } from "./service.ts";
+
+/** Static definition or action-time factory used by a service command group. */
+export type CliServiceDefinitionSource = CliServiceDefinition | (() => CliServiceDefinition);
+
+/** Injectable lifecycle and output boundary for service CLI tests and composition. */
+export interface CliServiceCliDependencies {
+  /** Construct the lifecycle manager used by command actions. */
+  create(definition: CliServiceDefinition): CliServiceLifecycle;
+  /** Write the JSON result of the status command. */
+  write(value: string): void;
+}
+
+const DEFAULT_DEPENDENCIES: CliServiceCliDependencies = {
+  create: (definition) => new CliService(definition),
+  write: (value) => process.stdout.write(value),
+};
+
+/** Build install, start, stop, restart, status, and uninstall commands for a service. */
+export function buildServiceCommand(
+  source: CliServiceDefinitionSource,
+  dependencies: CliServiceCliDependencies = DEFAULT_DEPENDENCIES,
+): Command {
+  const definition = resolveDefinition(source);
+  const service = () => dependencies.create(definition());
+  const command = new Command("service").description(
+    typeof source === "function"
+      ? "Install and manage the desktop service"
+      : `Install and manage the ${source.name} desktop service`,
+  );
+
+  command
+    .command("install")
+    .description("Install the service for the current user and start it")
+    .option("--no-start", "install without starting the service")
+    .action(async (options: { start: boolean }) => {
+      await service().install({ start: options.start });
+    });
+
+  command
+    .command("start")
+    .description("Start the installed service")
+    .action(async () => {
+      await service().start();
+    });
+
+  command
+    .command("stop")
+    .description("Stop the running service")
+    .action(async () => {
+      await service().stop();
+    });
+
+  command
+    .command("restart")
+    .description("Restart the installed service")
+    .action(async () => {
+      await service().restart();
+    });
+
+  command
+    .command("status")
+    .description("Print service installation and process state as JSON")
+    .action(async () => {
+      dependencies.write(`${JSON.stringify(await service().status(), null, 2)}\n`);
+    });
+
+  command
+    .command("uninstall")
+    .description("Stop and remove the service for the current user")
+    .action(async () => {
+      await service().uninstall();
+    });
+
+  return command;
+}
+
+function resolveDefinition(source: CliServiceDefinitionSource): () => CliServiceDefinition {
+  return typeof source === "function" ? source : () => source;
+}

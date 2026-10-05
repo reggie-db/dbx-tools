@@ -20,6 +20,7 @@
     "projen": "projen"
   },
   "devDependencies": {
+    "@types/cacache": "^20.0.1",
     "@types/node": "catalog:",
     "cheerio": "^1.2.0",
     "typescript": "^5.9.3"
@@ -31,6 +32,8 @@
     "@dbx-tools/shared-auth": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-model": "workspace:^",
+    "cacache": "catalog:",
+    "env-paths": "catalog:",
     "fuse.js": "^7.4.2"
   },
   "main": "index.ts",
@@ -60,6 +63,10 @@
         "types": "./lib/src/invoke.d.ts",
         "default": "./lib/src/invoke.js"
       },
+      "./metadata-cache": {
+        "types": "./lib/src/metadata-cache.d.ts",
+        "default": "./lib/src/metadata-cache.js"
+      },
       "./metadata": {
         "types": "./lib/src/metadata.d.ts",
         "default": "./lib/src/metadata.js"
@@ -75,6 +82,10 @@
       "./policy": {
         "types": "./lib/src/policy.d.ts",
         "default": "./lib/src/policy.js"
+      },
+      "./reasoning-translation": {
+        "types": "./lib/src/reasoning-translation.d.ts",
+        "default": "./lib/src/reasoning-translation.js"
       },
       "./resolve": {
         "types": "./lib/src/resolve.d.ts",
@@ -101,10 +112,12 @@
     "./classify": "./src/classify.ts",
     "./fallback": "./src/fallback.ts",
     "./invoke": "./src/invoke.ts",
+    "./metadata-cache": "./src/metadata-cache.ts",
     "./metadata": "./src/metadata.ts",
     "./model-catalog": "./src/model-catalog.ts",
     "./model-client": "./src/model-client.ts",
     "./policy": "./src/policy.ts",
+    "./reasoning-translation": "./src/reasoning-translation.ts",
     "./resolve": "./src/resolve.ts",
     "./serving-wire": "./src/serving-wire.ts",
     "./package.json": "./package.json"

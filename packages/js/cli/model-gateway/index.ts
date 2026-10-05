@@ -4,4 +4,4 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-model-gateway";
 export * as cli from "./src/cli.ts";
-export type { ModelGatewayCliDependencies } from "./src/cli.ts";
+export type { ModelGatewayCliDependencies, ModelGatewayServiceOptions } from "./src/cli.ts";

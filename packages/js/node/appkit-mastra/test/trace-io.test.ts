@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  assistantTextFromJson,
   assistantTextFromSse,
   chatTurnTraceIoMiddleware,
   MLFLOW_SPAN_INPUTS_ATTR,
@@ -35,6 +36,29 @@ describe("assistantTextFromSse", () => {
   it("returns empty string when no text-delta frames are present", () => {
     assert.equal(assistantTextFromSse('data: {"type":"finish"}\n'), "");
   });
+
+  it("caps the assembled answer at the trace payload limit", () => {
+    const answer = "x".repeat(TRACE_IO_LIMIT + 100);
+    assert.equal(
+      assistantTextFromSse(`data: ${JSON.stringify({ type: "text-delta", delta: answer })}\n`),
+      "x".repeat(TRACE_IO_LIMIT),
+    );
+  });
+});
+
+describe("assistantTextFromJson", () => {
+  it("reads and caps the text from a generate result", () => {
+    assert.equal(assistantTextFromJson({ text: "complete answer" }), "complete answer");
+    assert.equal(
+      assistantTextFromJson({ text: "x".repeat(TRACE_IO_LIMIT + 100) }),
+      "x".repeat(TRACE_IO_LIMIT),
+    );
+  });
+
+  it("ignores responses without text", () => {
+    assert.equal(assistantTextFromJson({ output: "not the generate shape" }), "");
+    assert.equal(assistantTextFromJson(undefined), "");
+  });
 });
 
 describe("chatTurnTraceIoMiddleware", () => {
@@ -45,7 +69,7 @@ describe("chatTurnTraceIoMiddleware", () => {
       path: "/agents/support/stream",
       body: {},
     };
-    const res = { write: () => true, end: () => undefined };
+    const res = { write: () => true, end: () => undefined, json: () => undefined };
     chatTurnTraceIoMiddleware(req as never, res as never, () => {
       nextCalls += 1;
     });
@@ -67,6 +91,12 @@ describe("chatTurnTraceIoMiddleware", () => {
         return true;
       },
       end() {
+        return undefined;
+      },
+      json() {
+        return undefined;
+      },
+      once() {
         return undefined;
       },
     };

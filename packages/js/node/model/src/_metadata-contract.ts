@@ -19,6 +19,10 @@ export const WEB_SEARCH_MODELS_URL =
 export const MODEL_RATE_LIMITS_URL =
   "https://docs.databricks.com/aws/en/machine-learning/foundation-model-apis/limits";
 
+/** Databricks documentation URL for reasoning-effort model policy. */
+export const QUERY_REASON_MODELS_URL =
+  "https://docs.databricks.com/aws/en/machine-learning/model-serving/query-reason-models";
+
 /** Build-generated retired-model snapshot. */
 export interface RetiredModelsSnapshot {
   readonly generatedAt: number;
@@ -48,4 +52,15 @@ export interface ModelRateLimitCatalogue {
 export interface ModelRateLimitsSnapshot {
   readonly generatedAt: number;
   readonly catalogue: ModelRateLimitCatalogue;
+}
+
+/** Documented generic reasoning levels keyed by normalized model identity. */
+export interface ReasoningModelCatalogue {
+  readonly models: Readonly<Record<string, readonly string[]>>;
+}
+
+/** Build-generated reasoning-effort documentation snapshot. */
+export interface ReasoningModelsSnapshot {
+  readonly generatedAt: number;
+  readonly catalogue: ReasoningModelCatalogue;
 }

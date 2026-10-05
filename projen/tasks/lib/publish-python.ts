@@ -63,7 +63,9 @@ export function publishPythonProjects(options: {
   readonly root: string;
   readonly version: string;
 }): void {
-  const output = mkdtempSync(join(tmpdir(), "projen-python-publish-"));
+  const root = resolve(options.root);
+  const workspace = projectUtils.root(root) ?? dirname(root);
+  const output = mkdtempSync(join(workspace, ".projen-python-publish-"));
   try {
     buildPythonProjects({ ...options, output });
     runTaskCommand(

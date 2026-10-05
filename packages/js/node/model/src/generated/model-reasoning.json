@@ -1,0 +1,147 @@
+{
+  "generatedAt": 1791233726,
+  "catalogue": {
+    "models": {
+      "claude-5-1-fable": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "claude-5-5-opus": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "deepseek-4-1-flash": [
+        "low",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "deepseek-4-flash-0731": [
+        "low",
+        "high",
+        "max"
+      ],
+      "deepseek-4-pro-0813": [
+        "low",
+        "high",
+        "max"
+      ],
+      "gemini-3-1-flash-lite": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gemini-3-1-pro": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gemini-3-5-flash": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gemini-3-5-flash-lite": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gemini-3-6-flash": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gemini-3-7-flash": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gemini-3-8-flash": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gemini-3-flash": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "glm-5-2": [
+        "high",
+        "max"
+      ],
+      "glm-5-3": [
+        "low",
+        "high",
+        "max"
+      ],
+      "glm-5-3-flash": [
+        "low",
+        "high",
+        "max"
+      ],
+      "gpt-6-1-sol": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "gpt-6-astra": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "gpt-6-luna": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "gpt-6-sol": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "gpt-oss-120b": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "gpt-oss-20b": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "grok-4-6": [
+        "low",
+        "medium",
+        "high",
+        "extra-high"
+      ],
+      "inkling": [
+        "low",
+        "medium",
+        "high",
+        "extra-high",
+        "max"
+      ],
+      "kimi-3": [
+        "low",
+        "high",
+        "max"
+      ]
+    }
+  }
+}

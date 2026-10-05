@@ -380,13 +380,16 @@ list, so a new package is covered without a re-synth. Work from the root:
 | `bun run version:check` | verify every generated version against `VERSION`    |
 | `bun run release`       | run the configured release transaction              |
 
-Run exactly `bun run release` from a clean `main`. It calls the existing `bump`
-task, commits the generated version changes, pushes `main`, and pushes the
-matching annotated `vX.Y.Z` tag. Pass `--no-bump` only to release an existing
-synchronized local bump. The tag workflow verifies that the tag points at the
-exact `origin/main` commit, publishes npm and PyPI directly from that checkout,
-then builds and deploys documentation. Local npm and Python registry publication
-remains available through the direct local publication tooling.
+Run exactly `bun run release` from any branch. Pending changes are committed and
+the current branch is pushed first. A non-`main` branch then fast-forwards
+`main`; the command fails without creating a merge commit if either branch has
+diverged. From `main`, it calls the existing `bump` task, commits the generated
+version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
+Pass `--no-bump` only to release an existing synchronized local bump. The tag
+workflow verifies that the tag points at the exact `origin/main` commit,
+publishes npm and PyPI directly from that checkout, then builds and deploys
+documentation. Local npm and Python registry publication remains available
+through the direct local publication tooling.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:

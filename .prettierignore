@@ -75,6 +75,7 @@ packages/js/cli/auth/index.ts
 packages/js/cli/dbx-tools/index.ts
 packages/js/cli/lakebase-proxy/index.ts
 packages/js/cli/model-gateway/index.ts
+packages/js/cli/service/index.ts
 packages/js/cli/tunnel/index.ts
 packages/js/node/appkit/index.ts
 packages/js/node/appkit-graphiti/index.ts

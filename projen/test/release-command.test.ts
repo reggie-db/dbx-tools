@@ -94,10 +94,46 @@ describe("direct release tags", () => {
     }
   });
 
-  it("rejects release from another branch", async () => {
+  it("commits and pushes a feature branch before fast-forwarding main", async () => {
     const { remote, root } = fixture();
     try {
       git(root, "switch", "-c", "feature");
+      writeFileSync(join(root, "feature.txt"), "feature\n");
+      assert.equal(
+        await runRelease({
+          root,
+          branch: "main",
+          prefix: "v",
+          remote: "origin",
+          localPublish: false,
+        }),
+        "v1.0.1",
+      );
+      assert.equal(git(root, "branch", "--show-current"), "main");
+      assert.equal(git(root, "log", "feature", "-1", "--pretty=%s"), "chore: prepare release");
+      assert.equal(
+        git(remote, "rev-parse", "refs/heads/feature"),
+        git(root, "rev-parse", "feature"),
+      );
+      assert.equal(git(remote, "rev-parse", "refs/heads/main"), git(root, "rev-parse", "HEAD"));
+    } finally {
+      rmSync(join(root, ".."), { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a feature branch that cannot safely fast-forward main", async () => {
+    const { root } = fixture();
+    try {
+      git(root, "switch", "-c", "feature");
+      writeFileSync(join(root, "feature.txt"), "feature\n");
+      git(root, "add", ".");
+      git(root, "commit", "-m", "feature");
+      git(root, "switch", "main");
+      writeFileSync(join(root, "main.txt"), "main\n");
+      git(root, "add", ".");
+      git(root, "commit", "-m", "main advance");
+      git(root, "push", "origin", "main");
+      git(root, "switch", "feature");
       await assert.rejects(
         () =>
           runRelease({
@@ -107,8 +143,10 @@ describe("direct release tags", () => {
             remote: "origin",
             localPublish: false,
           }),
-        /must run from main/,
+        /cannot safely merge feature into main/,
       );
+      assert.equal(git(root, "branch", "--show-current"), "feature");
+      assert.equal(git(root, "rev-parse", "feature"), git(root, "rev-parse", "origin/feature"));
     } finally {
       rmSync(join(root, ".."), { recursive: true, force: true });
     }

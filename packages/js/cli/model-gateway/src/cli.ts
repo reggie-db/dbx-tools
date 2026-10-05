@@ -5,16 +5,33 @@
  */
 
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { startModelGateway } from "@dbx-tools/appkit-model-gateway";
-import { json } from "@dbx-tools/shared-core";
+import type { CliServiceDefinition } from "@dbx-tools/cli-service";
+import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
+import { json, object } from "@dbx-tools/shared-core";
 import { Command, InvalidArgumentError } from "commander";
+
+import { modelGatewayTrayIcon } from "./_tray-icon.ts";
+
+const DEFAULT_HOST = "127.0.0.1";
+const DEFAULT_PORT = 4400;
 
 /** Injectable foreground gateway boundary for CLI tests. */
 export interface ModelGatewayCliDependencies {
   start(options: { host?: string; port?: number; profile?: string }): Promise<void>;
+  /** Optional service CLI boundary for tests and embedding. */
+  readonly service?: CliServiceCliDependencies;
+}
+
+/** Install-time options persisted in the model-gateway service definition. */
+export interface ModelGatewayServiceOptions {
+  /** Loopback port exposed by the installed gateway. */
+  readonly port?: number;
+  /** Databricks profile passed to the installed gateway. */
+  readonly profile?: string;
 }
 
 interface ModelGatewayCliOptions {
@@ -31,20 +48,57 @@ const DEFAULT_DEPENDENCIES: ModelGatewayCliDependencies = {
 /** Resolve the package's foreground executable by absolute path. */
 export function modelGatewayExecutable(): string {
   const manifest = fileURLToPath(import.meta.resolve("@dbx-tools/cli-model-gateway/package.json"));
-  return join(dirname(manifest), "bin", "dbx-model-gateway.ts");
+  const bin = json.parseRecord(readFileSync(manifest, "utf8"))?.bin;
+  const target = object.isRecord(bin) ? bin["dbx-model-gateway"] : undefined;
+  if (typeof target !== "string") {
+    throw new Error("could not resolve dbx-model-gateway executable");
+  }
+  return resolve(dirname(manifest), target);
 }
 
-/** Build the foreground model-gateway command without starting a server. */
+/** Build the tray-only model-gateway service definition. */
+export function modelGatewayServiceDefinition(
+  options: ModelGatewayServiceOptions = {},
+): CliServiceDefinition {
+  const port = options.port ?? DEFAULT_PORT;
+  parsePort(String(port));
+  return {
+    id: "com.dbx-tools.model-gateway",
+    name: "dbx model gateway",
+    version: packageVersion(),
+    icon: modelGatewayTrayIcon(),
+    isTemplateIcon: process.platform === "darwin",
+    command: {
+      entrypoint: modelGatewayExecutable(),
+      arguments: [
+        "--host",
+        DEFAULT_HOST,
+        "--port",
+        String(port),
+        ...(options.profile ? ["--profile", options.profile] : []),
+      ],
+    },
+    menu: [
+      {
+        type: "url",
+        label: "Models",
+        url: `http://${DEFAULT_HOST}:${port}/v1/models`,
+      },
+    ],
+  };
+}
+
+/** Build foreground and service model-gateway commands without starting a server. */
 export function buildProgram(
   name = "dbx model-gateway",
   dependencies: ModelGatewayCliDependencies = DEFAULT_DEPENDENCIES,
 ): Command {
   const version = packageVersion();
-  return new Command()
+  const program = new Command()
     .name(name)
-    .description("Run the foreground AppKit Databricks model gateway")
-    .option("--host <host>", "loopback host to bind", "127.0.0.1")
-    .option("--port <port>", "HTTP port", parsePort, 4400)
+    .description("Run or manage the AppKit Databricks model gateway")
+    .option("--host <host>", "loopback host to bind", DEFAULT_HOST)
+    .option("--port <port>", "HTTP port", parsePort, DEFAULT_PORT)
     .option("--profile <profile>", "Databricks profile resolved by @dbx-tools/auth")
     .option("--runtime-info", "print runtime implementation metadata")
     .version(version, "-v, --version")
@@ -62,6 +116,12 @@ export function buildProgram(
         ...(options.profile ? { profile: options.profile } : {}),
       });
     });
+  const serviceCommand = buildServiceCommand(() => {
+    const options = program.opts<ModelGatewayServiceOptions>();
+    return modelGatewayServiceDefinition(options);
+  }, dependencies.service);
+  program.addCommand(serviceCommand);
+  return program;
 }
 
 function parsePort(value: string): number {
