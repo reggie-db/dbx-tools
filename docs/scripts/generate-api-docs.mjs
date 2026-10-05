@@ -483,7 +483,7 @@ async function main() {
   fs.rmSync(apiRoot, { recursive: true, force: true });
   fs.mkdirSync(apiRoot, { recursive: true });
 
-  const [typescriptGenerated, pythonGenerated, rustGenerated] = await Promise.all([
+  const [typescriptGenerated, pythonGenerated] = await Promise.all([
     asyncUtils.mapConcurrent(
       typescriptPackages,
       async (pkg) => ((await generatePackageApi(pkg, typedocBin)) ? pkg : undefined),
@@ -494,13 +494,8 @@ async function main() {
       async (pkg) => ((await generatePythonPackageApi(pkg)) ? pkg : undefined),
       { concurrency: 5 },
     ),
-    generateRustApis(rustPackages),
   ]);
-  const generated = [
-    ...typescriptGenerated.filter(Boolean),
-    ...pythonGenerated.filter(Boolean),
-    ...rustGenerated,
-  ];
+  const generated = [...typescriptGenerated.filter(Boolean), ...pythonGenerated.filter(Boolean)];
 
   write(
     path.join(apiRoot, "index.md"),
