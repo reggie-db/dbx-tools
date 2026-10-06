@@ -1,4 +1,13 @@
-/** Cached Databricks Lakebase discovery and database credentials. */
+/**
+ * Profile-aware Lakebase discovery and short-lived database credentials.
+ *
+ * This module is the Node owner for resolving a parsed target into concrete
+ * connection identity. Reuse {@link LakebaseClient} from AppKit integrations,
+ * CLIs, and proxies instead of calling Lakebase APIs or selecting defaults in
+ * each consumer.
+ *
+ * @module
+ */
 
 import {
   client as authClient,

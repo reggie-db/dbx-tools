@@ -22,7 +22,7 @@ const CAPABILITIES: ModelCapabilities = {
 };
 
 describe("model gateway catalogue", () => {
-  it("publishes Codex models with a chat class, sorted by display name", () => {
+  it("publishes Codex models with a chat class, sorted by major family then display name", () => {
     const targets = [
       target("gpt", { responses: true, openResponses: false, customTools: true }),
       target("claude", { anthropic: true }),
@@ -37,8 +37,8 @@ describe("model gateway catalogue", () => {
       codex.map((entry) => entry.slug),
       [
         "databricks/databricks-claude-test",
-        "databricks/databricks-gemini-test",
         "databricks/system.ai.gpt-test",
+        "databricks/databricks-gemini-test",
       ],
     );
     assert.deepEqual(
@@ -49,17 +49,19 @@ describe("model gateway catalogue", () => {
     assert.equal("data" in payload, false);
   });
 
-  it("sorts OpenAI models as family chat, other chat, then embeddings, each by name", () => {
+  it("sorts OpenAI models as major-provider families, other chat, then embeddings", () => {
     const payload = listModelsPayload(
       [
         embedding("Test Pt Disabled Legacy It", "bge"),
-        named("Zeta", "gpt"),
+        named("GPT Zeta", "gpt"),
         unnamed("Zed"),
+        unnamed("Ben Test GPT OSS 1"),
+        unnamed("AI Query E 2 E Pt Chat"),
         embedding("GTE Large (En)", "gte"),
         named("Veo 3.1 Generate", "gemini"),
-        named("Beta", "claude"),
+        named("Claude Beta", "claude"),
         unnamed("Ada"),
-        named("Alpha", "gpt"),
+        named("GPT Alpha", "gpt"),
       ],
       false,
     );
@@ -67,11 +69,13 @@ describe("model gateway catalogue", () => {
     assert.deepEqual(
       payload.data.map((entry) => entry.name),
       [
-        "Alpha",
-        "Beta",
+        "Claude Beta",
+        "GPT Alpha",
+        "GPT Zeta",
         "Veo 3.1 Generate",
-        "Zeta",
         "Ada",
+        "AI Query E 2 E Pt Chat",
+        "Ben Test GPT OSS 1",
         "Zed",
         "GTE Large (En)",
         "Test Pt Disabled Legacy It",

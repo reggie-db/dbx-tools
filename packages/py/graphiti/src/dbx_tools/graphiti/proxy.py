@@ -1,3 +1,5 @@
+"""Run a loopback Caddy proxy for the upstream Graphiti sidecar."""
+
 from __future__ import annotations
 
 import os
@@ -9,8 +11,6 @@ from cyclopts import App, Parameter
 from dbx_tools.core import bin
 
 from .runtime import RuntimePaths
-
-"""Loopback Caddy proxy for the upstream Graphiti sidecar."""
 
 CADDY_MISE_TOOL = "caddy@2.10.2"
 

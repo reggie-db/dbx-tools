@@ -6,6 +6,7 @@ packages:
   - packages/js/cli/appkit-env
   - packages/js/cli/auth
   - packages/js/cli/dbx-tools
+  - packages/js/cli/graphiti
   - packages/js/cli/lakebase-proxy
   - packages/js/cli/model-gateway
   - packages/js/cli/service

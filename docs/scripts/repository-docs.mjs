@@ -88,6 +88,22 @@ export function summaryText(markdown) {
     .replace(/`([^`]*)`/g, "$1");
 }
 
+/** Structural quality issues that make a package README unsuitable as a docs page. */
+export function packageReadmeIssues(markdown) {
+  const issues = [];
+  if (!markdown.startsWith("# ")) issues.push("start with one H1 title");
+  if (summaryText(markdown).length < 40) {
+    issues.push("open with a useful summary of at least 40 characters");
+  }
+  if ([...markdown.matchAll(/^##\s+\S/gm)].length < 2) {
+    issues.push("include at least two task-oriented H2 sections");
+  }
+  if (!/^```[a-z0-9-]*$/im.test(markdown)) {
+    issues.push("include at least one runnable usage example");
+  }
+  return issues;
+}
+
 function read(file) {
   return fs.readFileSync(file, "utf8");
 }

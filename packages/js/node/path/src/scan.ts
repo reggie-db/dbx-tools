@@ -1,8 +1,20 @@
+/**
+ * Shared scan options used by file discovery and watching.
+ *
+ * Reuse these types so path-based utilities agree on roots, ignore policy,
+ * symlink behavior, and cancellation rather than inventing parallel option
+ * shapes.
+ *
+ * @module
+ */
+
 import { IgnorePatternOptions } from "./ignore.ts";
 import { PathMatchInput } from "./match.ts";
 
+/** Shared default used by file discovery and watching to avoid traversing symlinks. */
 export const FOLLOW_SYMLINKS_DEFAULT = false;
 
+/** Common root, ignore, symlink, and cancellation settings for filesystem scans. */
 export interface FileScanOptions {
   /**
    * Base directory used to resolve relative paths.

@@ -6,6 +6,7 @@ export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-service";
 export const PACKAGE_VERSION = "0.9.37";
 export * as cli from "./src/cli.ts";
 export * as definition from "./src/definition.ts";
+export * as icon from "./src/icon.ts";
 export * as service from "./src/service.ts";
 export type { CliServiceDefinitionSource, CliServiceCliDependencies } from "./src/cli.ts";
 export { CliServiceCommandSchema, CliServiceMenuItemSchema, CliServiceDefinitionSchema } from "./src/definition.ts";

@@ -55,6 +55,7 @@ const logger = log.logger("mastra/observability");
 
 const DEFAULT_SERVICE_NAME = "mastra";
 
+/** Options for connecting Mastra spans to AppKit's OpenTelemetry pipeline. */
 export interface BuildObservabilityOptions {
   /**
    * Whether to wire the Mastra `OtelBridge`. Mirrors

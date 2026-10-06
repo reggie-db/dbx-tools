@@ -22,13 +22,21 @@ class ExplicitAdvisoryLockId:
 
 
 class SyncQueryable(Protocol):
-    def execute(self, statement: object, parameters: dict[str, object] | None = None) -> object: ...
+    """Synchronous SQLAlchemy-compatible execution surface used by lock helpers."""
+
+    def execute(self, statement: object, parameters: dict[str, object] | None = None) -> object:
+        """Execute one SQL statement and return a result exposing scalar values."""
+        ...
 
 
 class AsyncQueryable(Protocol):
+    """Asynchronous SQLAlchemy-compatible execution surface used by lock helpers."""
+
     async def execute(
         self, statement: object, parameters: dict[str, object] | None = None
-    ) -> object: ...
+    ) -> object:
+        """Execute one SQL statement and return a result exposing scalar values."""
+        ...
 
 
 def advisory_lock_id(key: object) -> int:

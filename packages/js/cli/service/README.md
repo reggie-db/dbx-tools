@@ -4,6 +4,11 @@ Product-agnostic system-tray service lifecycle for Node and Bun CLIs. A
 consuming Commander program gets `service install`, `start`, `stop`, `restart`,
 `status`, and `uninstall` commands from one typed definition.
 
+This is the shared owner for current-user CLI services. Product CLIs should
+provide a service definition and reuse this lifecycle instead of implementing
+their own installers, startup registration, tray host, runtime layout, or
+control channel.
+
 The resident `systray2` host can manage a foreground command and display a
 system tray icon. Its default menu contains:
 

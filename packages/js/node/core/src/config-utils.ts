@@ -21,6 +21,10 @@
  * inputs for the bundle itself (interpolated into targets, resources, and paths),
  * so treating one as a process setting resolves names the deployed app never sees.
  *
+ * This module is the repository-wide owner for layered configuration. Reuse it
+ * instead of adding local environment-name generation, `.env` readers, bundle
+ * validation, App YAML parsing, or scalar coercion policy.
+ *
  * Node-only (`child_process`, `fs`, `process`).
  *
  * @module
@@ -41,12 +45,15 @@ const configFileCache = new Map<string, string | undefined>();
 
 type ConfigKey = string | readonly string[];
 
+/** Scalar or list value accepted by an in-memory configuration map. */
 export type ConfigMapValue = string | readonly string[] | null | undefined;
+/** Immutable string-keyed configuration values used by the `config` source. */
 export type ConfigData = Readonly<Record<string, ConfigMapValue>>;
 
 /** Where a value may come from, consulted in the order given. */
 export type ConfigSource = "config" | "env" | "dotenv" | "bundle" | "app";
 
+/** Source order, namespaces, parsed files, and working directory for value resolution. */
 export interface ConfigOptions {
   /**
    * Outermost namespaces tried before each key. Defaults to `DBX_TOOLS`.
@@ -106,6 +113,7 @@ const CONFIG_APP_KEY = "DBX_TOOLS_CONFIG_APP";
 /** Exact process-environment lookup for callers that do not read local config files. */
 export const ENV_ONLY = { scope: [] as const, sources: "env" as const };
 
+/** Non-empty literal configuration value with unresolved interpolation rejected. */
 export const valueSchema = z
   .string()
   .trim()
@@ -126,24 +134,28 @@ const positiveIntValue = positiveNumberValue.transform(Math.floor);
 /** A named bundle or App resource; concrete resource fields pass through. */
 export const bundleResourceSchema = z.object({ name: valueSchema.optional() }).passthrough();
 
+/** Databricks bundle application environment entry. */
 export const bundleEnvEntrySchema = z.object({
   name: valueSchema.optional(),
   value: z.string().optional(),
   value_from: valueSchema.optional(),
 });
 
+/** Databricks bundle application fields used by local configuration resolution. */
 export const bundleAppSchema = z.object({
   name: valueSchema.optional(),
   config: z.object({ env: z.array(bundleEnvEntrySchema).optional() }).optional(),
   resources: z.array(bundleResourceSchema).optional(),
 });
 
+/** Databricks App YAML environment entry. */
 export const appEnvEntrySchema = z.object({
   name: valueSchema,
   value: z.string().optional(),
   valueFrom: valueSchema.optional(),
 });
 
+/** Databricks App YAML fields used by local configuration resolution. */
 export const appSchema = z.object({
   env: z.array(appEnvEntrySchema).optional(),
   resources: z.array(bundleResourceSchema).optional(),

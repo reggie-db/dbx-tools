@@ -36,7 +36,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-model-gateway",
+      "name": "@dbx-tools/cli-graphiti",
       "version": "workspace:^",
       "type": "runtime"
     },

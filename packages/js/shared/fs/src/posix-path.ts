@@ -95,6 +95,7 @@ export function join(...parts: string[]): string {
   return result || ".";
 }
 
+/** Successful normalized namespace path or an indication that traversal escaped the root. */
 export type NormalizeResult =
   { readonly ok: true; readonly path: string } | { readonly ok: false; readonly escape: true };
 

@@ -1,7 +1,20 @@
+/**
+ * Browser-safe filesystem contracts shared by every dbx-tools storage backend.
+ *
+ * This module owns portable content, entry, error, option, and lifecycle shapes.
+ * Implement new backends against `FileSystem` or `BaseFileSystem`
+ * instead of publishing a parallel filesystem interface in another package.
+ *
+ * @module
+ */
+
+/** Text or binary data accepted by filesystem write operations. */
 export type FileContent = string | Uint8Array;
 
+/** Portable kind assigned to a filesystem directory entry. */
 export type FileEntryType = "file" | "directory" | "symbolic-link" | "other";
 
+/** Name, kind, size, and optional backend metadata for one directory entry. */
 export interface FileEntry {
   name: string;
   type: FileEntryType;
@@ -14,6 +27,7 @@ export interface FileEntry {
   metadata?: Readonly<Record<string, unknown>>;
 }
 
+/** Directory entry enriched with its relative path and available timestamps. */
 export interface FileStat extends FileEntry {
   /** Path relative to the filesystem root. */
   path: string;
@@ -25,6 +39,7 @@ export interface FileStat extends FileEntry {
   mimeType?: string;
 }
 
+/** Text decoding options for a filesystem read. */
 export interface ReadFileOptions {
   /**
    * Return decoded text using this encoding.
@@ -33,11 +48,13 @@ export interface ReadFileOptions {
   encoding?: string;
 }
 
+/** Existing-file behavior for a filesystem write. */
 export interface WriteFileOptions {
   /** Replace an existing file. Defaults to true. */
   overwrite?: boolean;
 }
 
+/** Missing-target and recursive behavior for file or directory removal. */
 export interface RemoveOptions {
   /** Do not fail if the target does not exist. */
   force?: boolean;
@@ -46,16 +63,19 @@ export interface RemoveOptions {
   recursive?: boolean;
 }
 
+/** Existing-destination behavior for copy and move operations. */
 export interface CopyOptions {
   /** Replace an existing destination. Defaults to true. */
   overwrite?: boolean;
 }
 
+/** Parent-directory creation behavior for directory creation. */
 export interface MakeDirectoryOptions {
   /** Create missing parent directories. */
   recursive?: boolean;
 }
 
+/** Recursion, depth, and extension filters for directory listing. */
 export interface ListOptions {
   /** Recursively list descendant entries. */
   recursive?: boolean;

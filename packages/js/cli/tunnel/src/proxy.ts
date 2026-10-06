@@ -32,6 +32,7 @@ const logger = log.logger("tunnel:proxy");
 
 type UpgradeSocket = Socket & { destroySoon?: () => void };
 
+/** Listener, upstream application, and optional authentication settings for the wrapper proxy. */
 export interface ProxyOptions {
   /** The port this proxy listens on - the port portr and the platform route to. */
   publicPort: number;

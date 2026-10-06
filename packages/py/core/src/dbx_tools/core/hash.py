@@ -1,3 +1,5 @@
+"""Stable hashing compatible with the shared TypeScript implementation."""
+
 from __future__ import annotations
 
 _BASE32_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz"

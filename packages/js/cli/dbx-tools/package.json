@@ -30,6 +30,7 @@
     "@clack/prompts": "catalog:",
     "@dbx-tools/cli-appkit-env": "workspace:^",
     "@dbx-tools/cli-auth": "workspace:^",
+    "@dbx-tools/cli-graphiti": "workspace:^",
     "@dbx-tools/cli-lakebase-proxy": "workspace:^",
     "@dbx-tools/cli-model-gateway": "workspace:^",
     "@dbx-tools/cli-tunnel": "workspace:^",

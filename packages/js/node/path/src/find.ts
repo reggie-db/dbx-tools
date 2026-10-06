@@ -1,3 +1,13 @@
+/**
+ * Repository-consistent file discovery over `glob`.
+ *
+ * Reuse {@link findFiles} when package discovery, generation, cleanup, or docs
+ * tooling must honor the same ignore catalogue and symlink defaults as watchers.
+ * Direct `glob` calls should be reserved for behavior that intentionally differs.
+ *
+ * @module
+ */
+
 import { object, type Sequence } from "@dbx-tools/shared-core";
 import { globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
 import { ignorePathMatcher } from "./ignore.ts";
@@ -6,6 +16,7 @@ import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from 
 
 type FileFindIgnore = PathMatchInput | readonly PathMatchInput[] | IgnoreLike;
 
+/** Glob, root, ignore, and symlink options for {@link findFiles}. */
 export interface FileFindOptions
   extends
     Omit<

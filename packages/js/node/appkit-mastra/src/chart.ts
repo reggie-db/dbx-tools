@@ -324,6 +324,7 @@ export const chartPlannerRequestSchema = z.object({
     ),
 });
 
+/** Validated title, description, and tabular rows passed to the chart-planning model. */
 export type ChartPlannerRequest = z.infer<typeof chartPlannerRequestSchema>;
 
 /**

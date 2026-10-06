@@ -5,6 +5,10 @@ services that already hold a Databricks `WorkspaceClient`. This package is
 the Python counterpart to `@dbx-tools/postgres`. Shared address parsing and
 identity rules are generated from the public Node package modules.
 
+This package owns the Python side of those cross-runtime contracts. Reuse its
+connection factories, locks, address parser, and topic bus so Python services
+stay wire-compatible with Node callers instead of growing parallel behavior.
+
 Install from PyPI:
 
 ```bash

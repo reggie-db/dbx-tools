@@ -1,6 +1,10 @@
 /**
  * Install, start, stop, and inspect a system-tray user service.
  *
+ * This module owns current-user service compilation and lifecycle across
+ * consuming CLIs. Reuse {@link CliService} rather than adding product-specific
+ * installers, startup registration, runtime directories, or control sockets.
+ *
  * @module
  */
 

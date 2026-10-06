@@ -42,6 +42,7 @@ export const MASTRA_USER_KEY = "mastra__user";
  * issued the request without leaking the full user object.
  */
 export const MASTRA_USER_NAME_KEY = "mastra__userName";
+/** Request-context key containing the authenticated user's email address. */
 export const MASTRA_USER_EMAIL_KEY = "mastra__userEmail";
 
 /**

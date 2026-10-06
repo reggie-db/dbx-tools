@@ -8,6 +8,7 @@ import {
   discoverPythonPackages,
   discoverRepositoryPackages,
   escapeRegExp,
+  packageReadmeIssues,
   stripLeadingH1,
   summaryText,
   walk,
@@ -70,6 +71,34 @@ describe("repository docs catalogue", () => {
     assert.equal(stripLeadingH1("# Title\n\nBody\n"), "Body\n");
     assert.equal(yamlString('A "title"'), '"A \\"title\\""');
     assert.equal(new RegExp(`^${escapeRegExp("a+b")}$`).test("a+b"), true);
+  });
+
+  it("reports package guides that are too thin for the docs site", () => {
+    assert.deepEqual(packageReadmeIssues("# Widget\n\nShort.\n"), [
+      "open with a useful summary of at least 40 characters",
+      "include at least two task-oriented H2 sections",
+      "include at least one runnable usage example",
+    ]);
+    assert.deepEqual(
+      packageReadmeIssues(
+        [
+          "# Widget",
+          "",
+          "Build useful widgets without repeating application setup or transport code.",
+          "",
+          "## Quick Start",
+          "",
+          "```ts",
+          "createWidget();",
+          "```",
+          "",
+          "## Choose A Mode",
+          "",
+          "Pick the mode that matches the application.",
+        ].join("\n"),
+      ),
+      [],
+    );
   });
 
   it("lets callers skip generated output trees", () => {

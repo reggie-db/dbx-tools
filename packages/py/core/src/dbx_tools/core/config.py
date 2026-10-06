@@ -1,3 +1,5 @@
+"""Resolve layered dbx-tools configuration from explicit values and local files."""
+
 from __future__ import annotations
 
 import builtins
@@ -18,6 +20,8 @@ ConfigSource = Literal["config", "env", "dotenv", "bundle", "app"]
 
 
 class ConfigOptions(TypedDict, total=False):
+    """Source order, namespaces, parsed files, and workspace for value resolution."""
+
     scope: str | Sequence[str]
     prefix: str | Sequence[str]
     cwd: str
@@ -30,6 +34,8 @@ class ConfigOptions(TypedDict, total=False):
 
 @dataclass(frozen=True)
 class ConfigFile:
+    """Parsed configuration file and its absolute source path."""
+
     path: str
     data: dict[str, object]
 
@@ -80,6 +86,8 @@ _YAML_NUMBER_PATTERN = re.compile(
 
 
 def is_databricks_app_env(source: Mapping[str, str | None] | None = None) -> bool:
+    """Return whether values describe a deployed Databricks App runtime."""
+
     values = os.environ if source is None else source
     override = _boolean(values.get(DATABRICKS_APP_ENV_KEY))
     if override is not None:
@@ -111,10 +119,14 @@ def _valid_app_value(value: str | None) -> bool:
 
 
 def text(input: ConfigKey, options: ConfigOptions | None = None) -> str | None:
+    """Return the first non-empty text value from the configured source order."""
+
     return next((_value.value for _value in _values(input, options or {})), None)
 
 
 def environment_keys(name: str) -> list[str]:
+    """Return distinct literal, uppercase, and environment-token forms of a name."""
+
     trimmed = name.strip()
     if not trimmed:
         return []
@@ -124,10 +136,14 @@ def environment_keys(name: str) -> list[str]:
 
 
 def resolve_value(name: str, options: ConfigOptions | None = None) -> str | None:
+    """Resolve a human-readable setting name through its environment key variants."""
+
     return text(environment_keys(name), options)
 
 
 def get_bundle_path(data: Mapping[str, object], path: str) -> str | None:
+    """Read a dotted path from parsed bundle data and unwrap a terminal value field."""
+
     parts = [part for part in path.split(".") if part]
     if not parts:
         return None
@@ -146,6 +162,8 @@ def get_bundle_path(data: Mapping[str, object], path: str) -> str | None:
 
 
 def name(input: ConfigKey, options: ConfigOptions | None = None) -> str:
+    """Return the highest-precedence generated configuration key."""
+
     candidates = _keys(input, options or {})
     return candidates[0] if candidates else ""
 
@@ -155,6 +173,8 @@ def string(
     input: ConfigKey,
     options: ConfigOptions | None = None,
 ) -> str | None:
+    """Prefer a configured string, then resolve text from layered sources."""
+
     return _trim_to_none(configured) or text(input, options)
 
 
@@ -163,6 +183,8 @@ def boolean(
     input: ConfigKey,
     options: ConfigOptions | None = None,
 ) -> bool | None:
+    """Prefer a configured boolean, then parse a layered configuration value."""
+
     resolved = _to_boolean(configured)
     return resolved if resolved is not None else _to_boolean(text(input, options))
 
@@ -173,6 +195,8 @@ def positive_number(
     fallback: float,
     options: ConfigOptions | None = None,
 ) -> float:
+    """Resolve a positive number and fall back when no valid value is available."""
+
     return _to_positive_number(configured) or _to_positive_number(text(input, options)) or fallback
 
 
@@ -182,6 +206,8 @@ def positive_int(
     fallback: int,
     options: ConfigOptions | None = None,
 ) -> int:
+    """Resolve a positive number and return its floored integer value."""
+
     return math.floor(positive_number(configured, input, fallback, options))
 
 
@@ -191,11 +217,15 @@ def list(
     transform: Callable[[str], str] | None = None,
     options: ConfigOptions | None = None,
 ) -> builtins.list[str]:
+    """Resolve a comma-delimited or repeated value list with an optional transform."""
+
     from_config = _parse_list(configured, transform)
     return from_config or _parse_list(text(input, options), transform)
 
 
 def bundle_file(cwd: str | None = None, *, profile: str | None = None) -> ConfigFile | None:
+    """Load and validate the active Databricks bundle configuration when enabled."""
+
     production = _trim_to_none(os.environ.get("NODE_ENV"))
     default_enabled = (production or "").lower() != "production" and not is_databricks_app_env()
     if not _file_source_enabled(CONFIG_BUNDLE_KEY, default_enabled):
@@ -204,6 +234,8 @@ def bundle_file(cwd: str | None = None, *, profile: str | None = None) -> Config
 
 
 def app_file(cwd: str | None = None) -> ConfigFile | None:
+    """Load and validate the nearest Databricks App YAML configuration when enabled."""
+
     if not _file_source_enabled(CONFIG_APP_KEY):
         return None
     return _load_app_file(_resolve_working_directory(cwd))
@@ -436,6 +468,8 @@ def _validate_bundle(path: str, profile: str | None) -> dict[str, object] | None
 
 
 def flatten_app_env(input: object) -> dict[str, str]:
+    """Flatten literal Databricks App YAML environment entries into strings."""
+
     if not isinstance(input, Mapping):
         return {}
     entries = input.get("env")
@@ -582,6 +616,8 @@ def _strip_yaml_comment(value: str) -> str:
 
 
 def flatten_bundle_env(input: object) -> dict[str, str]:
+    """Flatten one bundle application's environment entries and resource references."""
+
     if not isinstance(input, Mapping):
         return {}
     resources = input.get("resources")

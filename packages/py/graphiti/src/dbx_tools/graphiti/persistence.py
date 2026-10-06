@@ -1,3 +1,5 @@
+"""Durable write journaling for ephemeral Graphiti graph drivers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -20,8 +22,6 @@ from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-"""Durable write journaling for ephemeral Graphiti graph drivers."""
-
 _TAG = "__graphiti_type__"
 _TABLE_COMPONENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _WRITE_KEYWORD = re.compile(r"\b(?:CREATE|DELETE|DETACH|MERGE|REMOVE|SET)\b", re.IGNORECASE)
@@ -42,13 +42,21 @@ class GraphWrite:
 class WriteStorageDriver(Protocol):
     """Durable ordered storage used by `DelegatingGraphDriver`."""
 
-    async def setup(self) -> None: ...
+    async def setup(self) -> None:
+        """Create storage resources required before appending writes."""
+        ...
 
-    async def append(self, writes: Sequence[GraphWrite]) -> None: ...
+    async def append(self, writes: Sequence[GraphWrite]) -> None:
+        """Persist one ordered mutation batch."""
+        ...
 
-    async def load(self) -> list[GraphWrite]: ...
+    async def load(self) -> list[GraphWrite]:
+        """Load persisted mutations in replay order."""
+        ...
 
-    async def close(self) -> None: ...
+    async def close(self) -> None:
+        """Release storage resources owned by the driver."""
+        ...
 
 
 class PostgresWriteStorage:
@@ -184,46 +192,57 @@ class DelegatingGraphDriver(GraphDriver):
 
     @property
     def entity_node_ops(self):
+        """Delegate entity-node operations to the live graph driver."""
         return self._delegate.entity_node_ops
 
     @property
     def episode_node_ops(self):
+        """Delegate episode-node operations to the live graph driver."""
         return self._delegate.episode_node_ops
 
     @property
     def community_node_ops(self):
+        """Delegate community-node operations to the live graph driver."""
         return self._delegate.community_node_ops
 
     @property
     def saga_node_ops(self):
+        """Delegate saga-node operations to the live graph driver."""
         return self._delegate.saga_node_ops
 
     @property
     def entity_edge_ops(self):
+        """Delegate entity-edge operations to the live graph driver."""
         return self._delegate.entity_edge_ops
 
     @property
     def episodic_edge_ops(self):
+        """Delegate episodic-edge operations to the live graph driver."""
         return self._delegate.episodic_edge_ops
 
     @property
     def community_edge_ops(self):
+        """Delegate community-edge operations to the live graph driver."""
         return self._delegate.community_edge_ops
 
     @property
     def has_episode_edge_ops(self):
+        """Delegate episode-membership edge operations to the live graph driver."""
         return self._delegate.has_episode_edge_ops
 
     @property
     def next_episode_edge_ops(self):
+        """Delegate episode-ordering edge operations to the live graph driver."""
         return self._delegate.next_episode_edge_ops
 
     @property
     def search_ops(self):
+        """Delegate graph search operations to the live graph driver."""
         return self._delegate.search_ops
 
     @property
     def graph_ops(self):
+        """Delegate graph-wide operations to the live graph driver."""
         return self._delegate.graph_ops
 
     async def execute_query(self, cypher_query_: str, **kwargs: Any) -> Any:

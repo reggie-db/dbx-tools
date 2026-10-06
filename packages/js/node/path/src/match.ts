@@ -12,6 +12,7 @@ import { object, predicate, type Predicate, type PredicateFunction } from "@dbx-
 import { Minimatch } from "minimatch";
 import { ignorePathMatcher } from "./ignore.ts";
 
+/** Plain path predicate accepted anywhere a glob pattern can be supplied. */
 export type PathMatchPredicate = PredicateFunction<string>;
 
 /** A composable path test (`true` == match). */

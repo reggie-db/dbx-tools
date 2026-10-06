@@ -1,4 +1,13 @@
-/** Node-only discovery and file loading for the shared brand context. */
+/**
+ * Node-only discovery and file loading for the shared brand context.
+ *
+ * This module owns repository-wide brand file discovery, YAML/JSON loading,
+ * validation, defaulting, and relative asset resolution. Reuse it instead of
+ * teaching each CLI or docs generator how to locate and parse brand files. The
+ * browser-safe contract itself remains owned by `@dbx-tools/shared-core`.
+ *
+ * @module
+ */
 import { readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { brandUtils } from "@dbx-tools/shared-core";
@@ -14,12 +23,19 @@ const BRAND_CONTEXT_FILES = [
   "brand.json",
 ] as const;
 
+/** Validated brand context consumed by dbx-tools presentation packages. */
 export type BrandContext = brandUtils.BrandContext;
+/** Partial or untrusted input accepted by the brand context parser. */
 export type BrandContextInput = brandUtils.BrandContextInput;
+/** Zod schema for a complete validated brand context. */
 export const BrandContextSchema = brandUtils.BrandContextSchema;
+/** Built-in dbx-tools brand used when no project brand file exists. */
 export const defaultBrandContext = brandUtils.defaultBrandContext;
+/** Validate and normalize brand context input. */
 export const parseBrandContext = brandUtils.parseBrandContext;
+/** JSON Schema representation of {@link BrandContextSchema}. */
 export const brandContextJsonSchema = brandUtils.brandContextJsonSchema;
+/** Format a brand context as instructions for a text or design model. */
 export const brandContextPrompt = brandUtils.brandContextPrompt;
 
 /** Find a conventional YAML or JSON brand file from known project roots. */

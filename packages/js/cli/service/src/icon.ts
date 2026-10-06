@@ -13,8 +13,8 @@ const RECTANGLES = [
   [18, 24, 6, 2],
 ] as const;
 
-/** Return the prior 32-pixel service glyph as a systray2 PNG or Windows ICO payload. */
-export function modelGatewayTrayIcon(platform: NodeJS.Platform = process.platform): string {
+/** Return the dbx-tools service glyph as a systray2 PNG or Windows ICO payload. */
+export function serviceTrayIcon(platform: NodeJS.Platform = process.platform): string {
   const color =
     platform === "darwin"
       ? ([0x00, 0x00, 0x00, 0xff] as const)

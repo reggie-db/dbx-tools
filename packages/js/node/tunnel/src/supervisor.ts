@@ -10,6 +10,7 @@ const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30_000;
 /** Consecutive failed probes required before killing a still-running child. */
 const DEFAULT_HEALTH_CHECK_FAILURES = 2;
 
+/** Handle used to stop a supervised child and its restart loop. */
 export interface ProcessSupervisor {
   stop(): void;
 }

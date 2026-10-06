@@ -1,3 +1,5 @@
+"""Detached entry point for the linked Graphiti process supervisor."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -10,9 +12,6 @@ from cyclopts import App, Parameter
 from ._cli import run_forwarding_app
 from .runtime import Runtime, RuntimePaths
 from .settings import ModelSettings
-
-"""Background entry point for the linked Graphiti process supervisor."""
-
 
 @dataclass
 class SupervisorOptions:

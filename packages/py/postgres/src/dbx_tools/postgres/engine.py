@@ -63,16 +63,24 @@ class WorkspaceClientLike(Protocol):
     """WorkspaceClient surface required for Lakebase discovery and credentials."""
 
     @property
-    def config(self) -> Any: ...
+    def config(self) -> Any:
+        """Return SDK authentication and workspace configuration."""
+        ...
 
     @property
-    def current_user(self) -> Any: ...
+    def current_user(self) -> Any:
+        """Return the SDK current-user service used for database identity discovery."""
+        ...
 
     @property
-    def database(self) -> Any: ...
+    def database(self) -> Any:
+        """Return the provisioned Lakebase database service."""
+        ...
 
     @property
-    def postgres(self) -> PostgresAPI: ...
+    def postgres(self) -> PostgresAPI:
+        """Return the autoscaling Lakebase Postgres service."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,6 +11,10 @@
  * not (readline never emits that extra line). `trim: true` strips all leading/
  * trailing whitespace in both modes; `trim: false` leaves output unchanged.
  *
+ * This module owns subprocess execution policy for Node and Bun packages. Reuse
+ * it instead of wrapping `child_process` locally when callers need consistent
+ * argv parsing, stdio capture, line callbacks, cancellation, and exit checking.
+ *
  * @example Capture command output
  * ```ts
  * const { stdout } = await exec("git", ["rev-parse", "--show-toplevel"], {
@@ -160,6 +164,7 @@ type ResolvedStdio = {
   onLine?: LineHandler;
 };
 
+/** Supported command, argument-array, variadic-argument, and options call forms. */
 export type SpawnArgs<T extends SpawnOptions> =
   | [command: string, ...args: string[]]
   | [command: string, args: readonly string[]]

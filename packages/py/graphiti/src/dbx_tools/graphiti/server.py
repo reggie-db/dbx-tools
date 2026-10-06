@@ -1,3 +1,5 @@
+"""Run the pinned upstream MCP server with optional Postgres persistence."""
+
 from __future__ import annotations
 
 import argparse
@@ -25,9 +27,6 @@ from .persistence import (
     DelegatingGraphDriver,
     PostgresWriteStorage,
 )
-
-"""Pinned upstream MCP entry point with optional Postgres graph persistence."""
-
 
 def main() -> None:
     """Load the upstream MCP server and install persistence when configured."""

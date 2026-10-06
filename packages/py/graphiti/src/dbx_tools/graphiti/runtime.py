@@ -1,3 +1,5 @@
+"""Install and supervise Graphiti, its model gateway, and Neo4j processes."""
+
 from __future__ import annotations
 
 import hashlib
@@ -21,8 +23,6 @@ from honcho.process import Popen as HonchoPopen
 
 from .constants import UPSTREAM_MCP_PATH_ENV, persistence_configured
 from .settings import ModelSettings
-
-"""Installation and native process lifecycle for Graphiti, its model gateway, and Neo4j."""
 
 GRAPHITI_VERSION = "0.29.3"
 NEO4J_VERSION = "5.26.12"
@@ -70,26 +70,32 @@ class RuntimePaths:
 
     @classmethod
     def default(cls) -> RuntimePaths:
+        """Return paths rooted at the configured per-user Graphiti data directory."""
         return cls(default_data_dir())
 
     @property
     def graphiti(self) -> Path:
+        """Pinned Graphiti source and environment directory."""
         return self.root / "tools" / "graphiti" / GRAPHITI_VERSION
 
     @property
     def neo4j(self) -> Path:
+        """Pinned Neo4j installation directory."""
         return self.root / "tools" / "neo4j" / NEO4J_VERSION
 
     @property
     def neo4j_data(self) -> Path:
+        """Persistent Neo4j database directory."""
         return self.root / "data" / "neo4j"
 
     @property
     def state(self) -> Path:
+        """Runtime process and connection state file."""
         return self.root / "state.json"
 
     @property
     def log(self) -> Path:
+        """Detached supervisor log file."""
         return self.root / "graphiti.log"
 
 
@@ -115,6 +121,8 @@ class Runtime:
         extra_args: list[str] | None = None,
         settings: ModelSettings | None = None,
     ) -> int:
+        """Provision dependencies and start Graphiti in foreground or detached mode."""
+
         settings = settings or ModelSettings.resolve()
         self._ensure_runtime()
         self._start_neo4j()
@@ -146,6 +154,8 @@ class Runtime:
         return process.pid
 
     def stop(self) -> None:
+        """Stop the supervisor and Neo4j, then clear recorded process state."""
+
         state = self.read_state(required=False)
         supervisor_pid = state.get("graphiti_pid")
         if isinstance(supervisor_pid, int) and _is_running(supervisor_pid):
@@ -161,6 +171,8 @@ class Runtime:
         self._clear_process_state(state)
 
     def status(self) -> dict[str, object]:
+        """Return process, endpoint, and model settings safe for CLI status output."""
+
         state = self.read_state(required=False)
         pid = state.get("graphiti_pid")
         model_settings = state.get("model_settings")
@@ -445,6 +457,8 @@ class Runtime:
         return environment
 
     def read_state(self, *, required: bool = True) -> dict[str, object]:
+        """Read persisted runtime state or return an empty mapping when optional."""
+
         if not self.paths.state.exists():
             if required:
                 raise RuntimeError("Graphiti has not been started")

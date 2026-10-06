@@ -1,3 +1,13 @@
+/**
+ * Repository, package, bundle, and project discovery for Node and Bun tools.
+ *
+ * This module is the shared owner for working-directory normalization, project
+ * roots, repository URLs, package names, and Databricks bundle context. Reuse it
+ * instead of adding package-local root-marker walks or Git remote parsing.
+ *
+ * @module
+ */
+
 import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { homedir } from "node:os";

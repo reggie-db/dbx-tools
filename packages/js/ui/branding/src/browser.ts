@@ -9,6 +9,7 @@ const builtInAssets = new Map<string, string>([
   [brandUtils.DEFAULT_BRAND_ASSETS.favicon, dbxToolsAssetDataUrls.iconLight],
 ]);
 
+/** Resolve a brand asset identifier to a browser-loadable URL. */
 export type BrandAssetResolver = (source: string) => string;
 
 /** Resolve built-in package asset ids to portable data URLs. */
@@ -31,6 +32,7 @@ export function brandCssVariables(context: brandUtils.BrandContext): Record<stri
   };
 }
 
+/** Document, root element, asset, title, and favicon behavior for applying a brand. */
 export interface ApplyBrandContextOptions {
   root?: HTMLElement;
   document?: Document;

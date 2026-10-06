@@ -73,6 +73,7 @@ packages/example/server/appkit-demo/index.ts
 packages/js/cli/appkit-env/index.ts
 packages/js/cli/auth/index.ts
 packages/js/cli/dbx-tools/index.ts
+packages/js/cli/graphiti/index.ts
 packages/js/cli/lakebase-proxy/index.ts
 packages/js/cli/model-gateway/index.ts
 packages/js/cli/service/index.ts

@@ -10,6 +10,7 @@ import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
 import { stringUtils } from "@dbx-tools/shared-core";
 import { LOGIN_CLIENT_SOURCE } from "./generated/_login-client.ts";
 
+/** Brand label and validated return path rendered into the standalone sign-in page. */
 export interface LoginPageOptions {
   /** Product/brand name shown in the heading. */
   brandName: string;

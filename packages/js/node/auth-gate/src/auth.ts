@@ -20,6 +20,7 @@ import { migrateAuth } from "./auth-storage.ts";
 
 const logger = log.logger("auth");
 
+/** Decide whether a normalized email address may create or use an account. */
 export type AuthorizeIdentity = (email: string) => boolean | Promise<boolean>;
 
 /** Copy and expiry metadata shared by authentication email renderers. */
@@ -34,6 +35,7 @@ export interface AuthEmailOptions extends AuthEmailCopy {
   brandName: string;
 }
 
+/** Storage, origin, policy, delivery, and expiry settings for passwordless authentication. */
 export interface PasswordlessAuthOptions {
   storage: AuthStorage;
   baseURL: string;
@@ -55,6 +57,7 @@ export interface PasswordlessAuthOptions {
   message?: string;
 }
 
+/** Initialized passwordless HTTP handler, session reader, and storage lifecycle. */
 export interface PasswordlessAuthRuntime {
   readonly basePath: string;
   readonly passkeysEnabled: boolean;

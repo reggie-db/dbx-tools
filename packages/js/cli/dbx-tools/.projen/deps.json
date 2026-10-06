@@ -26,6 +26,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/cli-graphiti",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/cli-lakebase-proxy",
       "version": "workspace:^",
       "type": "runtime"

@@ -3,6 +3,10 @@
 Node filesystem path toolkit for discovery, matching, ignoring, scanning, and
 watching.
 
+This package owns repository-wide path discovery and ignore behavior. Reuse it
+instead of calling `glob`, `minimatch`, or Chokidar directly when results should
+agree with package discovery, generation, docs, cleanup, or watch workflows.
+
 Import this package when Node code needs consistent glob behavior across CLI,
 projen, barrel generation, OpenAPI generation, or docs tooling.
 

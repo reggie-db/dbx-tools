@@ -10,6 +10,10 @@
  * - the `*At` primitives and {@link isNotFoundError}
  * - optional `try*` hooks for native append / copy / move
  *
+ * This class is the repository reuse point for rooted path safety, lifecycle,
+ * portable errors, encoding, and fallback behavior. A backend should implement
+ * the low-level `*At` primitives here rather than recreate the public contract.
+ *
  * @module
  */
 
@@ -130,6 +134,7 @@ function sanitizePathSegment(segment: string): string {
   return segment;
 }
 
+/** Portable error codes exposed by every filesystem backend. */
 export type FileSystemErrorCode =
   | "NOT_FOUND"
   | "ALREADY_EXISTS"
@@ -142,6 +147,7 @@ export type FileSystemErrorCode =
   | "NOT_SUPPORTED"
   | "IO_ERROR";
 
+/** Filesystem operation failure with a portable code and optional path. */
 export class FileSystemError extends Error {
   readonly name = "FileSystemError";
 
@@ -218,6 +224,7 @@ export function mapFileSystemError(
   );
 }
 
+/** Identity, root, mutability, and initialization settings for {@link BaseFileSystem}. */
 export interface BaseFileSystemOptions<TBackend extends string = string> {
   id: string;
   backend: TBackend;

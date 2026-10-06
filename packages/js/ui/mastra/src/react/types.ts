@@ -11,6 +11,7 @@ export type { ExportFormat } from "../support/export.ts";
 // it. Kept dependency-free of the components so both the presentational
 // layer and the `useMastraChat` driver can share them.
 
+/** User-visible lifecycle state of the active chat turn. */
 export type ChatStatus = "submitted" | "streaming" | "ready" | "error";
 
 /**
@@ -111,6 +112,7 @@ export type ThreadSummary = {
  */
 export type ThreadPlacement = "disabled" | "auto" | "left" | "right" | "top";
 
+/** Controlled transcript, composer, thread, model, approval, export, and feedback state. */
 export type ChatViewProps = {
   messages: UIMessage[];
   status: ChatStatus;

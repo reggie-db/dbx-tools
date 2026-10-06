@@ -1,3 +1,5 @@
+"""Resolve model and gateway settings for the native Graphiti launcher."""
+
 from __future__ import annotations
 
 import os
@@ -5,8 +7,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from dbx_tools.core import config
-
-"""Model and gateway settings for the native Graphiti launcher."""
 
 DEFAULT_MODEL_GATEWAY_HOST = "127.0.0.1"
 DEFAULT_MODEL_GATEWAY_PORT = 4400

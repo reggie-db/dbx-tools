@@ -7,6 +7,7 @@ import { loadDocsToolchain } from "./docs-toolchain.mjs";
 import {
   discoverRepositoryPackages,
   groupTitle,
+  packageReadmeIssues,
   posix,
   stripLeadingH1,
   summaryText,
@@ -424,6 +425,12 @@ export const collections = {
 
 function main() {
   const packages = discoverRepositoryPackages(root);
+  for (const pkg of packages) {
+    const issues = packageReadmeIssues(read(pkg.readme));
+    if (issues.length > 0) {
+      throw new Error(`${pkg.relDir}/README.md: ${issues.join("; ")}`);
+    }
+  }
   const guides = discoverGuides();
   const mappings = { byDir: new Map(), byFile: new Map() };
   for (const pkg of packages) {

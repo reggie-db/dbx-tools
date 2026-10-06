@@ -2,6 +2,10 @@
 
 Browser-safe filesystem contract and abstract base for rooted storage backends.
 
+This package owns the portable filesystem shape used across dbx-tools. New
+storage backends should implement `FileSystem` through `BaseFileSystem` rather
+than publish another set of entry, error, path, and operation types.
+
 Key features:
 
 - Portable `FileSystem` interface (read/write/append/copy/move, mkdir/rmdir/readdir/stat/exists)

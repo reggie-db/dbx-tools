@@ -48,6 +48,10 @@
         "types": "./lib/src/definition.d.ts",
         "default": "./lib/src/definition.js"
       },
+      "./icon": {
+        "types": "./lib/src/icon.d.ts",
+        "default": "./lib/src/icon.js"
+      },
       "./service": {
         "types": "./lib/src/service.d.ts",
         "default": "./lib/src/service.js"
@@ -67,6 +71,7 @@
     ".": "./index.ts",
     "./cli": "./src/cli.ts",
     "./definition": "./src/definition.ts",
+    "./icon": "./src/icon.ts",
     "./service": "./src/service.ts",
     "./package.json": "./package.json"
   },

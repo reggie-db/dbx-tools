@@ -3,6 +3,10 @@
 Node-only core helpers for layered configuration, binary installation, process
 execution, locking, and project discovery.
 
+This is the canonical owner for reusable Node and Bun infrastructure. Prefer it
+over package-local environment readers, subprocess wrappers, project-root walks,
+installers, or locking implementations so all consumers share one policy.
+
 Import this package when code needs `node:child_process`, `node:fs`, or
 `node:path`. Browser-safe utilities live in
 [`@dbx-tools/shared-core`](../../shared/core).

@@ -1,3 +1,5 @@
+"""Cross-platform cache directories and cross-process file locking."""
+
 from __future__ import annotations
 
 import os

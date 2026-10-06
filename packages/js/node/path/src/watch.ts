@@ -1,3 +1,14 @@
+/**
+ * Repository-consistent file watching over Chokidar.
+ *
+ * Reuse `watchFiles()` when live workflows must match `findFiles()`
+ * discovery and the central ignore catalogue. The wrapper expands globs once,
+ * prunes ignored directories consistently, and preserves Chokidar's native
+ * watcher result for callers.
+ *
+ * @module
+ */
+
 import { Stats } from "fs";
 import { isAbsolute, relative, resolve } from "path";
 import { ChokidarOptions, MatchFunction, watch } from "chokidar";
@@ -7,6 +18,7 @@ import { ignorePathMatcher } from "./ignore.ts";
 import { pathMatchTests } from "./match.ts";
 import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan.ts";
 
+/** Chokidar options extended with the shared dbx-tools ignore configuration. */
 export interface FileWatchOptions
   extends Omit<ChokidarOptions, "ignored">, Omit<FileScanOptions, "ignore"> {
   ignore?: string | string[] | MatchFunction | MatchFunction[];

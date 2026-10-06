@@ -10,6 +10,7 @@ import {
   renamePasskey,
 } from "./auth-client.ts";
 
+/** Styling options for the authenticated passkey management surface. */
 export interface PasskeyManagerProps {
   className?: string;
 }

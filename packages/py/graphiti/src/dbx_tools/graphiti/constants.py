@@ -1,9 +1,9 @@
+"""Environment names shared by the launcher and Graphiti server process."""
+
 from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-
-"""Environment names shared by the launcher and Graphiti server process."""
 
 UPSTREAM_MCP_PATH_ENV = "UPSTREAM_MCP_PATH"
 PERSISTENCE_ENV = (

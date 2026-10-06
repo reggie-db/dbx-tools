@@ -9,19 +9,19 @@ import {
 import { supportsToolsByFamily } from "./classify.ts";
 
 const FAMILIES = [
-  "bge",
   "claude",
-  "deepseek",
-  "gemini",
-  "gemma",
-  "glm",
   "gpt",
-  "grok",
-  "gte",
-  "inkling",
-  "kimi",
+  "gemini",
   "llama",
+  "grok",
+  "deepseek",
   "qwen",
+  "glm",
+  "kimi",
+  "gemma",
+  "inkling",
+  "bge",
+  "gte",
 ] as const;
 
 const STANDARD: ReasoningEffort[] = ["low", "medium", "high"];
@@ -39,6 +39,12 @@ interface ParsedModelName {
 /** Return the normalized family parsed from a model identity. */
 export function modelFamily(name: string): string | undefined {
   return parseModelName(name)?.family;
+}
+
+/** Rank a family by how major it is; unrecognized families sort last. */
+export function modelFamilyRank(family: string): number {
+  const index = FAMILIES.indexOf(family as (typeof FAMILIES)[number]);
+  return index >= 0 ? index : FAMILIES.length;
 }
 
 /** Normalize a recognized model identity into family, version, and variant tokens. */

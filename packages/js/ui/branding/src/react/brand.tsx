@@ -19,12 +19,14 @@ const BrandReactContext = createContext<BrandState>({
   resolveAsset: resolveBrandAsset,
 });
 
+/** Brand input, asset resolver, and document-application behavior for {@link BrandProvider}. */
 export interface BrandProviderProps extends PropsWithChildren {
   context?: brandUtils.BrandContextInput;
   resolveAsset?: BrandAssetResolver;
   applyToDocument?: boolean;
 }
 
+/** Provide a validated brand context to descendant React components. */
 export function BrandProvider({
   children,
   context,
@@ -41,10 +43,12 @@ export function BrandProvider({
   return <BrandReactContext.Provider value={value}>{children}</BrandReactContext.Provider>;
 }
 
+/** Read the active validated brand context and asset resolver. */
 export function useBrand(): BrandState {
   return useContext(BrandReactContext);
 }
 
+/** Image attributes and light/dark selection used by branded icons and logos. */
 export interface BrandImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "alt"> {
   alt?: string;
   mode?: "auto" | "light" | "dark";
@@ -71,6 +75,7 @@ function BrandImage({
   );
 }
 
+/** Render the active brand icon with automatic light and dark assets. */
 export function BrandIcon(props: BrandImageProps) {
   const { context } = useBrand();
   const { alt, ...imageProps } = props;
@@ -79,6 +84,7 @@ export function BrandIcon(props: BrandImageProps) {
   );
 }
 
+/** Render the active brand logo with automatic light and dark assets. */
 export function BrandLogo(props: BrandImageProps) {
   const { context } = useBrand();
   const { alt, ...imageProps } = props;

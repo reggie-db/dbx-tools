@@ -14,6 +14,7 @@ import {
 
 type Phase = "loading" | "email" | "code" | "enroll" | "authed" | "open";
 
+/** Protected content and optional sign-in copy rendered by {@link AuthGate}. */
 export interface AuthGateProps {
   children: ReactNode;
   title?: string;

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import ts from "typescript";
@@ -169,6 +170,16 @@ function printRecords(label, records) {
 
 function main() {
   const root = process.cwd();
+  const python = spawnSync(
+    process.env.PYTHON ?? "python3",
+    [path.join(root, "docs", "scripts", "check_python_source_docs.py")],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (python.stdout) process.stdout.write(python.stdout);
+  if (python.stderr) process.stderr.write(python.stderr);
+  if (python.status !== 0) {
+    throw new Error("Public Python source documentation validation failed.");
+  }
   const baselineArgument = process.argv.find((argument) => argument.startsWith("--baseline="));
   const baseline = path.resolve(
     root,

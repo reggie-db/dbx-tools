@@ -18,20 +18,25 @@ import envPaths from "env-paths";
 
 const logger = log.logger("auth:storage");
 
+/** Supported persistence choices for Better Auth state. */
 export type AuthStorageMode = "auto" | "lakebase" | "sqlite";
 
+/** Caller-selected authentication storage mode and optional SQLite location. */
 export interface AuthStorageConfig {
   storage?: AuthStorageMode;
   sqlitePath?: string;
 }
 
+/** Authentication storage configuration after defaults and path resolution. */
 export interface ResolvedAuthStorageConfig {
   mode: AuthStorageMode;
   sqlitePath: string;
 }
 
+/** Database adapter value accepted by Better Auth. */
 export type AuthDatabase = NonNullable<BetterAuthOptions["database"]>;
 
+/** Open authentication storage backend and its cleanup lifecycle. */
 export interface AuthStorage {
   kind: "lakebase" | "sqlite" | "memory";
   database: AuthDatabase;

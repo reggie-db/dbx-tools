@@ -1,17 +1,53 @@
 /** Commander entry point for the pure Node Lakebase proxy. */
 
-import { readFileSync } from "node:fs";
+import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
+import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
 import { connectionUrl } from "@dbx-tools/lakebase";
-import { json } from "@dbx-tools/shared-core";
 import { Command, InvalidArgumentError } from "commander";
 
+import { PACKAGE_VERSION } from "../index.ts";
 import { LakebaseProxy } from "./proxy.ts";
 
+/** Injectable service boundary for Lakebase proxy CLI composition and tests. */
+export interface LakebaseProxyCliDependencies {
+  readonly service?: CliServiceCliDependencies;
+}
+
+/** Install-time options persisted in the Lakebase proxy service definition. */
+export interface LakebaseProxyServiceOptions {
+  readonly host?: string;
+  readonly port?: number;
+  readonly startupTimeoutSeconds?: number;
+  readonly profile?: string;
+}
+
+/** Build the tray-only Lakebase proxy service definition. */
+export function lakebaseProxyServiceDefinition(
+  options: LakebaseProxyServiceOptions = {},
+): CliServiceDefinition {
+  return defineService(import.meta.url, {
+    command: {
+      arguments: [
+        "--host",
+        options.host ?? "127.0.0.1",
+        "--port",
+        String(options.port ?? 5432),
+        "--startup-timeout-seconds",
+        String(options.startupTimeoutSeconds ?? 30),
+        ...(options.profile ? ["--profile", options.profile] : []),
+      ],
+    },
+  });
+}
+
 /** Build the Lakebase proxy command-line program. */
-export function buildProgram(name = "dbx lakebase-proxy"): Command {
+export function buildProgram(
+  name = "dbx lakebase-proxy",
+  dependencies: LakebaseProxyCliDependencies = {},
+): Command {
   const program = new Command(name)
     .description("Run a loopback PostgreSQL proxy for Databricks Lakebase")
-    .version(packageVersion())
+    .version(PACKAGE_VERSION)
     .enablePositionalOptions()
     .option("--host <host>", "loopback listener host", "127.0.0.1")
     .option("--port <port>", "listener port", port, 5432)
@@ -41,6 +77,17 @@ export function buildProgram(name = "dbx lakebase-proxy"): Command {
       if (!target) throw new InvalidArgumentError("url requires --target or LAKEBASE_ENDPOINT");
       process.stdout.write(`${connectionUrl(target, options.host, options.port)}\n`);
     });
+  let installCommand!: Command;
+  const serviceCommand = buildServiceCommand(() => {
+    return lakebaseProxyServiceDefinition(installCommand.opts<LakebaseProxyServiceOptions>());
+  }, dependencies.service);
+  installCommand = serviceCommand.commands.find((command) => command.name() === "install")!;
+  installCommand
+    .option("--host <host>", "loopback listener host", "127.0.0.1")
+    .option("--port <port>", "listener port", port, 5432)
+    .option("--startup-timeout-seconds <seconds>", "startup timeout", integer, 30)
+    .option("--profile <profile>", "exact Databricks profile");
+  program.addCommand(serviceCommand);
   return program;
 }
 
@@ -56,21 +103,6 @@ function port(value: string): number {
   const parsed = integer(value);
   if (parsed > 65_535) throw new InvalidArgumentError("port must not exceed 65535");
   return parsed;
-}
-
-function packageVersion(): string {
-  for (const location of [
-    new URL("../package.json", import.meta.url),
-    new URL("../../package.json", import.meta.url),
-  ]) {
-    try {
-      const version = json.parseRecord(readFileSync(location, "utf8"))?.version;
-      if (typeof version === "string" && version) return version;
-    } catch {
-      continue;
-    }
-  }
-  throw new Error("could not resolve @dbx-tools/cli-lakebase-proxy version");
 }
 
 function waitForShutdown(): Promise<void> {

@@ -75,8 +75,9 @@ export class LakebaseProxy {
       });
     });
     const address = server.address();
-    if (!address || typeof address === "string")
+    if (!address || typeof address === "string") {
       throw new Error("Lakebase listener has no address");
+    }
     logger.info("Lakebase proxy listening", { host: address.address, port: address.port });
     return { host: address.address, port: address.port };
   }

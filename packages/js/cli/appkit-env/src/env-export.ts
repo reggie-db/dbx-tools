@@ -41,6 +41,7 @@ export function diffEnv(
   return out;
 }
 
+/** Select Windows `set` output on Windows and POSIX `export` output elsewhere. */
 export function defaultEnvExportFormat(
   platform: NodeJS.Platform = process.platform,
 ): EnvExportFormat {

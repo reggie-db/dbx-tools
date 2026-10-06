@@ -1,5 +1,8 @@
 /**
- * Dependency-free object + iterable utilities.
+ * Dependency-free object + iterable utilities and the canonical repository
+ * owner for stable identity, loose scalar coercion, record guards, sequences,
+ * and common object transforms. Reuse these helpers across packages instead of
+ * adding local equivalents with different edge-case behavior.
  *
  * Value guards / coercions / shape types: {@link isRecord} narrows parsed JSON
  * to a record, {@link toNumber} coerces a hand-typed numeral, {@link toBoolean}

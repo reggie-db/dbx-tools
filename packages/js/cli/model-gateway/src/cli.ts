@@ -9,7 +9,6 @@ import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service
 import { Command, InvalidArgumentError } from "commander";
 
 import { PACKAGE_VERSION } from "../index.ts";
-import { modelGatewayTrayIcon } from "./_tray-icon.ts";
 import { DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
 import { startModelGateway } from "./server.ts";
 
@@ -46,8 +45,6 @@ export function modelGatewayServiceDefinition(
   const port = options.port ?? DEFAULT_PORT;
   parsePort(String(port));
   return defineService(import.meta.url, {
-    icon: modelGatewayTrayIcon(),
-    isTemplateIcon: process.platform === "darwin",
     command: {
       environment: { NODE_ENV: "production" },
       arguments: [

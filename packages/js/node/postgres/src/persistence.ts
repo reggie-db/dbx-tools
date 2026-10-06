@@ -1,11 +1,24 @@
+/**
+ * Durable replay and pointer payloads for {@link PostgresTopicBus}.
+ *
+ * This module owns schema provisioning, grants, TTL cleanup, replay cursors,
+ * and open/restricted persistence scopes. Reuse it when a topic-bus consumer
+ * needs history or larger payloads instead of creating a parallel message table.
+ *
+ * @module
+ */
+
 import { object } from "@dbx-tools/shared-core";
 import type { QueryResultRow } from "pg";
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
 import { withAdvisoryTransactionLock } from "./advisory-lock.ts";
 import type { TopicMessage } from "./topic-bus.ts";
 
+/** Storage and grant tier for persisted topic messages. */
 export type TopicPersistenceScope = "open" | "restricted";
+/** PostgreSQL interval text or millisecond duration accepted for message expiry. */
 export type DurationInput = string | number;
+/** Optional schema, table, expiry, payload, and provisioning settings for topic persistence. */
 export interface TopicBusPersistenceOptions {
   schema?: string;
   scope?: TopicPersistenceScope;
@@ -15,6 +28,7 @@ export interface TopicBusPersistenceOptions {
   cleanupBatchSize?: number;
   provision?: boolean;
 }
+/** Complete persistence settings after defaults are applied. */
 export interface ResolvedTopicBusPersistenceOptions {
   schema: string;
   scope: TopicPersistenceScope;
@@ -24,6 +38,7 @@ export interface ResolvedTopicBusPersistenceOptions {
   cleanupBatchSize: number;
   provision: boolean;
 }
+/** Persisted topic message plus replay cursor, scope, and expiry metadata. */
 export interface StoredTopicMessage<
   TBody extends object.SerializableValue = object.SerializableValue,
 > {
@@ -32,6 +47,7 @@ export interface StoredTopicMessage<
   scope: TopicPersistenceScope;
   message: TopicMessage<TBody>;
 }
+/** Ordered replay page and optional cursor for the next page. */
 export interface TopicHistoryPage<
   TBody extends object.SerializableValue = object.SerializableValue,
 > {
@@ -49,6 +65,7 @@ const quote = (value: string): string => `"${value.replaceAll('"', '""')}"`;
 const table = (options: ResolvedTopicBusPersistenceOptions, scope: TopicPersistenceScope): string =>
   `${quote(options.schema)}.${quote(options.tables[scope])}`;
 
+/** Validate persistence scope and apply stable schema, table, TTL, and cleanup defaults. */
 export function resolvePersistenceOptions(
   value: true | TopicBusPersistenceOptions,
 ): ResolvedTopicBusPersistenceOptions {
@@ -71,6 +88,7 @@ export function resolvePersistenceOptions(
   };
 }
 
+/** Create the persistence schema, open and restricted tables, and replay indexes. */
 export async function provisionMessageBusSchema(
   pool: PgPoolLike,
   options: ResolvedTopicBusPersistenceOptions,
@@ -98,6 +116,7 @@ export async function provisionMessageBusSchema(
   });
 }
 
+/** Build SQL grants for roles that may read and write one persistence scope. */
 export function messageBusGrantStatements(
   roles: string | readonly string[],
   scope: TopicPersistenceScope,

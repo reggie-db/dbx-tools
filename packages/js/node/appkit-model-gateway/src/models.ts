@@ -5,7 +5,7 @@
  */
 
 import { isChatClass } from "@dbx-tools/model/classes";
-import { modelFamily } from "@dbx-tools/model/policy";
+import { modelFamily, modelFamilyRank } from "@dbx-tools/model/policy";
 import type {
   CodexModel,
   CodexModelListResponse,
@@ -124,10 +124,11 @@ function codexModel(target: ModelTarget, priority: number): CodexModel {
 }
 
 /**
- * Order listed models in three groups: non-embedding models with a detected
- * family, the remaining non-embedding models, then embeddings. Each group is
- * sorted by the published label (`display_name` for Codex, `name` otherwise)
- * with numeric segments ordered naturally so "Veo 3.1" precedes "Veo 3.10".
+ * Order listed models in three groups: major-provider chat families, the
+ * remaining chat models, then embeddings. Families keep a fixed provider
+ * order; each family and the later groups sort by the published label
+ * (`display_name` for Codex, `name` otherwise). Numeric segments sort
+ * naturally so "Veo 3.1" precedes "Veo 3.10".
  */
 function compareCatalogueTargets(
   left: ModelTarget,
@@ -136,6 +137,12 @@ function compareCatalogueTargets(
 ): number {
   const group = catalogueGroup(left) - catalogueGroup(right);
   if (group !== 0) return group;
+  const leftFamily = catalogueFamily(left);
+  const rightFamily = catalogueFamily(right);
+  if (leftFamily && rightFamily) {
+    const familyOrder = modelFamilyRank(leftFamily) - modelFamilyRank(rightFamily);
+    if (familyOrder !== 0) return familyOrder;
+  }
   return compareCatalogueLabel(label(left), label(right));
 }
 
@@ -144,14 +151,25 @@ function catalogueGroup(target: ModelTarget): number {
   return catalogueFamily(target) ? 0 : 1;
 }
 
+const IDENTITY_PREFIXES = new Set(["databricks", "system", "ai", "meta", "google", "openai", "anthropic"]);
+
 function catalogueFamily(target: ModelTarget): string | undefined {
-  const stamped = target.family?.trim() || target.endpoint?.family?.trim();
-  return (
-    modelFamily(target.displayName) ??
-    modelFamily(target.id) ??
-    (target.endpoint?.name ? modelFamily(target.endpoint.name) : undefined) ??
-    (stamped ? modelFamily(stamped) : undefined)
-  );
+  if (isEmbeddingTarget(target)) return undefined;
+  for (const identity of [target.displayName, target.id, target.endpoint?.name]) {
+    if (!identity) continue;
+    const family = catalogueFamilyFromIdentity(identity);
+    if (family) return family;
+  }
+  return undefined;
+}
+
+function catalogueFamilyFromIdentity(identity: string): string | undefined {
+  const tokens = identity.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const start = tokens.find((token) => !IDENTITY_PREFIXES.has(token));
+  if (!start) return undefined;
+  if (start === "veo") return "gemini";
+  const family = modelFamily(identity);
+  return family && start === family ? family : undefined;
 }
 
 function isEmbeddingTarget(target: ModelTarget): boolean {

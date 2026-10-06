@@ -13,6 +13,10 @@
  * - {@link ignorePathMatcher} - returns a single {@link PathMatcher} for
  *   {@link findFiles} and {@link watchFiles} (keeps `test: true` by default).
  *
+ * This is the repository owner for generated, dependency, VCS, temporary, test,
+ * and lockfile ignore policy. Extend these groups instead of copying ignore
+ * lists into individual generators or watchers.
+ *
  * @module
  */
 

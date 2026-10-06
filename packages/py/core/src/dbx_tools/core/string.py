@@ -1,3 +1,5 @@
+"""Identifier tokenization compatible with shared dbx-tools naming rules."""
+
 from __future__ import annotations
 
 import re

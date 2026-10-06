@@ -7,6 +7,7 @@ import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
 import { configUtils, projectUtils } from "@dbx-tools/core";
 import type { JSONSchema7 } from "json-schema";
 
+/** Optional sidecar ports, Python command, and journal namespace for the Graphiti plugin. */
 export interface GraphitiPluginConfig extends BasePluginConfig {
   graphitiPort?: number;
   modelGatewayPort?: number;
@@ -15,6 +16,7 @@ export interface GraphitiPluginConfig extends BasePluginConfig {
   journalNamespace?: string;
 }
 
+/** Graphiti plugin configuration after environment values and defaults are applied. */
 export interface ResolvedGraphitiPluginConfig extends GraphitiPluginConfig {
   graphitiPort: number;
   modelGatewayPort: number;
@@ -23,6 +25,7 @@ export interface ResolvedGraphitiPluginConfig extends GraphitiPluginConfig {
   journalNamespace: string;
 }
 
+/** AppKit manifest schema for caller-provided Graphiti plugin configuration. */
 export const GRAPHITI_CONFIG_SCHEMA = {
   type: "object",
   properties: {

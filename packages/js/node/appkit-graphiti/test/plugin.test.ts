@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { createMockRouter } from "@databricks/appkit/testing";
-import { GRAPHITI_PYTHON_VERSION } from "../src/_python-runtime.ts";
-import { GraphitiPlugin, ensureGraphitiModelGateway, ensureGraphitiPython } from "../src/plugin.ts";
+import { GraphitiPlugin } from "../src/plugin.ts";
 
 const SCOPED_TOOL_NAMES = [
   "add_memory",
@@ -48,14 +47,16 @@ function fixtureTool(name: string) {
 }
 
 describe("GraphitiPlugin routes", () => {
-  it("depends on the foreground model gateway instead of Rust or the umbrella CLI", () => {
+  it("delegates bootstrap to the Graphiti CLI instead of owning service dependencies", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as {
       dependencies?: Record<string, string>;
     };
 
-    assert.equal(manifest.dependencies?.["@dbx-tools/cli-model-gateway"], "workspace:^");
+    assert.equal(manifest.dependencies?.["@dbx-tools/cli-graphiti"], "workspace:^");
+    assert.equal(manifest.dependencies?.["@dbx-tools/cli-service"], undefined);
+    assert.equal(manifest.dependencies?.["@dbx-tools/cli-model-gateway"], undefined);
     assert.equal(manifest.dependencies?.["@dbx-tools/rust-binary"], undefined);
     assert.equal(manifest.dependencies?.["@dbx-tools/cli"], undefined);
   });
@@ -70,41 +71,6 @@ describe("GraphitiPlugin routes", () => {
 
     await plugin.setup();
     release();
-  });
-
-  it("installs the matching Python package when its version is absent or stale", async () => {
-    const calls: Array<{ file: string; args: string[] }> = [];
-    await ensureGraphitiPython("python3", async (file, args) => {
-      calls.push({ file, args });
-      if (calls.length === 1) throw new Error("missing module");
-    });
-
-    assert.equal(calls[0]?.file, "python3");
-    assert.equal(calls[0]?.args[0], "-c");
-    assert.match(calls[0]?.args[1] ?? "", /importlib\.metadata\.version/);
-    assert.deepEqual(calls[1], { file: "python3", args: ["-m", "pip", "--version"] });
-    assert.ok(calls[2]?.args.includes("--upgrade"));
-    assert.equal(calls[2]?.args.at(-1), `dbx-tools-graphiti==${GRAPHITI_PYTHON_VERSION}`);
-  });
-
-  it("bootstraps pip when the App Python omits it", async () => {
-    const calls: string[][] = [];
-    await ensureGraphitiPython("python3", async (_file, args) => {
-      calls.push(args);
-      if (calls.length < 3) throw new Error("missing");
-    });
-
-    assert.match(calls[2]?.[1] ?? "", /urllib\.request/);
-    assert.equal(calls[3]?.at(-1), `dbx-tools-graphiti==${GRAPHITI_PYTHON_VERSION}`);
-  });
-
-  it("resolves the foreground TypeScript model gateway by absolute path", () => {
-    const command = ensureGraphitiModelGateway(
-      () => "/cache/dbx-model-gateway/bin/dbx-model-gateway.ts",
-    );
-
-    assert.match(command, new RegExp(process.execPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.match(command, /dbx-model-gateway\.ts/);
   });
 
   it("registers the MCP transport on the AppKit server", () => {

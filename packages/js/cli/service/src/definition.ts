@@ -1,12 +1,17 @@
 /**
  * Serializable configuration for a system-tray CLI service.
  *
+ * This module owns the cross-package service definition contract, package
+ * identity defaults, process command, icon, and menu schema. Reuse
+ * {@link defineService} instead of maintaining another service manifest shape.
+ *
  * @module
  */
 
 import { z } from "zod";
 
 import { resolveServicePackage, servicePackageDefaults } from "./_package.ts";
+import { serviceTrayIcon } from "./icon.ts";
 
 const SAFE_URL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 
@@ -93,9 +98,9 @@ export type CliServiceDefinition = z.infer<typeof CliServiceDefinitionSchema>;
 /** Package-derived service fields plus caller-owned icon, process, and menu options. */
 export type CliServiceDefinitionOptions = Omit<
   CliServiceDefinition,
-  "packageName" | "id" | "name" | "version"
+  "packageName" | "id" | "name" | "version" | "icon" | "isTemplateIcon"
 > &
-  Partial<Pick<CliServiceDefinition, "id" | "name" | "version">>;
+  Partial<Pick<CliServiceDefinition, "id" | "name" | "version" | "icon" | "isTemplateIcon">>;
 
 /** Define a service from an owning module URL or installed package name. */
 export function defineService(
@@ -110,6 +115,8 @@ export function defineService(
     id: options.id ?? defaults.id,
     name: options.name ?? defaults.name,
     version: options.version ?? pkg.version,
+    icon: options.icon ?? serviceTrayIcon(),
+    isTemplateIcon: options.isTemplateIcon ?? process.platform === "darwin",
   });
 }
 

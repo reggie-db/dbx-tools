@@ -3,6 +3,10 @@
 Dependency-free Python configuration, identity, and mise-backed executable
 helpers shared by dbx-tools packages.
 
+This is the Python owner for layered configuration, stable identity, cache
+locking, and executable resolution. Reuse these modules instead of creating a
+Python-only variant of policy already shared with the Node packages.
+
 Install from PyPI:
 
 ```bash

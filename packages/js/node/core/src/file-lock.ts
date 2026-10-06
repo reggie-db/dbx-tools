@@ -64,6 +64,7 @@ export interface FileLockAcquisition {
   backend: FileLockBackend;
 }
 
+/** Backend selection, wait policy, and lifecycle callbacks for a cross-process lock. */
 export interface FileLockOptions {
   /**
    * Directory for lockfiles. Defaults to `$TMPDIR/dbx-tools-locks`.

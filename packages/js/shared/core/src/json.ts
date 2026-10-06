@@ -16,6 +16,9 @@
  * a zod schema when the payload has a contract; these only get you from `string`
  * to a safely typed starting point.
  *
+ * This is the repository-wide owner for non-throwing JSON parsing. Reuse these
+ * helpers instead of repeating local `try { JSON.parse(...) }` wrappers.
+ *
  * @module
  */
 

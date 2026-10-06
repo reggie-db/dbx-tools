@@ -103,3 +103,8 @@ this directly with `package.json` plus `pyproject.toml` or `requirements.txt`.
 
 - `config` resolves sidecar ports, the Python command, and journal namespace;
 - `plugin` starts and supervises Graphiti and Caddy.
+
+Python bootstrap and model-gateway command resolution belong to
+`@dbx-tools/cli-graphiti/runtime`. Local desktop lifecycle belongs to
+`dbx graphiti service`, which reuses `@dbx-tools/cli-service`; this AppKit plugin
+does not own an installer or desktop service.

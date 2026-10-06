@@ -3,6 +3,10 @@
 Connection-correct PostgreSQL primitives for Node.js: advisory locks that hold the
 connection they lock, and a structured topic bus over `LISTEN`/`NOTIFY`.
 
+This package owns reusable PostgreSQL coordination behavior. Prefer its locks,
+topic bus, persistence, identity, and connection helpers over local SQL snippets
+or parallel message envelopes so Node and Python services remain compatible.
+
 Both work against a plain `pg.Pool` or anything structurally compatible with one,
 including the pool AppKit's Lakebase plugin exports — so a Databricks App gets
 them without a second database client or connection pool.

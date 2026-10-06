@@ -137,6 +137,13 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     async () => (await import("@dbx-tools/cli-model-gateway/cli")).buildProgram,
   );
 
+  addForwardedCommand(
+    program,
+    "graphiti",
+    "Run Graphiti or manage its current-user desktop service",
+    async () => (await import("@dbx-tools/cli-graphiti/cli")).buildProgram,
+  );
+
   return program;
 }
 

@@ -9,15 +9,27 @@ import { modelGateway } from "@dbx-tools/appkit-model-gateway/plugin";
 import { sendHealth } from "@dbx-tools/appkit-model-gateway/routes";
 import { workspaceClient } from "@dbx-tools/databricks";
 
-import { DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
+import { DEFAULT_BODY_LIMIT, DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
 
-export { DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
+export { DEFAULT_BODY_LIMIT, DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
 
 /** Foreground model-gateway server options. */
 export interface StartModelGatewayOptions {
+  readonly bodyLimit?: string;
   readonly host?: string;
   readonly port?: number;
   readonly profile?: string;
+}
+
+/** Resolve AppKit server settings for the loopback model gateway. */
+export function modelGatewayServerOptions(
+  options: StartModelGatewayOptions = {},
+): NonNullable<Parameters<typeof server>[0]> {
+  return {
+    bodyLimit: options.bodyLimit ?? DEFAULT_BODY_LIMIT,
+    host: options.host ?? DEFAULT_HOST,
+    port: options.port ?? DEFAULT_PORT,
+  };
 }
 
 /** Start the foreground model gateway and keep its AppKit server active. */
@@ -27,13 +39,7 @@ export async function startModelGateway(options: StartModelGatewayOptions = {}):
   });
   await createApp({
     client,
-    plugins: [
-      modelGateway(),
-      server({
-        host: options.host ?? DEFAULT_HOST,
-        port: options.port ?? DEFAULT_PORT,
-      }),
-    ],
+    plugins: [modelGateway(), server(modelGatewayServerOptions(options))],
     onPluginsReady(appkit) {
       appkit.server.extend((application) => {
         application.get("/api/healthz", (_request, response) => {

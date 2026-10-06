@@ -10,6 +10,7 @@ export * as protocol from "./src/protocol.ts";
 export * as proxy from "./src/proxy.ts";
 export { CancellationRegistry } from "./src/cancellation.ts";
 export type { CancellationTarget, CancellationForwarder } from "./src/cancellation.ts";
+export type { LakebaseProxyCliDependencies, LakebaseProxyServiceOptions } from "./src/cli.ts";
 export { SSL_REQUEST, CANCEL_REQUEST, PROTOCOL_3, PostgresProtocolError } from "./src/protocol.ts";
 export type { StartupMessage, CancelMessage, InitialMessage } from "./src/protocol.ts";
 export { LakebaseProxy } from "./src/proxy.ts";

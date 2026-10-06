@@ -1,3 +1,5 @@
+"""Stable identity serialization for Python values shared with TypeScript."""
+
 from __future__ import annotations
 
 import math

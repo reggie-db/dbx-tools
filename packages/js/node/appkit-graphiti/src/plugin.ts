@@ -3,11 +3,8 @@
  *
  * @module
  */
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:net";
-import { resolve as resolvePath } from "node:path";
-import { promisify } from "node:util";
 import {
   ConfigurationError,
   Plugin,
@@ -30,14 +27,13 @@ import {
   pluginRegistry,
   toolkitEntries,
 } from "@dbx-tools/appkit";
-import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
+import { ensureGraphitiModelGateway, ensureGraphitiPython } from "@dbx-tools/cli-graphiti/runtime";
 import { configUtils } from "@dbx-tools/core";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
 import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";
 import concurrently, { type Command, type ConcurrentlyResult } from "concurrently";
 import type express from "express";
-import { GRAPHITI_PYTHON_VERSION } from "./_python-runtime.ts";
 import {
   GRAPHITI_CONFIG_SCHEMA,
   resolveGraphitiConfig,
@@ -77,6 +73,7 @@ interface UserMcpServer {
   server: MCPServer;
 }
 
+/** AppKit plugin that runs Graphiti sidecars and publishes user-scoped memory tools. */
 export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements ToolProvider {
   static manifest: PluginManifest<"graphiti"> = {
     name: "graphiti",
@@ -387,49 +384,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
   }
 }
 
-type ExecPython = (file: string, args: string[]) => Promise<unknown>;
-
-/** Ensure Databricks Apps has the Python sidecar matching this Node package. */
-export async function ensureGraphitiPython(
-  python: string,
-  run: ExecPython = (file, args) => promisify(execFile)(file, args),
-): Promise<void> {
-  try {
-    await run(python, [
-      "-c",
-      `import importlib.metadata; assert importlib.metadata.version('dbx-tools-graphiti') == '${GRAPHITI_PYTHON_VERSION}'`,
-    ]);
-  } catch {
-    try {
-      await run(python, ["-m", "pip", "--version"]);
-    } catch {
-      await run(python, [
-        "-c",
-        "import urllib.request; exec(urllib.request.urlopen('https://bootstrap.pypa.io/get-pip.py').read())",
-        "--user",
-        "--break-system-packages",
-      ]);
-    }
-    await run(python, [
-      "-m",
-      "pip",
-      "install",
-      "--disable-pip-version-check",
-      "--upgrade",
-      "--user",
-      "--break-system-packages",
-      `dbx-tools-graphiti==${GRAPHITI_PYTHON_VERSION}`,
-    ]);
-  }
-}
-
-/** Resolve the foreground TypeScript model-gateway command used by Graphiti. */
-export function ensureGraphitiModelGateway(
-  executable: () => string = () => resolveServicePackageBin("@dbx-tools/cli-model-gateway"),
-): string {
-  return commandLine([process.execPath, resolvePath(executable())]);
-}
-
+/** AppKit registration factory for {@link GraphitiPlugin}. */
 export const graphiti = toPlugin(GraphitiPlugin);
 
 function executionContextUserId(): string {

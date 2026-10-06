@@ -41,9 +41,15 @@ _MAX_RECONNECT_DELAY = 5.0
 
 
 class AsyncEngineLike(Protocol):
-    def begin(self) -> Any: ...
+    """Async SQLAlchemy engine surface required by the topic bus."""
 
-    async def raw_connection(self) -> Any: ...
+    def begin(self) -> Any:
+        """Return an asynchronous transaction context manager."""
+        ...
+
+    async def raw_connection(self) -> Any:
+        """Check out the driver connection used for LISTEN notifications."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)

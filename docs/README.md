@@ -3,6 +3,32 @@
 This directory holds the docs-site generator. Any `docs/*.md` added beside it
 becomes a hand-written guide on the site; there are none today.
 
+## Write Package Guides For Users
+
+Package READMEs are product guides, not implementation notes. Follow the same
+progression as AppKit documentation:
+
+1. Open with the outcome the package enables and why a user would choose it.
+2. Show the shortest successful path with a runnable example.
+3. Organize the rest around user tasks, choices, expected behavior, and limits.
+4. Put module lists and generated API references last.
+
+Prefer headings such as `Quick Start`, `Choose A Target`, `Run As A Service`,
+and `Handle Errors`. Avoid leading with ownership boundaries, internal classes,
+dependency graphs, protocol routing, caches, or build details. Include those
+only when they change how a caller uses or operates the package.
+
+Every published package README must have a useful opening summary, at least two
+task-oriented H2 sections, and a runnable fenced example. The docs generator
+checks this structure before producing the site. Because the first prose
+paragraph is also used in package indexes and `llms.txt`, make it a direct value
+statement rather than a technical inventory.
+
+Public TypeScript declarations need JSDoc that explains caller-visible purpose,
+inputs, outputs, errors, and lifecycle constraints where relevant. Public Python
+classes and functions need equivalent docstrings. Generated API pages should
+add detail to the README rather than compensate for missing task guidance.
+
 ## Docs site
 
 The docs site is generated from existing README files and rendered with Astro
@@ -22,9 +48,10 @@ Source of truth:
   and README summary rules shared by both generators.
 - `docs/toolchain.json` pins the exact Astro, Starlight, TypeDoc, and TypeDoc
   Markdown versions written into the generated site package.
-- `docs/scripts/check-source-docs.mjs` rejects new undocumented handwritten
-  TypeScript declarations exposed by package export maps. Its committed baseline
-  ratchets downward as existing declarations are documented.
+- `docs/scripts/check-source-docs.mjs` rejects undocumented handwritten Python
+  declarations and new undocumented TypeScript declarations exposed by package
+  export maps. The TypeScript baseline ratchets downward as existing
+  declarations are documented.
 - The generated Starlight app under `.docs-build/site/` configures navigation,
   static search, edit links, and the GitHub Pages build output.
 

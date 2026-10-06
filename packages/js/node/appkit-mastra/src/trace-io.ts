@@ -46,6 +46,7 @@ const AGENT_TURN_ROUTE = /^(?:\/agents\/[^/]+\/(?:stream|generate)(?:\/|$)|\/cha
 
 /** Attribute keys the MLflow UC `*_trace_unified` view reads from the root span. */
 export const MLFLOW_SPAN_INPUTS_ATTR = "mlflow.spanInputs";
+/** Root-span attribute consumed as chat output by MLflow unified trace views. */
 export const MLFLOW_SPAN_OUTPUTS_ATTR = "mlflow.spanOutputs";
 
 interface TraceTarget {

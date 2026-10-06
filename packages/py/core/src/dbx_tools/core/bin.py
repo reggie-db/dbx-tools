@@ -1,3 +1,5 @@
+"""Install mise-managed executables under locks and create async processes."""
+
 from __future__ import annotations
 
 import asyncio
@@ -15,8 +17,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
-"""Locked mise-backed executable installation and async process creation."""
 
 from .cache import file_lock, platform_cache_root
 

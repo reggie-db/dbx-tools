@@ -1,3 +1,15 @@
+/**
+ * Browser-safe function lifecycle helpers shared across dbx-tools packages.
+ *
+ * This module is the repository owner for zero-argument memoization, including
+ * in-flight promise sharing, TTL expiry, and rejection eviction. Reuse
+ * {@link memoize} instead of adding package-local once/cache wrappers; add a new
+ * primitive here when it is dependency-free and useful in both browser and
+ * server code.
+ *
+ * @module
+ */
+
 /** Cache lifetime controls for {@link memoize}; failures are always evicted. */
 export interface MemoizeOptions {
   /**

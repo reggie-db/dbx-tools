@@ -45,6 +45,7 @@ export interface TunnelOptions {
   frpProxyName?: string;
 }
 
+/** Fully resolved listener, gate, and transport settings used to start a tunnel. */
 export interface ResolvedTunnelOptions {
   /** The port the wrapper itself listens on - what portr forwards to. */
   publicPort: number;
@@ -65,6 +66,7 @@ export interface ResolvedTunnelOptions {
   frp: ReturnType<typeof frp.resolveFrpConfig>;
 }
 
+/** Resolve CLI flag values through the owning tunnel and auth-gate configuration rules. */
 export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOptions {
   // The Databricks Apps runtime contract: the platform routes to
   // DATABRICKS_APP_PORT, so the WRAPPER claims it and the wrapped app is moved

@@ -1,3 +1,5 @@
+"""Cyclopts helpers for forwarding arguments after a command-line separator."""
+
 from __future__ import annotations
 
 import sys

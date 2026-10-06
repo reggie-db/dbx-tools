@@ -8,5 +8,5 @@ export * as cli from "./src/cli.ts";
 export * as defaults from "./src/defaults.ts";
 export * as server from "./src/server.ts";
 export type { ModelGatewayCliDependencies, ModelGatewayServiceOptions } from "./src/cli.ts";
-export { DEFAULT_HOST, DEFAULT_PORT } from "./src/defaults.ts";
+export { DEFAULT_HOST, DEFAULT_PORT, DEFAULT_BODY_LIMIT } from "./src/defaults.ts";
 export type { StartModelGatewayOptions } from "./src/server.ts";

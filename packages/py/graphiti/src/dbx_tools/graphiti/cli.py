@@ -1,3 +1,5 @@
+"""Command-line interface for the native Graphiti stack."""
+
 from __future__ import annotations
 
 import json
@@ -10,8 +12,6 @@ from cyclopts import App, Parameter
 from ._cli import run_forwarding_app
 from .runtime import Runtime
 from .settings import ModelSettings
-
-"""Command-line interface for the native Graphiti stack."""
 
 _APP = App(
     name="dbx-graphiti",
@@ -147,6 +147,8 @@ def _bind_forwarded(options: object, forwarded: list[str]) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    """Run the Graphiti CLI, defaulting to the start command."""
+
     run_forwarding_app(
         _APP,
         argv,

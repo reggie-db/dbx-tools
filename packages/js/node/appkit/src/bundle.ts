@@ -10,15 +10,24 @@
 import { profile as authProfile } from "@dbx-tools/auth";
 import { configUtils } from "@dbx-tools/core";
 
+/** Unstructured JSON result returned by Databricks bundle validation. */
 export type BundleValidateJson = Record<string, unknown>;
+/** Parsed AppKit or bundle configuration file. */
 export type ConfigFile = configUtils.ConfigFile;
+/** Scalar or structured value accepted by a generated configuration map. */
 export type ConfigMapValue = configUtils.ConfigMapValue;
+/** Named configuration layer consulted while resolving application values. */
 export type ConfigSource = configUtils.ConfigSource;
+/** Options controlling layered configuration lookup and bundle profile selection. */
 export type ResolveConfigValueOptions = configUtils.ConfigOptions;
 
+/** Schema for one Databricks App resource entry in bundle configuration. */
 export const bundleAppResourceSchema = configUtils.bundleResourceSchema;
+/** Flatten an `app.yaml` environment map into process-ready string values. */
 export const flattenAppYamlEnv = configUtils.flattenAppEnv;
+/** Flatten Databricks bundle application environment entries into string values. */
 export const flattenAppEnv = configUtils.flattenBundleEnv;
+/** Resolve the nearest Databricks bundle configuration path for a working directory. */
 export const getBundlePath = configUtils.getBundlePath;
 
 /** Load the active Databricks bundle configuration. */

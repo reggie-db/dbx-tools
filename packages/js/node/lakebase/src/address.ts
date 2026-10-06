@@ -1,4 +1,12 @@
-/** Node-native Lakebase PostgreSQL address parsing and local proxy URLs. */
+/**
+ * Lakebase target parsing and local PostgreSQL proxy URL formatting.
+ *
+ * This module owns the accepted project, branch, endpoint, database, hostname,
+ * and PostgreSQL URL forms used across AppKit, the proxy, and Python bindings.
+ * Reuse it instead of adding another Lakebase resource-path or SSL-mode parser.
+ *
+ * @module
+ */
 
 import * as object from "@dbx-tools/shared-core/object";
 

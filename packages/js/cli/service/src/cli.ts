@@ -1,5 +1,8 @@
 /**
- * Commander command group for a system-tray service lifecycle.
+ * Commander command group for the shared system-tray service lifecycle.
+ *
+ * Consuming CLIs should mount {@link buildServiceCommand} instead of defining
+ * package-local install/start/stop/status commands with divergent behavior.
  *
  * @module
  */

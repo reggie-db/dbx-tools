@@ -2,6 +2,9 @@
  * Tagged, leveled logging for every runtime - the one logger the whole
  * monorepo shares.
  *
+ * Import this module instead of constructing package-local console wrappers so
+ * log levels, tags, formatting, and browser behavior remain consistent.
+ *
  * {@link logger} resolves a tagged {@link Logger} through a synchronous console
  * sink, then upgrades its server-side formatter when `node:util` resolves.
  * Keeping the sink dependency-free prevents browser bundlers from retaining an

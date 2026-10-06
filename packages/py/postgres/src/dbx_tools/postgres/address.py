@@ -16,6 +16,8 @@ from ._generated.node.postgres.identity import (
 
 
 class NativeSslMode(Enum):
+    """PostgreSQL SSL modes supported by the shared Lakebase address parser."""
+
     REQUIRE = "require"
     DISABLE = "disable"
     PREFER = "prefer"
@@ -27,6 +29,8 @@ SSL_MODES: tuple[str, ...] = tuple(mode.value for mode in NativeSslMode)
 
 @dataclass(frozen=True, slots=True)
 class ParsedAddress:
+    """Normalized project, endpoint, database, user, host, and SSL address fields."""
+
     project: str | None = None
     branch: str | None = None
     endpoint: str | None = None
@@ -43,10 +47,14 @@ LakebaseConnectionInputs: TypeAlias = ParsedAddress
 
 
 def parse_resource_path(input: str | None) -> ParsedAddress:
+    """Parse a canonical Lakebase project, branch, endpoint, or database resource path."""
+
     return _from_node(_node_parse_resource_path(input))
 
 
 def parse_address(input: str | None) -> ParsedAddress:
+    """Parse a PostgreSQL URL, Lakebase resource path, hostname, or project ID."""
+
     return _from_node(_node_parse_address(input))
 
 
