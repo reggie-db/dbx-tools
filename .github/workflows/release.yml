@@ -71,6 +71,10 @@ jobs:
         id: install_cli_documentation_parser
         if: ${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' }}
         run: python -m pip install -r docs/requirements.txt
+      - name: Setup validation uv
+        id: setup_validation_uv
+        if: ${{ steps.release.outputs.validation == 'true' || steps.release.outputs.pypi == 'true' }}
+        uses: astral-sh/setup-uv@v7
       - name: Validate docs:check-source
         id: validate_docs_check-source
         if: ${{ success() && steps.release.outputs.validation == 'true' }}
@@ -79,6 +83,18 @@ jobs:
         id: validate_docs_check-readmes
         if: ${{ success() && steps.release.outputs.validation == 'true' }}
         run: bun run docs:check-readmes
+      - name: Validate test
+        id: validate_test
+        if: ${{ success() && steps.release.outputs.validation == 'true' }}
+        run: bun run test
+      - name: Validate py:lint
+        id: validate_py_lint
+        if: ${{ success() && steps.release.outputs.validation == 'true' }}
+        run: bun run py:lint
+      - name: Validate py:test
+        id: validate_py_test
+        if: ${{ success() && steps.release.outputs.validation == 'true' }}
+        run: bun run py:test
       - name: Build npm archives
         id: build_npm_archives
         if: ${{ success() && steps.release.outputs.npm == 'true' }}

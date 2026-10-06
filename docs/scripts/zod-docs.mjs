@@ -33,7 +33,11 @@ export function zodDescribeFromExpression(ts, expression) {
       current = current.expression.expression;
       continue;
     }
-    if (ts.isCallExpression(current) || ts.isAsExpression(current) || ts.isParenthesizedExpression(current)) {
+    if (
+      ts.isCallExpression(current) ||
+      ts.isAsExpression(current) ||
+      ts.isParenthesizedExpression(current)
+    ) {
       current = current.expression;
       continue;
     }
@@ -96,7 +100,10 @@ export function zodDocumentationForDeclaration(ts, declaration) {
   if (!ts.isTypeAliasDeclaration(declaration)) return "";
   const schemaName = schemaNameFromInferType(ts, declaration.type);
   if (!schemaName) return "";
-  return zodDescribeFromExpression(ts, schemaInitializer(ts, declaration.getSourceFile(), schemaName));
+  return zodDescribeFromExpression(
+    ts,
+    schemaInitializer(ts, declaration.getSourceFile(), schemaName),
+  );
 }
 
 /**
@@ -123,9 +130,7 @@ export function isZodSchema(value) {
 export function jsonSchemaFieldLines(schema, prefix = "") {
   if (!schema || typeof schema !== "object") return [];
   const properties =
-    schema.properties && typeof schema.properties === "object"
-      ? schema.properties
-      : undefined;
+    schema.properties && typeof schema.properties === "object" ? schema.properties : undefined;
   if (!properties) {
     if (Array.isArray(schema.anyOf)) {
       return schema.anyOf.flatMap((entry) => jsonSchemaFieldLines(entry, prefix));
@@ -153,7 +158,7 @@ export function jsonSchemaFieldLines(schema, prefix = "") {
  */
 export function schemaDocsMarkdown(schema, exportName) {
   if (!isZodSchema(schema)) return "";
-  const json = z.toJSONSchema(schema);
+  const json = z.toJSONSchema(schema, { io: "input", unrepresentable: "any" });
   const description = typeof json.description === "string" ? json.description.trim() : "";
   const fields = jsonSchemaFieldLines(json);
   if (!description && fields.length === 0) return "";

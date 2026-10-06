@@ -395,7 +395,13 @@
             "--validate",
             "docs:check-source",
             "--validate",
-            "docs:check-readmes"
+            "docs:check-readmes",
+            "--validate",
+            "test",
+            "--validate",
+            "py:lint",
+            "--validate",
+            "py:test"
           ],
           "receiveArgs": true
         }

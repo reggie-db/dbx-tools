@@ -28,9 +28,8 @@ selection from `@dbx-tools/model`.
 Upstream publishes `graphiti-core` but not the MCP application. This wheel
 bundles the pinned MCP source tree so runtime downloads and tool bootstrapping
 are unnecessary. `_upstream/SOURCE.json` records the exact upstream tag, source
-path, and file hashes used by the package tests. Java, Neo4j, mise, uv project
-environments, Honcho, Caddy, and PostgreSQL journaling are not part of this
-package.
+path, and file hashes used by the package tests. Graph database durability and
+process supervision remain Node-owned.
 
 ## Use With AppKit
 

@@ -88,13 +88,7 @@ export const MessageStatusSchema = dashboards.messageStatusSchema;
  * still narrow correctly under `switch`.
  */
 export const GenieThoughtTypeSchema = z
-  .custom<
-    | "THOUGHT_TYPE_DESCRIPTION"
-    | "THOUGHT_TYPE_DATA_SOURCING"
-    | "THOUGHT_TYPE_STEPS"
-    | "THOUGHT_TYPE_UNDERSTANDING"
-    | (string & {})
-  >((value) => typeof value === "string")
+  .string()
   .describe("Forward-compatible Genie reasoning thought type.");
 
 export type GenieThoughtType = z.infer<typeof GenieThoughtTypeSchema>;
@@ -140,7 +134,7 @@ export const KnownAttachmentTypeSchema = z
 export type KnownAttachmentType = z.infer<typeof KnownAttachmentTypeSchema>;
 
 export const AttachmentTypeSchema = z
-  .custom<KnownAttachmentType | (string & {})>((value) => typeof value === "string")
+  .string()
   .describe("Forward-compatible Genie attachment discriminator.");
 
 export type AttachmentType = z.infer<typeof AttachmentTypeSchema>;
@@ -171,9 +165,7 @@ export type GenieQueryAttachment = z.infer<typeof GenieQueryAttachmentSchema>;
  * server-side enum change cannot invalidate an otherwise complete message.
  */
 export const GenieTextAttachmentPurposeSchema = z
-  .custom<"FOLLOW_UP_QUESTION" | "TEXT_ATTACHMENT_PURPOSE_ANSWER" | (string & {})>(
-    (value) => typeof value === "string",
-  )
+  .string()
   .describe("Forward-compatible semantic purpose for a Genie text attachment.");
 
 export type GenieTextAttachmentPurpose = z.infer<typeof GenieTextAttachmentPurposeSchema>;

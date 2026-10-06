@@ -101,18 +101,6 @@ async function buildClient(): Promise<void> {
   );
 }
 
-/** Start only the Python bus emitter when the emitter-only option is selected. */
-async function runEmitter(): Promise<void> {
-  const env = await demoEnv();
-  await run(["uv", "run", "python", "packages/example/python/bus-emitter.py"], {
-    cwd: ROOT,
-    env,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-}
-
 /** Create a terminal stream with a matching ANSI-free file stream. */
 async function createLoggedOutput(): Promise<{
   output: PassThrough;
@@ -144,7 +132,7 @@ async function createLoggedOutput(): Promise<{
   };
 }
 
-/** Build the client, then run the AppKit server and emitter together. */
+/** Build the client, then run the AppKit server. */
 async function runDemo(): Promise<void> {
   delete process.env.FORCE_COLOR;
   await buildClient();
@@ -158,12 +146,6 @@ async function runDemo(): Promise<void> {
         command: `${bun} --filter @dbx-tools/demo-appkit-server dev`,
         name: "server",
         prefixColor: "cyan",
-        env,
-      },
-      {
-        command: "uv run python packages/example/python/bus-emitter.py",
-        name: "emitter",
-        prefixColor: "green",
         env,
       },
     ],
@@ -182,11 +164,7 @@ async function runDemo(): Promise<void> {
 }
 
 try {
-  if (process.argv.includes("--emitter-only")) {
-    await runEmitter();
-  } else {
-    await runDemo();
-  }
+  await runDemo();
 } catch (err) {
   logger.error("failed", err);
   process.exitCode = 1;

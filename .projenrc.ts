@@ -61,6 +61,11 @@ const root = new project.DBXToolsNodeProject({
       if: "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' }}",
       run: "python -m pip install -r docs/requirements.txt",
     },
+    {
+      name: "Setup validation uv",
+      uses: "astral-sh/setup-uv@v7",
+      if: "${{ steps.release.outputs.validation == 'true' || steps.release.outputs.pypi == 'true' }}",
+    },
   ],
   releaseDocs: {
     siteUrl: "https://docs.dbx.tools",
@@ -91,7 +96,7 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
+  releaseValidationTasks: ["docs:check-source", "docs:check-readmes", "test", "py:lint", "py:test"],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:^` sibling deps from local source.

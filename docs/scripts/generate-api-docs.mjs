@@ -355,7 +355,10 @@ function schemaPagePath(outDir, exportName) {
   const files = walk(outDir).filter((p) => p.endsWith(".md"));
   const suffixes = [];
   if (exportName.endsWith("Schema")) {
-    suffixes.push(`.TypeAlias.${exportName.slice(0, -"Schema".length)}.md`, `.Variable.${exportName}.md`);
+    suffixes.push(
+      `.TypeAlias.${exportName.slice(0, -"Schema".length)}.md`,
+      `.Variable.${exportName}.md`,
+    );
   } else {
     suffixes.push(`.TypeAlias.${exportName}.md`, `.Variable.${exportName}.md`);
   }
@@ -371,7 +374,15 @@ async function injectZodSchemaDocs(pkg, outDir) {
       continue;
     }
     for (const [name, value] of Object.entries(module)) {
-      const section = schemaDocsMarkdown(value, name);
+      let section;
+      try {
+        section = schemaDocsMarkdown(value, name);
+      } catch (error) {
+        throw new Error(
+          `Failed to render Zod schema docs for ${pkg.name} ${entry.subpath} export ${name}`,
+          { cause: error },
+        );
+      }
       if (!section) continue;
       for (const file of schemaPagePath(outDir, name)) {
         write(file, injectSchemaSection(read(file), section));
