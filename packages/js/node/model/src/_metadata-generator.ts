@@ -7,7 +7,7 @@ import type {
   ReasoningModelsSnapshot,
   RetiredModelsSnapshot,
 } from "./_metadata-contract.ts";
-import { modelSearchQuery } from "./policy.ts";
+import { inheritsNativeWebSearch, modelSearchQuery } from "./policy.ts";
 import {
   parseReasoning,
   REASONING_LEVELS,
@@ -268,7 +268,6 @@ function modelsAfterHeading($: CheerioAPI, headingId: string): string[] {
 }
 
 function nativeWebSearchModels($: CheerioAPI, responses: readonly string[]): string[] {
-  const families = new Set<string>();
   const models = new Set<string>();
   let nativeSection = false;
   for (const element of sectionElements($, "supported-models")) {
@@ -285,11 +284,10 @@ function nativeWebSearchModels($: CheerioAPI, responses: readonly string[]): str
       const model = modelKey(value);
       if (!model) continue;
       models.add(model);
-      families.add(model.split("-", 1)[0]);
     }
   }
   for (const model of responses) {
-    if (families.has(model.split("-", 1)[0])) models.add(model);
+    if (inheritsNativeWebSearch(model, models)) models.add(model);
   }
   return [...models].sort();
 }

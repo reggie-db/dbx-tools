@@ -31,7 +31,7 @@ describe("model metadata generation", () => {
 
   it("parses response, image, patch, and web-search capabilities", () => {
     const responses = `<h2 id="databricks-hosted-foundation-models">Models</h2>
-      <p><code>databricks-gpt-5-4</code> <code>databricks-gpt-5-6-sol</code></p>
+      <p><code>databricks-gpt-4</code> <code>databricks-gpt-5-4</code> <code>databricks-gpt-5-6-sol</code></p>
       <h2 id="supported-input-types">Inputs</h2><p>Text and image</p>
       <h2 id="limitations">Limitations</h2><p><code>apply_patch</code> is supported.</p>`;
     const webSearch = `<h2 id="supported-models">Supported models</h2>
@@ -42,9 +42,9 @@ describe("model metadata generation", () => {
     assert.deepEqual(parseModelCapabilities(responses, webSearch, 42), {
       generatedAt: 42,
       capabilities: {
-        responses: ["gpt-5-4", "gpt-5-6-sol"],
-        imageInput: ["gpt-5-4", "gpt-5-6-sol"],
-        applyPatch: ["gpt-5-4", "gpt-5-6-sol"],
+        responses: ["gpt-4", "gpt-5-4", "gpt-5-6-sol"],
+        imageInput: ["gpt-4", "gpt-5-4", "gpt-5-6-sol"],
+        applyPatch: ["gpt-4", "gpt-5-4", "gpt-5-6-sol"],
         webSearch: ["gemini-3-1-pro", "gpt-5-4", "gpt-5-6-sol"],
       },
     });
@@ -79,6 +79,16 @@ describe("model metadata lookup", () => {
     };
     assert.equal(modelCapabilitiesFor(endpoint).responses, true);
     assert.equal(modelCapabilitiesFor("databricks-gpt-5-6-sol").webSearch, true);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-6-1-sol").webSearch, true);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-7-future").webSearch, true);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-4").webSearch, false);
+    assert.equal(modelCapabilitiesFor("databricks-gpt-oss-120b").webSearch, false);
+    assert.equal(modelCapabilitiesFor("steven-gpt-35-0125").webSearch, false);
+    assert.equal(
+      modelCapabilitiesFor({ name: "custom-gpt", modelServiceName: "system.ai.gpt-6-1-sol" })
+        .webSearch,
+      true,
+    );
     assert.equal(modelCapabilitiesFor("system.ai.gemini-3-1-pro").webSearch, true);
     assert.equal(modelCapabilitiesFor("databricks-claude-sonnet-4-6").webSearch, false);
     assert.deepEqual(modelRateLimitsFor(endpoint), modelRateLimitsFor("gpt-5.4"));

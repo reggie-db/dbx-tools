@@ -79,6 +79,7 @@ function openAiModel(target: ModelTarget): OpenAIModel {
       embeddings: target.capabilities.embeddings,
       ai_gateway_codex: target.capabilities.aiGatewayCodex,
       streaming: target.capabilities.streaming,
+      web_search: target.capabilities.webSearch,
     },
   };
 }
@@ -116,7 +117,7 @@ function codexModel(target: ModelTarget, priority: number): CodexModel {
     experimental_supported_tools: [],
     input_modalities: ["text"],
     web_search_tool_type: "text",
-    supports_search_tool: false,
+    supports_search_tool: target.capabilities.webSearch,
     supports_image_detail_original: false,
   };
 }

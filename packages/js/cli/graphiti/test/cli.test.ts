@@ -9,11 +9,20 @@ import type { GraphitiRuntimeOptions } from "../src/runtime.ts";
 describe("Graphiti CLI", () => {
   it("constructs without starting Graphiti", () => {
     const program = buildProgram();
+    const help = program.helpInformation();
     assert.equal(program.version(), PACKAGE_VERSION);
     assert.deepEqual(
       program.commands.map((command) => command.name()),
       ["start", "up", "down", "status", "env", "service"],
     );
+    assert.match(help, /--embedder-model <value>/);
+    assert.match(help, /EMBEDDER_MODEL/);
+    assert.match(help, /DATABRICKS_CONFIG_PROFILE/);
+    assert.match(help, /MODEL_NAME/);
+    assert.match(help, /--graphiti-home <value>/);
+    assert.match(help, /GRAPHITI_HOME/);
+    assert.match(help, /--no-manage-model-gateway/);
+    assert.doesNotMatch(help, /--graphiti-args/);
   });
 
   it("forwards Python arguments unchanged with the selected profile", async () => {

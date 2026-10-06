@@ -18,7 +18,8 @@ import { StringDecoder } from "node:string_decoder";
 import { promisify } from "node:util";
 
 import { bin, configUtils } from "@dbx-tools/core";
-import { log, stringUtils } from "@dbx-tools/shared-core";
+import { log, options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
+import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
 
@@ -64,24 +65,32 @@ export interface PortrConfig {
   port: number;
 }
 
+export const PortrOptionsSchema = z
+  .object({
+    publicDomain: z.string().trim().min(1).optional().describe("Public tunnel domain."),
+    subdomain: z.string().trim().min(1).optional().describe("Portr subdomain."),
+    sshUrl: z.string().trim().min(1).optional().describe("Portr SSH control endpoint."),
+    token: z.string().trim().min(1).optional().describe("Portr authentication token."),
+    port: sharedOptions.tcpPortOrZeroSchema.describe("Public listener port."),
+  })
+  .strict()
+  .describe("Portr tunnel resolution options.");
+
+export type PortrOptions = z.input<typeof PortrOptionsSchema>;
+
 /**
  * Resolve portr config from `TUNNEL_PUBLIC_DOMAIN` + `PORTR_TOKEN`, or an
  * explicit `subdomain`. The domain is `<subdomain>.<server>` (e.g.
  * `demo.apps.dbx.tools`). Returns `undefined` (no tunnel) when the token or a
  * usable domain is absent.
  */
-export function resolvePortrConfig(opts: {
-  publicDomain?: string;
-  subdomain?: string;
-  sshUrl?: string;
-  token?: string;
-  port: number;
-}): PortrConfig | undefined {
+export function resolvePortrConfig(opts: PortrOptions): PortrConfig | undefined {
+  const options = PortrOptionsSchema.parse(opts);
   // PORTR_* is upstream portr's own namespace, so it keeps its name.
-  const token = configUtils.string(opts.token, "PORTR_TOKEN");
-  const domain = configUtils.string(opts.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const token = configUtils.string(options.token, "PORTR_TOKEN");
+  const domain = configUtils.string(options.publicDomain, "TUNNEL_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   if (!token) return undefined;
-  let subdomain = opts.subdomain;
+  let subdomain = options.subdomain;
   let server: string | undefined;
   if (domain) {
     subdomain ??= domain.split(".")[0];
@@ -89,8 +98,8 @@ export function resolvePortrConfig(opts: {
   }
   server ??= configUtils.text("PORTR_SERVER");
   if (!subdomain || !server || server === domain) return undefined;
-  const sshUrl = configUtils.string(opts.sshUrl, "PORTR_SSH_URL") ?? `${server}:4444`;
-  return { subdomain, server, sshUrl, token, port: opts.port };
+  const sshUrl = configUtils.string(options.sshUrl, "PORTR_SSH_URL") ?? `${server}:4444`;
+  return { subdomain, server, sshUrl, token, port: options.port };
 }
 
 /** GitHub release asset name for the current or supplied OS/architecture. */

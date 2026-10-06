@@ -47,6 +47,10 @@ class DatabricksAuthDependencies:
 
 @dataclass(kw_only=True)
 class DatabricksAuthOptions:
+    auth: AuthOptions | None = field(
+        default=None,
+        metadata={"javascript_name": "auth"},
+    )
     profile: str | None = field(
         default=None,
         metadata={"javascript_name": "profile"},
@@ -94,10 +98,6 @@ class DatabricksAuthOptions:
     target: str | None = field(
         default=None,
         metadata={"javascript_name": "target"},
-    )
-    auth: AuthOptions | None = field(
-        default=None,
-        metadata={"javascript_name": "auth"},
     )
     request_headers: dict[str, str] | None = field(
         default=None,

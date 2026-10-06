@@ -17,6 +17,7 @@ export const OpenAIModelCapabilitiesSchema = z.object({
   embeddings: z.boolean(),
   ai_gateway_codex: z.boolean(),
   streaming: z.boolean(),
+  web_search: z.boolean(),
 });
 /** Capabilities published with an OpenAI-compatible model entry. */
 export type OpenAIModelCapabilities = z.infer<typeof OpenAIModelCapabilitiesSchema>;

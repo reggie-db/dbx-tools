@@ -8,38 +8,36 @@ import { createApp, server } from "@databricks/appkit";
 import { modelGateway } from "@dbx-tools/appkit-model-gateway/plugin";
 import { sendHealth } from "@dbx-tools/appkit-model-gateway/routes";
 import { workspaceClient } from "@dbx-tools/databricks";
+import {
+  resolveModelGatewayOptions,
+  type ModelGatewayOptions,
+  type ResolvedModelGatewayOptions,
+} from "@dbx-tools/shared-model-gateway/options";
 
-import { DEFAULT_BODY_LIMIT, DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
-
-export { DEFAULT_BODY_LIMIT, DEFAULT_HOST, DEFAULT_PORT } from "./defaults.ts";
-
-/** Foreground model-gateway server options. */
-export interface StartModelGatewayOptions {
-  readonly bodyLimit?: string;
-  readonly host?: string;
-  readonly port?: number;
-  readonly profile?: string;
-}
+type AppKitServerOptions = NonNullable<Parameters<typeof server>[0]>;
 
 /** Resolve AppKit server settings for the loopback model gateway. */
-export function modelGatewayServerOptions(
-  options: StartModelGatewayOptions = {},
-): NonNullable<Parameters<typeof server>[0]> {
+export function modelGatewayServerOptions(options: ModelGatewayOptions = {}): AppKitServerOptions {
+  return appKitServerOptions(resolveModelGatewayOptions(options));
+}
+
+function appKitServerOptions(options: ResolvedModelGatewayOptions): AppKitServerOptions {
   return {
-    bodyLimit: options.bodyLimit ?? DEFAULT_BODY_LIMIT,
-    host: options.host ?? DEFAULT_HOST,
-    port: options.port ?? DEFAULT_PORT,
+    bodyLimit: options.bodyLimit,
+    host: options.listen.host,
+    port: options.listen.port,
   };
 }
 
 /** Start the foreground model gateway and keep its AppKit server active. */
-export async function startModelGateway(options: StartModelGatewayOptions = {}): Promise<void> {
+export async function startModelGateway(options: ModelGatewayOptions = {}): Promise<void> {
+  const resolved = resolveModelGatewayOptions(options);
   const client = await workspaceClient.createWorkspaceClient({
-    ...(options.profile ? { profile: options.profile } : {}),
+    ...(resolved.profile ? { profile: resolved.profile } : {}),
   });
   await createApp({
     client,
-    plugins: [modelGateway(), server(modelGatewayServerOptions(options))],
+    plugins: [modelGateway(), server(appKitServerOptions(resolved))],
     onPluginsReady(appkit) {
       appkit.server.extend((application) => {
         application.get("/api/healthz", (_request, response) => {

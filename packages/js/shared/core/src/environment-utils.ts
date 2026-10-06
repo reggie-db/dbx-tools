@@ -1,6 +1,5 @@
 import { toBoolean } from "./object.ts";
-
-const MAX_TCP_PORT = 65_535;
+import { MAX_TCP_PORT } from "./options.ts";
 
 function runtimeEnvironment(): Record<string, string | undefined> {
   return (

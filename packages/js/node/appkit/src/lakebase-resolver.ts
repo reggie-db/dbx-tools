@@ -43,7 +43,13 @@ import {
   ValidationError,
 } from "@databricks/appkit";
 import { configUtils, projectUtils } from "@dbx-tools/core";
-import { asyncUtils, log, object, stringUtils } from "@dbx-tools/shared-core";
+import {
+  asyncUtils,
+  log,
+  object,
+  options as sharedOptions,
+  stringUtils,
+} from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import { toContext } from "./databricks.ts";
@@ -213,7 +219,7 @@ const operationSchema = z.object({
 type Operation = z.infer<typeof operationSchema>;
 
 /** `PGPORT` must land inside the TCP port range. */
-const portSchema = z.coerce.number().int().min(1).max(configUtils.MAX_TCP_PORT);
+const portSchema = sharedOptions.tcpPortSchema;
 
 /**
  * Validate a `PGPORT`-shaped value. Returns `undefined` when unset, and throws
@@ -284,7 +290,11 @@ export async function readLakebaseInputs(
 ): Promise<LakebaseResolverInputs> {
   const configOptions = { bundleProfile: config?.bundleProfile };
   const rawAddress =
-    config?.endpoint ?? configUtils.resolveValue("LAKEBASE_ENDPOINT", configOptions);
+    config?.endpoint ??
+    configUtils.resolveValue(
+      sharedOptions.databricksEnvironmentNames.lakebaseEndpoint,
+      configOptions,
+    );
   const parsed = parseAddress(rawAddress);
   const portEnv = parsePort(configUtils.resolveValue("PGPORT", configOptions));
   const sslModeEnv = parseSslMode(configUtils.resolveValue("PGSSLMODE", configOptions));
@@ -414,7 +424,9 @@ export async function resolveLakebaseConnection(
  * {@link applyLakebaseEnv} for the complete set a Postgres pool requires.
  */
 export function applyLakebaseToEnv(resolved: LakebaseConnection): void {
-  if (resolved.endpoint) process.env.LAKEBASE_ENDPOINT ??= resolved.endpoint;
+  if (resolved.endpoint) {
+    process.env[sharedOptions.databricksEnvironmentNames.lakebaseEndpoint] ??= resolved.endpoint;
+  }
   if (resolved.host) process.env.PGHOST ??= resolved.host;
   if (resolved.database) process.env.PGDATABASE ??= resolved.database;
   process.env.PGPORT ??= String(resolved.port);

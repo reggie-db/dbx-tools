@@ -7865,215 +7865,6 @@ var require_path_browserify = __commonJS((exports2, module2) => {
   module2.exports = posix;
 });
 
-// node_modules/ini/lib/ini.js
-var require_ini = __commonJS((exports2, module2) => {
-  var { hasOwnProperty } = Object.prototype;
-  var encode = (obj, opt = {}) => {
-    if (typeof opt === "string") {
-      opt = { section: opt };
-    }
-    opt.align = opt.align === true;
-    opt.newline = opt.newline === true;
-    opt.sort = opt.sort === true;
-    opt.whitespace = opt.whitespace === true || opt.align === true;
-    opt.platform = opt.platform || typeof process !== "undefined" && process.platform;
-    opt.bracketedArray = opt.bracketedArray !== false;
-    const eol = opt.platform === "win32" ? `\r
-` : `
-`;
-    const separator = opt.whitespace ? " = " : "=";
-    const children = [];
-    const keys = opt.sort ? Object.keys(obj).sort() : Object.keys(obj);
-    let padToChars = 0;
-    if (opt.align) {
-      padToChars = safe(keys.filter((k) => obj[k] === null || Array.isArray(obj[k]) || typeof obj[k] !== "object").map((k) => Array.isArray(obj[k]) ? `${k}[]` : k).concat([""]).reduce((a, b) => safe(a).length >= safe(b).length ? a : b)).length;
-    }
-    let out = "";
-    const arraySuffix = opt.bracketedArray ? "[]" : "";
-    for (const k of keys) {
-      const val = obj[k];
-      if (val && Array.isArray(val)) {
-        for (const item of val) {
-          out += safe(`${k}${arraySuffix}`).padEnd(padToChars, " ") + separator + safe(item) + eol;
-        }
-      } else if (val && typeof val === "object") {
-        children.push(k);
-      } else {
-        out += safe(k).padEnd(padToChars, " ") + separator + safe(val) + eol;
-      }
-    }
-    if (opt.section && out.length) {
-      out = "[" + safe(opt.section) + "]" + (opt.newline ? eol + eol : eol) + out;
-    }
-    for (const k of children) {
-      const nk = splitSections(k, ".").join("\\.");
-      const section = (opt.section ? opt.section + "." : "") + nk;
-      const child = encode(obj[k], {
-        ...opt,
-        section
-      });
-      if (out.length && child.length) {
-        out += eol;
-      }
-      out += child;
-    }
-    return out;
-  };
-  function splitSections(str, separator) {
-    var lastMatchIndex = 0;
-    var lastSeparatorIndex = 0;
-    var nextIndex = 0;
-    var sections = [];
-    do {
-      nextIndex = str.indexOf(separator, lastMatchIndex);
-      if (nextIndex !== -1) {
-        lastMatchIndex = nextIndex + separator.length;
-        if (nextIndex > 0 && str[nextIndex - 1] === "\\") {
-          continue;
-        }
-        sections.push(str.slice(lastSeparatorIndex, nextIndex));
-        lastSeparatorIndex = nextIndex + separator.length;
-      }
-    } while (nextIndex !== -1);
-    sections.push(str.slice(lastSeparatorIndex));
-    return sections;
-  }
-  var decode = (str, opt = {}) => {
-    opt.bracketedArray = opt.bracketedArray !== false;
-    const out = Object.create(null);
-    let p = out;
-    let section = null;
-    const re = /^\[([^\]]*)\]\s*$|^([^=]+)(=(.*))?$/i;
-    const lines = str.split(/[\r\n]+/g);
-    const duplicates = {};
-    for (const line of lines) {
-      if (!line || line.match(/^\s*[;#]/) || line.match(/^\s*$/)) {
-        continue;
-      }
-      const match = line.match(re);
-      if (!match) {
-        continue;
-      }
-      if (match[1] !== undefined) {
-        section = unsafe(match[1]);
-        if (section === "__proto__") {
-          p = Object.create(null);
-          continue;
-        }
-        p = out[section] = out[section] || Object.create(null);
-        continue;
-      }
-      const keyRaw = unsafe(match[2]);
-      let isArray;
-      if (opt.bracketedArray) {
-        isArray = keyRaw.length > 2 && keyRaw.slice(-2) === "[]";
-      } else {
-        duplicates[keyRaw] = (duplicates?.[keyRaw] || 0) + 1;
-        isArray = duplicates[keyRaw] > 1;
-      }
-      const key = isArray && keyRaw.endsWith("[]") ? keyRaw.slice(0, -2) : keyRaw;
-      if (key === "__proto__") {
-        continue;
-      }
-      const valueRaw = match[3] ? unsafe(match[4]) : true;
-      const value = valueRaw === "true" || valueRaw === "false" || valueRaw === "null" ? JSON.parse(valueRaw) : valueRaw;
-      if (isArray) {
-        if (!hasOwnProperty.call(p, key)) {
-          p[key] = [];
-        } else if (!Array.isArray(p[key])) {
-          p[key] = [p[key]];
-        }
-      }
-      if (Array.isArray(p[key])) {
-        p[key].push(value);
-      } else {
-        p[key] = value;
-      }
-    }
-    const remove = [];
-    for (const k of Object.keys(out)) {
-      if (!hasOwnProperty.call(out, k) || typeof out[k] !== "object" || Array.isArray(out[k])) {
-        continue;
-      }
-      const parts = splitSections(k, ".");
-      p = out;
-      const l = parts.pop();
-      const nl = l.replace(/\\\./g, ".");
-      for (const part of parts) {
-        if (part === "__proto__") {
-          continue;
-        }
-        if (!hasOwnProperty.call(p, part) || typeof p[part] !== "object") {
-          p[part] = Object.create(null);
-        }
-        p = p[part];
-      }
-      if (p === out && nl === l) {
-        continue;
-      }
-      p[nl] = out[k];
-      remove.push(k);
-    }
-    for (const del of remove) {
-      delete out[del];
-    }
-    return out;
-  };
-  var isQuoted = (val) => {
-    return val.startsWith('"') && val.endsWith('"') || val.startsWith("'") && val.endsWith("'");
-  };
-  var safe = (val) => {
-    if (typeof val !== "string" || val.match(/[=\r\n]/) || val.match(/^\[/) || val.length > 1 && isQuoted(val) || val !== val.trim()) {
-      return JSON.stringify(val);
-    }
-    return val.split(";").join("\\;").split("#").join("\\#");
-  };
-  var unsafe = (val) => {
-    val = (val || "").trim();
-    if (isQuoted(val)) {
-      if (val.charAt(0) === "'") {
-        val = val.slice(1, -1);
-      }
-      try {
-        val = JSON.parse(val);
-      } catch {}
-    } else {
-      let esc = false;
-      let unesc = "";
-      for (let i = 0, l = val.length;i < l; i++) {
-        const c = val.charAt(i);
-        if (esc) {
-          if ("\\;#".indexOf(c) !== -1) {
-            unesc += c;
-          } else {
-            unesc += "\\" + c;
-          }
-          esc = false;
-        } else if (";#".indexOf(c) !== -1) {
-          break;
-        } else if (c === "\\") {
-          esc = true;
-        } else {
-          unesc += c;
-        }
-      }
-      if (esc) {
-        unesc += "\\";
-      }
-      return unesc.trim();
-    }
-    return val;
-  };
-  module2.exports = {
-    parse: decode,
-    decode,
-    stringify: encode,
-    encode,
-    safe,
-    unsafe
-  };
-});
-
 // node_modules/zod/v4/core/core.cjs
 var require_core = __commonJS((exports2) => {
   Object.defineProperty(exports2, "__esModule", { value: true });
@@ -24009,6 +23800,215 @@ var require_zod = __commonJS((exports2) => {
   exports2.default = z;
 });
 
+// node_modules/ini/lib/ini.js
+var require_ini = __commonJS((exports2, module2) => {
+  var { hasOwnProperty } = Object.prototype;
+  var encode = (obj, opt = {}) => {
+    if (typeof opt === "string") {
+      opt = { section: opt };
+    }
+    opt.align = opt.align === true;
+    opt.newline = opt.newline === true;
+    opt.sort = opt.sort === true;
+    opt.whitespace = opt.whitespace === true || opt.align === true;
+    opt.platform = opt.platform || typeof process !== "undefined" && process.platform;
+    opt.bracketedArray = opt.bracketedArray !== false;
+    const eol = opt.platform === "win32" ? `\r
+` : `
+`;
+    const separator = opt.whitespace ? " = " : "=";
+    const children = [];
+    const keys = opt.sort ? Object.keys(obj).sort() : Object.keys(obj);
+    let padToChars = 0;
+    if (opt.align) {
+      padToChars = safe(keys.filter((k) => obj[k] === null || Array.isArray(obj[k]) || typeof obj[k] !== "object").map((k) => Array.isArray(obj[k]) ? `${k}[]` : k).concat([""]).reduce((a, b) => safe(a).length >= safe(b).length ? a : b)).length;
+    }
+    let out = "";
+    const arraySuffix = opt.bracketedArray ? "[]" : "";
+    for (const k of keys) {
+      const val = obj[k];
+      if (val && Array.isArray(val)) {
+        for (const item of val) {
+          out += safe(`${k}${arraySuffix}`).padEnd(padToChars, " ") + separator + safe(item) + eol;
+        }
+      } else if (val && typeof val === "object") {
+        children.push(k);
+      } else {
+        out += safe(k).padEnd(padToChars, " ") + separator + safe(val) + eol;
+      }
+    }
+    if (opt.section && out.length) {
+      out = "[" + safe(opt.section) + "]" + (opt.newline ? eol + eol : eol) + out;
+    }
+    for (const k of children) {
+      const nk = splitSections(k, ".").join("\\.");
+      const section = (opt.section ? opt.section + "." : "") + nk;
+      const child = encode(obj[k], {
+        ...opt,
+        section
+      });
+      if (out.length && child.length) {
+        out += eol;
+      }
+      out += child;
+    }
+    return out;
+  };
+  function splitSections(str, separator) {
+    var lastMatchIndex = 0;
+    var lastSeparatorIndex = 0;
+    var nextIndex = 0;
+    var sections = [];
+    do {
+      nextIndex = str.indexOf(separator, lastMatchIndex);
+      if (nextIndex !== -1) {
+        lastMatchIndex = nextIndex + separator.length;
+        if (nextIndex > 0 && str[nextIndex - 1] === "\\") {
+          continue;
+        }
+        sections.push(str.slice(lastSeparatorIndex, nextIndex));
+        lastSeparatorIndex = nextIndex + separator.length;
+      }
+    } while (nextIndex !== -1);
+    sections.push(str.slice(lastSeparatorIndex));
+    return sections;
+  }
+  var decode = (str, opt = {}) => {
+    opt.bracketedArray = opt.bracketedArray !== false;
+    const out = Object.create(null);
+    let p = out;
+    let section = null;
+    const re = /^\[([^\]]*)\]\s*$|^([^=]+)(=(.*))?$/i;
+    const lines = str.split(/[\r\n]+/g);
+    const duplicates = {};
+    for (const line of lines) {
+      if (!line || line.match(/^\s*[;#]/) || line.match(/^\s*$/)) {
+        continue;
+      }
+      const match = line.match(re);
+      if (!match) {
+        continue;
+      }
+      if (match[1] !== undefined) {
+        section = unsafe(match[1]);
+        if (section === "__proto__") {
+          p = Object.create(null);
+          continue;
+        }
+        p = out[section] = out[section] || Object.create(null);
+        continue;
+      }
+      const keyRaw = unsafe(match[2]);
+      let isArray;
+      if (opt.bracketedArray) {
+        isArray = keyRaw.length > 2 && keyRaw.slice(-2) === "[]";
+      } else {
+        duplicates[keyRaw] = (duplicates?.[keyRaw] || 0) + 1;
+        isArray = duplicates[keyRaw] > 1;
+      }
+      const key = isArray && keyRaw.endsWith("[]") ? keyRaw.slice(0, -2) : keyRaw;
+      if (key === "__proto__") {
+        continue;
+      }
+      const valueRaw = match[3] ? unsafe(match[4]) : true;
+      const value = valueRaw === "true" || valueRaw === "false" || valueRaw === "null" ? JSON.parse(valueRaw) : valueRaw;
+      if (isArray) {
+        if (!hasOwnProperty.call(p, key)) {
+          p[key] = [];
+        } else if (!Array.isArray(p[key])) {
+          p[key] = [p[key]];
+        }
+      }
+      if (Array.isArray(p[key])) {
+        p[key].push(value);
+      } else {
+        p[key] = value;
+      }
+    }
+    const remove = [];
+    for (const k of Object.keys(out)) {
+      if (!hasOwnProperty.call(out, k) || typeof out[k] !== "object" || Array.isArray(out[k])) {
+        continue;
+      }
+      const parts = splitSections(k, ".");
+      p = out;
+      const l = parts.pop();
+      const nl = l.replace(/\\\./g, ".");
+      for (const part of parts) {
+        if (part === "__proto__") {
+          continue;
+        }
+        if (!hasOwnProperty.call(p, part) || typeof p[part] !== "object") {
+          p[part] = Object.create(null);
+        }
+        p = p[part];
+      }
+      if (p === out && nl === l) {
+        continue;
+      }
+      p[nl] = out[k];
+      remove.push(k);
+    }
+    for (const del of remove) {
+      delete out[del];
+    }
+    return out;
+  };
+  var isQuoted = (val) => {
+    return val.startsWith('"') && val.endsWith('"') || val.startsWith("'") && val.endsWith("'");
+  };
+  var safe = (val) => {
+    if (typeof val !== "string" || val.match(/[=\r\n]/) || val.match(/^\[/) || val.length > 1 && isQuoted(val) || val !== val.trim()) {
+      return JSON.stringify(val);
+    }
+    return val.split(";").join("\\;").split("#").join("\\#");
+  };
+  var unsafe = (val) => {
+    val = (val || "").trim();
+    if (isQuoted(val)) {
+      if (val.charAt(0) === "'") {
+        val = val.slice(1, -1);
+      }
+      try {
+        val = JSON.parse(val);
+      } catch {}
+    } else {
+      let esc = false;
+      let unesc = "";
+      for (let i = 0, l = val.length;i < l; i++) {
+        const c = val.charAt(i);
+        if (esc) {
+          if ("\\;#".indexOf(c) !== -1) {
+            unesc += c;
+          } else {
+            unesc += "\\" + c;
+          }
+          esc = false;
+        } else if (";#".indexOf(c) !== -1) {
+          break;
+        } else if (c === "\\") {
+          esc = true;
+        } else {
+          unesc += c;
+        }
+      }
+      if (esc) {
+        unesc += "\\";
+      }
+      return unesc.trim();
+    }
+    return val;
+  };
+  module2.exports = {
+    parse: decode,
+    decode,
+    stringify: encode,
+    encode,
+    safe,
+    unsafe
+  };
+});
+
 // node_modules/boolbase/index.js
 var require_boolbase = __commonJS((exports2, module2) => {
   module2.exports = {
@@ -25964,7 +25964,7 @@ var require_re = __commonJS((exports2, module2) => {
 var require_parse_options = __commonJS((exports2, module2) => {
   var looseOption = Object.freeze({ loose: true });
   var emptyOpts = Object.freeze({});
-  var parseOptions = (options) => {
+  var parseOptions2 = (options) => {
     if (!options) {
       return emptyOpts;
     }
@@ -25973,7 +25973,7 @@ var require_parse_options = __commonJS((exports2, module2) => {
     }
     return options;
   };
-  module2.exports = parseOptions;
+  module2.exports = parseOptions2;
 });
 
 // node_modules/semver/internal/identifiers.js
@@ -26003,7 +26003,7 @@ var require_semver = __commonJS((exports2, module2) => {
   var debug = require_debug();
   var { MAX_LENGTH, MAX_SAFE_INTEGER } = require_constants();
   var { safeRe: re, t } = require_re();
-  var parseOptions = require_parse_options();
+  var parseOptions2 = require_parse_options();
   var { compareIdentifiers } = require_identifiers();
   var isPrereleaseIdentifier = (prerelease, identifier) => {
     const identifiers = identifier.split(".");
@@ -26020,7 +26020,7 @@ var require_semver = __commonJS((exports2, module2) => {
 
   class SemVer {
     constructor(version, options) {
-      options = parseOptions(options);
+      options = parseOptions2(options);
       if (version instanceof SemVer) {
         if (version.loose === !!options.loose && version.includePrerelease === !!options.includePrerelease) {
           return version;
@@ -26666,7 +26666,7 @@ var require_range2 = __commonJS((exports2, module2) => {
 
   class Range {
     constructor(range, options) {
-      options = parseOptions(options);
+      options = parseOptions2(options);
       if (range instanceof Range) {
         if (range.loose === !!options.loose && range.includePrerelease === !!options.includePrerelease) {
           return range;
@@ -26805,7 +26805,7 @@ var require_range2 = __commonJS((exports2, module2) => {
   module2.exports = Range;
   var LRU = require_lrucache();
   var cache = new LRU;
-  var parseOptions = require_parse_options();
+  var parseOptions2 = require_parse_options();
   var Comparator = require_comparator();
   var debug = require_debug();
   var SemVer = require_semver();
@@ -26853,16 +26853,16 @@ var require_range2 = __commonJS((exports2, module2) => {
   };
   var replaceTilde = (comp, options) => {
     const r = options.loose ? re[t.TILDELOOSE] : re[t.TILDE];
-    const z3 = options.includePrerelease ? "-0" : "";
+    const z6 = options.includePrerelease ? "-0" : "";
     return comp.replace(r, (_, M, m, p, pr) => {
       debug("tilde", comp, _, M, m, p, pr);
       let ret;
       if (isX(M)) {
         ret = "";
       } else if (isX(m)) {
-        ret = `>=${M}.0.0${z3} <${+M + 1}.0.0-0`;
+        ret = `>=${M}.0.0${z6} <${+M + 1}.0.0-0`;
       } else if (isX(p)) {
-        ret = `>=${M}.${m}.0${z3} <${M}.${+m + 1}.0-0`;
+        ret = `>=${M}.${m}.0${z6} <${M}.${+m + 1}.0-0`;
       } else if (pr) {
         debug("replaceTilde pr", pr);
         ret = `>=${M}.${m}.${p}-${pr} <${M}.${+m + 1}.0-0`;
@@ -26879,19 +26879,19 @@ var require_range2 = __commonJS((exports2, module2) => {
   var replaceCaret = (comp, options) => {
     debug("caret", comp, options);
     const r = options.loose ? re[t.CARETLOOSE] : re[t.CARET];
-    const z3 = options.includePrerelease ? "-0" : "";
+    const z6 = options.includePrerelease ? "-0" : "";
     return comp.replace(r, (_, M, m, p, pr) => {
       debug("caret", comp, _, M, m, p, pr);
       let ret;
       if (isX(M)) {
         ret = "";
       } else if (isX(m)) {
-        ret = `>=${M}.0.0${z3} <${+M + 1}.0.0-0`;
+        ret = `>=${M}.0.0${z6} <${+M + 1}.0.0-0`;
       } else if (isX(p)) {
         if (M === "0") {
-          ret = `>=${M}.${m}.0${z3} <${M}.${+m + 1}.0-0`;
+          ret = `>=${M}.${m}.0${z6} <${M}.${+m + 1}.0-0`;
         } else {
-          ret = `>=${M}.${m}.0${z3} <${+M + 1}.0.0-0`;
+          ret = `>=${M}.${m}.0${z6} <${+M + 1}.0.0-0`;
         }
       } else if (pr) {
         debug("replaceCaret pr", pr);
@@ -27051,7 +27051,7 @@ var require_comparator = __commonJS((exports2, module2) => {
       return ANY;
     }
     constructor(comp, options) {
-      options = parseOptions(options);
+      options = parseOptions2(options);
       if (comp instanceof Comparator) {
         if (comp.loose === !!options.loose) {
           return comp;
@@ -27119,7 +27119,7 @@ var require_comparator = __commonJS((exports2, module2) => {
         }
         return new Range(this.value, options).test(comp.semver);
       }
-      options = parseOptions(options);
+      options = parseOptions2(options);
       if (options.includePrerelease && (this.value === "<0.0.0-0" || comp.value === "<0.0.0-0")) {
         return false;
       }
@@ -27145,7 +27145,7 @@ var require_comparator = __commonJS((exports2, module2) => {
     }
   }
   module2.exports = Comparator;
-  var parseOptions = require_parse_options();
+  var parseOptions2 = require_parse_options();
   var { safeRe: re, t } = require_re();
   var cmp = require_cmp();
   var debug = require_debug();
@@ -31711,7 +31711,7 @@ var require_index_min = __commonJS((exports2) => {
       return this.#S;
     }
     constructor(t) {
-      let { max: e = 0, ttl: i, ttlResolution: s = 1, ttlAutopurge: n, updateAgeOnGet: o, updateAgeOnHas: l, allowStale: h, dispose: r, onInsert: c, disposeAfter: w, noDisposeOnSet: _, noUpdateTTL: d, maxSize: p = 0, maxEntrySize: f = 0, sizeCalculation: y, fetchMethod: a, memoMethod: S, noDeleteOnFetchRejection: F, noDeleteOnStaleGet: b, allowStaleOnFetchRejection: m, allowStaleOnFetchAbort: A, ignoreFetchAbort: z3, backgroundFetchSize: x = 1, perf: v } = t;
+      let { max: e = 0, ttl: i, ttlResolution: s = 1, ttlAutopurge: n, updateAgeOnGet: o, updateAgeOnHas: l, allowStale: h, dispose: r, onInsert: c, disposeAfter: w, noDisposeOnSet: _, noUpdateTTL: d, maxSize: p = 0, maxEntrySize: f = 0, sizeCalculation: y, fetchMethod: a, memoMethod: S, noDeleteOnFetchRejection: F, noDeleteOnStaleGet: b, allowStaleOnFetchRejection: m, allowStaleOnFetchAbort: A, ignoreFetchAbort: z6, backgroundFetchSize: x = 1, perf: v } = t;
       if (this.backgroundFetchSize = x, v !== undefined && typeof v?.now != "function")
         throw new TypeError("perf option must have a now() method if specified");
       if (this.#w = v ?? N.defaultPerf, e !== 0 && !T(e))
@@ -31729,7 +31729,7 @@ var require_index_min = __commonJS((exports2) => {
         throw new TypeError("memoMethod must be a function if defined");
       if (this.#j = S, a !== undefined && typeof a != "function")
         throw new TypeError("fetchMethod must be a function if specified");
-      if (this.#x = a, this.#U = !!a, this.#s = new Map, this.#i = Array.from({ length: e }).fill(undefined), this.#t = Array.from({ length: e }).fill(undefined), this.#l = new E(e), this.#u = new E(e), this.#a = 0, this.#h = 0, this.#y = L.create(e), this.#n = 0, this.#b = 0, typeof r == "function" && (this.#m = r), typeof c == "function" && (this.#W = c), typeof w == "function" ? (this.#S = w, this.#r = []) : (this.#S = undefined, this.#r = undefined), this.#T = !!this.#m, this.#R = !!this.#W, this.#f = !!this.#S, this.noDisposeOnSet = !!_, this.noUpdateTTL = !!d, this.noDeleteOnFetchRejection = !!F, this.allowStaleOnFetchRejection = !!m, this.allowStaleOnFetchAbort = !!A, this.ignoreFetchAbort = !!z3, this.maxEntrySize !== 0) {
+      if (this.#x = a, this.#U = !!a, this.#s = new Map, this.#i = Array.from({ length: e }).fill(undefined), this.#t = Array.from({ length: e }).fill(undefined), this.#l = new E(e), this.#u = new E(e), this.#a = 0, this.#h = 0, this.#y = L.create(e), this.#n = 0, this.#b = 0, typeof r == "function" && (this.#m = r), typeof c == "function" && (this.#W = c), typeof w == "function" ? (this.#S = w, this.#r = []) : (this.#S = undefined, this.#r = undefined), this.#T = !!this.#m, this.#R = !!this.#W, this.#f = !!this.#S, this.noDisposeOnSet = !!_, this.noUpdateTTL = !!d, this.noDeleteOnFetchRejection = !!F, this.allowStaleOnFetchRejection = !!m, this.allowStaleOnFetchAbort = !!A, this.ignoreFetchAbort = !!z6, this.maxEntrySize !== 0) {
         if (this.#c !== 0 && !T(this.#c))
           throw new TypeError("maxSize must be a positive integer if specified");
         if (!T(this.maxEntrySize))
@@ -32113,8 +32113,8 @@ var require_index_min = __commonJS((exports2) => {
         let A = this.#p(b);
         if (!y && !A)
           return a && (a.fetch = "hit"), this.#M(b), s && this.#D(b), a && this.#E(a, b), m;
-        let z3 = this.#G(t, b, F, f), v = z3.__staleWhileFetching !== undefined && i;
-        return a && (a.fetch = A ? "stale" : "refresh", v && A && (a.returnedStale = true)), v ? z3.__staleWhileFetching : z3.__returned = z3;
+        let z6 = this.#G(t, b, F, f), v = z6.__staleWhileFetching !== undefined && i;
+        return a && (a.fetch = A ? "stale" : "refresh", v && A && (a.returnedStale = true)), v ? z6.__staleWhileFetching : z6.__returned = z6;
       }
     }
     forceFetch(t, e = {}) {
@@ -36482,9 +36482,9 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
     };
     ee.Ignore = Ae;
   });
-  var Fs = R((z3) => {
-    Object.defineProperty(z3, "__esModule", { value: true });
-    z3.Processor = z3.SubWalks = z3.MatchRecord = z3.HasWalkedCache = undefined;
+  var Fs = R((z6) => {
+    Object.defineProperty(z6, "__esModule", { value: true });
+    z6.Processor = z6.SubWalks = z6.MatchRecord = z6.HasWalkedCache = undefined;
     var Ds = H(), se = class n {
       store;
       constructor(t = new Map) {
@@ -36501,7 +36501,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         i ? i.add(e.globString()) : this.store.set(s, new Set([e.globString()]));
       }
     };
-    z3.HasWalkedCache = se;
+    z6.HasWalkedCache = se;
     var ie = class {
       store = new Map;
       add(t, e, s) {
@@ -36512,7 +36512,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         return [...this.store.entries()].map(([t, e]) => [t, !!(e & 2), !!(e & 1)]);
       }
     };
-    z3.MatchRecord = ie;
+    z6.MatchRecord = ie;
     var re = class {
       store = new Map;
       add(t, e) {
@@ -36534,7 +36534,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         return [...this.store.keys()].filter((t) => t.canReaddir());
       }
     };
-    z3.SubWalks = re;
+    z6.SubWalks = re;
     var Me = class n {
       hasWalkedCache;
       matches = new ie;
@@ -36624,7 +36624,7 @@ globstar while`, t, d, e, u, m), this.matchOne(t.slice(d), e.slice(u), s))
         t.isNamed(e) && (s ? this.subwalks.add(t, s) : this.matches.add(t, i, false));
       }
     };
-    z3.Processor = Me;
+    z6.Processor = Me;
   });
   var Ls = R((X) => {
     Object.defineProperty(X, "__esModule", { value: true });
@@ -37979,6 +37979,39 @@ function* tokenizeWithOptions(options, ...values) {
     }
   }
 }
+function toIdentifierWithOptions(options, ...values) {
+  const opts = {
+    ...IDENTIFIER_DEFAULTS,
+    ...options,
+    lowerCase: true
+  };
+  const tokens = [];
+  let currentLength = 0;
+  for (const token of tokenizeWithOptions(opts, ...values)) {
+    const sepLength = tokens.length > 0 ? opts.delimiter.length : 0;
+    const nextLength = currentLength + sepLength + token.length;
+    if (nextLength > opts.maxLength) {
+      if (opts.truncateStrategy === "empty")
+        return "";
+      if (opts.truncateStrategy === "trim")
+        break;
+      const hash = digestTokens(opts.truncateHashLength, tokens, token);
+      if (currentLength + sepLength + hash.length <= opts.maxLength) {
+        return tokens.length > 0 ? tokens.join(opts.delimiter) + opts.delimiter + hash : hash;
+      }
+      return "";
+    }
+    tokens.push(token);
+    currentLength = nextLength;
+  }
+  return tokens.join(opts.delimiter);
+}
+function toSlugWithOptions(options, ...values) {
+  return toIdentifierWithOptions({ ...options, delimiter: "-" }, ...values);
+}
+function toSlug(...values) {
+  return toSlugWithOptions({}, ...values);
+}
 function trimToNull(value) {
   if (typeof value !== "string")
     return null;
@@ -38001,6 +38034,14 @@ function parseList(raw, transform = (entry) => entry.trim()) {
     out.push(normalized);
   }
   return out;
+}
+function digestTokens(length, parts, extra) {
+  let combined = "";
+  for (const part of parts)
+    combined += part + "\x00";
+  if (extra !== undefined)
+    combined += extra + "\x00";
+  return fnvHashWithOptions({ length }, combined);
 }
 function capitalize(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
@@ -39055,8 +39096,458 @@ init_fs();
 init_os();
 var import_node_path = __toESM(require_path_browserify(), 1);
 
-// packages/js/shared/core/src/environment-utils.ts
+// packages/js/shared/core/src/options.ts
+var exports_options = {};
+__export(exports_options, {
+  tcpPortSchema: () => tcpPortSchema,
+  tcpPortOrZeroSchema: () => tcpPortOrZeroSchema,
+  serializeOptions: () => serializeOptions,
+  parseOptions: () => parseOptions,
+  parseOptionOverrides: () => parseOptionOverrides,
+  normalizedUrlSchema: () => normalizedUrlSchema,
+  listenAddressSchema: () => listenAddressSchema,
+  formatListenAddress: () => formatListenAddress,
+  databricksEnvironmentNames: () => databricksEnvironmentNames,
+  MAX_TCP_PORT: () => MAX_TCP_PORT,
+  LakebaseOptionsSchema: () => LakebaseOptionsSchema,
+  DatabricksOptionsSchema: () => DatabricksOptionsSchema,
+  DatabricksEnvironmentNamesSchema: () => DatabricksEnvironmentNamesSchema
+});
+var import_zod = __toESM(require_zod(), 1);
+
+// packages/js/shared/core/src/net.ts
+var LOCAL_HOST_URL = new URL("http://localhost");
+var URL_SCHEME_DEFAULT = "https";
+var URL_SCHEME_PREFIX = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)/;
+var URL_PATH_SEGMENT_TRIM = /^\/+|\/+$/g;
+var URL_SCHEME_SEPARATOR = "://";
+var IP_BITS = { 4: 32, 6: 128 };
+var IPV4_OCTET = /^\d{1,3}$/;
+var IPV6_HEXTET = /^[0-9a-fA-F]{1,4}$/;
+class UrlBuilderImpl extends URL {
+  constructor(url) {
+    super(url);
+  }
+  get scheme() {
+    return this.protocol.slice(0, -1);
+  }
+  set scheme(value) {
+    this.protocol = value + ":";
+  }
+  with(key, value) {
+    const next = new UrlBuilderImpl(this);
+    next[key] = value;
+    return new UrlBuilderImpl(next);
+  }
+  withPathAppend(...pathSegments) {
+    return this.withPathReplace(this.pathname, ...pathSegments);
+  }
+  withPathReplace(...pathSegments) {
+    const pathnameParts = [...pathSegments].flatMap((p) => Array.isArray(p) ? p : [p]);
+    const pathname = pathnameParts.map((p) => p.replace(URL_PATH_SEGMENT_TRIM, "")).filter(Boolean).join("/");
+    return this.with("pathname", "/" + pathname);
+  }
+  pathMatches(path) {
+    const pathname = this.pathname;
+    if (pathname == path)
+      return true;
+    if (!path.startsWith("/"))
+      path = "/" + path;
+    if (pathname == path)
+      return true;
+    return pathname.startsWith(path + "/");
+  }
+}
+function urlBuilder(input) {
+  if (input instanceof URL) {
+    return new UrlBuilderImpl(input);
+  }
+  if (input !== null && typeof input === "object" && "url" in input) {
+    input = input.url;
+  }
+  if (typeof input === "string") {
+    input = input.trim();
+  }
+  if (input) {
+    if (input.startsWith("/") || input.startsWith("?") || input.startsWith("#")) {
+      const joinedUrl = defaultUrl().toString().slice(0, -1) + input;
+      return urlBuilder(joinedUrl);
+    } else if (input.startsWith(URL_SCHEME_SEPARATOR)) {
+      input = `${URL_SCHEME_DEFAULT}${input}`;
+    } else {
+      const match = input.match(URL_SCHEME_PREFIX);
+      const schemePrefix = match?.[1];
+      if (schemePrefix) {
+        const rest = input.slice(schemePrefix.length);
+        input = `${schemePrefix}${rest || defaultUrl().hostname}`;
+      } else {
+        input = `${URL_SCHEME_DEFAULT}://${input}`;
+      }
+    }
+  } else {
+    return urlBuilder(defaultUrl());
+  }
+  const url = parseUrl(input);
+  return url ? urlBuilder(url) : undefined;
+}
+function defaultUrl() {
+  const origin = globalThis.window?.location?.origin;
+  if (origin && origin !== "null") {
+    const originUrl = parseUrl(origin);
+    if (originUrl) {
+      return originUrl;
+    }
+  }
+  return new URL(LOCAL_HOST_URL);
+}
+function parseUrl(input) {
+  if (input && input.includes(URL_SCHEME_SEPARATOR)) {
+    try {
+      return new URL(input);
+    } catch {}
+  }
+  return null;
+}
+function parseIp(input) {
+  let text = input.trim();
+  if (text.startsWith("[") && text.endsWith("]"))
+    text = text.slice(1, -1);
+  if (text.includes(":")) {
+    const zone = text.indexOf("%");
+    if (zone >= 0)
+      text = text.slice(0, zone);
+    const value2 = parseIpv6(text);
+    return value2 === null ? null : { version: 6, value: value2 };
+  }
+  const value = parseIpv4(text);
+  return value === null ? null : { version: 4, value };
+}
+function parseCidr(input) {
+  const text = input.trim();
+  const slash = text.lastIndexOf("/");
+  if (slash < 0)
+    return null;
+  const prefixText = text.slice(slash + 1);
+  if (!IPV4_OCTET.test(prefixText))
+    return null;
+  const ip = parseIp(text.slice(0, slash));
+  if (!ip)
+    return null;
+  const prefix = Number(prefixText);
+  const bits = IP_BITS[ip.version];
+  if (prefix > bits)
+    return null;
+  const base = ip.value & networkMask(bits, prefix);
+  return {
+    version: ip.version,
+    base,
+    prefix,
+    cidr: `${text.slice(0, slash)}/${prefix}`
+  };
+}
+function ipInCidr(ip, cidr) {
+  const parsedIp = typeof ip === "string" ? parseIp(ip) : ip;
+  const parsedCidr = typeof cidr === "string" ? parseCidr(cidr) : cidr;
+  if (!parsedIp || !parsedCidr || parsedIp.version !== parsedCidr.version) {
+    return false;
+  }
+  const mask = networkMask(IP_BITS[parsedCidr.version], parsedCidr.prefix);
+  return (parsedIp.value & mask) === parsedCidr.base;
+}
+function isLoopbackHost(input) {
+  const host2 = urlBuilder(input)?.hostname;
+  if (!host2)
+    return false;
+  if (host2 === "localhost")
+    return true;
+  const ip = host2.replace(/^\[|\]$/g, "");
+  return ipInCidr(ip, "127.0.0.0/8") || ipInCidr(ip, "::1/128");
+}
+function networkMask(bits, prefix) {
+  const hostBits = BigInt(bits - prefix);
+  const full = (1n << BigInt(bits)) - 1n;
+  return full ^ (1n << hostBits) - 1n;
+}
+function parseIpv4(input) {
+  const parts = input.split(".");
+  if (parts.length !== 4)
+    return null;
+  let value = 0n;
+  for (const part of parts) {
+    if (!IPV4_OCTET.test(part))
+      return null;
+    const octet = Number(part);
+    if (octet > 255)
+      return null;
+    value = value << 8n | BigInt(octet);
+  }
+  return value;
+}
+function parseIpv6(input) {
+  const halves = input.split("::");
+  if (halves.length > 2)
+    return null;
+  const head = parseHextets(halves[0]);
+  if (head === null)
+    return null;
+  if (halves.length === 2) {
+    const tail = parseHextets(halves[1]);
+    if (tail === null)
+      return null;
+    const missing = 8 - head.length - tail.length;
+    if (missing < 1)
+      return null;
+    return hextetsToValue([...head, ...Array(missing).fill(0), ...tail]);
+  }
+  if (head.length !== 8)
+    return null;
+  return hextetsToValue(head);
+}
+function parseHextets(part) {
+  if (part === "")
+    return [];
+  const tokens = part.split(":");
+  const hextets = [];
+  for (let i = 0;i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.includes(".")) {
+      if (i !== tokens.length - 1)
+        return null;
+      const v4 = parseIpv4(token);
+      if (v4 === null)
+        return null;
+      hextets.push(Number(v4 >> 16n & 0xffffn), Number(v4 & 0xffffn));
+    } else {
+      if (!IPV6_HEXTET.test(token))
+        return null;
+      hextets.push(parseInt(token, 16));
+    }
+  }
+  return hextets;
+}
+function hextetsToValue(hextets) {
+  if (hextets.length !== 8)
+    return null;
+  let value = 0n;
+  for (const hextet of hextets)
+    value = value << 16n | BigInt(hextet);
+  return value;
+}
+
+// packages/js/shared/core/src/options.ts
+var environmentName = (name, description) => import_zod.z.literal(name).default(name).describe(description);
+var DatabricksEnvironmentNamesSchema = import_zod.z.object({
+  profile: environmentName("DATABRICKS_CONFIG_PROFILE", "Databricks CLI profile environment."),
+  host: environmentName("DATABRICKS_HOST", "Databricks host environment."),
+  accountId: environmentName("DATABRICKS_ACCOUNT_ID", "Databricks account ID environment."),
+  workspaceId: environmentName("DATABRICKS_WORKSPACE_ID", "Databricks workspace ID environment."),
+  configFile: environmentName("DATABRICKS_CONFIG_FILE", "Databricks CLI config file environment."),
+  clientId: environmentName("DATABRICKS_CLIENT_ID", "Databricks OAuth client ID environment."),
+  clientSecret: environmentName("DATABRICKS_CLIENT_SECRET", "Databricks OAuth client secret environment."),
+  accessToken: environmentName("DATABRICKS_TOKEN", "Databricks access token environment."),
+  groupId: environmentName("DATABRICKS_GROUP_ID", "Databricks group ID environment."),
+  authType: environmentName("DATABRICKS_AUTH_TYPE", "Databricks auth type environment."),
+  appName: environmentName("DATABRICKS_APP_NAME", "Databricks App name environment."),
+  appPort: environmentName("DATABRICKS_APP_PORT", "Databricks App port environment."),
+  lakebaseEndpoint: environmentName("LAKEBASE_ENDPOINT", "Lakebase endpoint environment.")
+}).strict().describe("Canonical Databricks CLI, SDK, Apps, and Lakebase environment names.");
+var databricksEnvironmentNames = Object.freeze(DatabricksEnvironmentNamesSchema.parse({}));
 var MAX_TCP_PORT = 65535;
+var tcpPortSchema = import_zod.z.coerce.number().int().min(1).max(MAX_TCP_PORT).describe("TCP port from 1 through 65535.");
+var tcpPortOrZeroSchema = import_zod.z.coerce.number().int().min(0).max(MAX_TCP_PORT).describe("TCP port from 0 through 65535, where zero requests automatic allocation.");
+var normalizedUrlSchema = import_zod.z.string().trim().min(1).refine((value) => urlBuilder(value) !== undefined, {
+  message: "Expected a valid URL or host."
+}).overwrite(normalizeUrl).describe("URL normalized through the shared URL builder.");
+var databricksText = (description) => import_zod.z.string().trim().min(1).optional().describe(description);
+var DatabricksOptionsSchema = import_zod.z.object({
+  profile: databricksText("Databricks CLI profile.").meta({
+    env: databricksEnvironmentNames.profile
+  }),
+  host: normalizedUrlSchema.optional().describe("Databricks host.").meta({ env: databricksEnvironmentNames.host, flag: false }),
+  accountId: databricksText("Databricks account ID.").meta({
+    env: databricksEnvironmentNames.accountId,
+    flag: false
+  }),
+  workspaceId: databricksText("Databricks workspace ID.").meta({
+    env: databricksEnvironmentNames.workspaceId,
+    flag: false
+  }),
+  configFile: databricksText("Databricks CLI config file.").meta({
+    env: databricksEnvironmentNames.configFile,
+    flag: false
+  }),
+  clientId: databricksText("Databricks OAuth client ID.").meta({
+    env: databricksEnvironmentNames.clientId,
+    flag: false
+  }),
+  clientSecret: databricksText("Databricks OAuth client secret.").meta({
+    env: databricksEnvironmentNames.clientSecret,
+    flag: false
+  }),
+  accessToken: databricksText("Databricks access token.").meta({
+    env: databricksEnvironmentNames.accessToken,
+    flag: false
+  }),
+  groupId: databricksText("Databricks group ID.").meta({
+    env: databricksEnvironmentNames.groupId,
+    flag: false
+  }),
+  authType: databricksText("Databricks authentication type.").meta({
+    env: databricksEnvironmentNames.authType,
+    flag: false
+  }),
+  appName: databricksText("Databricks App name.").meta({
+    env: databricksEnvironmentNames.appName,
+    flag: false
+  }),
+  appPort: tcpPortSchema.optional().describe("Databricks App port.").meta({
+    env: databricksEnvironmentNames.appPort,
+    flag: false
+  }),
+  lakebaseEndpoint: databricksText("Lakebase endpoint.").meta({
+    env: databricksEnvironmentNames.lakebaseEndpoint,
+    flag: false
+  })
+}).strict().describe("Common Databricks CLI, SDK, Apps, and Lakebase options.");
+function serializeOptions(schema, values2, format) {
+  const parsed = schema.parse(values2);
+  const entries = optionProperties(schema).flatMap((property) => {
+    if (format === "flag" && property.flag === false)
+      return [];
+    const key = format === "flag" ? `--${toSlug(property.key)}` : optionEnvironmentNames(property.key, property.env)[0] ?? "";
+    if (!key)
+      return [];
+    const value = parsed[property.key];
+    return value === undefined ? [] : [[key, serializedOptionValue(value)]];
+  });
+  return JSON.stringify(Object.fromEntries(entries), null, 2);
+}
+var optionalText = (description, env) => import_zod.z.string().trim().min(1).optional().describe(description).meta({ env, flag: false });
+var LakebaseOptionsSchema = import_zod.z.object({
+  lakebaseEndpoint: optionalText("Lakebase project, resource path, host, or URL.", databricksEnvironmentNames.lakebaseEndpoint)
+}).strict().describe("Common Lakebase options.");
+function parseOptions(schema, values2 = null, environment = null) {
+  return schema.parse(optionValues(schema, values2, environment));
+}
+function parseOptionOverrides(schema, values2 = null, environment = null) {
+  const configured = optionValues(schema, values2, environment);
+  const parsed = schema.parse(configured);
+  return Object.fromEntries(Object.keys(configured).map((key) => [key, parsed[key]]));
+}
+function listenAddressSchema(options) {
+  const defaults = {
+    host: options.host ?? "localhost",
+    port: options.port
+  };
+  return import_zod.z.preprocess((value) => parseListenAddress(value, defaults), import_zod.z.object({
+    host: import_zod.z.string().trim().toLowerCase().min(1).default(defaults.host),
+    port: tcpPortOrZeroSchema.default(defaults.port)
+  }).strict().refine((address) => !options.loopback || isLoopbackHost(address.host), "Listener host must be loopback.")).default(defaults).describe("Listener host and port.");
+}
+function formatListenAddress(address) {
+  const host2 = address.host.includes(":") ? `[${address.host}]` : address.host;
+  return `${host2}:${address.port}`;
+}
+function parseListenAddress(value, defaults) {
+  if (typeof value === "number")
+    return { host: defaults.host, port: value };
+  if (typeof value !== "string")
+    return value;
+  const text = value.trim();
+  if (/^\d+$/.test(text))
+    return { host: defaults.host, port: text };
+  if (/^:\d+$/.test(text))
+    return { host: defaults.host, port: text.slice(1) };
+  const bracketed = text.match(/^\[([^\]]+)\](?::(\d+))?$/);
+  if (bracketed) {
+    return { host: bracketed[1], port: bracketed[2] ?? defaults.port };
+  }
+  const separator = text.lastIndexOf(":");
+  if (separator > 0 && !text.slice(0, separator).includes(":")) {
+    return {
+      host: text.slice(0, separator),
+      port: text.slice(separator + 1)
+    };
+  }
+  return { host: text || defaults.host, port: defaults.port };
+}
+function optionProperties(schema) {
+  const document2 = import_zod.z.toJSONSchema(schema);
+  if (!isRecord(document2.properties))
+    return [];
+  return Object.entries(document2.properties).flatMap(([key, value]) => {
+    if (!isRecord(value))
+      return [];
+    return [
+      {
+        key,
+        type: typeof value.type === "string" ? value.type : undefined,
+        env: typeof value.env === "string" || Array.isArray(value.env) ? value.env : undefined,
+        flag: typeof value.flag === "boolean" ? value.flag : undefined
+      }
+    ];
+  });
+}
+function serializedOptionValue(value) {
+  if (isRecord(value) && typeof value.host === "string" && typeof value.port === "number") {
+    return formatListenAddress({ host: value.host, port: value.port });
+  }
+  return value;
+}
+function optionValues(schema, values2, environment) {
+  const document2 = import_zod.z.toJSONSchema(schema);
+  const properties = isRecord(document2.properties) ? document2.properties : {};
+  const configured = {};
+  for (const [key, property] of Object.entries(properties)) {
+    if (!isRecord(property))
+      continue;
+    const explicit = firstOptionValue(values2, [key, `--${toSlug(key)}`]);
+    if (explicit !== undefined) {
+      configured[key] = optionEnvironmentValue(property.type, explicit);
+      continue;
+    }
+    const names = optionEnvironmentNames(key, property.env);
+    const sourced = firstOptionValue(environment, names);
+    if (sourced === undefined)
+      continue;
+    configured[key] = optionEnvironmentValue(property.type, sourced);
+  }
+  return configured;
+}
+function optionEnvironmentNames(key, configured) {
+  if (typeof configured === "string")
+    return [configured];
+  if (Array.isArray(configured)) {
+    return configured.filter((value) => typeof value === "string");
+  }
+  return [toIdentifierWithOptions({ delimiter: "_" }, key).toUpperCase()];
+}
+function optionEnvironmentValue(type, value) {
+  if (type === "boolean")
+    return toBoolean(value) ?? value;
+  if (type === "array" && typeof value === "string")
+    return parseList(value);
+  return value;
+}
+function firstOptionValue(source, keys) {
+  if (!source)
+    return;
+  for (const key of keys) {
+    const value = source[key];
+    if (value !== undefined && value !== null && value !== "")
+      return value;
+  }
+  return;
+}
+function normalizeUrl(value) {
+  const url = urlBuilder(value);
+  if (!url)
+    return value;
+  const normalized = url.toString();
+  return url.pathname === "/" && !url.search && !url.hash ? normalized.slice(0, -1) : normalized;
+}
+
+// packages/js/shared/core/src/environment-utils.ts
 function runtimeEnvironment() {
   return globalThis.process?.env ?? {};
 }
@@ -39083,12 +39574,117 @@ function isDatabricksAppEnv(source = runtimeEnvironment()) {
 // packages/js/node/auth/src/_profile-config.ts
 var import_ini = __toESM(require_ini(), 1);
 
-// packages/js/node/auth/src/config.ts
-var AUTH_DEFAULTS = {
-  refreshBufferMs: 300000,
-  lockTimeoutMs: 0,
-  loginTimeoutMs: 900000
+// packages/js/shared/auth/src/config-schema.ts
+var import_zod3 = __toESM(require_zod(), 1);
+// packages/js/shared/core/src/brand-utils.ts
+var import_zod2 = __toESM(require_zod(), 1);
+var nonBlankString = import_zod2.z.string().trim().min(1);
+var color = import_zod2.z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
+var DEFAULT_BRAND_ASSETS = {
+  icon: {
+    light: "@dbx-tools/ui-branding/assets/icon-light.svg",
+    dark: "@dbx-tools/ui-branding/assets/icon-dark.svg"
+  },
+  logo: {
+    light: "@dbx-tools/ui-branding/assets/logo-light.svg",
+    dark: "@dbx-tools/ui-branding/assets/logo-dark.svg"
+  },
+  favicon: "@dbx-tools/ui-branding/assets/icon-light.svg"
 };
+var BrandAssetSetSchema = import_zod2.z.object({
+  light: nonBlankString.describe("Asset for light surfaces."),
+  dark: nonBlankString.optional().describe("Asset for dark surfaces; light is the fallback.")
+}).strict().describe("Theme-aware references to one visual asset.");
+var BrandColorsSchema = import_zod2.z.object({
+  primary: color.default("#1B3139").describe("Primary action and identity color."),
+  primaryHover: color.default("#0E538B").describe("Primary hover or pressed color."),
+  accent: color.default("#00A972").describe("Secondary accent color."),
+  foreground: color.default("#1B3139").describe("Default text and mark color."),
+  background: color.default("#FFFFFF").describe("Default page background."),
+  surface: color.default("#F9F7F4").describe("Secondary surface background."),
+  muted: color.default("#618794").describe("Muted text color."),
+  border: color.default("#E4E2DD").describe("Default border color.")
+}).strict().prefault({});
+var BrandVoiceSchema = import_zod2.z.object({
+  audience: import_zod2.z.array(nonBlankString).default(["Databricks developers", "application engineers", "AI agents"]),
+  tone: import_zod2.z.array(nonBlankString).default(["direct", "practical", "technical", "approachable"]),
+  principles: import_zod2.z.array(nonBlankString).default([
+    "Lead with the useful outcome.",
+    "Prefer concrete examples and accurate technical language.",
+    "Keep product claims specific and defensible."
+  ]),
+  avoid: import_zod2.z.array(nonBlankString).default(["unsupported superlatives", "vague AI claims", "unnecessary jargon"])
+}).strict().prefault({});
+var BrandContextSchema = import_zod2.z.object({
+  schemaVersion: import_zod2.z.literal("1").default("1"),
+  name: nonBlankString.default("dbx tools").describe("Canonical display name."),
+  shortName: nonBlankString.default("dbx").describe("Compact name for constrained UI."),
+  tagline: nonBlankString.default("Practical tools for Databricks builders.").describe("Short product line suitable for a header or metadata."),
+  description: nonBlankString.default("Companion packages for Databricks developers building apps, agents, data workflows, and reusable UI.").describe("Plain-language product description."),
+  assets: import_zod2.z.object({
+    icon: BrandAssetSetSchema.default(DEFAULT_BRAND_ASSETS.icon),
+    logo: BrandAssetSetSchema.default(DEFAULT_BRAND_ASSETS.logo),
+    favicon: nonBlankString.default(DEFAULT_BRAND_ASSETS.favicon)
+  }).strict().default(DEFAULT_BRAND_ASSETS),
+  colors: BrandColorsSchema,
+  typography: import_zod2.z.object({
+    sans: nonBlankString.default("'DM Sans', ui-sans-serif, system-ui, sans-serif"),
+    mono: nonBlankString.default("'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace")
+  }).strict().prefault({}),
+  voice: BrandVoiceSchema,
+  links: import_zod2.z.object({
+    website: import_zod2.z.string().url().optional(),
+    repository: import_zod2.z.string().url().optional(),
+    documentation: import_zod2.z.string().url().optional()
+  }).strict().default({}),
+  extensions: import_zod2.z.record(nonBlankString, import_zod2.z.unknown()).default({}).describe("Namespaced consumer-specific values that do not belong in the portable core.")
+}).strict().describe("Portable identity, visual, and voice context for UI, libraries, and LLMs.");
+function parseBrandContext(input = {}) {
+  return BrandContextSchema.parse(input);
+}
+var defaultBrandContext = parseBrandContext();
+// packages/js/shared/core/src/pattern.ts
+var log = logger("shared/pattern");
+// packages/js/shared/core/src/token.ts
+var log2 = logger("shared/token");
+// packages/js/shared/auth/src/config-schema.ts
+var authTypeSchema = import_zod3.z.enum([
+  AuthType.DatabricksCli,
+  AuthType.OAuthM2M,
+  AuthType.PersonalAccessToken,
+  AuthType.AppOnBehalfOf,
+  AuthType.AppServicePrincipal
+]).meta({ env: exports_options.databricksEnvironmentNames.authType, flag: false }).describe("Databricks authentication type values.");
+var targetKindSchema = import_zod3.z.enum([TargetKind.Workspace, TargetKind.Account, TargetKind.Unified]).describe("Databricks authentication target values.");
+
+// packages/js/node/auth/src/config.ts
+var import_zod4 = __toESM(require_zod(), 1);
+var text = (description) => import_zod4.z.string().trim().min(1).optional().describe(description);
+var safeInteger = (description) => import_zod4.z.coerce.number().int().safe().describe(description);
+var AuthOptionsSchema = import_zod4.z.object({
+  refreshBufferMs: safeInteger("Token refresh buffer in milliseconds.").default(300000),
+  lockTimeoutMs: safeInteger("Credential lock timeout in milliseconds.").nonnegative().default(0),
+  loginTimeoutMs: safeInteger("Browser login timeout in milliseconds.").nonnegative().default(900000)
+}).strict().describe("Token lifecycle timing configuration.");
+var DatabricksAuthOptionsSchema = import_zod4.z.object({
+  profile: exports_options.DatabricksOptionsSchema.shape.profile,
+  host: exports_options.DatabricksOptionsSchema.shape.host,
+  accountId: exports_options.DatabricksOptionsSchema.shape.accountId,
+  workspaceId: exports_options.DatabricksOptionsSchema.shape.workspaceId,
+  configFile: exports_options.DatabricksOptionsSchema.shape.configFile,
+  clientId: exports_options.DatabricksOptionsSchema.shape.clientId,
+  clientSecret: exports_options.DatabricksOptionsSchema.shape.clientSecret,
+  accessToken: exports_options.DatabricksOptionsSchema.shape.accessToken,
+  groupId: exports_options.DatabricksOptionsSchema.shape.groupId,
+  authType: authTypeSchema.optional().describe("Databricks authentication type."),
+  scopes: import_zod4.z.array(import_zod4.z.string().trim().min(1)).optional().describe("OAuth scopes."),
+  target: targetKindSchema.optional().describe("OAuth target."),
+  auth: AuthOptionsSchema.partial().optional().describe("Token lifecycle overrides."),
+  requestHeaders: import_zod4.z.record(import_zod4.z.string(), import_zod4.z.string()).optional().describe("Additional authentication request headers."),
+  accessTokenHeader: text("Request header carrying a bearer access token."),
+  preferUserToMachine: import_zod4.z.boolean().optional().describe("Prefer a matching user profile over selected machine credentials.")
+}).strict().describe("Databricks profile and credential-source options.");
+var AUTH_DEFAULTS = Object.freeze(AuthOptionsSchema.parse({}));
 var DEFAULT_CLIENT_ID = "databricks-cli";
 var DEFAULT_CONFIG_FILE = "~/.databrickscfg";
 var DEFAULT_ACCESS_TOKEN_HEADER = "authorization";
@@ -40822,102 +41418,102 @@ function stringValue2(value) {
 }
 
 // packages/js/shared/model/src/contracts.ts
-var import_zod = __toESM(require_zod(), 1);
-var ModelClassSchema = import_zod.z.enum(["chat-thinking", "chat-balanced", "chat-fast", "embedding"]).describe("Intent-oriented Databricks Model Serving endpoint class.");
+var import_zod5 = __toESM(require_zod(), 1);
+var ModelClassSchema = import_zod5.z.enum(["chat-thinking", "chat-balanced", "chat-fast", "embedding"]).describe("Intent-oriented Databricks Model Serving endpoint class.");
 var ModelClass = {
   ChatThinking: "chat-thinking",
   ChatBalanced: "chat-balanced",
   ChatFast: "chat-fast",
   Embedding: "embedding"
 };
-var ReasoningEffortSchema = import_zod.z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).describe("Reasoning effort value accepted by compatible model endpoints.");
-var ModelProfileSchema = import_zod.z.object({
-  quality: import_zod.z.number().optional().describe("Relative quality score for ranking."),
-  speed: import_zod.z.number().optional().describe("Relative speed score for ranking."),
-  cost: import_zod.z.number().optional().describe("Relative cost score for ranking.")
+var ReasoningEffortSchema = import_zod5.z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).describe("Reasoning effort value accepted by compatible model endpoints.");
+var ModelProfileSchema = import_zod5.z.object({
+  quality: import_zod5.z.number().optional().describe("Relative quality score for ranking."),
+  speed: import_zod5.z.number().optional().describe("Relative speed score for ranking."),
+  cost: import_zod5.z.number().optional().describe("Relative cost score for ranking.")
 }).describe("Relative quality, speed, and cost scores for an endpoint.");
-var ModelStatusSchema = import_zod.z.object({
-  deprecated: import_zod.z.boolean().default(false).describe("True when the model should no longer be selected by default.")
+var ModelStatusSchema = import_zod5.z.object({
+  deprecated: import_zod5.z.boolean().default(false).describe("True when the model should no longer be selected by default.")
 }).describe("Model retirement status.");
-var ServingEndpointSummarySchema = import_zod.z.object({
-  name: import_zod.z.string().describe("Serving endpoint invoke id."),
-  displayName: import_zod.z.string().optional().describe("Human-readable label when the workspace provides one."),
-  family: import_zod.z.string().optional().describe("Detected model family used for grouping and sort order."),
-  task: import_zod.z.string().optional().describe("Databricks serving task reported for the endpoint."),
-  state: import_zod.z.string().optional().describe("Serving endpoint lifecycle state."),
-  description: import_zod.z.string().optional().describe("Workspace-provided endpoint description."),
-  supportsTools: import_zod.z.boolean().optional().describe("True when the endpoint accepts tool calls."),
+var ServingEndpointSummarySchema = import_zod5.z.object({
+  name: import_zod5.z.string().describe("Serving endpoint invoke id."),
+  displayName: import_zod5.z.string().optional().describe("Human-readable label when the workspace provides one."),
+  family: import_zod5.z.string().optional().describe("Detected model family used for grouping and sort order."),
+  task: import_zod5.z.string().optional().describe("Databricks serving task reported for the endpoint."),
+  state: import_zod5.z.string().optional().describe("Serving endpoint lifecycle state."),
+  description: import_zod5.z.string().optional().describe("Workspace-provided endpoint description."),
+  supportsTools: import_zod5.z.boolean().optional().describe("True when the endpoint accepts tool calls."),
   profile: ModelProfileSchema.optional().describe("Relative quality, speed, and cost scores."),
   class: ModelClassSchema.optional().describe("Intent-oriented class assigned to this endpoint."),
-  serviceNames: import_zod.z.record(import_zod.z.string(), import_zod.z.string()).optional().describe("Provider-specific service name aliases keyed by protocol."),
-  modelServiceName: import_zod.z.string().optional().describe("Canonical model-service name used for metadata lookup."),
-  reasoningEfforts: import_zod.z.array(ReasoningEffortSchema).optional().describe("Reasoning effort values this endpoint accepts."),
+  serviceNames: import_zod5.z.record(import_zod5.z.string(), import_zod5.z.string()).optional().describe("Provider-specific service name aliases keyed by protocol."),
+  modelServiceName: import_zod5.z.string().optional().describe("Canonical model-service name used for metadata lookup."),
+  reasoningEfforts: import_zod5.z.array(ReasoningEffortSchema).optional().describe("Reasoning effort values this endpoint accepts."),
   status: ModelStatusSchema.optional().describe("Retirement status for this endpoint."),
-  dimension: import_zod.z.number().optional().describe("Embedding vector size when the endpoint is an embedding model.")
+  dimension: import_zod5.z.number().optional().describe("Embedding vector size when the endpoint is an embedding model.")
 }).describe("Browser-safe normalized Model Serving endpoint metadata.");
-var ModelQuerySchema = import_zod.z.object({
-  search: import_zod.z.string().optional().describe("Free-text query matched against endpoint names and labels."),
+var ModelQuerySchema = import_zod5.z.object({
+  search: import_zod5.z.string().optional().describe("Free-text query matched against endpoint names and labels."),
   modelClass: ModelClassSchema.optional().describe("Restrict results to this intent-oriented class."),
-  requiresTools: import_zod.z.boolean().optional().describe("When true, only endpoints that accept tools are returned."),
-  includeDeprecated: import_zod.z.boolean().optional().describe("When true, retired endpoints remain in the result set."),
-  limit: import_zod.z.number().int().min(1).max(50).optional().describe("Maximum number of ranked results to return."),
-  threshold: import_zod.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1.")
+  requiresTools: import_zod5.z.boolean().optional().describe("When true, only endpoints that accept tools are returned."),
+  includeDeprecated: import_zod5.z.boolean().optional().describe("When true, retired endpoints remain in the result set."),
+  limit: import_zod5.z.number().int().min(1).max(50).optional().describe("Maximum number of ranked results to return."),
+  threshold: import_zod5.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1.")
 }).describe("Browser-safe model catalogue search and ranking controls.");
-var RankedModelSchema = import_zod.z.object({
+var RankedModelSchema = import_zod5.z.object({
   endpoint: ServingEndpointSummarySchema.describe("Normalized endpoint chosen for this result."),
   modelClass: ModelClassSchema.describe("Class used to rank this result."),
-  score: import_zod.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
+  score: import_zod5.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
 }).describe("One ranked model-search result.");
-var EndpointCapabilitiesSchema = import_zod.z.object({
-  chat: import_zod.z.boolean().describe("True when the endpoint can serve chat completions."),
-  embedding: import_zod.z.boolean().describe("True when the endpoint can serve embeddings."),
-  tools: import_zod.z.boolean().describe("True when the endpoint accepts tool calls.")
+var EndpointCapabilitiesSchema = import_zod5.z.object({
+  chat: import_zod5.z.boolean().describe("True when the endpoint can serve chat completions."),
+  embedding: import_zod5.z.boolean().describe("True when the endpoint can serve embeddings."),
+  tools: import_zod5.z.boolean().describe("True when the endpoint accepts tool calls.")
 }).describe("Capabilities derived from one normalized serving endpoint.");
-var FamilyClassSchema = import_zod.z.object({
+var FamilyClassSchema = import_zod5.z.object({
   class: ModelClassSchema.describe("Fallback class for an unscored recognized family."),
-  rank: import_zod.z.number().min(0).describe("Relative rank among family fallbacks, starting at 0.")
+  rank: import_zod5.z.number().min(0).describe("Relative rank among family fallbacks, starting at 0.")
 }).describe("Fallback class and rank for an unscored recognized model family.");
-var ModelCapabilitiesSchema = import_zod.z.object({
-  responses: import_zod.z.boolean().describe("True when the model supports the Responses API."),
-  imageInput: import_zod.z.boolean().describe("True when the model accepts image inputs."),
-  applyPatch: import_zod.z.boolean().describe("True when the model supports the apply-patch tool."),
-  webSearch: import_zod.z.boolean().describe("True when the model supports web search.")
+var ModelCapabilitiesSchema = import_zod5.z.object({
+  responses: import_zod5.z.boolean().describe("True when the model supports the Responses API."),
+  imageInput: import_zod5.z.boolean().describe("True when the model accepts image inputs."),
+  applyPatch: import_zod5.z.boolean().describe("True when the model supports the apply-patch tool."),
+  webSearch: import_zod5.z.boolean().describe("True when the model supports web search.")
 }).describe("Documented capabilities resolved for one model identity.");
-var ModelRateLimitsSchema = import_zod.z.object({
-  inputTokensPerMinute: import_zod.z.number().int().min(0).nullable().describe("Published input tokens per minute, or null when unpublished."),
-  outputTokensPerMinute: import_zod.z.number().int().min(0).nullable().describe("Published output tokens per minute, or null when unpublished."),
-  queriesPerHour: import_zod.z.number().int().min(0).nullable().describe("Published queries per hour, or null when unpublished.")
+var ModelRateLimitsSchema = import_zod5.z.object({
+  inputTokensPerMinute: import_zod5.z.number().int().min(0).nullable().describe("Published input tokens per minute, or null when unpublished."),
+  outputTokensPerMinute: import_zod5.z.number().int().min(0).nullable().describe("Published output tokens per minute, or null when unpublished."),
+  queriesPerHour: import_zod5.z.number().int().min(0).nullable().describe("Published queries per hour, or null when unpublished.")
 }).describe("Published pay-per-token limits for one model.");
-var ModelMetadataSchema = import_zod.z.object({
+var ModelMetadataSchema = import_zod5.z.object({
   status: ModelStatusSchema.describe("Retirement status for this model identity."),
   capabilities: ModelCapabilitiesSchema.describe("Documented capabilities for this model identity."),
   rateLimits: ModelRateLimitsSchema.optional().describe("Published rate limits when available.")
 }).describe("Combined retirement, capability, and rate-limit metadata.");
-var ResolvedModelSchema = import_zod.z.object({
-  modelId: import_zod.z.string().describe("Resolved serving endpoint or model identifier."),
-  matched: import_zod.z.boolean().describe("True when the identifier matched a catalogue entry."),
-  score: import_zod.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
+var ResolvedModelSchema = import_zod5.z.object({
+  modelId: import_zod5.z.string().describe("Resolved serving endpoint or model identifier."),
+  matched: import_zod5.z.boolean().describe("True when the identifier matched a catalogue entry."),
+  score: import_zod5.z.number().min(0).max(1).optional().describe("Fuzzy-match score in the range 0 to 1.")
 }).describe("Result of resolving a fuzzy model identifier.");
-var ResolveModelOptionsSchema = import_zod.z.object({
-  threshold: import_zod.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
-  requiresTools: import_zod.z.boolean().optional().describe("When true, only tool-capable endpoints may match.")
+var ResolveModelOptionsSchema = import_zod5.z.object({
+  threshold: import_zod5.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
+  requiresTools: import_zod5.z.boolean().optional().describe("When true, only tool-capable endpoints may match.")
 }).describe("Pure controls for fuzzy endpoint resolution.");
-var ScoredEndpointSchema = import_zod.z.object({
+var ScoredEndpointSchema = import_zod5.z.object({
   endpoint: ServingEndpointSummarySchema.describe("Candidate serving endpoint."),
-  score: import_zod.z.number().min(0).max(1).describe("Fuzzy-match distance in the range 0 to 1.")
+  score: import_zod5.z.number().min(0).max(1).describe("Fuzzy-match distance in the range 0 to 1.")
 }).describe("One endpoint paired with its fuzzy-match distance.");
-var ResolveModelInputSchema = import_zod.z.object({
-  explicit: import_zod.z.string().optional().describe("Exact model id or display name supplied by the caller."),
-  fuzzy: import_zod.z.boolean().optional().describe("When true, unmatched explicit values may fuzzy-match."),
-  threshold: import_zod.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
-  requiresTools: import_zod.z.boolean().optional().describe("When true, only tool-capable endpoints may be selected."),
+var ResolveModelInputSchema = import_zod5.z.object({
+  explicit: import_zod5.z.string().optional().describe("Exact model id or display name supplied by the caller."),
+  fuzzy: import_zod5.z.boolean().optional().describe("When true, unmatched explicit values may fuzzy-match."),
+  threshold: import_zod5.z.number().min(0).max(1).optional().describe("Minimum fuzzy-match score in the range 0 to 1."),
+  requiresTools: import_zod5.z.boolean().optional().describe("When true, only tool-capable endpoints may be selected."),
   modelClass: ModelClassSchema.optional().describe("Preferred intent-oriented class when no explicit model matches."),
-  fallbacks: import_zod.z.array(import_zod.z.string()).optional().describe("Ordered model ids tried after class selection fails."),
-  liveOnly: import_zod.z.boolean().optional().describe("When true, skip endpoints that are not currently ready.")
+  fallbacks: import_zod5.z.array(import_zod5.z.string()).optional().describe("Ordered model ids tried after class selection fails."),
+  liveOnly: import_zod5.z.boolean().optional().describe("When true, skip endpoints that are not currently ready.")
 }).describe("Caller intent used to resolve one model from a catalogue.");
-var ResolvedModelSelectionSchema = import_zod.z.object({
-  modelId: import_zod.z.string().describe("Selected serving endpoint identifier."),
-  source: import_zod.z.enum(["explicit", "fuzzy-match", "class", "fallback"]).describe("Policy branch that selected this model.")
+var ResolvedModelSelectionSchema = import_zod5.z.object({
+  modelId: import_zod5.z.string().describe("Selected serving endpoint identifier."),
+  source: import_zod5.z.enum(["explicit", "fuzzy-match", "class", "fallback"]).describe("Policy branch that selected this model.")
 }).describe("Selected model identifier and the policy branch that selected it.");
 
 // packages/js/shared/model/src/display.ts
@@ -41313,12 +41909,12 @@ var FuseIndex = class {
               subRecords.push(subRecord);
             }
           } else if (isDefined(item.v)) {
-            const text = isString(item.v) ? item.v : toString(item.v);
-            if (!isBlank(text)) {
+            const text2 = isString(item.v) ? item.v : toString(item.v);
+            if (!isBlank(text2)) {
               const subRecord = {
-                v: text,
+                v: text2,
                 i: item.i,
-                n: this.norm.get(text)
+                n: this.norm.get(text2)
               };
               subRecords.push(subRecord);
             }
@@ -41382,11 +41978,11 @@ function convertMaskToIndices(matchmask = [], minMatchCharLength = Config.minMat
     indices.push([start, i - 1]);
   return indices;
 }
-function search(text, pattern, patternAlphabet, { location = Config.location, distance = Config.distance, threshold = Config.threshold, findAllMatches = Config.findAllMatches, minMatchCharLength = Config.minMatchCharLength, includeMatches = Config.includeMatches, ignoreLocation = Config.ignoreLocation } = {}) {
+function search(text2, pattern, patternAlphabet, { location = Config.location, distance = Config.distance, threshold = Config.threshold, findAllMatches = Config.findAllMatches, minMatchCharLength = Config.minMatchCharLength, includeMatches = Config.includeMatches, ignoreLocation = Config.ignoreLocation } = {}) {
   if (pattern.length > 32)
     throw new Error(PATTERN_LENGTH_TOO_LARGE(32));
   const patternLen = pattern.length;
-  const textLen = text.length;
+  const textLen = text2.length;
   const expectedLocation = Math.max(0, Math.min(location, textLen));
   let currentThreshold = threshold;
   let bestLocation = expectedLocation;
@@ -41402,7 +41998,7 @@ function search(text, pattern, patternAlphabet, { location = Config.location, di
   const computeMatches = minMatchCharLength > 1 || includeMatches;
   const matchMask = computeMatches ? Array(textLen) : [];
   let index;
-  while ((index = text.indexOf(pattern, bestLocation)) > -1) {
+  while ((index = text2.indexOf(pattern, bestLocation)) > -1) {
     const score = calcScore(0, index);
     currentThreshold = Math.min(score, currentThreshold);
     bestLocation = index + patternLen;
@@ -41437,7 +42033,7 @@ function search(text, pattern, patternAlphabet, { location = Config.location, di
     bitArr[finish + 1] = (1 << i) - 1;
     for (let j = finish;j >= start; j -= 1) {
       const currentLocation = j - 1;
-      const charMatch = patternAlphabet[text[currentLocation]];
+      const charMatch = patternAlphabet[text2[currentLocation]];
       bitArr[j] = (bitArr[j + 1] << 1 | 1) & charMatch;
       if (i)
         bitArr[j] |= (lastBitArr[j + 1] | lastBitArr[j]) << 1 | 1 | lastBitArr[j + 1];
@@ -41460,7 +42056,7 @@ function search(text, pattern, patternAlphabet, { location = Config.location, di
   if (computeMatches && bestLocation >= 0) {
     const matchEnd = Math.min(textLen - 1, bestLocation + patternLen - 1 + bestErrors);
     for (let k = bestLocation;k <= matchEnd; k += 1)
-      if (patternAlphabet[text[k]])
+      if (patternAlphabet[text2[k]])
         matchMask[k] = 1;
   }
   const result = {
@@ -41557,12 +42153,12 @@ var BitapSearch = class {
     } else
       addChunk(this.pattern, 0);
   }
-  searchIn(text) {
+  searchIn(text2) {
     const { isCaseSensitive, ignoreDiacritics, includeMatches } = this.options;
-    text = isCaseSensitive ? text : text.toLowerCase();
-    text = ignoreDiacritics ? stripDiacritics(text) : text;
-    if (this.pattern === text) {
-      if (text.length < this.options.minMatchCharLength)
+    text2 = isCaseSensitive ? text2 : text2.toLowerCase();
+    text2 = ignoreDiacritics ? stripDiacritics(text2) : text2;
+    if (this.pattern === text2) {
+      if (text2.length < this.options.minMatchCharLength)
         return {
           isMatch: false,
           score: 1
@@ -41572,7 +42168,7 @@ var BitapSearch = class {
         score: 0
       };
       if (includeMatches)
-        result2.indices = [[0, text.length - 1]];
+        result2.indices = [[0, text2.length - 1]];
       return result2;
     }
     const { location, distance, threshold, findAllMatches, minMatchCharLength, ignoreLocation } = this.options;
@@ -41580,7 +42176,7 @@ var BitapSearch = class {
     let totalScore = 0;
     let hasMatches = false;
     this.chunks.forEach(({ pattern, alphabet, startIndex }) => {
-      const { isMatch, score, indices } = search(text, pattern, alphabet, {
+      const { isMatch, score, indices } = search(text2, pattern, alphabet, {
         location: location + startIndex,
         distance,
         threshold,
@@ -41615,8 +42211,8 @@ var matchers = [
     singleRegex: /^=(.*)$/,
     create: (pattern) => ({
       type: "exact",
-      search(text) {
-        const isMatch = text === pattern;
+      search(text2) {
+        const isMatch = text2 === pattern;
         return {
           isMatch,
           score: isMatch ? 0 : 1,
@@ -41631,12 +42227,12 @@ var matchers = [
     singleRegex: /^'(.*)$/,
     create: (pattern) => ({
       type: "include",
-      search(text) {
+      search(text2) {
         let location = 0;
         let index;
         const indices = [];
         const patternLen = pattern.length;
-        while ((index = text.indexOf(pattern, location)) > -1) {
+        while ((index = text2.indexOf(pattern, location)) > -1) {
           location = index + patternLen;
           indices.push([index, location - 1]);
         }
@@ -41655,8 +42251,8 @@ var matchers = [
     singleRegex: /^\^(.*)$/,
     create: (pattern) => ({
       type: "prefix-exact",
-      search(text) {
-        const isMatch = text.startsWith(pattern);
+      search(text2) {
+        const isMatch = text2.startsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
@@ -41671,12 +42267,12 @@ var matchers = [
     singleRegex: /^!\^(.*)$/,
     create: (pattern) => ({
       type: "inverse-prefix-exact",
-      search(text) {
-        const isMatch = !text.startsWith(pattern);
+      search(text2) {
+        const isMatch = !text2.startsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text.length - 1]
+          indices: [0, text2.length - 1]
         };
       }
     })
@@ -41687,12 +42283,12 @@ var matchers = [
     singleRegex: /^!(.*)\$$/,
     create: (pattern) => ({
       type: "inverse-suffix-exact",
-      search(text) {
-        const isMatch = !text.endsWith(pattern);
+      search(text2) {
+        const isMatch = !text2.endsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text.length - 1]
+          indices: [0, text2.length - 1]
         };
       }
     })
@@ -41703,12 +42299,12 @@ var matchers = [
     singleRegex: /^(.*)\$$/,
     create: (pattern) => ({
       type: "suffix-exact",
-      search(text) {
-        const isMatch = text.endsWith(pattern);
+      search(text2) {
+        const isMatch = text2.endsWith(pattern);
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [text.length - pattern.length, text.length - 1]
+          indices: [text2.length - pattern.length, text2.length - 1]
         };
       }
     })
@@ -41719,12 +42315,12 @@ var matchers = [
     singleRegex: /^!(.*)$/,
     create: (pattern) => ({
       type: "inverse-exact",
-      search(text) {
-        const isMatch = text.indexOf(pattern) === -1;
+      search(text2) {
+        const isMatch = text2.indexOf(pattern) === -1;
         return {
           isMatch,
           score: isMatch ? 0 : 1,
-          indices: [0, text.length - 1]
+          indices: [0, text2.length - 1]
         };
       }
     })
@@ -41747,8 +42343,8 @@ var matchers = [
       });
       return {
         type: "fuzzy",
-        search(text) {
-          return bitap.searchIn(text);
+        search(text2) {
+          return bitap.searchIn(text2);
         }
       };
     }
@@ -41853,7 +42449,7 @@ var ExtendedSearch = class {
   static condition(_, options) {
     return options.useExtendedSearch;
   }
-  searchIn(text) {
+  searchIn(text2) {
     const query = this.query;
     if (!query)
       return {
@@ -41861,8 +42457,8 @@ var ExtendedSearch = class {
         score: 1
       };
     const { includeMatches, isCaseSensitive, ignoreDiacritics } = this.options;
-    text = isCaseSensitive ? text : text.toLowerCase();
-    text = ignoreDiacritics ? stripDiacritics(text) : text;
+    text2 = isCaseSensitive ? text2 : text2.toLowerCase();
+    text2 = ignoreDiacritics ? stripDiacritics(text2) : text2;
     let numMatches = 0;
     const allIndices = [];
     let totalScore = 0;
@@ -41874,7 +42470,7 @@ var ExtendedSearch = class {
       hasInverse = false;
       for (let j = 0, pLen = searchers.length;j < pLen; j += 1) {
         const matcher = searchers[j];
-        const { isMatch, indices, score } = matcher.search(text);
+        const { isMatch, indices, score } = matcher.search(text2);
         if (isMatch) {
           numMatches += 1;
           totalScore += score;
@@ -42088,8 +42684,8 @@ function warnNonGlobal(regex) {
 function resolveTokenize(tokenize2) {
   if (typeof tokenize2 === "function") {
     let validated = false;
-    return (text) => {
-      const result = tokenize2(text);
+    return (text2) => {
+      const result = tokenize2(text2);
       if (!validated) {
         validated = true;
         if (!Array.isArray(result) || result.some((t) => typeof t !== "string"))
@@ -42101,18 +42697,18 @@ function resolveTokenize(tokenize2) {
   if (tokenize2 instanceof RegExp) {
     if (!tokenize2.global)
       warnNonGlobal(tokenize2);
-    return (text) => text.match(tokenize2) || [];
+    return (text2) => text2.match(tokenize2) || [];
   }
-  return (text) => text.match(DEFAULT_TOKEN) || [];
+  return (text2) => text2.match(DEFAULT_TOKEN) || [];
 }
 function createAnalyzer({ isCaseSensitive = false, ignoreDiacritics = false, tokenize: tokenize2 } = {}) {
   const tokenizeFn = resolveTokenize(tokenize2);
-  return { tokenize(text) {
+  return { tokenize(text2) {
     if (!isCaseSensitive)
-      text = text.toLowerCase();
+      text2 = text2.toLowerCase();
     if (ignoreDiacritics)
-      text = stripDiacritics(text);
-    return tokenizeFn(text);
+      text2 = stripDiacritics(text2);
+    return tokenizeFn(text2);
   } };
 }
 var TokenSearch = class {
@@ -42150,7 +42746,7 @@ var TokenSearch = class {
     this.numTerms = this.termSearchers.length;
     this.useMask = this.numTerms <= 31;
   }
-  searchIn(text) {
+  searchIn(text2) {
     if (!this.termSearchers.length)
       return {
         isMatch: false,
@@ -42163,7 +42759,7 @@ var TokenSearch = class {
     let matchedMask = 0;
     const matchedTerms = this.combineAll && !this.useMask ? /* @__PURE__ */ new Set : null;
     for (let i = 0;i < this.termSearchers.length; i++) {
-      const result = this.termSearchers[i].searchIn(text);
+      const result = this.termSearchers[i].searchIn(text2);
       const idf = this.idfWeights[i];
       maxPossibleScore += idf;
       if (result.isMatch) {
@@ -42200,8 +42796,8 @@ var TokenSearch = class {
     return searchResult;
   }
 };
-function addField(index, text, docIdx, analyzer) {
-  const tokens = analyzer.tokenize(text);
+function addField(index, text2, docIdx, analyzer) {
+  const tokens = analyzer.tokenize(text2);
   if (!tokens.length)
     return;
   index.fieldCount++;
@@ -42443,14 +43039,14 @@ var Fuse = class {
     const requireAllTokens = this.options.useTokenSearch && this.options.tokenMatch === "all";
     const { records } = this._myIndex;
     const results = heap ? null : [];
-    records.forEach(({ v: text, i: idx, n: norm2 }) => {
-      if (!isDefined(text))
+    records.forEach(({ v: text2, i: idx, n: norm2 }) => {
+      if (!isDefined(text2))
         return;
-      const searchResult = searcher.searchIn(text);
+      const searchResult = searcher.searchIn(text2);
       if (searchResult.isMatch) {
         const match = {
           score: searchResult.score,
-          value: text,
+          value: text2,
           norm: norm2,
           indices: searchResult.indices
         };
@@ -42462,7 +43058,7 @@ var Fuse = class {
         const matches = [match];
         if (!requireAllTokens || this._coversAllTokens(matches)) {
           const result = {
-            item: text,
+            item: text2,
             idx,
             matches
           };
@@ -42588,15 +43184,15 @@ var Fuse = class {
       return [];
     const matches = [];
     if (isArray(value))
-      value.forEach(({ v: text, i: idx, n: norm2 }) => {
-        if (!isDefined(text))
+      value.forEach(({ v: text2, i: idx, n: norm2 }) => {
+        if (!isDefined(text2))
           return;
-        const searchResult = searcher.searchIn(text);
+        const searchResult = searcher.searchIn(text2);
         if (searchResult.isMatch) {
           const match = {
             score: searchResult.score,
             key,
-            value: text,
+            value: text2,
             idx,
             norm: norm2,
             indices: searchResult.indices,
@@ -42611,13 +43207,13 @@ var Fuse = class {
         }
       });
     else {
-      const { v: text, n: norm2 } = value;
-      const searchResult = searcher.searchIn(text);
+      const { v: text2, n: norm2 } = value;
+      const searchResult = searcher.searchIn(text2);
       if (searchResult.isMatch) {
         const match = {
           score: searchResult.score,
           key,
-          value: text,
+          value: text2,
           norm: norm2,
           indices: searchResult.indices,
           hasInverse: searchResult.hasInverse
@@ -42656,13 +43252,13 @@ Fuse.version = "7.5.0";
 Fuse.createIndex = createIndex;
 Fuse.parseIndex = parseIndex;
 Fuse.config = Config;
-Fuse.match = function(pattern, text, options) {
+Fuse.match = function(pattern, text2, options) {
   if (options && options.useTokenSearch)
     throw new Error(FUSE_MATCH_TOKEN_SEARCH_UNSUPPORTED);
   return createSearcher(pattern, {
     ...Config,
     ...options
-  }).searchIn(text);
+  }).searchIn(text2);
 };
 Fuse.parseQuery = parse;
 register(ExtendedSearch);
@@ -42795,13 +43391,17 @@ function versionTuple(name) {
   const nums = name.slice(start).split(/[^a-z0-9]+/i).map((chunk) => chunk.match(/^\d+/)?.[0]).filter((digits) => digits !== undefined).map(Number);
   return [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0];
 }
-function compareVersionDesc(a, b) {
-  for (let i = 0;i < 3; i++) {
-    const diff = (b[i] ?? 0) - (a[i] ?? 0);
+function compareVersionTuples(left, right) {
+  const length = Math.max(left.length, right.length, 3);
+  for (let index = 0;index < length; index += 1) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
     if (diff !== 0)
       return diff;
   }
   return 0;
+}
+function compareVersionDesc(a, b) {
+  return compareVersionTuples(b, a);
 }
 function versionScore(name) {
   const [major, minor, patch] = versionTuple(name);
@@ -42945,6 +43545,39 @@ function modelSearchQuery(name) {
   if (!parsed)
     return;
   return [parsed.family, ...parsed.version.map(String), ...parsed.model].join(" ");
+}
+function inheritsNativeWebSearch(name, documented) {
+  const documentedKeys = documented instanceof Set ? documented : new Set(documented);
+  const key = modelSearchQuery(name)?.replaceAll(" ", "-");
+  if (key && documentedKeys.has(key))
+    return true;
+  const family = modelFamily(name);
+  if (!family || isOpenWeightsGpt(name))
+    return false;
+  const version = versionTuple(name);
+  if (isZeroVersion(version))
+    return false;
+  let floor;
+  for (const entry of documentedKeys) {
+    if (modelFamily(entry) !== family || isOpenWeightsGpt(entry))
+      continue;
+    const documentedVersion = versionTuple(entry);
+    if (isZeroVersion(documentedVersion))
+      continue;
+    if (!floor || compareVersionTuples(documentedVersion, floor) < 0) {
+      floor = documentedVersion;
+    }
+  }
+  return floor !== undefined && compareVersionTuples(version, floor) >= 0;
+}
+function isFoundationModelIdentity(name) {
+  return /^(?:databricks-|system\.ai\.)/i.test(name.trim());
+}
+function isOpenWeightsGpt(name) {
+  return modelFamily(name) === "gpt" && /(?:^|[-_.])oss(?:[-_.]|$)/i.test(name);
+}
+function isZeroVersion(version) {
+  return version.every((part) => (part ?? 0) === 0);
 }
 function modelReasoningEfforts(name) {
   const normalized = name.toLowerCase();
@@ -43428,7 +44061,7 @@ var QUERY_REASON_MODELS_URL = "https://docs.databricks.com/aws/en/machine-learni
 var exports_static = {};
 __export(exports_static, {
   xml: () => xml,
-  text: () => text,
+  text: () => text2,
   root: () => root,
   parseHTML: () => parseHTML,
   merge: () => merge,
@@ -43838,11 +44471,11 @@ class DomHandler {
     this.lastNode = null;
   }
   oncdatastart() {
-    const text = new Text2("");
-    const node2 = new CDATA2([text]);
+    const text2 = new Text2("");
+    const node2 = new CDATA2([text2]);
     this.addNode(node2);
-    text.parent = node2;
-    this.lastNode = text;
+    text2.parent = node2;
+    this.lastNode = text2;
   }
   oncdataend() {
     this.lastNode = null;
@@ -45083,7 +45716,7 @@ function xml(dom) {
   const options = { ...this._options, xmlMode: true };
   return render2(this, dom, options);
 }
-function text(elements) {
+function text2(elements) {
   const elems = elements !== null && elements !== undefined ? elements : this ? this.root() : [];
   let ret = "";
   for (let i = 0;i < elems.length; i++) {
@@ -46633,7 +47266,7 @@ function getAttr(elem, name, xmlMode) {
     return !xmlMode && rboolean.test(name) ? name : elem.attribs[name];
   }
   if (elem.name === "option" && name === "value") {
-    return text(elem.children);
+    return text2(elem.children);
   }
   if (elem.name === "input" && (elem.attribs["type"] === "radio" || elem.attribs["type"] === "checkbox") && name === "value") {
     return "on";
@@ -46858,7 +47491,7 @@ function val(value) {
         }
         return this;
       }
-      return this.attr("multiple") ? option.toArray().map((el) => text(el.children)) : option.attr("value");
+      return this.attr("multiple") ? option.toArray().map((el) => text2(el.children)) : option.attr("value");
     }
     case "button":
     case "input":
@@ -47395,13 +48028,13 @@ function getChildFunc(next, adapter) {
   };
 }
 var filters = {
-  contains(next, text2, { adapter }) {
+  contains(next, text3, { adapter }) {
     return function contains2(elem) {
-      return next(elem) && adapter.getText(elem).includes(text2);
+      return next(elem) && adapter.getText(elem).includes(text3);
     };
   },
-  icontains(next, text2, { adapter }) {
-    const itext = text2.toLowerCase();
+  icontains(next, text3, { adapter }) {
+    const itext = text3.toLowerCase();
     return function icontains(elem) {
       return next(elem) && adapter.getText(elem).toLowerCase().includes(itext);
     };
@@ -48452,7 +49085,7 @@ __export(exports_manipulation, {
   wrap: () => wrap,
   unwrap: () => unwrap,
   toString: () => toString2,
-  text: () => text2,
+  text: () => text3,
   replaceWith: () => replaceWith,
   remove: () => remove,
   prependTo: () => prependTo,
@@ -48805,12 +49438,12 @@ function html2(str) {
 function toString2() {
   return this._render(this);
 }
-function text2(str) {
+function text3(str) {
   if (str === undefined) {
-    return text(this);
+    return text2(this);
   }
   if (typeof str === "function") {
-    return domEach(this, (el, i) => this._make(el).text(str.call(el, i, text([el]))));
+    return domEach(this, (el, i) => this._make(el).text(str.call(el, i, text2([el]))));
   }
   return domEach(this, (el) => {
     if (!hasChildren(el))
@@ -53173,22 +53806,22 @@ var defaultTreeAdapter = {
       node2.parentNode = null;
     }
   },
-  insertText(parentNode, text3) {
+  insertText(parentNode, text4) {
     if (parentNode.childNodes.length > 0) {
       const prevNode = parentNode.childNodes[parentNode.childNodes.length - 1];
       if (defaultTreeAdapter.isTextNode(prevNode)) {
-        prevNode.value += text3;
+        prevNode.value += text4;
         return;
       }
     }
-    defaultTreeAdapter.appendChild(parentNode, defaultTreeAdapter.createTextNode(text3));
+    defaultTreeAdapter.appendChild(parentNode, defaultTreeAdapter.createTextNode(text4));
   },
-  insertTextBefore(parentNode, text3, referenceNode) {
+  insertTextBefore(parentNode, text4, referenceNode) {
     const prevNode = parentNode.childNodes[parentNode.childNodes.indexOf(referenceNode) - 1];
     if (prevNode && defaultTreeAdapter.isTextNode(prevNode)) {
-      prevNode.value += text3;
+      prevNode.value += text4;
     } else {
-      defaultTreeAdapter.insertBefore(parentNode, defaultTreeAdapter.createTextNode(text3), referenceNode);
+      defaultTreeAdapter.insertBefore(parentNode, defaultTreeAdapter.createTextNode(text4), referenceNode);
     }
   },
   adoptAttributes(recipient, attrs) {
@@ -56804,20 +57437,20 @@ var adapter = {
       node2.parent = null;
     }
   },
-  insertText(parentNode, text3) {
+  insertText(parentNode, text4) {
     const lastChild = parentNode.children[parentNode.children.length - 1];
     if (lastChild && isText(lastChild)) {
-      lastChild.data += text3;
+      lastChild.data += text4;
     } else {
-      adapter.appendChild(parentNode, adapter.createTextNode(text3));
+      adapter.appendChild(parentNode, adapter.createTextNode(text4));
     }
   },
-  insertTextBefore(parentNode, text3, referenceNode) {
+  insertTextBefore(parentNode, text4, referenceNode) {
     const prevNode = parentNode.children[parentNode.children.indexOf(referenceNode) - 1];
     if (prevNode && isText(prevNode)) {
-      prevNode.data += text3;
+      prevNode.data += text4;
     } else {
-      adapter.insertBefore(parentNode, adapter.createTextNode(text3), referenceNode);
+      adapter.insertBefore(parentNode, adapter.createTextNode(text4), referenceNode);
     }
   },
   adoptAttributes(recipient, attrs) {
@@ -56918,79 +57551,6 @@ function renderWithParse5(dom) {
 // node_modules/cheerio/dist/browser/load-parse.js
 var parse6 = getParse((content, options, isDocument3, context) => options._useHtmlParser2 ? parseDocument(content, options) : parseWithParse5(content, options, isDocument3, context));
 var load = getLoad(parse6, (dom, options) => options._useHtmlParser2 ? esm_default(dom, options) : renderWithParse5(dom));
-// packages/js/shared/core/src/brand-utils.ts
-var import_zod2 = __toESM(require_zod(), 1);
-var nonBlankString = import_zod2.z.string().trim().min(1);
-var color = import_zod2.z.string().regex(/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
-var DEFAULT_BRAND_ASSETS = {
-  icon: {
-    light: "@dbx-tools/ui-branding/assets/icon-light.svg",
-    dark: "@dbx-tools/ui-branding/assets/icon-dark.svg"
-  },
-  logo: {
-    light: "@dbx-tools/ui-branding/assets/logo-light.svg",
-    dark: "@dbx-tools/ui-branding/assets/logo-dark.svg"
-  },
-  favicon: "@dbx-tools/ui-branding/assets/icon-light.svg"
-};
-var BrandAssetSetSchema = import_zod2.z.object({
-  light: nonBlankString.describe("Asset for light surfaces."),
-  dark: nonBlankString.optional().describe("Asset for dark surfaces; light is the fallback.")
-}).strict().describe("Theme-aware references to one visual asset.");
-var BrandColorsSchema = import_zod2.z.object({
-  primary: color.default("#1B3139").describe("Primary action and identity color."),
-  primaryHover: color.default("#0E538B").describe("Primary hover or pressed color."),
-  accent: color.default("#00A972").describe("Secondary accent color."),
-  foreground: color.default("#1B3139").describe("Default text and mark color."),
-  background: color.default("#FFFFFF").describe("Default page background."),
-  surface: color.default("#F9F7F4").describe("Secondary surface background."),
-  muted: color.default("#618794").describe("Muted text color."),
-  border: color.default("#E4E2DD").describe("Default border color.")
-}).strict().prefault({});
-var BrandVoiceSchema = import_zod2.z.object({
-  audience: import_zod2.z.array(nonBlankString).default(["Databricks developers", "application engineers", "AI agents"]),
-  tone: import_zod2.z.array(nonBlankString).default(["direct", "practical", "technical", "approachable"]),
-  principles: import_zod2.z.array(nonBlankString).default([
-    "Lead with the useful outcome.",
-    "Prefer concrete examples and accurate technical language.",
-    "Keep product claims specific and defensible."
-  ]),
-  avoid: import_zod2.z.array(nonBlankString).default(["unsupported superlatives", "vague AI claims", "unnecessary jargon"])
-}).strict().prefault({});
-var BrandContextSchema = import_zod2.z.object({
-  schemaVersion: import_zod2.z.literal("1").default("1"),
-  name: nonBlankString.default("dbx tools").describe("Canonical display name."),
-  shortName: nonBlankString.default("dbx").describe("Compact name for constrained UI."),
-  tagline: nonBlankString.default("Practical tools for Databricks builders.").describe("Short product line suitable for a header or metadata."),
-  description: nonBlankString.default("Companion packages for Databricks developers building apps, agents, data workflows, and reusable UI.").describe("Plain-language product description."),
-  assets: import_zod2.z.object({
-    icon: BrandAssetSetSchema.default(DEFAULT_BRAND_ASSETS.icon),
-    logo: BrandAssetSetSchema.default(DEFAULT_BRAND_ASSETS.logo),
-    favicon: nonBlankString.default(DEFAULT_BRAND_ASSETS.favicon)
-  }).strict().default(DEFAULT_BRAND_ASSETS),
-  colors: BrandColorsSchema,
-  typography: import_zod2.z.object({
-    sans: nonBlankString.default("'DM Sans', ui-sans-serif, system-ui, sans-serif"),
-    mono: nonBlankString.default("'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace")
-  }).strict().prefault({}),
-  voice: BrandVoiceSchema,
-  links: import_zod2.z.object({
-    website: import_zod2.z.string().url().optional(),
-    repository: import_zod2.z.string().url().optional(),
-    documentation: import_zod2.z.string().url().optional()
-  }).strict().default({}),
-  extensions: import_zod2.z.record(nonBlankString, import_zod2.z.unknown()).default({}).describe("Namespaced consumer-specific values that do not belong in the portable core.")
-}).strict().describe("Portable identity, visual, and voice context for UI, libraries, and LLMs.");
-function parseBrandContext(input = {}) {
-  return BrandContextSchema.parse(input);
-}
-var defaultBrandContext = parseBrandContext();
-// packages/js/shared/core/src/net.ts
-var LOCAL_HOST_URL = new URL("http://localhost");
-// packages/js/shared/core/src/pattern.ts
-var log = logger("shared/pattern");
-// packages/js/shared/core/src/token.ts
-var log2 = logger("shared/token");
 // packages/js/node/model/src/reasoning-translation.ts
 var ReasoningLevel = {
   Low: "low",
@@ -57239,9 +57799,9 @@ function parseReasoningModels(html3, generatedAt) {
 function reasoningModelNamesFromCell(cell, $2) {
   const names2 = new Set;
   cell.find("code").each((_, code) => {
-    const text3 = collapseText($2(code));
-    if (text3.startsWith("databricks-"))
-      names2.add(text3);
+    const text4 = collapseText($2(code));
+    if (text4.startsWith("databricks-"))
+      names2.add(text4);
   });
   if (names2.size === 0) {
     for (const match of collapseText(cell).matchAll(MODEL_CODE_PATTERN)) {
@@ -57250,9 +57810,9 @@ function reasoningModelNamesFromCell(cell, $2) {
   }
   return [...names2];
 }
-function extractAcceptedReasoningLevels(text3) {
+function extractAcceptedReasoningLevels(text4) {
   const levels = [];
-  for (const match of text3.matchAll(ACCEPTED_VALUES_PATTERN)) {
+  for (const match of text4.matchAll(ACCEPTED_VALUES_PATTERN)) {
     const fragment = match[1];
     if (!fragment || /vary by model/i.test(fragment))
       continue;
@@ -57315,7 +57875,6 @@ function modelsAfterHeading($2, headingId) {
   ].sort();
 }
 function nativeWebSearchModels($2, responses) {
-  const families = new Set;
   const models = new Set;
   let nativeSection = false;
   for (const element of sectionElements($2, "supported-models")) {
@@ -57334,11 +57893,10 @@ function nativeWebSearchModels($2, responses) {
       if (!model)
         continue;
       models.add(model);
-      families.add(model.split("-", 1)[0]);
     }
   }
   for (const model of responses) {
-    if (families.has(model.split("-", 1)[0]))
+    if (inheritsNativeWebSearch(model, models))
       models.add(model);
   }
   return [...models].sort();
@@ -58528,12 +59086,13 @@ async function peekOrFallback(cache, fallback) {
 }
 function modelCapabilitiesFor(model) {
   const capabilities = metadataIndex().capabilities;
-  const keys2 = modelIdentities2(model, false).flatMap((identity) => modelKey2(identity) ?? []);
+  const identities = modelIdentities2(model, false);
+  const keys2 = identities.flatMap((identity) => modelKey2(identity) ?? []);
   return {
     responses: keys2.some((key) => capabilities.responses.has(key)),
     imageInput: keys2.some((key) => capabilities.imageInput.has(key)),
     applyPatch: keys2.some((key) => capabilities.applyPatch.has(key)),
-    webSearch: keys2.some((key) => capabilities.webSearch.has(key))
+    webSearch: keys2.some((key) => capabilities.webSearch.has(key)) || identities.some((identity) => isFoundationModelIdentity(identity) && inheritsNativeWebSearch(identity, capabilities.webSearch))
   };
 }
 function modelRateLimitsFor(model) {
@@ -58611,11 +59170,11 @@ class AuthenticatedModelClient {
       headers = await this.auth.headers({ refresh: true });
       response = await this.fetcher(url, { headers });
     }
-    const text3 = await response.text();
+    const text4 = await response.text();
     if (!response.ok) {
-      throw new Error(`Databricks Model Serving API ${path2} returned HTTP ${response.status}: ${text3}`);
+      throw new Error(`Databricks Model Serving API ${path2} returned HTTP ${response.status}: ${text4}`);
     }
-    return text3 ? JSON.parse(text3) : undefined;
+    return text4 ? JSON.parse(text4) : undefined;
   }
 }
 var catalogueCache = new Map;
@@ -58783,8 +59342,8 @@ async function resolveModelRoute(options = {}) {
 }
 
 // packages/js/shared/graphiti/src/options.ts
-var exports_options = {};
-__export(exports_options, {
+var exports_options2 = {};
+__export(exports_options2, {
   serializeGraphitiOptions: () => serializeGraphitiOptions,
   resolveGraphitiOptions: () => resolveGraphitiOptions,
   graphitiOptionsFromEnvironment: () => graphitiOptionsFromEnvironment,
@@ -58794,38 +59353,40 @@ __export(exports_options, {
   ResolvedGraphitiOptionsSchema: () => ResolvedGraphitiOptionsSchema,
   GraphitiOptionsSchema: () => GraphitiOptionsSchema,
   GraphitiCommandSchema: () => GraphitiCommandSchema,
+  GraphitiCliOptionsSchema: () => GraphitiCliOptionsSchema,
   GRAPHITI_OPTIONS_ENV: () => GRAPHITI_OPTIONS_ENV,
   GRAPHITI_DEFAULTS: () => GRAPHITI_DEFAULTS,
   GRAPHITI_COMMAND_ENV: () => GRAPHITI_COMMAND_ENV
 });
-var import_zod3 = __toESM(require_zod(), 1);
+var import_zod6 = __toESM(require_zod(), 1);
 var GRAPHITI_OPTIONS_ENV = "DBX_GRAPHITI_OPTIONS";
 var GRAPHITI_COMMAND_ENV = "DBX_GRAPHITI_COMMAND";
-var GraphitiCommandSchema = import_zod3.z.enum(["start", "up", "down", "status", "env"]).describe("Operations accepted by the internal Graphiti Python runtime.");
-var graphitiText = (description) => import_zod3.z.string().trim().min(1).describe(description);
-var graphitiPort = (description) => import_zod3.z.number().int().min(0).max(65535).describe(description);
-var GraphitiOptionsSchema = import_zod3.z.object({
+var GraphitiCommandSchema = import_zod6.z.enum(["start", "up", "down", "status", "env"]).describe("Operations accepted by the internal Graphiti Python runtime.");
+var graphitiText = (description) => import_zod6.z.string().trim().min(1).describe(description);
+var graphitiPort = (description) => exports_options.tcpPortOrZeroSchema.describe(description);
+var GraphitiOptionsSchema = import_zod6.z.object({
   python: graphitiText("Python executable used to run the matching Graphiti package.").default("python3"),
-  profile: graphitiText("Databricks profile used for model discovery, authentication, and persistence.").optional(),
-  home: graphitiText("Application-owned Graphiti runtime directory.").optional(),
-  model: graphitiText("Fuzzy chat-model name or endpoint identifier.").default("databricks-gpt-5-nano"),
+  profile: exports_options.DatabricksOptionsSchema.shape.profile.describe("Databricks profile used for model discovery, authentication, and persistence."),
+  graphitiHome: graphitiText("Application-owned Graphiti runtime directory.").optional(),
+  model: graphitiText("Fuzzy chat-model name or endpoint identifier.").default("databricks-gpt-5-nano").meta({ env: "MODEL_NAME" }),
   embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.").default("databricks-gte-large-en"),
-  embedderDimensions: import_zod3.z.number().int().positive().default(1024).describe("Embedding vector dimensions expected by Graphiti."),
-  modelGatewayUrl: graphitiText("Existing OpenAI-compatible model gateway base URL, including /v1.").optional(),
+  embedderDimensions: import_zod6.z.coerce.number().int().positive().default(1024).describe("Embedding vector dimensions expected by Graphiti."),
+  modelGatewayUrl: exports_options.normalizedUrlSchema.optional().describe("Existing OpenAI-compatible model gateway base URL, including /v1.").meta({ env: ["MODEL_GATEWAY_URL", "OPENAI_API_URL"] }),
   modelGatewayHost: graphitiText("Listener host for a locally managed model gateway.").default("127.0.0.1"),
   modelGatewayPort: graphitiPort("Listener port for a locally managed model gateway.").default(4400),
   modelGatewayCommand: graphitiText("Command used to start a locally managed model gateway.").optional(),
-  manageModelGateway: import_zod3.z.boolean().optional().describe("Whether Graphiti starts and stops a local model gateway."),
-  openAiApiKey: graphitiText("API key used only with an externally managed OpenAI-compatible endpoint.").optional(),
-  structuredOutputMode: graphitiText("Structured-output mode forwarded to Graphiti's OpenAI provider.").default("json_object"),
+  manageModelGateway: import_zod6.z.boolean().optional().describe("Whether Graphiti starts and stops a local model gateway."),
+  openAiApiKey: graphitiText("API key used only with an externally managed OpenAI-compatible endpoint.").optional().meta({ env: "OPENAI_API_KEY" }),
+  structuredOutputMode: graphitiText("Structured-output mode forwarded to Graphiti's OpenAI provider.").default("json_object").meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
   graphitiHost: graphitiText("Graphiti MCP listener host.").default("127.0.0.1"),
   graphitiPort: graphitiPort("Graphiti MCP listener port.").default(8000),
   proxyPort: graphitiPort("AppKit reverse-proxy listener port.").default(0),
   journalNamespace: graphitiText("Persistence namespace used by the Graphiti write journal.").optional(),
   journalDatabaseUrl: graphitiText("Explicit PostgreSQL journal URL.").optional(),
   journalTable: graphitiText("PostgreSQL journal table name.").optional(),
-  graphitiArgs: import_zod3.z.array(import_zod3.z.string()).default([]).describe("Arguments forwarded to the pinned upstream Graphiti MCP server.")
+  graphitiArgs: import_zod6.z.array(import_zod6.z.string()).default([]).describe("Arguments forwarded to the pinned upstream Graphiti MCP server.")
 }).strict().describe("Graphiti options accepted by JavaScript, Python, and generated bindings.");
+var GraphitiCliOptionsSchema = GraphitiOptionsSchema.omit({ graphitiArgs: true }).describe("Graphiti options represented as Commander flags rather than positional arguments.");
 var GRAPHITI_DEFAULTS = Object.freeze(GraphitiOptionsSchema.parse({}));
 var graphitiOptionKeys = Object.keys(GraphitiOptionsSchema.shape);
 function graphitiOptionOverrides(value) {
@@ -58861,28 +59422,7 @@ function serializeGraphitiOptions(options = {}) {
   return JSON.stringify(resolveGraphitiOptions(options));
 }
 function graphitiOptionsFromEnvironment(environment) {
-  const values2 = {
-    python: environment.PYTHON,
-    profile: environment.DATABRICKS_CONFIG_PROFILE,
-    home: environment.DBX_GRAPHITI_HOME,
-    model: environment.MODEL_NAME,
-    embedderModel: environment.EMBEDDER_MODEL,
-    embedderDimensions: integer(environment.EMBEDDER_DIMENSIONS),
-    modelGatewayUrl: environment.MODEL_GATEWAY_URL ?? environment.OPENAI_API_URL,
-    modelGatewayHost: environment.MODEL_GATEWAY_HOST,
-    modelGatewayPort: integer(environment.MODEL_GATEWAY_PORT),
-    modelGatewayCommand: environment.MODEL_GATEWAY_COMMAND,
-    manageModelGateway: boolean(environment.MANAGE_MODEL_GATEWAY),
-    openAiApiKey: environment.OPENAI_API_KEY,
-    structuredOutputMode: environment.LLM_STRUCTURED_OUTPUT_MODE,
-    graphitiHost: environment.GRAPHITI_HOST,
-    graphitiPort: integer(environment.GRAPHITI_PORT),
-    proxyPort: integer(environment.PROXY_PORT),
-    journalNamespace: environment.JOURNAL_NAMESPACE,
-    journalDatabaseUrl: environment.JOURNAL_DATABASE_URL,
-    journalTable: environment.JOURNAL_TABLE
-  };
-  return graphitiOptionOverrides(values2);
+  return exports_options.parseOptionOverrides(GraphitiOptionsSchema, null, environment);
 }
 function graphitiGatewayHealthUrl(options = {}) {
   return `${resolveGraphitiOptions(options).modelGatewayUrl.replace(/\/v1$/, "")}/api/healthz`;
@@ -58903,23 +59443,6 @@ function graphitiEnvironment(options = {}) {
     EMBEDDING_DIM: String(resolved.embedderDimensions),
     LLM_STRUCTURED_OUTPUT_MODE: resolved.structuredOutputMode
   };
-}
-function integer(value) {
-  if (value === undefined || value.trim() === "")
-    return;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed))
-    throw new Error(`Expected an integer, received ${value}`);
-  return parsed;
-}
-function boolean(value) {
-  if (value === undefined || value.trim() === "")
-    return;
-  if (/^(1|true|yes|on)$/i.test(value))
-    return true;
-  if (/^(0|false|no|off)$/i.test(value))
-    return false;
-  throw new Error(`Expected a boolean, received ${value}`);
 }
 
 // dbx-tools-python:dbx-tools:python-entry
@@ -58957,7 +59480,7 @@ var __pythonInvokeMethod = async (target, name, args) => {
 };
 var __pythonModules = {
   model__bindings: () => exports_bindings,
-  shared_graphiti__options: () => exports_options
+  shared_graphiti__options: () => exports_options2
 };
 var __pythonModule = (name) => {
   const load2 = __pythonModules[name];

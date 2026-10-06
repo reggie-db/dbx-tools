@@ -11,6 +11,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@simplewebauthn/browser",
       "version": "catalog:",
       "type": "runtime"

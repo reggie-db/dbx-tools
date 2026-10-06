@@ -70,6 +70,7 @@ assets/tsconfig.json
 packages/example/app/appkit-demo/index.ts
 packages/example/server/appkit-demo/index.ts
 packages/js/cli/appkit-env/index.ts
+packages/js/cli/args/index.ts
 packages/js/cli/auth/index.ts
 packages/js/cli/dbx-tools/index.ts
 packages/js/cli/falkor-db/index.ts

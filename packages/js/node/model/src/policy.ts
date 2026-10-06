@@ -6,7 +6,7 @@ import {
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model/contracts";
 
-import { supportsToolsByFamily } from "./classify.ts";
+import { compareVersionTuples, supportsToolsByFamily, versionTuple } from "./classify.ts";
 
 const FAMILIES = [
   "claude",
@@ -52,6 +52,50 @@ export function modelSearchQuery(name: string): string | undefined {
   const parsed = parseModelName(name);
   if (!parsed) return undefined;
   return [parsed.family, ...parsed.version.map(String), ...parsed.model].join(" ");
+}
+
+/**
+ * Return whether `name` has native web search: an exact documented identity, or
+ * a later {@link versionTuple} in the same family as a documented native
+ * web-search model. Intra-family floors use the name digit parser so identities
+ * like `databricks-claude-opus-4-8` and `system.ai.gpt-6-1-sol` compare.
+ * Hosted GPT-OSS weights never inherit.
+ */
+export function inheritsNativeWebSearch(name: string, documented: Iterable<string>): boolean {
+  const documentedKeys = documented instanceof Set ? documented : new Set(documented);
+  const key = modelSearchQuery(name)?.replaceAll(" ", "-");
+  if (key && documentedKeys.has(key)) return true;
+  const family = modelFamily(name);
+  if (!family || isOpenWeightsGpt(name)) return false;
+  const version = versionTuple(name);
+  if (isZeroVersion(version)) return false;
+  let floor: readonly number[] | undefined;
+  for (const entry of documentedKeys) {
+    if (modelFamily(entry) !== family || isOpenWeightsGpt(entry)) continue;
+    const documentedVersion = versionTuple(entry);
+    if (isZeroVersion(documentedVersion)) continue;
+    if (!floor || compareVersionTuples(documentedVersion, floor) < 0) {
+      floor = documentedVersion;
+    }
+  }
+  return floor !== undefined && compareVersionTuples(version, floor) >= 0;
+}
+
+/**
+ * Return whether an identity names a Databricks-hosted foundation model
+ * (`databricks-*` endpoint or `system.ai.*` model service). Custom and
+ * external endpoints use arbitrary names, so their digits are not versions.
+ */
+export function isFoundationModelIdentity(name: string): boolean {
+  return /^(?:databricks-|system\.ai\.)/i.test(name.trim());
+}
+
+function isOpenWeightsGpt(name: string): boolean {
+  return modelFamily(name) === "gpt" && /(?:^|[-_.])oss(?:[-_.]|$)/i.test(name);
+}
+
+function isZeroVersion(version: readonly number[]): boolean {
+  return version.every((part) => (part ?? 0) === 0);
 }
 
 /** Return the reasoning efforts accepted by a model family. */

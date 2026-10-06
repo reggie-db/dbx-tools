@@ -7,38 +7,17 @@
  * @module
  */
 
+import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import * as databricks from "@dbx-tools/auth";
-import {
-  AuthType,
-  type AuthType as AuthTypeValue,
-  TargetKind,
-  type TargetKind as TargetKindValue,
-} from "@dbx-tools/shared-auth";
 import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth/client";
-import { stringUtils } from "@dbx-tools/shared-core";
-import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
+import { Command, CommanderError } from "commander";
 
-interface AuthCliOptions {
-  profile?: string;
-  host?: string;
-  accountId?: string;
-  workspaceId?: string;
-  configFile?: string;
-  clientId?: string;
-  groupId?: string;
-  authType?: AuthTypeValue;
-  scopes?: string[];
-  target?: TargetKindValue;
-  lockTimeoutMs: string;
-  loginTimeoutMs: string;
-  refreshBufferMs: string;
-  preferUserToMachine: boolean;
-}
-
-interface TokenCommandOptions {
-  forceRefresh?: boolean;
-  login?: boolean;
-}
+import {
+  AuthCliOptionsSchema,
+  databricksAuthOptions,
+  TokenCommandOptionsSchema,
+  type AuthCliOptions,
+} from "./options.ts";
 
 interface AuthContext {
   auth: databricks.AuthClient;
@@ -51,8 +30,6 @@ interface AuthCliDependencies {
   writeText(value: string): void;
 }
 
-const DEFAULT_AUTH_OPTIONS = databricks.AUTH_DEFAULTS;
-
 const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
   createAuthClient: databricks.client.createAuthClient,
   writeJson: (value) => {
@@ -63,54 +40,13 @@ const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
   },
 };
 
-/** Collect comma-separated and repeated scope values into one ordered list. */
-function collectScopes(value: string, previous: string[] = []): string[] {
-  return [...previous, ...stringUtils.parseList(value)];
-}
-
-/** Parse a decimal integer for lifecycle timeout configuration. */
-function parseInteger(value: string | number, name: string, signed: boolean): number {
-  const text = String(value).trim();
-  const pattern = signed ? /^-?\d+$/ : /^\d+$/;
-  if (!pattern.test(text)) {
-    throw new InvalidArgumentError(`${name} must be a ${signed ? "" : "non-negative "}integer`);
-  }
-  const parsed = Number(text);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new InvalidArgumentError(`${name} is outside the safe integer range`);
-  }
-  return parsed;
-}
-
-/** Build authentication options from parsed Commander values. */
-function bindingOptions(options: AuthCliOptions): databricks.DatabricksAuthOptions {
-  return {
-    profile: options.profile,
-    host: options.host,
-    accountId: options.accountId,
-    workspaceId: options.workspaceId,
-    configFile: options.configFile,
-    clientId: options.clientId,
-    groupId: options.groupId,
-    authType: options.authType,
-    scopes: options.scopes?.length ? options.scopes : undefined,
-    target: options.target,
-    auth: {
-      lockTimeoutMs: parseInteger(options.lockTimeoutMs, "--lock-timeout-ms", false),
-      loginTimeoutMs: parseInteger(options.loginTimeoutMs, "--login-timeout-ms", false),
-      refreshBufferMs: parseInteger(options.refreshBufferMs, "--refresh-buffer-ms", true),
-    },
-    preferUserToMachine: options.preferUserToMachine,
-  };
-}
-
 /** Open the selected authentication client. */
 async function openAuth(
   options: AuthCliOptions,
   dependencies: AuthCliDependencies,
 ): Promise<AuthContext> {
   return {
-    auth: await dependencies.createAuthClient(bindingOptions(options)),
+    auth: await dependencies.createAuthClient(databricksAuthOptions(options)),
     close: async () => {},
   };
 }
@@ -152,75 +88,21 @@ function clientInfo(auth: databricks.AuthClient): DatabricksAuthClientInfo {
   };
 }
 
-/** Register options shared by every auth operation. */
-function addCommonOptions(program: Command): Command {
-  return program
-    .addOption(
-      new Option("--profile <name>", "Databricks CLI profile").env("DATABRICKS_CONFIG_PROFILE"),
-    )
-    .addOption(new Option("--host <url>", "Databricks host").env("DATABRICKS_HOST"))
-    .addOption(
-      new Option("--account-id <id>", "Databricks account id").env("DATABRICKS_ACCOUNT_ID"),
-    )
-    .addOption(
-      new Option("--workspace-id <id>", "Databricks workspace id").env("DATABRICKS_WORKSPACE_ID"),
-    )
-    .addOption(
-      new Option("--config-file <path>", "Databricks config file").env("DATABRICKS_CONFIG_FILE"),
-    )
-    .addOption(new Option("--client-id <id>", "OAuth client id").env("DATABRICKS_CLIENT_ID"))
-    .addOption(
-      new Option("--group-id <id>", "Assumed Databricks group id").env("DATABRICKS_GROUP_ID"),
-    )
-    .addOption(
-      new Option("--auth-type <type>", "Databricks authentication type")
-        .choices(Object.values(AuthType))
-        .env("DATABRICKS_AUTH_TYPE"),
-    )
-    .addOption(
-      new Option("--scopes <scopes>", "OAuth scopes, repeatable or comma-separated").argParser(
-        collectScopes,
-      ),
-    )
-    .addOption(
-      new Option("--target <target>", "OAuth target")
-        .choices(Object.values(TargetKind))
-        .env("DBX_TOOLS_U2M_TARGET"),
-    )
-    .addOption(
-      new Option("--lock-timeout-ms <ms>", "Credential lock timeout (0 waits indefinitely)")
-        .default(DEFAULT_AUTH_OPTIONS.lockTimeoutMs.toString())
-        .env("DBX_TOOLS_U2M_LOCK_TIMEOUT_MS"),
-    )
-    .addOption(
-      new Option("--login-timeout-ms <ms>", "Browser login timeout")
-        .default(DEFAULT_AUTH_OPTIONS.loginTimeoutMs.toString())
-        .env("DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS"),
-    )
-    .addOption(
-      new Option("--refresh-buffer-ms <ms>", "Token refresh buffer")
-        .default(DEFAULT_AUTH_OPTIONS.refreshBufferMs.toString())
-        .env("DBX_TOOLS_U2M_REFRESH_BUFFER_MS"),
-    )
-    .option(
-      "--no-prefer-user-to-machine",
-      "Use selected M2M credentials without preferring a matching user profile",
-    );
-}
-
 /** Build the `dbx auth` Commander program without parsing arguments. */
 export function buildProgram(
   name = "dbx auth",
   overrides: Partial<AuthCliDependencies> = {},
 ): Command {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...overrides };
-  const program = addCommonOptions(
+  const program = addArgs(
     new Command()
       .name(name)
       .description("Authenticate to Databricks with user or machine OAuth")
       .showHelpAfterError(),
+    AuthCliOptionsSchema,
+    { scope: [] },
   );
-  const options = (): AuthCliOptions => program.opts<AuthCliOptions>();
+  const options = (): AuthCliOptions => parseArgs(program, AuthCliOptionsSchema);
 
   program
     .command("login")
@@ -231,21 +113,21 @@ export function buildProgram(
       });
     });
 
-  program
-    .command("token")
-    .description("Return a valid access token, logging in when needed")
-    .option("--force-refresh", "Refresh the token before returning it")
-    .option("--no-login", "Fail instead of logging in for a missing or invalid credential")
-    .action(async (tokenOptions: TokenCommandOptions) => {
-      await withAuth(options(), dependencies, async ({ auth }) => {
-        const login = tokenOptions.login === false ? false : undefined;
-        const token = await auth.token({
-          ...(login === undefined ? {} : { login }),
-          refresh: tokenOptions.forceRefresh,
-        });
-        dependencies.writeJson(tokenJson(token));
+  const tokenCommand = addArgs(
+    program.command("token").description("Return a valid access token, logging in when needed"),
+    TokenCommandOptionsSchema,
+    { scope: [] },
+  );
+  tokenCommand.action(async () => {
+    const tokenOptions = parseArgs(tokenCommand, TokenCommandOptionsSchema);
+    await withAuth(options(), dependencies, async ({ auth }) => {
+      const token = await auth.token({
+        ...(tokenOptions.login ? {} : { login: false }),
+        ...(tokenOptions.forceRefresh ? { refresh: true } : {}),
       });
+      dependencies.writeJson(tokenJson(token));
     });
+  });
 
   program
     .command("profile")

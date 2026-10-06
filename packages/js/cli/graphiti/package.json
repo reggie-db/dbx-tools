@@ -26,6 +26,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/cli-model-gateway": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/core": "workspace:^",

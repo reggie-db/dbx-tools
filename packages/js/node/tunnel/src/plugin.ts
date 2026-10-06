@@ -30,7 +30,6 @@ import {
   authStorage,
   type AuthorizeIdentity,
   type AuthEmailOptions,
-  type AuthStorageConfig,
   type AuthStorageMode,
   type PasswordlessAuthRuntime,
 } from "@dbx-tools/auth-gate";
@@ -38,6 +37,7 @@ import { configUtils } from "@dbx-tools/core";
 import { AUTH_BASE_PATH } from "@dbx-tools/shared-auth";
 import { brandUtils, log, stringUtils } from "@dbx-tools/shared-core";
 import type { RequestHandler } from "express";
+import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
 import { mountGate, type GateOptions } from "./gate.ts";
@@ -88,107 +88,56 @@ export function mountGateOnContext(context: GateMountContext, options: GateOptio
   );
 }
 
-/** Options for the {@link authGate} plugin (all resolvable from env - see below). */
-export interface AuthGateConfig extends BasePluginConfig, AuthStorageConfig {
-  /** Allow-list patterns (domain / glob / `/regex/`). Empty = allow nobody. Env TUNNEL_AUTH_ALLOW. */
-  allow?: string | string[];
-  /**
-   * Subject line for the code email. Env TUNNEL_AUTH_SUBJECT.
-   *
-   * Defaults to "Your verification code". The wording of the subject and
-   * {@link message} is deliberately the conventional phrasing rather than
-   * anything branded: iOS, Gmail, Outlook, and Android all detect a one-time
-   * code from this shape and offer to autofill it, and a novel phrasing is what
-   * breaks that detection.
-   *
-   * This is the subject TEMPLATE, not the literal line sent: the code is spliced
-   * into it (`"123456 is your verification code"`) because a push notification
-   * shows only the subject and preheader, and that notification is what mobile
-   * autofill reads. See `codeEmailSubject` in `./code-email.ts`.
-   */
-  subject?: string;
-  /**
-   * Display name used in the code email copy. Env TUNNEL_AUTH_BRAND_NAME.
-   *
-   * Defaults to the brand context's `name` - the app's own `branding/brand.yaml`
-   * when it has one, else the dbx-tools default. Set this only to override the
-   * brand for this gate.
-   */
-  brandName?: string;
-  /**
-   * Line shown immediately above the code in the email. Env TUNNEL_AUTH_MESSAGE.
-   *
-   * Keep the code on its OWN line directly after this text - that adjacency is
-   * what the platform code-detection heuristics key on.
-   */
-  message?: string;
-  /**
-   * Session lifetime (seconds). Env TUNNEL_AUTH_SESSION_TTL. Default 2592000 (30d).
-   *
-   * Matched to the cache-backed signing key's own 30-day TTL (see
-   * `./signing-key.ts`): the cookie and the key that validates it should expire
-   * together, or one silently outlives the other.
-   */
-  sessionTtlSeconds?: number;
-  /** One-time-code lifetime (seconds). Env TUNNEL_AUTH_CODE_TTL. Default 600 (10m). */
-  codeTtlSeconds?: number;
-  /** Max verify attempts per issued code. Default 5. */
-  maxAttempts?: number;
-  /**
-   * Force-clear cutoff: every session issued BEFORE it stops verifying, so moving
-   * it forward signs everyone out. Env TUNNEL_AUTH_SESSION_CUTOFF.
-   *
-   * Anything `object.toDate` accepts: a `Date`, `2026-08-02`, an ISO instant,
-   * epoch seconds/millis, or a relative duration (`-30d`, `7 days ago`). Unset
-   * means no cutoff.
-   */
-  sessionCutoff?: string | number | Date;
-  /**
-   * Same-origin path returned after a successful logout. Env
-   * `TUNNEL_AUTH_LOGOUT_REDIRECT`. Defaults to `/`, where the AuthGate presents
-   * login again.
-   */
-  logoutRedirectPath?: string;
-  /**
-   * Deliver a code to an address. Defaults to sending through the host app's
-   * shared `@dbx-tools/email` transport (see `./send-code`); override to wire a
-   * different delivery path.
-   */
-  sendCode?: (email: string, code: string, opts: SendCodeOptions) => Promise<void>;
-  /**
-   * Identity authorization independent of authentication. Defaults to the
-   * configured allow-list and is re-evaluated for every accepted session.
-   */
-  authorizeIdentity?: AuthorizeIdentity;
-  /**
-   * The public `<subdomain>.<server>` that identifies portr traffic by its `Host`
-   * header. Only requests whose `Host` matches this are gated; everything else
-   * (the platform front door, other local callers) passes through. Env
-   * `TUNNEL_PUBLIC_DOMAIN`. When absent, the gate is inert (nothing is tunnel
-   * traffic).
-   */
-  publicDomain?: string;
-  /** Additional public tunnel domains accepted by the gate. */
-  publicDomains?: string | string[];
-  /**
-   * Extra `x-` request headers tunnel traffic may forward (literal / glob /
-   * `/regex/`), unioned with the built-in allow-list. Env `TUNNEL_FORWARD_HEADERS`.
-   */
-  forwardHeaders?: string | string[];
-  /**
-   * Path prefixes to gate beyond the built-in `/api/` (literal prefixes, comma-
-   * or space-separated as a string). For an app whose privileged surface is not
-   * under `/api/` — e.g. a WebSocket at `/ws` — list those prefixes so they
-   * require a session too. Env `TUNNEL_GATE_PATHS`.
-   */
-  gatePaths?: string | string[];
-  /**
-   * Run OPEN with no gate (env `TUNNEL_INSECURE=true`). The login routes and gate
-   * middleware are not mounted, and the SMTP fail-fast is skipped. Use only when
-   * the tunnel is deliberately public.
-   */
-  insecure?: boolean;
-}
+const text = (description: string) => z.string().trim().min(1).optional().describe(description);
+const textOrList = (description: string) =>
+  z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .describe(description);
+
+export const AuthGateConfigSchema = authStorage.AuthStorageConfigSchema.extend({
+  allow: textOrList("Email allow-list patterns."),
+  subject: text("Verification email subject."),
+  brandName: text("Verification email brand name."),
+  message: text("Verification email message."),
+  sessionTtlSeconds: z.coerce
+    .number<number>()
+    .positive()
+    .optional()
+    .describe("Session lifetime in seconds."),
+  codeTtlSeconds: z.coerce
+    .number<number>()
+    .positive()
+    .optional()
+    .describe("One-time-code lifetime in seconds."),
+  maxAttempts: z.coerce
+    .number<number>()
+    .int()
+    .positive()
+    .optional()
+    .describe("Maximum verification attempts per code."),
+  sessionCutoff: z
+    .union([z.string(), z.number(), z.date()])
+    .optional()
+    .describe("Session invalidation cutoff."),
+  logoutRedirectPath: text("Same-origin path returned after logout."),
+  publicDomain: text("Primary public tunnel domain."),
+  publicDomains: textOrList("Additional public tunnel domains."),
+  forwardHeaders: textOrList("Additional forwarded request header patterns."),
+  gatePaths: textOrList("Additional path prefixes requiring authentication."),
+  insecure: z.boolean().optional().describe("Run without an authentication gate."),
+})
+  .strict()
+  .describe("Serializable authentication gate configuration.");
+
+type SerializableAuthGateConfig = z.input<typeof AuthGateConfigSchema>;
+
+/** Options for the {@link authGate} plugin. */
+export type AuthGateConfig = BasePluginConfig &
+  SerializableAuthGateConfig & {
+    sendCode?: (email: string, code: string, opts: SendCodeOptions) => Promise<void>;
+    authorizeIdentity?: AuthorizeIdentity;
+  };
 
 /** Branding and expiry metadata passed to {@link AuthGateConfig.sendCode}. */
 export type SendCodeOptions = AuthEmailOptions;

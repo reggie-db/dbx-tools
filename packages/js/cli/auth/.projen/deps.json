@@ -16,6 +16,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/cli-args",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-auth",
       "version": "workspace:^",
       "type": "runtime"
@@ -27,6 +32,11 @@
     },
     {
       "name": "commander",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "zod",
       "version": "catalog:",
       "type": "runtime"
     }

@@ -27,11 +27,11 @@ Arguments after `--` belong to your command, not to the tunnel CLI.
 ## Choose Access Rules
 
 ```sh
-dbx tunnel --allow example.com trusted@example.org --gate-path /ws -- bun src/server.ts
+dbx tunnel --allow example.com --allow trusted@example.org --gate-paths /ws -- bun src/server.ts
 ```
 
 Allow-list entries accept domains, glob patterns, and regular expressions. API
-routes are gated by default; add other protected prefixes with `--gate-path`.
+routes are gated by default; add other protected prefixes with `--gate-paths`.
 `--insecure` disables the gate entirely.
 
 Session lifetime, one-time-code lifetime, email wording, and authentication
@@ -89,32 +89,33 @@ dbx tunnel [options] [command] [command...]
 
 #### Options
 
-| Option                            | Description                                           |
-| --------------------------------- | ----------------------------------------------------- |
-| `--transport <transport>`         | public tunnel transport: portr, frp, or both          |
-| `--public-domain <host>`          | public tunnel domain                                  |
-| `--subdomain <name>`              | portr subdomain (else derived from the public domain) |
-| `--port <port>`                   | public port the wrapper listens on                    |
-| `--app-port <port>`               | private port the wrapped app is told to bind          |
-| `--allow <patterns...>`           | email allow-list (domain / glob / /regex/)            |
-| `--subject <text>`                | verification email subject                            |
-| `--brand-name <name>`             | verification email brand name                         |
-| `--message <text>`                | verification email message                            |
-| `--session-ttl <seconds>`         | session lifetime                                      |
-| `--code-ttl <seconds>`            | one-time-code lifetime                                |
-| `--session-cutoff <when>`         | invalidate every session issued before this           |
-| `--auth-storage <mode>`           | auth database: auto, lakebase, or sqlite              |
-| `--auth-sqlite-path <path>`       | local Better Auth SQLite file                         |
-| `--forward-headers <patterns...>` | extra x- headers tunnel traffic may forward           |
-| `--gate-path <prefix...>`         | path prefixes to gate beyond /api/ (e.g. /ws)         |
-| `--bind <host...>`                | interface IPs the gate listens on (default: 0.0.0.0)  |
-| `--frp-server <host>`             | frps control host (default: FRP public domain)        |
-| `--frp-public-domain <host>`      | FRP public HTTP domain                                |
-| `--frp-server-port <port>`        | frps control port (default: 443)                      |
-| `--frp-protocol <protocol>`       | frpc transport protocol (default: wss)                |
-| `--frp-token <token>`             | frps auth token                                       |
-| `--frp-proxy-name <name>`         | frp proxy registration name                           |
-| `--insecure`                      | run open, with no gate                                |
+| Option                          | Description                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
+| `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
+| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
+| `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
+| `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
+| `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
+| `--subject <value>`             | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
+| `--brand-name <value>`          | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `--message <value>`             | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
+| `--session-ttl-seconds <value>` | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
+| `--code-ttl-seconds <value>`    | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
+| `--session-cutoff <value>`      | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
+| `--storage <value>`             | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
+| `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
+| `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
+| `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
+| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
+| `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
+| `--no-insecure`                 | Disable run without an authentication gate.                                                     |
+| `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
+| `--frp-public-domain <value>`   | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
+| `--frp-server-port <value>`     | FRP control port. (env: FRP_SERVER_PORT)                                                        |
+| `--frp-protocol <value>`        | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
+| `--frp-token <value>`           | FRP authentication token. (env: FRP_TOKEN)                                                      |
+| `--frp-proxy-name <value>`      | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
 
 #### Commands
 
@@ -140,32 +141,33 @@ dbx tunnel run [options] <command...>
 
 #### Options
 
-| Option                            | Description                                           |
-| --------------------------------- | ----------------------------------------------------- |
-| `--transport <transport>`         | public tunnel transport: portr, frp, or both          |
-| `--public-domain <host>`          | public tunnel domain                                  |
-| `--subdomain <name>`              | portr subdomain (else derived from the public domain) |
-| `--port <port>`                   | public port the wrapper listens on                    |
-| `--app-port <port>`               | private port the wrapped app is told to bind          |
-| `--allow <patterns...>`           | email allow-list (domain / glob / /regex/)            |
-| `--subject <text>`                | verification email subject                            |
-| `--brand-name <name>`             | verification email brand name                         |
-| `--message <text>`                | verification email message                            |
-| `--session-ttl <seconds>`         | session lifetime                                      |
-| `--code-ttl <seconds>`            | one-time-code lifetime                                |
-| `--session-cutoff <when>`         | invalidate every session issued before this           |
-| `--auth-storage <mode>`           | auth database: auto, lakebase, or sqlite              |
-| `--auth-sqlite-path <path>`       | local Better Auth SQLite file                         |
-| `--forward-headers <patterns...>` | extra x- headers tunnel traffic may forward           |
-| `--gate-path <prefix...>`         | path prefixes to gate beyond /api/ (e.g. /ws)         |
-| `--bind <host...>`                | interface IPs the gate listens on (default: 0.0.0.0)  |
-| `--frp-server <host>`             | frps control host (default: FRP public domain)        |
-| `--frp-public-domain <host>`      | FRP public HTTP domain                                |
-| `--frp-server-port <port>`        | frps control port (default: 443)                      |
-| `--frp-protocol <protocol>`       | frpc transport protocol (default: wss)                |
-| `--frp-token <token>`             | frps auth token                                       |
-| `--frp-proxy-name <name>`         | frp proxy registration name                           |
-| `--insecure`                      | run open, with no gate                                |
+| Option                          | Description                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
+| `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
+| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
+| `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
+| `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
+| `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
+| `--subject <value>`             | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
+| `--brand-name <value>`          | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `--message <value>`             | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
+| `--session-ttl-seconds <value>` | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
+| `--code-ttl-seconds <value>`    | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
+| `--session-cutoff <value>`      | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
+| `--storage <value>`             | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
+| `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
+| `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
+| `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
+| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
+| `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
+| `--no-insecure`                 | Disable run without an authentication gate.                                                     |
+| `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
+| `--frp-public-domain <value>`   | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
+| `--frp-server-port <value>`     | FRP control port. (env: FRP_SERVER_PORT)                                                        |
+| `--frp-protocol <value>`        | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
+| `--frp-token <value>`           | FRP authentication token. (env: FRP_TOKEN)                                                      |
+| `--frp-proxy-name <value>`      | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
 
 ### `dbx tunnel status`
 
@@ -177,32 +179,33 @@ dbx tunnel status [options]
 
 #### Options
 
-| Option                            | Description                                           |
-| --------------------------------- | ----------------------------------------------------- |
-| `--transport <transport>`         | public tunnel transport: portr, frp, or both          |
-| `--public-domain <host>`          | public tunnel domain                                  |
-| `--subdomain <name>`              | portr subdomain (else derived from the public domain) |
-| `--port <port>`                   | public port the wrapper listens on                    |
-| `--app-port <port>`               | private port the wrapped app is told to bind          |
-| `--allow <patterns...>`           | email allow-list (domain / glob / /regex/)            |
-| `--subject <text>`                | verification email subject                            |
-| `--brand-name <name>`             | verification email brand name                         |
-| `--message <text>`                | verification email message                            |
-| `--session-ttl <seconds>`         | session lifetime                                      |
-| `--code-ttl <seconds>`            | one-time-code lifetime                                |
-| `--session-cutoff <when>`         | invalidate every session issued before this           |
-| `--auth-storage <mode>`           | auth database: auto, lakebase, or sqlite              |
-| `--auth-sqlite-path <path>`       | local Better Auth SQLite file                         |
-| `--forward-headers <patterns...>` | extra x- headers tunnel traffic may forward           |
-| `--gate-path <prefix...>`         | path prefixes to gate beyond /api/ (e.g. /ws)         |
-| `--bind <host...>`                | interface IPs the gate listens on (default: 0.0.0.0)  |
-| `--frp-server <host>`             | frps control host (default: FRP public domain)        |
-| `--frp-public-domain <host>`      | FRP public HTTP domain                                |
-| `--frp-server-port <port>`        | frps control port (default: 443)                      |
-| `--frp-protocol <protocol>`       | frpc transport protocol (default: wss)                |
-| `--frp-token <token>`             | frps auth token                                       |
-| `--frp-proxy-name <name>`         | frp proxy registration name                           |
-| `--insecure`                      | run open, with no gate                                |
+| Option                          | Description                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `--transport <value>`           | Public tunnel transport. (choices: "portr", "frp", "both", env: TUNNEL_TRANSPORT)               |
+| `--public-domain <value>`       | Public tunnel domain. (env: TUNNEL_PUBLIC_DOMAIN)                                               |
+| `--subdomain <value>`           | Portr subdomain. (env: SUBDOMAIN)                                                               |
+| `--port <value>`                | Public listener port. (env: DATABRICKS_APP_PORT)                                                |
+| `--app-port <value>`            | Private wrapped application port. (env: TUNNEL_APP_PORT)                                        |
+| `--allow <value>`               | Email allow-list patterns. (env: TUNNEL_AUTH_ALLOW)                                             |
+| `--subject <value>`             | Verification email subject. (env: TUNNEL_AUTH_SUBJECT)                                          |
+| `--brand-name <value>`          | Verification email brand name. (env: TUNNEL_AUTH_BRAND_NAME)                                    |
+| `--message <value>`             | Verification email message. (env: TUNNEL_AUTH_MESSAGE)                                          |
+| `--session-ttl-seconds <value>` | Session lifetime in seconds. (env: TUNNEL_AUTH_SESSION_TTL)                                     |
+| `--code-ttl-seconds <value>`    | One-time-code lifetime in seconds. (env: TUNNEL_AUTH_CODE_TTL)                                  |
+| `--session-cutoff <value>`      | Invalidate sessions issued before this value. (env: TUNNEL_AUTH_SESSION_CUTOFF)                 |
+| `--storage <value>`             | Authentication database mode. (choices: "auto", "lakebase", "sqlite", env: TUNNEL_AUTH_STORAGE) |
+| `--sqlite-path <value>`         | Local authentication SQLite file. (env: TUNNEL_AUTH_SQLITE_PATH)                                |
+| `--forward-headers <value>`     | Additional forwarded request header patterns. (env: TUNNEL_FORWARD_HEADERS)                     |
+| `--gate-paths <value>`          | Additional path prefixes requiring authentication. (env: TUNNEL_GATE_PATHS)                     |
+| `--bind-hosts <value>`          | Interface IPs the gate listens on. (env: BIND_HOSTS)                                            |
+| `--insecure`                    | Run without an authentication gate. (env: TUNNEL_INSECURE)                                      |
+| `--no-insecure`                 | Disable run without an authentication gate.                                                     |
+| `--frp-server <value>`          | FRP control host. (env: FRP_SERVER)                                                             |
+| `--frp-public-domain <value>`   | FRP public HTTP domain. (env: TUNNEL_FRP_PUBLIC_DOMAIN)                                         |
+| `--frp-server-port <value>`     | FRP control port. (env: FRP_SERVER_PORT)                                                        |
+| `--frp-protocol <value>`        | FRP transport protocol. (env: FRP_PROTOCOL)                                                     |
+| `--frp-token <value>`           | FRP authentication token. (env: FRP_TOKEN)                                                      |
+| `--frp-proxy-name <value>`      | FRP proxy registration name. (env: FRP_PROXY_NAME)                                              |
 
 ### `dbx tunnel install`
 

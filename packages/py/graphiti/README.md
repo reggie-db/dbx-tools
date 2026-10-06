@@ -42,7 +42,7 @@ the Graphiti home directory. Defaults are:
 - macOS: `~/Library/Application Support/dbx-tools/graphiti`
 - Linux: `${XDG_DATA_HOME:-~/.local/share}/dbx-tools/graphiti`
 
-Set `DBX_GRAPHITI_HOME` or pass the CLI's `--home` option to use another
+Set `GRAPHITI_HOME` or pass the CLI's `--graphiti-home` option to use another
 directory. Removing the directory removes the local graph.
 
 ## Durable Recovery

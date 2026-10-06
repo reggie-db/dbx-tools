@@ -8,6 +8,7 @@
  * @module
  */
 
+import { options } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 /** Environment variable carrying one serialized {@link GraphitiOptions} object. */
@@ -23,33 +24,33 @@ export const GraphitiCommandSchema = z
 export type GraphitiCommand = z.infer<typeof GraphitiCommandSchema>;
 
 const graphitiText = (description: string) => z.string().trim().min(1).describe(description);
-const graphitiPort = (description: string) =>
-  z.number().int().min(0).max(65_535).describe(description);
+const graphitiPort = (description: string) => options.tcpPortOrZeroSchema.describe(description);
 
 export const GraphitiOptionsSchema = z
   .object({
     python: graphitiText("Python executable used to run the matching Graphiti package.").default(
       "python3",
     ),
-    profile: graphitiText(
+    profile: options.DatabricksOptionsSchema.shape.profile.describe(
       "Databricks profile used for model discovery, authentication, and persistence.",
-    ).optional(),
-    home: graphitiText("Application-owned Graphiti runtime directory.").optional(),
-    model: graphitiText("Fuzzy chat-model name or endpoint identifier.").default(
-      "databricks-gpt-5-nano",
     ),
+    graphitiHome: graphitiText("Application-owned Graphiti runtime directory.").optional(),
+    model: graphitiText("Fuzzy chat-model name or endpoint identifier.")
+      .default("databricks-gpt-5-nano")
+      .meta({ env: "MODEL_NAME" }),
     embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.").default(
       "databricks-gte-large-en",
     ),
-    embedderDimensions: z
-      .number()
+    embedderDimensions: z.coerce
+      .number<number>()
       .int()
       .positive()
       .default(1024)
       .describe("Embedding vector dimensions expected by Graphiti."),
-    modelGatewayUrl: graphitiText(
-      "Existing OpenAI-compatible model gateway base URL, including /v1.",
-    ).optional(),
+    modelGatewayUrl: options.normalizedUrlSchema
+      .optional()
+      .describe("Existing OpenAI-compatible model gateway base URL, including /v1.")
+      .meta({ env: ["MODEL_GATEWAY_URL", "OPENAI_API_URL"] }),
     modelGatewayHost: graphitiText("Listener host for a locally managed model gateway.").default(
       "127.0.0.1",
     ),
@@ -65,10 +66,14 @@ export const GraphitiOptionsSchema = z
       .describe("Whether Graphiti starts and stops a local model gateway."),
     openAiApiKey: graphitiText(
       "API key used only with an externally managed OpenAI-compatible endpoint.",
-    ).optional(),
+    )
+      .optional()
+      .meta({ env: "OPENAI_API_KEY" }),
     structuredOutputMode: graphitiText(
       "Structured-output mode forwarded to Graphiti's OpenAI provider.",
-    ).default("json_object"),
+    )
+      .default("json_object")
+      .meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
     graphitiHost: graphitiText("Graphiti MCP listener host.").default("127.0.0.1"),
     graphitiPort: graphitiPort("Graphiti MCP listener port.").default(8000),
     proxyPort: graphitiPort("AppKit reverse-proxy listener port.").default(0),
@@ -84,6 +89,11 @@ export const GraphitiOptionsSchema = z
   })
   .strict()
   .describe("Graphiti options accepted by JavaScript, Python, and generated bindings.");
+
+/** Graphiti options represented as Commander flags rather than positional arguments. */
+export const GraphitiCliOptionsSchema = GraphitiOptionsSchema.omit({ graphitiArgs: true }).describe(
+  "Graphiti options represented as Commander flags rather than positional arguments.",
+);
 
 export type GraphitiOptions = z.input<typeof GraphitiOptionsSchema>;
 
@@ -143,28 +153,7 @@ export function serializeGraphitiOptions(options: GraphitiOptions = {}): string 
 export function graphitiOptionsFromEnvironment(
   environment: Readonly<Record<string, string | undefined>>,
 ): GraphitiOptions {
-  const values = {
-    python: environment.PYTHON,
-    profile: environment.DATABRICKS_CONFIG_PROFILE,
-    home: environment.DBX_GRAPHITI_HOME,
-    model: environment.MODEL_NAME,
-    embedderModel: environment.EMBEDDER_MODEL,
-    embedderDimensions: integer(environment.EMBEDDER_DIMENSIONS),
-    modelGatewayUrl: environment.MODEL_GATEWAY_URL ?? environment.OPENAI_API_URL,
-    modelGatewayHost: environment.MODEL_GATEWAY_HOST,
-    modelGatewayPort: integer(environment.MODEL_GATEWAY_PORT),
-    modelGatewayCommand: environment.MODEL_GATEWAY_COMMAND,
-    manageModelGateway: boolean(environment.MANAGE_MODEL_GATEWAY),
-    openAiApiKey: environment.OPENAI_API_KEY,
-    structuredOutputMode: environment.LLM_STRUCTURED_OUTPUT_MODE,
-    graphitiHost: environment.GRAPHITI_HOST,
-    graphitiPort: integer(environment.GRAPHITI_PORT),
-    proxyPort: integer(environment.PROXY_PORT),
-    journalNamespace: environment.JOURNAL_NAMESPACE,
-    journalDatabaseUrl: environment.JOURNAL_DATABASE_URL,
-    journalTable: environment.JOURNAL_TABLE,
-  };
-  return graphitiOptionOverrides(values);
+  return options.parseOptionOverrides(GraphitiOptionsSchema, null, environment);
 }
 
 /** Return the managed model gateway health endpoint. */
@@ -189,18 +178,4 @@ export function graphitiEnvironment(options: GraphitiOptions = {}): Record<strin
     EMBEDDING_DIM: String(resolved.embedderDimensions),
     LLM_STRUCTURED_OUTPUT_MODE: resolved.structuredOutputMode,
   };
-}
-
-function integer(value: string | undefined): number | undefined {
-  if (value === undefined || value.trim() === "") return undefined;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) throw new Error(`Expected an integer, received ${value}`);
-  return parsed;
-}
-
-function boolean(value: string | undefined): boolean | undefined {
-  if (value === undefined || value.trim() === "") return undefined;
-  if (/^(1|true|yes|on)$/i.test(value)) return true;
-  if (/^(0|false|no|off)$/i.test(value)) return false;
-  throw new Error(`Expected a boolean, received ${value}`);
 }

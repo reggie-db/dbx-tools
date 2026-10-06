@@ -24,9 +24,11 @@
   },
   "dependencies": {
     "@dbx-tools/auth": "workspace:^",
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/shared-auth": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "commander": "catalog:"
+    "commander": "catalog:",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -43,6 +45,10 @@
         "types": "./lib/src/cli.d.ts",
         "default": "./lib/src/cli.js"
       },
+      "./options": {
+        "types": "./lib/src/options.d.ts",
+        "default": "./lib/src/options.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -57,6 +63,7 @@
   "exports": {
     ".": "./index.ts",
     "./cli": "./src/cli.ts",
+    "./options": "./src/options.ts",
     "./package.json": "./package.json"
   },
   "files": [

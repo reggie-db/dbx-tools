@@ -15,17 +15,30 @@ import { log } from "@dbx-tools/shared-core";
 import type { BetterAuthOptions } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import envPaths from "env-paths";
+import { z } from "zod";
 
 const logger = log.logger("auth:storage");
 
-/** Supported persistence choices for Better Auth state. */
-export type AuthStorageMode = "auto" | "lakebase" | "sqlite";
+export const AuthStorageModeSchema = z
+  .enum(["auto", "lakebase", "sqlite"])
+  .describe("Supported persistence choices for Better Auth state.");
 
-/** Caller-selected authentication storage mode and optional SQLite location. */
-export interface AuthStorageConfig {
-  storage?: AuthStorageMode;
-  sqlitePath?: string;
-}
+export const AuthStorageConfigSchema = z
+  .object({
+    storage: AuthStorageModeSchema.optional().describe("Authentication storage mode."),
+    sqlitePath: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe("Optional local SQLite database path."),
+  })
+  .strict()
+  .describe("Caller-selected authentication storage configuration.");
+
+export type AuthStorageMode = z.infer<typeof AuthStorageModeSchema>;
+
+export type AuthStorageConfig = z.input<typeof AuthStorageConfigSchema>;
 
 /** Authentication storage configuration after defaults and path resolution. */
 export interface ResolvedAuthStorageConfig {
@@ -60,14 +73,15 @@ const MIGRATION_LOCK = ["auth", "better-auth", "migrations"] as const;
 export function resolveAuthStorageConfig(
   config: AuthStorageConfig = {},
 ): ResolvedAuthStorageConfig {
-  const mode = config.storage ?? "auto";
-  if (mode !== "auto" && mode !== "lakebase" && mode !== "sqlite") {
-    throw new TypeError('auth storage must be "auto", "lakebase", or "sqlite"');
-  }
+  const parsed = AuthStorageConfigSchema.parse({
+    storage: config.storage,
+    sqlitePath: config.sqlitePath,
+  });
+  const mode = parsed.storage ?? "auto";
   const dataDirectory = envPaths("dbx-tools", { suffix: "" }).data;
   return {
     mode,
-    sqlitePath: resolve(config.sqlitePath ?? resolve(dataDirectory, "auth", "auth.sqlite")),
+    sqlitePath: resolve(parsed.sqlitePath ?? resolve(dataDirectory, "auth", "auth.sqlite")),
   };
 }
 

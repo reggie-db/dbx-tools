@@ -26,6 +26,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/cli-args",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/cli-service",
       "version": "workspace:^",
       "type": "runtime"
@@ -37,6 +42,11 @@
     },
     {
       "name": "@dbx-tools/shared-core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-model-gateway",
       "version": "workspace:^",
       "type": "runtime"
     },

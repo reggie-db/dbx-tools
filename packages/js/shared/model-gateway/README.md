@@ -54,8 +54,30 @@ The `models` module covers OpenAI, Codex, Anthropic, embedding, and error
 payloads. The `contracts` module covers model capabilities and deterministic
 route-selection inputs and results.
 
+## Configure The Gateway
+
+`ModelGatewayOptionsSchema` owns server defaults and validation. The derived
+`ModelGatewayCliOptionsSchema` adds `runtimeInfo` and requires a non-zero port
+for foreground and service commands:
+
+```ts
+import {
+  ModelGatewayOptionsSchema,
+  resolveModelGatewayOptions,
+} from "@dbx-tools/shared-model-gateway/options";
+
+const options = resolveModelGatewayOptions({
+  host: "localhost",
+  port: 4400,
+  bodyLimit: "100mb",
+});
+
+ModelGatewayOptionsSchema.parse(options);
+```
+
 ## Package API
 
 - `client` creates the model-discovery client and typed HTTP errors.
 - `models` validates public model, embedding, and error payloads.
 - `contracts` validates shared routing and capability values.
+- `options` validates shared server and CLI configuration.

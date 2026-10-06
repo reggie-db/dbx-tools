@@ -75,7 +75,7 @@ describe("resolveTunnelOptions", () => {
   });
 
   it("passes gate flags through unresolved, so the plugin applies its own defaults", () => {
-    const resolved = resolveTunnelOptions({ sessionTtl: "120", codeTtl: "30" });
+    const resolved = resolveTunnelOptions({ sessionTtlSeconds: 120, codeTtlSeconds: 30 });
     // Coerced to a number for the plugin's `config` shape, not resolved here.
     assert.equal(resolved.gateConfig.sessionTtlSeconds, 120);
     assert.equal(resolved.gateConfig.codeTtlSeconds, 30);
@@ -200,7 +200,7 @@ describe("resolveTunnelOptions", () => {
   it("rejects an unknown tunnel transport", () => {
     assert.throws(
       () => resolveTunnelOptions({ transport: "unknown" as "portr" }),
-      /invalid tunnel transport/,
+      /expected one of/,
     );
   });
 
@@ -209,9 +209,9 @@ describe("resolveTunnelOptions", () => {
     // gate to exactly those interface IPs (loopback then reaches the upstream
     // ungated).
     assert.deepEqual(resolveTunnelOptions({}).bindHosts, []);
-    assert.deepEqual(resolveTunnelOptions({ bind: ["10.147.0.5", "192.168.1.20"] }).bindHosts, [
-      "10.147.0.5",
-      "192.168.1.20",
-    ]);
+    assert.deepEqual(
+      resolveTunnelOptions({ bindHosts: ["10.147.0.5", "192.168.1.20"] }).bindHosts,
+      ["10.147.0.5", "192.168.1.20"],
+    );
   });
 });

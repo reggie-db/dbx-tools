@@ -36,7 +36,8 @@
     "@dbx-tools/shared-core": "workspace:^",
     "@types/express": "catalog:",
     "better-call": "catalog:",
-    "http-proxy-3": "catalog:"
+    "http-proxy-3": "catalog:",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

@@ -50,11 +50,13 @@ describe("Graphiti options", () => {
     assert.deepEqual(
       graphitiOptionsFromEnvironment({
         DATABRICKS_CONFIG_PROFILE: "PROFILE",
+        GRAPHITI_HOME: "/graphiti",
         MODEL_GATEWAY_PORT: "4500",
         MANAGE_MODEL_GATEWAY: "false",
       }),
       {
         profile: "PROFILE",
+        graphitiHome: "/graphiti",
         modelGatewayPort: 4500,
         manageModelGateway: false,
       },

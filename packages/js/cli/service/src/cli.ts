@@ -7,7 +7,9 @@
  * @module
  */
 
+import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import { Command } from "commander";
+import { z } from "zod";
 
 import type { CliServiceDefinition } from "./definition.ts";
 import { CliService, type CliServiceLifecycle } from "./service.ts";
@@ -28,6 +30,15 @@ const DEFAULT_DEPENDENCIES: CliServiceCliDependencies = {
   write: (value) => process.stdout.write(value),
 };
 
+export const CliServiceInstallOptionsSchema = z
+  .object({
+    start: z.boolean().default(true).describe("Start the service after installation."),
+  })
+  .strict()
+  .describe("Options for installing a current-user CLI service.");
+
+export type CliServiceInstallOptions = z.output<typeof CliServiceInstallOptionsSchema>;
+
 /** Build install, start, stop, restart, status, and uninstall commands for a service. */
 export function buildServiceCommand(
   source: CliServiceDefinitionSource,
@@ -41,13 +52,15 @@ export function buildServiceCommand(
       : `Install and manage the ${source.name} desktop service`,
   );
 
-  command
-    .command("install")
-    .description("Install the service for the current user and start it")
-    .option("--no-start", "install without starting the service")
-    .action(async (options: { start: boolean }) => {
-      await service().install({ start: options.start });
-    });
+  const install = addArgs(
+    command.command("install").description("Install the service for the current user and start it"),
+    CliServiceInstallOptionsSchema,
+    { scope: [] },
+  );
+  install.action(async () => {
+    const options = parseArgs(install, CliServiceInstallOptionsSchema);
+    await service().install({ start: options.start });
+  });
 
   command
     .command("start")

@@ -26,7 +26,26 @@ await program.parseAsync(process.argv);
 `defineService` uses the owning package's name, version, and default executable.
 Use `command.binName` when the package has multiple executable entries. Set
 `command.executable` to run an existing external program instead of compiling a
-package entrypoint.
+package entrypoint. Managed commands default `NODE_ENV` to `production`; an
+explicit `command.environment.NODE_ENV` overrides it.
+
+`command.options` accepts either a concrete option object or a Zod object
+schema. Objects serialize their current values. Schemas parse `{}` and serialize
+their defaults. Boolean values become positive or negated flags, arrays become
+repeated flags, and `undefined` values are omitted:
+
+```ts
+defineService(import.meta.url, {
+  command: {
+    arguments: ["serve"],
+    options: {
+      host: "127.0.0.1",
+      port: 4400,
+      telemetry: false,
+    },
+  },
+});
+```
 
 ## Install And Manage The Service
 
@@ -96,9 +115,10 @@ Install the service for the current user and start it
 
 #### Options
 
-| Option       | Description                          |
-| ------------ | ------------------------------------ |
-| `--no-start` | install without starting the service |
+| Option       | Description                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `--start`    | Start the service after installation. (default: true, env: START) |
+| `--no-start` | Disable start the service after installation.                     |
 
 ### `<cli> service start`
 

@@ -102,6 +102,7 @@ describe("auth CLI", () => {
 
   it("describes automatic login and its opt-out", () => {
     const program = buildProgram("dbx auth");
+    const help = program.helpInformation();
     const token = program.commands.find((command) => command.name() === "token");
     const profile = program.commands.find((command) => command.name() === "profile");
 
@@ -109,42 +110,50 @@ describe("auth CLI", () => {
     assert.match(token?.helpInformation() ?? "", /--no-login/);
     assert.doesNotMatch(token?.helpInformation() ?? "", /--login-if-missing/);
     assert.match(profile?.description() ?? "", /configured or automatically detected profile/);
+    assert.match(help, /DATABRICKS_CONFIG_PROFILE/);
+    assert.doesNotMatch(help, /--host/);
   });
 
   it("translates common options to the generated binding record", async () => {
     let capturedOptions: DatabricksAuthOptions | undefined;
-
-    await buildProgram("dbx auth", {
-      createAuthClient: async (options) => {
-        capturedOptions = options;
-        return fakeAuth([]);
-      },
-      writeJson: () => {},
-    }).parseAsync(
-      [
-        "--profile",
-        "TEST",
-        "--target",
-        "workspace",
-        "--auth-type",
-        AuthType.OAuthM2M,
-        "--group-id",
-        "group",
-        "--no-prefer-user-to-machine",
-        "--scopes",
-        "scope-a,scope-b",
-        "--scopes",
-        "scope-c",
-        "--lock-timeout-ms",
-        "12",
-        "--login-timeout-ms",
-        "34",
-        "--refresh-buffer-ms",
-        "-5",
-        "login",
-      ],
-      { from: "user" },
-    );
+    const previousAuthType = process.env.DATABRICKS_AUTH_TYPE;
+    const previousGroupId = process.env.DATABRICKS_GROUP_ID;
+    process.env.DATABRICKS_AUTH_TYPE = AuthType.OAuthM2M;
+    process.env.DATABRICKS_GROUP_ID = "group";
+    try {
+      await buildProgram("dbx auth", {
+        createAuthClient: async (options) => {
+          capturedOptions = options;
+          return fakeAuth([]);
+        },
+        writeJson: () => {},
+      }).parseAsync(
+        [
+          "--profile",
+          "TEST",
+          "--target",
+          "workspace",
+          "--no-prefer-user-to-machine",
+          "--scopes",
+          "scope-a,scope-b",
+          "--scopes",
+          "scope-c",
+          "--lock-timeout-ms",
+          "12",
+          "--login-timeout-ms",
+          "34",
+          "--refresh-buffer-ms",
+          "-5",
+          "login",
+        ],
+        { from: "user" },
+      );
+    } finally {
+      if (previousAuthType === undefined) delete process.env.DATABRICKS_AUTH_TYPE;
+      else process.env.DATABRICKS_AUTH_TYPE = previousAuthType;
+      if (previousGroupId === undefined) delete process.env.DATABRICKS_GROUP_ID;
+      else process.env.DATABRICKS_GROUP_ID = previousGroupId;
+    }
 
     assert.equal(capturedOptions?.profile, "TEST");
     assert.equal(capturedOptions?.target, "workspace");

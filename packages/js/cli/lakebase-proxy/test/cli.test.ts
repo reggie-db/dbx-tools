@@ -9,13 +9,18 @@ const version = json.parseRecord(
 )?.version;
 
 test("reports the package version", () => {
-  expect(buildProgram().version()).toBe(version);
+  const program = buildProgram();
+  expect(program.version()).toBe(version);
+  expect(program.helpInformation()).toContain("--listen <value>");
+  expect(program.helpInformation()).toContain("DATABRICKS_CONFIG_PROFILE");
+  const url = program.commands.find((command) => command.name() === "url");
+  expect(url?.helpInformation()).not.toContain("--lakebase-endpoint");
 });
 
 test("rejects ports outside the PostgreSQL TCP range", async () => {
   const program = buildProgram().exitOverride();
-  expect(program.parseAsync(["node", "dbx-lakebase-proxy", "--port", "65536"])).rejects.toThrow(
-    "port must not exceed 65535",
+  expect(program.parseAsync(["node", "dbx-lakebase-proxy", "--listen", ":65536"])).rejects.toThrow(
+    /65535/,
   );
 });
 
@@ -45,15 +50,15 @@ test("persists Lakebase service listener and optional profile", async () => {
     "service",
     "install",
     "--no-start",
-    "--port",
-    "5544",
+    "--listen",
+    ":5544",
     "--profile",
     "LAKEBASE-PROFILE",
   ]);
 
   expect(definition).toEqual(
     lakebaseProxyServiceDefinition({
-      port: 5544,
+      listen: 5544,
       profile: "LAKEBASE-PROFILE",
     }),
   );

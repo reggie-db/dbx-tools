@@ -18,49 +18,44 @@
  */
 
 import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
-import { log, object } from "@dbx-tools/shared-core";
+import { log, object, options as sharedOptions } from "@dbx-tools/shared-core";
+import { z } from "zod";
 import { installFrp, resolveFrpConfig, superviseFrp, writeFrpConfig } from "./frp.ts";
 import { startPathProxy } from "./path-proxy.ts";
 import { installPortr, resolvePortrConfig, supervisePortr, writePortrConfig } from "./portr.ts";
 
 const logger = log.logger("tunnel:interceptor");
 
-/** Options for {@link tunnelInterceptor} (each also resolvable from env). */
-export interface TunnelInterceptorOptions {
-  /** Tunnel clients to run. Env `TUNNEL_TRANSPORT`; defaults to `portr`. */
-  transport?: TunnelTransport;
-  /** Public host to serve on. Env `TUNNEL_PUBLIC_DOMAIN`. */
-  publicDomain?: string;
-  /** portr subdomain (else derived from {@link publicDomain}). */
-  subdomain?: string;
-  /** Portr SSH control endpoint. Env `PORTR_SSH_URL`; defaults to the Portr host on port `4444`. */
-  portrSshUrl?: string;
-  /**
-   * The PUBLIC port portr forwards to - the port the app itself listens on.
-   * Defaults to the Databricks Apps runtime contract `DATABRICKS_APP_PORT`
-   * (then `8000`), which is the port the platform routes to.
-   */
-  port?: number;
-  /** frps control host; defaults to the FRP public domain. Env `FRP_SERVER`. */
-  frpServer?: string;
-  /** FRP public HTTP host. Env `TUNNEL_FRP_PUBLIC_DOMAIN`. */
-  frpPublicDomain?: string;
-  /** frps control port. Env `FRP_SERVER_PORT`; defaults to `443`. */
-  frpServerPort?: number;
-  /** frpc transport protocol. Env `FRP_PROTOCOL`; defaults to `wss`. */
-  frpProtocol?: string;
-  /** frps auth token. Env `FRP_TOKEN` (or `TUNNEL_TOKEN`). */
-  frpToken?: string;
-  /** frp proxy registration name. Env `FRP_PROXY_NAME`. */
-  frpProxyName?: string;
-  /** FRP path location. Env `FRP_PATH`; defaults to `DATABRICKS_APP_NAME`. */
-  frpPath?: string;
-  /** Strip the FRP path before forwarding. Env `FRP_STRIP_PREFIX`; defaults true for non-root paths. */
-  frpStripPrefix?: boolean;
-}
+const text = (description: string) => z.string().trim().min(1).optional().describe(description);
+const port = (description: string) =>
+  sharedOptions.tcpPortOrZeroSchema.optional().describe(description);
 
-/** Public tunnel clients supported by the interceptor and CLI. */
-export type TunnelTransport = "portr" | "frp" | "both";
+export const TunnelTransportSchema = z
+  .enum(["portr", "frp", "both"])
+  .describe("Public tunnel clients supported by the interceptor and CLI.");
+
+export const TunnelInterceptorOptionsSchema = z
+  .object({
+    transport: TunnelTransportSchema.optional().describe("Public tunnel transport."),
+    publicDomain: text("Public tunnel host."),
+    subdomain: text("Portr subdomain."),
+    portrSshUrl: text("Portr SSH control endpoint."),
+    port: port("Public listener port."),
+    frpServer: text("FRP control host."),
+    frpPublicDomain: text("FRP public HTTP host."),
+    frpServerPort: port("FRP control port."),
+    frpProtocol: text("FRP transport protocol."),
+    frpToken: text("FRP authentication token."),
+    frpProxyName: text("FRP proxy registration name."),
+    frpPath: text("FRP path location."),
+    frpStripPrefix: z.boolean().optional().describe("Strip the FRP path before forwarding."),
+  })
+  .strict()
+  .describe("Tunnel interceptor options.");
+
+export type TunnelTransport = z.infer<typeof TunnelTransportSchema>;
+
+export type TunnelInterceptorOptions = z.input<typeof TunnelInterceptorOptionsSchema>;
 
 interface TunnelAuxiliary {
   stop(): void;
@@ -104,8 +99,7 @@ const defaultRuntime: TunnelRuntime = {
 /** Resolve and validate the tunnel transport selector. */
 export function resolveTunnelTransport(transport?: string): TunnelTransport {
   const resolved = transport ?? process.env.TUNNEL_TRANSPORT ?? "portr";
-  if (resolved === "portr" || resolved === "frp" || resolved === "both") return resolved;
-  throw new TypeError(`invalid tunnel transport: ${resolved} (expected portr, frp, or both)`);
+  return TunnelTransportSchema.parse(resolved);
 }
 
 /** Resolve the public port portr should target: explicit, else the Apps contract. */

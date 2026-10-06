@@ -26,13 +26,15 @@
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:^",
     "@dbx-tools/auth-gate": "workspace:^",
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/core": "workspace:^",
     "@dbx-tools/email": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-email": "workspace:^",
     "@dbx-tools/tunnel": "workspace:^",
     "commander": "catalog:",
-    "http-proxy-3": "catalog:"
+    "http-proxy-3": "catalog:",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

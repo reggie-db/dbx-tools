@@ -17,8 +17,13 @@ describe("model gateway CLI", () => {
       },
     });
 
-    assert.match(program.helpInformation(), /--profile/);
-    assert.match(program.helpInformation(), /service/);
+    const help = program.helpInformation();
+    assert.match(help, /--listen <value>/);
+    assert.match(help, /--profile <value>/);
+    assert.match(help, /PROFILE/);
+    assert.match(help, /--body-limit <value>/);
+    assert.match(help, /BODY_LIMIT/);
+    assert.match(help, /service/);
     assert.equal(started, false);
   });
 
@@ -29,7 +34,7 @@ describe("model gateway CLI", () => {
       {
         type: "url",
         label: "Models",
-        url: "http://127.0.0.1:4000/v1/models",
+        url: "http://localhost:4000/v1/models",
       },
     ]);
     assert.equal(definition.packageName, "@dbx-tools/cli-model-gateway");
@@ -65,23 +70,23 @@ describe("model gateway CLI", () => {
         write() {},
       },
     }).parseAsync(
-      ["service", "install", "--no-start", "--port", "4401", "--profile", "SERVICE-PROFILE"],
+      ["service", "install", "--no-start", "--listen", ":4401", "--profile", "SERVICE-PROFILE"],
       { from: "user" },
     );
 
-    assert.deepEqual(definition?.command?.arguments?.slice(-6), [
-      "--host",
-      "127.0.0.1",
-      "--port",
-      "4401",
+    assert.deepEqual(definition?.command?.arguments, [
+      "--listen",
+      "localhost:4401",
       "--profile",
       "SERVICE-PROFILE",
+      "--body-limit",
+      "100mb",
     ]);
     assert.deepEqual(definition?.menu, [
       {
         type: "url",
         label: "Models",
-        url: "http://127.0.0.1:4401/v1/models",
+        url: "http://localhost:4401/v1/models",
       },
     ]);
   });
@@ -92,11 +97,17 @@ describe("model gateway CLI", () => {
       async start(options) {
         calls.push(options);
       },
-    }).parseAsync(["--host", "localhost", "--port", "4410", "--profile", "MODEL-PROFILE"], {
+    }).parseAsync(["--listen", "4410", "--profile", "MODEL-PROFILE"], {
       from: "user",
     });
 
-    assert.deepEqual(calls, [{ host: "localhost", port: 4410, profile: "MODEL-PROFILE" }]);
+    assert.deepEqual(calls, [
+      {
+        listen: { host: "localhost", port: 4410 },
+        profile: "MODEL-PROFILE",
+        bodyLimit: "100mb",
+      },
+    ]);
   });
 
   it("rejects public binds and invalid ports", async () => {
@@ -107,17 +118,17 @@ describe("model gateway CLI", () => {
     };
     await assert.rejects(
       () =>
-        buildProgram("dbx model-gateway", dependencies).parseAsync(["--host", "0.0.0.0"], {
+        buildProgram("dbx model-gateway", dependencies).parseAsync(["--listen", "0.0.0.0:4000"], {
           from: "user",
         }),
       /loopback/,
     );
-    assert.throws(
+    await assert.rejects(
       () =>
         buildProgram("dbx model-gateway", dependencies)
           .exitOverride()
-          .parse(["--port", "70000"], { from: "user" }),
-      /port must be an integer/,
+          .parseAsync(["--listen", ":70000"], { from: "user" }),
+      /65535/,
     );
   });
 });

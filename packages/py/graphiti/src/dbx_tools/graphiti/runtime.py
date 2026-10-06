@@ -52,7 +52,7 @@ UV_MISE_TOOL = f"uv@{UV_VERSION}"
 
 def default_data_dir() -> Path:
     """Return the per-user directory containing downloads, data, and logs."""
-    override = os.getenv("DBX_GRAPHITI_HOME")
+    override = os.getenv("GRAPHITI_HOME")
     if override:
         return Path(override).expanduser()
     if sys.platform == "darwin":
@@ -84,7 +84,7 @@ class RuntimePaths:
     @classmethod
     def from_options(cls, options: ResolvedGraphitiOptionsResponse) -> RuntimePaths:
         """Return paths from generated Graphiti options or the platform default."""
-        home = options.get("home")
+        home = options.get("graphitiHome")
         return cls(Path(home).expanduser()) if home else cls.default()
 
     @property

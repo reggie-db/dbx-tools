@@ -84,6 +84,10 @@
         "types": "./lib/src/object.d.ts",
         "default": "./lib/src/object.js"
       },
+      "./options": {
+        "types": "./lib/src/options.d.ts",
+        "default": "./lib/src/options.js"
+      },
       "./pattern": {
         "types": "./lib/src/pattern.d.ts",
         "default": "./lib/src/pattern.js"
@@ -125,6 +129,7 @@
     "./log": "./src/log.ts",
     "./net": "./src/net.ts",
     "./object": "./src/object.ts",
+    "./options": "./src/options.ts",
     "./pattern": "./src/pattern.ts",
     "./predicate": "./src/predicate.ts",
     "./string-utils": "./src/string-utils.ts",

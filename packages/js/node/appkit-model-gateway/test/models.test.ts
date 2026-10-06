@@ -49,6 +49,18 @@ describe("model gateway catalogue", () => {
     assert.equal("data" in payload, false);
   });
 
+  it("publishes discovered web search on OpenAI and Codex catalogues", () => {
+    const gpt = target("gpt", { webSearch: true });
+    const gemini = target("gemini", { webSearch: false });
+    const openAiPayload = listModelsPayload([gpt, gemini], false);
+    const codexPayload = listModelsPayload([gpt, gemini], true);
+
+    assert.equal(openAiPayload.data[0]?.capabilities.web_search, true);
+    assert.equal(openAiPayload.data[1]?.capabilities.web_search, false);
+    assert.equal(codexPayload.models[0]?.supports_search_tool, true);
+    assert.equal(codexPayload.models[1]?.supports_search_tool, false);
+  });
+
   it("sorts OpenAI models as major-provider families, other chat, then embeddings", () => {
     const payload = listModelsPayload(
       [

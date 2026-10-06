@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",
+    "@dbx-tools/shared-core": "workspace:^",
     "@simplewebauthn/browser": "catalog:",
     "better-auth": "catalog:",
     "zod": "catalog:"

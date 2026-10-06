@@ -27,11 +27,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/lakebase": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "commander": "catalog:",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -54,6 +56,10 @@
       "./cli": {
         "types": "./lib/src/cli.d.ts",
         "default": "./lib/src/cli.js"
+      },
+      "./options": {
+        "types": "./lib/src/options.d.ts",
+        "default": "./lib/src/options.js"
       },
       "./protocol": {
         "types": "./lib/src/protocol.d.ts",
@@ -78,6 +84,7 @@
     ".": "./index.ts",
     "./cancellation": "./src/cancellation.ts",
     "./cli": "./src/cli.ts",
+    "./options": "./src/options.ts",
     "./protocol": "./src/protocol.ts",
     "./proxy": "./src/proxy.ts",
     "./package.json": "./package.json"

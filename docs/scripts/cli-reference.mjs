@@ -38,7 +38,10 @@ export function commanderReference(program) {
         "#### Commands",
         markdownTable(
           ["Command", "Description"],
-          children.map((child) => [helper.subcommandTerm(child), helper.subcommandDescription(child)]),
+          children.map((child) => [
+            helper.subcommandTerm(child),
+            helper.subcommandDescription(child),
+          ]),
         ),
       );
     }
@@ -55,6 +58,9 @@ export function commanderReference(program) {
 }
 
 function prepareCommand(command) {
+  for (const option of command.options) {
+    if ("schemaHelpDefault" in option) option.defaultValue = option.schemaHelpDefault;
+  }
   command.helpOption(false).addHelpCommand(false);
 }
 

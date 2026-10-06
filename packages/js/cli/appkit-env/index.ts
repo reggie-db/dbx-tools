@@ -7,4 +7,5 @@ export const PACKAGE_VERSION = "0.9.40";
 export * as cli from "./src/cli.ts";
 export * as envExport from "./src/env-export.ts";
 export { CommanderError } from "./src/cli.ts";
-export type { EnvExportFormat } from "./src/env-export.ts";
+export { EnvExportFormatSchema, EnvCommandOptionsSchema } from "./src/env-export.ts";
+export type { EnvExportFormat, EnvCommandOptions } from "./src/env-export.ts";

@@ -22,6 +22,7 @@ import {
   log,
   net,
   object,
+  options,
   stringUtils,
 } from "@dbx-tools/shared-core";
 ```
@@ -47,6 +48,8 @@ Key features:
   grab-bag default import.
 - A Zod-backed `BrandContext` contract with dbx tools defaults, JSON Schema
   output, and prompt serialization for browser, library, and LLM consumers.
+- Shared Zod option schemas for Databricks environment names, normalized URLs,
+  TCP ports, listener addresses, and schema-driven parse/serialization.
 
 ## Brand Context
 
@@ -428,6 +431,8 @@ when disabled.
 - `http` - header iteration, cookie parsing, and fetch error creation.
 - `execution` - direct executor fallback, cancellation merging, and result unwrapping.
 - `net` - URL building, email parsing, path matching, IP/CIDR helpers.
+- `options` - Databricks environment/config schemas, ports, listener addresses,
+  URL normalization, nullable map parsing, and flag/env JSON serialization.
 - `token` - JWT payload and scope readers.
 - `functionUtils` - memoization.
 - `log` - tagged leveled logging.

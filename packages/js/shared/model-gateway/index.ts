@@ -7,6 +7,7 @@ export const PACKAGE_VERSION = "0.9.40";
 export * as client from "./src/client.ts";
 export * as contracts from "./src/contracts.ts";
 export * as models from "./src/models.ts";
+export * as options from "./src/options.ts";
 export * as upstream from "./src/upstream.ts";
 export { ModelGatewayClientError } from "./src/client.ts";
 export type { ModelGatewayClientOptions, ListModelsOptions, ModelGatewayClient } from "./src/client.ts";
@@ -14,4 +15,6 @@ export { ClientProtocolSchema, UpstreamProtocolSchema, ModelCapabilitiesSchema, 
 export type { ClientProtocol, UpstreamProtocol, ModelCapabilities, ModelTarget, RequestedFeatures, GatewayRoute, ModelCapabilityOverride, ResolveRouteInput } from "./src/contracts.ts";
 export { OpenAIModelCapabilitiesSchema, OpenAIModelSchema, OpenAIModelListResponseSchema, CodexReasoningLevelSchema, CodexTruncationPolicySchema, CodexModelSchema, CodexModelListResponseSchema, ModelListResponseSchema, EmbeddingRequestSchema, EmbeddingDataSchema, EmbeddingUsageSchema, EmbeddingResponseSchema, OpenAIErrorResponseSchema, AnthropicErrorResponseSchema, GatewayErrorResponseSchema } from "./src/models.ts";
 export type { OpenAIModelCapabilities, OpenAIModel, OpenAIModelListResponse, CodexReasoningLevel, CodexTruncationPolicy, CodexModel, CodexModelListResponse, ModelListResponse, EmbeddingRequest, EmbeddingData, EmbeddingUsage, EmbeddingResponse, OpenAIErrorResponse, AnthropicErrorResponse, GatewayErrorResponse } from "./src/models.ts";
+export { ModelGatewayOptionsSchema, ModelGatewayCliOptionsSchema, MODEL_GATEWAY_DEFAULTS } from "./src/options.ts";
+export type { ModelGatewayOptions, ResolvedModelGatewayOptions, ModelGatewayCliOptions } from "./src/options.ts";
 export * from "./exports.ts";

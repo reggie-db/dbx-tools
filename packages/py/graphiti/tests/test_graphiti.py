@@ -40,7 +40,7 @@ def test_runtime_paths_are_versioned(tmp_path: Path) -> None:
 
     assert paths.graphiti == tmp_path / "tools" / "graphiti" / GRAPHITI_VERSION
     assert paths.neo4j_data == tmp_path / "data" / "neo4j"
-    assert RuntimePaths.from_options(options(home=str(tmp_path))).root == tmp_path
+    assert RuntimePaths.from_options(options(graphitiHome=str(tmp_path))).root == tmp_path
 
 
 def test_serialized_options_use_generated_zod_contract() -> None:

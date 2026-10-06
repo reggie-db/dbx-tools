@@ -34,7 +34,14 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseEnv } from "node:util";
-import { environmentUtils, json, log, object, stringUtils } from "@dbx-tools/shared-core";
+import {
+  environmentUtils,
+  json,
+  log,
+  object,
+  options as sharedOptions,
+  stringUtils,
+} from "@dbx-tools/shared-core";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { cachedRecord, statSync } from "./file.ts";
@@ -99,7 +106,7 @@ const NODE_ENV_ALTERNATIVES = {
 } as const satisfies Record<string, readonly string[]>;
 
 /** Highest valid TCP port number. */
-export const MAX_TCP_PORT = 65_535;
+export const MAX_TCP_PORT = sharedOptions.MAX_TCP_PORT;
 
 /** Boolean environment override for project `.env` reads. */
 const CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV";
@@ -122,11 +129,7 @@ export const valueSchema = z
     message: "Interpolated values are not allowed",
   });
 
-const portValueSchema = z.preprocess((input) => {
-  if (typeof input === "number") return input;
-  if (typeof input !== "string" || !/^\d+$/.test(input.trim())) return Number.NaN;
-  return Number(input.trim());
-}, z.number().int().min(1).max(MAX_TCP_PORT));
+const portValueSchema = sharedOptions.tcpPortSchema;
 
 const positiveNumberValue = z.preprocess((input) => object.toNumber(input), z.number().positive());
 const positiveIntValue = positiveNumberValue.transform(Math.floor);

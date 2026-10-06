@@ -29,7 +29,8 @@
     "@dbx-tools/shared-auth": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "better-auth": "catalog:",
-    "env-paths": "catalog:"
+    "env-paths": "catalog:",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",

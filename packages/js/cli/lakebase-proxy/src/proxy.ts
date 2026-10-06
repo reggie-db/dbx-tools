@@ -1,12 +1,17 @@
 /** Pure Node PostgreSQL wire proxy for Databricks Lakebase. */
 
-import { createServer, isIP, type Server, type Socket } from "node:net";
+import { createServer, type Server, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 import { LakebaseClient, requireAddress } from "@dbx-tools/lakebase";
 import { log } from "@dbx-tools/shared-core";
 import { Client } from "pg";
 
 import { CancellationRegistry } from "./cancellation.ts";
+import {
+  resolveLakebaseProxyOptions,
+  type LakebaseProxyOptions,
+  type ResolvedLakebaseProxyOptions,
+} from "./options.ts";
 import {
   fatalError,
   PostgresProtocolError,
@@ -17,14 +22,6 @@ import {
 } from "./protocol.ts";
 
 const logger = log.logger("lakebase-proxy");
-
-/** Listener and authentication options for the loopback Lakebase proxy. */
-export interface LakebaseProxyOptions {
-  host?: string;
-  port?: number;
-  startupTimeoutMs?: number;
-  profile?: string;
-}
 
 interface PgConnectionInternals {
   stream: Duplex;
@@ -47,6 +44,7 @@ interface ParameterStatus {
 /** Loopback PostgreSQL wire proxy backed by Databricks Lakebase credentials. */
 export class LakebaseProxy {
   private readonly client: LakebaseClient;
+  private readonly options: ResolvedLakebaseProxyOptions;
   private readonly cancellations = new CancellationRegistry();
   private server?: Server;
   private statsTimer?: ReturnType<typeof setInterval>;
@@ -55,21 +53,21 @@ export class LakebaseProxy {
   private failed = 0;
   private active = 0;
 
-  constructor(private readonly options: LakebaseProxyOptions = {}) {
-    this.client = new LakebaseClient({ profile: options.profile });
+  constructor(options: LakebaseProxyOptions = {}) {
+    this.options = resolveLakebaseProxyOptions(options);
+    this.client = new LakebaseClient({ profile: this.options.profile });
   }
 
   async listen(): Promise<{ host: string; port: number }> {
     if (this.server) throw new Error("Lakebase proxy is already listening");
-    const host = this.options.host ?? "127.0.0.1";
-    if (!isLoopback(host)) throw new Error("Postgres proxy listener must use a loopback address");
+    const host = this.options.listen.host;
     const server = createServer((socket) => void this.handle(socket));
     this.server = server;
     this.statsTimer = setInterval(() => this.reportStats(), 60_000);
     this.statsTimer.unref();
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(this.options.port ?? 5432, host, () => {
+      server.listen(this.options.listen.port, host, () => {
         server.off("error", reject);
         resolve();
       });
@@ -101,7 +99,7 @@ export class LakebaseProxy {
     this.active += 1;
     try {
       local.setNoDelay(true);
-      const initial = await readInitialMessage(local, this.options.startupTimeoutMs ?? 30_000);
+      const initial = await readInitialMessage(local, this.options.startupTimeoutSeconds * 1000);
       if (initial.kind === "cancel") {
         await this.cancellations.forward(initial);
         local.end();
@@ -237,14 +235,6 @@ function closed(socket: Duplex): Promise<void> {
     socket.once("close", () => resolve());
     socket.once("error", reject);
   });
-}
-
-function isLoopback(host: string): boolean {
-  if (host === "localhost") return true;
-  const version = isIP(host);
-  return version === 4
-    ? host.startsWith("127.")
-    : version === 6 && (host === "::1" || host === "0:0:0:0:0:0:0:1");
 }
 
 function message(error: unknown): string {

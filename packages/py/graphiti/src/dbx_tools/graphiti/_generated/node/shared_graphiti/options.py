@@ -22,9 +22,9 @@ class GraphitiOptions:
         default=None,
         metadata={"javascript_name": "profile"},
     )
-    home: str | None = field(
+    graphiti_home: str | None = field(
         default=None,
-        metadata={"javascript_name": "home"},
+        metadata={"javascript_name": "graphitiHome"},
     )
     model: str | None = field(
         default=None,
@@ -99,7 +99,7 @@ class GraphitiOptions:
 class GraphitiOptionsResponse(TypedDict):
     python: NotRequired[str]
     profile: NotRequired[str]
-    home: NotRequired[str]
+    graphitiHome: NotRequired[str]
     model: NotRequired[str]
     embedderModel: NotRequired[str]
     embedderDimensions: NotRequired[int | float]
@@ -135,7 +135,7 @@ class ResolvedGraphitiOptionsResponse(TypedDict):
     proxyPort: int | float
     graphitiArgs: list[str]
     profile: NotRequired[str]
-    home: NotRequired[str]
+    graphitiHome: NotRequired[str]
     modelGatewayCommand: NotRequired[str]
     journalNamespace: NotRequired[str]
     journalDatabaseUrl: NotRequired[str]

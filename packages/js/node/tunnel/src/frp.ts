@@ -15,7 +15,8 @@ import os from "node:os";
 import { delimiter, join } from "node:path";
 
 import { bin, configUtils } from "@dbx-tools/core";
-import { log } from "@dbx-tools/shared-core";
+import { log, options as sharedOptions } from "@dbx-tools/shared-core";
+import { z } from "zod";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
 
@@ -43,6 +44,24 @@ export interface FrpConfig {
   targetPort: number;
 }
 
+export const FrpOptionsSchema = z
+  .object({
+    publicDomain: z.string().trim().min(1).optional().describe("FRP public HTTP host."),
+    server: z.string().trim().min(1).optional().describe("FRP control host."),
+    serverPort: sharedOptions.tcpPortOrZeroSchema.optional().describe("FRP control port."),
+    protocol: z.string().trim().min(1).optional().describe("FRP transport protocol."),
+    token: z.string().trim().min(1).optional().describe("FRP authentication token."),
+    proxyName: z.string().trim().min(1).optional().describe("FRP proxy registration name."),
+    path: z.string().trim().min(1).optional().describe("FRP public path."),
+    stripPrefix: z.boolean().optional().describe("Strip the FRP path before forwarding."),
+    port: sharedOptions.tcpPortOrZeroSchema.describe("Public listener port."),
+    targetPort: sharedOptions.tcpPortOrZeroSchema.optional().describe("Private target port."),
+  })
+  .strict()
+  .describe("FRP tunnel resolution options.");
+
+export type FrpOptions = z.input<typeof FrpOptionsSchema>;
+
 function bareHost(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const normalized = value
@@ -59,35 +78,25 @@ function normalizePath(value: string | undefined): string {
 }
 
 /** Resolve frpc config from the public domain and FRP-specific environment. */
-export function resolveFrpConfig(opts: {
-  publicDomain?: string;
-  server?: string;
-  serverPort?: string | number;
-  protocol?: string;
-  token?: string;
-  proxyName?: string;
-  path?: string;
-  stripPrefix?: boolean;
-  port: number;
-  targetPort?: number;
-}): FrpConfig | undefined {
+export function resolveFrpConfig(opts: FrpOptions): FrpConfig | undefined {
+  const options = FrpOptionsSchema.parse(opts);
   const publicDomain = bareHost(
     configUtils.string(
-      opts.publicDomain,
+      options.publicDomain,
       ["TUNNEL_FRP_PUBLIC_DOMAIN", "TUNNEL_PUBLIC_DOMAIN"],
       TUNNEL_CONFIG,
     ),
   );
   if (!publicDomain) return undefined;
-  const server = bareHost(configUtils.string(opts.server, "FRP_SERVER")) ?? publicDomain;
-  const serverPort = configUtils.port(opts.serverPort, "FRP_SERVER_PORT", 443);
-  const protocol = configUtils.string(opts.protocol, "FRP_PROTOCOL") ?? "wss";
-  const token = configUtils.string(opts.token, ["FRP_TOKEN", "TUNNEL_TOKEN"]);
+  const server = bareHost(configUtils.string(options.server, "FRP_SERVER")) ?? publicDomain;
+  const serverPort = configUtils.port(options.serverPort, "FRP_SERVER_PORT", 443);
+  const protocol = configUtils.string(options.protocol, "FRP_PROTOCOL") ?? "wss";
+  const token = configUtils.string(options.token, ["FRP_TOKEN", "TUNNEL_TOKEN"]);
   const proxyName =
-    configUtils.string(opts.proxyName, "FRP_PROXY_NAME") ?? publicDomain.split(".")[0] ?? "app";
+    configUtils.string(options.proxyName, "FRP_PROXY_NAME") ?? publicDomain.split(".")[0] ?? "app";
   const appName = configUtils.string(undefined, "DATABRICKS_APP_NAME") ?? proxyName;
-  const path = normalizePath(configUtils.string(opts.path, "FRP_PATH") ?? appName);
-  const stripPrefix = configUtils.boolean(opts.stripPrefix, "FRP_STRIP_PREFIX") ?? path !== "/";
+  const path = normalizePath(configUtils.string(options.path, "FRP_PATH") ?? appName);
+  const stripPrefix = configUtils.boolean(options.stripPrefix, "FRP_STRIP_PREFIX") ?? path !== "/";
   return {
     publicDomain,
     server,
@@ -97,8 +106,8 @@ export function resolveFrpConfig(opts: {
     proxyName,
     path,
     stripPrefix,
-    port: opts.port,
-    targetPort: opts.targetPort ?? opts.port,
+    port: options.port,
+    targetPort: options.targetPort ?? options.port,
   };
 }
 

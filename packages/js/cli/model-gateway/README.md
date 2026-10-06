@@ -8,7 +8,7 @@ current-user service.
 ## Quick Start
 
 ```sh
-dbx model-gateway --profile PROFILE --port 4000
+dbx model-gateway --profile PROFILE --listen :4000
 ```
 
 Point an OpenAI-compatible client at `http://127.0.0.1:4000/v1`, then inspect
@@ -25,15 +25,15 @@ The standalone `dbx-model-gateway` executable accepts the same options.
 Install the gateway when local tools need it outside an active terminal:
 
 ```sh
-dbx model-gateway service install --port 4401 --profile PROFILE
+dbx model-gateway service install --listen :4401 --profile PROFILE
 dbx model-gateway service status
 dbx model-gateway service restart
 dbx model-gateway service uninstall
 ```
 
-The installed service remembers the port and profile. Its tray menu opens the
-active `/v1/models` response and provides a clean quit action. `service status`
-prints installation and process state as JSON.
+The installed service remembers the host, port, profile, and request body
+limit. Its tray menu opens the active `/v1/models` response and provides a clean
+quit action. `service status` prints installation and process state as JSON.
 
 `service restart` relaunches the installed executable. Re-run `service install`
 after upgrading the CLI to rebuild that executable and update its saved options.
@@ -69,13 +69,14 @@ dbx model-gateway [options] [command]
 
 #### Options
 
-| Option                | Description                                              |
-| --------------------- | -------------------------------------------------------- |
-| `--host <host>`       | loopback host to bind (default: "127.0.0.1")             |
-| `--port <port>`       | HTTP port (default: 4000)                                |
-| `--profile <profile>` | Databricks profile used for model discovery and requests |
-| `--runtime-info`      | print runtime implementation metadata                    |
-| `-v, --version`       | output the version number                                |
+| Option                 | Description                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `-v, --version`        | output the version number                                                                  |
+| `--listen <value>`     | Loopback listener address. (default: localhost:4000, env: LISTEN)                          |
+| `--profile <value>`    | Databricks profile used for model discovery and requests. (env: DATABRICKS_CONFIG_PROFILE) |
+| `--body-limit <value>` | Maximum JSON request body size. (default: "100mb", env: BODY_LIMIT)                        |
+| `--runtime-info`       | Print runtime implementation metadata. (default: false, env: RUNTIME_INFO)                 |
+| `--no-runtime-info`    | Disable print runtime implementation metadata.                                             |
 
 #### Commands
 
@@ -112,9 +113,10 @@ dbx model-gateway service install [options]
 
 #### Options
 
-| Option       | Description                          |
-| ------------ | ------------------------------------ |
-| `--no-start` | install without starting the service |
+| Option       | Description                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `--start`    | Start the service after installation. (default: true, env: START) |
+| `--no-start` | Disable start the service after installation.                     |
 
 ### `dbx model-gateway service start`
 

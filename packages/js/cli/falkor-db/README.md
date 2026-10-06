@@ -66,25 +66,27 @@ dbx falkor-db [options]
 
 #### Options
 
-| Option                                     | Description                                                                               |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `-v, --version`                            | output the version number                                                                 |
-| `--data-dir <path>`                        | active local FalkorDB directory (env: FALKORDB_DATA_DIR)                                  |
-| `--snapshot-seconds <seconds>`             | Redis snapshot interval (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                    |
-| `--snapshot-min-changes <count>`           | writes required before an interval saves (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES) |
-| `--volume <path>`                          | durable Unity Catalog Volume directory (env: FALKORDB_VOLUME)                             |
-| `--profile <name>`                         | exact Databricks profile used for Volume access (env: DATABRICKS_CONFIG_PROFILE)          |
-| `--retention <count>`                      | durable snapshots retained (default: 5)                                                   |
-| `--backup-poll-seconds <seconds>`          | completed-RDB polling interval (default: 10)                                              |
-| `--stale-backup-warning-seconds <seconds>` | warn when changed data lacks a recent durable backup                                      |
-| `--force-backup-on-shutdown`               | force a dirty RDB and durable upload before shutdown                                      |
-| `--shutdown-timeout-seconds <seconds>`     | shutdown backup timeout (default: 30)                                                     |
-| `--redis-server-path <path>`               | custom redis-server executable                                                            |
-| `--module-path <path>`                     | custom FalkorDB module                                                                    |
-| `--max-memory <limit>`                     | Redis memory limit such as 256mb                                                          |
-| `--redis-log-level <level>`                | Redis log level (choices: "debug", "verbose", "notice", "warning")                        |
-| `--redis-log-file <path>`                  | Redis log file                                                                            |
-| `--startup-timeout-seconds <seconds>`      | embedded server startup timeout (default: 10)                                             |
-| `--inherit-stdio`                          | inherit redis-server stdout and stderr                                                    |
+| Option                                   | Description                                                                                                 |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                          | output the version number                                                                                   |
+| `--data-dir <value>`                     | Active local FalkorDB directory. (env: FALKORDB_DATA_DIR)                                                   |
+| `--snapshot-seconds <value>`             | Redis snapshot interval in seconds. (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                          |
+| `--snapshot-min-changes <value>`         | Writes required before an interval saves. (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES)                  |
+| `--volume <value>`                       | Durable Unity Catalog Volume directory. (env: FALKORDB_VOLUME)                                              |
+| `--profile <value>`                      | Exact Databricks profile used for Volume access. (env: DATABRICKS_CONFIG_PROFILE)                           |
+| `--retention <value>`                    | Durable snapshots retained. (default: 5, env: RETENTION)                                                    |
+| `--backup-poll-seconds <value>`          | Completed-RDB polling interval in seconds. (default: 10, env: BACKUP_POLL_SECONDS)                          |
+| `--stale-backup-warning-seconds <value>` | Seconds before warning that changed data lacks a recent durable backup. (env: STALE_BACKUP_WARNING_SECONDS) |
+| `--force-backup-on-shutdown`             | Force a dirty RDB and durable upload before shutdown. (default: false, env: FORCE_BACKUP_ON_SHUTDOWN)       |
+| `--no-force-backup-on-shutdown`          | Disable force a dirty rdb and durable upload before shutdown.                                               |
+| `--shutdown-timeout-seconds <value>`     | Shutdown backup timeout in seconds. (default: 30, env: SHUTDOWN_TIMEOUT_SECONDS)                            |
+| `--redis-server-path <value>`            | Custom redis-server executable. (env: REDIS_SERVER_PATH)                                                    |
+| `--module-path <value>`                  | Custom FalkorDB module. (env: MODULE_PATH)                                                                  |
+| `--max-memory <value>`                   | Redis memory limit such as 256mb. (env: MAX_MEMORY)                                                         |
+| `--redis-log-level <value>`              | Redis log level. (choices: "debug", "verbose", "notice", "warning", env: REDIS_LOG_LEVEL)                   |
+| `--redis-log-file <value>`               | Redis log file. (env: REDIS_LOG_FILE)                                                                       |
+| `--startup-timeout-seconds <value>`      | Embedded server startup timeout in seconds. (default: 10, env: STARTUP_TIMEOUT_SECONDS)                     |
+| `--inherit-stdio`                        | Inherit redis-server stdout and stderr. (default: false, env: INHERIT_STDIO)                                |
+| `--no-inherit-stdio`                     | Disable inherit redis-server stdout and stderr.                                                             |
 
 <!-- cli-reference:end -->

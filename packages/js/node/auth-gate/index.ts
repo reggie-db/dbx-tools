@@ -7,4 +7,5 @@ export const PACKAGE_VERSION = "0.9.40";
 export * as auth from "./src/auth.ts";
 export * as authStorage from "./src/auth-storage.ts";
 export type { AuthorizeIdentity, AuthEmailCopy, AuthEmailOptions, PasswordlessAuthOptions, PasswordlessAuthRuntime } from "./src/auth.ts";
+export { AuthStorageModeSchema, AuthStorageConfigSchema } from "./src/auth-storage.ts";
 export type { AuthStorageMode, AuthStorageConfig, ResolvedAuthStorageConfig, AuthDatabase, AuthStorage } from "./src/auth-storage.ts";

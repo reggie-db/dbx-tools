@@ -12,38 +12,88 @@
  * @module
  */
 
-import type { AuthStorageMode } from "@dbx-tools/auth-gate";
 import { configUtils } from "@dbx-tools/core";
-import { object } from "@dbx-tools/shared-core";
+import { options as sharedOptions, stringUtils } from "@dbx-tools/shared-core";
 import { type AuthGateConfig, frp, interceptor, plugin, portr } from "@dbx-tools/tunnel";
+import { z } from "zod";
 
-/** Raw commander flag values (every numeric flag arrives as a string). */
-export interface TunnelOptions {
-  transport?: interceptor.TunnelTransport;
-  publicDomain?: string;
-  subdomain?: string;
-  port?: string | number;
-  appPort?: string | number;
-  allow?: string[];
-  subject?: string;
-  brandName?: string;
-  message?: string;
-  sessionTtl?: string | number;
-  codeTtl?: string | number;
-  sessionCutoff?: string;
-  authStorage?: AuthStorageMode;
-  authSqlitePath?: string;
-  forwardHeaders?: string[];
-  gatePath?: string[];
-  bind?: string[];
-  insecure?: boolean;
-  frpServer?: string;
-  frpPublicDomain?: string;
-  frpServerPort?: string | number;
-  frpProtocol?: string;
-  frpToken?: string;
-  frpProxyName?: string;
-}
+const text = (description: string) => z.string().trim().min(1).optional().describe(description);
+const port = (description: string) =>
+  sharedOptions.tcpPortOrZeroSchema.optional().describe(description);
+const list = (description: string) =>
+  z
+    .preprocess(
+      (value) => (typeof value === "string" ? stringUtils.parseList(value) : value),
+      z.array(z.string().trim().min(1)),
+    )
+    .optional()
+    .describe(description);
+
+export const TunnelOptionsSchema = z
+  .object({
+    transport: interceptor.TunnelTransportSchema.optional()
+      .describe("Public tunnel transport.")
+      .meta({ env: "TUNNEL_TRANSPORT" }),
+    publicDomain: text("Public tunnel domain.").meta({ env: "TUNNEL_PUBLIC_DOMAIN" }),
+    subdomain: text("Portr subdomain."),
+    port: port("Public listener port.").meta({
+      env: sharedOptions.databricksEnvironmentNames.appPort,
+    }),
+    appPort: port("Private wrapped application port.").meta({
+      env: ["TUNNEL_APP_PORT", "APP_PORT"],
+    }),
+    allow: list("Email allow-list patterns.").meta({ env: "TUNNEL_AUTH_ALLOW" }),
+    subject: text("Verification email subject.").meta({ env: "TUNNEL_AUTH_SUBJECT" }),
+    brandName: text("Verification email brand name.").meta({ env: "TUNNEL_AUTH_BRAND_NAME" }),
+    message: text("Verification email message.").meta({ env: "TUNNEL_AUTH_MESSAGE" }),
+    sessionTtlSeconds: z.coerce
+      .number<number>()
+      .positive()
+      .optional()
+      .describe("Session lifetime in seconds.")
+      .meta({ env: "TUNNEL_AUTH_SESSION_TTL" }),
+    codeTtlSeconds: z.coerce
+      .number<number>()
+      .positive()
+      .optional()
+      .describe("One-time-code lifetime in seconds.")
+      .meta({ env: "TUNNEL_AUTH_CODE_TTL" }),
+    sessionCutoff: text("Invalidate sessions issued before this value.").meta({
+      env: "TUNNEL_AUTH_SESSION_CUTOFF",
+    }),
+    storage: z
+      .enum(["auto", "lakebase", "sqlite"])
+      .optional()
+      .describe("Authentication database mode.")
+      .meta({ env: "TUNNEL_AUTH_STORAGE" }),
+    sqlitePath: text("Local authentication SQLite file.").meta({
+      env: "TUNNEL_AUTH_SQLITE_PATH",
+    }),
+    forwardHeaders: list("Additional forwarded request header patterns.").meta({
+      env: "TUNNEL_FORWARD_HEADERS",
+    }),
+    gatePaths: list("Additional path prefixes requiring authentication.").meta({
+      env: "TUNNEL_GATE_PATHS",
+    }),
+    bindHosts: list("Interface IPs the gate listens on."),
+    insecure: z
+      .boolean()
+      .optional()
+      .describe("Run without an authentication gate.")
+      .meta({ env: "TUNNEL_INSECURE" }),
+    frpServer: text("FRP control host.").meta({ env: "FRP_SERVER" }),
+    frpPublicDomain: text("FRP public HTTP domain.").meta({
+      env: "TUNNEL_FRP_PUBLIC_DOMAIN",
+    }),
+    frpServerPort: port("FRP control port.").meta({ env: "FRP_SERVER_PORT" }),
+    frpProtocol: text("FRP transport protocol.").meta({ env: "FRP_PROTOCOL" }),
+    frpToken: text("FRP authentication token.").meta({ env: ["FRP_TOKEN", "TUNNEL_TOKEN"] }),
+    frpProxyName: text("FRP proxy registration name.").meta({ env: "FRP_PROXY_NAME" }),
+  })
+  .strict()
+  .describe("Public tunnel wrapper command-line options.");
+
+export type TunnelOptions = z.output<typeof TunnelOptionsSchema>;
 
 /** Fully resolved listener, gate, and transport settings used to start a tunnel. */
 export interface ResolvedTunnelOptions {
@@ -81,13 +131,13 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     // Coerced, not resolved: the plugin owns the env name and the default for
     // these, so the flag is passed through as the `config` value it expects and
     // only needs a string -> number nudge on the way.
-    sessionTtlSeconds: object.toNumber(options.sessionTtl),
-    codeTtlSeconds: object.toNumber(options.codeTtl),
+    sessionTtlSeconds: options.sessionTtlSeconds,
+    codeTtlSeconds: options.codeTtlSeconds,
     sessionCutoff: options.sessionCutoff,
-    storage: options.authStorage,
-    sqlitePath: options.authSqlitePath,
+    storage: options.storage,
+    sqlitePath: options.sqlitePath,
     forwardHeaders: options.forwardHeaders,
-    gatePaths: options.gatePath,
+    gatePaths: options.gatePaths,
     insecure: options.insecure,
     publicDomain: options.publicDomain,
     publicDomains: options.frpPublicDomain ? [options.frpPublicDomain] : undefined,
@@ -97,7 +147,7 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
   return {
     publicPort,
     ...(appPort > 0 ? { appPort } : {}),
-    bindHosts: options.bind ?? [],
+    bindHosts: options.bindHosts ?? [],
     transport,
     gateConfig,
     gate,

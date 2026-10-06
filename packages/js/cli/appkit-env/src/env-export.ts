@@ -5,7 +5,22 @@
  * @module
  */
 
-export type EnvExportFormat = "export" | "windows" | "json";
+import { z } from "zod";
+
+export const EnvExportFormatSchema = z
+  .preprocess(
+    (value) => {
+      if (typeof value !== "string") return value;
+      const normalized = value.trim().toLowerCase();
+      if (["export", "shell", "nix", "bash"].includes(normalized)) return "export";
+      if (["windows", "win", "cmd"].includes(normalized)) return "windows";
+      return normalized;
+    },
+    z.enum(["export", "windows", "json"]),
+  )
+  .describe("Environment export output format.");
+
+export type EnvExportFormat = z.output<typeof EnvExportFormatSchema>;
 
 /** Shallow copy of the current process environment. */
 export function snapshotEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
@@ -47,6 +62,18 @@ export function defaultEnvExportFormat(
 ): EnvExportFormat {
   return platform === "win32" ? "windows" : "export";
 }
+
+export const EnvCommandOptionsSchema = z
+  .object({
+    format: EnvExportFormatSchema.default(defaultEnvExportFormat()).describe(
+      "Output format: export, windows, or json.",
+    ),
+    quiet: z.boolean().default(false).describe("Suppress auto-config log output."),
+  })
+  .strict()
+  .describe("Options for exporting the AppKit auto-config environment.");
+
+export type EnvCommandOptions = z.output<typeof EnvCommandOptionsSchema>;
 
 function escapeExportValue(value: string): string {
   return value
@@ -93,20 +120,5 @@ export function formatEnvExport(env: Record<string, string>, format: EnvExportFo
 
 /** Normalize CLI format aliases to a supported export format. */
 export function parseEnvExportFormat(value: string): EnvExportFormat {
-  const normalized = value.trim().toLowerCase();
-  if (
-    normalized === "export" ||
-    normalized === "shell" ||
-    normalized === "nix" ||
-    normalized === "bash"
-  ) {
-    return "export";
-  }
-  if (normalized === "windows" || normalized === "win" || normalized === "cmd") {
-    return "windows";
-  }
-  if (normalized === "json") {
-    return "json";
-  }
-  throw new Error(`Unknown format '${value}'. Use export, windows, or json.`);
+  return EnvExportFormatSchema.parse(value);
 }

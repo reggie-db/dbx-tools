@@ -123,29 +123,29 @@ dbx graphiti [options] [command] [args...]
 
 #### Options
 
-| Option                               | Description                                                                                      |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `-v, --version`                      | output the version number                                                                        |
-| `--python <python>`                  | Python executable used to run Graphiti (default: "python3", env: PYTHON)                         |
-| `--profile <profile>`                | Databricks profile used for models and persistence (env: DATABRICKS_CONFIG_PROFILE)              |
-| `--home <directory>`                 | Graphiti runtime and data directory (env: DBX_GRAPHITI_HOME)                                     |
-| `--model <model>`                    | Fuzzy chat-model name or endpoint (default: "databricks-gpt-5-nano", env: MODEL_NAME)            |
-| `--embedder-model <model>`           | Fuzzy embedding-model name or endpoint (default: "databricks-gte-large-en", env: EMBEDDER_MODEL) |
-| `--embedder-dimensions <dimensions>` | Embedding vector dimensions (default: 1024, env: EMBEDDER_DIMENSIONS)                            |
-| `--model-gateway-url <url>`          | Existing OpenAI-compatible gateway URL including /v1 (env: MODEL_GATEWAY_URL)                    |
-| `--model-gateway-host <host>`        | Managed model-gateway listener host (default: "127.0.0.1", env: MODEL_GATEWAY_HOST)              |
-| `--model-gateway-port <port>`        | Managed model-gateway listener port (default: 4400, env: MODEL_GATEWAY_PORT)                     |
-| `--model-gateway-command <command>`  | Command used to start the managed model gateway (env: MODEL_GATEWAY_COMMAND)                     |
-| `--manage-model-gateway`             | Start and stop a local model gateway (env: MANAGE_MODEL_GATEWAY)                                 |
-| `--no-manage-model-gateway`          | Use an existing model gateway                                                                    |
-| `--openai-api-key <key>`             | API key for an external OpenAI-compatible gateway (env: OPENAI_API_KEY)                          |
-| `--structured-output-mode <mode>`    | Graphiti OpenAI structured-output mode (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
-| `--graphiti-host <host>`             | Graphiti MCP listener host (default: "127.0.0.1", env: GRAPHITI_HOST)                            |
-| `--graphiti-port <port>`             | Graphiti MCP listener port (default: 8000, env: GRAPHITI_PORT)                                   |
-| `--proxy-port <port>`                | AppKit reverse-proxy listener port (default: 0, env: PROXY_PORT)                                 |
-| `--journal-namespace <namespace>`    | Graphiti write-journal namespace (env: JOURNAL_NAMESPACE)                                        |
-| `--journal-database-url <url>`       | Explicit PostgreSQL write-journal URL (env: JOURNAL_DATABASE_URL)                                |
-| `--journal-table <table>`            | PostgreSQL write-journal table (env: JOURNAL_TABLE)                                              |
+| Option                             | Description                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                    | output the version number                                                                                                 |
+| `--python <value>`                 | Python executable used to run the matching Graphiti package. (default: "python3", env: PYTHON)                            |
+| `--profile <value>`                | Databricks profile used for model discovery, authentication, and persistence. (env: DATABRICKS_CONFIG_PROFILE)            |
+| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
+| `--model <value>`                  | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
+| `--embedder-model <value>`         | Fuzzy embedding-model name or endpoint identifier. (default: "databricks-gte-large-en", env: EMBEDDER_MODEL)              |
+| `--embedder-dimensions <value>`    | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
+| `--model-gateway-url <value>`      | Existing OpenAI-compatible model gateway base URL, including /v1. (env: MODEL_GATEWAY_URL)                                |
+| `--model-gateway-host <value>`     | Listener host for a locally managed model gateway. (default: "127.0.0.1", env: MODEL_GATEWAY_HOST)                        |
+| `--model-gateway-port <value>`     | Listener port for a locally managed model gateway. (default: 4400, env: MODEL_GATEWAY_PORT)                               |
+| `--model-gateway-command <value>`  | Command used to start a locally managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                       |
+| `--manage-model-gateway`           | Whether Graphiti starts and stops a local model gateway. (env: MANAGE_MODEL_GATEWAY)                                      |
+| `--no-manage-model-gateway`        | Disable whether graphiti starts and stops a local model gateway.                                                          |
+| `--open-ai-api-key <value>`        | API key used only with an externally managed OpenAI-compatible endpoint. (env: OPENAI_API_KEY)                            |
+| `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
+| `--graphiti-host <value>`          | Graphiti MCP listener host. (default: "127.0.0.1", env: GRAPHITI_HOST)                                                    |
+| `--graphiti-port <value>`          | Graphiti MCP listener port. (default: 8000, env: GRAPHITI_PORT)                                                           |
+| `--proxy-port <value>`             | AppKit reverse-proxy listener port. (default: 0, env: PROXY_PORT)                                                         |
+| `--journal-namespace <value>`      | Persistence namespace used by the Graphiti write journal. (env: JOURNAL_NAMESPACE)                                        |
+| `--journal-database-url <value>`   | Explicit PostgreSQL journal URL. (env: JOURNAL_DATABASE_URL)                                                              |
+| `--journal-table <value>`          | PostgreSQL journal table name. (env: JOURNAL_TABLE)                                                                       |
 
 #### Commands
 
@@ -239,9 +239,10 @@ dbx graphiti service install [options]
 
 #### Options
 
-| Option       | Description                          |
-| ------------ | ------------------------------------ |
-| `--no-start` | install without starting the service |
+| Option       | Description                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| `--start`    | Start the service after installation. (default: true, env: START) |
+| `--no-start` | Disable start the service after installation.                     |
 
 ### `dbx graphiti service start`
 

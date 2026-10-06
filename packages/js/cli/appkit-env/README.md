@@ -73,9 +73,10 @@ dbx appkit env [options]
 
 #### Options
 
-| Option                  | Description                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------- |
-| `-f, --format <format>` | Output: export (POSIX shell), windows (cmd set), or json. Defaults by platform. |
-| `-q, --quiet`           | Suppress auto-config log output (LOG_LEVEL=error)                               |
+| Option             | Description                                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `--format <value>` | Output format: export, windows, or json. (choices: "export", "windows", "json", default: "export", env: FORMAT) |
+| `--quiet`          | Suppress auto-config log output. (default: false, env: QUIET)                                                   |
+| `--no-quiet`       | Disable suppress auto-config log output.                                                                        |
 
 <!-- cli-reference:end -->

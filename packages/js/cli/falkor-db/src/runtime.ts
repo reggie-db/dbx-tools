@@ -13,31 +13,12 @@ import { DatabricksFileSystem } from "@dbx-tools/databricks/databricks-fs";
 import { DatabricksVolumeStorage, DurableFalkorDB } from "@dbx-tools/falkor-db";
 import { log } from "@dbx-tools/shared-core";
 
+import type { FalkorDBOptions } from "./options.ts";
+
 const logger = log.logger("cli:falkor-db");
 
-/** Foreground FalkorDB settings resolved by the owning Commander parser. */
-export interface RunFalkorDBOptions {
-  readonly dataDir?: string;
-  readonly snapshotSeconds: number;
-  readonly snapshotMinChanges: number;
-  readonly volume?: string;
-  readonly profile?: string;
-  readonly retention: number;
-  readonly backupPollSeconds: number;
-  readonly staleBackupWarningSeconds?: number;
-  readonly forceBackupOnShutdown?: boolean;
-  readonly shutdownTimeoutSeconds: number;
-  readonly redisServerPath?: string;
-  readonly modulePath?: string;
-  readonly maxMemory?: string;
-  readonly redisLogLevel?: "debug" | "verbose" | "notice" | "warning";
-  readonly redisLogFile?: string;
-  readonly startupTimeoutSeconds: number;
-  readonly inheritStdio?: boolean;
-}
-
 /** Run FalkorDB until SIGINT or SIGTERM, then close it without an implicit save. */
-export async function runFalkorDB(options: RunFalkorDBOptions): Promise<void> {
+export async function runFalkorDB(options: FalkorDBOptions): Promise<void> {
   const storage = options.volume ? await volumeStorage(options.volume, options.profile) : undefined;
   const database = await DurableFalkorDB.open({
     ...(options.dataDir ? { dataDir: options.dataDir } : {}),

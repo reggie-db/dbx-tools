@@ -11,6 +11,8 @@ describe("FalkorDB CLI", () => {
     assert.match(help, /--snapshot-seconds/);
     assert.match(help, /--volume/);
     assert.match(help, /--force-backup-on-shutdown/);
+    assert.match(help, /FALKORDB_DATA_DIR/);
+    assert.match(help, /DATABRICKS_CONFIG_PROFILE/);
     assert.doesNotMatch(help, /\bservice\b/);
   });
 
@@ -84,18 +86,18 @@ describe("FalkorDB CLI", () => {
     assert.equal(calls[0]?.volume, undefined);
   });
 
-  it("rejects invalid interval values", () => {
+  it("rejects invalid interval values", async () => {
     const dependencies: FalkorDBCliDependencies = {
       async run() {
         assert.fail("runtime must not start");
       },
     };
-    assert.throws(
+    await assert.rejects(
       () =>
         buildProgram("dbx falkor-db", dependencies)
           .exitOverride()
-          .parse(["--snapshot-seconds", "0"], { from: "user" }),
-      /positive integer/,
+          .parseAsync(["--snapshot-seconds", "0"], { from: "user" }),
+      /greater than 0|>0/i,
     );
   });
 });

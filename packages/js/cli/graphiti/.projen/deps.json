@@ -11,6 +11,11 @@
       "type": "build"
     },
     {
+      "name": "@dbx-tools/cli-args",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/cli-model-gateway",
       "version": "workspace:^",
       "type": "runtime"

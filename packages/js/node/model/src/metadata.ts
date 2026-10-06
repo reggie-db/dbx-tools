@@ -51,7 +51,11 @@ import {
   mergePreferFreshRecord,
   type MetadataCache,
 } from "./metadata-cache.ts";
-import { modelSearchQuery } from "./policy.ts";
+import {
+  inheritsNativeWebSearch,
+  isFoundationModelIdentity,
+  modelSearchQuery,
+} from "./policy.ts";
 import {
   defaultReasoningLevels,
   documentedReasoningLevels,
@@ -336,12 +340,20 @@ export async function learnReasoningLevelsFromError(
 /** Resolve documented model capabilities from a name or endpoint summary. */
 export function modelCapabilitiesFor(model: string | ServingEndpointSummary): ModelCapabilities {
   const capabilities = metadataIndex().capabilities;
-  const keys = modelIdentities(model, false).flatMap((identity) => modelKey(identity) ?? []);
+  const identities = modelIdentities(model, false);
+  const keys = identities.flatMap((identity) => modelKey(identity) ?? []);
   return {
     responses: keys.some((key) => capabilities.responses.has(key)),
     imageInput: keys.some((key) => capabilities.imageInput.has(key)),
     applyPatch: keys.some((key) => capabilities.applyPatch.has(key)),
-    webSearch: keys.some((key) => capabilities.webSearch.has(key)),
+    // Version inheritance only applies to hosted foundation identities.
+    webSearch:
+      keys.some((key) => capabilities.webSearch.has(key)) ||
+      identities.some(
+        (identity) =>
+          isFoundationModelIdentity(identity) &&
+          inheritsNativeWebSearch(identity, capabilities.webSearch),
+      ),
   };
 }
 

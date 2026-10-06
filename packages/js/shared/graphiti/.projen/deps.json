@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "@dbx-tools/shared-core",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "zod",
       "version": "catalog:",
       "type": "runtime"

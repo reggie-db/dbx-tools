@@ -16,7 +16,7 @@ dbx auth profile
 
 `login` opens the Databricks user authentication flow when needed. `status`
 reports the selected identity and authentication state. `profile` prints the
-configured profile name. Use `--host` or a configuration file override when
+configured profile name. Use `DATABRICKS_HOST` or a configuration file override when
 connecting to a target outside the selected profile.
 
 ## Obtain A Token
@@ -74,22 +74,16 @@ dbx auth [options] [command]
 
 #### Options
 
-| Option                        | Description                                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--profile <name>`            | Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)                                                                        |
-| `--host <url>`                | Databricks host (env: DATABRICKS_HOST)                                                                                         |
-| `--account-id <id>`           | Databricks account id (env: DATABRICKS_ACCOUNT_ID)                                                                             |
-| `--workspace-id <id>`         | Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)                                                                         |
-| `--config-file <path>`        | Databricks config file (env: DATABRICKS_CONFIG_FILE)                                                                           |
-| `--client-id <id>`            | OAuth client id (env: DATABRICKS_CLIENT_ID)                                                                                    |
-| `--group-id <id>`             | Assumed Databricks group id (env: DATABRICKS_GROUP_ID)                                                                         |
-| `--auth-type <type>`          | Databricks authentication type (choices: "databricks-cli", "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE) |
-| `--scopes <scopes>`           | OAuth scopes, repeatable or comma-separated                                                                                    |
-| `--target <target>`           | OAuth target (choices: "workspace", "account", "unified", env: DBX_TOOLS_U2M_TARGET)                                           |
-| `--lock-timeout-ms <ms>`      | Credential lock timeout (0 waits indefinitely) (default: "0", env: DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)                              |
-| `--login-timeout-ms <ms>`     | Browser login timeout (default: "900000", env: DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)                                                 |
-| `--refresh-buffer-ms <ms>`    | Token refresh buffer (default: "300000", env: DBX_TOOLS_U2M_REFRESH_BUFFER_MS)                                                 |
-| `--no-prefer-user-to-machine` | Use selected M2M credentials without preferring a matching user profile                                                        |
+| Option                        | Description                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `--profile <value>`           | Databricks CLI profile. (env: DATABRICKS_CONFIG_PROFILE)                                                       |
+| `--scopes <value>`            | OAuth scopes. (default: [], env: SCOPES)                                                                       |
+| `--target <value>`            | OAuth target. (choices: "workspace", "account", "unified", env: TARGET)                                        |
+| `--lock-timeout-ms <value>`   | Credential lock timeout in milliseconds. (default: 0, env: LOCK_TIMEOUT_MS)                                    |
+| `--login-timeout-ms <value>`  | Browser login timeout in milliseconds. (default: 900000, env: LOGIN_TIMEOUT_MS)                                |
+| `--refresh-buffer-ms <value>` | Token refresh buffer in milliseconds. (default: 300000, env: REFRESH_BUFFER_MS)                                |
+| `--prefer-user-to-machine`    | Prefer a matching user profile over selected machine credentials. (default: true, env: PREFER_USER_TO_MACHINE) |
+| `--no-prefer-user-to-machine` | Disable prefer a matching user profile over selected machine credentials.                                      |
 
 #### Commands
 
@@ -119,10 +113,12 @@ dbx auth token [options]
 
 #### Options
 
-| Option            | Description                                                    |
-| ----------------- | -------------------------------------------------------------- |
-| `--force-refresh` | Refresh the token before returning it                          |
-| `--no-login`      | Fail instead of logging in for a missing or invalid credential |
+| Option               | Description                                                                 |
+| -------------------- | --------------------------------------------------------------------------- |
+| `--force-refresh`    | Refresh the token before returning it. (default: false, env: FORCE_REFRESH) |
+| `--no-force-refresh` | Disable refresh the token before returning it.                              |
+| `--login`            | Log in when credentials are missing or invalid. (default: true, env: LOGIN) |
+| `--no-login`         | Disable log in when credentials are missing or invalid.                     |
 
 ### `dbx auth profile`
 

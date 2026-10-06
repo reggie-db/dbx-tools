@@ -30,9 +30,9 @@ class AuthOptions:
 
 @dataclass(kw_only=True)
 class DatabricksAuthOptions:
-    profile: str | None = field(
+    auth: AuthOptions | None = field(
         default=None,
-        metadata={"javascript_name": "profile"},
+        metadata={"javascript_name": "auth"},
     )
     host: str | None = field(
         default=None,
@@ -45,6 +45,14 @@ class DatabricksAuthOptions:
     workspace_id: str | None = field(
         default=None,
         metadata={"javascript_name": "workspaceId"},
+    )
+    target: str | None = field(
+        default=None,
+        metadata={"javascript_name": "target"},
+    )
+    profile: str | None = field(
+        default=None,
+        metadata={"javascript_name": "profile"},
     )
     config_file: str | None = field(
         default=None,
@@ -73,14 +81,6 @@ class DatabricksAuthOptions:
     scopes: list[str] | None = field(
         default=None,
         metadata={"javascript_name": "scopes"},
-    )
-    target: str | None = field(
-        default=None,
-        metadata={"javascript_name": "target"},
-    )
-    auth: AuthOptions | None = field(
-        default=None,
-        metadata={"javascript_name": "auth"},
     )
     request_headers: dict[str, str] | None = field(
         default=None,

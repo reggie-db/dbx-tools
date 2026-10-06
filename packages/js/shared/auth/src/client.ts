@@ -4,6 +4,7 @@
  * @module
  */
 
+import { options } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 import { authTypeSchema, targetKindSchema } from "./config-schema.ts";
@@ -11,7 +12,7 @@ import { authTypeSchema, targetKindSchema } from "./config-schema.ts";
 /** Resolved secret-free Databricks authentication client fields. */
 export const databricksAuthClientInfoSchema = z.object({
   profile: z.string().min(1).optional(),
-  host: z.string().url(),
+  host: options.normalizedUrlSchema,
   accountId: z.string().min(1).optional(),
   workspaceId: z.string().min(1).optional(),
   target: targetKindSchema,

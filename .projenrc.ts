@@ -296,6 +296,7 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
     "@dbx-tools/shared-core@workspace:^",
     "ini@^6.0.0",
     "oauth4webapi@^3.8.8",
+    "zod@catalog:",
   );
   p.addDevDeps("@types/ini@^4.1.1");
   p.compileTask.prependExec(
@@ -336,8 +337,10 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
   );
   p.addDeps(
     "@dbx-tools/appkit@workspace:^",
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@databricks/appkit@catalog:",
+    "zod@catalog:",
   );
 });
 
@@ -347,8 +350,22 @@ project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) =
   p.package.addField("description", "Databricks OAuth commands mounted under dbx auth");
   p.addDeps(
     "@dbx-tools/auth@workspace:^",
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
+    "zod@catalog:",
+  );
+});
+
+project.applyToProjects(root, { identifierName: "cli-args", tags: "cli" }, (p) => {
+  p.package.addField(
+    "description",
+    "Bind Zod schemas to Commander arguments with layered configUtils defaults",
+  );
+  p.addDeps(
+    "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "zod@catalog:",
   );
 });
 
@@ -360,9 +377,11 @@ project.applyToProjects(root, { identifierName: "cli-model-gateway", tags: "cli"
     "@vitejs/plugin-react@5.1.1",
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit-model-gateway@workspace:^",
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-model-gateway@workspace:^",
     "esbuild@0.28.2",
   );
   p.package.addBin({ "dbx-model-gateway": "./bin/dbx-model-gateway.ts" });
@@ -375,6 +394,7 @@ project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (
   );
   p.addDeps(
     "@dbx-tools/cli-model-gateway@workspace:^",
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
@@ -397,9 +417,11 @@ project.applyToProjects(root, { identifierName: "cli-falkor-db", tags: "cli" }, 
     "Foreground embedded FalkorDB CLI with optional Databricks Volume backups",
   );
   p.addDeps(
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/falkor-db@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
+    "zod@catalog:",
   );
   p.package.addBin({ "dbx-falkor-db": "./bin/dbx-falkor-db.ts" });
 });
@@ -407,10 +429,12 @@ project.applyToProjects(root, { identifierName: "cli-falkor-db", tags: "cli" }, 
 project.applyToProjects(root, { identifierName: "cli-lakebase-proxy", tags: "cli" }, (p) => {
   p.package.addField("description", "Pure Node loopback PostgreSQL proxy for Databricks Lakebase");
   p.addDeps(
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/lakebase@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "pg@^8.22.0",
+    "zod@catalog:",
   );
   p.addDevDeps("@types/pg@^8");
   p.package.addBin({ "dbx-lakebase-proxy": "./bin/dbx-lakebase-proxy.ts" });
@@ -811,7 +835,11 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
     "description",
     "Browser-safe model-gateway schemas and model discovery client",
   );
-  p.addDeps("@dbx-tools/shared-model@workspace:^", "zod@catalog:");
+  p.addDeps(
+    "@dbx-tools/shared-core@workspace:^",
+    "@dbx-tools/shared-model@workspace:^",
+    "zod@catalog:",
+  );
 });
 
 project.applyToProjects(root, { identifierName: "shared-graphiti", tags: "shared" }, (p) => {
@@ -819,7 +847,7 @@ project.applyToProjects(root, { identifierName: "shared-graphiti", tags: "shared
     "description",
     "Browser-safe Graphiti options, defaults, and runtime configuration",
   );
-  p.addDeps("zod@catalog:");
+  p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
 });
 
 project.applyToProjects(root, { identifierName: "shared-fs", tags: "shared" }, (p) => {
@@ -927,6 +955,7 @@ project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p
     "Cross-platform service lifecycle and system tray menus for CLIs",
   );
   p.addDeps(
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
     `bun@${bunWorkflow.BUN_VERSION}`,
     "systray2@catalog:",
@@ -980,6 +1009,7 @@ project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p)
   p.addDeps(
     "@databricks/appkit@catalog:",
     "@dbx-tools/auth-gate@workspace:^",
+    "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/appkit@workspace:^",
@@ -987,6 +1017,7 @@ project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p)
     "@dbx-tools/tunnel@workspace:^",
     "@dbx-tools/shared-email@workspace:^",
     "http-proxy-3@catalog:",
+    "zod@catalog:",
   );
 });
 
@@ -1005,6 +1036,7 @@ project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p)
     "@dbx-tools/shared-auth@workspace:^",
     "better-auth@catalog:",
     "env-paths@catalog:",
+    "zod@catalog:",
   );
 });
 
@@ -1031,6 +1063,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "@types/express@catalog:",
     "better-call@catalog:",
     "http-proxy-3@catalog:",
+    "zod@catalog:",
   );
   p.tasks.tryFind("pre-compile")?.exec("bun assets/build-login-client.ts");
   p.addDevDeps(`@types/bun@${bunWorkflow.BUN_VERSION}`);
@@ -1128,6 +1161,7 @@ project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" },
   );
   p.addDeps(
     "@better-auth/passkey@catalog:",
+    "@dbx-tools/shared-core@workspace:^",
     "@simplewebauthn/browser@catalog:",
     "better-auth@catalog:",
     "zod@catalog:",

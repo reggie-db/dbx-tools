@@ -24,10 +24,11 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import { log } from "@dbx-tools/shared-core";
-import { frp, portr } from "@dbx-tools/tunnel";
+import { frp, interceptor, portr } from "@dbx-tools/tunnel";
 import { Command, CommanderError } from "commander";
-import { resolveTunnelOptions, type TunnelOptions } from "./options.ts";
+import { resolveTunnelOptions, TunnelOptionsSchema, type TunnelOptions } from "./options.ts";
 import { startProxy } from "./proxy.ts";
 
 export { CommanderError };
@@ -52,39 +53,6 @@ function freePort(): Promise<number> {
       probe.close(() => (port > 0 ? resolve(port) : reject(new Error("no free port"))));
     });
   });
-}
-
-/**
- * Every gate/portr flag. Declared on the root command AND on `run`/`status` so
- * `dbx tunnel --allow x -- cmd` and `dbx tunnel run --allow x -- cmd` behave
- * identically - commander does not inherit options downward.
- */
-function addOptions(command: Command): Command {
-  return command
-    .option("--transport <transport>", "public tunnel transport: portr, frp, or both")
-    .option("--public-domain <host>", "public tunnel domain")
-    .option("--subdomain <name>", "portr subdomain (else derived from the public domain)")
-    .option("--port <port>", "public port the wrapper listens on")
-    .option("--app-port <port>", "private port the wrapped app is told to bind")
-    .option("--allow <patterns...>", "email allow-list (domain / glob / /regex/)")
-    .option("--subject <text>", "verification email subject")
-    .option("--brand-name <name>", "verification email brand name")
-    .option("--message <text>", "verification email message")
-    .option("--session-ttl <seconds>", "session lifetime")
-    .option("--code-ttl <seconds>", "one-time-code lifetime")
-    .option("--session-cutoff <when>", "invalidate every session issued before this")
-    .option("--auth-storage <mode>", "auth database: auto, lakebase, or sqlite")
-    .option("--auth-sqlite-path <path>", "local Better Auth SQLite file")
-    .option("--forward-headers <patterns...>", "extra x- headers tunnel traffic may forward")
-    .option("--gate-path <prefix...>", "path prefixes to gate beyond /api/ (e.g. /ws)")
-    .option("--bind <host...>", "interface IPs the gate listens on (default: 0.0.0.0)")
-    .option("--frp-server <host>", "frps control host (default: FRP public domain)")
-    .option("--frp-public-domain <host>", "FRP public HTTP domain")
-    .option("--frp-server-port <port>", "frps control port (default: 443)")
-    .option("--frp-protocol <protocol>", "frpc transport protocol (default: wss)")
-    .option("--frp-token <token>", "frps auth token")
-    .option("--frp-proxy-name <name>", "frp proxy registration name")
-    .option("--insecure", "run open, with no gate");
 }
 
 /**
@@ -190,10 +158,12 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
 
 /** The `dbx tunnel` program. No side effects until parsed. */
 export function buildProgram(name = "dbx tunnel"): Command {
-  const program = addOptions(
+  const program = addArgs(
     new Command()
       .name(name)
       .description("Front a command with a public tunnel and passwordless auth"),
+    TunnelOptionsSchema,
+    { scope: [] },
   );
 
   // `run` is the DEFAULT action as well as a named subcommand, preserving the old
@@ -201,23 +171,31 @@ export function buildProgram(name = "dbx tunnel"): Command {
   // leaving somewhere for `status` and `install` to live.
   program
     .argument("[command...]", "the command to wrap, after `--`")
-    .action(async (command: string[], _options: TunnelOptions, cmd: Command) => {
-      await run(cmd.opts<TunnelOptions>(), command);
+    .action(async (command: string[]) => {
+      await run(parseArgs(program, TunnelOptionsSchema), command);
     });
 
-  addOptions(program.command("run").description("Wrap a command (the default action)"))
+  const runCommand = addArgs(
+    program.command("run").description("Wrap a command (the default action)"),
+    TunnelOptionsSchema,
+    { scope: [] },
+  );
+  runCommand
     .argument("<command...>", "the command to wrap, after `--`")
-    .action(async (command: string[], _options: TunnelOptions, cmd: Command) => {
-      await run(cmd.opts<TunnelOptions>(), command);
+    .action(async (command: string[]) => {
+      await run(parseArgs(runCommand, TunnelOptionsSchema), command);
     });
 
   // Worth its own command: the most common failure is a tunnel that silently
   // does nothing because no token or domain resolved, and this prints exactly
   // what would happen without starting anything.
-  addOptions(
+  const statusCommand = addArgs(
     program.command("status").description("Resolve the configuration and print it"),
-  ).action((_options: TunnelOptions, cmd: Command) => {
-    const resolved = resolveTunnelOptions(cmd.opts<TunnelOptions>());
+    TunnelOptionsSchema,
+    { scope: [] },
+  );
+  statusCommand.action(() => {
+    const resolved = resolveTunnelOptions(parseArgs(statusCommand, TunnelOptionsSchema));
     process.stdout.write(`${JSON.stringify(resolved, null, 2)}\n`);
   });
 
@@ -226,11 +204,9 @@ export function buildProgram(name = "dbx tunnel"): Command {
     .argument("[transport]", "portr, frp, or both", "portr")
     .description("Install public tunnel client binaries and exit")
     .action(async (transport: string) => {
-      if (transport === "portr" || transport === "both") await portr.installPortr();
-      if (transport === "frp" || transport === "both") await frp.installFrp();
-      if (transport !== "portr" && transport !== "frp" && transport !== "both") {
-        throw new CommanderError(1, "tunnel.invalid-transport", `invalid transport: ${transport}`);
-      }
+      const parsed = interceptor.TunnelTransportSchema.parse(transport);
+      if (parsed === "portr" || parsed === "both") await portr.installPortr();
+      if (parsed === "frp" || parsed === "both") await frp.installFrp();
     });
 
   return program;

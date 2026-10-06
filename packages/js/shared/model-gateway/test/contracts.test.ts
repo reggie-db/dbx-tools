@@ -112,6 +112,7 @@ describe("shared model-gateway schemas", () => {
               embeddings: false,
               ai_gateway_codex: true,
               streaming: true,
+              web_search: true,
             },
           },
         ],

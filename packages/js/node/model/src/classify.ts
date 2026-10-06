@@ -111,13 +111,25 @@ export function versionTuple(name: string): [number, number, number] {
   return [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0];
 }
 
-/** Compare two version tuples so the higher version sorts first (descending). */
-function compareVersionDesc(a: readonly number[], b: readonly number[]): number {
-  for (let i = 0; i < 3; i++) {
-    const diff = (b[i] ?? 0) - (a[i] ?? 0);
+/**
+ * Compare version tuples component-wise with missing parts as 0.
+ * Positive when `left` is newer.
+ */
+export function compareVersionTuples(
+  left: readonly number[],
+  right: readonly number[],
+): number {
+  const length = Math.max(left.length, right.length, 3);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] ?? 0) - (right[index] ?? 0);
     if (diff !== 0) return diff;
   }
   return 0;
+}
+
+/** Compare two version tuples so the higher version sorts first (descending). */
+function compareVersionDesc(a: readonly number[], b: readonly number[]): number {
+  return compareVersionTuples(b, a);
 }
 
 /**

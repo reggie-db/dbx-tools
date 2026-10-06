@@ -13,38 +13,32 @@
  */
 
 import { appkit } from "@dbx-tools/appkit";
+import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import { log } from "@dbx-tools/shared-core";
 import { Command, CommanderError } from "commander";
 
 import {
-  defaultEnvExportFormat,
   diffEnv,
+  EnvCommandOptionsSchema,
   formatEnvExport,
-  parseEnvExportFormat,
   snapshotEnv,
+  type EnvCommandOptions,
 } from "./env-export.ts";
 
 const logger = log.logger("appkit-env");
 
-/** Options for the `env` command. */
-interface EnvOpts {
-  format?: string;
-  quiet?: boolean;
-}
-
 /** Run auto-config and write the resulting env delta to stdout. */
-async function writeEnvExport(opts: EnvOpts): Promise<void> {
+async function writeEnvExport(opts: EnvCommandOptions): Promise<void> {
   if (opts.quiet) {
     process.env.LOG_LEVEL = "error";
   }
 
-  const format = opts.format ? parseEnvExportFormat(opts.format) : defaultEnvExportFormat();
   logger.debug("Snapshotting env vars");
   const before = snapshotEnv();
   await appkit.autoConfigure({ autoConfigure: "env" });
   const changes = diffEnv(before, snapshotEnv());
 
-  process.stdout.write(formatEnvExport(changes, format));
+  process.stdout.write(formatEnvExport(changes, opts.format));
 }
 
 /**
@@ -52,14 +46,14 @@ async function writeEnvExport(opts: EnvOpts): Promise<void> {
  * different parent than {@link buildProgram}'s.
  */
 export function buildEnvCommand(name = "env"): Command {
-  return new Command(name)
-    .description("Run AppKit auto-config and print new/changed env vars.")
-    .option(
-      "-f, --format <format>",
-      "Output: export (POSIX shell), windows (cmd set), or json. Defaults by platform.",
-    )
-    .option("-q, --quiet", "Suppress auto-config log output (LOG_LEVEL=error)")
-    .action(writeEnvExport);
+  const command = addArgs(
+    new Command(name).description("Run AppKit auto-config and print new/changed env vars."),
+    EnvCommandOptionsSchema,
+    { scope: [] },
+  );
+  return command.action(async () => {
+    await writeEnvExport(parseArgs(command, EnvCommandOptionsSchema));
+  });
 }
 
 /** Build the `dbx appkit` commander program (no side effects until parsed). */

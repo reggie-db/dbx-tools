@@ -26,6 +26,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/cli-args",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/core",
       "version": "workspace:^",
       "type": "runtime"
@@ -57,6 +62,11 @@
     },
     {
       "name": "http-proxy-3",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "zod",
       "version": "catalog:",
       "type": "runtime"
     }

@@ -5,6 +5,8 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-falkor-db";
 export const PACKAGE_VERSION = "0.9.40";
 export * as cli from "./src/cli.ts";
+export * as options from "./src/options.ts";
 export * as runtime from "./src/runtime.ts";
 export type { FalkorDBCliDependencies } from "./src/cli.ts";
-export type { RunFalkorDBOptions } from "./src/runtime.ts";
+export { FalkorDBOptionsSchema } from "./src/options.ts";
+export type { FalkorDBOptions } from "./src/options.ts";

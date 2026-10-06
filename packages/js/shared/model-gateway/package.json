@@ -22,6 +22,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/shared-core": "workspace:^",
     "@dbx-tools/shared-model": "workspace:^",
     "zod": "catalog:"
   },
@@ -48,6 +49,10 @@
         "types": "./lib/src/models.d.ts",
         "default": "./lib/src/models.js"
       },
+      "./options": {
+        "types": "./lib/src/options.d.ts",
+        "default": "./lib/src/options.js"
+      },
       "./upstream": {
         "types": "./lib/src/upstream.d.ts",
         "default": "./lib/src/upstream.js"
@@ -68,6 +73,7 @@
     "./client": "./src/client.ts",
     "./contracts": "./src/contracts.ts",
     "./models": "./src/models.ts",
+    "./options": "./src/options.ts",
     "./upstream": "./src/upstream.ts",
     "./package.json": "./package.json"
   },

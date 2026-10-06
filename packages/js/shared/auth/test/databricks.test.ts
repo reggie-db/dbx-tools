@@ -41,7 +41,7 @@ describe("browser-safe Databricks auth schemas", () => {
     assert.throws(() =>
       databricksProfileSummarySchema.parse({
         ...PROFILE,
-        host: "not-a-url",
+        host: "http://[]",
       }),
     );
   });

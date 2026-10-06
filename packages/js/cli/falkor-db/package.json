@@ -26,10 +26,12 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/databricks": "workspace:^",
     "@dbx-tools/falkor-db": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "commander": "catalog:"
+    "commander": "catalog:",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -49,6 +51,10 @@
         "types": "./lib/src/cli.d.ts",
         "default": "./lib/src/cli.js"
       },
+      "./options": {
+        "types": "./lib/src/options.d.ts",
+        "default": "./lib/src/options.js"
+      },
       "./runtime": {
         "types": "./lib/src/runtime.d.ts",
         "default": "./lib/src/runtime.js"
@@ -67,6 +73,7 @@
   "exports": {
     ".": "./index.ts",
     "./cli": "./src/cli.ts",
+    "./options": "./src/options.ts",
     "./runtime": "./src/runtime.ts",
     "./package.json": "./package.json"
   },

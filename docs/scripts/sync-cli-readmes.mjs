@@ -13,7 +13,11 @@ for (const pkg of discoverJavaScriptPackages(root).filter((pkg) => pkg.group ===
   const entry = resolvePackageTypeScriptExports(pkg.manifest).find(
     (entry) => entry.subpath === "./cli",
   );
-  if (!entry) throw new Error(`${pkg.name} must export its owning CLI module`);
+  if (!entry) {
+    const manifest = JSON.parse(fs.readFileSync(pkg.manifest, "utf8"));
+    if (manifest.bin) throw new Error(`${pkg.name} must export its owning CLI module`);
+    continue;
+  }
   const owner = await import(pathToFileURL(entry.file).href);
   if (typeof owner.buildProgram !== "function" && typeof owner.buildServiceCommand !== "function") {
     throw new Error(`${pkg.name} must expose its parser builder for documentation`);

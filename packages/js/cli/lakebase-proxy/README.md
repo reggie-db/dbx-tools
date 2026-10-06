@@ -13,7 +13,7 @@ Databricks discovery or credential exchange itself.
 Choose a configured Databricks profile and start the proxy:
 
 ```sh
-dbx lakebase-proxy --profile PROFILE --port 5432
+dbx lakebase-proxy --profile PROFILE --listen :5432
 ```
 
 In another terminal, generate a client URL and connect:
@@ -53,7 +53,7 @@ Install the proxy as a current-user tray service when local applications need
 the endpoint to remain available across terminal sessions:
 
 ```sh
-dbx lakebase-proxy service install --port 5432 --profile PROFILE
+dbx lakebase-proxy service install --listen :5432 --profile PROFILE
 dbx lakebase-proxy service status
 dbx lakebase-proxy service restart
 dbx lakebase-proxy service uninstall
@@ -97,13 +97,12 @@ dbx lakebase-proxy [options] [command]
 
 #### Options
 
-| Option                                | Description                                   |
-| ------------------------------------- | --------------------------------------------- |
-| `-V, --version`                       | output the version number                     |
-| `--host <host>`                       | loopback listener host (default: "127.0.0.1") |
-| `--port <port>`                       | listener port (default: 5432)                 |
-| `--startup-timeout-seconds <seconds>` | startup timeout (default: 30)                 |
-| `--profile <profile>`                 | exact Databricks profile                      |
+| Option                              | Description                                                             |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| `-V, --version`                     | output the version number                                               |
+| `--listen <value>`                  | Loopback listener address. (default: localhost:5432, env: LISTEN)       |
+| `--startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS) |
+| `--profile <value>`                 | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)              |
 
 #### Commands
 
@@ -122,12 +121,10 @@ dbx lakebase-proxy url [options]
 
 #### Options
 
-| Option                  | Description                                   |
-| ----------------------- | --------------------------------------------- |
-| `--target <target>`     | Lakebase project, resource path, host, or URL |
-| `--endpoint <endpoint>` | fallback target                               |
-| `--host <host>`         | local proxy host (default: "localhost")       |
-| `--port <port>`         | local proxy port (default: 5432)              |
+| Option             | Description                                                  |
+| ------------------ | ------------------------------------------------------------ |
+| `--target <value>` | Lakebase project, resource path, host, or URL. (env: TARGET) |
+| `--listen <value>` | Local proxy address. (default: localhost:5432, env: LISTEN)  |
 
 ### `dbx lakebase-proxy service`
 
@@ -158,13 +155,13 @@ dbx lakebase-proxy service install [options]
 
 #### Options
 
-| Option                                | Description                                   |
-| ------------------------------------- | --------------------------------------------- |
-| `--no-start`                          | install without starting the service          |
-| `--host <host>`                       | loopback listener host (default: "127.0.0.1") |
-| `--port <port>`                       | listener port (default: 5432)                 |
-| `--startup-timeout-seconds <seconds>` | startup timeout (default: 30)                 |
-| `--profile <profile>`                 | exact Databricks profile                      |
+| Option                              | Description                                                             |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| `--start`                           | Start the service after installation. (default: true, env: START)       |
+| `--no-start`                        | Disable start the service after installation.                           |
+| `--listen <value>`                  | Loopback listener address. (default: localhost:5432, env: LISTEN)       |
+| `--startup-timeout-seconds <value>` | Startup timeout in seconds. (default: 30, env: STARTUP_TIMEOUT_SECONDS) |
+| `--profile <value>`                 | Exact Databricks profile. (env: DATABRICKS_CONFIG_PROFILE)              |
 
 ### `dbx lakebase-proxy service start`
 

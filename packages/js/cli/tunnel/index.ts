@@ -9,5 +9,6 @@ export * as cli from "./src/cli.ts";
 export * as options from "./src/options.ts";
 export * as proxy from "./src/proxy.ts";
 export { CommanderError } from "./src/cli.ts";
+export { TunnelOptionsSchema } from "./src/options.ts";
 export type { TunnelOptions, ResolvedTunnelOptions } from "./src/options.ts";
 export type { ProxyOptions } from "./src/proxy.ts";
