@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-search";
-export const PACKAGE_VERSION = "0.9.46";
+export const PACKAGE_VERSION = "0.9.47";
 export * as searchSchemas from "./src/search-schemas.ts";
 export { searchModeSchema, aiSearchQueryTypeSchema, searchRequestSchema, searchHitSchema, searchResultSchema, universalSearchRequestSchema, searchDocumentSchema, upsertResultSchema, searchIndexInfoSchema, searchClientConfigSchema, createIndexRequestSchema, syncIndexRequestSchema, indexInfoSchema } from "./src/search-schemas.ts";
 export type { SearchMode, AiSearchQueryType, SearchRequest, SearchHit, SearchResult, UniversalSearchRequest, SearchDocument, UpsertResult, SearchIndexInfo, SearchClientConfig, CreateIndexRequest, SyncIndexRequest, IndexInfo } from "./src/search-schemas.ts";
