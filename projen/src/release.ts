@@ -92,15 +92,11 @@ export function nodeReleaseSetupSteps(): readonly JobStep[] {
   ];
 }
 
-/** Install uv and restore its download/build cache using Python manifests. */
+/** Install uv for Python release builds. */
 export function uvSetupStep(): JobStep {
   return {
     name: "Setup uv",
     uses: "astral-sh/setup-uv@v7",
-    with: {
-      "enable-cache": true,
-      "cache-dependency-glob": "**/pyproject.toml",
-    },
   };
 }
 

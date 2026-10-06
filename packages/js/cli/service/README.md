@@ -69,69 +69,75 @@ reference uses `<cli>` as a placeholder for the consuming program's name.
 
 ### `<cli> service`
 
-```text
-Usage: <cli> service [command]
-
 Install and manage the desktop service
 
-Commands:
-  install [options]  Install the service for the current user and start it
-  start              Start the installed service
-  stop               Stop the running service
-  restart            Restart the installed service
-  status             Print service installation and process state as JSON
-  uninstall          Stop and remove the service for the current user
+```sh
+<cli> service [command]
 ```
+
+#### Commands
+
+| Command             | Description                                           |
+| ------------------- | ----------------------------------------------------- |
+| `install [options]` | Install the service for the current user and start it |
+| `start`             | Start the installed service                           |
+| `stop`              | Stop the running service                              |
+| `restart`           | Restart the installed service                         |
+| `status`            | Print service installation and process state as JSON  |
+| `uninstall`         | Stop and remove the service for the current user      |
 
 ### `<cli> service install`
 
-```text
-Usage: <cli> service install [options]
-
 Install the service for the current user and start it
 
-Options:
-  --no-start  install without starting the service
+```sh
+<cli> service install [options]
 ```
+
+#### Options
+
+| Option       | Description                          |
+| ------------ | ------------------------------------ |
+| `--no-start` | install without starting the service |
 
 ### `<cli> service start`
 
-```text
-Usage: <cli> service start
-
 Start the installed service
+
+```sh
+<cli> service start
 ```
 
 ### `<cli> service stop`
 
-```text
-Usage: <cli> service stop
-
 Stop the running service
+
+```sh
+<cli> service stop
 ```
 
 ### `<cli> service restart`
 
-```text
-Usage: <cli> service restart
-
 Restart the installed service
+
+```sh
+<cli> service restart
 ```
 
 ### `<cli> service status`
 
-```text
-Usage: <cli> service status
-
 Print service installation and process state as JSON
+
+```sh
+<cli> service status
 ```
 
 ### `<cli> service uninstall`
 
-```text
-Usage: <cli> service uninstall
-
 Stop and remove the service for the current user
+
+```sh
+<cli> service uninstall
 ```
 
 <!-- cli-reference:end -->

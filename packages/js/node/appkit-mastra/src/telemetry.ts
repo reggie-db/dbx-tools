@@ -25,7 +25,7 @@ import { context, SpanKind, trace, type Span } from "@opentelemetry/api";
 import { getRPCMetadata, RPCType } from "@opentelemetry/core";
 import type express from "express";
 
-const logger = log.logger("mastra/trace-io");
+const logger = log.logger("mastra/telemetry");
 
 /** Cap on each payload copied onto a span, so one turn cannot bloat the export. */
 export const TRACE_IO_LIMIT = 8_000;
@@ -34,7 +34,7 @@ export const TRACE_IO_LIMIT = 8_000;
 const RESPONSE_BODY_LIMIT = TRACE_IO_LIMIT * 4;
 
 /** Tracer scope used only when AppKit did not create a recording HTTP span. */
-const CHAT_TURN_TRACER = "@dbx-tools/appkit-mastra/trace-io";
+const CHAT_TURN_TRACER = "@dbx-tools/appkit-mastra/telemetry";
 
 /**
  * Mount-relative Mastra agent invoke paths that carry a chat turn body
@@ -48,16 +48,80 @@ const AGENT_TURN_ROUTE = /^(?:\/agents\/[^/]+\/(?:stream|generate)(?:\/|$)|\/cha
 export const MLFLOW_SPAN_INPUTS_ATTR = "mlflow.spanInputs";
 /** Root-span attribute consumed as chat output by MLflow unified trace views. */
 export const MLFLOW_SPAN_OUTPUTS_ATTR = "mlflow.spanOutputs";
+/** Full serialized request messages retained when the MLflow preview is plain text. */
+export const CHAT_MESSAGES_ATTR = "appkit.mastra.chat.messages";
+/** Full serialized response retained when the MLflow preview is plain text. */
+export const CHAT_RESPONSE_ATTR = "appkit.mastra.chat.response";
+/** Credential mode used by Databricks calls in this chat turn. */
+export const CHAT_IDENTITY_ATTR = "appkit.mastra.identity.mode";
+/** Whether the streamed turn emitted a Genie tool or progress event. */
+export const CHAT_GENIE_USED_ATTR = "appkit.mastra.genie.used";
+
+/** Root-span metadata known before a chat request is dispatched. */
+export interface ChatTurnTelemetryOptions {
+  readonly identity?:
+    "obo" | "service-principal" | ((request: express.Request) => "obo" | "service-principal");
+}
 
 interface TraceTarget {
   span: Span;
   owned: boolean;
 }
 
+/** Return one raw prompt when the request is exactly one text-only user message. */
+export function textOnlyChatInput(messages: unknown): string | undefined {
+  if (typeof messages === "string") return messages || undefined;
+  if (!Array.isArray(messages) || messages.length !== 1) return undefined;
+  const message = messages[0];
+  if (!object.isRecord(message) || message.role !== "user") return undefined;
+  if (typeof message.content === "string") return message.content || undefined;
+  return textFromParts(message.parts) ?? textFromParts(message.content);
+}
+
+function textFromParts(value: unknown): string | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const text: string[] = [];
+  for (const part of value) {
+    if (!object.isRecord(part) || part.type !== "text" || typeof part.text !== "string") {
+      return undefined;
+    }
+    text.push(part.text);
+  }
+  const joined = text.join("");
+  return joined || undefined;
+}
+
+function serialized(value: unknown, limit = TRACE_IO_LIMIT): string {
+  return JSON.stringify(value)?.slice(0, limit) ?? String(value).slice(0, limit);
+}
+
+function sseFrame(line: string): unknown {
+  if (!line.startsWith("data:")) return undefined;
+  return json.parse(line.slice(5));
+}
+
+function valueUsesGenie(value: unknown, depth = 0): boolean {
+  if (depth > 3) return false;
+  if (Array.isArray(value)) return value.some((item) => valueUsesGenie(item, depth + 1));
+  if (!object.isRecord(value)) return false;
+  if (
+    value.type === "data-genie-progress" ||
+    value.type === "ask_genie_done" ||
+    value.toolName === "ask_genie" ||
+    value.tool_name === "ask_genie" ||
+    value.name === "ask_genie"
+  ) {
+    return true;
+  }
+  return ["data", "event", "payload"].some((key) => valueUsesGenie(value[key], depth + 1));
+}
+
 /** Return the assistant text from one SSE line, or an empty string. */
 function assistantTextFromSseLine(line: string): string {
-  if (!line.startsWith("data:")) return "";
-  const frame = json.parse(line.slice(5));
+  return assistantTextFromSseFrame(sseFrame(line));
+}
+
+function assistantTextFromSseFrame(frame: unknown): string {
   if (!object.isRecord(frame) || frame.type !== "text-delta") return "";
   const text =
     typeof frame.delta === "string"
@@ -98,6 +162,7 @@ class AssistantResponseCollector {
   private body = "";
   private pendingLine = "";
   private finished = false;
+  private genie = false;
 
   write(chunk: unknown): void {
     if (this.finished) return;
@@ -121,6 +186,14 @@ class AssistantResponseCollector {
     return this.answer || this.jsonAnswer();
   }
 
+  rawBody(): string {
+    return this.body.slice(0, TRACE_IO_LIMIT);
+  }
+
+  usedGenie(): boolean {
+    return this.genie;
+  }
+
   private consume(text: string): void {
     if (!text) return;
     if (this.body.length < RESPONSE_BODY_LIMIT) {
@@ -139,8 +212,10 @@ class AssistantResponseCollector {
   }
 
   private consumeSseLine(line: string): void {
+    const frame = sseFrame(line);
+    this.genie ||= valueUsesGenie(frame);
     if (this.answer.length >= TRACE_IO_LIMIT) return;
-    const text = assistantTextFromSseLine(line);
+    const text = assistantTextFromSseFrame(frame);
     this.answer += text.slice(0, TRACE_IO_LIMIT - this.answer.length);
   }
 
@@ -186,10 +261,11 @@ function resolveTraceTarget(): TraceTarget | undefined {
  * `path` is mount-relative (what the Mastra sub-app sees), e.g.
  * `/agents/support/stream`.
  */
-export function chatTurnTraceIoMiddleware(
+export function chatTurnTelemetryMiddleware(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction,
+  options: ChatTurnTelemetryOptions = {},
 ): void {
   if (req.method !== "POST" || !AGENT_TURN_ROUTE.test(req.path)) {
     next();
@@ -200,17 +276,26 @@ export function chatTurnTraceIoMiddleware(
     next();
     return;
   }
+  const identity =
+    typeof options.identity === "function" ? options.identity(req) : options.identity;
+  if (identity) {
+    target.span.setAttribute(CHAT_IDENTITY_ATTR, identity);
+  }
+  target.span.setAttribute(CHAT_GENIE_USED_ATTR, false);
 
   const messages = (req.body as { messages?: unknown } | undefined)?.messages;
   if (messages !== undefined) {
+    const fullInput = serialized(messages);
+    target.span.setAttribute(CHAT_MESSAGES_ATTR, fullInput);
     target.span.setAttribute(
       MLFLOW_SPAN_INPUTS_ATTR,
-      JSON.stringify(messages).slice(0, TRACE_IO_LIMIT),
+      (textOnlyChatInput(messages) ?? fullInput).slice(0, TRACE_IO_LIMIT),
     );
   }
 
   const collector = new AssistantResponseCollector();
   let outputRecorded = false;
+  let fullOutputRecorded = false;
   let ownedSpanEnded = false;
   const passThroughWrite = res.write.bind(res) as (...args: unknown[]) => boolean;
   const passThroughEnd = res.end.bind(res) as (...args: unknown[]) => unknown;
@@ -219,6 +304,14 @@ export function chatTurnTraceIoMiddleware(
     if (outputRecorded || !answer) return;
     target.span.setAttribute(MLFLOW_SPAN_OUTPUTS_ATTR, answer.slice(0, TRACE_IO_LIMIT));
     outputRecorded = true;
+  };
+  const recordFullOutput = (response: string): void => {
+    if (fullOutputRecorded || !response) return;
+    target.span.setAttribute(CHAT_RESPONSE_ATTR, response.slice(0, TRACE_IO_LIMIT));
+    fullOutputRecorded = true;
+  };
+  const recordGenie = (used: boolean): void => {
+    if (used) target.span.setAttribute(CHAT_GENIE_USED_ATTR, true);
   };
   const endOwnedSpan = (): void => {
     if (!target.owned || ownedSpanEnded) return;
@@ -232,6 +325,8 @@ export function chatTurnTraceIoMiddleware(
   }) as typeof res.write;
 
   res.json = ((body?: unknown) => {
+    recordFullOutput(serialized(body));
+    recordGenie(valueUsesGenie(body));
     recordOutput(assistantTextFromJson(body));
     return passThroughJson(body);
   }) as typeof res.json;
@@ -239,6 +334,8 @@ export function chatTurnTraceIoMiddleware(
   res.end = ((chunk?: unknown, ...rest: unknown[]) => {
     collector.write(chunk);
     recordOutput(collector.finish());
+    recordFullOutput(collector.rawBody());
+    recordGenie(collector.usedGenie());
     try {
       return passThroughEnd(chunk, ...rest);
     } finally {
@@ -248,6 +345,8 @@ export function chatTurnTraceIoMiddleware(
 
   res.once("close", () => {
     recordOutput(collector.finish());
+    recordFullOutput(collector.rawBody());
+    recordGenie(collector.usedGenie());
     endOwnedSpan();
   });
 
@@ -255,13 +354,16 @@ export function chatTurnTraceIoMiddleware(
 }
 
 /**
- * Install {@link chatTurnTraceIoMiddleware} on a Mastra Express sub-app.
+ * Install {@link chatTurnTelemetryMiddleware} on a Mastra Express sub-app.
  *
  * Call before `MastraServer.init()` so the layer sits ahead of the agent
  * routes. Safe to call unconditionally: when no recording tracer is registered,
  * the middleware is a no-op.
  */
-export function attachChatTurnTraceIo(app: express.Express): void {
-  app.use(chatTurnTraceIoMiddleware);
-  logger.info("chat turn I/O middleware attached");
+export function attachChatTurnTelemetry(
+  app: express.Express,
+  options: ChatTurnTelemetryOptions = {},
+): void {
+  app.use((req, res, next) => chatTurnTelemetryMiddleware(req, res, next, options));
+  logger.info("chat turn telemetry middleware attached", options);
 }

@@ -7,6 +7,7 @@ export const PACKAGE_VERSION = "0.9.40";
 export * as client from "./src/client.ts";
 export * as contracts from "./src/contracts.ts";
 export * as models from "./src/models.ts";
+export * as upstream from "./src/upstream.ts";
 export { ModelGatewayClientError } from "./src/client.ts";
 export type { ModelGatewayClientOptions, ListModelsOptions, ModelGatewayClient } from "./src/client.ts";
 export { ClientProtocolSchema, UpstreamProtocolSchema, ModelCapabilitiesSchema, ModelTargetSchema, RequestedFeaturesSchema, GatewayRouteSchema, ModelCapabilityOverrideSchema, ResolveRouteInputSchema } from "./src/contracts.ts";

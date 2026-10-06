@@ -96,7 +96,7 @@ retaining the async context manager used to parent in-process child spans.
 
 ## appkit-mastra gap
 
-`trace-io.ts` assumes the active HTTP span is the MLflow root. That assumption
+`telemetry.ts` assumes the active HTTP span is the MLflow root. That assumption
 must not determine whether request and response fields are visible.
 
 The plugin should provide a deterministic root for each chat turn and put the
@@ -134,12 +134,23 @@ The same selected root receives request messages and the final assistant text.
 The output collector supports both Mastra SSE `text-delta` shapes, split UTF-8
 chunks, and non-streaming `/generate` JSON responses.
 
+For one text-only user message, the MLflow input preview is the raw prompt
+instead of the serialized message envelope. The full request and response
+remain on `appkit.mastra.chat.messages` and `appkit.mastra.chat.response`.
+The root also records `appkit.mastra.identity.mode` (`obo` or
+`service-principal`) and `appkit.mastra.genie.used`. These are searchable OTel
+span attributes; custom OTel attributes do not become MLflow trace tags.
+
 ## Acceptance status
 
 - [x] A local incoming-`traceparent` test with `OTEL_PROPAGATORS=none` exports
       exactly one span whose parent is null.
 - [x] The local root span contains non-empty `mlflow.spanInputs` and
       `mlflow.spanOutputs`.
+- [x] Text-only turns display raw prompt and answer text while retaining the
+      full serialized request and response.
+- [x] Local roots identify OBO versus service-principal execution and whether
+      Genie emitted a tool or progress event.
 - [ ] `*_trace_unified.request` and `*_trace_unified.response` contain the user
       message and final assistant answer in a deployed Databricks App.
 - [ ] The experiment UI displays Input and Output for deployed streamed and

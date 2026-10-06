@@ -37,7 +37,7 @@
  * `OTEL_PROPAGATORS=none` so Apps ingress `traceparent` does not hide
  * every request-scoped root span from the UC `*_trace_unified` view.
  * Chat request/response on that root span is stamped by
- * `traceIo.attachChatTurnTraceIo` (see `trace-io.ts`).
+ * `telemetry.attachChatTurnTelemetry` (see `telemetry.ts`).
  *
  * @module
  */

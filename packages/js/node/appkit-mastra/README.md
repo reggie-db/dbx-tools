@@ -762,11 +762,15 @@ MLflow reporting, OTel tracing, or the official AI SDK chat route.
 configured. `mlflow.resolveFeedbackEnabled()` turns MLflow feedback on when both
 trace export and an MLflow experiment are configured, unless the plugin config
 forces a value. The plugin also stamps each chat turn's request/response onto
-the request's exported root span via `traceIo.attachChatTurnTraceIo()` so
+the request's exported root span via `telemetry.attachChatTurnTelemetry()` so
 MLflow's UC `*_trace_unified` view can show them. It uses AppKit's HTTP server
 span when present and creates one request-lifetime fallback span otherwise.
 Mastra's own `mastra.agent_run.*` attributes sit on a child span that the view
-never reads.
+never reads. Text-only turns use raw prompt and answer previews, while
+`appkit.mastra.chat.messages` and `appkit.mastra.chat.response` retain the
+serialized envelopes. `appkit.mastra.identity.mode` records `obo` versus
+`service-principal`; `appkit.mastra.genie.used` records Genie activity. These
+custom values are searchable span attributes, not MLflow trace tags.
 
 ```ts
 mastra({
@@ -1035,7 +1039,7 @@ client that talks to these routes.
   `.metadata.json` so a source is re-downloaded at most once a day
   (`refreshTtlMs`).
 - `mcp` - MCP server construction.
-- `observability` / `mlflow` / `traceIo` - tracing, feedback, and stamping chat
+- `observability` / `mlflow` / `telemetry` - tracing, feedback, and stamping chat
   turn I/O onto the HTTP root span for MLflow's UC `*_trace_unified` view.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,
   and stale chart-id input cleanup.

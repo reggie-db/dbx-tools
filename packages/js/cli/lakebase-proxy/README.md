@@ -89,162 +89,121 @@ failures are returned to the local client using normal PostgreSQL behavior.
 
 ### `dbx lakebase-proxy`
 
-```text
-Usage: dbx lakebase-proxy [options] [command]
-
 Run a loopback PostgreSQL proxy for Databricks Lakebase
 
-Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
-
-Commands:
-  url [options]                        Format a local PostgreSQL URL for a Lakebase target
-  service                              Install and manage the desktop service
+```sh
+dbx lakebase-proxy [options] [command]
 ```
+
+#### Options
+
+| Option                                | Description                                   |
+| ------------------------------------- | --------------------------------------------- |
+| `-V, --version`                       | output the version number                     |
+| `--host <host>`                       | loopback listener host (default: "127.0.0.1") |
+| `--port <port>`                       | listener port (default: 5432)                 |
+| `--startup-timeout-seconds <seconds>` | startup timeout (default: 30)                 |
+| `--profile <profile>`                 | exact Databricks profile                      |
+
+#### Commands
+
+| Command         | Description                                         |
+| --------------- | --------------------------------------------------- |
+| `url [options]` | Format a local PostgreSQL URL for a Lakebase target |
+| `service`       | Install and manage the desktop service              |
 
 ### `dbx lakebase-proxy url`
 
-```text
-Usage: dbx lakebase-proxy url [options]
-
 Format a local PostgreSQL URL for a Lakebase target
 
-Options:
-  --target <target>                    Lakebase project, resource path, host, or URL
-  --endpoint <endpoint>                fallback target
-  --host <host>                        local proxy host (default: "localhost")
-  --port <port>                        local proxy port (default: 5432)
-
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
+```sh
+dbx lakebase-proxy url [options]
 ```
+
+#### Options
+
+| Option                  | Description                                   |
+| ----------------------- | --------------------------------------------- |
+| `--target <target>`     | Lakebase project, resource path, host, or URL |
+| `--endpoint <endpoint>` | fallback target                               |
+| `--host <host>`         | local proxy host (default: "localhost")       |
+| `--port <port>`         | local proxy port (default: 5432)              |
 
 ### `dbx lakebase-proxy service`
 
-```text
-Usage: dbx lakebase-proxy service [command]
-
 Install and manage the desktop service
 
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
-
-Commands:
-  install [options]                    Install the service for the current user and start it
-  start                                Start the installed service
-  stop                                 Stop the running service
-  restart                              Restart the installed service
-  status                               Print service installation and process state as JSON
-  uninstall                            Stop and remove the service for the current user
+```sh
+dbx lakebase-proxy service [command]
 ```
+
+#### Commands
+
+| Command             | Description                                           |
+| ------------------- | ----------------------------------------------------- |
+| `install [options]` | Install the service for the current user and start it |
+| `start`             | Start the installed service                           |
+| `stop`              | Stop the running service                              |
+| `restart`           | Restart the installed service                         |
+| `status`            | Print service installation and process state as JSON  |
+| `uninstall`         | Stop and remove the service for the current user      |
 
 ### `dbx lakebase-proxy service install`
 
-```text
-Usage: dbx lakebase-proxy service install [options]
-
 Install the service for the current user and start it
 
-Options:
-  --no-start                           install without starting the service
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
-
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
+```sh
+dbx lakebase-proxy service install [options]
 ```
+
+#### Options
+
+| Option                                | Description                                   |
+| ------------------------------------- | --------------------------------------------- |
+| `--no-start`                          | install without starting the service          |
+| `--host <host>`                       | loopback listener host (default: "127.0.0.1") |
+| `--port <port>`                       | listener port (default: 5432)                 |
+| `--startup-timeout-seconds <seconds>` | startup timeout (default: 30)                 |
+| `--profile <profile>`                 | exact Databricks profile                      |
 
 ### `dbx lakebase-proxy service start`
 
-```text
-Usage: dbx lakebase-proxy service start
-
 Start the installed service
 
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
+```sh
+dbx lakebase-proxy service start
 ```
 
 ### `dbx lakebase-proxy service stop`
 
-```text
-Usage: dbx lakebase-proxy service stop
-
 Stop the running service
 
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
+```sh
+dbx lakebase-proxy service stop
 ```
 
 ### `dbx lakebase-proxy service restart`
 
-```text
-Usage: dbx lakebase-proxy service restart
-
 Restart the installed service
 
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
+```sh
+dbx lakebase-proxy service restart
 ```
 
 ### `dbx lakebase-proxy service status`
 
-```text
-Usage: dbx lakebase-proxy service status
-
 Print service installation and process state as JSON
 
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
+```sh
+dbx lakebase-proxy service status
 ```
 
 ### `dbx lakebase-proxy service uninstall`
 
-```text
-Usage: dbx lakebase-proxy service uninstall
-
 Stop and remove the service for the current user
 
-Global Options:
-  -V, --version                        output the version number
-  --host <host>                        loopback listener host (default: "127.0.0.1")
-  --port <port>                        listener port (default: 5432)
-  --startup-timeout-seconds <seconds>  startup timeout (default: 30)
-  --profile <profile>                  exact Databricks profile
+```sh
+dbx lakebase-proxy service uninstall
 ```
 
 <!-- cli-reference:end -->

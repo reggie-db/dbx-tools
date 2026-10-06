@@ -58,8 +58,8 @@ workflow.
 Repository policy stays in the consuming `.projenrc.ts`:
 
 - `releaseDocs` supplies repository-defined preparation and build steps plus
-  the Pages artifact path. The engine adds release checkout, Bun caching,
-  artifact upload, and deployment without naming a docs script or output tree.
+  the Pages artifact path. The engine adds release checkout, artifact upload,
+  and deployment without naming a docs script or output tree.
 - `releasePythonRoot` passes the actual Python package root to local release
   preparation. Omit it when the workspace has no standard Python packages.
 - `releaseValidationTasks` names repository tasks that must pass in tag CI
@@ -68,8 +68,6 @@ Repository policy stays in the consuming `.projenrc.ts`:
   shared release job before the validation tasks run.
 - `pullRequestTitlePolicy` configures semantic title types and scope policy.
   Omit it or pass `false` to disable the title job.
-- `workflowCacheIgnorePaths` excludes generated output trees that may contain
-  package manifests from the dependency-only Bun cache key.
 - `extraWorkspaceMembers` declares self-synthesizing tooling packages outside
   `packageRoots`. Their version, generated entrypoint, formatting, linting, and
   workspace membership are derived from that declaration.
@@ -389,10 +387,10 @@ diverged. From `main`, it calls the existing `bump` task, commits the generated
 version changes, pushes `main`, and pushes the matching annotated `vX.Y.Z` tag.
 Pass `--no-bump` only to release an existing synchronized local bump. The tag
 workflow verifies that the tag points at the exact `origin/main` commit. One
-`build-release` job restores the Bun cache and installs workspace dependencies,
-runs validation, packs the npm archives, builds all Python distributions, and
-builds the documentation site. Install validation prerequisites through
-`releaseSetupSteps`; `releaseDocs.prepareSteps` runs after validation.
+`build-release` job installs workspace dependencies, runs validation, packs the
+npm archives, builds all Python distributions, and builds the documentation
+site. Install validation prerequisites through `releaseSetupSteps`;
+`releaseDocs.prepareSteps` runs after validation.
 
 Publication jobs download the resulting artifacts rather than rebuilding the
 workspace. Each Python package retains its own publishing environment and waits
@@ -458,33 +456,32 @@ workflow order without introducing another version owner.
 
 ### `release`
 
-```text
-Usage: release [options]
-
 Prepare an annotated release and select its build and publication steps
 
-Options:
-  --root <path>                      repository root
-  --branch <name>                    release branch (default: "main")
-  --prefix <prefix>                  release tag prefix (default: "v")
-  --remote <name>                    git remote (default: "origin")
-  --python-root <path>               Python package root for local publish (default: "packages/py")
-  --validate <task>                  task to run before pushing (default: [])
-  --no-bump                          use an existing synchronized local version bump
-  --publish <target>                 publication scope (choices: "auto", "npm", "pypi", "local",
-                                     "none", default: "auto")
-  --install <mode>                   local workspace dependency installation (choices: "auto",
-                                     "always", "never", default: "auto")
-  --no-npm                           skip npm build and publication, including local npm publication
-  --no-pypi                          skip Python build and publication, including local Python
-                                     publication
-  --docs                             build and deploy docs for a selected scope
-  --no-docs                          skip documentation build and deployment
-  --no-validation                    skip optional release validation tasks; version/source checks
-                                     remain mandatory
-  --no-local-publish                 skip publishing to configured local registries
-  --local-registry <auto|false|url>  local npm registry selection (default: "auto")
-  --local-pypi <auto|false|url>      local devpi registry selection (default: "auto")
+```sh
+release [options]
 ```
+
+#### Options
+
+| Option                                | Description                                                                                   |
+| ------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `--root <path>`                       | repository root                                                                               |
+| `--branch <name>`                     | release branch (default: "main")                                                              |
+| `--prefix <prefix>`                   | release tag prefix (default: "v")                                                             |
+| `--remote <name>`                     | git remote (default: "origin")                                                                |
+| `--python-root <path>`                | Python package root for local publish (default: "packages/py")                                |
+| `--validate <task>`                   | task to run before pushing (default: [])                                                      |
+| `--no-bump`                           | use an existing synchronized local version bump                                               |
+| `--publish <target>`                  | publication scope (choices: "auto", "npm", "pypi", "local", "none", default: "auto")          |
+| `--install <mode>`                    | local workspace dependency installation (choices: "auto", "always", "never", default: "auto") |
+| `--no-npm`                            | skip npm build and publication, including local npm publication                               |
+| `--no-pypi`                           | skip Python build and publication, including local Python publication                         |
+| `--docs`                              | build and deploy docs for a selected scope                                                    |
+| `--no-docs`                           | skip documentation build and deployment                                                       |
+| `--no-validation`                     | skip optional release validation tasks; version/source checks remain mandatory                |
+| `--no-local-publish`                  | skip publishing to configured local registries                                                |
+| `--local-registry <auto\|false\|url>` | local npm registry selection (default: "auto")                                                |
+| `--local-pypi <auto\|false\|url>`     | local devpi registry selection (default: "auto")                                              |
 
 <!-- cli-reference:end -->

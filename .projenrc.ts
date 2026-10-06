@@ -66,15 +66,7 @@ const root = new project.DBXToolsNodeProject({
     siteUrl: "https://docs.dbx.tools",
     base: "/",
     prepareSteps: [
-      {
-        name: "Validate generated CLI references",
-        run: "bun test docs/scripts/cli-reference.test.mjs && bun docs/scripts/sync-cli-readmes.mjs --check",
-      },
       { name: "Configure Pages", uses: "actions/configure-pages@v5" },
-      {
-        name: "Validate public source documentation",
-        run: "bun docs/scripts/check-source-docs.mjs",
-      },
       { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
       {
         name: "Install docs dependencies",
@@ -100,7 +92,6 @@ const root = new project.DBXToolsNodeProject({
   },
   releasePythonRoot: PYTHON_ROOT,
   releaseValidationTasks: ["docs:check-source", "docs:check-readmes"],
-  workflowCacheIgnorePaths: [DOCS_BUILD_ROOT],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:^` sibling deps from local source.
@@ -399,6 +390,19 @@ project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (
   });
 });
 
+project.applyToProjects(root, { identifierName: "cli-falkor-db", tags: "cli" }, (p) => {
+  p.package.addField(
+    "description",
+    "Foreground embedded FalkorDB CLI with optional Databricks Volume backups",
+  );
+  p.addDeps(
+    "@dbx-tools/databricks@workspace:^",
+    "@dbx-tools/falkor-db@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+  );
+  p.package.addBin({ "dbx-falkor-db": "./bin/dbx-falkor-db.ts" });
+});
+
 project.applyToProjects(root, { identifierName: "cli-lakebase-proxy", tags: "cli" }, (p) => {
   p.package.addField("description", "Pure Node loopback PostgreSQL proxy for Databricks Lakebase");
   p.addDeps(
@@ -493,6 +497,28 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
     "Region-aware Zerobus ingest helpers for Databricks workspaces",
   );
   p.addDeps("@dbx-tools/databricks@workspace:^", "@databricks/zerobus-ingest-sdk@^1.1.0");
+});
+
+// node-falkor-db: embedded FalkorDBLite with local RDB persistence and optional
+// change-aware durable snapshots in a Databricks Volume. The platform packages
+// are optional so package managers install only the matching native artifact;
+// falkordblite remains the owner of process/config primitives.
+project.applyToProjects(root, { identifierName: "falkor-db", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "Embedded FalkorDBLite with change-aware durable backups to Databricks Volumes",
+  );
+  p.addDeps(
+    "@dbx-tools/databricks@workspace:^",
+    "@dbx-tools/shared-core@workspace:^",
+    "falkordb@^6.6.0",
+    "falkordblite@0.3.0",
+    "redis@6.3.0",
+  );
+  p.package.addField("optionalDependencies", {
+    "@falkordblite/darwin-arm64": "8.2.3-falkordb.4.16.3",
+    "@falkordblite/linux-x64": "8.2.3-falkordb.4.16.3",
+  });
 });
 
 // node-email: server-side email add-on - SMTP transport (nodemailer) / local
@@ -925,6 +951,7 @@ project.applyToProjects(root, { identifierName: "cli", tags: "cli" }, (p) => {
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/cli-appkit-env@workspace:^",
     "@dbx-tools/cli-auth@workspace:^",
+    "@dbx-tools/cli-falkor-db@workspace:^",
     "@dbx-tools/cli-graphiti@workspace:^",
     "@dbx-tools/cli-lakebase-proxy@workspace:^",
     "@dbx-tools/cli-model-gateway@workspace:^",

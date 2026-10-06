@@ -53,6 +53,8 @@ describe("Node-owned model and Lakebase runtimes", () => {
 
   for (const packageName of [
     "@dbx-tools/cli",
+    "@dbx-tools/cli-falkor-db",
+    "@dbx-tools/falkor-db",
     "@dbx-tools/model",
     "@dbx-tools/cli-model-gateway",
     "@dbx-tools/appkit-graphiti",

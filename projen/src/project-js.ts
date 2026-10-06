@@ -18,7 +18,7 @@ import type { ReleaseProjectOptions } from "projen/lib/release";
 import { generateBarrels } from "./barrels.ts";
 
 import { BUN_APP_OVERRIDES, RootBunfigFile } from "./bun-app.ts";
-import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
+import { BUN_VERSION, bunSetupStep } from "./bun-workflow.ts";
 import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
 import { resolvePkgRoot } from "./engine-root.ts";
@@ -61,8 +61,6 @@ export interface DBXToolsJavaScriptProject extends DBXToolsProject, javascript.N
   pnpmWorkspace?: PnpmWorkspaceState;
   /** Root projenrc tsconfigs - only a tree ROOT has one. */
   rootTsconfig?: DBXToolsRootTsconfig;
-  /** Repository outputs excluded from generated workflow dependency-cache hashing. */
-  readonly workflowCacheIgnorePaths: readonly string[];
 }
 
 /** Parsed npm package identifier: optional scope plus the unscoped package name. */
@@ -581,8 +579,6 @@ export type DBXToolsJavaScriptProjectOptions = CommonProjectOptions &
     readonly releaseMode?: DBXToolsReleaseMode;
     /** Prefix for generated release tags. Defaults to `v`. */
     readonly releaseTagPrefix?: string;
-    /** Repository output paths excluded from generated workflow dependency-cache hashing. */
-    readonly workflowCacheIgnorePaths?: readonly string[];
     /**
      * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
      * config ALONGSIDE the discovered `packageRoots` members - for a package that
@@ -609,16 +605,6 @@ export type DBXToolsTypeScriptProjectOptions = Partial<
 > &
   DBXToolsJavaScriptProjectOptions;
 
-const initializingWorkflowCachePaths = new Map<string, readonly string[]>();
-
-function configuredOutdir(
-  options: Pick<DBXToolsJavaScriptProjectOptions, "parent" | "outdir">,
-): string {
-  return options.parent
-    ? resolve(options.parent.outdir, options.outdir ?? ".")
-    : resolve(options.outdir ?? process.cwd());
-}
-
 /**
  * A monorepo root. Scans `packageRoots` and appends a
  * {@link DBXToolsTypeScriptProject} per `src`-bearing folder, then emits the
@@ -635,7 +621,6 @@ export class DBXToolsNodeProject
   rootTsconfig?: DBXToolsRootTsconfig;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
-  readonly workflowCacheIgnorePaths: readonly string[];
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
@@ -648,8 +633,6 @@ export class DBXToolsNodeProject
     // into `package.json` (`workspaces`/`catalog`) for bun to read. The
     // `pnpm-workspace.yaml` is still emitted for the Databricks Apps pnpm install.
     const pnpmWorkspace = new PnpmWorkspaceState(options);
-    const outdir = configuredOutdir(options);
-    initializingWorkflowCachePaths.set(outdir, options.workflowCacheIgnorePaths ?? []);
     super({
       ...defaultProjectOptions(options),
       pnpmOptions: {
@@ -668,8 +651,6 @@ export class DBXToolsNodeProject
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
-    this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
-    initializingWorkflowCachePaths.delete(outdir);
     this.rootInstallOnly = options.rootInstallOnly !== false;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     initProject(this, options);
@@ -678,28 +659,10 @@ export class DBXToolsNodeProject
   public override renderWorkflowSetup(options?: javascript.RenderWorkflowSetupOptions): JobStep[] {
     const steps = super.renderWorkflowSetup(options);
     if (this.parent) return steps;
-    return steps.flatMap((step) => {
-      if (step.uses?.startsWith("oven-sh/setup-bun@")) {
-        return [
-          ...bunCacheRestoreSteps(this, {
-            ignorePaths:
-              this.workflowCacheIgnorePaths ??
-              initializingWorkflowCachePaths.get(resolve(this.outdir)) ??
-              [],
-          }),
-        ];
-      }
-      if (step.run?.startsWith("bun install")) {
-        return [
-          step,
-          bunCacheSaveStep({
-            condition:
-              "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository",
-          }),
-        ];
-      }
-      return [step];
-    }) as JobStep[];
+    return [
+      bunSetupStep() as JobStep,
+      ...steps.filter((step) => !step.uses?.startsWith("oven-sh/setup-bun@")),
+    ];
   }
 
   public override preSynthesize(): void {
@@ -754,7 +717,6 @@ export class DBXToolsTypeScriptProject
   rootTsconfig?: DBXToolsRootTsconfig;
   readonly extraWorkspaceMembers: readonly string[];
   readonly releaseBranch: string;
-  readonly workflowCacheIgnorePaths: readonly string[];
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
@@ -795,7 +757,6 @@ export class DBXToolsTypeScriptProject
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.releaseBranch = options.defaultReleaseBranch ?? "main";
-    this.workflowCacheIgnorePaths = options.workflowCacheIgnorePaths ?? [];
     this.rootInstallOnly = options.rootInstallOnly !== false;
     // Pairs with `jsx` in SHARED_COMPILER_OPTIONS: projen's default `include` is
     // `src/**/*.ts` only, which silently omits a `.tsx` file from the program

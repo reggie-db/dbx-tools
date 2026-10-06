@@ -58,7 +58,6 @@ before(() => {
         },
       },
     },
-    workflowCacheIgnorePaths: ["custom-site"],
   });
   project.synth();
   release = readWorkflow(outdir, "release");
@@ -94,7 +93,6 @@ describe("unified release workflow", () => {
       names.indexOf("Install CLI documentation parser") <
         names.indexOf("Validate docs:check-readmes"),
     );
-    assert.equal(step(verifyJob, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.ok(step(verifyJob, "Build npm archives").run?.includes("--output .release/npm"));
     assert.ok(step(verifyJob, "Build npm archives").run?.includes("bun run compile"));
     assert.ok(step(verifyJob, "Build npm archives").run?.includes("--skip-compile"));
@@ -127,12 +125,7 @@ describe("unified release workflow", () => {
     });
     assert.equal(step(job, "Install npm CLI").run, "npm install --global npm@11.4.2");
     assert.equal(job.needs, "build-release");
-    for (const name of [
-      "Restore Bun cache",
-      "Save Bun cache",
-      "Install dependencies",
-      "Checkout release commit",
-    ]) {
+    for (const name of ["Install dependencies", "Checkout release commit"]) {
       assert.equal(
         job.steps.some((candidate) => candidate.name === name),
         false,
@@ -285,14 +278,6 @@ describe("generated workflow safety", () => {
     );
     assert.equal(step(build.jobs.build!, "build").run, "bunx projen build");
     assert.equal(existsSync(join(outdir, ".github/workflows/pull-request-lint.yml")), true);
-  });
-
-  it("uses a dependency-only Bun cache key", () => {
-    const cacheKey = readFileSync(join(outdir, ".projen", "bun-cache-key.mjs"), "utf8");
-    assert.ok(cacheKey.includes("const dependencyFields ="));
-    assert.equal(cacheKey.includes('"version"'), false);
-    assert.ok(cacheKey.includes('"custom-site"'));
-    assert.equal(cacheKey.includes('".docs-build"'), false);
   });
 });
 

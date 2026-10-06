@@ -85,145 +85,127 @@ tools and sidecar lifecycle.
 
 ### `dbx graphiti`
 
-```text
-Usage: dbx graphiti [options] [command] [args...]
-
 Run Graphiti or manage its current-user desktop service
 
-Arguments:
-  args                 arguments forwarded to the Python Graphiti start command
-
-Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
-
-Commands:
-  service              Install and manage the desktop service
+```sh
+dbx graphiti [options] [command] [args...]
 ```
+
+#### Arguments
+
+| Argument | Description                                              |
+| -------- | -------------------------------------------------------- |
+| `args`   | arguments forwarded to the Python Graphiti start command |
+
+#### Options
+
+| Option                | Description                                                              |
+| --------------------- | ------------------------------------------------------------------------ |
+| `-v, --version`       | output the version number                                                |
+| `--python <python>`   | Python executable used to run Graphiti (default: "python3", env: PYTHON) |
+| `--profile <profile>` | Databricks profile used for model requests                               |
+
+#### Commands
+
+| Command   | Description                            |
+| --------- | -------------------------------------- |
+| `service` | Install and manage the desktop service |
 
 ### `dbx graphiti service`
 
-```text
-Usage: dbx graphiti service [command]
-
 Install and manage the desktop service
 
-Global Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
-
-Commands:
-  install [options]    Install the service for the current user and start it
-  start                Start the installed service
-  stop                 Stop the running service
-  restart              Restart the installed service
-  status               Print service installation and process state as JSON
-  uninstall            Stop and remove the service for the current user
+```sh
+dbx graphiti service [command]
 ```
+
+#### Commands
+
+| Command             | Description                                           |
+| ------------------- | ----------------------------------------------------- |
+| `install [options]` | Install the service for the current user and start it |
+| `start`             | Start the installed service                           |
+| `stop`              | Stop the running service                              |
+| `restart`           | Restart the installed service                         |
+| `status`            | Print service installation and process state as JSON  |
+| `uninstall`         | Stop and remove the service for the current user      |
 
 ### `dbx graphiti service install`
 
-```text
-Usage: dbx graphiti service install [options]
-
 Install the service for the current user and start it
 
-Options:
-  --no-start           install without starting the service
-
-Global Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
+```sh
+dbx graphiti service install [options]
 ```
+
+#### Options
+
+| Option       | Description                          |
+| ------------ | ------------------------------------ |
+| `--no-start` | install without starting the service |
 
 ### `dbx graphiti service start`
 
-```text
-Usage: dbx graphiti service start
-
 Start the installed service
 
-Global Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
+```sh
+dbx graphiti service start
 ```
 
 ### `dbx graphiti service stop`
 
-```text
-Usage: dbx graphiti service stop
-
 Stop the running service
 
-Global Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
+```sh
+dbx graphiti service stop
 ```
 
 ### `dbx graphiti service restart`
 
-```text
-Usage: dbx graphiti service restart
-
 Restart the installed service
 
-Global Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
+```sh
+dbx graphiti service restart
 ```
 
 ### `dbx graphiti service status`
 
-```text
-Usage: dbx graphiti service status
-
 Print service installation and process state as JSON
 
-Global Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
+```sh
+dbx graphiti service status
 ```
 
 ### `dbx graphiti service uninstall`
 
-```text
-Usage: dbx graphiti service uninstall
-
 Stop and remove the service for the current user
 
-Global Options:
-  -v, --version        output the version number
-  --python <python>    Python executable used to run Graphiti (default: "python3", env: PYTHON)
-  --profile <profile>  Databricks profile used for model requests
+```sh
+dbx graphiti service uninstall
 ```
 
 ### Forwarded Graphiti Options
 
-#### start
-
-```console
-dbx graphiti [ARGS]
-```
+#### `dbx graphiti [ARGS]`
 
 Start Neo4j, the model gateway, and Graphiti.
 
-**Parameters**:
+```sh
+dbx graphiti [ARGS]
+```
 
-- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
-- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
-- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
-- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
-- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
-- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
-- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
-- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
-- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
+#### Options
+
+| Option                                              | Description                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--profile`                                         | Databricks profile used by the managed model gateway.                                                               |
+| `--model`                                           | Model used to extract and query graph memory. (env: MODEL_NAME)                                                     |
+| `--embedder-model`                                  | Embedding model used to index graph memory. (env: EMBEDDER_MODEL)                                                   |
+| `--embedder-dimensions`                             | Number of dimensions returned by the embedding model. (env: EMBEDDER_DIMENSIONS)                                    |
+| `--model-gateway-url`                               | Existing OpenAI-compatible gateway URL, including /v1. (env: MODEL_GATEWAY_URL)                                     |
+| `--model-gateway-host`                              | Host for the locally managed model gateway. (env: MODEL_GATEWAY_HOST)                                               |
+| `--model-gateway-port`                              | Port for the locally managed model gateway. (env: MODEL_GATEWAY_PORT)                                               |
+| `--model-gateway-command`                           | Command used to launch the managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                      |
+| `--manage-model-gateway, --no-manage-model-gateway` | Start and stop a local model gateway with Graphiti; disable to use an existing gateway. (env: MANAGE_MODEL_GATEWAY) |
 
 <!-- cli-reference:end -->

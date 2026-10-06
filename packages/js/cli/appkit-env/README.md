@@ -51,26 +51,31 @@ application startup itself, use
 
 ### `dbx appkit`
 
-```text
-Usage: dbx appkit [command]
-
 AppKit helpers: resolve the environment an AppKit app would start with.
 
-Commands:
-  env [options]  Run AppKit auto-config and print new/changed env vars.
+```sh
+dbx appkit [command]
 ```
+
+#### Commands
+
+| Command         | Description                                            |
+| --------------- | ------------------------------------------------------ |
+| `env [options]` | Run AppKit auto-config and print new/changed env vars. |
 
 ### `dbx appkit env`
 
-```text
-Usage: dbx appkit env [options]
-
 Run AppKit auto-config and print new/changed env vars.
 
-Options:
-  -f, --format <format>  Output: export (POSIX shell), windows (cmd set), or json. Defaults by
-                         platform.
-  -q, --quiet            Suppress auto-config log output (LOG_LEVEL=error)
+```sh
+dbx appkit env [options]
 ```
+
+#### Options
+
+| Option                  | Description                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `-f, --format <format>` | Output: export (POSIX shell), windows (cmd set), or json. Defaults by platform. |
+| `-q, --quiet`           | Suppress auto-config log output (LOG_LEVEL=error)                               |
 
 <!-- cli-reference:end -->

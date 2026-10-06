@@ -84,6 +84,12 @@ export interface DatabricksFileSystemOptions {
   createRoot?: boolean;
 }
 
+/** Existing-file behavior for a streamed UC Volume upload. */
+export interface DatabricksStreamWriteOptions {
+  /** Replace an existing file. Defaults to true. */
+  overwrite?: boolean;
+}
+
 /**
  * {@link FileSystem} implementation over Databricks workspace files, UC
  * volumes, and DBFS.
@@ -125,6 +131,68 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     const client = options.client ?? (await getWorkspaceClient());
     const root = await resolveDatabricksRoot(options.root, { client });
     return new DatabricksFileSystem({ ...options, root, client });
+  }
+
+  /**
+   * Open a UC Volume file as a web stream without buffering it in memory.
+   *
+   * Reuse this for large Volume transfers. Workspace files and DBFS retain
+   * their existing buffered APIs because their SDK surfaces are not raw streams.
+   */
+  async readStream(inputPath: string): Promise<globalThis.ReadableStream<Uint8Array>> {
+    const resolvedPath = await this.resolveFor(inputPath);
+    try {
+      return await this.dispatch(resolvedPath, {
+        dbfs: unreachableBackend,
+        workspace: unreachableBackend,
+        volumes: async (client) => {
+          const response = await client.files.download({ file_path: resolvedPath });
+          const contents = response.contents as globalThis.ReadableStream<Uint8Array> | undefined;
+          if (!contents) {
+            throw new FileSystemError(
+              "IO_ERROR",
+              "Volume download returned no content",
+              resolvedPath,
+            );
+          }
+          return contents;
+        },
+      });
+    } catch (error) {
+      throw baseFS.mapFileSystemError(error, resolvedPath);
+    }
+  }
+
+  /**
+   * Stream a file to a UC Volume without loading it completely into memory.
+   *
+   * Parent directories are created consistently with {@link writeFile}. The
+   * Files API owns transfer retries and authentication through the injected
+   * {@link WorkspaceClient}.
+   */
+  async writeStream(
+    inputPath: string,
+    content: globalThis.ReadableStream<Uint8Array>,
+    options: DatabricksStreamWriteOptions = {},
+  ): Promise<void> {
+    await this._init();
+    this.assertWritable("write stream");
+    await this.ensureParentDirectory(inputPath);
+    const resolvedPath = await this.resolveFor(inputPath, { allowMissing: true });
+    try {
+      await this.dispatch(resolvedPath, {
+        dbfs: unreachableBackend,
+        workspace: unreachableBackend,
+        volumes: (client) =>
+          client.files.upload({
+            file_path: resolvedPath,
+            contents: content as never,
+            overwrite: options.overwrite ?? true,
+          }),
+      });
+    } catch (error) {
+      throw baseFS.mapFileSystemError(error, resolvedPath);
+    }
   }
 
   protected override async onInit(): Promise<void> {

@@ -38,29 +38,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - name: Resolve Bun cache
-        id: bun_cache_metadata
-        run: |-
-          echo "path=$(bun pm cache)" >> "$GITHUB_OUTPUT"
-          echo "dependency_hash=$(node .projen/bun-cache-key.mjs)" >> "$GITHUB_OUTPUT"
-        shell: bash
-      - name: Restore Bun cache
-        id: bun_cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ steps.bun_cache_metadata.outputs.path }}
-          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ env.BUN_VERSION }}-${{ steps.bun_cache_metadata.outputs.dependency_hash }}
-          restore-keys: bun-${{ runner.os }}-${{ runner.arch }}-${{ env.BUN_VERSION }}-
       - name: Install dependencies
         id: install_dependencies
         run: bun install --frozen-lockfile
-      - name: Save Bun cache
-        id: save_bun_cache
-        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository && steps.bun_cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ steps.bun_cache_metadata.outputs.path }}
-          key: ${{ steps.bun_cache.outputs.cache-primary-key }}
       - name: Verify release context
         id: release
         env:
@@ -116,18 +96,10 @@ jobs:
           name: release-npm
           path: .release/npm
           if-no-files-found: error
-      - name: Validate generated CLI references
-        id: validate_generated_cli_references
-        if: ${{ success() && steps.release.outputs.docs == 'true' }}
-        run: bun test docs/scripts/cli-reference.test.mjs && bun docs/scripts/sync-cli-readmes.mjs --check
       - name: Configure Pages
         id: configure_pages
         if: ${{ success() && steps.release.outputs.docs == 'true' }}
         uses: actions/configure-pages@v5
-      - name: Validate public source documentation
-        id: validate_public_source_documentation
-        if: ${{ success() && steps.release.outputs.docs == 'true' }}
-        run: bun docs/scripts/check-source-docs.mjs
       - name: Generate docs from READMEs
         id: generate_docs_from_readmes
         if: ${{ success() && steps.release.outputs.docs == 'true' }}
@@ -162,9 +134,6 @@ jobs:
         id: setup_uv
         if: ${{ success() && steps.release.outputs.pypi == 'true' }}
         uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: "**/pyproject.toml"
       - name: Build Python distributions
         id: build_python_distributions
         if: ${{ success() && steps.release.outputs.pypi == 'true' }}

@@ -75,204 +75,147 @@ executables, and applications you do not want to modify.
 
 ### `dbx tunnel`
 
-```text
-Usage: dbx tunnel [options] [command] [command...]
-
 Front a command with a public tunnel and passwordless auth
 
-Arguments:
-  command                          the command to wrap, after `--`
-
-Options:
-  --transport <transport>          public tunnel transport: portr, frp, or both
-  --public-domain <host>           public tunnel domain
-  --subdomain <name>               portr subdomain (else derived from the public domain)
-  --port <port>                    public port the wrapper listens on
-  --app-port <port>                private port the wrapped app is told to bind
-  --allow <patterns...>            email allow-list (domain / glob / /regex/)
-  --subject <text>                 verification email subject
-  --brand-name <name>              verification email brand name
-  --message <text>                 verification email message
-  --session-ttl <seconds>          session lifetime
-  --code-ttl <seconds>             one-time-code lifetime
-  --session-cutoff <when>          invalidate every session issued before this
-  --auth-storage <mode>            auth database: auto, lakebase, or sqlite
-  --auth-sqlite-path <path>        local Better Auth SQLite file
-  --forward-headers <patterns...>  extra x- headers tunnel traffic may forward
-  --gate-path <prefix...>          path prefixes to gate beyond /api/ (e.g. /ws)
-  --bind <host...>                 interface IPs the gate listens on (default: 0.0.0.0)
-  --frp-server <host>              frps control host (default: FRP public domain)
-  --frp-public-domain <host>       FRP public HTTP domain
-  --frp-server-port <port>         frps control port (default: 443)
-  --frp-protocol <protocol>        frpc transport protocol (default: wss)
-  --frp-token <token>              frps auth token
-  --frp-proxy-name <name>          frp proxy registration name
-  --insecure                       run open, with no gate
-
-Commands:
-  run [options] <command...>       Wrap a command (the default action)
-  status [options]                 Resolve the configuration and print it
-  install [transport]              Install public tunnel client binaries and exit
+```sh
+dbx tunnel [options] [command] [command...]
 ```
+
+#### Arguments
+
+| Argument  | Description                     |
+| --------- | ------------------------------- |
+| `command` | the command to wrap, after `--` |
+
+#### Options
+
+| Option                            | Description                                           |
+| --------------------------------- | ----------------------------------------------------- |
+| `--transport <transport>`         | public tunnel transport: portr, frp, or both          |
+| `--public-domain <host>`          | public tunnel domain                                  |
+| `--subdomain <name>`              | portr subdomain (else derived from the public domain) |
+| `--port <port>`                   | public port the wrapper listens on                    |
+| `--app-port <port>`               | private port the wrapped app is told to bind          |
+| `--allow <patterns...>`           | email allow-list (domain / glob / /regex/)            |
+| `--subject <text>`                | verification email subject                            |
+| `--brand-name <name>`             | verification email brand name                         |
+| `--message <text>`                | verification email message                            |
+| `--session-ttl <seconds>`         | session lifetime                                      |
+| `--code-ttl <seconds>`            | one-time-code lifetime                                |
+| `--session-cutoff <when>`         | invalidate every session issued before this           |
+| `--auth-storage <mode>`           | auth database: auto, lakebase, or sqlite              |
+| `--auth-sqlite-path <path>`       | local Better Auth SQLite file                         |
+| `--forward-headers <patterns...>` | extra x- headers tunnel traffic may forward           |
+| `--gate-path <prefix...>`         | path prefixes to gate beyond /api/ (e.g. /ws)         |
+| `--bind <host...>`                | interface IPs the gate listens on (default: 0.0.0.0)  |
+| `--frp-server <host>`             | frps control host (default: FRP public domain)        |
+| `--frp-public-domain <host>`      | FRP public HTTP domain                                |
+| `--frp-server-port <port>`        | frps control port (default: 443)                      |
+| `--frp-protocol <protocol>`       | frpc transport protocol (default: wss)                |
+| `--frp-token <token>`             | frps auth token                                       |
+| `--frp-proxy-name <name>`         | frp proxy registration name                           |
+| `--insecure`                      | run open, with no gate                                |
+
+#### Commands
+
+| Command                      | Description                                    |
+| ---------------------------- | ---------------------------------------------- |
+| `run [options] <command...>` | Wrap a command (the default action)            |
+| `status [options]`           | Resolve the configuration and print it         |
+| `install [transport]`        | Install public tunnel client binaries and exit |
 
 ### `dbx tunnel run`
 
-```text
-Usage: dbx tunnel run [options] <command...>
-
 Wrap a command (the default action)
 
-Arguments:
-  command                          the command to wrap, after `--`
-
-Options:
-  --transport <transport>          public tunnel transport: portr, frp, or both
-  --public-domain <host>           public tunnel domain
-  --subdomain <name>               portr subdomain (else derived from the public domain)
-  --port <port>                    public port the wrapper listens on
-  --app-port <port>                private port the wrapped app is told to bind
-  --allow <patterns...>            email allow-list (domain / glob / /regex/)
-  --subject <text>                 verification email subject
-  --brand-name <name>              verification email brand name
-  --message <text>                 verification email message
-  --session-ttl <seconds>          session lifetime
-  --code-ttl <seconds>             one-time-code lifetime
-  --session-cutoff <when>          invalidate every session issued before this
-  --auth-storage <mode>            auth database: auto, lakebase, or sqlite
-  --auth-sqlite-path <path>        local Better Auth SQLite file
-  --forward-headers <patterns...>  extra x- headers tunnel traffic may forward
-  --gate-path <prefix...>          path prefixes to gate beyond /api/ (e.g. /ws)
-  --bind <host...>                 interface IPs the gate listens on (default: 0.0.0.0)
-  --frp-server <host>              frps control host (default: FRP public domain)
-  --frp-public-domain <host>       FRP public HTTP domain
-  --frp-server-port <port>         frps control port (default: 443)
-  --frp-protocol <protocol>        frpc transport protocol (default: wss)
-  --frp-token <token>              frps auth token
-  --frp-proxy-name <name>          frp proxy registration name
-  --insecure                       run open, with no gate
-
-Global Options:
-  --transport <transport>          public tunnel transport: portr, frp, or both
-  --public-domain <host>           public tunnel domain
-  --subdomain <name>               portr subdomain (else derived from the public domain)
-  --port <port>                    public port the wrapper listens on
-  --app-port <port>                private port the wrapped app is told to bind
-  --allow <patterns...>            email allow-list (domain / glob / /regex/)
-  --subject <text>                 verification email subject
-  --brand-name <name>              verification email brand name
-  --message <text>                 verification email message
-  --session-ttl <seconds>          session lifetime
-  --code-ttl <seconds>             one-time-code lifetime
-  --session-cutoff <when>          invalidate every session issued before this
-  --auth-storage <mode>            auth database: auto, lakebase, or sqlite
-  --auth-sqlite-path <path>        local Better Auth SQLite file
-  --forward-headers <patterns...>  extra x- headers tunnel traffic may forward
-  --gate-path <prefix...>          path prefixes to gate beyond /api/ (e.g. /ws)
-  --bind <host...>                 interface IPs the gate listens on (default: 0.0.0.0)
-  --frp-server <host>              frps control host (default: FRP public domain)
-  --frp-public-domain <host>       FRP public HTTP domain
-  --frp-server-port <port>         frps control port (default: 443)
-  --frp-protocol <protocol>        frpc transport protocol (default: wss)
-  --frp-token <token>              frps auth token
-  --frp-proxy-name <name>          frp proxy registration name
-  --insecure                       run open, with no gate
+```sh
+dbx tunnel run [options] <command...>
 ```
+
+#### Arguments
+
+| Argument  | Description                     |
+| --------- | ------------------------------- |
+| `command` | the command to wrap, after `--` |
+
+#### Options
+
+| Option                            | Description                                           |
+| --------------------------------- | ----------------------------------------------------- |
+| `--transport <transport>`         | public tunnel transport: portr, frp, or both          |
+| `--public-domain <host>`          | public tunnel domain                                  |
+| `--subdomain <name>`              | portr subdomain (else derived from the public domain) |
+| `--port <port>`                   | public port the wrapper listens on                    |
+| `--app-port <port>`               | private port the wrapped app is told to bind          |
+| `--allow <patterns...>`           | email allow-list (domain / glob / /regex/)            |
+| `--subject <text>`                | verification email subject                            |
+| `--brand-name <name>`             | verification email brand name                         |
+| `--message <text>`                | verification email message                            |
+| `--session-ttl <seconds>`         | session lifetime                                      |
+| `--code-ttl <seconds>`            | one-time-code lifetime                                |
+| `--session-cutoff <when>`         | invalidate every session issued before this           |
+| `--auth-storage <mode>`           | auth database: auto, lakebase, or sqlite              |
+| `--auth-sqlite-path <path>`       | local Better Auth SQLite file                         |
+| `--forward-headers <patterns...>` | extra x- headers tunnel traffic may forward           |
+| `--gate-path <prefix...>`         | path prefixes to gate beyond /api/ (e.g. /ws)         |
+| `--bind <host...>`                | interface IPs the gate listens on (default: 0.0.0.0)  |
+| `--frp-server <host>`             | frps control host (default: FRP public domain)        |
+| `--frp-public-domain <host>`      | FRP public HTTP domain                                |
+| `--frp-server-port <port>`        | frps control port (default: 443)                      |
+| `--frp-protocol <protocol>`       | frpc transport protocol (default: wss)                |
+| `--frp-token <token>`             | frps auth token                                       |
+| `--frp-proxy-name <name>`         | frp proxy registration name                           |
+| `--insecure`                      | run open, with no gate                                |
 
 ### `dbx tunnel status`
 
-```text
-Usage: dbx tunnel status [options]
-
 Resolve the configuration and print it
 
-Options:
-  --transport <transport>          public tunnel transport: portr, frp, or both
-  --public-domain <host>           public tunnel domain
-  --subdomain <name>               portr subdomain (else derived from the public domain)
-  --port <port>                    public port the wrapper listens on
-  --app-port <port>                private port the wrapped app is told to bind
-  --allow <patterns...>            email allow-list (domain / glob / /regex/)
-  --subject <text>                 verification email subject
-  --brand-name <name>              verification email brand name
-  --message <text>                 verification email message
-  --session-ttl <seconds>          session lifetime
-  --code-ttl <seconds>             one-time-code lifetime
-  --session-cutoff <when>          invalidate every session issued before this
-  --auth-storage <mode>            auth database: auto, lakebase, or sqlite
-  --auth-sqlite-path <path>        local Better Auth SQLite file
-  --forward-headers <patterns...>  extra x- headers tunnel traffic may forward
-  --gate-path <prefix...>          path prefixes to gate beyond /api/ (e.g. /ws)
-  --bind <host...>                 interface IPs the gate listens on (default: 0.0.0.0)
-  --frp-server <host>              frps control host (default: FRP public domain)
-  --frp-public-domain <host>       FRP public HTTP domain
-  --frp-server-port <port>         frps control port (default: 443)
-  --frp-protocol <protocol>        frpc transport protocol (default: wss)
-  --frp-token <token>              frps auth token
-  --frp-proxy-name <name>          frp proxy registration name
-  --insecure                       run open, with no gate
-
-Global Options:
-  --transport <transport>          public tunnel transport: portr, frp, or both
-  --public-domain <host>           public tunnel domain
-  --subdomain <name>               portr subdomain (else derived from the public domain)
-  --port <port>                    public port the wrapper listens on
-  --app-port <port>                private port the wrapped app is told to bind
-  --allow <patterns...>            email allow-list (domain / glob / /regex/)
-  --subject <text>                 verification email subject
-  --brand-name <name>              verification email brand name
-  --message <text>                 verification email message
-  --session-ttl <seconds>          session lifetime
-  --code-ttl <seconds>             one-time-code lifetime
-  --session-cutoff <when>          invalidate every session issued before this
-  --auth-storage <mode>            auth database: auto, lakebase, or sqlite
-  --auth-sqlite-path <path>        local Better Auth SQLite file
-  --forward-headers <patterns...>  extra x- headers tunnel traffic may forward
-  --gate-path <prefix...>          path prefixes to gate beyond /api/ (e.g. /ws)
-  --bind <host...>                 interface IPs the gate listens on (default: 0.0.0.0)
-  --frp-server <host>              frps control host (default: FRP public domain)
-  --frp-public-domain <host>       FRP public HTTP domain
-  --frp-server-port <port>         frps control port (default: 443)
-  --frp-protocol <protocol>        frpc transport protocol (default: wss)
-  --frp-token <token>              frps auth token
-  --frp-proxy-name <name>          frp proxy registration name
-  --insecure                       run open, with no gate
+```sh
+dbx tunnel status [options]
 ```
+
+#### Options
+
+| Option                            | Description                                           |
+| --------------------------------- | ----------------------------------------------------- |
+| `--transport <transport>`         | public tunnel transport: portr, frp, or both          |
+| `--public-domain <host>`          | public tunnel domain                                  |
+| `--subdomain <name>`              | portr subdomain (else derived from the public domain) |
+| `--port <port>`                   | public port the wrapper listens on                    |
+| `--app-port <port>`               | private port the wrapped app is told to bind          |
+| `--allow <patterns...>`           | email allow-list (domain / glob / /regex/)            |
+| `--subject <text>`                | verification email subject                            |
+| `--brand-name <name>`             | verification email brand name                         |
+| `--message <text>`                | verification email message                            |
+| `--session-ttl <seconds>`         | session lifetime                                      |
+| `--code-ttl <seconds>`            | one-time-code lifetime                                |
+| `--session-cutoff <when>`         | invalidate every session issued before this           |
+| `--auth-storage <mode>`           | auth database: auto, lakebase, or sqlite              |
+| `--auth-sqlite-path <path>`       | local Better Auth SQLite file                         |
+| `--forward-headers <patterns...>` | extra x- headers tunnel traffic may forward           |
+| `--gate-path <prefix...>`         | path prefixes to gate beyond /api/ (e.g. /ws)         |
+| `--bind <host...>`                | interface IPs the gate listens on (default: 0.0.0.0)  |
+| `--frp-server <host>`             | frps control host (default: FRP public domain)        |
+| `--frp-public-domain <host>`      | FRP public HTTP domain                                |
+| `--frp-server-port <port>`        | frps control port (default: 443)                      |
+| `--frp-protocol <protocol>`       | frpc transport protocol (default: wss)                |
+| `--frp-token <token>`             | frps auth token                                       |
+| `--frp-proxy-name <name>`         | frp proxy registration name                           |
+| `--insecure`                      | run open, with no gate                                |
 
 ### `dbx tunnel install`
 
-```text
-Usage: dbx tunnel install [transport]
-
 Install public tunnel client binaries and exit
 
-Arguments:
-  transport                        portr, frp, or both (default: "portr")
-
-Global Options:
-  --transport <transport>          public tunnel transport: portr, frp, or both
-  --public-domain <host>           public tunnel domain
-  --subdomain <name>               portr subdomain (else derived from the public domain)
-  --port <port>                    public port the wrapper listens on
-  --app-port <port>                private port the wrapped app is told to bind
-  --allow <patterns...>            email allow-list (domain / glob / /regex/)
-  --subject <text>                 verification email subject
-  --brand-name <name>              verification email brand name
-  --message <text>                 verification email message
-  --session-ttl <seconds>          session lifetime
-  --code-ttl <seconds>             one-time-code lifetime
-  --session-cutoff <when>          invalidate every session issued before this
-  --auth-storage <mode>            auth database: auto, lakebase, or sqlite
-  --auth-sqlite-path <path>        local Better Auth SQLite file
-  --forward-headers <patterns...>  extra x- headers tunnel traffic may forward
-  --gate-path <prefix...>          path prefixes to gate beyond /api/ (e.g. /ws)
-  --bind <host...>                 interface IPs the gate listens on (default: 0.0.0.0)
-  --frp-server <host>              frps control host (default: FRP public domain)
-  --frp-public-domain <host>       FRP public HTTP domain
-  --frp-server-port <port>         frps control port (default: 443)
-  --frp-protocol <protocol>        frpc transport protocol (default: wss)
-  --frp-token <token>              frps auth token
-  --frp-proxy-name <name>          frp proxy registration name
-  --insecure                       run open, with no gate
+```sh
+dbx tunnel install [transport]
 ```
+
+#### Arguments
+
+| Argument    | Description                            |
+| ----------- | -------------------------------------- |
+| `transport` | portr, frp, or both (default: "portr") |
 
 <!-- cli-reference:end -->

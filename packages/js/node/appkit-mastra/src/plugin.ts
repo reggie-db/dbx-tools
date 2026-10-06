@@ -111,7 +111,7 @@ import {
 } from "./server.ts";
 import { resolveServingConfig } from "./serving.ts";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
-import { attachChatTurnTraceIo } from "./trace-io.ts";
+import { attachChatTurnTelemetry } from "./telemetry.ts";
 import { invalidFields } from "./validation.ts";
 
 const GENIE_MANIFEST = pluginRegistry.data(genie).plugin.manifest;
@@ -1133,7 +1133,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // `mastra.agent_run.*` attributes sit on a child span the view
     // never reads). Must run before `MastraServer.init` so the layer
     // sits ahead of the agent routes.
-    attachChatTurnTraceIo(this.mastraApp);
+    attachChatTurnTelemetry(this.mastraApp, {
+      identity: (request) =>
+        useServicePrincipal(this.identityMode, request) ? "service-principal" : "obo",
+    });
     this.mastraServer = new MastraServer(this.config, {
       app: this.mastraApp,
       mastra: this.mastra,

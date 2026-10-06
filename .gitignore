@@ -83,7 +83,6 @@ jspm_packages/
 !/.eslintrc.json
 .release/
 !/.github/workflows/release.yml
-!/.projen/bun-cache-key.mjs
 .docs-build/
 .astro/
 .home/

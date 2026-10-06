@@ -6,6 +6,7 @@ packages:
   - packages/js/cli/appkit-env
   - packages/js/cli/auth
   - packages/js/cli/dbx-tools
+  - packages/js/cli/falkor-db
   - packages/js/cli/graphiti
   - packages/js/cli/lakebase-proxy
   - packages/js/cli/model-gateway
@@ -22,6 +23,7 @@ packages:
   - packages/js/node/databricks
   - packages/js/node/databricks-zerobus
   - packages/js/node/email
+  - packages/js/node/falkor-db
   - packages/js/node/fs
   - packages/js/node/genie
   - packages/js/node/lakebase

@@ -109,11 +109,8 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.equal(publishCore.needs, "build-release");
     assert.equal(publishCore.env?.BUN_VERSION, undefined);
     const build = release.jobs["build-release"]!;
-    assert.deepEqual(workflowStep(build, "Setup uv").with, {
-      "enable-cache": true,
-      "cache-dependency-glob": "**/pyproject.toml",
-    });
-    assert.equal(workflowStep(build, "Save Bun cache").uses, "actions/cache/save@v5");
+    assert.equal(workflowStep(build, "Setup uv").uses, "astral-sh/setup-uv@v7");
+    assert.equal(workflowStep(build, "Setup uv").with, undefined);
     assert.ok(
       workflowStep(build, "Build Python distributions").run?.includes("--package-directories"),
     );
@@ -130,12 +127,6 @@ describe("DBXToolsPythonWorkspace", () => {
       assert.equal(job.steps[0]?.uses, "actions/download-artifact@v4");
       assert.equal(job.steps[1]?.uses, "pypa/gh-action-pypi-publish@release/v1");
     }
-    assert.equal(
-      Object.values(release.jobs)
-        .flatMap((job) => job.steps)
-        .filter((entry) => entry.name === "Restore Bun cache").length,
-      1,
-    );
     assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
       name: "pypi-fixture-core",
       url: "https://pypi.org/project/fixture-core/",

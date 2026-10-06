@@ -4,6 +4,7 @@
  * `dev` bootstraps or repairs a workspace and forwards to projen.
  * `appkit` provides AppKit environment helpers.
  * `auth` manages Databricks OAuth and access tokens.
+ * `falkor-db` runs an embedded foreground graph database.
  * `tunnel` runs a public portr tunnel with passwordless access gating.
  *
  * Feature commands load their sibling packages only when selected and forward
@@ -121,6 +122,13 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     "tunnel",
     "Run a public portr tunnel with an email-OTP gate",
     async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
+  );
+
+  addForwardedCommand(
+    program,
+    "falkor-db",
+    "Run embedded FalkorDB with optional Databricks Volume backups",
+    async () => (await import("@dbx-tools/cli-falkor-db/cli")).buildProgram,
   );
 
   addForwardedCommand(

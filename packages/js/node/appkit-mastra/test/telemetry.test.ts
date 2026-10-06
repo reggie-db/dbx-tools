@@ -4,11 +4,16 @@ import { describe, it } from "node:test";
 import {
   assistantTextFromJson,
   assistantTextFromSse,
-  chatTurnTraceIoMiddleware,
+  CHAT_GENIE_USED_ATTR,
+  CHAT_IDENTITY_ATTR,
+  CHAT_MESSAGES_ATTR,
+  CHAT_RESPONSE_ATTR,
+  chatTurnTelemetryMiddleware,
   MLFLOW_SPAN_INPUTS_ATTR,
   MLFLOW_SPAN_OUTPUTS_ATTR,
+  textOnlyChatInput,
   TRACE_IO_LIMIT,
-} from "../src/trace-io.ts";
+} from "../src/telemetry.ts";
 
 describe("assistantTextFromSse", () => {
   it("reassembles text-delta frames and ignores keepalives", () => {
@@ -61,7 +66,48 @@ describe("assistantTextFromJson", () => {
   });
 });
 
-describe("chatTurnTraceIoMiddleware", () => {
+describe("textOnlyChatInput", () => {
+  it("unwraps one text-only user message", () => {
+    assert.equal(
+      textOnlyChatInput([
+        {
+          id: "message-1",
+          role: "user",
+          parts: [{ type: "text", text: "raw prompt" }],
+        },
+      ]),
+      "raw prompt",
+    );
+    assert.equal(
+      textOnlyChatInput([{ role: "user", content: "content prompt" }]),
+      "content prompt",
+    );
+  });
+
+  it("preserves structured and multi-message input as JSON", () => {
+    assert.equal(
+      textOnlyChatInput([
+        { role: "user", content: "first" },
+        { role: "assistant", content: "second" },
+      ]),
+      undefined,
+    );
+    assert.equal(
+      textOnlyChatInput([
+        {
+          role: "user",
+          parts: [
+            { type: "text", text: "describe" },
+            { type: "file", url: "volume://image.png" },
+          ],
+        },
+      ]),
+      undefined,
+    );
+  });
+});
+
+describe("chatTurnTelemetryMiddleware", () => {
   it("skips non-agent routes without touching the response", () => {
     let nextCalls = 0;
     const req = {
@@ -70,7 +116,7 @@ describe("chatTurnTraceIoMiddleware", () => {
       body: {},
     };
     const res = { write: () => true, end: () => undefined, json: () => undefined };
-    chatTurnTraceIoMiddleware(req as never, res as never, () => {
+    chatTurnTelemetryMiddleware(req as never, res as never, () => {
       nextCalls += 1;
     });
     assert.equal(nextCalls, 1);
@@ -100,7 +146,7 @@ describe("chatTurnTraceIoMiddleware", () => {
         return undefined;
       },
     };
-    chatTurnTraceIoMiddleware(req as never, res as never, () => {
+    chatTurnTelemetryMiddleware(req as never, res as never, () => {
       nextCalls += 1;
     });
     assert.equal(nextCalls, 1);
@@ -110,10 +156,14 @@ describe("chatTurnTraceIoMiddleware", () => {
   });
 });
 
-describe("trace-io constants", () => {
+describe("telemetry constants", () => {
   it("exposes the MLflow attribute keys the UC view reads", () => {
     assert.equal(MLFLOW_SPAN_INPUTS_ATTR, "mlflow.spanInputs");
     assert.equal(MLFLOW_SPAN_OUTPUTS_ATTR, "mlflow.spanOutputs");
+    assert.equal(CHAT_MESSAGES_ATTR, "appkit.mastra.chat.messages");
+    assert.equal(CHAT_RESPONSE_ATTR, "appkit.mastra.chat.response");
+    assert.equal(CHAT_IDENTITY_ATTR, "appkit.mastra.identity.mode");
+    assert.equal(CHAT_GENIE_USED_ATTR, "appkit.mastra.genie.used");
     assert.ok(TRACE_IO_LIMIT > 0);
   });
 });

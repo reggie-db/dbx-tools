@@ -233,96 +233,104 @@ for its complete API.
 
 ## Command Reference
 
-### Python Graphiti Commands
-
-```text
-Usage: dbx-graphiti COMMAND
+### `python -m dbx_tools.graphiti`
 
 Run Graphiti MCP with a local native Neo4j backend (no containers).
 
-Commands:
-  down: Stop Graphiti, the model gateway, and Neo4j.
-  env: Print resolved runtime settings, including the Neo4j password.
-  start: Start Neo4j, the model gateway, and Graphiti.
-  status: Show native process status.
-  up: Start Neo4j, the model gateway, and Graphiti in the background.
-  --version: Display application version.
+```sh
+python -m dbx_tools.graphiti
 ```
 
-### start
+#### Commands
 
-```console
-python -m dbx_tools.graphiti start [ARGS]
-```
+| Command  | Description                                                     |
+| -------- | --------------------------------------------------------------- |
+| `start`  | Start Neo4j, the model gateway, and Graphiti.                   |
+| `up`     | Start Neo4j, the model gateway, and Graphiti in the background. |
+| `down`   | Stop Graphiti, the model gateway, and Neo4j.                    |
+| `status` | Show native process status.                                     |
+| `env`    | Print resolved runtime settings, including the Neo4j password.  |
+
+### `python -m dbx_tools.graphiti start`
 
 Start Neo4j, the model gateway, and Graphiti.
 
-**Parameters**:
-
-- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
-- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
-- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
-- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
-- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
-- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
-- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
-- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
-- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
-
-### up
-
-```console
-python -m dbx_tools.graphiti up [ARGS]
+```sh
+python -m dbx_tools.graphiti start
 ```
+
+#### Options
+
+| Option                                              | Description                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--profile`                                         | Databricks profile used by the managed model gateway.                                                               |
+| `--model`                                           | Model used to extract and query graph memory. (env: MODEL_NAME)                                                     |
+| `--embedder-model`                                  | Embedding model used to index graph memory. (env: EMBEDDER_MODEL)                                                   |
+| `--embedder-dimensions`                             | Number of dimensions returned by the embedding model. (env: EMBEDDER_DIMENSIONS)                                    |
+| `--model-gateway-url`                               | Existing OpenAI-compatible gateway URL, including /v1. (env: MODEL_GATEWAY_URL)                                     |
+| `--model-gateway-host`                              | Host for the locally managed model gateway. (env: MODEL_GATEWAY_HOST)                                               |
+| `--model-gateway-port`                              | Port for the locally managed model gateway. (env: MODEL_GATEWAY_PORT)                                               |
+| `--model-gateway-command`                           | Command used to launch the managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                      |
+| `--manage-model-gateway, --no-manage-model-gateway` | Start and stop a local model gateway with Graphiti; disable to use an existing gateway. (env: MANAGE_MODEL_GATEWAY) |
+
+### `python -m dbx_tools.graphiti up`
 
 Start Neo4j, the model gateway, and Graphiti in the background.
 
-**Parameters**:
-
-- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
-- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
-- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
-- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
-- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
-- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
-- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
-- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
-- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
-
-### down
-
-```console
-python -m dbx_tools.graphiti down
+```sh
+python -m dbx_tools.graphiti up
 ```
+
+#### Options
+
+| Option                                              | Description                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--profile`                                         | Databricks profile used by the managed model gateway.                                                               |
+| `--model`                                           | Model used to extract and query graph memory. (env: MODEL_NAME)                                                     |
+| `--embedder-model`                                  | Embedding model used to index graph memory. (env: EMBEDDER_MODEL)                                                   |
+| `--embedder-dimensions`                             | Number of dimensions returned by the embedding model. (env: EMBEDDER_DIMENSIONS)                                    |
+| `--model-gateway-url`                               | Existing OpenAI-compatible gateway URL, including /v1. (env: MODEL_GATEWAY_URL)                                     |
+| `--model-gateway-host`                              | Host for the locally managed model gateway. (env: MODEL_GATEWAY_HOST)                                               |
+| `--model-gateway-port`                              | Port for the locally managed model gateway. (env: MODEL_GATEWAY_PORT)                                               |
+| `--model-gateway-command`                           | Command used to launch the managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                      |
+| `--manage-model-gateway, --no-manage-model-gateway` | Start and stop a local model gateway with Graphiti; disable to use an existing gateway. (env: MANAGE_MODEL_GATEWAY) |
+
+### `python -m dbx_tools.graphiti down`
 
 Stop Graphiti, the model gateway, and Neo4j.
 
-### status
-
-```console
-python -m dbx_tools.graphiti status
+```sh
+python -m dbx_tools.graphiti down
 ```
+
+### `python -m dbx_tools.graphiti status`
 
 Show native process status.
 
-### env
-
-```console
-python -m dbx_tools.graphiti env [ARGS]
+```sh
+python -m dbx_tools.graphiti status
 ```
+
+### `python -m dbx_tools.graphiti env`
 
 Print resolved runtime settings, including the Neo4j password.
 
-**Parameters**:
+```sh
+python -m dbx_tools.graphiti env
+```
 
-- `PROFILE, --profile`: Databricks profile used by the managed model gateway.
-- `MODEL, --model`: Model used to extract and query graph memory. _[env: MODEL_NAME]_
-- `EMBEDDER-MODEL, --embedder-model`: Embedding model used to index graph memory. _[env: EMBEDDER_MODEL]_
-- `EMBEDDER-DIMENSIONS, --embedder-dimensions`: Number of dimensions returned by the embedding model. _[env: EMBEDDER_DIMENSIONS]_
-- `MODEL-GATEWAY-URL, --model-gateway-url`: Existing OpenAI-compatible gateway URL, including /v1. _[env: MODEL_GATEWAY_URL]_
-- `MODEL-GATEWAY-HOST, --model-gateway-host`: Host for the locally managed model gateway. _[env: MODEL_GATEWAY_HOST]_
-- `MODEL-GATEWAY-PORT, --model-gateway-port`: Port for the locally managed model gateway. _[env: MODEL_GATEWAY_PORT]_
-- `MODEL-GATEWAY-COMMAND, --model-gateway-command`: Command used to launch the managed model gateway. _[env: MODEL_GATEWAY_COMMAND]_
-- `MANAGE-MODEL-GATEWAY, --manage-model-gateway, --no-manage-model-gateway`: Start and stop a local model gateway with Graphiti; disable to use an existing gateway. _[env: MANAGE_MODEL_GATEWAY]_
+#### Options
+
+| Option                                              | Description                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--profile`                                         | Databricks profile used by the managed model gateway.                                                               |
+| `--model`                                           | Model used to extract and query graph memory. (env: MODEL_NAME)                                                     |
+| `--embedder-model`                                  | Embedding model used to index graph memory. (env: EMBEDDER_MODEL)                                                   |
+| `--embedder-dimensions`                             | Number of dimensions returned by the embedding model. (env: EMBEDDER_DIMENSIONS)                                    |
+| `--model-gateway-url`                               | Existing OpenAI-compatible gateway URL, including /v1. (env: MODEL_GATEWAY_URL)                                     |
+| `--model-gateway-host`                              | Host for the locally managed model gateway. (env: MODEL_GATEWAY_HOST)                                               |
+| `--model-gateway-port`                              | Port for the locally managed model gateway. (env: MODEL_GATEWAY_PORT)                                               |
+| `--model-gateway-command`                           | Command used to launch the managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                      |
+| `--manage-model-gateway, --no-manage-model-gateway` | Start and stop a local model gateway with Graphiti; disable to use an existing gateway. (env: MANAGE_MODEL_GATEWAY) |
 
 <!-- cli-reference:end -->

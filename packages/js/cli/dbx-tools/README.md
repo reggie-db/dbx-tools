@@ -86,96 +86,135 @@ package guide documents that group's complete options and subcommands.
 
 ### `dbx`
 
-```text
-Usage: dbx [command]
-
 Databricks developer tools: workspace lifecycle, AppKit env, auth, tunnels, and local proxies
 
-Commands:
-  dev [projenArgs...]       Bootstrap or repair a dbx-tools workspace, then forward to projen
-  appkit [args...]          AppKit helpers (env: print the environment an AppKit app resolves)
-  auth [args...]            Authenticate to Databricks and manage OAuth tokens
-  tunnel [args...]          Run a public portr tunnel with an email-OTP gate
-  lakebase-proxy [args...]  Run the Node Databricks Lakebase PostgreSQL proxy
-  model-gateway [args...]   Run the foreground AppKit Databricks model gateway
-  graphiti [args...]        Run Graphiti or manage its current-user desktop service
+```sh
+dbx [command]
 ```
+
+#### Commands
+
+| Command                    | Description                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| `dev [projenArgs...]`      | Bootstrap or repair a dbx-tools workspace, then forward to projen  |
+| `appkit [args...]`         | AppKit helpers (env: print the environment an AppKit app resolves) |
+| `auth [args...]`           | Authenticate to Databricks and manage OAuth tokens                 |
+| `tunnel [args...]`         | Run a public portr tunnel with an email-OTP gate                   |
+| `falkor-db [args...]`      | Run embedded FalkorDB with optional Databricks Volume backups      |
+| `lakebase-proxy [args...]` | Run the Node Databricks Lakebase PostgreSQL proxy                  |
+| `model-gateway [args...]`  | Run the foreground AppKit Databricks model gateway                 |
+| `graphiti [args...]`       | Run Graphiti or manage its current-user desktop service            |
 
 ### `dbx dev`
 
-```text
-Usage: dbx dev [projenArgs...]
-
 Bootstrap or repair a dbx-tools workspace, then forward to projen
 
-Arguments:
-  projenArgs  projen task and arguments (e.g. sync --watch)
+```sh
+dbx dev [projenArgs...]
 ```
+
+#### Arguments
+
+| Argument     | Description                                   |
+| ------------ | --------------------------------------------- |
+| `projenArgs` | projen task and arguments (e.g. sync --watch) |
 
 ### `dbx appkit`
 
-```text
-Usage: dbx appkit [args...]
-
 AppKit helpers (env: print the environment an AppKit app resolves)
 
-Arguments:
-  args  arguments forwarded to appkit
+```sh
+dbx appkit [args...]
 ```
+
+#### Arguments
+
+| Argument | Description                   |
+| -------- | ----------------------------- |
+| `args`   | arguments forwarded to appkit |
 
 ### `dbx auth`
 
-```text
-Usage: dbx auth [args...]
-
 Authenticate to Databricks and manage OAuth tokens
 
-Arguments:
-  args  arguments forwarded to auth
+```sh
+dbx auth [args...]
 ```
+
+#### Arguments
+
+| Argument | Description                 |
+| -------- | --------------------------- |
+| `args`   | arguments forwarded to auth |
 
 ### `dbx tunnel`
 
-```text
-Usage: dbx tunnel [args...]
-
 Run a public portr tunnel with an email-OTP gate
 
-Arguments:
-  args  arguments forwarded to tunnel
+```sh
+dbx tunnel [args...]
 ```
+
+#### Arguments
+
+| Argument | Description                   |
+| -------- | ----------------------------- |
+| `args`   | arguments forwarded to tunnel |
+
+### `dbx falkor-db`
+
+Run embedded FalkorDB with optional Databricks Volume backups
+
+```sh
+dbx falkor-db [args...]
+```
+
+#### Arguments
+
+| Argument | Description                      |
+| -------- | -------------------------------- |
+| `args`   | arguments forwarded to falkor-db |
 
 ### `dbx lakebase-proxy`
 
-```text
-Usage: dbx lakebase-proxy [args...]
-
 Run the Node Databricks Lakebase PostgreSQL proxy
 
-Arguments:
-  args  arguments forwarded to lakebase-proxy
+```sh
+dbx lakebase-proxy [args...]
 ```
+
+#### Arguments
+
+| Argument | Description                           |
+| -------- | ------------------------------------- |
+| `args`   | arguments forwarded to lakebase-proxy |
 
 ### `dbx model-gateway`
 
-```text
-Usage: dbx model-gateway [args...]
-
 Run the foreground AppKit Databricks model gateway
 
-Arguments:
-  args  arguments forwarded to model-gateway
+```sh
+dbx model-gateway [args...]
 ```
+
+#### Arguments
+
+| Argument | Description                          |
+| -------- | ------------------------------------ |
+| `args`   | arguments forwarded to model-gateway |
 
 ### `dbx graphiti`
 
-```text
-Usage: dbx graphiti [args...]
-
 Run Graphiti or manage its current-user desktop service
 
-Arguments:
-  args  arguments forwarded to graphiti
+```sh
+dbx graphiti [args...]
 ```
+
+#### Arguments
+
+| Argument | Description                     |
+| -------- | ------------------------------- |
+| `args`   | arguments forwarded to graphiti |
 
 <!-- cli-reference:end -->

@@ -6,9 +6,8 @@
 
 import { getExecutionContext } from "@databricks/appkit";
 import { workspaceClient } from "@dbx-tools/databricks";
-import { invoke } from "@dbx-tools/model";
 import { log } from "@dbx-tools/shared-core";
-import type { GatewayRoute } from "@dbx-tools/shared-model-gateway";
+import { upstreamUrl, type GatewayRoute } from "@dbx-tools/shared-model-gateway";
 
 const logger = log.logger("appkit/model-gateway/transport");
 const ERROR_PREVIEW_BYTES = 8 * 1024;
@@ -127,26 +126,6 @@ export function gatewayResponseHeaders(upstream: Headers): Headers {
     if (!BLOCKED_RESPONSE_HEADERS.has(name.toLowerCase())) headers.set(name, value);
   });
   return headers;
-}
-
-/** Resolve the exact upstream URL for a deterministic direct route. */
-export function upstreamUrl(host: string, route: GatewayRoute): string {
-  switch (route.upstreamProtocol) {
-    case "databricks-ai-gateway-codex":
-      return invoke.aiGatewayCodexResponsesUrl(host);
-    case "databricks-responses":
-      return invoke.responsesUrl(host);
-    case "databricks-open-responses":
-      return invoke.openResponsesUrl(host);
-    case "databricks-chat":
-      return invoke.chatCompletionsUrl(host);
-    case "databricks-anthropic":
-      return invoke.anthropicMessagesUrl(host);
-    case "databricks-embeddings":
-      return invoke.invocationsUrl(host, route.upstreamModel);
-    case "ai-sdk":
-      throw new Error("AI SDK routes do not use the direct Databricks transport");
-  }
 }
 
 async function logUpstreamFailureBody(

@@ -66,193 +66,86 @@ Commander program, import `buildProgram` from `@dbx-tools/cli-auth/cli`.
 
 ### `dbx auth`
 
-```text
-Usage: dbx auth [options] [command]
-
 Authenticate to Databricks with user or machine OAuth
 
-Options:
-  --profile <name>             Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)
-  --host <url>                 Databricks host (env: DATABRICKS_HOST)
-  --account-id <id>            Databricks account id (env: DATABRICKS_ACCOUNT_ID)
-  --workspace-id <id>          Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)
-  --config-file <path>         Databricks config file (env: DATABRICKS_CONFIG_FILE)
-  --client-id <id>             OAuth client id (env: DATABRICKS_CLIENT_ID)
-  --group-id <id>              Assumed Databricks group id (env: DATABRICKS_GROUP_ID)
-  --auth-type <type>           Databricks authentication type (choices: "databricks-cli",
-                               "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE)
-  --scopes <scopes>            OAuth scopes, repeatable or comma-separated
-  --target <target>            OAuth target (choices: "workspace", "account", "unified", env:
-                               DBX_TOOLS_U2M_TARGET)
-  --lock-timeout-ms <ms>       Credential lock timeout (0 waits indefinitely) (default: "0", env:
-                               DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)
-  --login-timeout-ms <ms>      Browser login timeout (default: "900000", env:
-                               DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)
-  --refresh-buffer-ms <ms>     Token refresh buffer (default: "300000", env:
-                               DBX_TOOLS_U2M_REFRESH_BUFFER_MS)
-  --no-prefer-user-to-machine  Use selected M2M credentials without preferring a matching user
-                               profile
-
-Commands:
-  login                        Force browser login and return an access token
-  token [options]              Return a valid access token, logging in when needed
-  profile                      Print the configured or automatically detected profile
-  logout                       Delete the stored credential for the selected profile
-  status                       Show the resolved authentication client configuration
+```sh
+dbx auth [options] [command]
 ```
+
+#### Options
+
+| Option                        | Description                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--profile <name>`            | Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)                                                                        |
+| `--host <url>`                | Databricks host (env: DATABRICKS_HOST)                                                                                         |
+| `--account-id <id>`           | Databricks account id (env: DATABRICKS_ACCOUNT_ID)                                                                             |
+| `--workspace-id <id>`         | Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)                                                                         |
+| `--config-file <path>`        | Databricks config file (env: DATABRICKS_CONFIG_FILE)                                                                           |
+| `--client-id <id>`            | OAuth client id (env: DATABRICKS_CLIENT_ID)                                                                                    |
+| `--group-id <id>`             | Assumed Databricks group id (env: DATABRICKS_GROUP_ID)                                                                         |
+| `--auth-type <type>`          | Databricks authentication type (choices: "databricks-cli", "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE) |
+| `--scopes <scopes>`           | OAuth scopes, repeatable or comma-separated                                                                                    |
+| `--target <target>`           | OAuth target (choices: "workspace", "account", "unified", env: DBX_TOOLS_U2M_TARGET)                                           |
+| `--lock-timeout-ms <ms>`      | Credential lock timeout (0 waits indefinitely) (default: "0", env: DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)                              |
+| `--login-timeout-ms <ms>`     | Browser login timeout (default: "900000", env: DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)                                                 |
+| `--refresh-buffer-ms <ms>`    | Token refresh buffer (default: "300000", env: DBX_TOOLS_U2M_REFRESH_BUFFER_MS)                                                 |
+| `--no-prefer-user-to-machine` | Use selected M2M credentials without preferring a matching user profile                                                        |
+
+#### Commands
+
+| Command           | Description                                            |
+| ----------------- | ------------------------------------------------------ |
+| `login`           | Force browser login and return an access token         |
+| `token [options]` | Return a valid access token, logging in when needed    |
+| `profile`         | Print the configured or automatically detected profile |
+| `logout`          | Delete the stored credential for the selected profile  |
+| `status`          | Show the resolved authentication client configuration  |
 
 ### `dbx auth login`
 
-```text
-Usage: dbx auth login
-
 Force browser login and return an access token
 
-Global Options:
-  --profile <name>             Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)
-  --host <url>                 Databricks host (env: DATABRICKS_HOST)
-  --account-id <id>            Databricks account id (env: DATABRICKS_ACCOUNT_ID)
-  --workspace-id <id>          Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)
-  --config-file <path>         Databricks config file (env: DATABRICKS_CONFIG_FILE)
-  --client-id <id>             OAuth client id (env: DATABRICKS_CLIENT_ID)
-  --group-id <id>              Assumed Databricks group id (env: DATABRICKS_GROUP_ID)
-  --auth-type <type>           Databricks authentication type (choices: "databricks-cli",
-                               "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE)
-  --scopes <scopes>            OAuth scopes, repeatable or comma-separated
-  --target <target>            OAuth target (choices: "workspace", "account", "unified", env:
-                               DBX_TOOLS_U2M_TARGET)
-  --lock-timeout-ms <ms>       Credential lock timeout (0 waits indefinitely) (default: "0", env:
-                               DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)
-  --login-timeout-ms <ms>      Browser login timeout (default: "900000", env:
-                               DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)
-  --refresh-buffer-ms <ms>     Token refresh buffer (default: "300000", env:
-                               DBX_TOOLS_U2M_REFRESH_BUFFER_MS)
-  --no-prefer-user-to-machine  Use selected M2M credentials without preferring a matching user
-                               profile
+```sh
+dbx auth login
 ```
 
 ### `dbx auth token`
 
-```text
-Usage: dbx auth token [options]
-
 Return a valid access token, logging in when needed
 
-Options:
-  --force-refresh              Refresh the token before returning it
-  --no-login                   Fail instead of logging in for a missing or invalid credential
-
-Global Options:
-  --profile <name>             Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)
-  --host <url>                 Databricks host (env: DATABRICKS_HOST)
-  --account-id <id>            Databricks account id (env: DATABRICKS_ACCOUNT_ID)
-  --workspace-id <id>          Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)
-  --config-file <path>         Databricks config file (env: DATABRICKS_CONFIG_FILE)
-  --client-id <id>             OAuth client id (env: DATABRICKS_CLIENT_ID)
-  --group-id <id>              Assumed Databricks group id (env: DATABRICKS_GROUP_ID)
-  --auth-type <type>           Databricks authentication type (choices: "databricks-cli",
-                               "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE)
-  --scopes <scopes>            OAuth scopes, repeatable or comma-separated
-  --target <target>            OAuth target (choices: "workspace", "account", "unified", env:
-                               DBX_TOOLS_U2M_TARGET)
-  --lock-timeout-ms <ms>       Credential lock timeout (0 waits indefinitely) (default: "0", env:
-                               DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)
-  --login-timeout-ms <ms>      Browser login timeout (default: "900000", env:
-                               DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)
-  --refresh-buffer-ms <ms>     Token refresh buffer (default: "300000", env:
-                               DBX_TOOLS_U2M_REFRESH_BUFFER_MS)
-  --no-prefer-user-to-machine  Use selected M2M credentials without preferring a matching user
-                               profile
+```sh
+dbx auth token [options]
 ```
+
+#### Options
+
+| Option            | Description                                                    |
+| ----------------- | -------------------------------------------------------------- |
+| `--force-refresh` | Refresh the token before returning it                          |
+| `--no-login`      | Fail instead of logging in for a missing or invalid credential |
 
 ### `dbx auth profile`
 
-```text
-Usage: dbx auth profile
-
 Print the configured or automatically detected profile
 
-Global Options:
-  --profile <name>             Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)
-  --host <url>                 Databricks host (env: DATABRICKS_HOST)
-  --account-id <id>            Databricks account id (env: DATABRICKS_ACCOUNT_ID)
-  --workspace-id <id>          Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)
-  --config-file <path>         Databricks config file (env: DATABRICKS_CONFIG_FILE)
-  --client-id <id>             OAuth client id (env: DATABRICKS_CLIENT_ID)
-  --group-id <id>              Assumed Databricks group id (env: DATABRICKS_GROUP_ID)
-  --auth-type <type>           Databricks authentication type (choices: "databricks-cli",
-                               "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE)
-  --scopes <scopes>            OAuth scopes, repeatable or comma-separated
-  --target <target>            OAuth target (choices: "workspace", "account", "unified", env:
-                               DBX_TOOLS_U2M_TARGET)
-  --lock-timeout-ms <ms>       Credential lock timeout (0 waits indefinitely) (default: "0", env:
-                               DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)
-  --login-timeout-ms <ms>      Browser login timeout (default: "900000", env:
-                               DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)
-  --refresh-buffer-ms <ms>     Token refresh buffer (default: "300000", env:
-                               DBX_TOOLS_U2M_REFRESH_BUFFER_MS)
-  --no-prefer-user-to-machine  Use selected M2M credentials without preferring a matching user
-                               profile
+```sh
+dbx auth profile
 ```
 
 ### `dbx auth logout`
 
-```text
-Usage: dbx auth logout
-
 Delete the stored credential for the selected profile
 
-Global Options:
-  --profile <name>             Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)
-  --host <url>                 Databricks host (env: DATABRICKS_HOST)
-  --account-id <id>            Databricks account id (env: DATABRICKS_ACCOUNT_ID)
-  --workspace-id <id>          Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)
-  --config-file <path>         Databricks config file (env: DATABRICKS_CONFIG_FILE)
-  --client-id <id>             OAuth client id (env: DATABRICKS_CLIENT_ID)
-  --group-id <id>              Assumed Databricks group id (env: DATABRICKS_GROUP_ID)
-  --auth-type <type>           Databricks authentication type (choices: "databricks-cli",
-                               "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE)
-  --scopes <scopes>            OAuth scopes, repeatable or comma-separated
-  --target <target>            OAuth target (choices: "workspace", "account", "unified", env:
-                               DBX_TOOLS_U2M_TARGET)
-  --lock-timeout-ms <ms>       Credential lock timeout (0 waits indefinitely) (default: "0", env:
-                               DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)
-  --login-timeout-ms <ms>      Browser login timeout (default: "900000", env:
-                               DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)
-  --refresh-buffer-ms <ms>     Token refresh buffer (default: "300000", env:
-                               DBX_TOOLS_U2M_REFRESH_BUFFER_MS)
-  --no-prefer-user-to-machine  Use selected M2M credentials without preferring a matching user
-                               profile
+```sh
+dbx auth logout
 ```
 
 ### `dbx auth status`
 
-```text
-Usage: dbx auth status
-
 Show the resolved authentication client configuration
 
-Global Options:
-  --profile <name>             Databricks CLI profile (env: DATABRICKS_CONFIG_PROFILE)
-  --host <url>                 Databricks host (env: DATABRICKS_HOST)
-  --account-id <id>            Databricks account id (env: DATABRICKS_ACCOUNT_ID)
-  --workspace-id <id>          Databricks workspace id (env: DATABRICKS_WORKSPACE_ID)
-  --config-file <path>         Databricks config file (env: DATABRICKS_CONFIG_FILE)
-  --client-id <id>             OAuth client id (env: DATABRICKS_CLIENT_ID)
-  --group-id <id>              Assumed Databricks group id (env: DATABRICKS_GROUP_ID)
-  --auth-type <type>           Databricks authentication type (choices: "databricks-cli",
-                               "oauth-m2m", "pat", "app_obo", "app_sp", env: DATABRICKS_AUTH_TYPE)
-  --scopes <scopes>            OAuth scopes, repeatable or comma-separated
-  --target <target>            OAuth target (choices: "workspace", "account", "unified", env:
-                               DBX_TOOLS_U2M_TARGET)
-  --lock-timeout-ms <ms>       Credential lock timeout (0 waits indefinitely) (default: "0", env:
-                               DBX_TOOLS_U2M_LOCK_TIMEOUT_MS)
-  --login-timeout-ms <ms>      Browser login timeout (default: "900000", env:
-                               DBX_TOOLS_U2M_LOGIN_TIMEOUT_MS)
-  --refresh-buffer-ms <ms>     Token refresh buffer (default: "300000", env:
-                               DBX_TOOLS_U2M_REFRESH_BUFFER_MS)
-  --no-prefer-user-to-machine  Use selected M2M credentials without preferring a matching user
-                               profile
+```sh
+dbx auth status
 ```
 
 <!-- cli-reference:end -->

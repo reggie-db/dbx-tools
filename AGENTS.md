@@ -35,7 +35,9 @@ Primary ownership:
 - `packages/js/cli/service` owns product-agnostic current-user install, start, stop, restart, status, uninstall, package-local Bun compilation into `~/.dbx-tools/bin`, and systray2 menu behavior for consuming CLIs.
 - `packages/js/cli/model-gateway` owns foreground `dbx model-gateway` and `dbx-model-gateway` execution plus its tray-only service definition and Models URL menu item. There is no Python gateway or compatibility command.
 - `packages/js/cli/graphiti` owns Graphiti CLI execution, exact-version Python runtime bootstrap, model-gateway command resolution, and its service definition. Reuse `cli/service` for local service lifecycle; `node/appkit-graphiti` owns only AppKit integration and app-scoped sidecar supervision, not installers or desktop services.
+- `packages/js/cli/falkor-db` owns foreground `dbx falkor-db` and `dbx-falkor-db` execution, parser-owned runtime options, Databricks profile selection for Volume backups, and terminal signal handling. It does not install or manage a service; `node/falkor-db` owns the embedded database and durability lifecycle.
 - `packages/js/node/lakebase` and `packages/js/cli/lakebase-proxy` own Lakebase parsing, discovery, credentials, and the loopback PostgreSQL proxy.
+- `packages/js/node/falkor-db` owns embedded FalkorDBLite startup over a private Unix socket, change-aware local RDB persistence, storage-neutral durable snapshot policy, and the Databricks Volume adapter. Reuse it instead of spawning Redis/FalkorDB or implementing application-local restore, manifest, retry, retention, or shutdown backup logic.
 - `packages/js/node/postgres` and `packages/py/postgres` own advisory locks, topic buses, and Postgres/Lakebase helpers in their respective runtimes.
 - `packages/js/node/appkit*`, `packages/js/shared/*`, and `packages/js/ui/*` own AppKit integrations and browser-safe contracts/UI. Before changing AppKit-facing APIs, inspect `bunx @databricks/appkit docs` and installed AppKit `.d.ts` files.
 - `projen/shims/python-node` owns the trace-driven Node compatibility layer used by PythonMonkey bundles. Only shim Node built-ins actually imported by a bundle.
@@ -55,7 +57,7 @@ Primary ownership:
 
 - Keep the root `README.md` focused on Databricks developer value.
 - Write package READMEs for users: outcomes, runnable workflows, configuration, and operational limits. Keep development policies and implementation-history explanations out of product guides.
-- Generate CLI command and option references from the owning parser's help or documentation API, including subcommands and forwarded options. Exclude built-in help commands and flags; do not maintain parallel option tables or hand-edit generated README sections.
+- Generate CLI command and option references from the owning parser's help or documentation API, including subcommands and forwarded options. Render each command as markdown tables for arguments, options, and child commands that command owns. Do not treat parent flags as global or repeat them on subcommands that do not declare them. Exclude built-in help commands and flags; do not maintain parallel option tables or hand-edit generated README sections.
 - Put detailed workspace/generator guidance in `projen/README.md`.
 - Track active technical debt under `docs/enhancements/YYYY-MM-DD-*.md`; move completed or abandoned plans to `docs/archived/enhancements`.
 - Do not mention predecessor repositories or migrations in public docs.
@@ -66,7 +68,7 @@ Primary ownership:
 - `bun run bump` increments `VERSION` locally and synchronizes generated package versions.
 - Run `bun run release` from any branch; without flags it retains all default steps. It commits and pushes pending branch changes, safely fast-forwards `main` when needed, then calls `bump`, commits the synchronized changes, pushes `main`, creates an annotated `vX.Y.Z` tag, and pushes the tag. It fails instead of creating a merge commit when `main` cannot fast-forward. Use `--no-bump` only for an existing synchronized bump.
 - `.github/workflows/release.yml` runs only for `v*` tag pushes and verifies the tagged commit exactly equals `origin/main` before publishing Node, Python, and docs.
-- The release workflow installs dependencies and validates/builds all release artifacts in one job. Install validation prerequisites before running validation tasks. Registry jobs only download and publish those artifacts; they must not restore dependency caches, install workspace dependencies, or rebuild packages. Keep per-package Python environments and publish dependency ordering.
+- The release workflow installs dependencies and validates/builds all release artifacts in one job. Install validation prerequisites before running validation tasks. Registry jobs only download and publish those artifacts; they must not install workspace dependencies or rebuild packages. Keep per-package Python environments and publish dependency ordering.
 - Release task flags may select publication targets, documentation, optional validation, local registry publication, and local dependency installation. Preserve unflagged defaults. Store CI selections in the annotated release tag, not a mutable repository setting; version and immutable-source verification remain mandatory.
 - There is no release PR, GitHub Release, manual stage recovery, Cargo/native publication, or alternate release entrypoint.
 - Preserve local application/deployment flows and local npm/Python publication helpers.

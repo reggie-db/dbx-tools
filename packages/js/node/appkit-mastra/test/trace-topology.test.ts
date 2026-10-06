@@ -13,10 +13,14 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 
 import { configureOtelPropagation } from "../src/observability.ts";
 import {
-  chatTurnTraceIoMiddleware,
+  CHAT_GENIE_USED_ATTR,
+  CHAT_IDENTITY_ATTR,
+  CHAT_MESSAGES_ATTR,
+  CHAT_RESPONSE_ATTR,
+  chatTurnTelemetryMiddleware,
   MLFLOW_SPAN_INPUTS_ATTR,
   MLFLOW_SPAN_OUTPUTS_ATTR,
-} from "../src/trace-io.ts";
+} from "../src/telemetry.ts";
 
 const INCOMING_TRACE_ID = "0123456789abcdef0123456789abcdef";
 const INCOMING_SPAN_ID = "0123456789abcdef";
@@ -118,7 +122,7 @@ describe("chat trace topology", () => {
 
     const response = createResponse();
     context.with(rpcContext, () => {
-      chatTurnTraceIoMiddleware(
+      chatTurnTelemetryMiddleware(
         request("/chat/support", [
           { role: "user", parts: [{ type: "text", text: "hello" }] },
         ]) as never,
@@ -126,9 +130,13 @@ describe("chat trace topology", () => {
         () => {
           assert.equal(trace.getActiveSpan(), root);
           endChildSpans(tracer, ["invoke_agent support", "model", "tool", "memory", "processor"]);
+          response.write(
+            'data: {"type":"data-genie-progress","data":{"event":{"type":"started"}}}\n\n',
+          );
           response.write('data: {"type":"text-delta","delta":"root answer"}\n\n');
           response.end();
         },
+        { identity: () => "service-principal" },
       );
     });
     expressChild.end();
@@ -138,7 +146,11 @@ describe("chat trace topology", () => {
     const exportedRoot = spans.find((span) => span.name === "POST /api/mastra/chat/support");
     assert.ok(exportedRoot);
     assert.equal(exportedRoot.attributes[MLFLOW_SPAN_OUTPUTS_ATTR], "root answer");
-    assert.match(String(exportedRoot.attributes[MLFLOW_SPAN_INPUTS_ATTR]), /hello/);
+    assert.equal(exportedRoot.attributes[MLFLOW_SPAN_INPUTS_ATTR], "hello");
+    assert.match(String(exportedRoot.attributes[CHAT_MESSAGES_ATTR]), /hello/);
+    assert.match(String(exportedRoot.attributes[CHAT_RESPONSE_ATTR]), /root answer/);
+    assert.equal(exportedRoot.attributes[CHAT_IDENTITY_ATTR], "service-principal");
+    assert.equal(exportedRoot.attributes[CHAT_GENIE_USED_ATTR], true);
     assert.equal(spans.filter((span) => span.parentSpanContext === undefined).length, 1);
     assert.equal(
       spans.some((span) => span.name === "mastra.chat_turn"),
@@ -161,7 +173,7 @@ describe("chat trace topology", () => {
     const response = createResponse();
     const downstream: Record<string, string> = {};
     context.with(extracted, () => {
-      chatTurnTraceIoMiddleware(
+      chatTurnTelemetryMiddleware(
         request("/agents/support/stream", [{ role: "user", content: "stream this" }]) as never,
         response as never,
         () => {
@@ -179,6 +191,7 @@ describe("chat trace topology", () => {
           response.write(payload.subarray(split));
           response.end();
         },
+        { identity: "obo" },
       );
     });
 
@@ -187,7 +200,11 @@ describe("chat trace topology", () => {
     assert.equal(roots.length, 1);
     assert.equal(roots[0]?.name, "mastra.chat_turn");
     assert.equal(roots[0]?.attributes[MLFLOW_SPAN_OUTPUTS_ATTR], "Hello €");
-    assert.match(String(roots[0]?.attributes[MLFLOW_SPAN_INPUTS_ATTR]), /stream this/);
+    assert.equal(roots[0]?.attributes[MLFLOW_SPAN_INPUTS_ATTR], "stream this");
+    assert.match(String(roots[0]?.attributes[CHAT_MESSAGES_ATTR]), /stream this/);
+    assert.match(String(roots[0]?.attributes[CHAT_RESPONSE_ATTR]), /Hello/);
+    assert.equal(roots[0]?.attributes[CHAT_IDENTITY_ATTR], "obo");
+    assert.equal(roots[0]?.attributes[CHAT_GENIE_USED_ATTR], false);
     assert.equal(
       spans.every((span) => span.spanContext().traceId === roots[0]?.spanContext().traceId),
       true,
@@ -205,7 +222,7 @@ describe("chat trace topology", () => {
     const response = createResponse();
     const downstream: Record<string, string> = {};
     context.with(extracted, () => {
-      chatTurnTraceIoMiddleware(
+      chatTurnTelemetryMiddleware(
         request("/agents/support/generate", [{ role: "user", content: "generate this" }]) as never,
         response as never,
         () => {
@@ -221,7 +238,9 @@ describe("chat trace topology", () => {
     assert.equal(span.spanContext().traceId, INCOMING_TRACE_ID);
     assert.equal(span.parentSpanContext?.spanId, INCOMING_SPAN_ID);
     assert.equal(span.attributes[MLFLOW_SPAN_OUTPUTS_ATTR], "generated answer");
-    assert.match(String(span.attributes[MLFLOW_SPAN_INPUTS_ATTR]), /generate this/);
+    assert.equal(span.attributes[MLFLOW_SPAN_INPUTS_ATTR], "generate this");
+    assert.match(String(span.attributes[CHAT_MESSAGES_ATTR]), /generate this/);
+    assert.match(String(span.attributes[CHAT_RESPONSE_ATTR]), /generated answer/);
     assert.equal(exporter.getFinishedSpans().filter((item) => !item.parentSpanContext).length, 0);
     assert.match(downstream.traceparent ?? "", new RegExp(`^00-${INCOMING_TRACE_ID}-`));
   });

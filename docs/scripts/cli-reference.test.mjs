@@ -30,8 +30,13 @@ describe("parser-owned CLI references", () => {
     assert.match(reference, /### `example service install`/);
     assert.match(reference, /install\|add/);
     assert.match(reference, /--no-start/);
-    assert.match(reference, /Global Options:/);
+    assert.match(reference, /\| Option \| Description \|/);
+    assert.match(reference, /\| Command \| Description \|/);
+    assert.doesNotMatch(reference, /Global options/);
     assert.doesNotMatch(reference, /--help|display help|secret|--internal/);
+    const install = section(reference, "### `example service install`");
+    assert.match(install, /--no-start/);
+    assert.doesNotMatch(install, /--format|--profile/);
   });
 
   it("renders the real shared service commands without resolving a definition", () => {
@@ -41,6 +46,23 @@ describe("parser-owned CLI references", () => {
     }
     assert.match(reference, /--no-start/);
     assert.doesNotMatch(reference, /--help|display help/);
+  });
+
+  it("documents parent flags only on the command that owns them", () => {
+    const program = new Command("proxy")
+      .option("--host <host>", "loopback listener host")
+      .option("--profile <profile>", "exact Databricks profile");
+    const service = program.command("service");
+    service.command("install").option("--host <host>", "loopback listener host");
+    service.command("uninstall").description("Stop and remove the service");
+    const reference = commanderReference(program);
+    const root = section(reference, "### `proxy`");
+    const install = section(reference, "### `proxy service install`");
+    const uninstall = section(reference, "### `proxy service uninstall`");
+    assert.match(root, /--profile/);
+    assert.match(install, /--host/);
+    assert.doesNotMatch(install, /--profile/);
+    assert.doesNotMatch(uninstall, /--host|--profile|#### Options/);
   });
 
   it("preserves handwritten guidance and updates generated output deterministically", () => {
@@ -70,6 +92,15 @@ describe("parser-owned CLI references", () => {
     program.option("--timeout <seconds>", "Startup timeout", "30");
     const after = withCliReference(before, commanderReference(program));
     assert.notEqual(after, before);
-    assert.match(after, /--timeout <seconds>.*Startup timeout.*default: "30"/);
+    assert.match(after, /--timeout <seconds>/);
+    assert.match(after, /Startup timeout \(default: "30"\)/);
   });
 });
+
+function section(reference, heading) {
+  const start = reference.indexOf(heading);
+  assert.ok(start >= 0, `missing ${heading}`);
+  const rest = reference.slice(start);
+  const next = rest.slice(heading.length).search(/\n### /);
+  return next < 0 ? rest : rest.slice(0, heading.length + next);
+}

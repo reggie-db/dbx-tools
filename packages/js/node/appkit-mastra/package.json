@@ -185,9 +185,9 @@
         "types": "./lib/src/summarize.d.ts",
         "default": "./lib/src/summarize.js"
       },
-      "./trace-io": {
-        "types": "./lib/src/trace-io.d.ts",
-        "default": "./lib/src/trace-io.js"
+      "./telemetry": {
+        "types": "./lib/src/telemetry.d.ts",
+        "default": "./lib/src/telemetry.js"
       },
       "./validation": {
         "types": "./lib/src/validation.d.ts",
@@ -242,7 +242,7 @@
     "./storage-schema": "./src/storage-schema.ts",
     "./style": "./src/style.ts",
     "./summarize": "./src/summarize.ts",
-    "./trace-io": "./src/trace-io.ts",
+    "./telemetry": "./src/telemetry.ts",
     "./validation": "./src/validation.ts",
     "./workspaces": "./src/workspaces.ts",
     "./writer": "./src/writer.ts",

@@ -123,6 +123,33 @@ describe("DatabricksFileSystem", () => {
     );
   });
 
+  it("streams UC Volume files without buffering through readFile/writeFile", async () => {
+    const { client, files } = mockVolumeClient();
+    const fs = new DatabricksFileSystem({ root: "main.default.assets", client });
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Buffer.from("large-"));
+        controller.enqueue(Buffer.from("snapshot"));
+        controller.close();
+      },
+    });
+
+    await fs.writeStream("backups/snapshot.rdb", source, { overwrite: false });
+    assert.equal(
+      Buffer.from(files.get("/Volumes/main/default/assets/backups/snapshot.rdb")!).toString(),
+      "large-snapshot",
+    );
+
+    const reader = (await fs.readStream("backups/snapshot.rdb")).getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+    assert.equal(Buffer.concat(chunks).toString(), "large-snapshot");
+  });
+
   it("expands ~ with an explicit userName", async () => {
     const { client } = mockVolumeClient();
     const fs = new DatabricksFileSystem({
