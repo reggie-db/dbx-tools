@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-model-gateway";
-export const PACKAGE_VERSION = "0.9.38";
+export const PACKAGE_VERSION = "0.9.39";
 export * as cli from "./src/cli.ts";
 export * as defaults from "./src/defaults.ts";
 export * as server from "./src/server.ts";
