@@ -48,6 +48,10 @@
         "types": "./lib/src/models.d.ts",
         "default": "./lib/src/models.js"
       },
+      "./upstream": {
+        "types": "./lib/src/upstream.d.ts",
+        "default": "./lib/src/upstream.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -64,6 +68,7 @@
     "./client": "./src/client.ts",
     "./contracts": "./src/contracts.ts",
     "./models": "./src/models.ts",
+    "./upstream": "./src/upstream.ts",
     "./package.json": "./package.json"
   },
   "files": [

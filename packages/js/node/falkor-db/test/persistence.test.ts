@@ -1,8 +1,8 @@
+import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
 import { FalkorPersistenceManager } from "../src/persistence/manager.ts";
 import { parsePersistenceInfo } from "../src/persistence/redis-info.ts";
 import type {

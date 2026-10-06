@@ -60,6 +60,7 @@ def parse_address(input: str | None) -> ParsedAddress:
 
 def _from_node(value: Mapping[str, object]) -> ParsedAddress:
     ssl_value = value.get("sslMode")
+    port_value = value.get("port")
     ssl_mode = (
         next((mode for mode in NativeSslMode if mode.value == ssl_value), None)
         if isinstance(ssl_value, str)
@@ -74,7 +75,9 @@ def _from_node(value: Mapping[str, object]) -> ParsedAddress:
         database_resource_id=_string(value.get("databaseResourceId")),
         user=_string(value.get("user")),
         host=_string(value.get("host")),
-        port=value.get("port") if isinstance(value.get("port"), int) else None,
+        port=int(port_value)
+        if isinstance(port_value, (int, float)) and float(port_value).is_integer()
+        else None,
         ssl_mode=ssl_mode,
     )
 

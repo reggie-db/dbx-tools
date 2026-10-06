@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import sysconfig
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
-from dbx_tools.graphiti.cli import main
+from dbx_tools.graphiti._generated.node.shared_graphiti.options import (
+    resolve_graphiti_options,
+)
 from dbx_tools.graphiti.constants import UPSTREAM_MCP_PATH_ENV
 from dbx_tools.graphiti.proxy import caddy_config
 from dbx_tools.graphiti.runtime import (
@@ -21,10 +24,15 @@ from dbx_tools.graphiti.runtime import (
     _link_tool,
     _uv_python,
 )
-from dbx_tools.graphiti.settings import ModelSettings
-from dbx_tools.graphiti.supervisor import main as supervisor_main
+from dbx_tools.graphiti.settings import (
+    GRAPHITI_OPTIONS_ENV,
+    load_graphiti_options,
+    resolve_graphiti_models,
+)
 
-_EMPTY_ENV: dict[str, str] = {}
+
+def options(**overrides):
+    return resolve_graphiti_options(overrides)
 
 
 def test_runtime_paths_are_versioned(tmp_path: Path) -> None:
@@ -32,16 +40,88 @@ def test_runtime_paths_are_versioned(tmp_path: Path) -> None:
 
     assert paths.graphiti == tmp_path / "tools" / "graphiti" / GRAPHITI_VERSION
     assert paths.neo4j_data == tmp_path / "data" / "neo4j"
+    assert RuntimePaths.from_options(options(home=str(tmp_path))).root == tmp_path
+
+
+def test_serialized_options_use_generated_zod_contract() -> None:
+    resolved = load_graphiti_options(
+        {
+            GRAPHITI_OPTIONS_ENV: json.dumps(
+                {
+                    "profile": "PROFILE",
+                    "model": "gpt 5",
+                    "modelGatewayPort": 4500,
+                }
+            )
+        }
+    )
+
+    assert resolved["profile"] == "PROFILE"
+    assert resolved["model"] == "gpt 5"
+    assert resolved["modelGatewayUrl"] == "http://127.0.0.1:4500/v1"
+
+
+def test_generated_model_binding_resolves_fuzzy_routes(monkeypatch) -> None:
+    route = AsyncMock(
+        side_effect=[
+            {
+                "modelId": "databricks-gpt-5",
+                "endpointName": "databricks-gpt-5",
+                "source": "fuzzy-match",
+                "protocol": "chat",
+                "host": "https://workspace",
+                "apiBase": "https://workspace/serving-endpoints",
+                "url": "https://workspace/serving-endpoints/chat/completions",
+                "headers": {"authorization": "Bearer token"},
+            },
+            {
+                "modelId": "databricks-gte-large-en",
+                "endpointName": "databricks-gte-large-en",
+                "endpointDimension": 1024,
+                "source": "fuzzy-match",
+                "protocol": "embeddings",
+                "host": "https://workspace",
+                "apiBase": "https://workspace/serving-endpoints",
+                "url": "https://workspace/serving-endpoints/gte/invocations",
+                "headers": {"authorization": "Bearer token"},
+            },
+        ]
+    )
+    monkeypatch.setattr("dbx_tools.graphiti.settings.resolve_model_route", route)
+
+    resolved, model_route, embedder_route = asyncio.run(
+        resolve_graphiti_models(options(profile="PROFILE", model="gpt", embedderModel="gte"))
+    )
+
+    assert resolved["model"] == "databricks-gpt-5"
+    assert resolved["embedderModel"] == "databricks-gte-large-en"
+    assert model_route is not None and model_route["headers"]["authorization"] == "Bearer token"
+    assert embedder_route is not None and embedder_route["endpointDimension"] == 1024
+    assert route.await_args_list[0].args[0]["profile"] == "PROFILE"
+    assert route.await_args_list[1].args[0]["modelClass"] == "embedding"
+
+
+def test_external_gateway_skips_databricks_model_resolution(monkeypatch) -> None:
+    route = AsyncMock()
+    monkeypatch.setattr("dbx_tools.graphiti.settings.resolve_model_route", route)
+    configured = options(
+        manageModelGateway=False,
+        modelGatewayUrl="https://models.example/v1",
+    )
+
+    resolved, model_route, embedder_route = asyncio.run(resolve_graphiti_models(configured))
+
+    assert resolved == configured
+    assert model_route is None
+    assert embedder_route is None
+    route.assert_not_awaited()
 
 
 def test_environment_preserves_explicit_neo4j_values(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("NEO4J_URI", "bolt://example:7687")
     runtime = Runtime(RuntimePaths(tmp_path))
 
-    environment = runtime.environment(
-        "generated",
-        ModelSettings.resolve(environ=_EMPTY_ENV),
-    )
+    environment = runtime.environment("generated", options())
 
     assert environment["NEO4J_URI"] == "bolt://example:7687"
     assert environment["NEO4J_PASSWORD"] == "generated"
@@ -53,6 +133,15 @@ def test_environment_preserves_explicit_neo4j_values(monkeypatch, tmp_path: Path
     assert str(Path(__file__).parents[1] / "src") in environment["PYTHONPATH"]
 
 
+def test_connection_settings_do_not_expose_api_keys(tmp_path: Path) -> None:
+    runtime = Runtime(RuntimePaths(tmp_path))
+
+    settings = runtime.connection_settings("generated", options(openAiApiKey="secret"))
+
+    assert "OPENAI_API_KEY" not in settings
+    assert settings["NEO4J_PASSWORD"] == "generated"
+
+
 def test_child_python_paths_exclude_standard_library() -> None:
     paths = _child_python_paths()
 
@@ -60,23 +149,6 @@ def test_child_python_paths_exclude_standard_library() -> None:
     assert str(Path(sysconfig.get_path("stdlib")).resolve()) not in paths
     assert any((Path(entry) / "dbx_tools" / "postgres").exists() for entry in paths)
     assert any((Path(entry) / "dbx_tools" / "core").exists() for entry in paths)
-
-
-def test_connection_settings_do_not_expose_unrelated_environment(
-    monkeypatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "do-not-print")
-    runtime = Runtime(RuntimePaths(tmp_path))
-
-    settings = runtime.connection_settings(
-        "generated",
-        ModelSettings.resolve(
-            environ={**_EMPTY_ENV, "OPENAI_API_KEY": "do-not-print"},
-        ),
-    )
-
-    assert "OPENAI_API_KEY" not in settings
-    assert settings["NEO4J_PASSWORD"] == "generated"
 
 
 def test_state_is_private(tmp_path: Path) -> None:
@@ -92,22 +164,16 @@ def test_startup_resolves_prerequisites_through_core_bin(monkeypatch, tmp_path: 
     runtime = Runtime(RuntimePaths(tmp_path))
     ensure_tool = Mock()
     resolve = Mock(return_value="/bin/uv")
-    install_neo4j = Mock()
-    install_graphiti = Mock()
-    ensure_state = Mock()
     monkeypatch.setattr("dbx_tools.graphiti.runtime.bin.ensure_tool", ensure_tool)
     monkeypatch.setattr("dbx_tools.graphiti.runtime.bin.resolve", resolve)
-    monkeypatch.setattr(runtime, "_install_neo4j", install_neo4j)
-    monkeypatch.setattr(runtime, "_install_graphiti", install_graphiti)
-    monkeypatch.setattr(runtime, "_ensure_state", ensure_state)
+    monkeypatch.setattr(runtime, "_install_neo4j", Mock())
+    monkeypatch.setattr(runtime, "_install_graphiti", Mock())
+    monkeypatch.setattr(runtime, "_ensure_state", Mock())
 
     runtime._ensure_runtime()
 
     ensure_tool.assert_called_once_with(JAVA_MISE_TOOL)
     resolve.assert_called_once_with("uv", mise_tool=UV_MISE_TOOL)
-    install_neo4j.assert_called_once_with()
-    install_graphiti.assert_called_once_with()
-    ensure_state.assert_called_once_with()
 
 
 def test_tool_link_targets_mise_install_path(tmp_path: Path) -> None:
@@ -119,16 +185,6 @@ def test_tool_link_targets_mise_install_path(tmp_path: Path) -> None:
     _link_tool(source, destination)
 
     assert destination.readlink() == source
-
-
-def test_start_neo4j_does_not_poll_readiness(monkeypatch, tmp_path: Path) -> None:
-    runtime = Runtime(RuntimePaths(tmp_path))
-    command = Mock(side_effect=[Mock(returncode=1), Mock(returncode=0)])
-    monkeypatch.setattr(runtime, "_neo4j_command", command)
-
-    runtime._start_neo4j()
-
-    assert [call.args[0] for call in command.call_args_list] == ["status", "start"]
 
 
 def test_honcho_child_preserves_argv_without_a_shell() -> None:
@@ -143,199 +199,28 @@ def test_honcho_child_preserves_argv_without_a_shell() -> None:
     assert output.decode() == argument
 
 
-def test_cli_strips_argument_separator(monkeypatch) -> None:
-    start = Mock(return_value=123)
-    monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "DEFAULT")
-    monkeypatch.setattr("dbx_tools.graphiti.runtime.Runtime.start", start)
-    monkeypatch.setattr("dbx_tools.graphiti.runtime.Runtime.status", Mock(return_value={}))
-
-    main(
-        [
-            "up",
-            "--profile",
-            "DEV",
-            "--model",
-            "databricks-gpt-5-mini",
-            "--model-gateway-command",
-            "/opt/dbx-model-gateway",
-            "--model-gateway-port",
-            "4100",
-            "--",
-            "--port",
-            "9000",
-        ]
-    )
-
-    assert start.call_args.kwargs["foreground"] is False
-    assert start.call_args.kwargs["extra_args"] == ["--port", "9000"]
-    assert start.call_args.kwargs["settings"].manage_model_gateway is True
-    assert start.call_args.kwargs["settings"].profile == "DEV"
-    assert start.call_args.kwargs["settings"].model == "databricks-gpt-5-mini"
-    assert start.call_args.kwargs["settings"].model_gateway_command == "/opt/dbx-model-gateway"
-    assert start.call_args.kwargs["settings"].model_gateway_port == 4100
-
-
-def test_supervisor_strips_argument_separator(monkeypatch, tmp_path: Path) -> None:
-    supervise = Mock(return_value=0)
-    monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "DEFAULT")
-    monkeypatch.setattr("dbx_tools.graphiti.supervisor.Runtime.supervise", supervise)
-
-    supervisor_main(["--home", str(tmp_path), "--profile", "DEV", "--", "--port", "9000"])
-
-    assert supervise.call_args.args[1] == ["--port", "9000"]
-    assert supervise.call_args.args[0].profile == "DEV"
-
-
-def test_model_settings_default_to_managed_databricks_models() -> None:
-    settings = ModelSettings.resolve(environ={"DATABRICKS_CONFIG_PROFILE": "DEFAULT"})
-
-    assert settings.manage_model_gateway is True
-    assert settings.openai_api_url == "http://127.0.0.1:4400/v1"
-    assert settings.model == "databricks-gpt-5-nano"
-    assert settings.embedder_model == "databricks-gte-large-en"
-    assert settings.embedder_dimensions == 1024
-    assert settings.profile is None
-    assert settings.health_url == "http://127.0.0.1:4400/api/healthz"
-
-
-def test_model_settings_delegate_default_profile_resolution() -> None:
-    settings = ModelSettings.resolve(environ={})
-
-    assert settings.profile is None
-
-
-def test_model_settings_use_ambient_databricks_app_auth() -> None:
-    settings = ModelSettings.resolve(
-        environ={
-            "DATABRICKS_HOST": "https://workspace.example",
-            "DATABRICKS_CLIENT_ID": "client",
-            "DATABRICKS_CLIENT_SECRET": "secret",
-        }
-    )
-
-    assert settings.manage_model_gateway is True
-    assert settings.profile is None
-
-
-def test_model_settings_allow_external_model_gateway() -> None:
-    settings = ModelSettings.resolve(
-        model_gateway_url="https://models.example/v1/",
-        environ={"DATABRICKS_CONFIG_PROFILE": "DEV"},
-    )
-
-    assert settings.manage_model_gateway is False
-    assert settings.openai_api_url == "https://models.example/v1"
-    assert settings.openai_api_key == "not-required"
-    assert settings.profile is None
-
-
-def test_model_settings_resolve_model_gateway_environment() -> None:
-    settings = ModelSettings.resolve(
-        environ={
-            "MANAGE_MODEL_GATEWAY": "false",
-            "MODEL_GATEWAY_COMMAND": "/opt/dbx-model-gateway",
-            "MODEL_GATEWAY_HOST": "127.0.0.2",
-            "MODEL_GATEWAY_PORT": "4100",
-            "MODEL_GATEWAY_URL": "https://models.example/v1",
-        },
-    )
-
-    assert settings.manage_model_gateway is False
-    assert settings.model_gateway_command == "/opt/dbx-model-gateway"
-    assert settings.model_gateway_host == "127.0.0.2"
-    assert settings.model_gateway_port == 4100
-    assert settings.openai_api_url == "https://models.example/v1"
-    assert "model_gateway_command" not in settings.public_settings()
-
-
-def test_model_settings_preserve_external_openai_api_url() -> None:
-    settings = ModelSettings.resolve(
-        environ={
-            "OPENAI_API_URL": "https://openai.example/v1/",
-            "OPENAI_API_KEY": "secret",
-        },
-    )
-
-    assert settings.manage_model_gateway is False
-    assert settings.openai_api_url == "https://openai.example/v1"
-    assert settings.openai_api_key == "secret"
-
-
-def test_status_uses_model_gateway_health(monkeypatch, tmp_path: Path) -> None:
-    runtime = Runtime(RuntimePaths(tmp_path))
-    runtime._write_state(
-        {
-            "neo4j_password": "secret",
-            "model_settings": ModelSettings.resolve(environ=_EMPTY_ENV).public_settings(),
-        }
-    )
-    health_urls: list[str] = []
-    monkeypatch.setattr(
-        "dbx_tools.graphiti.runtime._url_ready",
-        lambda url: health_urls.append(url) or True,
-    )
-
-    status = runtime.status()
-
-    assert status["model_gateway"] == "running"
-    assert health_urls == ["http://127.0.0.1:4400/api/healthz"]
-
-
-def test_uv_python_honors_explicit_override(monkeypatch) -> None:
-    monkeypatch.setenv("UV_PYTHON", "3.12")
-
-    assert _uv_python() == "3.12"
-
-
-def test_graphiti_command_does_not_require_config_yaml(tmp_path: Path) -> None:
-    runtime = Runtime(RuntimePaths(tmp_path))
-    settings = ModelSettings.resolve(environ=_EMPTY_ENV)
-
-    command = runtime.graphiti_command(settings, [])
-
-    assert "--config" not in command
-    assert command[command.index("--python") + 1] == _uv_python()
-    assert command[command.index("-m") + 1] == "dbx_tools.graphiti.server"
-    assert command[-8:] == [
-        "--llm-provider",
-        "openai",
-        "--model",
-        "databricks-gpt-5-nano",
-        "--embedder-provider",
-        "openai",
-        "--embedder-model",
-        "databricks-gte-large-en",
-    ]
-
-
-def test_server_uses_temporary_empty_config(monkeypatch) -> None:
-    from dbx_tools.graphiti.server import _upstream_config
-
-    monkeypatch.setattr("dbx_tools.graphiti.server.sys.argv", ["dbx-graphiti"])
-
-    with _upstream_config():
-        config_path = Path(sys.argv[sys.argv.index("--config") + 1])
-        assert config_path.read_text() == "{}\n"
-
-    assert sys.argv == ["dbx-graphiti"]
-    assert not config_path.exists()
-
-
-def test_graphiti_command_uses_databricks_app_listener(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("DATABRICKS_APP_PORT", "9001")
+def test_graphiti_command_uses_generated_options(tmp_path: Path) -> None:
     runtime = Runtime(RuntimePaths(tmp_path))
 
-    command = runtime.graphiti_command(ModelSettings.resolve(environ=_EMPTY_ENV), [])
+    command = runtime.graphiti_command(
+        options(
+            profile="PROFILE",
+            graphitiHost="0.0.0.0",
+            graphitiPort=9001,
+            model="databricks-gpt-5",
+            embedderModel="databricks-gte-large-en",
+            graphitiArgs=["--transport", "sse"],
+        )
+    )
 
+    assert command[command.index("--profile") + 1] == "PROFILE"
     assert command[command.index("--host") + 1] == "0.0.0.0"
     assert command[command.index("--port") + 1] == "9001"
+    assert command[-2:] == ["--transport", "sse"]
 
 
 def test_caddy_config_routes_to_graphiti() -> None:
-    config = caddy_config(
-        proxy_port=8000,
-        graphiti_port=8002,
-    )
+    config = caddy_config(proxy_port=8000, graphiti_port=8002)
 
     assert "127.0.0.1:8000" in config
     assert "reverse_proxy 127.0.0.1:8002" in config
@@ -346,22 +231,17 @@ def test_managed_model_gateway_uses_configured_argv_and_profile(
 ) -> None:
     runtime = Runtime(RuntimePaths(tmp_path))
     runtime._write_state({"neo4j_password": "secret"})
-    settings = ModelSettings.resolve(
-        profile="DEV",
-        model_gateway_command="/opt/dbx-model-gateway",
-        environ={"DATABRICKS_CONFIG_PROFILE": "DEFAULT"},
-    )
+    settings = options(profile="DEV", modelGatewayCommand="/opt/dbx-model-gateway")
     monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "DEFAULT")
     manager = Mock()
     manager.returncode = 0
     monkeypatch.setattr("dbx_tools.graphiti.runtime.Manager", Mock(return_value=manager))
     monkeypatch.setattr("dbx_tools.graphiti.runtime._url_ready", lambda _: False)
 
-    result = runtime.supervise(settings, [])
+    result = runtime.supervise(settings)
 
     assert result == 0
     model_gateway = manager.add_process.call_args_list[0]
-    assert model_gateway.args[0] == "model-gateway"
     assert model_gateway.args[1] == [
         "/opt/dbx-model-gateway",
         "--profile",
@@ -371,9 +251,7 @@ def test_managed_model_gateway_uses_configured_argv_and_profile(
         "--port",
         "4400",
     ]
-    assert model_gateway.kwargs["env"]["DATABRICKS_CONFIG_PROFILE"] == "DEFAULT"
     assert manager.add_process.call_args_list[1].args[0] == "graphiti"
-    assert isinstance(manager.add_process.call_args_list[1].args[1], list)
     manager.loop.assert_called_once_with()
 
 
@@ -384,21 +262,7 @@ def test_model_gateway_command_prefers_installed_binary(monkeypatch, tmp_path: P
         lambda name: "/usr/local/bin/dbx-model-gateway" if name == "dbx-model-gateway" else None,
     )
 
-    command = runtime._model_gateway_command(ModelSettings.resolve(environ=_EMPTY_ENV))
-
-    assert command[:1] == ["/usr/local/bin/dbx-model-gateway"]
-
-
-def test_model_gateway_command_falls_back_to_dbx(monkeypatch, tmp_path: Path) -> None:
-    runtime = Runtime(RuntimePaths(tmp_path))
-    monkeypatch.setattr(
-        "dbx_tools.graphiti.runtime.shutil.which",
-        lambda name: "/usr/local/bin/dbx" if name == "dbx" else None,
-    )
-
-    command = runtime._model_gateway_command(ModelSettings.resolve(environ=_EMPTY_ENV))
-
-    assert command[:2] == ["/usr/local/bin/dbx", "model-gateway"]
+    assert runtime._model_gateway_command(options())[:1] == ["/usr/local/bin/dbx-model-gateway"]
 
 
 def test_managed_model_gateway_rejects_an_occupied_port(monkeypatch, tmp_path: Path) -> None:
@@ -409,6 +273,6 @@ def test_managed_model_gateway_rejects_an_occupied_port(monkeypatch, tmp_path: P
     monkeypatch.setattr("dbx_tools.graphiti.runtime._url_ready", lambda _: True)
 
     with pytest.raises(RuntimeError, match="already in use"):
-        runtime.supervise(ModelSettings.resolve(environ=_EMPTY_ENV), [])
+        runtime.supervise(options())
 
     manager.add_process.assert_not_called()

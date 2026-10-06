@@ -17,9 +17,7 @@ describe("Lakebase address parsing", () => {
   });
 
   test("parses canonical resource paths", () => {
-    expect(
-      parseResourcePath("projects/demo/branches/production/endpoints/primary"),
-    ).toEqual({
+    expect(parseResourcePath("projects/demo/branches/production/endpoints/primary")).toEqual({
       project: "demo",
       branch: "production",
       endpoint: "projects/demo/branches/production/endpoints/primary",

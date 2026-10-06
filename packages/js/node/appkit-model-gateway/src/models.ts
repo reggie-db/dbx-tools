@@ -49,9 +49,7 @@ export function listModelsPayload(
     .filter((target) => target.endpoint?.status?.deprecated !== true)
     .filter((target) => !includeCodex || hasChatClass(target))
     .slice()
-    .sort((left, right) =>
-      compareCatalogueTargets(left, right, (target) => target.displayName),
-    );
+    .sort((left, right) => compareCatalogueTargets(left, right, (target) => target.displayName));
   if (includeCodex) {
     return {
       models: available.map((target, index) => codexModel(target, index + 1)),
@@ -151,7 +149,15 @@ function catalogueGroup(target: ModelTarget): number {
   return catalogueFamily(target) ? 0 : 1;
 }
 
-const IDENTITY_PREFIXES = new Set(["databricks", "system", "ai", "meta", "google", "openai", "anthropic"]);
+const IDENTITY_PREFIXES = new Set([
+  "databricks",
+  "system",
+  "ai",
+  "meta",
+  "google",
+  "openai",
+  "anthropic",
+]);
 
 function catalogueFamily(target: ModelTarget): string | undefined {
   if (isEmbeddingTarget(target)) return undefined;
@@ -173,9 +179,7 @@ function catalogueFamilyFromIdentity(identity: string): string | undefined {
 }
 
 function isEmbeddingTarget(target: ModelTarget): boolean {
-  return (
-    target.capabilities.embeddings === true || target.endpoint?.task === "llm/v1/embeddings"
-  );
+  return target.capabilities.embeddings === true || target.endpoint?.task === "llm/v1/embeddings";
 }
 
 function compareCatalogueLabel(left: string, right: string): number {

@@ -15,6 +15,7 @@ interface PythonHttpResponse {
 }
 
 export interface PythonFileHost {
+  appendBytes(path: string, content: number[]): Promise<void>;
   chmod(path: string, mode: number): Promise<void>;
   copy(source: string, destination: string): Promise<void>;
   exists(path: string): boolean;
@@ -23,7 +24,10 @@ export interface PythonFileHost {
   readBytes(path: string): Promise<number[]>;
   readDirectory(path: string): Promise<{ name: string; directory: boolean; file: boolean }[]>;
   readTextSync(path: string): string;
+  readDirectorySync(path: string): { name: string; directory: boolean; file: boolean }[];
+  readLinkSync(path: string): string;
   realpath(path: string): Promise<string>;
+  realpathSync(path: string): string;
   remove(path: string, recursive: boolean, force: boolean): Promise<void>;
   rename(source: string, destination: string): Promise<void>;
   stat(path: string): Promise<{
@@ -33,6 +37,13 @@ export interface PythonFileHost {
     mtimeMs: number;
     size: number;
   }>;
+  statSync(path: string): {
+    directory: boolean;
+    file: boolean;
+    mode: number;
+    mtimeMs: number;
+    size: number;
+  };
   touch(path: string, atimeMs: number, mtimeMs: number): Promise<void>;
   writeBytes(path: string, content: number[], mode?: number): Promise<void>;
 }
@@ -63,8 +74,9 @@ export interface PythonProcessHandle {
 
 export interface PythonRuntimeHost {
   crypto: {
+    digest(algorithm: string, content: number[], encoding?: "hex" | "base64"): string | number[];
+    hashes(): string[];
     randomBytes(length: number): number[];
-    sha256(content: number[]): string;
   };
   file: PythonFileHost;
   os: {
@@ -118,12 +130,16 @@ const readText = evaluate<PythonFunction>("lambda path: open(path, encoding='utf
 const writeBytes = evaluate<PythonFunction>(
   "lambda path, content: open(path, 'wb').write(bytes(int(value) for value in content))",
 );
+const appendBytes = evaluate<PythonFunction>(
+  "lambda path, content: open(path, 'ab').write(bytes(int(value) for value in content))",
+);
 const mkdir = evaluate<PythonFunction>(
   "lambda path, recursive: __import__('os').makedirs(path, exist_ok=recursive) if recursive else __import__('os').mkdir(path)",
 );
 const listDirectory = evaluate<PythonFunction>(
   "lambda path: [{'name': entry.name, 'directory': entry.is_dir(), 'file': entry.is_file()} for entry in __import__('pathlib').Path(path).iterdir()]",
 );
+const readLink = evaluate<PythonFunction>("__import__('os').readlink");
 const statPath = evaluate<PythonFunction>(
   "lambda path: {'directory': __import__('os').path.isdir(path), 'file': __import__('os').path.isfile(path), 'mode': __import__('os').stat(path).st_mode, 'mtimeMs': __import__('os').stat(path).st_mtime * 1000, 'size': __import__('os').stat(path).st_size}",
 );
@@ -147,14 +163,18 @@ const unlink = evaluate<PythonFunction>("__import__('os').unlink");
 
 const host: PythonRuntimeHost = {
   crypto: {
+    digest: evaluate<PythonFunction>(
+      "lambda algorithm, content, encoding: (lambda value: value.hexdigest() if encoding == 'hex' else __import__('base64').b64encode(value.digest()).decode('ascii') if encoding == 'base64' else list(value.digest()))(__import__('hashlib').new(algorithm, bytes(int(item) for item in content)))",
+    ),
+    hashes: evaluate<PythonFunction>("lambda: sorted(__import__('hashlib').algorithms_available)"),
     randomBytes: evaluate<PythonFunction>(
       "lambda length: list(__import__('os').urandom(int(length)))",
     ),
-    sha256: evaluate<PythonFunction>(
-      "lambda content: __import__('hashlib').sha256(bytes(int(value) for value in content)).hexdigest()",
-    ),
   },
   file: {
+    async appendBytes(path, content) {
+      await toThread(appendBytes, path, content);
+    },
     async chmod(path, mode) {
       await toThread(chmod, path, mode);
     },
@@ -184,10 +204,13 @@ const host: PythonRuntimeHost = {
     async readDirectory(path) {
       return toThread(listDirectory, path);
     },
+    readDirectorySync: (path) => listDirectory(path),
+    readLinkSync: (path) => String(readLink(path)),
     readTextSync: (path) => String(readText(path)),
     async realpath(path) {
       return String(await toThread(osPath.realpath, path));
     },
+    realpathSync: (path) => String(osPath.realpath(path)),
     async remove(path, recursive, force) {
       if (!(await toThread(osPath.exists, path))) {
         if (!force) throw Object.assign(new Error(`ENOENT: ${path}`), { code: "ENOENT" });
@@ -203,6 +226,7 @@ const host: PythonRuntimeHost = {
     async stat(path) {
       return toThread(statPath, path);
     },
+    statSync: (path) => statPath(path),
     async touch(path, atimeMs, mtimeMs) {
       await toThread(
         evaluate<PythonFunction>(

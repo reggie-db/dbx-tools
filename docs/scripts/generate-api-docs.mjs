@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { asyncUtils } from "@dbx-tools/shared-core";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import {
@@ -17,6 +18,7 @@ import {
   yamlString,
 } from "./repository-docs.mjs";
 import { docsSiteConfig } from "./site-config.mjs";
+import { injectSchemaSection, schemaDocsMarkdown } from "./zod-docs.mjs";
 
 const root = process.cwd();
 const siteRoot = path.join(root, ".docs-build", "site");
@@ -349,6 +351,35 @@ function pruneEmptyNamespacePages(outDir) {
   write(indexPath, index);
 }
 
+function schemaPagePath(outDir, exportName) {
+  const files = walk(outDir).filter((p) => p.endsWith(".md"));
+  const suffixes = [];
+  if (exportName.endsWith("Schema")) {
+    suffixes.push(`.TypeAlias.${exportName.slice(0, -"Schema".length)}.md`, `.Variable.${exportName}.md`);
+  } else {
+    suffixes.push(`.TypeAlias.${exportName}.md`, `.Variable.${exportName}.md`);
+  }
+  return files.filter((file) => suffixes.some((suffix) => path.basename(file).endsWith(suffix)));
+}
+
+async function injectZodSchemaDocs(pkg, outDir) {
+  for (const entry of pkg.entries) {
+    let module;
+    try {
+      module = await import(pathToFileURL(entry.file).href);
+    } catch {
+      continue;
+    }
+    for (const [name, value] of Object.entries(module)) {
+      const section = schemaDocsMarkdown(value, name);
+      if (!section) continue;
+      for (const file of schemaPagePath(outDir, name)) {
+        write(file, injectSchemaSection(read(file), section));
+      }
+    }
+  }
+}
+
 async function generatePackageApi(pkg, typedocBin) {
   const outDir = path.join(apiRoot, pkg.slug);
   fs.rmSync(outDir, { recursive: true, force: true });
@@ -396,6 +427,8 @@ async function generatePackageApi(pkg, typedocBin) {
   for (const file of mdFiles) {
     addFrontmatter(file, pkg);
   }
+
+  await injectZodSchemaDocs(pkg, outDir);
 
   pruneEmptyNamespacePages(outDir);
 

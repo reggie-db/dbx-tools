@@ -24,10 +24,7 @@ export function upstreamUrl(host: string, route: GatewayRoute): string {
     case "databricks-anthropic":
       return url(host, "/serving-endpoints/anthropic/v1/messages");
     case "databricks-embeddings":
-      return url(
-        host,
-        `/serving-endpoints/${encodeURIComponent(route.upstreamModel)}/invocations`,
-      );
+      return url(host, `/serving-endpoints/${encodeURIComponent(route.upstreamModel)}/invocations`);
     case "ai-sdk":
       throw new Error("AI SDK routes do not use the direct Databricks transport");
   }

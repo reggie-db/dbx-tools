@@ -57,3 +57,43 @@ test("checks owning declarations once and ignores generated exports", () => {
     }),
   ]);
 });
+
+test("treats Zod describe as documentation for schemas and inferred types", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dbx-tools-source-docs-"));
+  temporaryDirectories.push(root);
+  const pkg = path.join(root, "packages", "js", "shared", "example");
+  fs.mkdirSync(path.join(pkg, "src"), { recursive: true });
+  fs.writeFileSync(
+    path.join(pkg, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@scope/example",
+        exports: {
+          ".": "./src/index.ts",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  fs.writeFileSync(
+    path.join(pkg, "src", "index.ts"),
+    [
+      'import { z } from "zod";',
+      "export const ExampleSchema = z.object({",
+      '  name: z.string().describe("Example name."),',
+      '}).describe("An example payload.");',
+      "export type Example = z.infer<typeof ExampleSchema>;",
+      "export const stillUndocumented = true;",
+      "",
+    ].join("\n"),
+  );
+
+  expect(collectUndocumentedPublicSymbols(root)).toEqual([
+    expect.objectContaining({
+      package: "@scope/example",
+      name: "stillUndocumented",
+      source: "packages/js/shared/example/src/index.ts",
+    }),
+  ]);
+});

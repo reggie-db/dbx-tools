@@ -20,6 +20,40 @@ export function readFileSync(path: string, _encoding?: string): string {
   return pythonHost().file.readTextSync(String(path));
 }
 
+export function readdirSync(path: string, options: { withFileTypes?: boolean } = {}): unknown[] {
+  const entries = pythonHost().file.readDirectorySync(String(path));
+  if (!options.withFileTypes) return entries.map((entry) => entry.name);
+  return entries.map((entry) => ({
+    name: entry.name,
+    isDirectory: () => entry.directory,
+    isFile: () => entry.file,
+    isSymbolicLink: () => false,
+  }));
+}
+
+export function readlinkSync(path: string): string {
+  return pythonHost().file.readLinkSync(String(path));
+}
+
+export function realpathSync(path: string): string {
+  return pythonHost().file.realpathSync(String(path));
+}
+
+realpathSync.native = realpathSync;
+
+export function lstatSync(path: string): unknown {
+  const value = pythonHost().file.statSync(String(path));
+  return {
+    mode: value.mode,
+    mtime: new Date(value.mtimeMs),
+    mtimeMs: value.mtimeMs,
+    size: value.size,
+    isDirectory: () => value.directory,
+    isFile: () => value.file,
+    isSymbolicLink: () => false,
+  };
+}
+
 export function createReadStream(path: string): Readable {
   const stream = new Readable({ read() {} });
   void pythonHost()
@@ -128,8 +162,12 @@ export default {
   openSync,
   promises,
   readFileSync,
+  readdirSync,
   realpath,
+  realpathSync,
+  readlinkSync,
   rmdir,
   stat,
+  lstatSync,
   utimes,
 };

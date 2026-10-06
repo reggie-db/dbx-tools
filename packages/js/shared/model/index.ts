@@ -8,6 +8,6 @@ export * as contracts from "./src/contracts.ts";
 export * as display from "./src/display.ts";
 export * as model from "./src/model.ts";
 export * as openaiChat from "./src/openai-chat.ts";
-export { UNSUPPORTED_CHAT_FIELDS } from "./src/openai-chat.ts";
+export { ChatRoleSchema, ChatContentPartSchema, ChatToolCallFunctionSchema, ChatToolCallSchema, ChatMessageSchema, UNSUPPORTED_CHAT_FIELDS, ChatContentToTextOptionsSchema } from "./src/openai-chat.ts";
 export type { ChatRole, ChatContentPart, ChatToolCallFunction, ChatToolCall, ChatMessage, ChatContentToTextOptions } from "./src/openai-chat.ts";
 export * from "./exports.ts";

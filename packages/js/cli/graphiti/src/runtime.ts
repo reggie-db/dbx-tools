@@ -1,29 +1,30 @@
 /**
- * Graphiti runtime bootstrap and foreground execution for CLI and AppKit callers.
+ * Graphiti Python bootstrap and internal runtime execution.
  *
- * This module owns exact-version Python installation and model-gateway command
- * resolution. Reuse it instead of adding installers or package-bin discovery to
- * AppKit plugins. Python owns Graphiti, Neo4j, and their process supervision;
- * `@dbx-tools/cli-service` owns desktop installation and lifecycle.
+ * This module owns exact-version Python installation, model-gateway command
+ * resolution, and the serialized boundary into Python. Public command parsing
+ * belongs to `cli.ts`; Graphiti defaults and validation belong to
+ * `@dbx-tools/shared-graphiti`.
  *
  * @module
  */
 import { resolve } from "node:path";
 import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
 import * as exec from "@dbx-tools/core/exec";
+import {
+  GRAPHITI_COMMAND_ENV,
+  GRAPHITI_OPTIONS_ENV,
+  resolveGraphitiOptions,
+  serializeGraphitiOptions,
+  type GraphitiCommand,
+  type GraphitiOptions,
+} from "@dbx-tools/shared-graphiti";
 import { GRAPHITI_PYTHON_VERSION } from "./_python-runtime.ts";
 
 type ExecPython = (file: string, args: string[]) => Promise<unknown>;
 
-/** Python executable, selected profile, and Python-owned foreground arguments. */
-export interface GraphitiRuntimeOptions {
-  /** Python executable used to bootstrap and start the matching runtime. */
-  readonly python?: string;
-  /** Explicit Databricks profile forwarded to Python. */
-  readonly profile?: string;
-  /** Additional arguments forwarded unchanged to Python's start command. */
-  readonly args?: readonly string[];
-}
+/** Shared Graphiti options plus upstream arguments accepted by runtime callers. */
+export type GraphitiRuntimeOptions = GraphitiOptions;
 
 /** Install the matching Python runtime through the configured Python registry. */
 export async function ensureGraphitiPython(
@@ -65,33 +66,34 @@ export function ensureGraphitiModelGateway(
     .join(" ");
 }
 
-/** Start Python's Graphiti stack, forwarding termination and its exit status. */
-export async function startGraphiti(options: GraphitiRuntimeOptions = {}): Promise<void> {
-  const python = options.python ?? process.env.PYTHON ?? "python3";
-  await ensureGraphitiPython(python);
-  const child = exec.spawn(
-    python,
-    [
-      "-m",
-      "dbx_tools.graphiti",
-      "start",
-      ...(options.profile ? ["--profile", options.profile] : []),
-      ...(options.args ?? []),
-    ],
-    {
-      env: {
-        ...process.env,
-        MANAGE_MODEL_GATEWAY: process.env.MANAGE_MODEL_GATEWAY ?? "true",
-        MODEL_GATEWAY_COMMAND: process.env.MODEL_GATEWAY_COMMAND ?? ensureGraphitiModelGateway(),
-      },
-    },
-  );
-  const terminate = () => {
-    child.kill("SIGTERM");
+/** Build the environment consumed by the internal Python runtime. */
+export function graphitiRuntimeEnvironment(
+  command: GraphitiCommand,
+  options: GraphitiRuntimeOptions = {},
+): NodeJS.ProcessEnv {
+  const resolved = resolveGraphitiOptions({
+    ...options,
+    modelGatewayCommand: options.modelGatewayCommand ?? ensureGraphitiModelGateway(),
+  });
+  return {
+    ...process.env,
+    [GRAPHITI_COMMAND_ENV]: command,
+    [GRAPHITI_OPTIONS_ENV]: serializeGraphitiOptions(resolved),
   };
-  const interrupt = () => {
-    child.kill("SIGINT");
-  };
+}
+
+/** Run one internal Python Graphiti operation and preserve its exit status. */
+export async function runGraphiti(
+  command: GraphitiCommand,
+  options: GraphitiRuntimeOptions = {},
+): Promise<void> {
+  const resolved = resolveGraphitiOptions(options);
+  await ensureGraphitiPython(resolved.python);
+  const child = exec.spawn(resolved.python, ["-m", "dbx_tools.graphiti"], {
+    env: graphitiRuntimeEnvironment(command, resolved),
+  });
+  const terminate = () => child.kill("SIGTERM");
+  const interrupt = () => child.kill("SIGINT");
   process.once("SIGTERM", terminate);
   process.once("SIGINT", interrupt);
   try {
@@ -100,4 +102,9 @@ export async function startGraphiti(options: GraphitiRuntimeOptions = {}): Promi
     process.removeListener("SIGTERM", terminate);
     process.removeListener("SIGINT", interrupt);
   }
+}
+
+/** Start Graphiti in the foreground. */
+export async function startGraphiti(options: GraphitiRuntimeOptions = {}): Promise<void> {
+  await runGraphiti("start", options);
 }

@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  adaptInferenceReasoning,
-  learnAndAdaptReasoningRetry,
-} from "../src/reasoning-adapt.ts";
+import { adaptInferenceReasoning, learnAndAdaptReasoningRetry } from "../src/reasoning-adapt.ts";
 
 describe("reasoning adaptation", () => {
   it("proactively remaps unsupported wire tokens before upstream", () => {

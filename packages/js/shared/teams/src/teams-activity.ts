@@ -28,8 +28,11 @@ export const ADAPTIVE_CARD_CONTENT_TYPE = "application/vnd.microsoft.card.adapti
 /** Bot Framework activity types this endpoint understands. */
 export const ACTIVITY_TYPES = ["message", "conversationUpdate", "typing"] as const;
 
-/** A Bot Framework activity type. */
-export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+export const activityTypeSchema = z
+  .enum(ACTIVITY_TYPES)
+  .describe("Bot Framework activity type understood by the conversation endpoint.");
+
+export type ActivityType = z.infer<typeof activityTypeSchema>;
 
 /**
  * A participant in a conversation. `id` is the stable key; `name` is the
@@ -77,7 +80,7 @@ export type CardAttachment = z.infer<typeof cardAttachmentSchema>;
  */
 export const activitySchema = z
   .object({
-    type: z.enum(ACTIVITY_TYPES).describe("Activity type; `message` carries user text."),
+    type: activityTypeSchema.describe("Activity type; message carries user text."),
     id: z.string().optional().describe("Activity id, assigned by the sender."),
     text: z.string().optional().describe("Message text, present on a `message` activity."),
     from: channelAccountSchema.optional().describe("Who sent the activity."),

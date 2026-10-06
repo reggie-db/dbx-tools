@@ -108,7 +108,7 @@ class ListProfilesOptions:
     )
 
 
-class ListProfilesReturnResultResponse(TypedDict):
+class DatabricksProfileSummaryResponse(TypedDict):
     name: str
     target: str
     authType: str
@@ -118,7 +118,7 @@ class ListProfilesReturnResultResponse(TypedDict):
     workspaceId: NotRequired[str]
 
 
-class ResolveProfileReturnResultResponse(TypedDict):
+class ListProfilesReturnResultResponse(TypedDict):
     name: str
     target: str
     authType: str
@@ -140,7 +140,7 @@ def list_profiles(
 
 def resolve_profile(
     options: DatabricksAuthOptions | dict[str, Any] | None | object = _MISSING,
-) -> ResolveProfileReturnResultResponse:
+) -> DatabricksProfileSummaryResponse:
     arguments: list[tuple[int, Any]] = []
     if options is not _MISSING:
         arguments.append((0, options))
@@ -150,9 +150,9 @@ def resolve_profile(
 __all__ = [
     "AuthOptions",
     "DatabricksAuthOptions",
+    "DatabricksProfileSummaryResponse",
     "ListProfilesOptions",
     "ListProfilesReturnResultResponse",
-    "ResolveProfileReturnResultResponse",
     "list_profiles",
     "resolve_profile",
 ]

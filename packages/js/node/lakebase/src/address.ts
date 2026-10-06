@@ -108,9 +108,7 @@ function parseUri(value: string): ParsedAddress {
   if (port !== undefined) result.port = port;
   if (url.username) result.user = decode(url.username);
   if (target && !result.project) result.database = target;
-  result.sslMode = parseSslMode(
-    url.searchParams.get("sslmode") ?? url.searchParams.get("sslMode"),
-  );
+  result.sslMode = parseSslMode(url.searchParams.get("sslmode") ?? url.searchParams.get("sslMode"));
   if (result.sslMode === undefined) delete result.sslMode;
   return result;
 }

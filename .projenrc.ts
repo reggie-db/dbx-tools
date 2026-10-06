@@ -377,6 +377,7 @@ project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (
     "@dbx-tools/cli-model-gateway@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-graphiti@workspace:^",
   );
   p.package.addBin({ "dbx-graphiti": "./bin/dbx-graphiti.ts" });
   new TextFile(p, "src/_python-runtime.ts", {
@@ -589,11 +590,13 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:^",
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/shared-graphiti@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/cli-graphiti@workspace:^",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
     "concurrently@catalog:",
+    "zod@catalog:",
   );
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "vitest@catalog:");
 });
@@ -801,11 +804,6 @@ project.applyToProjects(root, { identifierName: "fs", tags: "node" }, (p) => {
 project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }, (p) => {
   p.package.addField("description", "Browser-safe model selection contract and classifier");
   p.addDeps("@dbx-tools/shared-core@workspace:^", "zod@catalog:");
-  const contracts = p.addTask("contracts", {
-    exec: "bunx ts-to-zod src/contracts.ts src/generated/_schemas.ts --keepComments",
-    description: "Generate Zod schemas from the browser-safe model contracts",
-  });
-  p.compileTask.prependSpawn(contracts);
 });
 
 project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "shared" }, (p) => {
@@ -814,6 +812,14 @@ project.applyToProjects(root, { identifierName: "shared-model-gateway", tags: "s
     "Browser-safe model-gateway schemas and model discovery client",
   );
   p.addDeps("@dbx-tools/shared-model@workspace:^", "zod@catalog:");
+});
+
+project.applyToProjects(root, { identifierName: "shared-graphiti", tags: "shared" }, (p) => {
+  p.package.addField(
+    "description",
+    "Browser-safe Graphiti options, defaults, and runtime configuration",
+  );
+  p.addDeps("zod@catalog:");
 });
 
 project.applyToProjects(root, { identifierName: "shared-fs", tags: "shared" }, (p) => {
@@ -1339,14 +1345,21 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "Native Graphiti MCP and Neo4j launcher with Databricks models through model-gateway",
     internalDependencies: ["core", "postgres"],
     dependencies: [
-      "cyclopts>=4.11,<6",
+      ...pythonNodeBindingDependencies,
       "databricks-sdk>=0.123.0",
       "graphiti-core==0.29.3",
       "honcho>=2,<3",
     ],
-    scripts: {
-      "dbx-graphiti": "dbx_tools.graphiti.cli:main",
-    },
+    nodeBindings: [
+      {
+        package: "@dbx-tools/model",
+        modules: ["bindings"],
+      },
+      {
+        package: "@dbx-tools/shared-graphiti",
+        modules: ["options"],
+      },
+    ],
   },
 ];
 

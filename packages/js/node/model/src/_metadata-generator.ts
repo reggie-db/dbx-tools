@@ -132,10 +132,7 @@ export function parseModelRateLimits(html: string, generatedAt: number): ModelRa
 }
 
 /** Parse reasoning-effort ladders from the Query reasoning models HTML table. */
-export function parseReasoningModels(
-  html: string,
-  generatedAt: number,
-): ReasoningModelsSnapshot {
+export function parseReasoningModels(html: string, generatedAt: number): ReasoningModelsSnapshot {
   const $ = load(html);
   const models: Record<string, ReasoningLevel[]> = {};
   $("table").each((_, table) => {
@@ -147,7 +144,10 @@ export function parseReasoningModels(
     if (!headers.some((header) => header.includes("model"))) return;
     if (!headers.some((header) => header.includes("parameter"))) return;
     rows.slice(1).each((__, row) => {
-      const cells = $(row).find("th, td").toArray().map((cell) => $(cell));
+      const cells = $(row)
+        .find("th, td")
+        .toArray()
+        .map((cell) => $(cell));
       if (cells.length < 2) return;
       const modelNames = reasoningModelNamesFromCell(cells[0]!, $);
       if (modelNames.length === 0) return;
@@ -307,11 +307,13 @@ function codeValuesAfterHeading($: CheerioAPI, headingId: string): string[] {
 
 function sectionElements($: CheerioAPI, headingId: string): Selection[] {
   const heading = $(`#${headingId}`).first();
-  if (heading.length === 0)
+  if (heading.length === 0) {
     throw new Error(`Databricks capability page is missing section ${headingId}`);
+  }
   const level = headingLevel(nodeTagName(heading.get(0)));
-  if (level === undefined)
+  if (level === undefined) {
     throw new Error(`Databricks capability section ${headingId} is not a heading`);
+  }
   const elements: Selection[] = [];
   let sibling = heading.next();
   while (sibling.length > 0) {

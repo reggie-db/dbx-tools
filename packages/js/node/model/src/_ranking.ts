@@ -8,6 +8,7 @@ import {
 import { toModelDisplayName } from "@dbx-tools/shared-model/display";
 import Fuse from "fuse.js";
 
+import { modelStatusFor } from "./_retirement.ts";
 import { classesAtOrBelow, CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./classes.ts";
 import {
   classifyEndpoints,
@@ -15,7 +16,6 @@ import {
   supportsToolsByFamily,
   versionTuple,
 } from "./classify.ts";
-import { modelStatusFor } from "./metadata.ts";
 import { modelFamily, modelReasoningEfforts, modelServiceNames } from "./policy.ts";
 
 type ModelClass = ModelClassType;

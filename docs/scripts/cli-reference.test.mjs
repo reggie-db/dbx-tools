@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Command, Option } from "commander";
+import { buildProgram as buildGraphitiProgram } from "../../packages/js/cli/graphiti/src/cli.ts";
 import { buildServiceCommand } from "../../packages/js/cli/service/src/cli.ts";
 import {
   CLI_REFERENCE_START,
@@ -45,6 +46,25 @@ describe("parser-owned CLI references", () => {
       assert.ok(reference.includes(`### \`<cli> service ${command}\``));
     }
     assert.match(reference, /--no-start/);
+    assert.doesNotMatch(reference, /--help|display help/);
+  });
+
+  it("renders every Graphiti command and parser-owned option", () => {
+    const reference = commanderReference(buildGraphitiProgram());
+    for (const command of ["start", "up", "down", "status", "env", "service"]) {
+      assert.match(reference, new RegExp(`dbx graphiti ${command}`));
+    }
+    for (const option of [
+      "--python <python>",
+      "--profile <profile>",
+      "--model <model>",
+      "--embedder-model <model>",
+      "--model-gateway-url <url>",
+      "--graphiti-port <port>",
+      "--journal-database-url <url>",
+    ]) {
+      assert.ok(reference.includes(option), `missing ${option}`);
+    }
     assert.doesNotMatch(reference, /--help|display help/);
   });
 

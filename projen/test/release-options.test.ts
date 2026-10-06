@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createReleaseCommand } from "../tasks/release.ts";
-import { releaseBuildSteps } from "../src/release.ts";
 import {
   parseReleaseTagAnnotation,
   releasePublishesLocally,
@@ -9,6 +7,8 @@ import {
   releaseTagAnnotation,
   type ReleaseSelectionOptions,
 } from "../src/release-options.ts";
+import { releaseBuildSteps } from "../src/release.ts";
+import { createReleaseCommand } from "../tasks/release.ts";
 
 async function flags(
   args: string[],

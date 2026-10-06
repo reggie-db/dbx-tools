@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 
-import { runRelease } from "../tasks/release.ts";
 import { parseReleaseTagAnnotation } from "../src/release-options.ts";
+import { runRelease } from "../tasks/release.ts";
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();

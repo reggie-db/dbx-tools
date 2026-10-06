@@ -3,16 +3,17 @@
  *
  * This is the portable entry point used by generated Python bindings. It keeps
  * authentication, endpoint discovery, caching, normalization, ranking, route
- * selection, and published metadata in Node while exposing one small client.
+ * selection, route construction, and published metadata in Node while exposing
+ * one small client.
  *
  * @module
  */
 import {
-  client as authClient,
-  profile as authProfile,
+  createAuthClient,
   type AuthClient,
   type DatabricksAuthDependencies,
-} from "@dbx-tools/auth";
+} from "@dbx-tools/auth/client";
+import { listProfiles as listAuthProfiles } from "@dbx-tools/auth/profile";
 import type { DatabricksProfileSummary } from "@dbx-tools/shared-auth";
 import * as log from "@dbx-tools/shared-core/log";
 import * as object from "@dbx-tools/shared-core/object";
@@ -29,7 +30,7 @@ import {
 import { normalizeEndpoints } from "./_ranking.ts";
 import { lookupModels, resolveModel } from "./_selection.ts";
 import { chatCompletionsUrl, invocationsUrl, responsesUpstreamUrl } from "./invoke.ts";
-import { modelMetadataFor } from "./metadata.ts";
+import { hydrateModelMetadata, modelMetadataFor } from "./metadata.ts";
 import { modelServingApi } from "./policy.ts";
 
 const logger = log.logger("model/client");
@@ -49,6 +50,8 @@ export interface ModelClientOptions {
   auth?: ModelAuthOptions;
   /** In-memory endpoint catalogue TTL in milliseconds. */
   cacheTtlMs?: number;
+  /** Hydrate Node-only metadata caches before constructing the client. */
+  hydrateMetadata?: boolean;
 }
 
 /** Secret-free runtime identity and cache configuration. */
@@ -246,15 +249,16 @@ class DefaultModelClient implements ModelClient {
 /** Create an authentication-aware Databricks model client. */
 export async function createModelClient(options: ModelClientOptions = {}): Promise<ModelClient> {
   const cacheTtlMs = validateCacheTtl(options.cacheTtlMs);
+  if (options.hydrateMetadata ?? true) await hydrateModelMetadata();
   return new DefaultModelClient(
-    new AuthenticatedModelClient(await authClient.createAuthClient(options.auth), globalThis.fetch),
+    new AuthenticatedModelClient(await createAuthClient(options.auth), globalThis.fetch),
     cacheTtlMs,
   );
 }
 
 /** List configured Databricks profiles outside the model client facade. */
 export function listProfiles(refresh = false): DatabricksProfileSummary[] {
-  return authProfile.listProfiles({ refresh });
+  return listAuthProfiles({ refresh });
 }
 
 /** @internal Construct a model client around a test or host-owned Databricks client. */
@@ -270,9 +274,10 @@ export async function createModelClientWithDependencies(
   options: ModelClientOptions,
   dependencies: DatabricksAuthDependencies,
 ): Promise<ModelClient> {
+  if (options.hydrateMetadata ?? true) await hydrateModelMetadata();
   return new DefaultModelClient(
     new AuthenticatedModelClient(
-      await authClient.createAuthClient(options.auth, dependencies),
+      await createAuthClient(options.auth, dependencies),
       dependencies.fetch ?? globalThis.fetch,
     ),
     validateCacheTtl(options.cacheTtlMs),

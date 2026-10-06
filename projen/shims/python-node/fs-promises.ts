@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 import { pythonHost } from "./host.ts";
 
 function nodeError(error: unknown, code: string, path: string): Error {
@@ -12,8 +14,29 @@ function translatePythonError(cause: unknown, path: string): never {
   throw cause;
 }
 
+export async function access(path: string): Promise<void> {
+  try {
+    await pythonHost().file.stat(String(path));
+  } catch (cause) {
+    translatePythonError(cause, path);
+  }
+}
+
 export async function chmod(path: string, mode: number): Promise<void> {
   await pythonHost().file.chmod(String(path), mode);
+}
+
+export async function appendFile(
+  path: string,
+  content: string | ArrayBuffer | ArrayBufferView,
+): Promise<void> {
+  const bytes =
+    typeof content === "string"
+      ? new TextEncoder().encode(content)
+      : content instanceof ArrayBuffer
+        ? new Uint8Array(content)
+        : new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
+  await pythonHost().file.appendBytes(String(path), Array.from(bytes));
 }
 
 export async function copyFile(source: string, destination: string): Promise<void> {
@@ -63,7 +86,7 @@ export async function readFile(
   try {
     const bytes = Uint8Array.from(await pythonHost().file.readBytes(String(path)));
     const encoding = typeof options === "string" ? options : options?.encoding;
-    return encoding ? new TextDecoder(encoding).decode(bytes) : bytes;
+    return encoding ? new TextDecoder(encoding).decode(bytes) : Buffer.from(bytes);
   } catch (cause) {
     translatePythonError(cause, path);
   }
@@ -138,6 +161,8 @@ export async function open(): Promise<never> {
 }
 
 export default {
+  access,
+  appendFile,
   chmod,
   copyFile,
   mkdir,

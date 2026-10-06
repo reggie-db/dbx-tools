@@ -9,7 +9,6 @@
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
-    "contracts": "projen contracts",
     "default": "projen default",
     "package": "projen package",
     "post-compile": "projen post-compile",

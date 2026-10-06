@@ -29,6 +29,7 @@
     "@dbx-tools/cli-model-gateway": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/shared-graphiti": "workspace:^",
     "commander": "catalog:"
   },
   "main": "index.ts",

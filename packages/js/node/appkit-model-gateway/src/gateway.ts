@@ -14,15 +14,12 @@ import type {
 } from "@dbx-tools/shared-model-gateway";
 
 import { listModelsPayload } from "./models.ts";
+import { adaptInferenceReasoning, learnAndAdaptReasoningRetry } from "./reasoning-adapt.ts";
 import {
   DatabricksModelRegistry,
   type ModelRegistry,
   type ModelRegistryOptions,
 } from "./registry.ts";
-import {
-  adaptInferenceReasoning,
-  learnAndAdaptReasoningRetry,
-} from "./reasoning-adapt.ts";
 import { isCodexOriginator, requestedFeatures, resolveRoute } from "./router.ts";
 import { translateGatewayRequest } from "./translation.ts";
 import { fetchDatabricks, gatewayResponseHeaders } from "./transport.ts";

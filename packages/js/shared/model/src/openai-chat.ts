@@ -8,60 +8,84 @@
  * whereas the wire payload itself is the stable contract every caller in this
  * repo actually codes against.
  *
- * Pure types plus one text-flattening helper - no zod, no runtime deps - so a
- * browser client, a Node proxy, and an AppKit plugin can all agree on the shape
- * without any of them pulling in the others' dependencies.
- *
  * @module
  */
 
-/**
- * The roles OpenAI defines for a chat turn. {@link ChatMessage.role} is typed as
- * a plain string rather than this union, because providers add their own (for
- * example Databricks-hosted Claude replays a `"reasoning"` turn); use this when
- * you want the standard set named.
- */
-export type ChatRole = "system" | "developer" | "user" | "assistant" | "tool";
+import { z } from "zod";
 
-/**
- * One entry of a structured `content` array. Only `type` and `text` are read
- * here; the index signature keeps provider-specific parts (images, thinking
- * blocks, cache markers) intact through a parse/serialize round trip.
- */
-export interface ChatContentPart {
-  type?: string;
-  text?: string;
-  [key: string]: unknown;
-}
+export const ChatRoleSchema = z
+  .enum(["system", "developer", "user", "assistant", "tool"])
+  .describe(
+    "Standard OpenAI chat roles. Message.role stays a plain string because providers add values such as reasoning.",
+  );
 
-/** The function a tool call invokes, with its arguments as a JSON string. */
-export interface ChatToolCallFunction {
-  name: string;
-  /** JSON-encoded argument object. Streamed in fragments, so assemble before parsing. */
-  arguments: string;
-}
+export type ChatRole = z.infer<typeof ChatRoleSchema>;
 
-/** One tool call attached to an assistant turn. */
-export interface ChatToolCall {
-  id: string;
-  /** `"function"` in practice; widened so an unrecognized type round-trips. */
-  type: string;
-  function: ChatToolCallFunction;
-}
+export const ChatContentPartSchema = z
+  .object({
+    type: z
+      .string()
+      .optional()
+      .describe("Part discriminator, such as text, input_text, or output_text."),
+    text: z.string().optional().describe("Plain-text payload carried by this part when present."),
+  })
+  .catchall(z.unknown())
+  .describe(
+    "One entry of a structured content array. Extra provider keys round-trip through the catch-all.",
+  );
 
-/**
- * A single chat message. `content` is nullable because an assistant turn that
- * only calls tools carries `content: null`.
- */
-export interface ChatMessage {
-  /** See {@link ChatRole} for the standard values; widened for provider extensions. */
-  role: string;
-  content?: string | ChatContentPart | ChatContentPart[] | null;
-  tool_calls?: ChatToolCall[];
-  /** Set on a `tool` turn, keying it back to the call it answers. */
-  tool_call_id?: string;
-  name?: string;
-}
+export type ChatContentPart = z.infer<typeof ChatContentPartSchema>;
+
+export const ChatToolCallFunctionSchema = z
+  .object({
+    name: z.string().describe("Function name the model wants to invoke."),
+    arguments: z
+      .string()
+      .describe("JSON-encoded argument object. Streamed in fragments, so assemble before parsing."),
+  })
+  .describe("The function a tool call invokes, with its arguments as a JSON string.");
+
+export type ChatToolCallFunction = z.infer<typeof ChatToolCallFunctionSchema>;
+
+export const ChatToolCallSchema = z
+  .object({
+    id: z.string().describe("Tool-call identifier echoed on the matching tool message."),
+    type: z
+      .string()
+      .describe("Tool type. function in practice; widened so unrecognized values round-trip."),
+    function: ChatToolCallFunctionSchema.describe(
+      "Function name and JSON arguments for this call.",
+    ),
+  })
+  .describe("One tool call attached to an assistant turn.");
+
+export type ChatToolCall = z.infer<typeof ChatToolCallSchema>;
+
+export const ChatMessageSchema = z
+  .object({
+    role: z
+      .string()
+      .describe(
+        "Message author. See ChatRole for the standard values; widened for provider extensions.",
+      ),
+    content: z
+      .union([z.string(), ChatContentPartSchema, z.array(ChatContentPartSchema)])
+      .nullable()
+      .optional()
+      .describe("Message body. Null when an assistant turn only calls tools."),
+    tool_calls: z
+      .array(ChatToolCallSchema)
+      .optional()
+      .describe("Tool calls attached to an assistant turn."),
+    tool_call_id: z
+      .string()
+      .optional()
+      .describe("Set on a tool turn, keying it back to the call it answers."),
+    name: z.string().optional().describe("Optional speaker or function name."),
+  })
+  .describe("A single chat message in an OpenAI Chat Completions request or response.");
+
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 /**
  * Top-level request fields an OpenAI client may send that Databricks Model
@@ -80,10 +104,7 @@ export interface ChatMessage {
  * paths that forward a client body largely as-is.
  */
 export const UNSUPPORTED_CHAT_FIELDS: readonly string[] = [
-  // Tool-calling concurrency hint. Databricks rejects it; the upstream provider
-  // decides parallelism itself.
   "parallel_tool_calls",
-  // Response-persistence and bookkeeping fields for OpenAI's own platform.
   "store",
   "metadata",
   "service_tier",
@@ -112,21 +133,20 @@ export function stripUnsupportedChatFields(
   return dropped;
 }
 
-/** Options for {@link chatContentToText}. */
-export interface ChatContentToTextOptions {
-  /**
-   * Placed between parts. Defaults to `""`, which reassembles a message that was
-   * split purely for transport; pass `"\n\n"` when the parts are separate
-   * paragraphs that a human will read.
-   */
-  separator?: string;
-  /**
-   * Restrict to these `type` values. Defaults to accepting any part carrying
-   * `text`, which covers the `input_text` / `output_text` / `text` spellings
-   * different APIs use for the same thing.
-   */
-  types?: readonly string[];
-}
+export const ChatContentToTextOptionsSchema = z
+  .object({
+    separator: z
+      .string()
+      .optional()
+      .describe("Placed between parts. Defaults to empty, which reassembles transport-split text."),
+    types: z
+      .array(z.string())
+      .optional()
+      .describe("Restrict flattening to these part type values when set."),
+  })
+  .describe("Options for flattening structured chat content to plain text.");
+
+export type ChatContentToTextOptions = z.infer<typeof ChatContentToTextOptionsSchema>;
 
 /**
  * Normalize structured chat content to an array. Providers usually emit a
@@ -141,9 +161,10 @@ export function chatContentParts(content: unknown): ChatContentPart[] | undefine
       ? [content]
       : undefined;
   if (!values) return undefined;
-  return values.filter((part): part is ChatContentPart =>
-    Boolean(part && typeof part === "object"),
-  );
+  return values.flatMap((part) => {
+    const parsed = ChatContentPartSchema.safeParse(part);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 /**
@@ -160,7 +181,7 @@ export function chatContentToText(
   if (typeof content === "string") return content;
   const normalized = chatContentParts(content);
   if (!normalized) return "";
-  const { separator = "", types } = options;
+  const { separator = "", types } = ChatContentToTextOptionsSchema.parse(options);
   const parts: string[] = [];
   for (const part of normalized) {
     if (types && (typeof part.type !== "string" || !types.includes(part.type))) continue;

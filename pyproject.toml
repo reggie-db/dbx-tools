@@ -44,4 +44,7 @@ workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
-project-excludes = [ "packages/py/postgres/src/dbx_tools/postgres/_generated/**" ]
+project-excludes = [
+  "packages/py/postgres/src/dbx_tools/postgres/_generated/**",
+  "packages/py/graphiti/src/dbx_tools/graphiti/_generated/**"
+]

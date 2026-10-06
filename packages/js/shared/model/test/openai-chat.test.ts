@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ChatMessageSchema,
   chatContentToText,
   UNSUPPORTED_CHAT_FIELDS,
   stripUnsupportedChatFields,
 } from "../src/openai-chat.ts";
 
 describe("OpenAI chat helpers", () => {
+  describe("ChatMessageSchema", () => {
+    it("accepts a tool-only assistant turn", () => {
+      assert.equal(ChatMessageSchema.parse({ role: "assistant", content: null }).content, null);
+    });
+  });
+
   describe("chatContentToText", () => {
     it("passes a string through", () => {
       assert.equal(chatContentToText("hello"), "hello");

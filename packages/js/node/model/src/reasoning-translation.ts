@@ -129,9 +129,10 @@ interface AliasDocument {
   readonly level: ReasoningLevel;
 }
 
-const aliasDocuments: readonly AliasDocument[] = Object.entries(ALIASES).map(
-  ([token, level]) => ({ token, level }),
-);
+const aliasDocuments: readonly AliasDocument[] = Object.entries(ALIASES).map(([token, level]) => ({
+  token,
+  level,
+}));
 
 const aliasFuse = new Fuse(aliasDocuments, {
   keys: ["token"],
@@ -384,7 +385,9 @@ export function adaptRequestReasoning(
     }
   }
 
-  return changed ? { body: next, changed: true, wireEffort: wire } : { body, changed: false, wireEffort: wire };
+  return changed
+    ? { body: next, changed: true, wireEffort: wire }
+    : { body, changed: false, wireEffort: wire };
 }
 
 /** Normalize labels for alias lookup (`Extra High` → `extra-high`). */

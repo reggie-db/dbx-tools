@@ -302,20 +302,15 @@ export type StatementData = z.infer<typeof StatementDataSchema>;
 export const StartedEventSchema = z.object({
   type: z.literal("started"),
   spaceId: z.string(),
-  /**
-   * Genie conversation id, populated only when this `started`
-   * event corresponds to a follow-up turn on an existing
-   * conversation. Absent on the first turn.
-   */
-  conversationId: z.string().optional(),
-  /**
-   * Genie message id, populated only after the first wire
-   * `message` event lands. Absent on the immediate-on-invoke
-   * emit.
-   */
-  messageId: z.string().optional(),
-  /** Question the Genie agent sent to Genie. */
-  content: z.string(),
+  conversationId: z
+    .string()
+    .optional()
+    .describe("Existing Genie conversation id for a follow-up turn. Absent on the first turn."),
+  messageId: z
+    .string()
+    .optional()
+    .describe("Genie message id once the first wire message event has arrived."),
+  content: z.string().describe("Question the Genie agent sent to Genie."),
 });
 /** Immediate lifecycle event emitted when an `ask_genie` invocation begins. */
 export type StartedEvent = z.infer<typeof StartedEventSchema>;
@@ -332,18 +327,13 @@ export const AskGenieDoneEventSchema = z.object({
   spaceId: z.string(),
   conversationId: z.string().optional(),
   messageId: z.string().optional(),
-  /** Genie's natural-language answer for the turn, if any. */
-  answer: z.string().optional(),
-  /** Statement ids for any non-empty result sets this turn produced. */
-  statementIds: z.array(z.string()),
-  /**
-   * Terminal wire status (`COMPLETED` / `FAILED` / `CANCELLED`).
-   * Mirrors the source `result` event's status so subscribers
-   * can react to ask-level completion without re-walking history.
-   * Treated as `z.custom<MessageStatus>` because the SDK is the
-   * source of truth for the enum values.
-   */
-  status: z.custom<MessageStatus>((v) => typeof v === "string"),
+  answer: z.string().optional().describe("Genie's natural-language answer for the turn."),
+  statementIds: z
+    .array(z.string())
+    .describe("Statement ids for non-empty result sets produced by this turn."),
+  status: z
+    .custom<MessageStatus>((value) => typeof value === "string")
+    .describe("Terminal Genie wire status mirrored from the source result event."),
 });
 /** Completion event for one `ask_genie` invocation, including its terminal status. */
 export type AskGenieDoneEvent = z.infer<typeof AskGenieDoneEventSchema>;
@@ -383,16 +373,13 @@ export type MastraGenieErrorEvent = z.infer<typeof MastraGenieErrorEventSchema>;
 export const SummaryEventSchema = z.object({
   type: z.literal("summary"),
   spaceId: z.string(),
-  /** Total number of items in the agent's structured summary. */
-  items: z.number().int().nonnegative(),
-  /** Count of `text` / prose items in the summary. */
-  textItems: z.number().int().nonnegative(),
-  /**
-   * Count of `data` items the wrapper will hydrate into charts.
-   * The host UI can use this to seed N chart skeletons before
-   * the per-chart events arrive.
-   */
-  dataItems: z.number().int().nonnegative(),
+  items: z.number().int().nonnegative().describe("Total items in the agent's structured summary."),
+  textItems: z.number().int().nonnegative().describe("Text and prose items in the summary."),
+  dataItems: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe("Data items the wrapper will hydrate into charts."),
 });
 /** Lifecycle event emitted before summary data items are hydrated into charts. */
 export type SummaryEvent = z.infer<typeof SummaryEventSchema>;

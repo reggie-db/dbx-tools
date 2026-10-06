@@ -11,12 +11,10 @@
  * @module
  */
 import * as functionUtils from "@dbx-tools/shared-core/function-utils";
-import * as log from "@dbx-tools/shared-core/log";
 import type {
   ModelCapabilities,
   ModelMetadata,
   ModelRateLimits,
-  ModelStatus,
   ServingEndpointSummary,
 } from "@dbx-tools/shared-model/contracts";
 
@@ -31,7 +29,6 @@ import {
   type ModelCapabilityCatalogue,
   type ModelRateLimitsSnapshot,
   type ReasoningModelsSnapshot,
-  type RetiredModelsSnapshot,
 } from "./_metadata-contract.ts";
 import {
   parseModelCapabilities,
@@ -40,15 +37,20 @@ import {
   parseRetiredModels,
 } from "./_metadata-generator.ts";
 import {
+  COMMITTED_RETIRED_MODELS,
+  modelStatusFor,
+  replaceRetiredModelNames,
+  RETIRED_MODELS_GENERATED_AT,
+} from "./_retirement.ts";
+import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
+import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
+import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type: "json" };
+import {
   createMetadataCache,
   mergePreferFreshList,
   mergePreferFreshRecord,
   type MetadataCache,
 } from "./metadata-cache.ts";
-import capabilitiesSnapshotJson from "./generated/model-capabilities.json" with { type: "json" };
-import rateLimitsSnapshotJson from "./generated/model-rate-limits.json" with { type: "json" };
-import reasoningSnapshotJson from "./generated/model-reasoning.json" with { type: "json" };
-import retiredModelsSnapshotJson from "./generated/retired-models.json" with { type: "json" };
 import { modelSearchQuery } from "./policy.ts";
 import {
   defaultReasoningLevels,
@@ -69,16 +71,11 @@ export {
   WEB_SEARCH_MODELS_URL,
 };
 
-const logger = log.logger("model/metadata");
-
-const retiredModelsSnapshot = retiredModelsSnapshotJson as RetiredModelsSnapshot;
 const capabilitiesSnapshot = capabilitiesSnapshotJson as ModelCapabilitiesSnapshot;
 const rateLimitsSnapshot = rateLimitsSnapshotJson as ModelRateLimitsSnapshot;
 const reasoningSnapshot = reasoningSnapshotJson as ReasoningModelsSnapshot;
 
 interface MetadataIndex {
-  readonly retiredNames: readonly string[];
-  readonly retiredKeys: ReadonlySet<string>;
   readonly capabilities: {
     readonly [Key in keyof ModelCapabilityCatalogue]: ReadonlySet<string>;
   };
@@ -93,7 +90,7 @@ const USER_AGENT = "dbx-tools-model-metadata/1";
 
 const retiredCache = createMetadataCache<readonly string[]>({
   key: "retired-models",
-  fallback: retiredModelsSnapshot.models,
+  fallback: COMMITTED_RETIRED_MODELS,
   load: async () => parseRetiredModels(await loadPage(RETIRED_MODELS_URL), nowSeconds()).models,
   merge: mergePreferFreshList,
 });
@@ -148,7 +145,9 @@ const reasoningDocsCache = createMetadataCache<Readonly<Record<string, readonly 
   merge: mergePreferFreshRecord,
 });
 
-const learnedReasoningCache = createMetadataCache<Readonly<Record<string, readonly ReasoningLevel[]>>>({
+const learnedReasoningCache = createMetadataCache<
+  Readonly<Record<string, readonly ReasoningLevel[]>>
+>({
   key: "learned-reasoning",
   fallback: {},
   merge: mergePreferFreshRecord,
@@ -156,11 +155,13 @@ const learnedReasoningCache = createMetadataCache<Readonly<Record<string, readon
 
 let liveIndex: MetadataIndex | undefined;
 
-const metadataIndex = functionUtils.memoize<MetadataIndex>(() => liveIndex ?? buildIndexFromCommitted());
+const metadataIndex = functionUtils.memoize<MetadataIndex>(
+  () => liveIndex ?? buildIndexFromCommitted(),
+);
 
 function buildIndexFromCommitted(): MetadataIndex {
   return buildIndex({
-    retiredNames: retiredModelsSnapshot.models,
+    retiredNames: COMMITTED_RETIRED_MODELS,
     capabilities: capabilitiesSnapshot.capabilities,
     rateLimits: rateLimitsSnapshot.catalogue.models,
     reasoning: reasoningSnapshot.catalogue.models,
@@ -175,9 +176,8 @@ function buildIndex(input: {
   readonly reasoning: Readonly<Record<string, readonly string[]>>;
   readonly learnedReasoning: Readonly<Record<string, readonly ReasoningLevel[]>>;
 }): MetadataIndex {
+  replaceRetiredModelNames(input.retiredNames);
   return {
-    retiredNames: Object.freeze([...input.retiredNames]),
-    retiredKeys: new Set(input.retiredNames.map(retiredModelKey).filter(Boolean)),
     capabilities: {
       responses: new Set(input.capabilities.responses),
       imageInput: new Set(input.capabilities.imageInput),
@@ -228,13 +228,15 @@ let refreshInflight: Promise<MetadataIndex> | undefined;
 export async function refreshModelMetadata(): Promise<MetadataIndex> {
   if (refreshInflight) return refreshInflight;
   refreshInflight = (async () => {
-    const [retiredNames, capabilities, rateLimits, reasoning, learnedReasoning] = await Promise.all([
-      retiredCache.get(),
-      capabilitiesCache.get(),
-      rateLimitsCache.get(),
-      reasoningDocsCache.get(),
-      learnedReasoningCache.get(),
-    ]);
+    const [retiredNames, capabilities, rateLimits, reasoning, learnedReasoning] = await Promise.all(
+      [
+        retiredCache.get(),
+        capabilitiesCache.get(),
+        rateLimitsCache.get(),
+        reasoningDocsCache.get(),
+        learnedReasoningCache.get(),
+      ],
+    );
     liveIndex = buildIndex({
       retiredNames,
       capabilities,
@@ -249,14 +251,10 @@ export async function refreshModelMetadata(): Promise<MetadataIndex> {
   return refreshInflight;
 }
 
-void hydrateModelMetadata().catch((error) => {
-  logger.warn("metadata cache hydrate failed; using committed snapshots", { error });
-});
-
 /** Load cacache / memory entries without forcing a network refresh. */
 export async function hydrateModelMetadata(): Promise<MetadataIndex> {
   const [retiredNames, capabilities, rateLimits, reasoning, learnedReasoning] = await Promise.all([
-    peekOrFallback(retiredCache, retiredModelsSnapshot.models),
+    peekOrFallback(retiredCache, COMMITTED_RETIRED_MODELS),
     peekOrFallback(capabilitiesCache, capabilitiesSnapshot.capabilities),
     peekOrFallback(rateLimitsCache, rateLimitsSnapshot.catalogue.models),
     peekOrFallback(reasoningDocsCache, reasoningSnapshot.catalogue.models),
@@ -283,10 +281,7 @@ export function modelMetadataCachePath(): string {
   return retiredCache.path;
 }
 
-/** Return the committed retired-model names. The array is cached and immutable. */
-export function retiredModelNames(): readonly string[] {
-  return metadataIndex().retiredNames;
-}
+export { modelStatusFor, retiredModelNames } from "./_retirement.ts";
 
 /** Return the committed reasoning-effort catalogue. Cached per process. */
 export function reasoningModelCatalogue(): ReasoningModelCatalogue {
@@ -338,23 +333,6 @@ export async function learnReasoningLevelsFromError(
   return rememberReasoningLevels(model, parseReasoningLevels(body));
 }
 
-/** Resolve whether any supplied identity is listed in the retirement snapshot. */
-export function modelStatusFor(
-  ...models: readonly (string | ServingEndpointSummary)[]
-): ModelStatus {
-  const retired = metadataIndex().retiredKeys;
-  const deprecated = models
-    .flatMap((model) => modelIdentities(model))
-    .some((identity) => {
-      const candidate = retiredModelKey(identity);
-      for (const key of retired) {
-        if (candidate === key || candidate.startsWith(`${key}-`)) return true;
-      }
-      return false;
-    });
-  return { deprecated };
-}
-
 /** Resolve documented model capabilities from a name or endpoint summary. */
 export function modelCapabilitiesFor(model: string | ServingEndpointSummary): ModelCapabilities {
   const capabilities = metadataIndex().capabilities;
@@ -388,9 +366,7 @@ export function modelRateLimitsFor(
  * Does not parse error bodies; callers should use {@link parseReasoningLevels}
  * and then {@link rememberReasoningLevels}.
  */
-export function modelReasoningLevelsFor(
-  model: string | ServingEndpointSummary,
-): ReasoningLevel[] {
+export function modelReasoningLevelsFor(model: string | ServingEndpointSummary): ReasoningLevel[] {
   const index = metadataIndex();
   for (const identity of modelIdentities(model)) {
     const learned = documentedReasoningLevels(identity, index.learnedReasoning);
@@ -400,8 +376,7 @@ export function modelReasoningLevelsFor(
     const documented = documentedReasoningLevels(identity, index.reasoning);
     if (documented?.length) return documented;
   }
-  const primary =
-    typeof model === "string" ? model : (model.modelServiceName ?? model.name);
+  const primary = typeof model === "string" ? model : (model.modelServiceName ?? model.name);
   return defaultReasoningLevels(primary);
 }
 
@@ -423,7 +398,7 @@ export function modelMetadataGeneratedAt(): Readonly<{
   reasoning: number;
 }> {
   return {
-    retiredModels: retiredModelsSnapshot.generatedAt,
+    retiredModels: RETIRED_MODELS_GENERATED_AT,
     capabilities: capabilitiesSnapshot.generatedAt,
     rateLimits: rateLimitsSnapshot.generatedAt,
     reasoning: reasoningSnapshot.generatedAt,
@@ -445,23 +420,6 @@ function modelIdentities(
 
 function modelKey(value: string): string | undefined {
   return modelSearchQuery(value)?.replaceAll(" ", "-");
-}
-
-const RETIRED_MODEL_PREFIXES = new Set([
-  "ai",
-  "anthropic",
-  "databricks",
-  "dbx",
-  "google",
-  "meta",
-  "openai",
-  "system",
-]);
-
-function retiredModelKey(value: string): string {
-  const tokens = value.toLowerCase().match(/[a-z0-9]+/g) ?? [];
-  while (tokens[0] && RETIRED_MODEL_PREFIXES.has(tokens[0])) tokens.shift();
-  return tokens.join("-");
 }
 
 async function loadPage(url: string): Promise<string> {

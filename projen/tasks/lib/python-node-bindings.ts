@@ -270,6 +270,11 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
         };
       });
       build.onResolve({ filter: /.*/ }, ({ path }) => {
+        if (path === "zod") {
+          return {
+            path: resolve(dirname(Bun.resolveSync("zod/package.json", root)), "index.cjs"),
+          };
+        }
         if (overridesByModule.has(path)) {
           return { path, namespace: functionOverrideNamespace };
         }
@@ -586,7 +591,13 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
         }
         const parameterType = withoutUndefined(checker.getTypeAtLocation(parameter));
         const path = `${exported.sourceName}.${parameter.name.text}`;
-        const record = pythonRecordType(checker, parameterType, records, path);
+        const record = pythonRecordType(
+          checker,
+          parameterType,
+          records,
+          path,
+          declaredTypeName(parameter.type),
+        );
         const required = !parameter.questionToken && !parameter.initializer;
         return {
           javascriptName: parameter.name.text,
@@ -606,6 +617,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
         responses,
         protocols,
         `${exported.sourceName}.return`,
+        declaredTypeName(declaration.type),
       );
       typesByFunction.set(`${exported.sourceFile}#${exported.sourceName}`, {
         parameters,
@@ -636,8 +648,10 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     type: ts.Type,
     records: Map<string, PythonRecord>,
     path: string,
+    preferredName?: string,
   ): PythonRecord {
-    const name = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+    const symbolName = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+    const name = symbolName && symbolName !== "__type" ? symbolName : preferredName;
     if (!name || name === "__type") throw new Error(`${path} must reference a named object type`);
     const existing = records.get(name);
     if (existing) return existing;
@@ -665,13 +679,23 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     type: ts.Type,
     records: Map<string, PythonRecord>,
     path: string,
+    preferredName?: string,
   ): PythonRecord | undefined {
     if (!(type.flags & ts.TypeFlags.Object)) return undefined;
     if (checker.isArrayType(type) || type.getCallSignatures().length > 0) return undefined;
     if (checker.getIndexTypeOfType(type, ts.IndexKind.String)) return undefined;
-    const name = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+    const symbolName = type.aliasSymbol?.getName() ?? type.getSymbol()?.getName();
+    const name = symbolName && symbolName !== "__type" ? symbolName : preferredName;
     if (!name || name === "__type") return undefined;
-    return pythonRecord(checker, type, records, path);
+    return pythonRecord(checker, type, records, path, preferredName);
+  }
+
+  function declaredTypeName(node: ts.TypeNode | undefined): string | undefined {
+    if (!node) return undefined;
+    if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName)) {
+      return node.typeName.text;
+    }
+    return undefined;
   }
 
   function pythonType(
@@ -715,6 +739,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     responses: Map<string, PythonResponse>,
     protocols: Map<string, PythonProtocol>,
     path: string,
+    preferredName?: string,
   ): string {
     if (type.isUnion()) {
       return pythonUnion(
@@ -839,7 +864,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
       protocols.set(name, { name, methods: protocolMethods, properties: protocolProperties });
       return name;
     }
-    const name = `${pythonObjectName(type, path, "Result")}Response`;
+    const name = `${preferredName ?? pythonObjectName(type, path, "Result")}Response`;
     if (responses.has(name)) return name;
     responses.set(name, { name, fields: [] });
     const fields = properties.map((property) => {

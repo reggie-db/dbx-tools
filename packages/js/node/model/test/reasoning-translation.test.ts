@@ -158,12 +158,7 @@ describe("remapReasoning and adaptRequestReasoning", () => {
         reasoning_effort: "none",
         reasoning: { effort: "none" },
       },
-      [
-        ReasoningLevel.Low,
-        ReasoningLevel.Medium,
-        ReasoningLevel.High,
-        ReasoningLevel.ExtraHigh,
-      ],
+      [ReasoningLevel.Low, ReasoningLevel.Medium, ReasoningLevel.High, ReasoningLevel.ExtraHigh],
     );
     assert.equal(adapted.changed, true);
     assert.equal(adapted.wireEffort, "medium");

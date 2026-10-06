@@ -295,7 +295,7 @@ export class DBXToolsRelease extends Component {
     super(project);
     project.addGitIgnore(".release/");
     const installCondition =
-      'node -e "process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === \'never\' ? 1 : 0)"';
+      "node -e \"process.exit(process.env.DBX_TOOLS_RELEASE_INSTALL === 'never' ? 1 : 0)\"";
     project.package.installTask.addCondition(installCondition);
     project.package.installCiTask.addCondition(installCondition);
     const tagPrefix = options.tagPrefix ?? "v";

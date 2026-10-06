@@ -115,56 +115,69 @@ export interface LakebaseConnection extends LakebaseConnectionInputs {
  * stay `string` so a newly added state does not fail the whole response.
  */
 const projectSchema = z.object({
-  // Full resource path: `projects/{p}`.
-  name: z.string().optional(),
+  name: z.string().optional().describe("Full resource path: projects/{p}."),
 });
 type Project = z.infer<typeof projectSchema>;
 
 const endpointSchema = z.object({
-  // Full resource path: `projects/{p}/branches/{b}/endpoints/{e}`.
-  name: z.string().optional(),
-  uid: z.string().optional(),
-  // Server-side state. All connection info lives here - the spec block
-  // only carries the desired configuration, not the runtime hostnames.
+  name: z
+    .string()
+    .optional()
+    .describe("Full resource path: projects/{p}/branches/{b}/endpoints/{e}."),
+  uid: z.string().optional().describe("Stable endpoint uid assigned by Lakebase."),
   status: z
     .object({
-      endpoint_type: z.string().optional(),
-      // Resolved hostnames; `hosts.host` is the writable primary.
+      endpoint_type: z
+        .string()
+        .optional()
+        .describe("Endpoint role, such as ENDPOINT_TYPE_READ_WRITE."),
       hosts: z
         .object({
-          host: z.string().optional(),
-          read_only_host: z.string().optional(),
+          host: z.string().optional().describe("Writable primary hostname."),
+          read_only_host: z
+            .string()
+            .optional()
+            .describe("Read-only replica hostname when present."),
         })
-        .optional(),
-      // Compute state: `INITIALIZING`, `STARTING`, `READY`, `IDLE`, ...
-      current_state: z.string().optional(),
+        .optional()
+        .describe("Resolved hostnames. hosts.host is the writable primary."),
+      current_state: z
+        .string()
+        .optional()
+        .describe("Compute state: INITIALIZING, STARTING, READY, IDLE, and later values."),
     })
-    .optional(),
+    .optional()
+    .describe("Server-side state. Runtime hostnames live here, not in the spec block."),
 });
 type Endpoint = z.infer<typeof endpointSchema>;
 
 const branchSchema = z.object({
-  // Full resource path: `projects/{p}/branches/{b}`.
-  name: z.string().optional(),
+  name: z.string().optional().describe("Full resource path: projects/{p}/branches/{b}."),
   status: z
     .object({
-      // True for the project's default branch (e.g. `production`).
-      default: z.boolean().optional(),
-      current_state: z.string().optional(),
+      default: z
+        .boolean()
+        .optional()
+        .describe("True for the project's default branch, such as production."),
+      current_state: z.string().optional().describe("Branch compute state reported by Lakebase."),
     })
     .optional(),
 });
 type Branch = z.infer<typeof branchSchema>;
 
 const databaseSchema = z.object({
-  // Full resource path: `projects/{p}/branches/{b}/databases/{d}`.
-  name: z.string().optional(),
+  name: z
+    .string()
+    .optional()
+    .describe("Full resource path: projects/{p}/branches/{b}/databases/{d}."),
   status: z
     .object({
-      // Actual Postgres database name (used as `PGDATABASE`). May differ
-      // from the resource id - e.g. resource `databricks-postgres`
-      // surfaces as Postgres database `databricks_postgres`.
-      postgres_database: z.string().optional(),
+      postgres_database: z
+        .string()
+        .optional()
+        .describe(
+          "Actual Postgres database name used as PGDATABASE. May differ from the resource id.",
+        ),
     })
     .optional(),
 });
@@ -177,7 +190,10 @@ type Database = z.infer<typeof databaseSchema>;
  * cap is fine.
  */
 const listResponseSchema = z.object({
-  next_page_token: z.string().optional(),
+  next_page_token: z
+    .string()
+    .optional()
+    .describe("AIP page token. Only the first page is consumed."),
   projects: z.array(projectSchema).optional(),
   branches: z.array(branchSchema).optional(),
   endpoints: z.array(endpointSchema).optional(),
@@ -189,10 +205,10 @@ const listResponseSchema = z.object({
  * `done: true` means terminal; check `error` before reading `response`.
  */
 const operationSchema = z.object({
-  name: z.string().optional(),
-  done: z.boolean().optional(),
-  error: z.unknown().optional(),
-  response: z.unknown().optional(),
+  name: z.string().optional().describe("Operation resource name."),
+  done: z.boolean().optional().describe("True when the operation is terminal."),
+  error: z.unknown().optional().describe("Error payload present when the operation failed."),
+  response: z.unknown().optional().describe("Result payload present when the operation succeeded."),
 });
 type Operation = z.infer<typeof operationSchema>;
 

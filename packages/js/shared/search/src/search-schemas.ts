@@ -37,11 +37,13 @@ export const searchModeSchema = z
     "Match strategy: 'hybrid' fuses semantic similarity with keyword ranking (default, best for most searches), 'vector' is pure semantic, 'keyword' is pure full-text.",
   );
 
-/** How a query is matched (see {@link searchModeSchema}). */
 export type SearchMode = z.infer<typeof searchModeSchema>;
 
-/** AppKit AI Search query modes. */
-export type AiSearchQueryType = "ann" | "hybrid" | "full_text";
+export const aiSearchQueryTypeSchema = z
+  .enum(["ann", "hybrid", "full_text"])
+  .describe("AppKit AI Search query_type values mapped from SearchMode.");
+
+export type AiSearchQueryType = z.infer<typeof aiSearchQueryTypeSchema>;
 
 /** Map the dbx-tools extension vocabulary onto AppKit AI Search. */
 export function toAiSearchQueryType(mode: SearchMode | undefined): AiSearchQueryType | undefined {

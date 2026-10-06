@@ -61,7 +61,7 @@ def read_signature(function):
 
 def plain_value(value):
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return plain_value(vars(value))
+        return plain_value({field.name: getattr(value, field.name) for field in dataclasses.fields(value)})
     if isinstance(value, enum.Enum):
         return value.name.lower()
     if isinstance(value, dict):

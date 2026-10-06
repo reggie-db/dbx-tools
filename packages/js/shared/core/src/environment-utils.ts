@@ -4,10 +4,12 @@ const MAX_TCP_PORT = 65_535;
 
 function runtimeEnvironment(): Record<string, string | undefined> {
   return (
-    globalThis as typeof globalThis & {
-      process?: { env?: Record<string, string | undefined> };
-    }
-  ).process?.env ?? {};
+    (
+      globalThis as typeof globalThis & {
+        process?: { env?: Record<string, string | undefined> };
+      }
+    ).process?.env ?? {}
+  );
 }
 
 /** Detect a Databricks App runtime from its required name, host, and port. */

@@ -3,6 +3,8 @@ import { pythonHost } from "./host.ts";
 class PythonHash {
   private readonly content: number[] = [];
 
+  constructor(private readonly algorithm: string) {}
+
   update(value: string | ArrayBuffer | ArrayBufferView): this {
     const bytes =
       typeof value === "string"
@@ -14,15 +16,12 @@ class PythonHash {
     return this;
   }
 
-  digest(encoding?: "hex"): string | Uint8Array {
-    const hex = pythonHost().crypto.sha256(this.content);
-    if (encoding === "hex") return hex;
-    if (encoding !== undefined) {
-      throw new Error(`Unsupported digest encoding: ${encoding}`);
-    }
-    const bytes = Uint8Array.from(
-      hex.match(/.{2}/g)?.map((value) => Number.parseInt(value, 16)) ?? [],
-    ) as Uint8Array & { readBigInt64BE(offset: number): bigint };
+  digest(encoding?: "hex" | "base64"): string | Uint8Array {
+    const digest = pythonHost().crypto.digest(this.algorithm, this.content, encoding);
+    if (typeof digest === "string") return digest;
+    const bytes = Uint8Array.from(digest) as Uint8Array & {
+      readBigInt64BE(offset: number): bigint;
+    };
     bytes.readBigInt64BE = (offset) => {
       let value = 0n;
       for (const byte of bytes.slice(offset, offset + 8)) {
@@ -35,10 +34,15 @@ class PythonHash {
 }
 
 export function createHash(algorithm: string): PythonHash {
-  if (algorithm.toLowerCase() !== "sha256") {
+  const normalized = algorithm.toLowerCase();
+  if (!getHashes().includes(normalized)) {
     throw new Error(`Unsupported hash algorithm: ${algorithm}`);
   }
-  return new PythonHash();
+  return new PythonHash(normalized);
+}
+
+export function getHashes(): string[] {
+  return pythonHost().crypto.hashes();
 }
 
 export function randomBytes(length: number): Uint8Array {
@@ -53,4 +57,4 @@ export function randomUUID(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export default { createHash, randomBytes, randomUUID };
+export default { createHash, getHashes, randomBytes, randomUUID };

@@ -26,6 +26,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-graphiti",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "commander",
       "version": "catalog:",
       "type": "runtime"

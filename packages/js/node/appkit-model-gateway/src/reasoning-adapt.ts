@@ -8,10 +8,7 @@
  * @module
  */
 
-import {
-  learnReasoningLevelsFromError,
-  modelReasoningLevelsFor,
-} from "@dbx-tools/model/metadata";
+import { learnReasoningLevelsFromError, modelReasoningLevelsFor } from "@dbx-tools/model/metadata";
 import {
   adaptRequestReasoning,
   parseReasoningLevels,

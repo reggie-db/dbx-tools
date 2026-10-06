@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -9,22 +8,6 @@ import { discoverJavaScriptPackages } from "./repository-docs.mjs";
 
 const root = process.cwd();
 const check = process.argv.includes("--check");
-const python =
-  process.env.PYTHON ??
-  (fs.existsSync(path.join(root, ".venv/bin/python"))
-    ? path.join(root, ".venv/bin/python")
-    : "python3");
-const pythonReferences = JSON.parse(
-  execFileSync(python, ["docs/scripts/python-cli-reference.py"], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      PYTHONPATH: [path.join(root, "packages/py/graphiti/src"), process.env.PYTHONPATH]
-        .filter(Boolean)
-        .join(path.delimiter),
-    },
-  }),
-);
 const references = [];
 for (const pkg of discoverJavaScriptPackages(root).filter((pkg) => pkg.group === "cli")) {
   const entry = resolvePackageTypeScriptExports(pkg.manifest).find(
@@ -41,16 +24,9 @@ for (const pkg of discoverJavaScriptPackages(root).filter((pkg) => pkg.group ===
       : serviceReference(owner.buildServiceCommand);
   references.push({
     readme: pkg.readme,
-    reference:
-      pkg.name === "@dbx-tools/cli-graphiti"
-        ? `${reference}\n\n### Forwarded Graphiti Options\n\n${pythonReferences.start}`
-        : reference,
+    reference,
   });
 }
-references.push({
-  readme: path.join(root, "packages/py/graphiti/README.md"),
-  reference: pythonReferences.full,
-});
 const { createReleaseCommand } = await import(
   pathToFileURL(path.join(root, "projen/tasks/release.ts")).href
 );

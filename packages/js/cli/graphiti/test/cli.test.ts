@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { CliServiceDefinition, CliServiceLifecycle } from "@dbx-tools/cli-service";
+import { GRAPHITI_DEFAULTS } from "@dbx-tools/shared-graphiti";
 import { PACKAGE_VERSION } from "../index.ts";
 import { buildProgram, graphitiServiceDefinition } from "../src/cli.ts";
 import type { GraphitiRuntimeOptions } from "../src/runtime.ts";
@@ -11,15 +12,15 @@ describe("Graphiti CLI", () => {
     assert.equal(program.version(), PACKAGE_VERSION);
     assert.deepEqual(
       program.commands.map((command) => command.name()),
-      ["service"],
+      ["start", "up", "down", "status", "env", "service"],
     );
   });
 
   it("forwards Python arguments unchanged with the selected profile", async () => {
-    let received: GraphitiRuntimeOptions | undefined;
+    let received: { command: string; options: GraphitiRuntimeOptions } | undefined;
     await buildProgram("dbx graphiti", {
-      async start(options) {
-        received = options;
+      async run(command, options) {
+        received = { command, options };
       },
     }).parseAsync(
       [
@@ -33,9 +34,13 @@ describe("Graphiti CLI", () => {
       { from: "user" },
     );
     assert.deepEqual(received, {
-      python: "/path with spaces/python",
-      profile: "GRAPHITI-PROFILE",
-      args: ["--model", "my-model"],
+      command: "start",
+      options: {
+        ...GRAPHITI_DEFAULTS,
+        python: "/path with spaces/python",
+        profile: "GRAPHITI-PROFILE",
+        model: "my-model",
+      },
     });
   });
 
@@ -46,14 +51,9 @@ describe("Graphiti CLI", () => {
     });
     assert.equal(definition.packageName, "@dbx-tools/cli-graphiti");
     assert.equal(definition.command?.executable, "python3");
-    assert.deepEqual(definition.command?.arguments, [
-      "-m",
-      "dbx_tools.graphiti",
-      "start",
-      "--profile",
-      "GRAPHITI-PROFILE",
-    ]);
-    assert.match(definition.command?.environment?.MODEL_GATEWAY_COMMAND ?? "", /dbx-model-gateway/);
+    assert.deepEqual(definition.command?.arguments, ["-m", "dbx_tools.graphiti"]);
+    assert.equal(definition.command?.environment?.DBX_GRAPHITI_COMMAND, "start");
+    assert.match(definition.command?.environment?.DBX_GRAPHITI_OPTIONS ?? "", /GRAPHITI-PROFILE/);
   });
 
   it("uses the Python environment setting unless a CLI option overrides it", async () => {
@@ -62,7 +62,7 @@ describe("Graphiti CLI", () => {
     process.env.PYTHON = "/virtual/environment/python";
     try {
       const dependencies = {
-        async start(options: GraphitiRuntimeOptions) {
+        async run(_command: string, options: GraphitiRuntimeOptions) {
           selected.push(options.python!);
         },
       };
@@ -94,7 +94,7 @@ describe("Graphiti CLI", () => {
       },
     };
     await buildProgram("dbx graphiti", {
-      async start() {
+      async run() {
         assert.fail("must not start foreground during installation");
       },
       async prepare(python) {

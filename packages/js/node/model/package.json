@@ -47,6 +47,10 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
+      "./bindings": {
+        "types": "./lib/src/bindings.d.ts",
+        "default": "./lib/src/bindings.js"
+      },
       "./classes": {
         "types": "./lib/src/classes.d.ts",
         "default": "./lib/src/classes.js"
@@ -108,6 +112,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./bindings": "./src/bindings.ts",
     "./classes": "./src/classes.ts",
     "./classify": "./src/classify.ts",
     "./fallback": "./src/fallback.ts",

@@ -21,6 +21,7 @@ import * as log from "@dbx-tools/shared-core/log";
 import cacache from "cacache";
 import envPaths from "env-paths";
 
+import packageManifest from "../package.json" with { type: "json" };
 import { MODEL_METADATA_TTL_MS } from "./_metadata-contract.ts";
 
 const logger = log.logger("model/metadata-cache");
@@ -30,15 +31,10 @@ interface PackageIdentity {
   readonly version: string;
 }
 
-let packageIdentityPromise: Promise<PackageIdentity> | undefined;
-
-function packageIdentity(): Promise<PackageIdentity> {
-  packageIdentityPromise ??= import("../index.ts").then((mod) => ({
-    identifier: mod.PACKAGE_IDENTIFIER,
-    version: mod.PACKAGE_VERSION,
-  }));
-  return packageIdentityPromise;
-}
+const PACKAGE_IDENTITY: PackageIdentity = {
+  identifier: packageManifest.name,
+  version: packageManifest.version,
+};
 
 /** Envelope stored as JSON bytes in cacache for every key. */
 export interface MetadataCacheRecord<T> {
@@ -247,7 +243,7 @@ async function resolveCacheDir(options: {
   readonly version?: string;
 }): Promise<string> {
   if (options.cacheDir) return options.cacheDir;
-  const version = options.version ?? (await packageIdentity()).version;
+  const version = options.version ?? PACKAGE_IDENTITY.version;
   return defaultMetadataCacheDir(version);
 }
 
@@ -319,4 +315,3 @@ function isCacheMiss(error: unknown): boolean {
     (error as { code?: string }).code === "ENOENT",
   );
 }
-

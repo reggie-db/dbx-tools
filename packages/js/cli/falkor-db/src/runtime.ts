@@ -8,8 +8,8 @@
  * @module
  */
 
-import { DatabricksFileSystem } from "@dbx-tools/databricks/databricks-fs";
 import { workspaceClient } from "@dbx-tools/databricks";
+import { DatabricksFileSystem } from "@dbx-tools/databricks/databricks-fs";
 import { DatabricksVolumeStorage, DurableFalkorDB } from "@dbx-tools/falkor-db";
 import { log } from "@dbx-tools/shared-core";
 

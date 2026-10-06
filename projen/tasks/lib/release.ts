@@ -10,7 +10,6 @@ import {
   runTaskCommand,
   taskCommandSucceeds,
 } from "../../src/_task-command.ts";
-import { readWorkspaceVersion } from "../../src/workspace-version.ts";
 import {
   RELEASE_INSTALL_MODES,
   RELEASE_PUBLISH_TARGETS,
@@ -20,6 +19,7 @@ import {
   type ReleaseInstallMode,
   type ReleaseSelectionOptions,
 } from "../../src/release-options.ts";
+import { readWorkspaceVersion } from "../../src/workspace-version.ts";
 
 const logger = log.logger("projen:release");
 

@@ -4,6 +4,7 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/model";
 export const PACKAGE_VERSION = "0.9.40";
+export * as bindings from "./src/bindings.ts";
 export * as classes from "./src/classes.ts";
 export * as classify from "./src/classify.ts";
 export * as fallback from "./src/fallback.ts";
@@ -16,6 +17,7 @@ export * as policy from "./src/policy.ts";
 export * as reasoningTranslation from "./src/reasoning-translation.ts";
 export * as resolve from "./src/resolve.ts";
 export * as servingWire from "./src/serving-wire.ts";
+export type { ResolveModelRouteOptions, ResolvedModelRoute } from "./src/bindings.ts";
 export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER } from "./src/classes.ts";
 export { FALLBACK_MODEL_IDS } from "./src/fallback.ts";
 export { INVOCATIONS_SUFFIX, RESPONSES_PATH, OPEN_RESPONSES_PATH, CHAT_COMPLETIONS_PATH, AI_GATEWAY_CODEX_RESPONSES_PATH, ANTHROPIC_MESSAGES_PATH } from "./src/invoke.ts";

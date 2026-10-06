@@ -14,6 +14,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { log } from "@dbx-tools/shared-core";
 import { FalkorDB as FalkorClient, type Graph } from "falkordb";
 import {
   BinaryManager,
@@ -23,7 +24,6 @@ import {
   type FalkorDBLiteOptions,
 } from "falkordblite";
 import { createClient } from "redis";
-import { log } from "@dbx-tools/shared-core";
 import {
   FalkorPersistenceManager,
   type FalkorPersistenceOptions,

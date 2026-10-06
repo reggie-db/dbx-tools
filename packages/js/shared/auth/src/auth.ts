@@ -28,51 +28,57 @@ export function isAuthPath(path: string): boolean {
 /** Shared Better Auth session-cookie name used by browser and server packages. */
 export const SESSION_COOKIE_NAME = "dbx-tools-auth";
 
-/** Request schema for sending an email one-time password. */
-export const authRequestSchema = z.object({
-  email: z.string().describe("Address to email a one-time code to, if it is authorized."),
-});
-/** Validated request for an email one-time password. */
+export const authRequestSchema = z
+  .object({
+    email: z.string().describe("Address to email a one-time code to, if it is authorized."),
+  })
+  .describe("Validated request for an email one-time password.");
+
 export type AuthRequest = z.infer<typeof authRequestSchema>;
 
-/** Response schema for an accepted one-time-password request. */
-export const authRequestResultSchema = z.object({
-  ok: z.literal(true),
-  retryAfter: z.number().optional(),
-});
-/** Accepted one-time-password request result and optional retry delay. */
+export const authRequestResultSchema = z
+  .object({
+    ok: z.literal(true).describe("Always true for an accepted one-time-password request."),
+    retryAfter: z.number().optional().describe("Seconds to wait before requesting another code."),
+  })
+  .describe("Accepted one-time-password request result and optional retry delay.");
+
 export type AuthRequestResult = z.infer<typeof authRequestResultSchema>;
 
-/** Request schema for verifying an email one-time password. */
-export const authVerifySchema = z.object({
-  email: z.string(),
-  code: z.string(),
-});
-/** Email address and code submitted to establish a session. */
+export const authVerifySchema = z
+  .object({
+    email: z.string().describe("Address that received the one-time code."),
+    code: z.string().describe("One-time password submitted to establish a session."),
+  })
+  .describe("Email address and code submitted to establish a session.");
+
 export type AuthVerify = z.infer<typeof authVerifySchema>;
 
-/** Response schema for one-time-password verification. */
-export const authVerifyResultSchema = z.object({
-  ok: z.boolean(),
-  retryAfter: z.number().optional(),
-});
-/** Verification outcome and optional retry delay. */
+export const authVerifyResultSchema = z
+  .object({
+    ok: z.boolean().describe("True when the code was accepted and a session was created."),
+    retryAfter: z.number().optional().describe("Seconds to wait before trying another code."),
+  })
+  .describe("Verification outcome and optional retry delay.");
+
 export type AuthVerifyResult = z.infer<typeof authVerifyResultSchema>;
 
-/** Response schema returned after clearing an authentication session. */
-export const authLogoutResultSchema = z.object({
-  ok: z.boolean(),
-  redirectTo: z.string(),
-});
-/** Logout outcome plus the validated same-origin destination. */
+export const authLogoutResultSchema = z
+  .object({
+    ok: z.boolean().describe("True when the session cookie was cleared."),
+    redirectTo: z.string().describe("Validated same-origin destination after logout."),
+  })
+  .describe("Logout outcome plus the validated same-origin destination.");
+
 export type AuthLogoutResult = z.infer<typeof authLogoutResultSchema>;
 
-/** Response schema describing gate availability and the current browser session. */
-export const authStatusSchema = z.object({
-  authenticated: z.boolean(),
-  email: z.string().optional(),
-  enabled: z.boolean(),
-  passkeysEnabled: z.boolean().optional(),
-});
-/** Gate availability, session identity, and optional passkey capability. */
+export const authStatusSchema = z
+  .object({
+    authenticated: z.boolean().describe("True when the browser holds a valid session."),
+    email: z.string().optional().describe("Signed-in address when a session exists."),
+    enabled: z.boolean().describe("True when the passwordless gate is configured."),
+    passkeysEnabled: z.boolean().optional().describe("True when WebAuthn passkeys are available."),
+  })
+  .describe("Gate availability, session identity, and optional passkey capability.");
+
 export type AuthStatus = z.infer<typeof authStatusSchema>;

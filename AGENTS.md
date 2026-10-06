@@ -48,7 +48,11 @@ Primary ownership:
 - Keep `@dbx-tools/shared-core` logging dependency-free.
 - Python Node bundles contain no production Python callbacks. Compatibility belongs in build-time shims.
 - OpenAPI package files are generated from the owning service schema. Do not manually maintain parallel contracts.
-- `packages/js/shared/model/src/contracts.ts` owns browser-safe model contracts; the package-local `contracts` task generates matching Zod schemas.
+- Use Zod for every type that crosses, or could plausibly cross, a serialization boundary: HTTP/SSE request and response bodies, upstream REST payloads, tool inputs/outputs, client config published to browsers, serialized env/JSON options, and persisted records. Define `XSchema`, document the schema and each field with `.describe()` (not JSDoc inside the object literal), and export `type X = z.infer<typeof XSchema>` (or `z.input` / `z.output` when defaults or transforms differ). Never export `type X = typeof XSchema`, and never keep a parallel interface for a schema-owned shape.
+- Keep plain TypeScript interfaces and type aliases for in-process shapes: behavioral contracts and classes (`FileSystem`, clients, loggers), callables and generics, host objects (`Headers`, `URL`, `AbortSignal`, `Uint8Array`, `Date`), React props, parser results, and local helper option bags. Do not add Zod, or a `zod` dependency, to a package just to type those. Document them with ordinary JSDoc.
+- Apply this when adding or changing a shared type; convert an existing interface only when it is or becomes wire data. Do not migrate utility packages wholesale.
+- Generated API docs and `docs:check-source` accept either source: JSDoc on standard types, or `.describe()` on Zod schemas and their inferred aliases.
+- `packages/js/shared/model/src/contracts.ts` owns browser-safe model contracts. Define schemas there and in sibling modules such as `openai-chat.ts`; do not generate a second contract surface.
 - `packages/js/shared/model-gateway` owns compositional Zod gateway and browser-client contracts.
 - `bun run --filter '@dbx-tools/model' metadata` refreshes committed model metadata. Normal synthesis must not perform network-backed metadata refreshes.
 - Documentation is generated from root/package READMEs by `docs/scripts/sync-readmes.mjs`, with API pages from `docs/scripts/generate-api-docs.mjs`.

@@ -248,6 +248,35 @@
         }
       ]
     },
+    "graphiti:python-runtime": {
+      "name": "graphiti:python-runtime",
+      "description": "Generate Node bindings for Python package graphiti",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
+            "--project",
+            "packages/py/graphiti"
+          ]
+        }
+      ]
+    },
+    "graphiti:python-runtime:check": {
+      "name": "graphiti:python-runtime:check",
+      "description": "Verify generated Node bindings for Python package graphiti",
+      "steps": [
+        {
+          "execArgs": [
+            "bun",
+            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
+            "--project",
+            "packages/py/graphiti",
+            "--check"
+          ]
+        }
+      ]
+    },
     "install": {
       "name": "install",
       "description": "Install project dependencies and update lockfile (non-frozen)",
@@ -422,6 +451,9 @@
         },
         {
           "spawn": "postgres:python-runtime:check"
+        },
+        {
+          "spawn": "graphiti:python-runtime:check"
         },
         {
           "exec": "bun run --filter '*' test"

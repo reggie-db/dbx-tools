@@ -6,6 +6,7 @@ import path from "node:path";
 import ts from "typescript";
 import { resolvePackageTypeScriptExports } from "./package-exports.mjs";
 import { posix, walk } from "./repository-docs.mjs";
+import { zodDocumentationForDeclaration } from "./zod-docs.mjs";
 
 const DEFAULT_BASELINE = "docs/source-doc-baseline.json";
 const GENERATED_PATHS = [
@@ -118,6 +119,7 @@ export function collectUndocumentedPublicSymbols(rootDirectory = process.cwd()) 
       const source = record.declaration.getSourceFile();
       if (generatedSource(root, source.fileName)) continue;
       if (symbolDocumentation(checker, record.symbol)) continue;
+      if (zodDocumentationForDeclaration(ts, record.declaration)) continue;
       findings.push({
         package: pkg.name,
         name: record.symbol.name.replace(/^"|"$/g, ""),
@@ -208,7 +210,7 @@ function main() {
     printRecords("New undocumented public symbols", added);
     printRecords("Documented or removed baseline symbols", resolved);
     throw new Error(
-      "Public source documentation changed. Add missing JSDoc, then run " +
+      "Public source documentation changed. Add missing JSDoc or Zod `.describe()` text, then run " +
         "`bun docs/scripts/check-source-docs.mjs --write-baseline` to ratchet the baseline.",
     );
   }

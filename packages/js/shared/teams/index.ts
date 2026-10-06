@@ -8,5 +8,5 @@ export * as card from "./src/card.ts";
 export * as teamsActivity from "./src/teams-activity.ts";
 export { ADAPTIVE_CARD_VERSION, ADAPTIVE_CARD_SCHEMA_URL, cardFactSchema, cardActionSchema, cardSpecSchema, adaptiveCardSchema, cardResultSchema } from "./src/card.ts";
 export type { CardFact, CardAction, CardSpec, AdaptiveCard, CardResult } from "./src/card.ts";
-export { ADAPTIVE_CARD_CONTENT_TYPE, ACTIVITY_TYPES, channelAccountSchema, conversationAccountSchema, cardAttachmentSchema, activitySchema, activityRequestSchema, activityResponseSchema, toCardAttachment, cardsOf } from "./src/teams-activity.ts";
+export { ADAPTIVE_CARD_CONTENT_TYPE, ACTIVITY_TYPES, activityTypeSchema, channelAccountSchema, conversationAccountSchema, cardAttachmentSchema, activitySchema, activityRequestSchema, activityResponseSchema, toCardAttachment, cardsOf } from "./src/teams-activity.ts";
 export type { ActivityType, ChannelAccount, ConversationAccount, CardAttachment, Activity, ActivityRequest, ActivityResponse } from "./src/teams-activity.ts";

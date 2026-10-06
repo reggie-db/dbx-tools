@@ -51,6 +51,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-graphiti",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@mastra/core",
       "version": "catalog:",
       "type": "runtime"
@@ -62,6 +67,11 @@
     },
     {
       "name": "concurrently",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "zod",
       "version": "catalog:",
       "type": "runtime"
     }

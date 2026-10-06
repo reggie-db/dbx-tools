@@ -316,9 +316,9 @@ function generatePackage(
     const sourceText = preprocess(stripImports(tsRuntime, sourcePath));
     const { getZodSchemasFile, getInferredTypes, errors } = generate({
       sourceText,
-      // Carry JSDoc through so the `@description` tag stays visible alongside
-      // the matching `.describe(...)`.
-      keepComments: true,
+      // JSDoc is rewritten to `@description` so ts-to-zod emits `.describe()`.
+      // Keep the generated module comment-free; Zod owns the prose.
+      keepComments: false,
     });
     if (errors.length) {
       for (const err of errors) logger.warn(`${destination} from ${source}: ${err}`);

@@ -8,18 +8,16 @@ import { z } from "zod";
 
 import { AuthType, TargetKind } from "./config.ts";
 
-/** Runtime schema for Databricks authentication type values. */
-export const authTypeSchema = z.enum([
-  AuthType.DatabricksCli,
-  AuthType.OAuthM2M,
-  AuthType.PersonalAccessToken,
-  AuthType.AppOnBehalfOf,
-  AuthType.AppServicePrincipal,
-]);
+export const authTypeSchema = z
+  .enum([
+    AuthType.DatabricksCli,
+    AuthType.OAuthM2M,
+    AuthType.PersonalAccessToken,
+    AuthType.AppOnBehalfOf,
+    AuthType.AppServicePrincipal,
+  ])
+  .describe("Databricks authentication type values.");
 
-/** Runtime schema for Databricks authentication target values. */
-export const targetKindSchema = z.enum([
-  TargetKind.Workspace,
-  TargetKind.Account,
-  TargetKind.Unified,
-]);
+export const targetKindSchema = z
+  .enum([TargetKind.Workspace, TargetKind.Account, TargetKind.Unified])
+  .describe("Databricks authentication target values.");

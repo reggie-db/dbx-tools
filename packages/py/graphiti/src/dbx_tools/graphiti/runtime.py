@@ -22,7 +22,15 @@ from honcho.manager import Manager
 from honcho.process import Popen as HonchoPopen
 
 from .constants import UPSTREAM_MCP_PATH_ENV, persistence_configured
-from .settings import ModelSettings
+from .settings import (
+    GRAPHITI_OPTIONS_ENV,
+    ResolvedGraphitiOptionsResponse,
+    ResolvedModelRouteResponse,
+    gateway_health_url,
+    load_graphiti_options,
+    provider_environment,
+    public_settings,
+)
 
 GRAPHITI_VERSION = "0.29.3"
 NEO4J_VERSION = "5.26.12"
@@ -73,6 +81,12 @@ class RuntimePaths:
         """Return paths rooted at the configured per-user Graphiti data directory."""
         return cls(default_data_dir())
 
+    @classmethod
+    def from_options(cls, options: ResolvedGraphitiOptionsResponse) -> RuntimePaths:
+        """Return paths from generated Graphiti options or the platform default."""
+        home = options.get("home")
+        return cls(Path(home).expanduser()) if home else cls.default()
+
     @property
     def graphiti(self) -> Path:
         """Pinned Graphiti source and environment directory."""
@@ -118,25 +132,19 @@ class Runtime:
         self,
         *,
         foreground: bool = True,
-        extra_args: list[str] | None = None,
-        settings: ModelSettings | None = None,
+        settings: ResolvedGraphitiOptionsResponse | None = None,
     ) -> int:
         """Provision dependencies and start Graphiti in foreground or detached mode."""
 
-        settings = settings or ModelSettings.resolve()
+        settings = settings or load_graphiti_options()
         self._ensure_runtime()
         self._start_neo4j()
         if foreground:
-            return self.supervise(settings, extra_args or [])
+            return self.supervise(settings)
         command = [
             sys.executable,
             "-m",
             "dbx_tools.graphiti.supervisor",
-            "--home",
-            str(self.paths.root),
-            *(["--profile", settings.profile] if settings.profile else []),
-            "--",
-            *(extra_args or []),
         ]
         try:
             with self.paths.log.open("ab") as output:
@@ -182,6 +190,14 @@ class Runtime:
         model_gateway_url = (
             model_settings.get("model_gateway_url") if isinstance(model_settings, dict) else None
         )
+        graphiti_host = (
+            model_settings.get("graphiti_host")
+            if isinstance(model_settings, dict)
+            else "127.0.0.1"
+        )
+        graphiti_port = (
+            model_settings.get("graphiti_port") if isinstance(model_settings, dict) else 8000
+        )
         model_gateway_running = (
             manages_model_gateway is True
             and isinstance(model_gateway_url, str)
@@ -196,7 +212,7 @@ class Runtime:
             "graphiti": "running" if isinstance(pid, int) and _is_running(pid) else "stopped",
             "graphiti_pid": pid,
             "neo4j": "running" if neo4j_running else "stopped",
-            "mcp_url": f"http://{_graphiti_host()}:{_graphiti_port()}/mcp/",
+            "mcp_url": f"http://{graphiti_host}:{graphiti_port}/mcp/",
             "model_gateway": (
                 "running"
                 if model_gateway_running
@@ -207,7 +223,7 @@ class Runtime:
             "models": model_settings,
         }
 
-    def graphiti_command(self, settings: ModelSettings, extra_args: list[str]) -> list[str]:
+    def graphiti_command(self, settings: ResolvedGraphitiOptionsResponse) -> list[str]:
         """Build the upstream command entirely from defaults, environment, and CLI flags."""
         return [
             *self._uv_command(),
@@ -219,25 +235,29 @@ class Runtime:
             "python",
             "-m",
             "dbx_tools.graphiti.server",
-            *(["--profile", settings.profile] if settings.profile else []),
+            *(["--profile", settings["profile"]] if settings.get("profile") else []),
             "--host",
-            _graphiti_host(),
+            settings["graphitiHost"],
             "--port",
-            _graphiti_port(),
+            _integer_string(settings["graphitiPort"]),
             "--database-provider",
             "neo4j",
             "--llm-provider",
             "openai",
             "--model",
-            settings.model,
+            settings["model"],
             "--embedder-provider",
             "openai",
             "--embedder-model",
-            settings.embedder_model,
-            *extra_args,
+            settings["embedderModel"],
+            *settings["graphitiArgs"],
         ]
 
-    def environment(self, password: str, settings: ModelSettings) -> dict[str, str]:
+    def environment(
+        self,
+        password: str,
+        settings: ResolvedGraphitiOptionsResponse,
+    ) -> dict[str, str]:
         """Build the upstream process environment without a Graphiti config file."""
         environment = os.environ.copy()
         environment.setdefault("UV_PYTHON", _uv_python())
@@ -256,7 +276,15 @@ class Runtime:
             ]
         )
         environment[UPSTREAM_MCP_PATH_ENV] = str(self.paths.graphiti / "mcp_server")
-        environment.update(settings.graphiti_environment())
+        environment.update(provider_environment(settings))
+        environment["GRAPHITI_HOST"] = settings["graphitiHost"]
+        environment["GRAPHITI_PORT"] = _integer_string(settings["graphitiPort"])
+        if settings.get("journalNamespace"):
+            environment["JOURNAL_NAMESPACE"] = settings["journalNamespace"]
+        if settings.get("journalDatabaseUrl"):
+            environment["JOURNAL_DATABASE_URL"] = settings["journalDatabaseUrl"]
+        if settings.get("journalTable"):
+            environment["JOURNAL_TABLE"] = settings["journalTable"]
         if persistence_configured(environment):
             namespace = hashlib.sha256(str(self.paths.root.resolve()).encode()).hexdigest()[:16]
             environment.setdefault("JOURNAL_NAMESPACE", f"runtime_{namespace}")
@@ -265,22 +293,23 @@ class Runtime:
     def connection_settings(
         self,
         password: str,
-        settings: ModelSettings | None = None,
+        settings: ResolvedGraphitiOptionsResponse | None = None,
+        model_route: ResolvedModelRouteResponse | None = None,
+        embedder_route: ResolvedModelRouteResponse | None = None,
     ) -> dict[str, object]:
         """Return the resolved Neo4j, model, and proxy settings."""
-        settings = settings or ModelSettings.resolve()
+        settings = settings or load_graphiti_options()
         environment = self.environment(password, settings)
         result: dict[str, object] = {
             name: environment[name]
             for name in ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD", "NEO4J_DATABASE")
         }
-        result.update(settings.public_settings())
+        result.update(public_settings(settings, model_route, embedder_route))
         return result
 
     def supervise(
         self,
-        settings: ModelSettings,
-        extra_args: list[str],
+        settings: ResolvedGraphitiOptionsResponse,
     ) -> int:
         """Run Graphiti and its managed model gateway under Honcho."""
         state = self.read_state()
@@ -289,15 +318,15 @@ class Runtime:
             {
                 "graphiti_pid": os.getpid(),
                 "graphiti_supervisor": True,
-                "model_settings": settings.public_settings(),
+                "model_settings": public_settings(settings),
             }
         )
         self._write_state(state)
         try:
-            if settings.manage_model_gateway:
-                if _url_ready(settings.health_url):
+            if settings["manageModelGateway"]:
+                if _url_ready(gateway_health_url(settings)):
                     raise RuntimeError(
-                        f"Managed model gateway port {settings.model_gateway_port} is already in use; "
+                        f"Managed model gateway port {settings['modelGatewayPort']} is already in use; "
                         "set MODEL_GATEWAY_URL to use an external gateway"
                     )
                 _add_process(
@@ -309,7 +338,7 @@ class Runtime:
             _add_process(
                 manager,
                 "graphiti",
-                self.graphiti_command(settings, extra_args),
+                self.graphiti_command(settings),
                 cwd=self.paths.graphiti / "mcp_server",
                 env=self.environment(str(state["neo4j_password"]), settings),
             )
@@ -320,19 +349,12 @@ class Runtime:
                 self._neo4j_command("stop", check=False)
             self._clear_process_state(self.read_state(required=False))
 
-    def _supervisor_environment(self, settings: ModelSettings) -> dict[str, str]:
+    def _supervisor_environment(
+        self,
+        settings: ResolvedGraphitiOptionsResponse,
+    ) -> dict[str, str]:
         environment = os.environ.copy()
-        environment.update(settings.graphiti_environment())
-        environment.update(
-            {
-                "MANAGE_MODEL_GATEWAY": "true" if settings.manage_model_gateway else "false",
-                "MODEL_GATEWAY_HOST": settings.model_gateway_host,
-                "MODEL_GATEWAY_PORT": str(settings.model_gateway_port),
-                "MODEL_GATEWAY_URL": settings.openai_api_url,
-            }
-        )
-        if settings.model_gateway_command:
-            environment["MODEL_GATEWAY_COMMAND"] = settings.model_gateway_command
+        environment[GRAPHITI_OPTIONS_ENV] = json.dumps(settings)
         return environment
 
     def _wait_for_supervisor(self, pid: int) -> None:
@@ -408,8 +430,11 @@ class Runtime:
         if result.returncode:
             self._neo4j_command("start")
 
-    def _model_gateway_command(self, settings: ModelSettings) -> list[str]:
-        configured = settings.model_gateway_command
+    def _model_gateway_command(
+        self,
+        settings: ResolvedGraphitiOptionsResponse,
+    ) -> list[str]:
+        configured = settings.get("modelGatewayCommand")
         if configured:
             command = shlex.split(configured)
             if not command:
@@ -419,14 +444,17 @@ class Runtime:
             command = [installed] if installed else [shutil.which("dbx") or "dbx", "model-gateway"]
         return [
             *command,
-            *(["--profile", settings.profile] if settings.profile else []),
+            *(["--profile", settings["profile"]] if settings.get("profile") else []),
             "--host",
-            settings.model_gateway_host,
+            settings["modelGatewayHost"],
             "--port",
-            str(settings.model_gateway_port),
+            _integer_string(settings["modelGatewayPort"]),
         ]
 
-    def _model_gateway_environment(self, settings: ModelSettings) -> dict[str, str]:
+    def _model_gateway_environment(
+        self,
+        settings: ResolvedGraphitiOptionsResponse,
+    ) -> dict[str, str]:
         return os.environ.copy()
 
     def _neo4j_command(
@@ -518,18 +546,6 @@ def _url_ready(url: str) -> bool:
         return False
 
 
-def _graphiti_host() -> str:
-    """Resolve the listener host for local or Databricks App execution."""
-    return os.getenv(
-        "GRAPHITI_HOST", "0.0.0.0" if os.getenv("DATABRICKS_APP_PORT") else "127.0.0.1"
-    )
-
-
-def _graphiti_port() -> str:
-    """Resolve the listener port, honoring Databricks App injection."""
-    return os.getenv("GRAPHITI_PORT") or os.getenv("DATABRICKS_APP_PORT", "8000")
-
-
 def _uv_python() -> str:
     """Return the interpreter uv must use for the upstream Graphiti project.
 
@@ -576,6 +592,10 @@ def _child_python_paths() -> list[str]:
         if resolved not in paths:
             paths.append(resolved)
     return paths
+
+
+def _integer_string(value: int | float) -> str:
+    return str(int(value))
 
 
 def _is_running(pid: int) -> bool:

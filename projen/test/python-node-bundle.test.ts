@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -302,6 +310,45 @@ describe("PythonNodeBundle", () => {
     const result = runBindingTask(directory);
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr.toString(), /load\.options\.value uses unsupported TypeScript type/);
+  });
+
+  it("generates records from Zod-inferred option types", () => {
+    const directory = temporaryDirectory();
+    const entryDirectory = packageDirectory(directory, "fixture-entry");
+    symlinkSync(
+      join(import.meta.dirname, "../../node_modules/zod"),
+      join(directory, "node_modules/zod"),
+      "dir",
+    );
+    writeFileSync(
+      join(entryDirectory, "index.ts"),
+      [
+        'import { z } from "zod";',
+        "export const LoadOptionsSchema = z.object({ profile: z.string().optional(), port: z.number().int().optional() });",
+        "export type LoadOptions = z.input<typeof LoadOptionsSchema>;",
+        "export type DashboardView = z.infer<typeof LoadOptionsSchema>;",
+        "export function load(options: LoadOptions = {}): DashboardView { return LoadOptionsSchema.parse(options); }",
+      ].join("\n"),
+    );
+    writeFixturePyproject(directory, ['package = "fixture-entry"']);
+
+    const result = runBindingTask(directory);
+    assert.equal(result.exitCode, 0, result.stderr.toString());
+
+    const bindings = readFileSync(
+      join(directory, "python/src/fixture/runtime/_generated/node/fixture_entry/index.py"),
+      "utf8",
+    );
+    assert.match(bindings, /class LoadOptions:/);
+    assert.match(bindings, /class DashboardViewResponse\(TypedDict\):/);
+    assert.match(bindings, /profile: str \| None/);
+    assert.match(bindings, /port: int \| float \| None/);
+
+    const runtime = readFileSync(
+      join(directory, "python/src/fixture/runtime/_generated/node/_runtime.js"),
+      "utf8",
+    );
+    assert.doesNotMatch(runtime, /clone\(util\.mergeDefs\(/);
   });
 
   it("fails when JavaScript exports collide in Python", () => {

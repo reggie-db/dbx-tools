@@ -27,9 +27,10 @@ import {
   pluginRegistry,
   toolkitEntries,
 } from "@dbx-tools/appkit";
-import { ensureGraphitiModelGateway, ensureGraphitiPython } from "@dbx-tools/cli-graphiti/runtime";
+import { ensureGraphitiPython, graphitiRuntimeEnvironment } from "@dbx-tools/cli-graphiti/runtime";
 import { configUtils } from "@dbx-tools/core";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
+import { resolveGraphitiOptions } from "@dbx-tools/shared-graphiti";
 import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";
 import concurrently, { type Command, type ConcurrentlyResult } from "concurrently";
@@ -124,44 +125,35 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     const configured = resolveGraphitiConfig(this.config);
     const [graphitiPort, modelGatewayPort, proxyPort] = await distinctPorts(
       configUtils.port(undefined, "DATABRICKS_APP_PORT", 8000, configUtils.ENV_ONLY),
-      configured.graphitiPort,
-      configured.modelGatewayPort,
-      configured.proxyPort,
+      configured.graphitiPort ?? 0,
+      configured.modelGatewayPort ?? 0,
+      configured.proxyPort ?? 0,
     );
-    await ensureGraphitiPython(configured.python);
-    const modelGatewayCommand = ensureGraphitiModelGateway();
-    this.resolved = {
+    const resolved = resolveGraphitiOptions({
       ...configured,
       graphitiPort,
       modelGatewayPort,
       proxyPort,
-    };
+    });
+    this.resolved = resolved;
+    await ensureGraphitiPython(resolved.python);
     this.supervision = concurrently(
       [
         {
           name: "graphiti",
-          command: commandLine([this.resolved.python, "-m", "dbx_tools.graphiti", "start"]),
-          env: {
-            ...process.env,
-            GRAPHITI_HOST: "127.0.0.1",
-            GRAPHITI_PORT: String(this.resolved.graphitiPort),
-            JOURNAL_NAMESPACE: this.resolved.journalNamespace,
-            MANAGE_MODEL_GATEWAY: "true",
-            MODEL_GATEWAY_COMMAND: modelGatewayCommand,
-            MODEL_GATEWAY_HOST: "127.0.0.1",
-            MODEL_GATEWAY_PORT: String(this.resolved.modelGatewayPort),
-          },
+          command: commandLine([resolved.python, "-m", "dbx_tools.graphiti"]),
+          env: graphitiRuntimeEnvironment("start", resolved),
         },
         {
           name: "caddy",
           command: commandLine([
-            this.resolved.python,
+            resolved.python,
             "-m",
             "dbx_tools.graphiti.proxy",
             "--proxy-port",
-            String(this.resolved.proxyPort),
+            String(resolved.proxyPort),
             "--graphiti-port",
-            String(this.resolved.graphitiPort),
+            String(resolved.graphitiPort),
           ]),
           env: process.env,
         },
@@ -183,9 +175,9 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.mcpServerSweep = setInterval(() => this.closeIdleMcpServers(), MCP_SERVER_SWEEP_MS);
     this.mcpServerSweep.unref();
     this.logger.info("sidecars launched", {
-      graphitiPort: this.resolved.graphitiPort,
-      modelGatewayPort: this.resolved.modelGatewayPort,
-      proxyPort: this.resolved.proxyPort,
+      graphitiPort: resolved.graphitiPort,
+      modelGatewayPort: resolved.modelGatewayPort,
+      proxyPort: resolved.proxyPort,
       mcpPath: MCP_PATH,
     });
   }

@@ -7594,8 +7594,10 @@ var osPath = {
 var readBytes = evaluate("lambda path: list(open(path, 'rb').read())");
 var readText = evaluate("lambda path: open(path, encoding='utf-8').read()");
 var writeBytes = evaluate("lambda path, content: open(path, 'wb').write(bytes(int(value) for value in content))");
+var appendBytes = evaluate("lambda path, content: open(path, 'ab').write(bytes(int(value) for value in content))");
 var mkdir = evaluate("lambda path, recursive: __import__('os').makedirs(path, exist_ok=recursive) if recursive else __import__('os').mkdir(path)");
 var listDirectory = evaluate("lambda path: [{'name': entry.name, 'directory': entry.is_dir(), 'file': entry.is_file()} for entry in __import__('pathlib').Path(path).iterdir()]");
+var readLink = evaluate("__import__('os').readlink");
 var statPath = evaluate("lambda path: {'directory': __import__('os').path.isdir(path), 'file': __import__('os').path.isfile(path), 'mode': __import__('os').stat(path).st_mode, 'mtimeMs': __import__('os').stat(path).st_mtime * 1000, 'size': __import__('os').stat(path).st_size}");
 var popen = evaluate("lambda command, args, environment, input_text: __import__('subprocess').Popen([command, *list(args)], env=dict(environment) if environment is not None else None, stdin=(__import__('subprocess').PIPE if input_text is not None else None), stdout=__import__('subprocess').PIPE, stderr=__import__('subprocess').PIPE, text=True)");
 var communicate = evaluate("lambda proc, input_text: (lambda out: {'returncode': proc.returncode, 'stdout': out[0], 'stderr': out[1]})(proc.communicate(input=input_text))");
@@ -7608,10 +7610,14 @@ var rmdir = evaluate("__import__('os').rmdir");
 var unlink = evaluate("__import__('os').unlink");
 var host = {
   crypto: {
-    randomBytes: evaluate("lambda length: list(__import__('os').urandom(int(length)))"),
-    sha256: evaluate("lambda content: __import__('hashlib').sha256(bytes(int(value) for value in content)).hexdigest()")
+    digest: evaluate("lambda algorithm, content, encoding: (lambda value: value.hexdigest() if encoding == 'hex' else __import__('base64').b64encode(value.digest()).decode('ascii') if encoding == 'base64' else list(value.digest()))(__import__('hashlib').new(algorithm, bytes(int(item) for item in content)))"),
+    hashes: evaluate("lambda: sorted(__import__('hashlib').algorithms_available)"),
+    randomBytes: evaluate("lambda length: list(__import__('os').urandom(int(length)))")
   },
   file: {
+    async appendBytes(path, content) {
+      await toThread(appendBytes, path, content);
+    },
     async chmod(path, mode) {
       await toThread(chmod, path, mode);
     },
@@ -7634,10 +7640,13 @@ var host = {
     async readDirectory(path) {
       return toThread(listDirectory, path);
     },
+    readDirectorySync: (path) => listDirectory(path),
+    readLinkSync: (path) => String(readLink(path)),
     readTextSync: (path) => String(readText(path)),
     async realpath(path) {
       return String(await toThread(osPath.realpath, path));
     },
+    realpathSync: (path) => String(osPath.realpath(path)),
     async remove(path, recursive, force) {
       if (!await toThread(osPath.exists, path)) {
         if (!force)
@@ -7654,6 +7663,7 @@ var host = {
     async stat(path) {
       return toThread(statPath, path);
     },
+    statSync: (path) => statPath(path),
     async touch(path, atimeMs, mtimeMs) {
       await toThread(evaluate("lambda path, atime, mtime: __import__('os').utime(path, (atime / 1000, mtime / 1000))"), path, atimeMs, mtimeMs);
     },
@@ -9492,20 +9502,21 @@ class DatabricksPersonalAccessTokenProvider {
 
 // projen/shims/python-node/crypto.ts
 class PythonHash {
+  algorithm;
   content = [];
+  constructor(algorithm) {
+    this.algorithm = algorithm;
+  }
   update(value) {
     const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
     this.content.push(...bytes);
     return this;
   }
   digest(encoding) {
-    const hex = pythonHost().crypto.sha256(this.content);
-    if (encoding === "hex")
-      return hex;
-    if (encoding !== undefined) {
-      throw new Error(`Unsupported digest encoding: ${encoding}`);
-    }
-    const bytes = Uint8Array.from(hex.match(/.{2}/g)?.map((value) => Number.parseInt(value, 16)) ?? []);
+    const digest = pythonHost().crypto.digest(this.algorithm, this.content, encoding);
+    if (typeof digest === "string")
+      return digest;
+    const bytes = Uint8Array.from(digest);
     bytes.readBigInt64BE = (offset) => {
       let value = 0n;
       for (const byte of bytes.slice(offset, offset + 8)) {
@@ -9517,20 +9528,33 @@ class PythonHash {
   }
 }
 function createHash(algorithm) {
-  if (algorithm.toLowerCase() !== "sha256") {
+  const normalized = algorithm.toLowerCase();
+  if (!getHashes().includes(normalized)) {
     throw new Error(`Unsupported hash algorithm: ${algorithm}`);
   }
-  return new PythonHash;
+  return new PythonHash(normalized);
+}
+function getHashes() {
+  return pythonHost().crypto.hashes();
 }
 
 // projen/shims/python-node/fs.ts
 var import_node_stream2 = __toESM(require_stream_browserify(), 1);
+
+// projen/shims/python-node/fs-promises.ts
+var import_node_buffer2 = __toESM(require_buffer(), 1);
+
+// projen/shims/python-node/fs.ts
 function existsSync(path) {
   return pythonHost().file.exists(String(path));
 }
 function readFileSync(path, _encoding) {
   return pythonHost().file.readTextSync(String(path));
 }
+function realpathSync(path) {
+  return pythonHost().file.realpathSync(String(path));
+}
+realpathSync.native = realpathSync;
 
 // projen/shims/python-node/os.ts
 function homedir() {
