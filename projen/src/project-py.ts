@@ -81,6 +81,8 @@ export interface DBXToolsPythonWorkspaceOptions {
   /** uv strategy for repositories that intentionally use multiple trusted indexes. */
   readonly indexStrategy?: "first-index" | "unsafe-first-match" | "unsafe-best-match";
   readonly ruffTarget?: string;
+  /** Python version installed in validation, documentation, and release workflows. */
+  readonly workflowPythonVersion?: string;
   readonly workspaceName?: string;
   readonly devDependencies?: readonly string[];
   readonly testPaths?: readonly string[];
@@ -319,9 +321,9 @@ export class DBXToolsPythonWorkspace extends Component {
     }));
     const resolvedOptions = { ...options, packages };
     this.requiresPython = options.requiresPython ?? ">=3.10";
-    this.workflowPythonVersion = pythonVersionFromRuffTarget(
-      options.ruffTarget ?? DEFAULT_RUFF_TARGET,
-    );
+    this.workflowPythonVersion =
+      options.workflowPythonVersion ??
+      pythonVersionFromRuffTarget(options.ruffTarget ?? DEFAULT_RUFF_TARGET);
     this.version = readWorkspaceVersion(project.outdir);
     this.file = this.emitWorkspace(project, resolvedOptions, scope);
     this.packages = packages.map(

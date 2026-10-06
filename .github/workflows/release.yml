@@ -65,7 +65,7 @@ jobs:
         if: ${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' || steps.release.outputs.pypi == 'true' }}
         uses: actions/setup-python@v7.0.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: Setup uv
         id: setup_uv
         if: ${{ steps.release.outputs.validation == 'true' || steps.release.outputs.docs == 'true' || steps.release.outputs.pypi == 'true' }}

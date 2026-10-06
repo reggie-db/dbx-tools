@@ -55,6 +55,7 @@ describe("DBXToolsPythonWorkspace", () => {
       requiresPython: ">=3.12",
       indexStrategy: "unsafe-best-match",
       ruffTarget: "py312",
+      workflowPythonVersion: "3.13",
       ruffExcludes: ["python/packages/app/src/fixture/app/_upstream"],
       lintPaths: ["python"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
@@ -118,7 +119,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.equal(publishCore.env?.BUN_VERSION, undefined);
     const build = release.jobs["build-release"]!;
     assert.match(workflowStep(build, "Setup Python").uses ?? "", /^actions\/setup-python@/);
-    assert.deepEqual(workflowStep(build, "Setup Python").with, { "python-version": "3.12" });
+    assert.deepEqual(workflowStep(build, "Setup Python").with, { "python-version": "3.13" });
     assert.equal(workflowStep(build, "Setup uv").uses, "astral-sh/setup-uv@v7");
     assert.equal(workflowStep(build, "Setup uv").with, undefined);
     assert.ok(
