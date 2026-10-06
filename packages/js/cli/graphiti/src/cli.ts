@@ -7,17 +7,13 @@
  *
  * @module
  */
-import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
+import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args/args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
 import {
-  GRAPHITI_COMMAND_ENV,
   GraphitiCliOptionsSchema,
-  GRAPHITI_OPTIONS_ENV,
   GraphitiOptionsSchema,
   resolveGraphitiOptions,
-  serializeGraphitiOptions,
-  type GraphitiCommand,
   type GraphitiOptions,
 } from "@dbx-tools/shared-graphiti";
 import { Command } from "commander";
@@ -31,9 +27,9 @@ import {
 
 /** Injectable runtime and service lifecycle boundaries for CLI callers. */
 export interface GraphitiCliDependencies {
-  /** Run one Python Graphiti operation. */
-  run(command: GraphitiCommand, options: GraphitiRuntimeOptions): Promise<void>;
-  /** Bootstrap the matching Python runtime before service installation. */
+  /** Run the Node-supervised Graphiti stack. */
+  run(options: GraphitiRuntimeOptions): Promise<void>;
+  /** Ensure the matching Python package before service installation. */
   readonly prepare?: (python: string) => Promise<void>;
   /** Shared service command dependencies for tests and embedding. */
   readonly service?: CliServiceCliDependencies;
@@ -46,23 +42,19 @@ export type GraphitiServiceOptions = GraphitiOptions;
 export function graphitiServiceDefinition(
   options: GraphitiServiceOptions = {},
 ): CliServiceDefinition {
-  const resolved = resolveGraphitiOptions({
+  const parsed = GraphitiOptionsSchema.parse({
     ...options,
     modelGatewayCommand: options.modelGatewayCommand ?? ensureGraphitiModelGateway(),
   });
+  const { graphitiArgs, ...cliOptions } = parsed;
   return defineService(import.meta.url, {
     command: {
-      executable: resolved.python,
-      arguments: ["-m", "dbx_tools.graphiti"],
-      environment: {
-        [GRAPHITI_COMMAND_ENV]: "start",
-        [GRAPHITI_OPTIONS_ENV]: serializeGraphitiOptions(resolved),
-      },
+      arguments: [...serializeArgs(cliOptions), ...graphitiArgs],
     },
   });
 }
 
-/** Build foreground, detached, inspection, and shared service commands. */
+/** Build foreground execution and shared desktop-service commands. */
 export function buildProgram(
   name = "dbx graphiti",
   dependencies: GraphitiCliDependencies = { run: runGraphiti },
@@ -77,33 +69,8 @@ export function buildProgram(
   )
     .argument("[args...]", "arguments forwarded to the pinned Graphiti MCP server")
     .action(async (args: string[]) => {
-      await dependencies.run("start", graphitiOptions(program, args));
+      await dependencies.run(graphitiOptions(program, args));
     });
-
-  for (const [commandName, description] of [
-    ["start", "Start Neo4j, the model gateway, and Graphiti in the foreground"],
-    ["up", "Start Neo4j, the model gateway, and Graphiti in the background"],
-  ] as const) {
-    program.addCommand(
-      new Command(commandName)
-        .description(description)
-        .argument("[args...]", "arguments forwarded to the pinned Graphiti MCP server")
-        .action(async (args: string[]) => {
-          await dependencies.run(commandName, graphitiOptions(program, args));
-        }),
-    );
-  }
-  for (const [commandName, description] of [
-    ["down", "Stop Graphiti, the model gateway, and Neo4j"],
-    ["status", "Show native process and endpoint status"],
-    ["env", "Print resolved runtime and connection settings"],
-  ] as const) {
-    program.addCommand(
-      new Command(commandName).description(description).action(async () => {
-        await dependencies.run(commandName, graphitiOptions(program));
-      }),
-    );
-  }
 
   program.hook("preAction", async (_command, action) => {
     if (action.name() === "install") {

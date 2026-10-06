@@ -1,74 +1,44 @@
-# dbx-tools-graphiti
+# `dbx-tools-graphiti`
 
-Python runtime support for dbx-tools Graphiti integrations. This package runs
-the pinned Graphiti MCP server, local Neo4j process, model-gateway connection,
-and optional PostgreSQL write journal used by `@dbx-tools/cli-graphiti` and
-`@dbx-tools/appkit-graphiti`.
+Internal Python adapter for the Node-owned dbx-tools Graphiti runtime. The
+package loads the pinned upstream Graphiti `0.29.3` MCP source, resolves shared
+Databricks model settings through generated PythonMonkey bindings, and connects
+Graphiti to the private FalkorDB Unix socket supplied by Node.
 
-The public command-line interface belongs to the JavaScript CLI package. The
-Python `cli` module is an internal dispatcher that receives validated,
-serialized configuration from that owner; it does not maintain a second option
-parser or configuration schema.
+## Run Through The Owning CLI
 
-## Run The Stack
-
-Install and invoke the owning CLI:
+Install and invoke the JavaScript owner:
 
 ```sh
 bun add --global @dbx-tools/cli-graphiti
 dbx-graphiti --profile MY-PROFILE
 ```
 
-The launcher installs the matching Python package when needed, resolves the
-selected Databricks models, starts the private model gateway and Neo4j, and then
-launches Graphiti. The default MCP endpoint is
-`http://127.0.0.1:8000/mcp/`.
+The Node launcher installs the matching Python package when needed, starts
+durable embedded FalkorDB and the optional model gateway, then runs this adapter.
+The default MCP endpoint is `http://127.0.0.1:8000/mcp/`.
 
-For every supported command, environment variable, default, and option, use:
+## Understand The Boundary
 
-```sh
-dbx-graphiti --help
-dbx-graphiti start --help
-```
+This package does not own a second CLI schema, database process, persistence
+policy, model gateway, desktop service, or AppKit lifecycle. Its generated
+bindings consume the Zod contract from `@dbx-tools/shared-graphiti` and model
+selection from `@dbx-tools/model`.
 
-The generated reference in
-[`@dbx-tools/cli-graphiti`](../../js/cli/graphiti) comes from that same parser.
+Upstream publishes `graphiti-core` but not the MCP application. This wheel
+bundles the pinned MCP source tree so runtime downloads and tool bootstrapping
+are unnecessary. `_upstream/SOURCE.json` records the exact upstream tag, source
+path, and file hashes used by the package tests. Java, Neo4j, mise, uv project
+environments, Honcho, Caddy, and PostgreSQL journaling are not part of this
+package.
 
-## Runtime Data
-
-The runtime keeps Neo4j data, generated credentials, process state, and logs in
-the Graphiti home directory. Defaults are:
-
-- macOS: `~/Library/Application Support/dbx-tools/graphiti`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/dbx-tools/graphiti`
-
-Set `GRAPHITI_HOME` or pass the CLI's `--graphiti-home` option to use another
-directory. Removing the directory removes the local graph.
-
-## Durable Recovery
-
-Local Neo4j is the active graph. When journal persistence is configured, graph
-mutations are appended to PostgreSQL before they are delegated to Neo4j. On
-startup, Graphiti replays the journal in sequence to rebuild an empty local
-graph.
-
-Use one journal namespace per logical graph. Replay is ordered and at least
-once: a process failure can leave an attempted mutation in the journal even if
-the original caller did not receive success. Graphiti's UUID-based mutations
-work with this model; custom non-idempotent mutations must provide their own
-replay safety.
-
-The journal does not replicate writes to concurrent Graphiti instances and does
-not compact itself. Do not delete old entries unless another complete recovery
-snapshot exists.
-
-## AppKit Integration
+## Use With AppKit
 
 Use [`@dbx-tools/appkit-graphiti`](../../js/node/appkit-graphiti) when Graphiti
-runs beside an AppKit server. It supervises the Python runtime and proxy,
-publishes user-scoped memory tools, and uses the same shared Zod configuration
-contract as the CLI.
+runs beside an AppKit server. It reuses the Node runtime, publishes user-scoped
+memory tools, and forwards the app's private identities without creating a
+parallel Python service owner.
 
 Direct Python callers should treat `dbx_tools.graphiti.cli` and generated Node
-bindings as internal runtime boundaries. Reuse the JavaScript CLI or AppKit
-package instead of creating another Graphiti configuration owner.
+bindings as internal runtime boundaries. Start Graphiti through the JavaScript
+CLI or AppKit plugin.

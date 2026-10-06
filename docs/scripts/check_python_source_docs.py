@@ -22,7 +22,10 @@ def collect_undocumented(root: Path) -> list[Finding]:
 
     findings: list[Finding] = []
     for source in sorted((root / "packages" / "py").glob("*/src/**/*.py")):
-        if any(part in {"generated", "_generated", "__pycache__"} for part in source.parts):
+        if any(
+            part in {"generated", "_generated", "_upstream", "__pycache__"}
+            for part in source.parts
+        ):
             continue
         module = ast.parse(source.read_text(), filename=str(source))
         if source.name != "__init__.py" and ast.get_docstring(module) is None:

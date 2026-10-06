@@ -32,10 +32,9 @@ handle the topic bus, static delivery, deployment staging, and shared types.
 - `lakebase()` (AppKit) — backs Mastra Memory.
 - `graphiti()` from
   [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
-  the Python Graphiti MCP sidecar, journals its graph writes to the same
-  Lakebase binding, and mounts its Caddy-backed MCP transport at
-  `/api/graphiti/mcp` on the AppKit server. Graphiti groups use the same
-  per-user resource id as Mastra memory.
+  Node-owned durable FalkorDB and the Python Graphiti MCP adapter, then mounts
+  its user-scoped transport at `/api/graphiti/mcp` on the AppKit server.
+  Graphiti groups use the same per-user resource id as Mastra memory.
 - `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
   [`@dbx-tools/postgres`](../../../js/node/postgres) on the Lakebase pool:
   `POST /api/bus-demo/messages` broadcasts, `GET /api/bus-demo/events` streams to
@@ -74,14 +73,11 @@ bun run demo
 ```
 
 From the repository root, this builds the client once, then starts AppKit at
-`http://localhost:8000`. Graphiti, the managed model gateway, and Caddy use separate
-loopback ports. A local uv Python emitter publishes `Hello world` onto the Bus
-page every random 5 to 10 seconds. The
-demo runner reads the endpoint from this package's bundle defaults and uses
+`http://localhost:8000`. Graphiti and the managed model gateway use separate
+loopback ports. The demo runner reads the endpoint from this package's bundle defaults and uses
 `@dbx-tools/appkit` auto-configuration once before passing the resolved
-Lakebase environment to every child. The emitter is not included in the
-Databricks App deployment. See the repository root README and `AGENTS.md` for
-workspace setup and environment behavior.
+Lakebase environment to every child. See the repository root README and
+`AGENTS.md` for workspace setup and environment behavior.
 
 For focused assistant UI work, optional integrations can be skipped and email
 can use the local file outbox:
@@ -95,10 +91,8 @@ The feature flags default to enabled, so normal demo and deployment behavior is
 unchanged.
 
 On shutdown, AppKit closes the per-user MCP servers and internal client.
-`concurrently` terminates Graphiti and Caddy, Honcho forwards termination to
-Graphiti and the managed model gateway, and both supervisors escalate unresponsive
-children after their bounded grace periods. The Python launcher stops Neo4j
-when Honcho exits.
+The Graphiti plugin terminates its Python adapter and managed model gateway,
+then closes FalkorDB through the shared durable lifecycle.
 
 ## Deploy
 
@@ -119,9 +113,8 @@ databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
 The staged app includes both `package.json` and `requirements.txt`. Databricks
 Apps installs the Node server and matching `dbx-tools-graphiti` Python release;
 the bundle sets `PYTHON=./.venv/bin/python` so the Graphiti plugin uses that
-Python 3.11 environment. The launcher then pins upstream Graphiti's `uv`
-project to the same interpreter minor. `UV_PYTHON=3.11` remains as an
-explicit override. Caddy installs through mise on first start.
+Python 3.11 environment. The Python wheel includes the pinned upstream MCP
+source, while Node owns FalkorDB and process supervision.
 Staging replaces each workspace dependency with the exact root version and writes
 the matching `dbx-tools-graphiti==<version>` requirement. The staged app expects
 that version to exist in npm and PyPI; local source changes are not bundled as

@@ -1,8 +1,8 @@
 # @dbx-tools/cli-graphiti
 
 Run Graphiti graph memory against Databricks-hosted chat and embedding models.
-The launcher owns the local Neo4j runtime, model-gateway process, Graphiti
-process, and optional desktop-service lifecycle.
+The launcher owns durable embedded FalkorDB, the optional model-gateway
+process, the pinned Python Graphiti MCP adapter, and desktop-service lifecycle.
 
 ## Install
 
@@ -31,14 +31,7 @@ dbx graphiti --profile MY-PROFILE
 ```
 
 The default MCP endpoint is `http://127.0.0.1:8000/mcp/`. Stop the foreground
-stack with `Ctrl-C`, or use `up`, `status`, and `down` for a detached local
-runtime:
-
-```sh
-dbx graphiti up --profile MY-PROFILE
-dbx graphiti status
-dbx graphiti down
-```
+stack with `Ctrl-C`. Use the shared `service` commands for detached lifecycle.
 
 ## Choose Models
 
@@ -65,20 +58,20 @@ Use `--openai-api-key` when the external gateway requires one.
 
 ## Persist Graph Writes
 
-Neo4j data lives under the configured Graphiti home directory. For durable
-recovery across lost local disks, configure the PostgreSQL write journal with a
-Databricks profile or an explicit database URL:
+FalkorDB writes the active graph to a local RDB under the configured Graphiti
+home directory. Snapshot creation is change-aware and uses the same durable
+runtime as `@dbx-tools/falkor-db`:
 
 ```sh
 dbx graphiti \
   --profile MY-PROFILE \
-  --journal-namespace my-agent-memory
+  --falkor-data-dir ~/.local/share/my-agent-memory \
+  --falkor-snapshot-seconds 60
 ```
 
-The journal records mutations before they reach the local graph and replays
-them in order when Graphiti starts. Use a distinct namespace for each logical
-graph. The journal is append-only; retention and full-snapshot policy remain an
-operator responsibility.
+The launcher restores the local RDB before Graphiti starts and closes FalkorDB
+with `SHUTDOWN NOSAVE` after its change-aware persistence policy has completed.
+Use a separate data directory for each logical graph.
 
 ## Install A Desktop Service
 
@@ -123,92 +116,34 @@ dbx graphiti [options] [command] [args...]
 
 #### Options
 
-| Option                             | Description                                                                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `-v, --version`                    | output the version number                                                                                                 |
-| `--python <value>`                 | Python executable used to run the matching Graphiti package. (default: "python3", env: PYTHON)                            |
-| `--profile <value>`                | Databricks profile used for model discovery, authentication, and persistence. (env: DATABRICKS_CONFIG_PROFILE)            |
-| `--graphiti-home <value>`          | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
-| `--model <value>`                  | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
-| `--embedder-model <value>`         | Fuzzy embedding-model name or endpoint identifier. (default: "databricks-gte-large-en", env: EMBEDDER_MODEL)              |
-| `--embedder-dimensions <value>`    | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
-| `--model-gateway-url <value>`      | Existing OpenAI-compatible model gateway base URL, including /v1. (env: MODEL_GATEWAY_URL)                                |
-| `--model-gateway-host <value>`     | Listener host for a locally managed model gateway. (default: "127.0.0.1", env: MODEL_GATEWAY_HOST)                        |
-| `--model-gateway-port <value>`     | Listener port for a locally managed model gateway. (default: 4400, env: MODEL_GATEWAY_PORT)                               |
-| `--model-gateway-command <value>`  | Command used to start a locally managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                       |
-| `--manage-model-gateway`           | Whether Graphiti starts and stops a local model gateway. (env: MANAGE_MODEL_GATEWAY)                                      |
-| `--no-manage-model-gateway`        | Disable whether graphiti starts and stops a local model gateway.                                                          |
-| `--open-ai-api-key <value>`        | API key used only with an externally managed OpenAI-compatible endpoint. (env: OPENAI_API_KEY)                            |
-| `--structured-output-mode <value>` | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
-| `--graphiti-host <value>`          | Graphiti MCP listener host. (default: "127.0.0.1", env: GRAPHITI_HOST)                                                    |
-| `--graphiti-port <value>`          | Graphiti MCP listener port. (default: 8000, env: GRAPHITI_PORT)                                                           |
-| `--proxy-port <value>`             | AppKit reverse-proxy listener port. (default: 0, env: PROXY_PORT)                                                         |
-| `--journal-namespace <value>`      | Persistence namespace used by the Graphiti write journal. (env: JOURNAL_NAMESPACE)                                        |
-| `--journal-database-url <value>`   | Explicit PostgreSQL journal URL. (env: JOURNAL_DATABASE_URL)                                                              |
-| `--journal-table <value>`          | PostgreSQL journal table name. (env: JOURNAL_TABLE)                                                                       |
+| Option                                  | Description                                                                                                               |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                         | output the version number                                                                                                 |
+| `--python <value>`                      | Python executable used to run the matching Graphiti package. (default: "python3", env: PYTHON)                            |
+| `--profile <value>`                     | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                          |
+| `--graphiti-home <value>`               | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
+| `--model <value>`                       | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
+| `--embedder-model <value>`              | Fuzzy embedding-model name or endpoint identifier. (default: "databricks-gte-large-en", env: EMBEDDER_MODEL)              |
+| `--embedder-dimensions <value>`         | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
+| `--model-gateway-url <value>`           | Existing OpenAI-compatible model gateway base URL, including /v1. (env: MODEL_GATEWAY_URL)                                |
+| `--model-gateway-host <value>`          | Listener host for a locally managed model gateway. (default: "127.0.0.1", env: MODEL_GATEWAY_HOST)                        |
+| `--model-gateway-port <value>`          | Listener port for a locally managed model gateway. (default: 4400, env: MODEL_GATEWAY_PORT)                               |
+| `--model-gateway-command <value>`       | Command used to start a locally managed model gateway. (env: MODEL_GATEWAY_COMMAND)                                       |
+| `--manage-model-gateway`                | Whether Graphiti starts and stops a local model gateway. (env: MANAGE_MODEL_GATEWAY)                                      |
+| `--no-manage-model-gateway`             | Disable whether graphiti starts and stops a local model gateway.                                                          |
+| `--open-ai-api-key <value>`             | API key used only with an externally managed OpenAI-compatible endpoint. (env: OPENAI_API_KEY)                            |
+| `--structured-output-mode <value>`      | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
+| `--graphiti-host <value>`               | Graphiti MCP listener host. (default: "127.0.0.1", env: GRAPHITI_HOST)                                                    |
+| `--graphiti-port <value>`               | Graphiti MCP listener port. (default: 8000, env: GRAPHITI_PORT)                                                           |
+| `--falkor-data-dir <value>`             | Local directory containing the active FalkorDB RDB. (env: FALKORDB_DATA_DIR)                                              |
+| `--falkor-snapshot-seconds <value>`     | Seconds between change-aware FalkorDB snapshot checks. (default: 300, env: FALKOR_SNAPSHOT_SECONDS)                       |
+| `--falkor-snapshot-min-changes <value>` | Minimum writes required before FalkorDB creates an RDB snapshot. (default: 1, env: FALKOR_SNAPSHOT_MIN_CHANGES)           |
 
 #### Commands
 
-| Command           | Description                                                    |
-| ----------------- | -------------------------------------------------------------- |
-| `start [args...]` | Start Neo4j, the model gateway, and Graphiti in the foreground |
-| `up [args...]`    | Start Neo4j, the model gateway, and Graphiti in the background |
-| `down`            | Stop Graphiti, the model gateway, and Neo4j                    |
-| `status`          | Show native process and endpoint status                        |
-| `env`             | Print resolved runtime and connection settings                 |
-| `service`         | Install and manage the desktop service                         |
-
-### `dbx graphiti start`
-
-Start Neo4j, the model gateway, and Graphiti in the foreground
-
-```sh
-dbx graphiti start [args...]
-```
-
-#### Arguments
-
-| Argument | Description                                           |
-| -------- | ----------------------------------------------------- |
-| `args`   | arguments forwarded to the pinned Graphiti MCP server |
-
-### `dbx graphiti up`
-
-Start Neo4j, the model gateway, and Graphiti in the background
-
-```sh
-dbx graphiti up [args...]
-```
-
-#### Arguments
-
-| Argument | Description                                           |
-| -------- | ----------------------------------------------------- |
-| `args`   | arguments forwarded to the pinned Graphiti MCP server |
-
-### `dbx graphiti down`
-
-Stop Graphiti, the model gateway, and Neo4j
-
-```sh
-dbx graphiti down
-```
-
-### `dbx graphiti status`
-
-Show native process and endpoint status
-
-```sh
-dbx graphiti status
-```
-
-### `dbx graphiti env`
-
-Print resolved runtime and connection settings
-
-```sh
-dbx graphiti env
-```
+| Command   | Description                            |
+| --------- | -------------------------------------- |
+| `service` | Install and manage the desktop service |
 
 ### `dbx graphiti service`
 

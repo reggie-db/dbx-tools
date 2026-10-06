@@ -59348,21 +59348,17 @@ __export(exports_options2, {
   graphitiEnvironment: () => graphitiEnvironment,
   ResolvedGraphitiOptionsSchema: () => ResolvedGraphitiOptionsSchema,
   GraphitiOptionsSchema: () => GraphitiOptionsSchema,
-  GraphitiCommandSchema: () => GraphitiCommandSchema,
   GraphitiCliOptionsSchema: () => GraphitiCliOptionsSchema,
   GRAPHITI_OPTIONS_ENV: () => GRAPHITI_OPTIONS_ENV,
-  GRAPHITI_DEFAULTS: () => GRAPHITI_DEFAULTS,
-  GRAPHITI_COMMAND_ENV: () => GRAPHITI_COMMAND_ENV
+  GRAPHITI_DEFAULTS: () => GRAPHITI_DEFAULTS
 });
 var import_zod6 = __toESM(require_zod(), 1);
 var GRAPHITI_OPTIONS_ENV = "DBX_GRAPHITI_OPTIONS";
-var GRAPHITI_COMMAND_ENV = "DBX_GRAPHITI_COMMAND";
-var GraphitiCommandSchema = import_zod6.z.enum(["start", "up", "down", "status", "env"]).describe("Operations accepted by the internal Graphiti Python runtime.");
 var graphitiText = (description) => import_zod6.z.string().trim().min(1).describe(description);
 var graphitiPort = (description) => exports_options.tcpPortOrZeroSchema.describe(description);
 var GraphitiOptionsSchema = import_zod6.z.object({
   python: graphitiText("Python executable used to run the matching Graphiti package.").default("python3"),
-  profile: exports_options.DatabricksOptionsSchema.shape.profile.describe("Databricks profile used for model discovery, authentication, and persistence."),
+  profile: exports_options.DatabricksOptionsSchema.shape.profile.describe("Databricks profile used for model discovery and authentication."),
   graphitiHome: graphitiText("Application-owned Graphiti runtime directory.").optional(),
   model: graphitiText("Fuzzy chat-model name or endpoint identifier.").default("databricks-gpt-5-nano").meta({ env: "MODEL_NAME" }),
   embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.").default("databricks-gte-large-en"),
@@ -59376,10 +59372,9 @@ var GraphitiOptionsSchema = import_zod6.z.object({
   structuredOutputMode: graphitiText("Structured-output mode forwarded to Graphiti's OpenAI provider.").default("json_object").meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
   graphitiHost: graphitiText("Graphiti MCP listener host.").default("127.0.0.1"),
   graphitiPort: graphitiPort("Graphiti MCP listener port.").default(8000),
-  proxyPort: graphitiPort("AppKit reverse-proxy listener port.").default(0),
-  journalNamespace: graphitiText("Persistence namespace used by the Graphiti write journal.").optional(),
-  journalDatabaseUrl: graphitiText("Explicit PostgreSQL journal URL.").optional(),
-  journalTable: graphitiText("PostgreSQL journal table name.").optional(),
+  falkorDataDir: graphitiText("Local directory containing the active FalkorDB RDB.").optional().meta({ env: "FALKORDB_DATA_DIR" }),
+  falkorSnapshotSeconds: import_zod6.z.coerce.number().int().positive().default(300).describe("Seconds between change-aware FalkorDB snapshot checks."),
+  falkorSnapshotMinChanges: import_zod6.z.coerce.number().int().positive().default(1).describe("Minimum writes required before FalkorDB creates an RDB snapshot."),
   graphitiArgs: import_zod6.z.array(import_zod6.z.string()).default([]).describe("Arguments forwarded to the pinned upstream Graphiti MCP server.")
 }).strict().describe("Graphiti options accepted by JavaScript, Python, and generated bindings.");
 var GraphitiCliOptionsSchema = GraphitiOptionsSchema.omit({ graphitiArgs: true }).describe("Graphiti options represented as Commander flags rather than positional arguments.");
@@ -59397,11 +59392,11 @@ function graphitiOptionOverrides(value) {
 var ResolvedGraphitiOptionsSchema = GraphitiOptionsSchema.transform((options, context) => {
   const manageModelGateway = options.manageModelGateway ?? options.modelGatewayUrl === undefined;
   const modelGatewayUrl = (options.modelGatewayUrl ?? `http://${options.modelGatewayHost}:${options.modelGatewayPort}/v1`).replace(/\/$/, "");
-  if (options.graphitiPort && options.proxyPort && options.graphitiPort === options.proxyPort) {
+  if (options.manageModelGateway !== false && options.graphitiPort && options.modelGatewayPort && options.graphitiPort === options.modelGatewayPort) {
     context.addIssue({
       code: "custom",
-      message: "graphitiPort and proxyPort must be distinct",
-      path: ["proxyPort"]
+      message: "graphitiPort and modelGatewayPort must be distinct",
+      path: ["modelGatewayPort"]
     });
   }
   return {

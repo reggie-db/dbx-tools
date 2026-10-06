@@ -14,15 +14,6 @@ import { z } from "zod";
 /** Environment variable carrying one serialized {@link GraphitiOptions} object. */
 export const GRAPHITI_OPTIONS_ENV = "DBX_GRAPHITI_OPTIONS";
 
-/** Environment variable selecting the internal Python runtime operation. */
-export const GRAPHITI_COMMAND_ENV = "DBX_GRAPHITI_COMMAND";
-
-export const GraphitiCommandSchema = z
-  .enum(["start", "up", "down", "status", "env"])
-  .describe("Operations accepted by the internal Graphiti Python runtime.");
-
-export type GraphitiCommand = z.infer<typeof GraphitiCommandSchema>;
-
 const graphitiText = (description: string) => z.string().trim().min(1).describe(description);
 const graphitiPort = (description: string) => options.tcpPortOrZeroSchema.describe(description);
 
@@ -32,7 +23,7 @@ export const GraphitiOptionsSchema = z
       "python3",
     ),
     profile: options.DatabricksOptionsSchema.shape.profile.describe(
-      "Databricks profile used for model discovery, authentication, and persistence.",
+      "Databricks profile used for model discovery and authentication.",
     ),
     graphitiHome: graphitiText("Application-owned Graphiti runtime directory.").optional(),
     model: graphitiText("Fuzzy chat-model name or endpoint identifier.")
@@ -76,12 +67,21 @@ export const GraphitiOptionsSchema = z
       .meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
     graphitiHost: graphitiText("Graphiti MCP listener host.").default("127.0.0.1"),
     graphitiPort: graphitiPort("Graphiti MCP listener port.").default(8000),
-    proxyPort: graphitiPort("AppKit reverse-proxy listener port.").default(0),
-    journalNamespace: graphitiText(
-      "Persistence namespace used by the Graphiti write journal.",
-    ).optional(),
-    journalDatabaseUrl: graphitiText("Explicit PostgreSQL journal URL.").optional(),
-    journalTable: graphitiText("PostgreSQL journal table name.").optional(),
+    falkorDataDir: graphitiText("Local directory containing the active FalkorDB RDB.")
+      .optional()
+      .meta({ env: "FALKORDB_DATA_DIR" }),
+    falkorSnapshotSeconds: z.coerce
+      .number<number>()
+      .int()
+      .positive()
+      .default(300)
+      .describe("Seconds between change-aware FalkorDB snapshot checks."),
+    falkorSnapshotMinChanges: z.coerce
+      .number<number>()
+      .int()
+      .positive()
+      .default(1)
+      .describe("Minimum writes required before FalkorDB creates an RDB snapshot."),
     graphitiArgs: z
       .array(z.string())
       .default([])
@@ -122,11 +122,16 @@ export const ResolvedGraphitiOptionsSchema = GraphitiOptionsSchema.transform((op
   const modelGatewayUrl = (
     options.modelGatewayUrl ?? `http://${options.modelGatewayHost}:${options.modelGatewayPort}/v1`
   ).replace(/\/$/, "");
-  if (options.graphitiPort && options.proxyPort && options.graphitiPort === options.proxyPort) {
+  if (
+    options.manageModelGateway !== false &&
+    options.graphitiPort &&
+    options.modelGatewayPort &&
+    options.graphitiPort === options.modelGatewayPort
+  ) {
     context.addIssue({
       code: "custom",
-      message: "graphitiPort and proxyPort must be distinct",
-      path: ["proxyPort"],
+      message: "graphitiPort and modelGatewayPort must be distinct",
+      path: ["modelGatewayPort"],
     });
   }
   return {

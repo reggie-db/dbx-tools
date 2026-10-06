@@ -17,10 +17,13 @@ dev = [
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+exclude = [
+  "packages/py/graphiti/src/dbx_tools/graphiti/_upstream",
+  "packages/py/graphiti/src/dbx_tools/graphiti/_generated/**"
+]
 
-[tool.ruff.lint.per-file-ignores]
-"packages/py/postgres/src/dbx_tools/postgres/topic_bus.py" = [ "BLE001" ]
-"packages/example/notebooks/*.ipynb" = [ "BLE001", "F821" ]
+  [tool.ruff.lint]
+  per-file-ignores = { }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -33,18 +36,12 @@ index-strategy = "unsafe-best-match"
   [tool.uv.workspace]
   members = [ "packages/py/*" ]
 
-[tool.uv.sources.dbx-tools-core]
-workspace = true
-
-[tool.uv.sources.dbx-tools-postgres]
-workspace = true
-
 [tool.uv.sources.dbx-tools-graphiti]
 workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
 project-excludes = [
-  "packages/py/postgres/src/dbx_tools/postgres/_generated/**",
+  "packages/py/graphiti/src/dbx_tools/graphiti/_upstream/**",
   "packages/py/graphiti/src/dbx_tools/graphiti/_generated/**"
 ]

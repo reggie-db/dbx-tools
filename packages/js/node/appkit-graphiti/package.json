@@ -34,7 +34,6 @@
     "@dbx-tools/shared-graphiti": "workspace:^",
     "@mastra/core": "catalog:",
     "@mastra/mcp": "catalog:",
-    "concurrently": "catalog:",
     "zod": "catalog:"
   },
   "main": "index.ts",

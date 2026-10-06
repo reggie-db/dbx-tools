@@ -42,8 +42,8 @@ describe("Graphiti options", () => {
     assert.deepEqual(JSON.parse(serializeGraphitiOptions(input)), resolveGraphitiOptions(input));
   });
 
-  it("rejects colliding Graphiti and proxy ports", () => {
-    assert.throws(() => resolveGraphitiOptions({ graphitiPort: 8000, proxyPort: 8000 }));
+  it("rejects colliding Graphiti and managed gateway ports", () => {
+    assert.throws(() => resolveGraphitiOptions({ graphitiPort: 8000, modelGatewayPort: 8000 }));
   });
 
   it("parses environment names without reading process state", () => {
@@ -53,12 +53,14 @@ describe("Graphiti options", () => {
         GRAPHITI_HOME: "/graphiti",
         MODEL_GATEWAY_PORT: "4500",
         MANAGE_MODEL_GATEWAY: "false",
+        FALKORDB_DATA_DIR: "/graphiti/falkor",
       }),
       {
         profile: "PROFILE",
         graphitiHome: "/graphiti",
         modelGatewayPort: 4500,
         manageModelGateway: false,
+        falkorDataDir: "/graphiti/falkor",
       },
     );
   });

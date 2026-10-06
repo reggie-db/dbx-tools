@@ -83,6 +83,7 @@ jspm_packages/
 !/.eslintrc.json
 .release/
 !/.github/workflows/release.yml
+.codex/
 .docs-build/
 .astro/
 .home/
@@ -91,8 +92,6 @@ jspm_packages/
 !projen/shims/python-node/
 !projen/shims/python-node/**
 !/pyproject.toml
-!/packages/py/core/pyproject.toml
-!/packages/py/postgres/pyproject.toml
 !/packages/py/graphiti/pyproject.toml
 .venv/
 .pytest_cache/

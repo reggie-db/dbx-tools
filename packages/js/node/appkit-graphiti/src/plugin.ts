@@ -8,11 +8,9 @@ import { createServer } from "node:net";
 import {
   ConfigurationError,
   Plugin,
-  lakebase,
   toPlugin,
   type IAppRouter,
   type PluginManifest,
-  type ResourceRequirement,
 } from "@databricks/appkit";
 import type {
   AgentToolDefinition,
@@ -21,19 +19,13 @@ import type {
   ToolAnnotations,
   ToolProvider,
 } from "@databricks/appkit/beta";
-import {
-  appkit as dbxAppkit,
-  identity as appkitIdentity,
-  pluginRegistry,
-  toolkitEntries,
-} from "@dbx-tools/appkit";
-import { ensureGraphitiPython, graphitiRuntimeEnvironment } from "@dbx-tools/cli-graphiti/runtime";
+import { appkit as dbxAppkit, identity as appkitIdentity, toolkitEntries } from "@dbx-tools/appkit";
+import { startGraphitiRuntime, type GraphitiRuntime } from "@dbx-tools/cli-graphiti/runtime";
 import { configUtils } from "@dbx-tools/core";
 import { asyncUtils, log, object } from "@dbx-tools/shared-core";
 import { resolveGraphitiOptions } from "@dbx-tools/shared-graphiti";
 import { createTool, type Tool } from "@mastra/core/tools";
 import { MCPClient, MCPServer } from "@mastra/mcp";
-import concurrently, { type Command, type ConcurrentlyResult } from "concurrently";
 import type express from "express";
 import {
   GRAPHITI_CONFIG_SCHEMA,
@@ -42,13 +34,11 @@ import {
   type ResolvedGraphitiPluginConfig,
 } from "./config.ts";
 
-const LAKEBASE_MANIFEST = pluginRegistry.data(lakebase).plugin.manifest;
 const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
 const MCP_TOOL_DISCOVERY_TIMEOUT_MS = 60_000;
 const MCP_TOOL_DISCOVERY_RETRY_MS = 250;
-const SIDECAR_SHUTDOWN_GRACE_MS = 10_000;
 const SCOPED_TOOL_FIELDS = {
   add_memory: "group_id",
   add_triplet: "group_id",
@@ -80,33 +70,22 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     name: "graphiti",
     displayName: "Graphiti",
     description:
-      "Runs the dbx-tools Graphiti MCP sidecar with Lakebase-backed recovery and " +
-      "publishes it through the App's single port with Caddy.",
+      "Runs the dbx-tools Graphiti MCP sidecar with durable embedded FalkorDB and " +
+      "publishes user-scoped tools through the App's single port.",
     stability: "beta",
-    resources: {
-      required: [],
-      optional: [...LAKEBASE_MANIFEST.resources.required],
-    },
+    resources: { required: [], optional: [] },
     config: { schema: GRAPHITI_CONFIG_SCHEMA },
   };
 
-  static getResourceRequirements(): ResourceRequirement[] {
-    return LAKEBASE_MANIFEST.resources.required.map((resource) => ({
-      ...resource,
-      required: true,
-    }));
-  }
-
   private readonly logger = log.logger(this);
-  private commands: Command[] = [];
   private mcp?: MCPClient;
   private mcpServers = new Map<string, UserMcpServer>();
   private mcpServerSweep?: NodeJS.Timeout;
   private mcpTools: Record<string, Tool> = {};
   private resolved?: ResolvedGraphitiPluginConfig;
+  private runtime?: GraphitiRuntime;
   private setupComplete = false;
   private startup?: Promise<void>;
-  private supervision?: ConcurrentlyResult;
   private stopping = false;
   private toolsReady?: Promise<void>;
 
@@ -123,52 +102,20 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
 
   private async startSidecars(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
-    const [graphitiPort, modelGatewayPort, proxyPort] = await distinctPorts(
+    const [graphitiPort, modelGatewayPort] = await distinctPorts(
       configUtils.port(undefined, "DATABRICKS_APP_PORT", 8000, configUtils.ENV_ONLY),
       configured.graphitiPort ?? 0,
       configured.modelGatewayPort ?? 0,
-      configured.proxyPort ?? 0,
     );
     const resolved = resolveGraphitiOptions({
       ...configured,
       graphitiPort,
       modelGatewayPort,
-      proxyPort,
     });
     this.resolved = resolved;
-    await ensureGraphitiPython(resolved.python);
-    this.supervision = concurrently(
-      [
-        {
-          name: "graphiti",
-          command: commandLine([resolved.python, "-m", "dbx_tools.graphiti"]),
-          env: graphitiRuntimeEnvironment("start", resolved),
-        },
-        {
-          name: "caddy",
-          command: commandLine([
-            resolved.python,
-            "-m",
-            "dbx_tools.graphiti.proxy",
-            "--proxy-port",
-            String(resolved.proxyPort),
-            "--graphiti-port",
-            String(resolved.graphitiPort),
-          ]),
-          env: process.env,
-        },
-      ],
-      {
-        killOthersOn: ["failure", "success"],
-        killSignal: "SIGTERM",
-        killTimeout: SIDECAR_SHUTDOWN_GRACE_MS,
-        prefix: "name",
-        prefixColors: false,
-      },
-    );
-    this.commands = this.supervision.commands;
+    this.runtime = await startGraphitiRuntime(resolved);
     this.setupComplete = true;
-    void this.supervision.result.then(
+    void this.runtime.result.then(
       () => this.onSupervisorExit(),
       (error) => this.onSupervisorExit(error),
     );
@@ -177,7 +124,6 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.logger.info("sidecars launched", {
       graphitiPort: resolved.graphitiPort,
       modelGatewayPort: resolved.modelGatewayPort,
-      proxyPort: resolved.proxyPort,
       mcpPath: MCP_PATH,
     });
   }
@@ -266,7 +212,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.mcp ??= new MCPClient({
       id: `appkit-graphiti-${this.resolved.graphitiPort}`,
       servers: {
-        graphiti: { url: new URL(`http://127.0.0.1:${this.resolved.proxyPort}/mcp`) },
+        graphiti: { url: new URL(`http://127.0.0.1:${this.resolved.graphitiPort}/mcp`) },
       },
     });
     const deadline = Date.now() + MCP_TOOL_DISCOVERY_TIMEOUT_MS;
@@ -339,28 +285,16 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> implements Tool
     this.stopping = true;
     if (this.mcpServerSweep) clearInterval(this.mcpServerSweep);
     this.mcpServerSweep = undefined;
-    const commands = this.commands;
-    const supervision = this.supervision;
-    for (const command of commands) command.kill("SIGTERM");
-    const cleanup = Promise.allSettled([
+    await Promise.allSettled([
       ...[...this.mcpServers.values()].map(({ server }) => server.close()),
       this.mcp?.disconnect(),
-      supervision?.result,
+      this.runtime?.close(),
     ]);
-    const completed = await Promise.race([
-      cleanup.then(() => true),
-      asyncUtils.sleep(SIDECAR_SHUTDOWN_GRACE_MS).then(() => false),
-    ]);
-    if (!completed) {
-      this.logger.warn("sidecars ignored SIGTERM; escalating to SIGKILL");
-      for (const command of commands) command.kill("SIGKILL");
-    }
     this.mcpServers.clear();
     this.mcp = undefined;
     this.mcpTools = {};
     this.toolsReady = undefined;
-    this.commands = [];
-    this.supervision = undefined;
+    this.runtime = undefined;
     this.startup = undefined;
   }
 
@@ -468,10 +402,9 @@ async function distinctPorts(
   appPort: number,
   graphitiPort: number,
   modelGatewayPort: number,
-  proxyPort: number,
-): Promise<[number, number, number]> {
+): Promise<[number, number]> {
   const ports = [appPort];
-  for (const configuredPort of [graphitiPort, modelGatewayPort, proxyPort]) {
+  for (const configuredPort of [graphitiPort, modelGatewayPort]) {
     if (configuredPort && ports.includes(configuredPort)) {
       throw new ConfigurationError("Graphiti sidecar ports must differ from DATABRICKS_APP_PORT");
     }
@@ -479,9 +412,5 @@ async function distinctPorts(
     while (ports.includes(port)) port = await availablePort();
     ports.push(port);
   }
-  return ports.slice(1) as [number, number, number];
-}
-
-function commandLine(arguments_: string[]): string {
-  return arguments_.map((value) => `'${value.replaceAll("'", "'\\''")}'`).join(" ");
+  return ports.slice(1) as [number, number];
 }

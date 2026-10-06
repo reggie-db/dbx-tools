@@ -7,4 +7,4 @@ export const PACKAGE_VERSION = "0.9.41";
 export * as cli from "./src/cli.ts";
 export * as runtime from "./src/runtime.ts";
 export type { GraphitiCliDependencies, GraphitiServiceOptions } from "./src/cli.ts";
-export type { GraphitiRuntimeOptions } from "./src/runtime.ts";
+export type { GraphitiRuntimeOptions, GraphitiRuntime } from "./src/runtime.ts";

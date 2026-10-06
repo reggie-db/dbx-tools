@@ -64,9 +64,7 @@ package = "fixture-cache"
 
         cache_dir = tmp_path / "cache"
         value = asyncio.run(
-            cache_round_trip(
-                {"cacheDir": str(cache_dir), "key": "probe", "value": "durable"}
-            )
+            cache_round_trip({"cacheDir": str(cache_dir), "key": "probe", "value": "durable"})
         )
         assert value == "durable"
     finally:

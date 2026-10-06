@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
-import { PACKAGE_IDENTIFIER, stringUtils } from "../index.ts";
+import { stringUtils } from "../index.ts";
 
 const identifierContract = {
   toIdentifier(...input: unknown[]): string {
@@ -113,31 +112,24 @@ describe("stringUtils.dedent", () => {
   });
 });
 
-await polyglotTest(
-  async () => ({ PACKAGE_IDENTIFIER, string: identifierContract }),
-  "string",
-  (implementation, language) => {
-    describe(`stringUtils.toIdentifier (${language})`, () => {
-      it("joins multiple values", () => {
-        assert.equal(implementation.toIdentifier("billing", "Prod"), "billing-prod");
-      });
+describe("stringUtils.toIdentifier", () => {
+  it("joins multiple values", () => {
+    assert.equal(identifierContract.toIdentifier("billing", "Prod"), "billing-prod");
+  });
 
-      it("splits camel case", () => {
-        assert.equal(implementation.toIdentifier("myApp"), "my-app");
-      });
+  it("splits camel case", () => {
+    assert.equal(identifierContract.toIdentifier("myApp"), "my-app");
+  });
 
-      it("tokenizes an acronym boundary", () => {
-        assert.equal(implementation.toIdentifier("XMLHttpRequest"), "xml-http-request");
-      });
+  it("tokenizes an acronym boundary", () => {
+    assert.equal(identifierContract.toIdentifier("XMLHttpRequest"), "xml-http-request");
+  });
 
-      it("normalizes punctuation", () => {
-        assert.equal(implementation.toIdentifier("already_snake"), "already-snake");
-        assert.equal(implementation.toIdentifier("fixtureOverride"), "fixture-override");
-      });
-    });
-  },
-  { identifiers: { [Language.Python]: "dbx_tools.core.string" } },
-);
+  it("normalizes punctuation", () => {
+    assert.equal(identifierContract.toIdentifier("already_snake"), "already-snake");
+    assert.equal(identifierContract.toIdentifier("fixtureOverride"), "fixture-override");
+  });
+});
 
 describe("string tokenize capitalize overrides", () => {
   it("uppercases ai and fs when capitalizing", () => {

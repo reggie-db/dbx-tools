@@ -51,11 +51,7 @@ import {
   mergePreferFreshRecord,
   type MetadataCache,
 } from "./metadata-cache.ts";
-import {
-  inheritsNativeWebSearch,
-  isFoundationModelIdentity,
-  modelSearchQuery,
-} from "./policy.ts";
+import { inheritsNativeWebSearch, isFoundationModelIdentity, modelSearchQuery } from "./policy.ts";
 import {
   defaultReasoningLevels,
   documentedReasoningLevels,

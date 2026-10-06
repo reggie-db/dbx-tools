@@ -111,13 +111,6 @@ const root = new project.DBXToolsNodeProject({
   ],
 });
 
-const installerTest = root.addTask("test:installer", {
-  description:
-    "Test the standalone mise installer (set RUN_DOCKER_INSTALL_TESTS=1 for container coverage)",
-});
-installerTest.exec("bun test scripts/install.test.ts");
-root.testTask.spawn(installerTest);
-
 const sourceDocs = root.addTask("docs:check-source", {
   description: "Reject new undocumented public TypeScript exports",
 });
@@ -129,6 +122,7 @@ const readmeDocs = root.addTask("docs:check-readmes", {
 readmeDocs.exec("bun test docs/scripts/cli-reference.test.mjs");
 readmeDocs.exec("bun docs/scripts/sync-cli-readmes.mjs --check");
 readmeDocs.exec("bun docs/scripts/sync-readmes.mjs");
+readmeDocs.exec("bun docs/scripts/generate-agent-skill.mjs");
 
 root.addTask("docs:cli", {
   description: "Update package README command references from their CLI parsers",
@@ -151,6 +145,7 @@ root.addTask("docs:cli", {
 // generated files and silently void every `!` negation projen emits for them.
 // Whole directories, since nothing inside any of them is ever committed.
 root.gitignore.addPatterns(
+  ".codex/",
   ".docs-build/",
   ".astro/",
   ".home/",
@@ -390,13 +385,14 @@ project.applyToProjects(root, { identifierName: "cli-model-gateway", tags: "cli"
 project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (p) => {
   p.package.addField(
     "description",
-    "Graphiti runtime bootstrap, foreground CLI, and desktop service",
+    "Node-supervised Graphiti foreground CLI and desktop service",
   );
   p.addDeps(
     "@dbx-tools/cli-model-gateway@workspace:^",
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/core@workspace:^",
+    "@dbx-tools/falkor-db@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
   );
   p.package.addBin({ "dbx-graphiti": "./bin/dbx-graphiti.ts" });
@@ -601,10 +597,8 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
   p.addDevDeps("@types/express@catalog:", "@types/html-to-text@^9", "@types/json-schema@^7");
 });
 
-// node-appkit-graphiti: AppKit lifecycle + Caddy routing for the Python Graphiti
-// sidecar. The Python package owns Graphiti, Neo4j, the Python model proxy, and
-// Postgres replay; this package owns binary resolution, child supervision, and
-// the single public port.
+// node-appkit-graphiti: AppKit lifecycle and user-scoped MCP publication for
+// the Node-supervised Graphiti stack.
 project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
   p.package.addField(
     "description",
@@ -619,7 +613,6 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@dbx-tools/cli-graphiti@workspace:^",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
-    "concurrently@catalog:",
     "zod@catalog:",
   );
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "vitest@catalog:");
@@ -1344,45 +1337,17 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 const pythonNodeBindingDependencies = ["httpx>=0.28,<1", "pythonmonkey>=1.3,<2"];
 const pythonPackages: project.PythonPackageOptions[] = [
   {
-    directory: "core",
-    description:
-      "Configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
-    internalDependencies: [],
-    dependencies: [],
-  },
-  {
-    directory: "postgres",
-    description:
-      "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus",
-    internalDependencies: [],
-    dependencies: [
-      ...pythonNodeBindingDependencies,
-      "asyncpg>=0.30",
-      "databricks-sdk>=0.123.0",
-      "greenlet>=3.2",
-      "psycopg[binary]>=3.2.9",
-      "sqlalchemy>=2.0.41",
-    ],
-    nodeBindings: [
-      {
-        package: "@dbx-tools/auth",
-      },
-      {
-        package: "@dbx-tools/postgres",
-        modules: ["identity"],
-      },
-    ],
-  },
-  {
     directory: "graphiti",
-    description:
-      "Native Graphiti MCP and Neo4j launcher with Databricks models through model-gateway",
-    internalDependencies: ["core", "postgres"],
+    description: "Pinned Graphiti MCP adapter for Node-owned FalkorDB and model-gateway",
+    internalDependencies: [],
     dependencies: [
       ...pythonNodeBindingDependencies,
-      "databricks-sdk>=0.123.0",
-      "graphiti-core==0.29.3",
-      "honcho>=2,<3",
+      "graphiti-core[falkordb]==0.29.3",
+      "mcp>=1.27.2,<2",
+      "openai>=2.41.0",
+      "pydantic-settings>=2,<3",
+      "pyyaml>=6.0.3,<7",
+      "typing-extensions>=4",
     ],
     nodeBindings: [
       {
@@ -1407,11 +1372,9 @@ new project.DBXToolsPythonWorkspace(root, {
   // This workspace uses two trusted corporate indexes. The first can lag the
   // local devpi index, so uv must consider the pinned version from both.
   indexStrategy: "unsafe-best-match",
-  lintPaths: ["packages/py", "packages/example/python", "packages/example/notebooks"],
-  ruffPerFileIgnores: {
-    "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
-    "packages/example/notebooks/*.ipynb": ["BLE001", "F821"],
-  },
+  lintPaths: ["packages/py"],
+  ruffExcludes: ["packages/py/graphiti/src/dbx_tools/graphiti/_upstream"],
+  pyreflyProjectExcludes: ["packages/py/graphiti/src/dbx_tools/graphiti/_upstream/**"],
   release: true,
 });
 new BrandPackageAssets(root);

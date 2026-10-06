@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { GRAPHITI_PYTHON_VERSION } from "../src/_python-runtime.ts";
 import { ensureGraphitiModelGateway, ensureGraphitiPython } from "../src/runtime.ts";
 
-describe("Graphiti runtime bootstrap", () => {
+describe("Graphiti runtime preparation", () => {
   it("does not install when the matching Python version is present", async () => {
     const calls: string[][] = [];
     await ensureGraphitiPython("python3", async (_file, args) => {

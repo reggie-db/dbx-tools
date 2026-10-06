@@ -51,7 +51,15 @@ describe("parser-owned CLI references", () => {
 
   it("renders every Graphiti command and schema-derived option", () => {
     const reference = commanderReference(buildGraphitiProgram());
-    for (const command of ["start", "up", "down", "status", "env", "service"]) {
+    for (const command of [
+      "service",
+      "service install",
+      "service start",
+      "service stop",
+      "service restart",
+      "service status",
+      "service uninstall",
+    ]) {
       assert.match(reference, new RegExp(`dbx graphiti ${command}`));
     }
     for (const option of [
@@ -61,10 +69,13 @@ describe("parser-owned CLI references", () => {
       "--embedder-model <value>",
       "--model-gateway-url <value>",
       "--graphiti-port <value>",
-      "--journal-database-url <value>",
+      "--falkor-data-dir <value>",
+      "--falkor-snapshot-seconds <value>",
     ]) {
       assert.ok(reference.includes(option), `missing ${option}`);
     }
+    assert.doesNotMatch(reference, /dbx graphiti (?:start|up|down|env)(?:\s|`)/);
+    assert.doesNotMatch(reference, /journal-database-url/);
     assert.doesNotMatch(reference, /--help|display help/);
   });
 

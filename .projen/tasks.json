@@ -173,6 +173,9 @@
         },
         {
           "exec": "bun docs/scripts/sync-readmes.mjs"
+        },
+        {
+          "exec": "bun docs/scripts/generate-agent-skill.mjs"
         }
       ]
     },
@@ -316,35 +319,6 @@
       "name": "post-compile",
       "description": "Runs after successful compilation"
     },
-    "postgres:python-runtime": {
-      "name": "postgres:python-runtime",
-      "description": "Generate Node bindings for Python package postgres",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
-            "--project",
-            "packages/py/postgres"
-          ]
-        }
-      ]
-    },
-    "postgres:python-runtime:check": {
-      "name": "postgres:python-runtime:check",
-      "description": "Verify generated Node bindings for Python package postgres",
-      "steps": [
-        {
-          "execArgs": [
-            "bun",
-            "node_modules/@dbx-tools/projen/tasks/python-node-bindings.ts",
-            "--project",
-            "packages/py/postgres",
-            "--check"
-          ]
-        }
-      ]
-    },
     "pre-compile": {
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
@@ -363,7 +337,7 @@
       "description": "Format Python workspace packages",
       "steps": [
         {
-          "exec": "uv run ruff format packages/py packages/example/python packages/example/notebooks"
+          "exec": "uv run ruff format packages/py"
         }
       ]
     },
@@ -372,7 +346,7 @@
       "description": "Lint Python workspace packages",
       "steps": [
         {
-          "exec": "uv run ruff check packages/py packages/example/python packages/example/notebooks"
+          "exec": "uv run ruff check packages/py"
         }
       ]
     },
@@ -447,25 +421,10 @@
           "spawn": "eslint"
         },
         {
-          "spawn": "test:installer"
-        },
-        {
-          "spawn": "postgres:python-runtime:check"
-        },
-        {
           "spawn": "graphiti:python-runtime:check"
         },
         {
           "exec": "bun run --filter '*' test"
-        }
-      ]
-    },
-    "test:installer": {
-      "name": "test:installer",
-      "description": "Test the standalone mise installer (set RUN_DOCKER_INSTALL_TESTS=1 for container coverage)",
-      "steps": [
-        {
-          "exec": "bun test scripts/install.test.ts"
         }
       ]
     },

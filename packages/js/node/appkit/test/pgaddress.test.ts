@@ -1,107 +1,97 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 
-await polyglotTest(
-  () => import("../index.ts"),
-  "pgaddress",
-  (implementation, language) => {
-    describe(`parseAddress (${language})`, () => {
-      it("returns no inputs for absent or unrecognized addresses", () => {
-        for (const value of [null, "", "   ", "Not An Address"]) {
-          assert.deepEqual(implementation.parseAddress(value), {});
-        }
-      });
+import * as pgaddress from "../src/pgaddress.ts";
 
-      it("parses Postgres URIs and supported SSL modes", () => {
-        assert.deepEqual(
-          implementation.parseAddress(
-            "postgresql://me%40acme.com@ep-1.database.eastus2.azuredatabricks.net:5433/app%20db?sslmode=disable",
-          ),
-          {
-            host: "ep-1.database.eastus2.azuredatabricks.net",
-            port: 5433,
-            user: "me@acme.com",
-            database: "app db",
-            sslMode: "disable",
-          },
-        );
-        assert.deepEqual(
-          implementation.parseAddress("postgres://h.example.com/db?sslMode=PrEfEr"),
-          { host: "h.example.com", database: "db", sslMode: "prefer" },
-        );
-        assert.deepEqual(
-          implementation.parseAddress("postgres://h.example.com/db?sslmode=verify-full"),
-          { host: "h.example.com", database: "db" },
-        );
-      });
+describe("parseAddress", () => {
+  it("returns no inputs for absent or unrecognized addresses", () => {
+    for (const value of [null, "", "   ", "Not An Address"]) {
+      assert.deepEqual(pgaddress.parseAddress(value), {});
+    }
+  });
 
-      it("parses Lakebase resource paths", () => {
-        assert.deepEqual(
-          implementation.parseAddress("projects/demo/branches/production/endpoints/ep-1"),
-          {
-            project: "demo",
-            branch: "production",
-            endpointId: "ep-1",
-            endpoint: "projects/demo/branches/production/endpoints/ep-1",
-          },
-        );
-        assert.deepEqual(
-          implementation.parseAddress(
-            "projects/demo/branches/production/databases/databricks-postgres",
-          ),
-          {
-            project: "demo",
-            branch: "production",
-            databaseResourceId: "databricks-postgres",
-          },
-        );
-        assert.deepEqual(implementation.parseAddress("projects/demo"), { project: "demo" });
-        assert.deepEqual(implementation.parseAddress("projects/demo/branches/main"), {
-          project: "demo",
-          branch: "main",
-        });
-        assert.deepEqual(implementation.parseAddress("projects/demo/branches"), {});
-      });
-
-      it("parses a canonical resource path from a PostgreSQL URL", () => {
-        assert.deepEqual(
-          implementation.parseAddress(
-            "postgresql://profile@localhost:5432/projects/demo/branches/production/endpoints/primary?sslmode=disable",
-          ),
-          {
-            project: "demo",
-            branch: "production",
-            endpointId: "primary",
-            endpoint: "projects/demo/branches/production/endpoints/primary",
-            host: "localhost",
-            port: 5432,
-            user: "profile",
-            sslMode: "disable",
-          },
-        );
-      });
-
-      it("recognizes hostnames and project ids", () => {
-        assert.deepEqual(implementation.parseAddress("ep-1.database.azuredatabricks.net"), {
-          host: "ep-1.database.azuredatabricks.net",
-        });
-        assert.deepEqual(implementation.parseAddress("dbx-tools-demo"), {
-          project: "dbx-tools-demo",
-        });
-      });
+  it("parses Postgres URIs and supported SSL modes", () => {
+    assert.deepEqual(
+      pgaddress.parseAddress(
+        "postgresql://me%40acme.com@ep-1.database.eastus2.azuredatabricks.net:5433/app%20db?sslmode=disable",
+      ),
+      {
+        host: "ep-1.database.eastus2.azuredatabricks.net",
+        port: 5433,
+        user: "me@acme.com",
+        database: "app db",
+        sslMode: "disable",
+      },
+    );
+    assert.deepEqual(pgaddress.parseAddress("postgres://h.example.com/db?sslMode=PrEfEr"), {
+      host: "h.example.com",
+      database: "db",
+      sslMode: "prefer",
     });
-
-    describe(`parseResourcePath (${language})`, () => {
-      it("accepts only complete resource paths", () => {
-        assert.deepEqual(implementation.parseResourcePath("production"), {});
-        assert.deepEqual(implementation.parseResourcePath(null), {});
-        assert.deepEqual(implementation.parseResourcePath("projects/demo/branches/main"), {
-          project: "demo",
-          branch: "main",
-        });
-      });
+    assert.deepEqual(pgaddress.parseAddress("postgres://h.example.com/db?sslmode=verify-full"), {
+      host: "h.example.com",
+      database: "db",
     });
-  },
-  { identifiers: { [Language.Python]: "dbx_tools.postgres.address" } },
-);
+  });
+
+  it("parses Lakebase resource paths", () => {
+    assert.deepEqual(pgaddress.parseAddress("projects/demo/branches/production/endpoints/ep-1"), {
+      project: "demo",
+      branch: "production",
+      endpointId: "ep-1",
+      endpoint: "projects/demo/branches/production/endpoints/ep-1",
+    });
+    assert.deepEqual(
+      pgaddress.parseAddress("projects/demo/branches/production/databases/databricks-postgres"),
+      {
+        project: "demo",
+        branch: "production",
+        databaseResourceId: "databricks-postgres",
+      },
+    );
+    assert.deepEqual(pgaddress.parseAddress("projects/demo"), { project: "demo" });
+    assert.deepEqual(pgaddress.parseAddress("projects/demo/branches/main"), {
+      project: "demo",
+      branch: "main",
+    });
+    assert.deepEqual(pgaddress.parseAddress("projects/demo/branches"), {});
+  });
+
+  it("parses a canonical resource path from a PostgreSQL URL", () => {
+    assert.deepEqual(
+      pgaddress.parseAddress(
+        "postgresql://profile@localhost:5432/projects/demo/branches/production/endpoints/primary?sslmode=disable",
+      ),
+      {
+        project: "demo",
+        branch: "production",
+        endpointId: "primary",
+        endpoint: "projects/demo/branches/production/endpoints/primary",
+        host: "localhost",
+        port: 5432,
+        user: "profile",
+        sslMode: "disable",
+      },
+    );
+  });
+
+  it("recognizes hostnames and project ids", () => {
+    assert.deepEqual(pgaddress.parseAddress("ep-1.database.azuredatabricks.net"), {
+      host: "ep-1.database.azuredatabricks.net",
+    });
+    assert.deepEqual(pgaddress.parseAddress("dbx-tools-demo"), {
+      project: "dbx-tools-demo",
+    });
+  });
+});
+
+describe("parseResourcePath", () => {
+  it("accepts only complete resource paths", () => {
+    assert.deepEqual(pgaddress.parseResourcePath("production"), {});
+    assert.deepEqual(pgaddress.parseResourcePath(null), {});
+    assert.deepEqual(pgaddress.parseResourcePath("projects/demo/branches/main"), {
+      project: "demo",
+      branch: "main",
+    });
+  });
+});

@@ -1,32 +1,44 @@
 /**
- * Graphiti Python bootstrap and internal runtime execution.
+ * Node-owned Graphiti process supervision.
  *
- * This module owns exact-version Python installation, model-gateway command
- * resolution, and the serialized boundary into Python. Public command parsing
- * belongs to `cli.ts`; Graphiti defaults and validation belong to
- * `@dbx-tools/shared-graphiti`.
+ * This module starts the durable embedded FalkorDB owner, the optional model
+ * gateway, and the pinned Python MCP adapter. Python owns only Graphiti-specific
+ * adaptation over the bundled upstream source.
  *
  * @module
  */
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { resolveServicePackageBin } from "@dbx-tools/cli-service/definition";
 import * as exec from "@dbx-tools/core/exec";
+import { DurableFalkorDB } from "@dbx-tools/falkor-db";
 import {
-  GRAPHITI_COMMAND_ENV,
   GRAPHITI_OPTIONS_ENV,
   resolveGraphitiOptions,
   serializeGraphitiOptions,
-  type GraphitiCommand,
   type GraphitiOptions,
+  type ResolvedGraphitiOptions,
 } from "@dbx-tools/shared-graphiti";
 import { GRAPHITI_PYTHON_VERSION } from "./_python-runtime.ts";
+
+const FALKORDB_SOCKET_ENV = "FALKORDB_SOCKET_PATH";
 
 type ExecPython = (file: string, args: string[]) => Promise<unknown>;
 
 /** Shared Graphiti options plus upstream arguments accepted by runtime callers. */
 export type GraphitiRuntimeOptions = GraphitiOptions;
 
-/** Install the matching Python runtime through the configured Python registry. */
+/** Running Graphiti stack controlled by one Node process. */
+export interface GraphitiRuntime {
+  /** Fully defaulted runtime configuration. */
+  readonly options: ResolvedGraphitiOptions;
+  /** Resolves when a supervised process exits, after all siblings are stopped. */
+  readonly result: Promise<void>;
+  /** Stop child processes and close FalkorDB without an implicit save. */
+  close(): Promise<void>;
+}
+
+/** Install the matching Python adapter through the configured Python registry. */
 export async function ensureGraphitiPython(
   python: string,
   run: ExecPython = (file, args) =>
@@ -61,15 +73,13 @@ export async function ensureGraphitiPython(
 export function ensureGraphitiModelGateway(
   executable: () => string = () => resolveServicePackageBin("@dbx-tools/cli-model-gateway"),
 ): string {
-  return [process.execPath, resolve(executable())]
-    .map((value) => `'${value.replaceAll("'", "'\\''")}'`)
-    .join(" ");
+  return [process.execPath, resolve(executable())].map(shellQuote).join(" ");
 }
 
-/** Build the environment consumed by the internal Python runtime. */
+/** Build the environment consumed by the Python MCP adapter. */
 export function graphitiRuntimeEnvironment(
-  command: GraphitiCommand,
-  options: GraphitiRuntimeOptions = {},
+  options: GraphitiRuntimeOptions,
+  socketPath: string,
 ): NodeJS.ProcessEnv {
   const resolved = resolveGraphitiOptions({
     ...options,
@@ -77,34 +87,122 @@ export function graphitiRuntimeEnvironment(
   });
   return {
     ...process.env,
-    [GRAPHITI_COMMAND_ENV]: command,
+    [FALKORDB_SOCKET_ENV]: socketPath,
     [GRAPHITI_OPTIONS_ENV]: serializeGraphitiOptions(resolved),
   };
 }
 
-/** Run one internal Python Graphiti operation and preserve its exit status. */
-export async function runGraphiti(
-  command: GraphitiCommand,
+/** Start FalkorDB, the optional model gateway, and the Python MCP adapter. */
+export async function startGraphitiRuntime(
   options: GraphitiRuntimeOptions = {},
-): Promise<void> {
-  const resolved = resolveGraphitiOptions(options);
-  await ensureGraphitiPython(resolved.python);
-  const child = exec.spawn(resolved.python, ["-m", "dbx_tools.graphiti"], {
-    env: graphitiRuntimeEnvironment(command, resolved),
+): Promise<GraphitiRuntime> {
+  const resolved = resolveGraphitiOptions({
+    ...options,
+    modelGatewayCommand: options.modelGatewayCommand ?? ensureGraphitiModelGateway(),
   });
-  const terminate = () => child.kill("SIGTERM");
-  const interrupt = () => child.kill("SIGINT");
-  process.once("SIGTERM", terminate);
-  process.once("SIGINT", interrupt);
+  await ensureGraphitiPython(resolved.python);
+  const database = await DurableFalkorDB.open({
+    dataDir: resolved.falkorDataDir ?? join(graphitiHome(resolved), "data", "falkor-db"),
+    snapshotSeconds: resolved.falkorSnapshotSeconds,
+    snapshotMinChanges: resolved.falkorSnapshotMinChanges,
+    persistence: { forceBackupOnShutdown: true },
+    handleSignals: false,
+  });
+  const children: exec.ChildProcessResult[] = [];
   try {
-    process.exitCode = (await child).exitCode;
-  } finally {
-    process.removeListener("SIGTERM", terminate);
-    process.removeListener("SIGINT", interrupt);
+    if (resolved.manageModelGateway) {
+      const command = [
+        resolved.modelGatewayCommand!,
+        ...(resolved.profile ? ["--profile", shellQuote(resolved.profile)] : []),
+        "--listen",
+        shellQuote(`${resolved.modelGatewayHost}:${resolved.modelGatewayPort}`),
+      ].join(" ");
+      children.push(exec.spawn(command, [], { shell: true }));
+    }
+    children.push(
+      exec.spawn(resolved.python, ["-m", "dbx_tools.graphiti", ...resolved.graphitiArgs], {
+        env: graphitiRuntimeEnvironment(resolved, database.socketPath),
+      }),
+    );
+    return managedRuntime(resolved, database, children);
+  } catch (error) {
+    for (const child of children) child.kill("SIGTERM");
+    await Promise.allSettled(children);
+    await database.close();
+    throw error;
   }
 }
 
-/** Start Graphiti in the foreground. */
-export async function startGraphiti(options: GraphitiRuntimeOptions = {}): Promise<void> {
-  await runGraphiti("start", options);
+/** Run the supervised stack until one child exits or the process is signaled. */
+export async function runGraphiti(options: GraphitiRuntimeOptions = {}): Promise<void> {
+  const runtime = await startGraphitiRuntime(options);
+  const dispose = installSignalHandlers(runtime);
+  try {
+    await runtime.result;
+  } finally {
+    dispose();
+  }
+}
+
+function managedRuntime(
+  options: ResolvedGraphitiOptions,
+  database: DurableFalkorDB,
+  children: exec.ChildProcessResult[],
+): GraphitiRuntime {
+  let closing: Promise<void> | undefined;
+  const close = (): Promise<void> => {
+    closing ??= (async () => {
+      for (const child of children) child.kill("SIGTERM");
+      await Promise.allSettled(children);
+      await database.close();
+    })();
+    return closing;
+  };
+  const result = Promise.race(
+    children.map(async (child) => {
+      const outcome = await child;
+      if (outcome.exitCode !== 0) {
+        throw new Error(`Graphiti child exited with status ${outcome.exitCode}`);
+      }
+    }),
+  ).finally(close);
+  return { options, result, close };
+}
+
+function graphitiHome(options: ResolvedGraphitiOptions): string {
+  if (options.graphitiHome) return options.graphitiHome;
+  if (process.platform === "darwin") {
+    return join(homedir(), "Library", "Application Support", "dbx-tools", "graphiti");
+  }
+  if (process.platform === "win32") {
+    return join(
+      process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
+      "dbx-tools",
+      "graphiti",
+    );
+  }
+  return join(
+    process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"),
+    "dbx-tools",
+    "graphiti",
+  );
+}
+
+function installSignalHandlers(runtime: GraphitiRuntime): () => void {
+  const handlers = new Map<NodeJS.Signals, () => void>();
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    const handler = () => {
+      for (const [name, callback] of handlers) process.off(name, callback);
+      void runtime.close().finally(() => process.kill(process.pid, signal));
+    };
+    handlers.set(signal, handler);
+    process.once(signal, handler);
+  }
+  return () => {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+  };
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }

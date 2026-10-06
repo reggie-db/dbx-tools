@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/cli-graphiti",
-  "description": "Graphiti runtime bootstrap, foreground CLI, and desktop service",
+  "description": "Node-supervised Graphiti foreground CLI and desktop service",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -30,6 +30,7 @@
     "@dbx-tools/cli-model-gateway": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/core": "workspace:^",
+    "@dbx-tools/falkor-db": "workspace:^",
     "@dbx-tools/shared-graphiti": "workspace:^",
     "commander": "catalog:"
   },

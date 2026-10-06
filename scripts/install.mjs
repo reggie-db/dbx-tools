@@ -144,7 +144,6 @@ if (!succeeds("dbx", ["--help"]) || !succeeds("dbx-tools", ["--help"])) {
 }
 if (globalPackages.length > 0) {
   run("npm", ["install", "--global", ...registryArgs(), ...globalPackages]);
-  run("mise", ["reshim"]);
 }
 
 const installedPnpmVersion = version("pnpm");

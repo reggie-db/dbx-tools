@@ -47,7 +47,7 @@ function fixtureTool(name: string) {
 }
 
 describe("GraphitiPlugin routes", () => {
-  it("delegates bootstrap to the Graphiti CLI instead of owning service dependencies", () => {
+  it("delegates runtime startup to the Graphiti CLI instead of owning service dependencies", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as {
@@ -158,7 +158,7 @@ describe("GraphitiPlugin routes", () => {
     );
     Object.assign(plugin, {
       startup,
-      resolved: { graphitiPort: 4101, proxyPort: 4102 },
+      resolved: { graphitiPort: 4101 },
       mcp: { listTools: async () => discovered },
     });
     let ready = false;

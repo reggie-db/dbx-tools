@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 import type { PoolClient, QueryResult } from "pg";
 
 import { withAdvisoryLock, withAdvisoryTransactionLock } from "../src/advisory-lock.ts";
@@ -29,29 +28,15 @@ function fakePool(calls: Call[], options: { fail?: string } = {}) {
   };
 }
 
-await polyglotTest(
-  () => import("../index.ts"),
-  "identity",
-  (implementation, language) => {
-    describe(`advisoryLockId (${language})`, () => {
-      it("hashes string and structured keys to signed int64 ids", () => {
-        assert.equal(implementation.advisoryLockId("schema-install"), "8391191540082855336");
-        assert.equal(
-          implementation.advisoryLockId(["schema-install", "v2"]),
-          "-6627415645816226415",
-        );
-        assert.equal(implementation.advisoryLockId({ b: 2, a: 1 }), "8289569017560903448");
-        assert.equal(implementation.advisoryLockId(["unicode", "λ"]), "5028212226534770301");
-        assert.equal(implementation.advisoryLockId([1, "1", true, null]), "1977673129255614398");
-      });
-    });
-  },
-  {
-    identifiers: {
-      [Language.Python]: "dbx_tools.postgres._generated.node.postgres.identity",
-    },
-  },
-);
+describe("advisoryLockId", () => {
+  it("hashes string and structured keys to signed int64 ids", () => {
+    assert.equal(advisoryLockId("schema-install"), "8391191540082855336");
+    assert.equal(advisoryLockId(["schema-install", "v2"]), "-6627415645816226415");
+    assert.equal(advisoryLockId({ b: 2, a: 1 }), "8289569017560903448");
+    assert.equal(advisoryLockId(["unicode", "λ"]), "5028212226534770301");
+    assert.equal(advisoryLockId([1, "1", true, null]), "1977673129255614398");
+  });
+});
 
 describe("advisoryLockId TypeScript", () => {
   it("is stable across object key order", () => {

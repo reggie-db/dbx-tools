@@ -13,7 +13,7 @@ describe("Graphiti CLI", () => {
     assert.equal(program.version(), PACKAGE_VERSION);
     assert.deepEqual(
       program.commands.map((command) => command.name()),
-      ["start", "up", "down", "status", "env", "service"],
+      ["service"],
     );
     assert.match(help, /--embedder-model <value>/);
     assert.match(help, /EMBEDDER_MODEL/);
@@ -26,10 +26,10 @@ describe("Graphiti CLI", () => {
   });
 
   it("forwards Python arguments unchanged with the selected profile", async () => {
-    let received: { command: string; options: GraphitiRuntimeOptions } | undefined;
+    let received: GraphitiRuntimeOptions | undefined;
     await buildProgram("dbx graphiti", {
-      async run(command, options) {
-        received = { command, options };
+      async run(options) {
+        received = options;
       },
     }).parseAsync(
       [
@@ -43,26 +43,23 @@ describe("Graphiti CLI", () => {
       { from: "user" },
     );
     assert.deepEqual(received, {
-      command: "start",
-      options: {
-        ...GRAPHITI_DEFAULTS,
-        python: "/path with spaces/python",
-        profile: "GRAPHITI-PROFILE",
-        model: "my-model",
-      },
+      ...GRAPHITI_DEFAULTS,
+      python: "/path with spaces/python",
+      profile: "GRAPHITI-PROFILE",
+      model: "my-model",
     });
   });
 
-  it("defines a Python foreground command using the shared service package", () => {
+  it("defines the owning Node CLI command using the shared service package", () => {
     const definition = graphitiServiceDefinition({
       python: "python3",
       profile: "GRAPHITI-PROFILE",
     });
     assert.equal(definition.packageName, "@dbx-tools/cli-graphiti");
-    assert.equal(definition.command?.executable, "python3");
-    assert.deepEqual(definition.command?.arguments, ["-m", "dbx_tools.graphiti"]);
-    assert.equal(definition.command?.environment?.DBX_GRAPHITI_COMMAND, "start");
-    assert.match(definition.command?.environment?.DBX_GRAPHITI_OPTIONS ?? "", /GRAPHITI-PROFILE/);
+    assert.equal(definition.command?.executable, undefined);
+    assert.ok(definition.command?.arguments?.includes("--python"));
+    assert.ok(definition.command?.arguments?.includes("python3"));
+    assert.ok(definition.command?.arguments?.includes("GRAPHITI-PROFILE"));
   });
 
   it("uses the Python environment setting unless a CLI option overrides it", async () => {
@@ -71,7 +68,7 @@ describe("Graphiti CLI", () => {
     process.env.PYTHON = "/virtual/environment/python";
     try {
       const dependencies = {
-        async run(_command: string, options: GraphitiRuntimeOptions) {
+        async run(options: GraphitiRuntimeOptions) {
           selected.push(options.python!);
         },
       };

@@ -2,7 +2,7 @@
 name: dbx-tools-reuse
 description: Enforce owning-library-first reuse of current @dbx-tools packages, Projen, and installed frameworks before adding or reviewing generators, wrappers, helpers, dependencies, workflows, or Databricks integration code. Use for work in github-reggie-db and for new Bun-first TypeScript or polyglot repositories.
 metadata:
-  version: "0.9.40"
+  version: "0.9.41"
 ---
 
 # dbx-tools reuse

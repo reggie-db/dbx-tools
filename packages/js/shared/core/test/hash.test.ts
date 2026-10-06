@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
-import { PACKAGE_IDENTIFIER, hash } from "../index.ts";
+import { hash } from "../index.ts";
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -25,67 +24,21 @@ const withCrypto = (value: unknown, body: () => void) => {
   }
 };
 
-await polyglotTest(
-  async () => ({ PACKAGE_IDENTIFIER, hash: hashContract }),
-  "hash",
-  (implementation, language) => {
-    describe(`hash.fnvHash (${language})`, () => {
-      it("uses the default digest length", () => {
-        assert.equal(implementation.fnvHash("string:7:billing"), "1m8m64");
-      });
-
-      it("hashes joined stable keys", () => {
-        assert.equal(implementation.fnvHash("string:7:billing\0string:4:prod"), "091p2g");
-      });
-
-      it("supports the maximum digest length", () => {
-        assert.equal(implementation.fnvHash("string:7:billing", { length: 7 }), "1m8m64b");
-      });
-
-      it("allows a zero-length digest", () => {
-        assert.equal(implementation.fnvHash("billing", { length: 0 }), "");
-      });
-    });
-  },
-  {
-    identifiers: {
-      [Language.Python]: "dbx_tools.core.hash",
-    },
-  },
-);
-
-describe("polyglotTest package metadata", () => {
-  it("requires PACKAGE_IDENTIFIER when Python inference needs it", async () => {
-    await assert.rejects(
-      polyglotTest(
-        async () => ({ hash }),
-        "hash",
-        () => undefined,
-      ),
-      /does not export string PACKAGE_IDENTIFIER/,
-    );
+describe("hash.fnvHash", () => {
+  it("uses the default digest length", () => {
+    assert.equal(hashContract.fnvHash("string:7:billing"), "1m8m64");
   });
 
-  it("does not require package metadata with an explicit Python identifier", async () => {
-    const languages: Language[] = [];
-    await polyglotTest(
-      async () => ({ hash }),
-      "hash",
-      (_implementation, language) => languages.push(language),
-      { identifiers: { [Language.Python]: "dbx_tools.core.hash" } },
-    );
-    assert.deepEqual(languages, [Language.TS, Language.Python]);
+  it("hashes joined stable keys", () => {
+    assert.equal(hashContract.fnvHash("string:7:billing\0string:4:prod"), "091p2g");
   });
 
-  it("accepts an explicit package identifier and loader", async () => {
-    const languages: Language[] = [];
-    await polyglotTest(
-      { packageIdentifier: "@dbx-tools/shared-core", loader: async () => ({ hash }) },
-      "hash",
-      (_implementation, language) => languages.push(language),
-      { identifiers: { [Language.Python]: "dbx_tools.core.hash" } },
-    );
-    assert.deepEqual(languages, [Language.TS, Language.Python]);
+  it("supports the maximum digest length", () => {
+    assert.equal(hashContract.fnvHash("string:7:billing", { length: 7 }), "1m8m64b");
+  });
+
+  it("allows a zero-length digest", () => {
+    assert.equal(hashContract.fnvHash("billing", { length: 0 }), "");
   });
 });
 

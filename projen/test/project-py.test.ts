@@ -54,6 +54,7 @@ describe("DBXToolsPythonWorkspace", () => {
       requiresPython: ">=3.12",
       indexStrategy: "unsafe-best-match",
       ruffTarget: "py312",
+      ruffExcludes: ["python/packages/app/src/fixture/app/_upstream"],
       lintPaths: ["python"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
       release: { environments: { "fixture-app": "production-pypi" } },
@@ -66,6 +67,7 @@ describe("DBXToolsPythonWorkspace", () => {
       project: { dependencies: string[]; "requires-python": string };
       tool: {
         pyrefly: { "ignore-errors-in-generated-code": boolean; "project-excludes": string[] };
+        ruff: { exclude: string[] };
         uv: {
           "index-strategy": string;
           sources: Record<string, { workspace: boolean }>;
@@ -78,6 +80,9 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(workspace, /requires-python = ">=3\.12"/);
     assert.match(workspace, /index-strategy = "unsafe-best-match"/);
     assert.match(workspace, /target[_-]version = "py312"/);
+    assert.deepEqual(workspaceMetadata.tool.ruff.exclude, [
+      "python/packages/app/src/fixture/app/_upstream",
+    ]);
     assert.match(workspace, /\[tool\.pyrefly\]\s+ignore-errors-in-generated-code = true/);
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
     assert.match(gitignore, /^\.venv\/$/m);
@@ -241,7 +246,7 @@ describe("DBXToolsPythonWorkspace", () => {
                   {
                     module: "@fixture/core/file-lock",
                     export: "acquireFileLock",
-                    handler: "projen/shims/python-node/file-lock.ts",
+                    handler: "projen/test/fixtures/python-node-function-override.ts",
                   },
                 ],
               },
@@ -277,7 +282,7 @@ describe("DBXToolsPythonWorkspace", () => {
             {
               module: "@fixture/core/file-lock",
               export: "acquireFileLock",
-              handler: "projen/shims/python-node/file-lock.ts",
+              handler: "projen/test/fixtures/python-node-function-override.ts",
             },
           ],
         },
@@ -287,6 +292,14 @@ describe("DBXToolsPythonWorkspace", () => {
         },
       ]);
       assert.equal(pyproject.tool.uv["build-backend"]["module-root"], "src");
+      const workspacePyproject = parse(
+        readFileSync(join(bindingsOutdir, "pyproject.toml"), "utf8"),
+      ) as {
+        tool: { ruff: { exclude: string[] } };
+      };
+      assert.deepEqual(workspacePyproject.tool.ruff.exclude, [
+        "python/packages/auth/src/fixture/auth/_generated/**",
+      ]);
       assert.equal(
         existsSync(
           join(

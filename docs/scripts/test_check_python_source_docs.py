@@ -6,7 +6,7 @@ from check_python_source_docs import collect_undocumented
 
 
 class CheckPythonSourceDocsTest(unittest.TestCase):
-    def test_reports_public_declarations_and_skips_generated_modules(self) -> None:
+    def test_reports_public_declarations_and_skips_derived_modules(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "packages" / "py" / "example" / "src" / "example"
@@ -17,6 +17,9 @@ class CheckPythonSourceDocsTest(unittest.TestCase):
             generated = source / "_generated"
             generated.mkdir()
             (generated / "client.py").write_text("class Generated:\n    pass\n")
+            upstream = source / "_upstream"
+            upstream.mkdir()
+            (upstream / "client.py").write_text("class Upstream:\n    pass\n")
 
             findings = collect_undocumented(root)
 

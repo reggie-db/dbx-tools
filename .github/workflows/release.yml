@@ -142,24 +142,8 @@ jobs:
         run: |-
           bun node_modules/@dbx-tools/projen/tasks/publish-python.ts "$RELEASE_VERSION" \
             --root "packages/py" \
-            --package "core" "postgres" "graphiti" \
+            --package "graphiti" \
             --output .release/python --package-directories
-      - name: Upload dbx-tools-core distributions
-        id: upload_dbx-tools-core_distributions
-        if: ${{ success() && steps.release.outputs.pypi == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-python-core
-          path: .release/python/core
-          if-no-files-found: error
-      - name: Upload dbx-tools-postgres distributions
-        id: upload_dbx-tools-postgres_distributions
-        if: ${{ success() && steps.release.outputs.pypi == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-python-postgres
-          path: .release/python/postgres
-          if-no-files-found: error
       - name: Upload dbx-tools-graphiti distributions
         id: upload_dbx-tools-graphiti_distributions
         if: ${{ success() && steps.release.outputs.pypi == 'true' }}
@@ -213,8 +197,6 @@ jobs:
     needs:
       - build-release
       - publish-node
-      - publish-pypi-core
-      - publish-pypi-postgres
       - publish-pypi-graphiti
     runs-on: ubuntu-latest
     permissions:
@@ -223,70 +205,21 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['publish-node'].result == 'success' || needs['publish-node'].result == 'skipped') && (needs['publish-pypi-core'].result == 'success' || needs['publish-pypi-core'].result == 'skipped') && (needs['publish-pypi-postgres'].result == 'success' || needs['publish-pypi-postgres'].result == 'skipped') && (needs['publish-pypi-graphiti'].result == 'success' || needs['publish-pypi-graphiti'].result == 'skipped') }}
+    if: ${{ always() && (needs['build-release'].result == 'success') && (needs['build-release'].outputs.docs == 'true') && (needs['publish-node'].result == 'success' || needs['publish-node'].result == 'skipped') && (needs['publish-pypi-graphiti'].result == 'success' || needs['publish-pypi-graphiti'].result == 'skipped') }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
     timeout-minutes: 15
-  publish-pypi-core:
-    needs: build-release
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: pypi-dbx-tools-core
-      url: https://pypi.org/project/dbx-tools-core/
-    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') }}
-    steps:
-      - name: Download dbx-tools-core distributions
-        id: download_dbx-tools-core_distributions
-        uses: actions/download-artifact@v4
-        with:
-          name: release-python-core
-          path: dist/core
-      - name: Publish dbx-tools-core to PyPI
-        id: publish_dbx-tools-core_to_pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/core
-          skip-existing: true
-    timeout-minutes: 10
-  publish-pypi-postgres:
-    needs: build-release
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: pypi-dbx-tools-postgres
-      url: https://pypi.org/project/dbx-tools-postgres/
-    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') }}
-    steps:
-      - name: Download dbx-tools-postgres distributions
-        id: download_dbx-tools-postgres_distributions
-        uses: actions/download-artifact@v4
-        with:
-          name: release-python-postgres
-          path: dist/postgres
-      - name: Publish dbx-tools-postgres to PyPI
-        id: publish_dbx-tools-postgres_to_pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/postgres
-          skip-existing: true
-    timeout-minutes: 10
   publish-pypi-graphiti:
-    needs:
-      - build-release
-      - publish-pypi-core
-      - publish-pypi-postgres
+    needs: build-release
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-graphiti
       url: https://pypi.org/project/dbx-tools-graphiti/
-    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') && (needs['publish-pypi-core'].result == 'success') && (needs['publish-pypi-postgres'].result == 'success') }}
+    if: ${{ always() && (needs.build-release.result == 'success') && (needs.build-release.outputs.pypi == 'true') }}
     steps:
       - name: Download dbx-tools-graphiti distributions
         id: download_dbx-tools-graphiti_distributions

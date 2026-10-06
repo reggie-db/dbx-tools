@@ -3,12 +3,11 @@
  *
  * `@dbx-tools/shared-graphiti` owns option fields, validation, defaults, and
  * environment names. This module adds only AppKit-specific automatic port
- * allocation sentinels and the application journal namespace fallback.
+ * allocation sentinels.
  *
  * @module
  */
 import type { BasePluginConfig } from "@databricks/appkit";
-import { projectUtils } from "@dbx-tools/core";
 import {
   GraphitiOptionsSchema,
   graphitiOptionsFromEnvironment,
@@ -35,17 +34,8 @@ export function resolveGraphitiConfig(config: GraphitiPluginConfig = {}): Graphi
     ...config,
     graphitiPort: config.graphitiPort ?? environment.graphitiPort ?? 0,
     modelGatewayPort: config.modelGatewayPort ?? environment.modelGatewayPort ?? 0,
-    proxyPort: config.proxyPort ?? environment.proxyPort ?? 0,
-    journalNamespace:
-      config.journalNamespace ??
-      environment.journalNamespace ??
-      process.env.DATABRICKS_APP_NAME?.trim() ??
-      projectUtils.name() ??
-      "default",
   });
-  const ports = [resolved.graphitiPort, resolved.modelGatewayPort, resolved.proxyPort].filter(
-    (port): port is number => Boolean(port),
-  );
+  const ports = [resolved.graphitiPort, resolved.modelGatewayPort].filter(Boolean);
   if (new Set(ports).size !== ports.length) {
     throw new Error("Graphiti sidecar ports must be distinct");
   }

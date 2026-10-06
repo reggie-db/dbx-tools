@@ -27,8 +27,6 @@
     "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
-    "postgres:python-runtime": "projen postgres:python-runtime",
-    "postgres:python-runtime:check": "projen postgres:python-runtime:check",
     "pre-compile": "projen pre-compile",
     "py:build": "projen py:build",
     "py:format": "projen py:format",
@@ -39,7 +37,6 @@
     "release": "projen release",
     "sync": "projen sync",
     "test": "projen test",
-    "test:installer": "projen test:installer",
     "version:check": "projen version:check",
     "projen": "projen"
   },

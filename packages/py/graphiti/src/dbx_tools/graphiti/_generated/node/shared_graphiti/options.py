@@ -74,21 +74,17 @@ class GraphitiOptions:
         default=None,
         metadata={"javascript_name": "graphitiPort"},
     )
-    proxy_port: int | float | None = field(
+    falkor_data_dir: str | None = field(
         default=None,
-        metadata={"javascript_name": "proxyPort"},
+        metadata={"javascript_name": "falkorDataDir"},
     )
-    journal_namespace: str | None = field(
+    falkor_snapshot_seconds: int | float | None = field(
         default=None,
-        metadata={"javascript_name": "journalNamespace"},
+        metadata={"javascript_name": "falkorSnapshotSeconds"},
     )
-    journal_database_url: str | None = field(
+    falkor_snapshot_min_changes: int | float | None = field(
         default=None,
-        metadata={"javascript_name": "journalDatabaseUrl"},
-    )
-    journal_table: str | None = field(
-        default=None,
-        metadata={"javascript_name": "journalTable"},
+        metadata={"javascript_name": "falkorSnapshotMinChanges"},
     )
     graphiti_args: list[str] | None = field(
         default=None,
@@ -112,10 +108,9 @@ class GraphitiOptionsResponse(TypedDict):
     structuredOutputMode: NotRequired[str]
     graphitiHost: NotRequired[str]
     graphitiPort: NotRequired[int | float]
-    proxyPort: NotRequired[int | float]
-    journalNamespace: NotRequired[str]
-    journalDatabaseUrl: NotRequired[str]
-    journalTable: NotRequired[str]
+    falkorDataDir: NotRequired[str]
+    falkorSnapshotSeconds: NotRequired[int | float]
+    falkorSnapshotMinChanges: NotRequired[int | float]
     graphitiArgs: NotRequired[list[str]]
 
 
@@ -132,14 +127,13 @@ class ResolvedGraphitiOptionsResponse(TypedDict):
     structuredOutputMode: str
     graphitiHost: str
     graphitiPort: int | float
-    proxyPort: int | float
+    falkorSnapshotSeconds: int | float
+    falkorSnapshotMinChanges: int | float
     graphitiArgs: list[str]
     profile: NotRequired[str]
     graphitiHome: NotRequired[str]
     modelGatewayCommand: NotRequired[str]
-    journalNamespace: NotRequired[str]
-    journalDatabaseUrl: NotRequired[str]
-    journalTable: NotRequired[str]
+    falkorDataDir: NotRequired[str]
 
 
 

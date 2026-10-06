@@ -107,10 +107,6 @@ resources:
           # import the already-installed dbx-tools-graphiti release.
           - name: PYTHON
             value: ./.venv/bin/python
-          # Optional override. The Graphiti launcher already pins `uv` to the
-          # interpreter that provided PYTHONPATH (this App's 3.11 venv).
-          - name: UV_PYTHON
-            value: "3.11"
           # OTP gate allow-list (was the tunnel CLI's `--allow`). No subject /
           # brand-name override: the defaults are the conventional one-time-code
           # wording ("Your verification code") that iOS, Gmail, Outlook, and
@@ -130,12 +126,6 @@ resources:
           # so never leave this at the provider default in a deployed app.
           - name: SEARCH_LAKEBASE_SCHEMA
             value: dbx_tools_search
-          # The currently released Graphiti runtime defaults its journal to the
-          # locked-down `public` schema. Reuse the search plugin's provisioned,
-          # writable schema until the dedicated `dbx_tools_graphiti` default is
-          # available in the next dbx-tools release.
-          - name: JOURNAL_TABLE
-            value: dbx_tools_search.graphiti_write_journal
           - name: DATABRICKS_WAREHOUSE_ID
             value_from: sql-warehouse
           - name: DATABRICKS_GENIE_SPACE_ID

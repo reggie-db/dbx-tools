@@ -37,8 +37,6 @@
 **/*-lock.yaml
 **/*-lock.yml
 **/*.lock
-packages/py/core/pyproject.toml
-packages/py/postgres/pyproject.toml
 packages/py/graphiti/pyproject.toml
 .eslintrc.json
 .gitattributes

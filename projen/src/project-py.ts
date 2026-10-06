@@ -87,6 +87,8 @@ export interface DBXToolsPythonWorkspaceOptions {
   readonly devDependencies?: readonly string[];
   readonly testPaths?: readonly string[];
   readonly lintPaths?: readonly string[];
+  /** Repository-relative paths Ruff must not lint or format. */
+  readonly ruffExcludes?: readonly string[];
   readonly ruffPerFileIgnores?: Readonly<Record<string, readonly string[]>>;
   /** Generated Python implementation files Pyrefly should resolve but not type-check. */
   readonly pyreflyProjectExcludes?: readonly string[];
@@ -346,6 +348,17 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     if (options.indexStrategy) {
       file.addOverride("tool.uv.index-strategy", options.indexStrategy);
+    }
+    const ruffExcludes = [
+      ...(options.ruffExcludes ?? []),
+      ...options.packages.flatMap((pkg) =>
+        pythonNodeGeneratedSources(pkg).map(
+          (source) => `${this.repository.root}/${pkg.directory}/${source}`,
+        ),
+      ),
+    ];
+    if (ruffExcludes.length) {
+      file.addOverride("tool.ruff.exclude", [...new Set(ruffExcludes)]);
     }
     file.addOverride("tool.pyrefly.ignore-errors-in-generated-code", true);
     const projectExcludes = [

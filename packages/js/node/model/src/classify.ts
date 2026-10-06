@@ -115,10 +115,7 @@ export function versionTuple(name: string): [number, number, number] {
  * Compare version tuples component-wise with missing parts as 0.
  * Positive when `left` is newer.
  */
-export function compareVersionTuples(
-  left: readonly number[],
-  right: readonly number[],
-): number {
+export function compareVersionTuples(left: readonly number[], right: readonly number[]): number {
   const length = Math.max(left.length, right.length, 3);
   for (let index = 0; index < length; index += 1) {
     const diff = (left[index] ?? 0) - (right[index] ?? 0);

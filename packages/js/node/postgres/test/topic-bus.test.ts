@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { describe, it } from "node:test";
-import { Language, polyglotTest } from "@dbx-tools/test-polyglot/polyglot";
 import type { Notification, QueryResult } from "pg";
 
-import { PACKAGE_IDENTIFIER } from "../index.ts";
+import { channelName } from "../src/identity.ts";
 import { PostgresTopicBus } from "../src/topic-bus.ts";
 import { topicBusConstants } from "./support/topic-bus-source.ts";
 
@@ -37,70 +36,40 @@ function fixture() {
   return { client, pool, queries };
 }
 
-await polyglotTest(
-  () => import("../index.ts"),
-  "identity",
-  (implementation, language) => {
-    describe(`channelName (${language})`, () => {
-      it("keeps default, scalar, parts, and structured identities compatible", () => {
-        assert.equal(
-          implementation.channelName("dbx_tools_topic_bus"),
-          "dbx_tools_topic_bus_3kj9bt",
-        );
-        assert.equal(implementation.channelName("billing"), "billing_1m8m64");
-        assert.equal(implementation.channelName(["billing", "prod"]), "billing_prod_091p2g");
-        assert.equal(implementation.channelName("billing_prod"), "billing_prod_3er7fp");
-        assert.equal(implementation.channelName({ a: 1 }), "bus_0xnqsa");
-      });
+describe("channelName", () => {
+  it("keeps default, scalar, parts, and structured identities compatible", () => {
+    assert.equal(channelName("dbx_tools_topic_bus"), "dbx_tools_topic_bus_3kj9bt");
+    assert.equal(channelName("billing"), "billing_1m8m64");
+    assert.equal(channelName(["billing", "prod"]), "billing_prod_091p2g");
+    assert.equal(channelName("billing_prod"), "billing_prod_3er7fp");
+    assert.equal(channelName({ a: 1 }), "bus_0xnqsa");
+  });
 
-      it("keeps collapsed spellings and part structure distinct", () => {
-        const collapsed = new Set(
-          ["my-app", "my_app", "myApp"].map((value) => implementation.channelName(value)),
-        );
-        assert.equal(collapsed.size, 3);
-        assert.notEqual(
-          implementation.channelName(["billing", "prod"]),
-          implementation.channelName("billing_prod"),
-        );
-      });
+  it("keeps collapsed spellings and part structure distinct", () => {
+    const collapsed = new Set(["my-app", "my_app", "myApp"].map(channelName));
+    assert.equal(collapsed.size, 3);
+    assert.notEqual(channelName(["billing", "prod"]), channelName("billing_prod"));
+  });
 
-      it("always emits a legal Postgres identifier", () => {
-        for (const value of ["!!!", "", 42, null, "a".repeat(200)]) {
-          const name = implementation.channelName(value);
-          assert.match(name, /^[A-Za-z_][A-Za-z0-9_]*$/, `not an identifier: ${name}`);
-          assert.ok(name.length <= 63, `too long: ${name}`);
-        }
-      });
+  it("always emits a legal Postgres identifier", () => {
+    for (const value of ["!!!", "", 42, null, "a".repeat(200)]) {
+      const name = channelName(value);
+      assert.match(name, /^[A-Za-z_][A-Za-z0-9_]*$/, `not an identifier: ${name}`);
+      assert.ok(name.length <= 63, `too long: ${name}`);
+    }
+  });
+});
+
+describe("topic-bus protocol constants", () => {
+  it("keeps channel and notification limits stable", () => {
+    assert.deepEqual(topicBusConstants, {
+      defaultChannel: "dbx_tools_topic_bus",
+      maxNotifyBytes: 7_900,
+      minReconnectDelay: 0.25,
+      maxReconnectDelay: 5,
     });
-  },
-  {
-    identifiers: {
-      [Language.Python]: "dbx_tools.postgres._generated.node.postgres.identity",
-    },
-  },
-);
-
-await polyglotTest(
-  async () => ({ PACKAGE_IDENTIFIER, topicBusConstants }),
-  "topicBusConstants",
-  (implementation, language) => {
-    describe(`topic-bus protocol constants (${language})`, () => {
-      it("keeps channel and notification limits wire-compatible", () => {
-        assert.deepEqual(implementation, {
-          defaultChannel: "dbx_tools_topic_bus",
-          maxNotifyBytes: 7_900,
-          minReconnectDelay: 0.25,
-          maxReconnectDelay: 5,
-        });
-      });
-    });
-  },
-  {
-    identifiers: {
-      python: new URL("./support/topic_bus_constants.py", import.meta.url).href,
-    },
-  },
-);
+  });
+});
 
 describe("PostgresTopicBus", () => {
   it("broadcasts an envelope through pg_notify", async () => {

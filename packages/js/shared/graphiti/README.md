@@ -34,7 +34,7 @@ import {
 const environment = {
   [GRAPHITI_OPTIONS_ENV]: serializeGraphitiOptions({
     profile: "MY-PROFILE",
-    journalNamespace: "agent-memory",
+    falkorDataDir: "/var/lib/agent-memory",
   }),
 };
 ```
