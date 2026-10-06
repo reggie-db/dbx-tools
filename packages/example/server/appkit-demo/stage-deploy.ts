@@ -30,6 +30,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { materializeWorkspaceManifest } from "@dbx-tools/projen/release-packaging";
+import { GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES } from "@dbx-tools/shared-graphiti/upstream";
 import { parse, stringify } from "yaml";
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
@@ -91,7 +92,10 @@ if (existsSync(join(serverDir, "shared"))) {
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
 writeFileSync(join(outDir, "package.json"), `${JSON.stringify(deployPkg, null, 2)}\n`);
 writeFileSync(join(outDir, "pnpm-workspace.yaml"), stringify(deployWorkspace));
-writeFileSync(join(outDir, "requirements.txt"), `dbx-tools-graphiti==${version}\n`);
+writeFileSync(
+  join(outDir, "requirements.txt"),
+  [`dbx-tools-graphiti==${version}`, ...GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES, ""].join("\n"),
+);
 cpSync(join(serverDir, "app.yaml"), join(outDir, "app.yaml"));
 cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 

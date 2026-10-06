@@ -91,6 +91,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-graphiti",
+      "version": "workspace:^",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/teams",
       "version": "workspace:^",
       "type": "runtime"

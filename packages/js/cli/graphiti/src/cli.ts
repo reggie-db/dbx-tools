@@ -11,6 +11,7 @@ import { addArgs, parseArgs, serializeArgs } from "@dbx-tools/cli-args/args";
 import { buildServiceCommand, type CliServiceCliDependencies } from "@dbx-tools/cli-service/cli";
 import { defineService, type CliServiceDefinition } from "@dbx-tools/cli-service/definition";
 import { runGraphiti, type GraphitiRuntimeOptions } from "@dbx-tools/graphiti/runtime";
+import { GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES } from "@dbx-tools/shared-graphiti/upstream";
 import { Command } from "commander";
 import {
   GraphitiCliOptionsSchema,
@@ -35,7 +36,10 @@ export function graphitiServiceDefinition(
   options: GraphitiServiceOptions = {},
 ): CliServiceDefinition {
   return defineService(import.meta.url, {
-    pythonPackage: { name: "dbx-tools-graphiti" },
+    pythonPackage: {
+      name: "dbx-tools-graphiti",
+      dependencies: [...GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES],
+    },
     command: {
       arguments: serializeArgs(GraphitiOptionsSchema.parse(options)),
     },

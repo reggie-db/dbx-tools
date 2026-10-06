@@ -84,6 +84,7 @@ export interface DBXToolsPythonWorkspaceOptions {
   /** Python version installed in validation, documentation, and release workflows. */
   readonly workflowPythonVersion?: string;
   readonly workspaceName?: string;
+  /** Dependencies appended to the standard development group. */
   readonly devDependencies?: readonly string[];
   readonly testPaths?: readonly string[];
   readonly lintPaths?: readonly string[];
@@ -397,7 +398,7 @@ export class DBXToolsPythonWorkspace extends Component {
         dependencies: [...(options.dependencies ?? [])],
       },
       dependencyGroups: {
-        dev: [...(options.devDependencies ?? DEFAULT_DEV_DEPENDENCIES)],
+        dev: [...DEFAULT_DEV_DEPENDENCIES, ...(options.devDependencies ?? [])],
       },
       tool: {
         uv: python.uvConfig.toJson_UvConfiguration({

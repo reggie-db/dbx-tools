@@ -28,7 +28,11 @@ describe("CLI service lifecycle", () => {
         version: "1.2.3",
         icon: join(root, "icon.png"),
         dataDirectory,
-        pythonPackage: { name: "example-runtime", python: "3.12" },
+        pythonPackage: {
+          name: "example-runtime",
+          python: "3.12",
+          dependencies: ["companion-runtime==4.5.6"],
+        },
         command: {
           entrypoint: commandEntrypoint,
           arguments: ["--port", "4401"],
@@ -50,8 +54,8 @@ describe("CLI service lifecycle", () => {
           await chmod(output, 0o755);
         },
         async installRuntime() {},
-        async installPython(uv, directory, packageSpecifier, python, platform) {
-          pythonInstalls.push({ uv, directory, packageSpecifier, python, platform });
+        async installPython(uv, directory, packageSpecifiers, python, platform) {
+          pythonInstalls.push({ uv, directory, packageSpecifiers, python, platform });
           return join(directory, "bin/python");
         },
       },
@@ -64,7 +68,7 @@ describe("CLI service lifecycle", () => {
       await readFile(join(dataDirectory, "service.json"), "utf8"),
     ) as {
       id: string;
-      pythonPackage: { name: string; version: string; python: string };
+      pythonPackage: { name: string; version: string; python: string; dependencies: string[] };
       command: { executable: string; entrypoint?: string; environment: Record<string, string> };
     };
     assert.equal(configuration.id, "com.example.gateway");
@@ -72,6 +76,7 @@ describe("CLI service lifecycle", () => {
       name: "example-runtime",
       version: "1.2.3",
       python: "3.12",
+      dependencies: ["companion-runtime==4.5.6"],
     });
     assert.equal(configuration.command.entrypoint, undefined);
     assert.equal(
@@ -86,7 +91,7 @@ describe("CLI service lifecycle", () => {
       {
         uv: "/opt/uv",
         directory: join(dataDirectory, "python"),
-        packageSpecifier: "example-runtime==1.2.3",
+        packageSpecifiers: ["example-runtime==1.2.3", "companion-runtime==4.5.6"],
         python: "3.12",
         platform: "linux",
       },

@@ -46,7 +46,7 @@ describe("DurableFalkorDB integration", () => {
 
     await waitFor(() => storage.json.has("latest.json"));
     const uploaded = storage.snapshotCount;
-    await Bun.sleep(2_200);
+    await Bun.sleep(1_200);
     expect(storage.snapshotCount).toBe(uploaded);
     await database.close();
 
@@ -60,7 +60,6 @@ describe("DurableFalkorDB integration", () => {
     });
     expect(await restored.list()).toContain("knowledge");
     expect(restored.persistenceStatus.restoreSnapshotSequence).toBe(1);
-    await Bun.sleep(1_200);
     expect(storage.snapshotCount).toBe(1);
     await restored.close();
   }, 20_000);

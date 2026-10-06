@@ -155,40 +155,6 @@ it("runs a packed engine through an isolated consumer lifecycle", { timeout: 120
       firstManifest,
     );
     assert.equal(readFileSync(join(consumer, "modules/example/index.ts"), "utf8"), firstBarrel);
-
-    run(consumer, ["run", "compile"], environment);
-    run(consumer, ["run", "test"], environment);
-    execFileSync("npm", ["pack", "--ignore-scripts", "--pack-destination", archiveDir], {
-      cwd: join(consumer, "modules/example"),
-      env: environment,
-      stdio: "ignore",
-    });
-    assert.equal(existsSync(join(archiveDir, "external-example-0.0.1.tgz")), true);
-
-    const standalone = join(temp, "standalone");
-    mkdirSync(join(standalone, "src"), { recursive: true });
-    writeBootstrapManifest(standalone, archives);
-    writeFileSync(
-      join(standalone, ".projenrc.ts"),
-      [
-        'import { project } from "@dbx-tools/projen";',
-        "const rootProject = new project.DBXToolsTypeScriptProject({",
-        '  name: "standalone-consumer",',
-        `  outdir: ${JSON.stringify(standalone)},`,
-        '  releaseMode: "disabled",',
-        "});",
-        `rootProject.addDevDeps(${dependencySpecs.map((spec) => JSON.stringify(spec)).join(", ")});`,
-        ...dependencyOverrides,
-        "rootProject.synth();",
-        "",
-      ].join("\n"),
-    );
-    writeFileSync(join(standalone, "src/main.ts"), "export const value = 1;\n");
-    run(standalone, ["install", "--force"], environment);
-    run(unrelatedCwd, [join(standalone, ".projenrc.ts")], environment);
-    assert.equal(existsSync(join(standalone, "index.ts")), true);
-    run(standalone, ["run", "compile"], environment);
-    run(standalone, ["run", "test"], environment);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

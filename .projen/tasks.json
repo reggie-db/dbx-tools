@@ -218,16 +218,15 @@
       },
       "steps": [
         {
-          "execArgs": [
-            "eslint",
-            "--ext",
-            ".ts,.tsx",
-            "--no-error-on-unmatched-pattern",
-            "$@",
-            "packages/js",
-            "packages/example",
-            "projen"
-          ],
+          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern packages/js/shared packages/js/cli",
+          "receiveArgs": true
+        },
+        {
+          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern packages/js/node",
+          "receiveArgs": true
+        },
+        {
+          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern packages/js/ui packages/example projen",
           "receiveArgs": true
         }
       ]
@@ -409,9 +408,6 @@
     "test": {
       "name": "test",
       "description": "Run tests",
-      "env": {
-        "NODE_OPTIONS": "--max-old-space-size=6144"
-      },
       "steps": [
         {
           "spawn": "eslint"

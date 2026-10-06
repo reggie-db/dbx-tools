@@ -56,6 +56,7 @@ describe("DBXToolsPythonWorkspace", () => {
       indexStrategy: "unsafe-best-match",
       ruffTarget: "py312",
       workflowPythonVersion: "3.13",
+      devDependencies: ["types-requests>=2"],
       ruffExcludes: ["python/packages/app/src/fixture/app/_upstream"],
       lintPaths: ["python"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
@@ -81,6 +82,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(workspace, /requires-python = ">=3\.12"/);
     assert.match(workspace, /index-strategy = "unsafe-best-match"/);
     assert.match(workspace, /target[_-]version = "py312"/);
+    assert.match(workspace, /"types-requests>=2"/);
     assert.deepEqual(workspaceMetadata.tool.ruff.exclude, [
       "python/packages/app/src/fixture/app/_upstream",
     ]);

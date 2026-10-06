@@ -39178,6 +39178,12 @@ var GraphitiCliOptionsSchema = GraphitiOptionsSchema.describe("Graphiti options 
 var GRAPHITI_DEFAULTS = Object.freeze(GraphitiOptionsSchema.parse({}));
 var graphitiOptionKeys = Object.keys(GraphitiOptionsSchema.shape);
 var ResolvedGraphitiOptionsSchema = GraphitiOptionsSchema.describe("Graphiti options after shared defaults are resolved.");
+// packages/js/shared/graphiti/src/upstream.ts
+var GRAPHITI_UPSTREAM_COMMIT = "2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066";
+var GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES = [
+  `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=server`,
+  `mcp-server @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_UPSTREAM_COMMIT}#subdirectory=mcp_server`
+];
 // packages/js/node/graphiti/src/options.ts
 var namespacedFalkor = exports_options.namespaceOpts(FalkorDBOptionsSchema, "falkor");
 var GraphitiOptionsSchema2 = GraphitiOptionsSchema.extend(namespacedFalkor.shape).extend({

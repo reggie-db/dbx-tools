@@ -8,13 +8,7 @@ readme = "README.md"
 requires-python = ">=3.10,<4"
 license = "Apache-2.0"
 license-files = [ "LICENSE" ]
-dependencies = [
-  "graph-service @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=server",
-  "mcp-server @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=mcp_server",
-  "httpx>=0.28,<1",
-  "pythonmonkey>=1.3,<2",
-  "uvicorn>=0.44"
-]
+dependencies = [ "httpx>=0.28,<1", "pythonmonkey>=1.3,<2", "uvicorn>=0.44" ]
 
   [project.urls]
   Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/graphiti"

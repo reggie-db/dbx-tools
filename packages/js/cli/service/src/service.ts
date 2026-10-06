@@ -63,7 +63,7 @@ export type CliServiceRuntimeInstaller = (
 export type CliServicePythonInstaller = (
   uvExecutable: string,
   directory: string,
-  packageSpecifier: string,
+  packageSpecifiers: readonly string[],
   python: string,
   platform: NodeJS.Platform,
 ) => Promise<string>;
@@ -312,7 +312,7 @@ export class CliService implements CliServiceLifecycle {
       pythonEnvironment.PYTHON = await this.pythonInstaller(
         this.uvExecutable,
         join(directory, "python"),
-        `${pythonPackage.name}==${pythonPackage.version}`,
+        [`${pythonPackage.name}==${pythonPackage.version}`, ...pythonPackage.dependencies],
         pythonPackage.python,
         this.runtime.platform,
       );

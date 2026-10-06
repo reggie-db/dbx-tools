@@ -41,6 +41,7 @@ describe("CLI service definition", () => {
     assert.deepEqual(definition.pythonPackage, {
       name: "example-runtime",
       python: "3.11",
+      dependencies: [],
     });
     assert.equal(definition.menu?.[0]?.type, "url");
   });

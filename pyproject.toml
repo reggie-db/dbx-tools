@@ -11,7 +11,9 @@ dev = [
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.1,<2",
   "pyyaml>=6.0,<7",
-  "ruff>=0.12,<1"
+  "ruff>=0.12,<1",
+  "graph-service @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=server",
+  "mcp-server @ git+https://github.com/getzep/graphiti.git@2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066#subdirectory=mcp_server"
 ]
 
 [tool.ruff]

@@ -18,10 +18,11 @@ import { resolve } from "node:path";
 import { bunWorkflow, project, projectJs } from "@dbx-tools/projen";
 import { Component, javascript } from "projen";
 
+import { GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES } from "./packages/js/shared/graphiti/src/upstream.ts";
+
 const SCOPE = "dbx-tools";
 const DOCS_BUILD_ROOT = ".docs-build";
 const PYTHON_ROOT = "packages/py";
-const GRAPHITI_COMMIT = "2a85bbbf27f3d0d07dd3a8bf6dc8700c5193c066";
 
 /** Copy canonical branding into published package trees after synthesis. */
 class BrandPackageAssets extends Component {
@@ -162,11 +163,23 @@ const root = new project.DBXToolsNodeProject({
   ],
 });
 
+const eslintTask = javascript.Eslint.of(root)!.eslintTask;
+eslintTask.reset();
+for (const paths of [
+  ["packages/js/shared", "packages/js/cli"],
+  ["packages/js/node"],
+  ["packages/js/ui", "packages/example", "projen"],
+]) {
+  eslintTask.exec(
+    `eslint --ext .ts,.tsx --no-error-on-unmatched-pattern ${paths.join(" ")}`,
+    { receiveArgs: true },
+  );
+}
+
 const sourceDocs = root.addTask("docs:check-source", {
   description: "Reject new undocumented public TypeScript exports",
 });
 sourceDocs.exec("bun docs/scripts/check-source-docs.mjs");
-root.testTask.env("NODE_OPTIONS", "--max-old-space-size=6144");
 root.testTask.exec("bun test docs/scripts");
 
 const readmeDocs = root.addTask("docs:check-readmes", {
@@ -352,6 +365,7 @@ project.applyToProjects(root, { identifierName: "cli-graphiti", tags: "cli" }, (
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/cli-service@workspace:^",
     "@dbx-tools/graphiti@workspace:^",
+    "@dbx-tools/shared-graphiti@workspace:^",
   );
   p.package.addBin({ "dbx-graphiti": "./bin/dbx-graphiti.ts" });
 });
@@ -1243,6 +1257,7 @@ project.applyToProjects(
       "@dbx-tools/teams@workspace:^",
       "@dbx-tools/search@workspace:^",
       "@dbx-tools/shared-core@workspace:^",
+      "@dbx-tools/shared-graphiti@workspace:^",
       // The tunnel library: the server registers `tunnelInterceptor()` on its own
       // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
       // runs the server directly rather than through a wrapper bin.
@@ -1303,8 +1318,6 @@ const pythonPackages: project.PythonPackageOptions[] = [
     directory: "graphiti",
     description: "Combined Graphiti REST and MCP FastAPI service",
     dependencies: [
-      `graph-service @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_COMMIT}#subdirectory=server`,
-      `mcp-server @ git+https://github.com/getzep/graphiti.git@${GRAPHITI_COMMIT}#subdirectory=mcp_server`,
       "httpx>=0.28,<1",
       "pythonmonkey>=1.3,<2",
       "uvicorn>=0.44",
@@ -1337,6 +1350,7 @@ new project.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
+  devDependencies: GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES,
   requiresPython: ">=3.10,<4",
   ruffTarget: "py310",
   workflowPythonVersion: "3.11",

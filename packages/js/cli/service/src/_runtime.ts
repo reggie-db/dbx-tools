@@ -41,11 +41,11 @@ export async function installServiceRuntime(
   });
 }
 
-/** Create a clean uv environment and install one exact Python package. */
+/** Create a clean uv environment and install the primary and companion Python packages. */
 export async function installServicePythonPackage(
   uvExecutable: string,
   directory: string,
-  packageSpecifier: string,
+  packageSpecifiers: readonly string[],
   python: string,
   platform: NodeJS.Platform,
 ): Promise<string> {
@@ -63,7 +63,7 @@ export async function installServicePythonPackage(
   const executable = join(directory, platform === "win32" ? "Scripts/python.exe" : "bin/python");
   await exec.spawn(
     uvExecutable,
-    ["pip", "install", "--python", executable, "--upgrade", packageSpecifier],
+    ["pip", "install", "--python", executable, "--upgrade", ...packageSpecifiers],
     {
       check: true,
       stdin: "ignore",

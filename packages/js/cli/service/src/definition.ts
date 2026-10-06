@@ -96,6 +96,10 @@ export const CliServicePythonPackageSchema = z
       .min(1)
       .default("3.11")
       .describe("Python version request passed to uv when creating the environment."),
+    dependencies: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Additional uv package specs installed beside the primary distribution."),
   })
   .readonly()
   .describe("Python runtime package installed with uv for a managed service.");
