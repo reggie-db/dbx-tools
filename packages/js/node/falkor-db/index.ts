@@ -11,6 +11,7 @@ export * as persistenceManifest from "./src/persistence/manifest.ts";
 export * as persistenceRedisInfo from "./src/persistence/redis-info.ts";
 export * as persistenceSnapshot from "./src/persistence/snapshot.ts";
 export * as persistenceVolume from "./src/persistence/volume.ts";
+export * as runtime from "./src/runtime.ts";
 export { DurableFalkorDB } from "./src/falkor.ts";
 export type { DurableFalkorDBOptions } from "./src/falkor.ts";
 export { FalkorDBOptionsSchema } from "./src/options.ts";

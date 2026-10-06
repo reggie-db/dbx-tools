@@ -120,7 +120,7 @@
       "description": "Install project dependencies using frozen lockfile",
       "steps": [
         {
-          "exec": "bun install --frozen-lockfile"
+          "exec": "bun install"
         }
       ]
     },

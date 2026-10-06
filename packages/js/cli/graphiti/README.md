@@ -104,22 +104,38 @@ dbx graphiti [options] [command]
 
 #### Options
 
-| Option                                  | Description                                                                                                               |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `-v, --version`                         | output the version number                                                                                                 |
-| `--profile <value>`                     | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                          |
-| `--graphiti-home <value>`               | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
-| `--model <value>`                       | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
-| `--temperature <value>`                 | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                 |
-| `--embedder-model <value>`              | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                         |
-| `--embedder-dimensions <value>`         | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
-| `--structured-output-mode <value>`      | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
-| `--listen <value>`                      | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                             |
-| `--falkor-data-dir <value>`             | Active local FalkorDB directory. (env: FALKORDB_DATA_DIR)                                                                 |
-| `--falkor-listen <value>`               | FalkorDB listener used by Graphiti. (default: tcp://127.0.0.1:6379, env: FALKORDB_LISTEN)                                 |
-| `--falkor-database <value>`             | Default graph name for consumers. (default: "default_db", env: FALKORDB_DATABASE)                                         |
-| `--falkor-snapshot-seconds <value>`     | Redis snapshot interval in seconds. (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                                        |
-| `--falkor-snapshot-min-changes <value>` | Writes required before an interval saves. (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES)                                |
+| Option                                          | Description                                                                                                                  |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `-v, --version`                                 | output the version number                                                                                                    |
+| `--profile <value>`                             | Databricks profile used for model discovery and authentication. (env: DATABRICKS_CONFIG_PROFILE)                             |
+| `--graphiti-home <value>`                       | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                           |
+| `--model <value>`                               | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                            |
+| `--temperature <value>`                         | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                    |
+| `--embedder-model <value>`                      | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                            |
+| `--embedder-dimensions <value>`                 | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                                  |
+| `--structured-output-mode <value>`              | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE)    |
+| `--listen <value>`                              | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                                |
+| `--falkor-data-dir <value>`                     | Active local FalkorDB directory. (env: FALKORDB_DATA_DIR)                                                                    |
+| `--falkor-listen <value>`                       | FalkorDB listener used by Graphiti. (default: tcp://127.0.0.1:6379, env: FALKORDB_LISTEN)                                    |
+| `--falkor-database <value>`                     | Default graph name for consumers. (default: "default_db", env: FALKORDB_DATABASE)                                            |
+| `--falkor-snapshot-seconds <value>`             | Redis snapshot interval in seconds. (default: 300, env: FALKORDB_SNAPSHOT_SECONDS)                                           |
+| `--falkor-snapshot-min-changes <value>`         | Writes required before an interval saves. (default: 1, env: FALKORDB_SNAPSHOT_MIN_CHANGES)                                   |
+| `--falkor-volume <value>`                       | Durable Unity Catalog Volume directory. (env: DBX_TOOLS_FALKOR_VOLUME)                                                       |
+| `--falkor-profile <value>`                      | Exact Databricks profile used for Volume access. (env: FALKORDB_PROFILE)                                                     |
+| `--falkor-retention <value>`                    | Durable snapshots retained. (default: 5, env: DBX_TOOLS_FALKOR_RETENTION)                                                    |
+| `--falkor-backup-poll-seconds <value>`          | Completed-RDB polling interval in seconds. (default: 10, env: DBX_TOOLS_FALKOR_BACKUP_POLL_SECONDS)                          |
+| `--falkor-stale-backup-warning-seconds <value>` | Seconds before warning that changed data lacks a recent durable backup. (env: DBX_TOOLS_FALKOR_STALE_BACKUP_WARNING_SECONDS) |
+| `--falkor-force-backup-on-shutdown`             | Force a dirty RDB and durable upload before shutdown. (default: false, env: DBX_TOOLS_FALKOR_FORCE_BACKUP_ON_SHUTDOWN)       |
+| `--no-falkor-force-backup-on-shutdown`          | Disable force a dirty rdb and durable upload before shutdown.                                                                |
+| `--falkor-shutdown-timeout-seconds <value>`     | Shutdown backup timeout in seconds. (default: 30, env: DBX_TOOLS_FALKOR_SHUTDOWN_TIMEOUT_SECONDS)                            |
+| `--falkor-redis-server-path <value>`            | Custom redis-server executable. (env: DBX_TOOLS_FALKOR_REDIS_SERVER_PATH)                                                    |
+| `--falkor-module-path <value>`                  | Custom FalkorDB module. (env: DBX_TOOLS_FALKOR_MODULE_PATH)                                                                  |
+| `--falkor-max-memory <value>`                   | Redis memory limit such as 256mb. (env: DBX_TOOLS_FALKOR_MAX_MEMORY)                                                         |
+| `--falkor-redis-log-level <value>`              | Redis log level. (choices: "debug", "verbose", "notice", "warning", env: DBX_TOOLS_FALKOR_REDIS_LOG_LEVEL)                   |
+| `--falkor-redis-log-file <value>`               | Redis log file. (env: DBX_TOOLS_FALKOR_REDIS_LOG_FILE)                                                                       |
+| `--falkor-startup-timeout-seconds <value>`      | Embedded server startup timeout in seconds. (default: 10, env: DBX_TOOLS_FALKOR_STARTUP_TIMEOUT_SECONDS)                     |
+| `--falkor-inherit-stdio`                        | Inherit redis-server stdout and stderr. (default: false, env: DBX_TOOLS_FALKOR_INHERIT_STDIO)                                |
+| `--no-falkor-inherit-stdio`                     | Disable inherit redis-server stdout and stderr.                                                                              |
 
 #### Commands
 

@@ -10,7 +10,10 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import * as exec from "@dbx-tools/core/exec";
-import { DurableFalkorDB } from "@dbx-tools/falkor-db";
+import type { DurableFalkorDB } from "@dbx-tools/falkor-db";
+import { FalkorDBOptionsSchema } from "@dbx-tools/falkor-db/options";
+import { openFalkorDB } from "@dbx-tools/falkor-db/runtime";
+import { options as sharedOptions } from "@dbx-tools/shared-core";
 import {
   graphitiOptionsEnvironment,
   resolveGraphitiOptions,
@@ -55,14 +58,11 @@ export async function startGraphitiRuntime(
   if (resolved.falkorListen.scheme !== "tcp") {
     throw new Error("Graphiti requires a TCP FalkorDB listener");
   }
-  const database = await DurableFalkorDB.open({
-    dataDir: resolved.falkorDataDir ?? join(graphitiHome(resolved), "data", "falkor-db"),
-    port: resolved.falkorListen.port,
-    snapshotSeconds: resolved.falkorSnapshotSeconds,
-    snapshotMinChanges: resolved.falkorSnapshotMinChanges,
-    redisConfig: { bind: resolved.falkorListen.host },
-    persistence: { forceBackupOnShutdown: true },
-    handleSignals: false,
+  const falkorOptions = sharedOptions.unnamespaceOpts(FalkorDBOptionsSchema, resolved, "falkor");
+  const database = await openFalkorDB({
+    ...falkorOptions,
+    dataDir: falkorOptions.dataDir ?? join(graphitiHome(resolved), "data", "falkor-db"),
+    profile: falkorOptions.profile ?? resolved.profile,
   });
   const children: exec.ChildProcessResult[] = [];
   try {

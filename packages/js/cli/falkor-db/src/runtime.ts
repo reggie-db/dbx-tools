@@ -8,9 +8,7 @@
  * @module
  */
 
-import { workspaceClient } from "@dbx-tools/databricks";
-import { DatabricksFileSystem } from "@dbx-tools/databricks/databricks-fs";
-import { DatabricksVolumeStorage, DurableFalkorDB } from "@dbx-tools/falkor-db";
+import { openFalkorDB } from "@dbx-tools/falkor-db/runtime";
 import { log } from "@dbx-tools/shared-core";
 
 import type { FalkorDBOptions } from "./options.ts";
@@ -19,41 +17,11 @@ const logger = log.logger("cli:falkor-db");
 
 /** Run FalkorDB until SIGINT or SIGTERM, then close it without an implicit save. */
 export async function runFalkorDB(options: FalkorDBOptions): Promise<void> {
-  const storage = options.volume ? await volumeStorage(options.volume, options.profile) : undefined;
-  const database = await DurableFalkorDB.open({
-    ...(options.dataDir ? { dataDir: options.dataDir } : {}),
-    ...(options.listen?.scheme === "unix" ? { socketPath: options.listen.path } : {}),
-    ...(options.listen?.scheme === "tcp"
-      ? {
-          port: options.listen.port,
-          redisConfig: { bind: options.listen.host },
-        }
-      : {}),
-    snapshotSeconds: options.snapshotSeconds,
-    snapshotMinChanges: options.snapshotMinChanges,
-    ...(storage ? { storage } : {}),
-    ...(options.redisServerPath ? { redisServerPath: options.redisServerPath } : {}),
-    ...(options.modulePath ? { modulePath: options.modulePath } : {}),
-    ...(options.maxMemory ? { maxMemory: options.maxMemory } : {}),
-    ...(options.redisLogLevel ? { logLevel: options.redisLogLevel } : {}),
-    ...(options.redisLogFile ? { logFile: options.redisLogFile } : {}),
-    timeout: options.startupTimeoutSeconds * 1000,
-    inheritStdio: options.inheritStdio,
-    handleSignals: false,
-    persistence: {
-      pollIntervalMs: options.backupPollSeconds * 1000,
-      retention: options.retention,
-      forceBackupOnShutdown: options.forceBackupOnShutdown ?? false,
-      shutdownTimeoutMs: options.shutdownTimeoutSeconds * 1000,
-      ...(options.staleBackupWarningSeconds === undefined
-        ? {}
-        : { staleBackupWarningMs: options.staleBackupWarningSeconds * 1000 }),
-    },
-  });
+  const database = await openFalkorDB(options);
   logger.info("foreground FalkorDB started", {
     pid: database.pid,
     socketPath: database.socketPath,
-    durableStorage: Boolean(storage),
+    durableStorage: Boolean(options.volume),
   });
   const shutdown = waitForShutdown();
   try {
@@ -62,13 +30,6 @@ export async function runFalkorDB(options: FalkorDBOptions): Promise<void> {
     await database.close();
     shutdown.dispose();
   }
-}
-
-async function volumeStorage(root: string, profile?: string): Promise<DatabricksVolumeStorage> {
-  const client = workspaceClient.toLegacyWorkspaceClient(
-    await workspaceClient.createWorkspaceClient({ ...(profile ? { profile } : {}) }),
-  );
-  return new DatabricksVolumeStorage(new DatabricksFileSystem({ root, client, createRoot: true }));
 }
 
 interface ShutdownWaiter {

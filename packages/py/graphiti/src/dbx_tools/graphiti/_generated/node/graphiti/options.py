@@ -62,9 +62,65 @@ class GraphitiOptions:
         default=None,
         metadata={"javascript_name": "falkorSnapshotMinChanges"},
     )
+    falkor_volume: str | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorVolume"},
+    )
+    falkor_retention: int | float | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorRetention"},
+    )
+    falkor_backup_poll_seconds: int | float | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorBackupPollSeconds"},
+    )
+    falkor_stale_backup_warning_seconds: int | float | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorStaleBackupWarningSeconds"},
+    )
+    falkor_force_backup_on_shutdown: bool | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorForceBackupOnShutdown"},
+    )
+    falkor_shutdown_timeout_seconds: int | float | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorShutdownTimeoutSeconds"},
+    )
+    falkor_redis_server_path: str | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorRedisServerPath"},
+    )
+    falkor_module_path: str | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorModulePath"},
+    )
+    falkor_max_memory: str | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorMaxMemory"},
+    )
+    falkor_redis_log_level: str | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorRedisLogLevel"},
+    )
+    falkor_redis_log_file: str | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorRedisLogFile"},
+    )
+    falkor_startup_timeout_seconds: int | float | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorStartupTimeoutSeconds"},
+    )
+    falkor_inherit_stdio: bool | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorInheritStdio"},
+    )
     falkor_listen: Any | None = field(
         default=None,
         metadata={"javascript_name": "falkorListen"},
+    )
+    falkor_profile: str | None = field(
+        default=None,
+        metadata={"javascript_name": "falkorProfile"},
     )
 
 
@@ -81,7 +137,21 @@ class GraphitiOptionsResponse(TypedDict):
     falkorDatabase: NotRequired[str]
     falkorSnapshotSeconds: NotRequired[int | float]
     falkorSnapshotMinChanges: NotRequired[int | float]
+    falkorVolume: NotRequired[str]
+    falkorRetention: NotRequired[int | float]
+    falkorBackupPollSeconds: NotRequired[int | float]
+    falkorStaleBackupWarningSeconds: NotRequired[int | float]
+    falkorForceBackupOnShutdown: NotRequired[bool | None]
+    falkorShutdownTimeoutSeconds: NotRequired[int | float]
+    falkorRedisServerPath: NotRequired[str]
+    falkorModulePath: NotRequired[str]
+    falkorMaxMemory: NotRequired[str]
+    falkorRedisLogLevel: NotRequired[str | None]
+    falkorRedisLogFile: NotRequired[str]
+    falkorStartupTimeoutSeconds: NotRequired[int | float]
+    falkorInheritStdio: NotRequired[bool | None]
     falkorListen: NotRequired[Any]
+    falkorProfile: NotRequired[str]
 
 
 class TcpListenAddressResponse(TypedDict):
@@ -105,10 +175,24 @@ class ResolvedGraphitiOptionsResponse(TypedDict):
     falkorDatabase: str
     falkorSnapshotSeconds: int | float
     falkorSnapshotMinChanges: int | float
+    falkorRetention: int | float
+    falkorBackupPollSeconds: int | float
+    falkorForceBackupOnShutdown: bool
+    falkorShutdownTimeoutSeconds: int | float
+    falkorStartupTimeoutSeconds: int | float
+    falkorInheritStdio: bool
     falkorListen: TcpListenAddressResponse | UnixListenAddressResponse
     profile: NotRequired[str]
     graphitiHome: NotRequired[str]
     falkorDataDir: NotRequired[str]
+    falkorVolume: NotRequired[str]
+    falkorStaleBackupWarningSeconds: NotRequired[int | float]
+    falkorRedisServerPath: NotRequired[str]
+    falkorModulePath: NotRequired[str]
+    falkorMaxMemory: NotRequired[str]
+    falkorRedisLogLevel: NotRequired[str | None]
+    falkorRedisLogFile: NotRequired[str]
+    falkorProfile: NotRequired[str]
 
 
 

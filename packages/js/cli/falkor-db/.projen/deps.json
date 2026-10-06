@@ -16,11 +16,6 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/databricks",
-      "version": "workspace:^",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/falkor-db",
       "version": "workspace:^",
       "type": "runtime"

@@ -145,5 +145,6 @@ const projenrc = new typescript.ProjenrcTs(project, {
 if (project.tsconfig) projenrc.tsconfig.addExtends(project.tsconfig);
 projenrc.tsconfig.removeInclude("**/*.ts");
 project.defaultTask?.reset("bun .projenrc.ts");
+project.tasks.tryFind("install:ci")?.reset("bun install");
 project.testTask.exec("bun test test");
 project.synth();

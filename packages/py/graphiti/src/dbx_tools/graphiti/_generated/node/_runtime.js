@@ -38614,13 +38614,14 @@ var defaultBrandContext = parseBrandContext();
 // packages/js/shared/core/src/options.ts
 var exports_options = {};
 __export(exports_options, {
+  unnamespaceOpts: () => unnamespaceOpts,
   tcpPortSchema: () => tcpPortSchema,
   tcpPortOrZeroSchema: () => tcpPortOrZeroSchema,
-  subnameOpts: () => subnameOpts,
   serializeOptsEnvironment: () => serializeOptsEnvironment,
   serializeOpts: () => serializeOpts,
   parseOpts: () => parseOpts,
   normalizedUrlSchema: () => normalizedUrlSchema,
+  namespaceOpts: () => namespaceOpts,
   listenAddressSchema: () => listenAddressSchema,
   formatListenAddress: () => formatListenAddress,
   databricksEnvironmentNames: () => databricksEnvironmentNames,
@@ -38904,12 +38905,16 @@ function serializeOptsEnvironment(schema, values2) {
     environmentOptionValue(value)
   ]));
 }
-function subnameOpts(schema, prefix) {
-  const shape = Object.fromEntries(Object.entries(schema.shape).map(([key, field]) => [
-    `${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`,
-    field
-  ]));
+function namespaceOpts(schema, prefix) {
+  const shape = Object.fromEntries(Object.entries(schema.shape).map(([key, field]) => [namespacedOptionKey(prefix, key), field]));
   return import_zod3.z.object(shape).strict();
+}
+function unnamespaceOpts(schema, values2, prefix) {
+  const source = values2;
+  return schema.parse(Object.fromEntries(Object.keys(schema.shape).map((key) => [key, source[namespacedOptionKey(prefix, key)]])));
+}
+function namespacedOptionKey(prefix, key) {
+  return `${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`;
 }
 function serializedOpts(schema, values2, format) {
   const parsed = schema.parse(values2);
@@ -39174,15 +39179,13 @@ var GRAPHITI_DEFAULTS = Object.freeze(GraphitiOptionsSchema.parse({}));
 var graphitiOptionKeys = Object.keys(GraphitiOptionsSchema.shape);
 var ResolvedGraphitiOptionsSchema = GraphitiOptionsSchema.describe("Graphiti options after shared defaults are resolved.");
 // packages/js/node/graphiti/src/options.ts
-var subnamedFalkor = exports_options.subnameOpts(FalkorDBOptionsSchema.pick({
-  dataDir: true,
-  listen: true,
-  database: true,
-  snapshotSeconds: true,
-  snapshotMinChanges: true
-}), "falkor");
-var GraphitiOptionsSchema2 = GraphitiOptionsSchema.extend(subnamedFalkor.shape).extend({
-  falkorListen: FalkorDBOptionsSchema.shape.listen.default({ scheme: "tcp", host: "127.0.0.1", port: 6379 }).describe("FalkorDB listener used by Graphiti.").meta({ env: "FALKORDB_LISTEN" })
+var namespacedFalkor = exports_options.namespaceOpts(FalkorDBOptionsSchema, "falkor");
+var GraphitiOptionsSchema2 = GraphitiOptionsSchema.extend(namespacedFalkor.shape).extend({
+  falkorListen: FalkorDBOptionsSchema.shape.listen.default({ scheme: "tcp", host: "127.0.0.1", port: 6379 }).describe("FalkorDB listener used by Graphiti.").meta({ env: "FALKORDB_LISTEN" }),
+  falkorProfile: FalkorDBOptionsSchema.shape.profile.meta({
+    env: "FALKORDB_PROFILE",
+    helpDefault: false
+  })
 }).strict().describe("Options accepted by the Node Graphiti runtime.");
 var GraphitiCliOptionsSchema2 = GraphitiOptionsSchema2.describe("Graphiti options represented as Commander flags.");
 var ResolvedGraphitiOptionsSchema2 = GraphitiOptionsSchema2.describe("Graphiti options after Graphiti and FalkorDB defaults are resolved.");

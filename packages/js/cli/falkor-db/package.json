@@ -27,7 +27,6 @@
   },
   "dependencies": {
     "@dbx-tools/cli-args": "workspace:^",
-    "@dbx-tools/databricks": "workspace:^",
     "@dbx-tools/falkor-db": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
     "commander": "catalog:",

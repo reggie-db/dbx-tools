@@ -12,7 +12,8 @@ import {
   parseOpts,
   serializeOpts,
   serializeOptsEnvironment,
-  subnameOpts,
+  namespaceOpts,
+  unnamespaceOpts,
   tcpPortOrZeroSchema,
   tcpPortSchema,
 } from "../src/options.ts";
@@ -143,8 +144,8 @@ describe("shared option schemas", () => {
     );
   });
 
-  it("subnames reusable option fields without replacing their schemas", () => {
-    const schema = subnameOpts(
+  it("namespaces reusable option fields without replacing their schemas", () => {
+    const schema = namespaceOpts(
       z.object({
         dataDir: z.string().meta({ env: "FALKORDB_DATA_DIR" }),
       }),
@@ -160,5 +161,9 @@ describe("shared option schemas", () => {
     assert.deepEqual(serializeOptsEnvironment(schema, { falkorDataDir: "/data" }), {
       FALKORDB_DATA_DIR: "/data",
     });
+    assert.deepEqual(
+      unnamespaceOpts(z.object({ dataDir: z.string() }), { falkorDataDir: "/data" }, "falkor"),
+      { dataDir: "/data" },
+    );
   });
 });

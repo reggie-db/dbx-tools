@@ -2,7 +2,7 @@
  * Complete option contract for the Node Graphiti runtime.
  *
  * Graphiti owns its model and HTTP listener fields. FalkorDB fields are
- * subnamed from the owning FalkorDB schema so CLI flags become `--falkor-*`
+ * namespaced from the owning FalkorDB schema so CLI flags become `--falkor-*`
  * without maintaining a parallel database configuration.
  *
  * @module
@@ -13,23 +13,18 @@ import { options } from "@dbx-tools/shared-core";
 import { GraphitiOptionsSchema as SharedGraphitiOptionsSchema } from "@dbx-tools/shared-graphiti";
 import { z } from "zod";
 
-const subnamedFalkor = options.subnameOpts(
-  FalkorDBOptionsSchema.pick({
-    dataDir: true,
-    listen: true,
-    database: true,
-    snapshotSeconds: true,
-    snapshotMinChanges: true,
-  }),
-  "falkor",
-);
+const namespacedFalkor = options.namespaceOpts(FalkorDBOptionsSchema, "falkor");
 
-export const GraphitiOptionsSchema = SharedGraphitiOptionsSchema.extend(subnamedFalkor.shape)
+export const GraphitiOptionsSchema = SharedGraphitiOptionsSchema.extend(namespacedFalkor.shape)
   .extend({
     falkorListen: FalkorDBOptionsSchema.shape.listen
       .default({ scheme: "tcp", host: "127.0.0.1", port: 6379 })
       .describe("FalkorDB listener used by Graphiti.")
       .meta({ env: "FALKORDB_LISTEN" }),
+    falkorProfile: FalkorDBOptionsSchema.shape.profile.meta({
+      env: "FALKORDB_PROFILE",
+      helpDefault: false,
+    }),
   })
   .strict()
   .describe("Options accepted by the Node Graphiti runtime.");
@@ -64,7 +59,7 @@ export function graphitiOptionOverrides(value: unknown): GraphitiOptions {
   return Object.fromEntries(keys.map((key) => [key, parsed[key]])) as GraphitiOptions;
 }
 
-/** Resolve Graphiti and subnamed FalkorDB defaults. */
+/** Resolve Graphiti and namespaced FalkorDB defaults. */
 export function resolveGraphitiOptions(value: GraphitiOptions = {}): ResolvedGraphitiOptions {
   return ResolvedGraphitiOptionsSchema.parse(value);
 }

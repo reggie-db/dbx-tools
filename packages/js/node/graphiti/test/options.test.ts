@@ -8,7 +8,7 @@ import {
 } from "../src/options.ts";
 
 describe("Graphiti runtime options", () => {
-  it("composes Graphiti and subnamed FalkorDB defaults", () => {
+  it("composes Graphiti and namespaced FalkorDB defaults", () => {
     const resolved = resolveGraphitiOptions();
 
     assert.deepEqual(resolved.listen, {
@@ -24,7 +24,7 @@ describe("Graphiti runtime options", () => {
     assert.equal(resolved.falkorSnapshotSeconds, 300);
   });
 
-  it("renders subnamed FalkorDB flags and owned environment names", () => {
+  it("renders namespaced FalkorDB flags and owned environment names", () => {
     const values = {
       falkorDataDir: "/graphiti",
       falkorListen: "tcp://127.0.0.1:6380",

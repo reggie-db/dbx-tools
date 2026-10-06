@@ -190,6 +190,8 @@ root.addTask("docs:cli", {
 // the repo ignores them and CI resolves fresh. Verify before ever committing one:
 //   grep -c 'localhost:4873' bun.lock
 // ---------------------------------------------------------------------------
+root.tasks.tryFind("install:ci")?.reset("bun install");
+
 // Generated dot-directories
 // ---------------------------------------------------------------------------
 // The dot-directories this repo generates are named individually rather than
@@ -376,7 +378,6 @@ project.applyToProjects(root, { identifierName: "cli-falkor-db", tags: "cli" }, 
   );
   p.addDeps(
     "@dbx-tools/cli-args@workspace:^",
-    "@dbx-tools/databricks@workspace:^",
     "@dbx-tools/falkor-db@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
   );

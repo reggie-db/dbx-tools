@@ -49,6 +49,10 @@
         "types": "./lib/src/options.d.ts",
         "default": "./lib/src/options.js"
       },
+      "./runtime": {
+        "types": "./lib/src/runtime.d.ts",
+        "default": "./lib/src/runtime.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -64,6 +68,7 @@
     ".": "./index.ts",
     "./falkor": "./src/falkor.ts",
     "./options": "./src/options.ts",
+    "./runtime": "./src/runtime.ts",
     "./package.json": "./package.json"
   },
   "files": [
