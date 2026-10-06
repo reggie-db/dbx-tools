@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-graphiti";
-export const PACKAGE_VERSION = "0.9.39";
+export const PACKAGE_VERSION = "0.9.40";
 export * as cli from "./src/cli.ts";
 export * as runtime from "./src/runtime.ts";
 export type { GraphitiCliDependencies, GraphitiServiceOptions } from "./src/cli.ts";

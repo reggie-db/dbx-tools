@@ -64,7 +64,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.9.39",
+  "version": "0.9.40",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
