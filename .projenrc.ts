@@ -1322,6 +1322,7 @@ const pythonPackages: project.PythonPackageOptions[] = [
       "pythonmonkey>=1.3,<2",
       "uvicorn>=0.44",
     ],
+    devDependencies: GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES,
     nodeBindings: [
       {
         package: "@dbx-tools/shared-core",
@@ -1350,7 +1351,6 @@ new project.DBXToolsPythonWorkspace(root, {
   root: PYTHON_ROOT,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
-  devDependencies: GRAPHITI_UPSTREAM_PYTHON_DEPENDENCIES,
   requiresPython: ">=3.10,<4",
   ruffTarget: "py310",
   workflowPythonVersion: "3.11",

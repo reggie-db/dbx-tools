@@ -47,6 +47,7 @@ describe("DBXToolsPythonWorkspace", () => {
         {
           directory: "app",
           description: "Fixture app",
+          devDependencies: ["types-app>=1"],
           internalDependencies: ["core"],
           releaseEnvironment: "production-pypi",
         },
@@ -99,7 +100,12 @@ describe("DBXToolsPythonWorkspace", () => {
       /Apache License/,
     );
     assert.match(app, /dependencies = \[\s*"fixture-core"\s*\]/);
-    assert.doesNotMatch(app, /\[dependency-groups\]/);
+    assert.match(app, /\[dependency-groups\]/);
+    assert.match(app, /"types-app>=1"/);
+    assert.doesNotMatch(
+      readFileSync(join(outdir, "python/packages/core/pyproject.toml"), "utf8"),
+      /\[dependency-groups\]/,
+    );
 
     const settings = readFileSync(join(outdir, ".vscode/settings.json"), "utf8");
     assert.match(settings, /python\/\.venv\/bin\/python/);

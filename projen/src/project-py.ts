@@ -33,6 +33,8 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly moduleRoot?: string;
   readonly description: string;
   readonly dependencies?: readonly string[];
+  /** Development dependencies emitted only in this package's dependency group. */
+  readonly devDependencies?: readonly string[];
   /** Workspace package directories rendered as standalone Git dependencies. */
   readonly internalDependencies?: readonly string[];
   readonly scripts?: Readonly<Record<string, string>>;
@@ -245,7 +247,11 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     this.tasks.removeTask("publish");
     this.tasks.removeTask("publish:test");
     this.uv.file.addDeletionOverride("project.authors");
-    this.uv.file.addDeletionOverride("dependency-groups");
+    if (pkg.devDependencies?.length) {
+      this.uv.file.addOverride("dependency-groups.dev", [...pkg.devDependencies]);
+    } else {
+      this.uv.file.addDeletionOverride("dependency-groups");
+    }
     if (nodeBindings.length > 0) {
       const rendered = nodeBindings.map(renderPythonNodeBindings);
       this.uv.file.addOverride(
