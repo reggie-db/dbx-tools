@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/falkor-db";
-export const PACKAGE_VERSION = "0.9.41";
+export const PACKAGE_VERSION = "0.9.42";
 export * as falkor from "./src/falkor.ts";
 export * as persistenceManager from "./src/persistence/manager.ts";
 export * as persistenceManifest from "./src/persistence/manifest.ts";
