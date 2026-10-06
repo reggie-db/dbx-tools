@@ -406,6 +406,9 @@
     "test": {
       "name": "test",
       "description": "Run tests",
+      "env": {
+        "NODE_OPTIONS": "--max-old-space-size=6144"
+      },
       "steps": [
         {
           "spawn": "eslint"

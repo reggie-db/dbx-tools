@@ -30,7 +30,8 @@
     "@dbx-tools/databricks": "workspace:^",
     "@dbx-tools/falkor-db": "workspace:^",
     "@dbx-tools/shared-core": "workspace:^",
-    "commander": "catalog:"
+    "commander": "catalog:",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -61,7 +62,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.43",
+  "version": "0.9.44",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [

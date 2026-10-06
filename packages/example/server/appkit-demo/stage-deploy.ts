@@ -85,8 +85,9 @@ const deployWorkspace = { allowBuilds };
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 cpSync(join(serverDir, "src"), join(outDir, "src"), { recursive: true });
-if (existsSync(join(serverDir, "shared")))
+if (existsSync(join(serverDir, "shared"))) {
   cpSync(join(serverDir, "shared"), join(outDir, "shared"), { recursive: true });
+}
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
 writeFileSync(join(outDir, "package.json"), `${JSON.stringify(deployPkg, null, 2)}\n`);
 writeFileSync(join(outDir, "pnpm-workspace.yaml"), stringify(deployWorkspace));

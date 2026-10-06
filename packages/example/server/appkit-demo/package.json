@@ -55,11 +55,12 @@
     "express": "catalog:",
     "fuse.js": "^7.4.2",
     "pg": "^8.22.0",
+    "yaml": "^2.9.0",
     "zod": "catalog:"
   },
   "main": "src/server.ts",
   "license": "Apache-2.0",
-  "version": "0.9.43",
+  "version": "0.9.44",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [

@@ -63,12 +63,12 @@ describe("parser-owned CLI references", () => {
       assert.match(reference, new RegExp(`dbx graphiti ${command}`));
     }
     for (const option of [
-      "--python <value>",
       "--profile <value>",
       "--model <value>",
       "--embedder-model <value>",
-      "--graphiti-port <value>",
+      "--listen <value>",
       "--falkor-data-dir <value>",
+      "--falkor-listen <value>",
       "--falkor-snapshot-seconds <value>",
     ]) {
       assert.ok(reference.includes(option), `missing ${option}`);

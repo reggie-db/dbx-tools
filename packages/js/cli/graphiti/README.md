@@ -111,7 +111,7 @@ dbx graphiti [options] [command]
 | `--graphiti-home <value>`               | Application-owned Graphiti runtime directory. (env: GRAPHITI_HOME)                                                        |
 | `--model <value>`                       | Fuzzy chat-model name or endpoint identifier. (default: "databricks-gpt-5-nano", env: MODEL_NAME)                         |
 | `--temperature <value>`                 | Sampling temperature forwarded to the Graphiti LLM client. (default: 1, env: TEMPERATURE)                                 |
-| `--embedder-model <value>`              | Fuzzy embedding-model name or endpoint identifier. (default: "databricks-gte-large-en", env: EMBEDDER_MODEL)              |
+| `--embedder-model <value>`              | Fuzzy embedding-model name or endpoint identifier. (default: "gte-large-en", env: EMBEDDER_MODEL)                         |
 | `--embedder-dimensions <value>`         | Embedding vector dimensions expected by Graphiti. (default: 1024, env: EMBEDDER_DIMENSIONS)                               |
 | `--structured-output-mode <value>`      | Structured-output mode forwarded to Graphiti's OpenAI provider. (default: "json_object", env: LLM_STRUCTURED_OUTPUT_MODE) |
 | `--listen <value>`                      | Graphiti HTTP listener. (default: tcp://127.0.0.1:7272, env: GRAPHITI_LISTEN)                                             |

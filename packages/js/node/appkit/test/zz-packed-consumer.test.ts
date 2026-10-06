@@ -32,6 +32,7 @@ it("loads packed AppKit surfaces from an isolated consumer", { timeout: 180_000 
     run(bun, ["run", "compile"], packageRoot);
     const packageArchives = {
       "@dbx-tools/shared-core": pack(resolve(packageRoot, "../../shared/core"), archives),
+      "@dbx-tools/shared-auth": pack(resolve(packageRoot, "../../shared/auth"), archives),
       "@dbx-tools/core": pack(resolve(packageRoot, "../core"), archives),
       "@dbx-tools/auth": pack(resolve(packageRoot, "../auth"), archives),
       "@dbx-tools/lakebase": pack(resolve(packageRoot, "../lakebase"), archives),

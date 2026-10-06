@@ -12,7 +12,7 @@ describe("Graphiti options", () => {
 
     assert.equal(options.model, "databricks-gpt-5-nano");
     assert.equal(options.temperature, 1);
-    assert.equal(options.embedderModel, "databricks-gte-large-en");
+    assert.equal(options.embedderModel, "gte-large-en");
     assert.equal(options.embedderDimensions, 1024);
     assert.deepEqual(options.listen, {
       scheme: "tcp",
@@ -54,7 +54,7 @@ describe("Graphiti options", () => {
 
     assert.equal(environment.DATABRICKS_CONFIG_PROFILE, "PROFILE");
     assert.equal(environment.MODEL_NAME, "databricks-gpt-5-nano");
-    assert.equal(environment.EMBEDDER_MODEL, "databricks-gte-large-en");
+    assert.equal(environment.EMBEDDER_MODEL, "gte-large-en");
     assert.equal(environment.GRAPHITI_LISTEN, "tcp://localhost:8100");
     assert.ok(Object.values(environment).every((value) => typeof value === "string"));
   });

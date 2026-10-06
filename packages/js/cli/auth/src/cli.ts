@@ -7,8 +7,8 @@
  * @module
  */
 
-import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import * as databricks from "@dbx-tools/auth";
+import { addArgs, parseArgs } from "@dbx-tools/cli-args/args";
 import type { DatabricksAuthClientInfo } from "@dbx-tools/shared-auth/client";
 import { Command, CommanderError } from "commander";
 

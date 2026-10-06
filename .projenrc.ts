@@ -166,6 +166,7 @@ const sourceDocs = root.addTask("docs:check-source", {
   description: "Reject new undocumented public TypeScript exports",
 });
 sourceDocs.exec("bun docs/scripts/check-source-docs.mjs");
+root.testTask.env("NODE_OPTIONS", "--max-old-space-size=6144");
 root.testTask.exec("bun test docs/scripts");
 
 const readmeDocs = root.addTask("docs:check-readmes", {
@@ -299,7 +300,6 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@databricks/appkit@catalog:",
-    "zod@catalog:",
   );
 });
 
@@ -312,7 +312,6 @@ project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) =
     "@dbx-tools/cli-args@workspace:^",
     "@dbx-tools/shared-auth@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "zod@catalog:",
   );
 });
 
@@ -324,7 +323,6 @@ project.applyToProjects(root, { identifierName: "cli-args", tags: "cli" }, (p) =
   p.addDeps(
     "@dbx-tools/core@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
-    "zod@catalog:",
   );
 });
 
@@ -367,6 +365,7 @@ project.applyToProjects(root, { identifierName: "graphiti", tags: "node" }, (p) 
     "@dbx-tools/falkor-db@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "@dbx-tools/shared-graphiti@workspace:^",
+    "zod@catalog:",
   );
 });
 
@@ -392,7 +391,6 @@ project.applyToProjects(root, { identifierName: "cli-lakebase-proxy", tags: "cli
     "@dbx-tools/lakebase@workspace:^",
     "@dbx-tools/shared-core@workspace:^",
     "pg@^8.22.0",
-    "zod@catalog:",
   );
   p.addDevDeps("@types/pg@^8");
   p.package.addBin({ "dbx-lakebase-proxy": "./bin/dbx-lakebase-proxy.ts" });
@@ -911,7 +909,6 @@ project.applyToProjects(root, { identifierName: "cli-service", tags: "cli" }, (p
     "@dbx-tools/core@workspace:^",
     `bun@${bunWorkflow.BUN_VERSION}`,
     "systray2@catalog:",
-    "zod@catalog:",
   );
 });
 
@@ -1263,6 +1260,7 @@ project.applyToProjects(
       "compression@^1.8.1",
       "pg@^8.22.0",
       "fuse.js@^7.4.2",
+      "yaml@^2.9.0",
     );
     p.addDevDeps(
       "@dbx-tools/projen@workspace:^",

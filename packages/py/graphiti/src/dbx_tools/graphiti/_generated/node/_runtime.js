@@ -39160,7 +39160,7 @@ var GraphitiOptionsSchema = import_zod5.z.object({
   graphitiHome: graphitiText("Application-owned Graphiti runtime directory.").optional().meta({ env: "GRAPHITI_HOME" }),
   model: graphitiText("Fuzzy chat-model name or endpoint identifier.").default("databricks-gpt-5-nano").meta({ env: "MODEL_NAME" }),
   temperature: import_zod5.z.coerce.number().min(0).max(2).default(1).describe("Sampling temperature forwarded to the Graphiti LLM client.").meta({ env: "TEMPERATURE" }),
-  embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.").default("databricks-gte-large-en").meta({ env: "EMBEDDER_MODEL" }),
+  embedderModel: graphitiText("Fuzzy embedding-model name or endpoint identifier.").default("gte-large-en").meta({ env: "EMBEDDER_MODEL" }),
   embedderDimensions: import_zod5.z.coerce.number().int().positive().default(1024).describe("Embedding vector dimensions expected by Graphiti.").meta({ env: "EMBEDDER_DIMENSIONS" }),
   structuredOutputMode: graphitiText("Structured-output mode forwarded to Graphiti's OpenAI provider.").default("json_object").meta({ env: "LLM_STRUCTURED_OUTPUT_MODE" }),
   listen: exports_options.listenAddressSchema({
@@ -59050,7 +59050,7 @@ var package_default = {
       "./package.json": "./package.json"
     }
   },
-  version: "0.9.43",
+  version: "0.9.44",
   types: "index.ts",
   dbxToolsConfig: {
     tags: [

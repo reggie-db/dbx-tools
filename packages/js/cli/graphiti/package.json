@@ -29,7 +29,8 @@
     "@dbx-tools/cli-args": "workspace:^",
     "@dbx-tools/cli-service": "workspace:^",
     "@dbx-tools/graphiti": "workspace:^",
-    "commander": "catalog:"
+    "commander": "catalog:",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "Apache-2.0",
@@ -56,7 +57,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.9.43",
+  "version": "0.9.44",
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [

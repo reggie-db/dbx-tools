@@ -144,7 +144,7 @@ export const PACKAGE_TAG_MIXINS = {
     // register and no launcher shim to generate. In a WORKSPACE checkout the
     // manifest still points at the `.ts` entry, which Node type-strips on its own
     // because the package is not under `node_modules`.
-    p.addDeps("commander@catalog:");
+    p.addDeps("commander@catalog:", "zod@catalog:");
     p.addDevDeps("@types/node@catalog:");
     // A CLI compiles code OUTSIDE `src/` - its root `index.ts` barrel and the
     // `bin/` entries - which the src-only tag default doesn't reach.

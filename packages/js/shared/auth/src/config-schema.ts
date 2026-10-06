@@ -4,8 +4,8 @@
  * @module
  */
 
-import { z } from "zod";
 import { options } from "@dbx-tools/shared-core";
+import { z } from "zod";
 
 import { AuthType, TargetKind } from "./config.ts";
 
