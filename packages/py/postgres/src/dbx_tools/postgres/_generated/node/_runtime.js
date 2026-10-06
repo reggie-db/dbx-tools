@@ -25510,9 +25510,8 @@ var exports_options = {};
 __export(exports_options, {
   tcpPortSchema: () => tcpPortSchema,
   tcpPortOrZeroSchema: () => tcpPortOrZeroSchema,
-  serializeOptions: () => serializeOptions,
-  parseOptions: () => parseOptions,
-  parseOptionOverrides: () => parseOptionOverrides,
+  serializeOpts: () => serializeOpts,
+  parseOpts: () => parseOpts,
   normalizedUrlSchema: () => normalizedUrlSchema,
   listenAddressSchema: () => listenAddressSchema,
   formatListenAddress: () => formatListenAddress,
@@ -25818,7 +25817,7 @@ var DatabricksOptionsSchema = import_zod.z.object({
     flag: false
   })
 }).strict().describe("Common Databricks CLI, SDK, Apps, and Lakebase options.");
-function serializeOptions(schema, values2, format) {
+function serializeOpts(schema, values2, format) {
   const parsed = schema.parse(values2);
   const entries = optionProperties(schema).flatMap((property) => {
     if (format === "flag" && property.flag === false)
@@ -25835,11 +25834,8 @@ var optionalText = (description, env) => import_zod.z.string().trim().min(1).opt
 var LakebaseOptionsSchema = import_zod.z.object({
   lakebaseEndpoint: optionalText("Lakebase project, resource path, host, or URL.", databricksEnvironmentNames.lakebaseEndpoint)
 }).strict().describe("Common Lakebase options.");
-function parseOptions(schema, values2 = null, environment = null) {
-  return schema.parse(optionValues(schema, values2, environment));
-}
-function parseOptionOverrides(schema, values2 = null, environment = null) {
-  const configured = optionValues(schema, values2, environment);
+function parseOpts(schema, flags = null, environment = null) {
+  const configured = optionValues(schema, flags, environment);
   const parsed = schema.parse(configured);
   return Object.fromEntries(Object.keys(configured).map((key) => [key, parsed[key]]));
 }

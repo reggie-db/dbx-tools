@@ -25964,7 +25964,7 @@ var require_re = __commonJS((exports2, module2) => {
 var require_parse_options = __commonJS((exports2, module2) => {
   var looseOption = Object.freeze({ loose: true });
   var emptyOpts = Object.freeze({});
-  var parseOptions2 = (options) => {
+  var parseOptions = (options) => {
     if (!options) {
       return emptyOpts;
     }
@@ -25973,7 +25973,7 @@ var require_parse_options = __commonJS((exports2, module2) => {
     }
     return options;
   };
-  module2.exports = parseOptions2;
+  module2.exports = parseOptions;
 });
 
 // node_modules/semver/internal/identifiers.js
@@ -26003,7 +26003,7 @@ var require_semver = __commonJS((exports2, module2) => {
   var debug = require_debug();
   var { MAX_LENGTH, MAX_SAFE_INTEGER } = require_constants();
   var { safeRe: re, t } = require_re();
-  var parseOptions2 = require_parse_options();
+  var parseOptions = require_parse_options();
   var { compareIdentifiers } = require_identifiers();
   var isPrereleaseIdentifier = (prerelease, identifier) => {
     const identifiers = identifier.split(".");
@@ -26020,7 +26020,7 @@ var require_semver = __commonJS((exports2, module2) => {
 
   class SemVer {
     constructor(version, options) {
-      options = parseOptions2(options);
+      options = parseOptions(options);
       if (version instanceof SemVer) {
         if (version.loose === !!options.loose && version.includePrerelease === !!options.includePrerelease) {
           return version;
@@ -26666,7 +26666,7 @@ var require_range2 = __commonJS((exports2, module2) => {
 
   class Range {
     constructor(range, options) {
-      options = parseOptions2(options);
+      options = parseOptions(options);
       if (range instanceof Range) {
         if (range.loose === !!options.loose && range.includePrerelease === !!options.includePrerelease) {
           return range;
@@ -26805,7 +26805,7 @@ var require_range2 = __commonJS((exports2, module2) => {
   module2.exports = Range;
   var LRU = require_lrucache();
   var cache = new LRU;
-  var parseOptions2 = require_parse_options();
+  var parseOptions = require_parse_options();
   var Comparator = require_comparator();
   var debug = require_debug();
   var SemVer = require_semver();
@@ -27051,7 +27051,7 @@ var require_comparator = __commonJS((exports2, module2) => {
       return ANY;
     }
     constructor(comp, options) {
-      options = parseOptions2(options);
+      options = parseOptions(options);
       if (comp instanceof Comparator) {
         if (comp.loose === !!options.loose) {
           return comp;
@@ -27119,7 +27119,7 @@ var require_comparator = __commonJS((exports2, module2) => {
         }
         return new Range(this.value, options).test(comp.semver);
       }
-      options = parseOptions2(options);
+      options = parseOptions(options);
       if (options.includePrerelease && (this.value === "<0.0.0-0" || comp.value === "<0.0.0-0")) {
         return false;
       }
@@ -27145,7 +27145,7 @@ var require_comparator = __commonJS((exports2, module2) => {
     }
   }
   module2.exports = Comparator;
-  var parseOptions2 = require_parse_options();
+  var parseOptions = require_parse_options();
   var { safeRe: re, t } = require_re();
   var cmp = require_cmp();
   var debug = require_debug();
@@ -39101,9 +39101,8 @@ var exports_options = {};
 __export(exports_options, {
   tcpPortSchema: () => tcpPortSchema,
   tcpPortOrZeroSchema: () => tcpPortOrZeroSchema,
-  serializeOptions: () => serializeOptions,
-  parseOptions: () => parseOptions,
-  parseOptionOverrides: () => parseOptionOverrides,
+  serializeOpts: () => serializeOpts,
+  parseOpts: () => parseOpts,
   normalizedUrlSchema: () => normalizedUrlSchema,
   listenAddressSchema: () => listenAddressSchema,
   formatListenAddress: () => formatListenAddress,
@@ -39409,7 +39408,7 @@ var DatabricksOptionsSchema = import_zod.z.object({
     flag: false
   })
 }).strict().describe("Common Databricks CLI, SDK, Apps, and Lakebase options.");
-function serializeOptions(schema, values2, format) {
+function serializeOpts(schema, values2, format) {
   const parsed = schema.parse(values2);
   const entries = optionProperties(schema).flatMap((property) => {
     if (format === "flag" && property.flag === false)
@@ -39426,11 +39425,8 @@ var optionalText = (description, env) => import_zod.z.string().trim().min(1).opt
 var LakebaseOptionsSchema = import_zod.z.object({
   lakebaseEndpoint: optionalText("Lakebase project, resource path, host, or URL.", databricksEnvironmentNames.lakebaseEndpoint)
 }).strict().describe("Common Lakebase options.");
-function parseOptions(schema, values2 = null, environment = null) {
-  return schema.parse(optionValues(schema, values2, environment));
-}
-function parseOptionOverrides(schema, values2 = null, environment = null) {
-  const configured = optionValues(schema, values2, environment);
+function parseOpts(schema, flags = null, environment = null) {
+  const configured = optionValues(schema, flags, environment);
   const parsed = schema.parse(configured);
   return Object.fromEntries(Object.keys(configured).map((key) => [key, parsed[key]]));
 }
@@ -58754,7 +58750,7 @@ var package_default = {
       "./package.json": "./package.json"
     }
   },
-  version: "0.9.40",
+  version: "0.9.41",
   types: "index.ts",
   dbxToolsConfig: {
     tags: [
@@ -59422,7 +59418,7 @@ function serializeGraphitiOptions(options = {}) {
   return JSON.stringify(resolveGraphitiOptions(options));
 }
 function graphitiOptionsFromEnvironment(environment) {
-  return exports_options.parseOptionOverrides(GraphitiOptionsSchema, null, environment);
+  return exports_options.parseOpts(GraphitiOptionsSchema, null, environment);
 }
 function graphitiGatewayHealthUrl(options = {}) {
   return `${resolveGraphitiOptions(options).modelGatewayUrl.replace(/\/v1$/, "")}/api/healthz`;

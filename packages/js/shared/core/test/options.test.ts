@@ -8,9 +8,8 @@ import {
   formatListenAddress,
   listenAddressSchema,
   normalizedUrlSchema,
-  parseOptionOverrides,
-  parseOptions,
-  serializeOptions,
+  parseOpts,
+  serializeOpts,
   tcpPortOrZeroSchema,
   tcpPortSchema,
 } from "../src/options.ts";
@@ -51,7 +50,7 @@ describe("shared option schemas", () => {
   it("parses nullable flag maps over environment maps", () => {
     const schema = DatabricksOptionsSchema.pick({ profile: true, host: true });
     assert.deepEqual(
-      parseOptions(
+      parseOpts(
         schema,
         { "--profile": "cli-profile", host: null },
         {
@@ -64,12 +63,11 @@ describe("shared option schemas", () => {
         host: "https://workspace.example.com",
       },
     );
+    assert.deepEqual(parseOpts(schema, null, { DATABRICKS_CONFIG_PROFILE: "env-profile" }), {
+      profile: "env-profile",
+    });
     assert.deepEqual(
-      parseOptionOverrides(schema, null, { DATABRICKS_CONFIG_PROFILE: "env-profile" }),
-      { profile: "env-profile" },
-    );
-    assert.deepEqual(
-      parseOptions(LakebaseOptionsSchema, null, {
+      parseOpts(LakebaseOptionsSchema, null, {
         LAKEBASE_ENDPOINT: "projects/example",
       }),
       { lakebaseEndpoint: "projects/example" },
@@ -79,10 +77,10 @@ describe("shared option schemas", () => {
   it("serializes complete option JSON by flag or environment name", () => {
     const schema = DatabricksOptionsSchema.pick({ profile: true, host: true });
     const values = { profile: "PROFILE", host: "workspace.example.com" };
-    assert.deepEqual(JSON.parse(serializeOptions(schema, values, "flag")), {
+    assert.deepEqual(JSON.parse(serializeOpts(schema, values, "flag")), {
       "--profile": "PROFILE",
     });
-    assert.deepEqual(JSON.parse(serializeOptions(schema, values, "env")), {
+    assert.deepEqual(JSON.parse(serializeOpts(schema, values, "env")), {
       DATABRICKS_CONFIG_PROFILE: "PROFILE",
       DATABRICKS_HOST: "https://workspace.example.com",
     });

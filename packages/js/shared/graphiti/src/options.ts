@@ -153,7 +153,7 @@ export function serializeGraphitiOptions(options: GraphitiOptions = {}): string 
 export function graphitiOptionsFromEnvironment(
   environment: Readonly<Record<string, string | undefined>>,
 ): GraphitiOptions {
-  return options.parseOptionOverrides(GraphitiOptionsSchema, null, environment);
+  return options.parseOpts(GraphitiOptionsSchema, null, environment);
 }
 
 /** Return the managed model gateway health endpoint. */
