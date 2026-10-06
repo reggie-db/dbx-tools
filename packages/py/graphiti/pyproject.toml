@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-graphiti"
-version = "0.9.45"
+version = "0.9.46"
 description = "Combined Graphiti REST and MCP FastAPI service"
 readme = "README.md"
 requires-python = ">=3.10,<4"
