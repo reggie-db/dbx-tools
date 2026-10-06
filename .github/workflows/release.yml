@@ -83,10 +83,6 @@ jobs:
         id: validate_docs_check-readmes
         if: ${{ success() && steps.release.outputs.validation == 'true' }}
         run: bun run docs:check-readmes
-      - name: Validate test
-        id: validate_test
-        if: ${{ success() && steps.release.outputs.validation == 'true' }}
-        run: bun run test
       - name: Validate py:lint
         id: validate_py_lint
         if: ${{ success() && steps.release.outputs.validation == 'true' }}

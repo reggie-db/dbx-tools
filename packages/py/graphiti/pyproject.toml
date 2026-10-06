@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-graphiti"
-version = "0.9.42"
+version = "0.9.43"
 description = "Pinned Graphiti MCP adapter for Node-owned FalkorDB and model-gateway"
 readme = "README.md"
 requires-python = ">=3.11,<4"

@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-lakebase-proxy";
-export const PACKAGE_VERSION = "0.9.42";
+export const PACKAGE_VERSION = "0.9.43";
 export * as cancellation from "./src/cancellation.ts";
 export * as cli from "./src/cli.ts";
 export * as options from "./src/options.ts";

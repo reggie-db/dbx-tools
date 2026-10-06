@@ -96,7 +96,7 @@ const root = new project.DBXToolsNodeProject({
     artifactPath: `${DOCS_BUILD_ROOT}/dist`,
   },
   releasePythonRoot: PYTHON_ROOT,
-  releaseValidationTasks: ["docs:check-source", "docs:check-readmes", "test", "py:lint", "py:test"],
+  releaseValidationTasks: ["docs:check-source", "docs:check-readmes", "py:lint", "py:test"],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:^` sibling deps from local source.

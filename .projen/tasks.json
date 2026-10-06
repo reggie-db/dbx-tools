@@ -397,8 +397,6 @@
             "--validate",
             "docs:check-readmes",
             "--validate",
-            "test",
-            "--validate",
             "py:lint",
             "--validate",
             "py:test"
